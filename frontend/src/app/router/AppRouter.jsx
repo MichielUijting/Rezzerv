@@ -8,13 +8,11 @@ function LoginRoute() {
   const navigate = useNavigate();
   const token = localStorage.getItem("rezzerv_token");
 
-  // Als je al ingelogd bent, ga naar start
-  if (token) return <Navigate to="/" replace />;
-
+  // PO-keuze: altijd starten op /login, ook als er al een token is.
   function handleLogin(newToken) {
     // login-mechanisme blijft: token in localStorage
     localStorage.setItem("rezzerv_token", newToken);
-    navigate("/", { replace: true });
+    navigate("/home", { replace: false });
   }
 
   return <LoginPage onLoggedIn={handleLogin} />;
@@ -44,8 +42,9 @@ export default function AppRouter() {
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/reset-session" element={<ResetSessionRoute />} />
+        <Route path="/" element={<Navigate to="/login" replace />} />
         <Route
-          path="/"
+          path="/home"
           element={
             <AuthGuard>
               <HomePage />
@@ -53,7 +52,7 @@ export default function AppRouter() {
           }
         />
         {/* Catch-all */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
   );
