@@ -45,6 +45,24 @@ export default function HomePage() {
       <div className="rz-content">
         <div className="rz-content-inner">
           <Card>
+            <div>
+              <div className="rz-label">Welkom</div>
+              <div>{localStorage.getItem("rezzerv_user_email") || ""}</div>
+            </div>
+          </Card>
+
+          <Card>
+            <div>
+              <div className="rz-label">Huishouden</div>
+              {householdError ? (
+                <div className="rz-alert">{householdError}</div>
+              ) : (
+                <div>{householdName || "Mijn huishouden"}</div>
+              )}
+            </div>
+          </Card>
+
+          <Card>
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
               {tiles.map(t => (
                 <div key={t.key} className="rz-tile">

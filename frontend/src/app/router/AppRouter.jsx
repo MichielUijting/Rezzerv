@@ -9,9 +9,10 @@ function LoginRoute() {
   const token = localStorage.getItem("rezzerv_token");
 
   // PO-keuze: altijd starten op /login, ook als er al een token is.
-  function handleLogin(newToken) {
+  function handleLogin(newToken, email) {
     // login-mechanisme blijft: token in localStorage
     localStorage.setItem("rezzerv_token", newToken);
+    if (email) localStorage.setItem("rezzerv_user_email", email);
     navigate("/home", { replace: false });
   }
 
@@ -25,6 +26,7 @@ function ResetSessionRoute() {
   React.useEffect(() => {
     try {
       localStorage.removeItem("rezzerv_token");
+      localStorage.removeItem("rezzerv_user_email");
       sessionStorage.clear();
       // Als er ooit extra keys bijkomen, is dit een veilige fallback:
       // localStorage.clear();

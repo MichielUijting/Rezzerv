@@ -20,7 +20,7 @@ export default function LoginPage({ onLoggedIn }) {
       const res = await apiPost('/api/auth/login', { email, password })
       if (!res.ok) throw new Error('Inloggen mislukt')
       const data = await res.json()
-      onLoggedIn(data.token)
+      onLoggedIn(data.token, email)
     } catch (err) {
       setError(err.message)
     } finally {
