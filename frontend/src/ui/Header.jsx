@@ -6,8 +6,16 @@ export default function Header({ title }) {
 
   return (
     <div className="rz-header">
-      <div className="rz-userbox">
-        <div>{email}</div>
+      <div className="rz-header-title">{title}</div>
+      <div className="rz-userbox-wrapper">
+        {(email || household) && (
+          <div className="rz-userbox">
+            {email && <div>{email}</div>}
+            {household && <div>{household}</div>}
+          </div>
+        )}
+      </div>
+    </div>
         <div>{household}</div>
       </div>
       <div className="rz-header-title">{title}</div>
