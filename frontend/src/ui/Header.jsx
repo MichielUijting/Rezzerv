@@ -1,8 +1,13 @@
+import { useLocation } from "react-router-dom";
+
 export default function Header({ title }) {
+  const location = useLocation();
+
   const email = localStorage.getItem("rezzerv_user_email") || "";
   const household = localStorage.getItem("rezzerv_household_name") || "";
 
-  const showBox = email || household;
+  const showBox =
+    location.pathname !== "/login" && (email || household);
 
   return (
     <div className="rz-header">
