@@ -382,3 +382,19 @@ body {
   pointer-events:none;
 }
 /* End Startpagina tiles v01.03.02 */
+
+
+/* ===== User & Household box in header ===== */
+.rz-userbox {
+  background: #ffffff;
+  padding: 8px 16px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 8px;
+}
+
+.rz-userbox div {
+  font-weight: normal;
+  font-size: 18px;
+  line-height: 1.3;
+}

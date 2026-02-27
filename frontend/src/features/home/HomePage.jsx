@@ -31,7 +31,9 @@ export default function HomePage() {
         return res.json();
       })
       .then((data) => {
-        setHouseholdName(data?.naam || "Mijn huishouden");
+        const name = data?.naam || "Mijn huishouden";
+        setHouseholdName(name);
+        localStorage.setItem("rezzerv_household_name", name);
       })
       .catch(() => {
         setHouseholdError("Huishouden niet beschikbaar");
