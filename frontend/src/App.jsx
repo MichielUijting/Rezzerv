@@ -4,7 +4,7 @@ export default function App() {
   return (
     <>
       <AppRouter />
-      <div className="rz-buildtag" aria-hidden="true">Rezzerv v01.04.13</div>
+      <div className="rz-buildtag" aria-hidden="true">Rezzerv v01.04.14</div>
     </>
   );
 }

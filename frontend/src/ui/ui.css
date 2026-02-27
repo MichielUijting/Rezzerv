@@ -59,12 +59,7 @@ body {
   padding: 0 var(--m-std);
 }
 .rz-header-title {
-  color: #FFFFFF;
-  font-size: 17px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: normal;
 }
 .rz-header-logo img{
   height:28px !important;
@@ -408,7 +403,6 @@ body {
 }
 
 .rz-header-title {
-  font-size: 20px;
   font-weight: normal;
 }
 
@@ -430,4 +424,23 @@ body {
 .rz-userbox div {
   font-size: 14px;
   font-weight: normal;
+}
+
+
+/* ===== Header layout aligned with styleguide ===== */
+.rz-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rz-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.rz-header-logo {
+  display: flex;
+  align-items: center;
 }

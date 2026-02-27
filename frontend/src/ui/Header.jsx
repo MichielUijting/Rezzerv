@@ -1,4 +1,5 @@
 import { useLocation } from "react-router-dom";
+import BrandLogo from "./BrandLogo.jsx";
 
 export default function Header({ title }) {
   const location = useLocation();
@@ -11,7 +12,9 @@ export default function Header({ title }) {
 
   return (
     <div className="rz-header">
-      <div className="rz-header-title">{title}</div>
+      <div className="rz-header-left">
+        <div className="rz-header-title">{title}</div>
+      </div>
 
       {showBox && (
         <div className="rz-userbox-wrapper">
@@ -21,6 +24,10 @@ export default function Header({ title }) {
           </div>
         </div>
       )}
+
+      <div className="rz-header-logo">
+        <BrandLogo variant="header" />
+      </div>
     </div>
   );
 }
