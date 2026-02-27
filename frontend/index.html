@@ -1,7 +1,22 @@
 <!DOCTYPE html>
 <html lang="nl">
   <head>
-    <meta charset="UTF-8" />
+    
+  <!-- PO-PROOF reset-session: early session reset before React loads -->
+  <script>
+    (function () {
+      try {
+        if (window.location.pathname === "/reset-session") {
+          try {
+            localStorage.removeItem("rezzerv_token");
+            sessionStorage.clear();
+          } catch (e) {}
+          window.location.replace("/login?reset=1");
+        }
+      } catch (e) {}
+    })();
+  </script>
+<meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rezzerv</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
