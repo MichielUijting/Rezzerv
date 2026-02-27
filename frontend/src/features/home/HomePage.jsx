@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 
@@ -16,6 +17,27 @@ const tiles = [
 ]
 
 export default function HomePage() {
+  const [householdName, setHouseholdName] = useState("");
+  const [householdError, setHouseholdError] = useState("");
+
+  useEffect(() => {
+    const token = localStorage.getItem("rezzerv_token");
+    if (!token) return;
+    fetch("/api/household", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Huishouden niet beschikbaar");
+        return res.json();
+      })
+      .then((data) => {
+        setHouseholdName(data?.naam || "Mijn huishouden");
+      })
+      .catch(() => {
+        setHouseholdError("Huishouden niet beschikbaar");
+      });
+  }, []);
+
   return (
     <div className="rz-screen">
       <Header title="Startpagina" />
