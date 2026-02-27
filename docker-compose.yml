@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:15
+    container_name: rezzerv_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: rezzerv
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    container_name: rezzerv_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/rezzerv
+      PYTHONUNBUFFERED: "1"
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    container_name: rezzerv_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
