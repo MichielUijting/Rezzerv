@@ -404,8 +404,9 @@ body {
 .rz-header {
   position: relative;
   display: flex;
-  align-items: center;
+  align-items: center; /* vertical center */
   justify-content: flex-start;
+  height: 80px;
 }
 
 .rz-header-title {
@@ -416,7 +417,8 @@ body {
 .rz-userbox-wrapper {
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .rz-userbox {
@@ -427,6 +429,6 @@ body {
 }
 
 .rz-userbox div {
-  font-size: 16px; /* 2pt smaller than title */
+  font-size: 14px; /* 2pt smaller than previous 16px */
   font-weight: normal;
 }
