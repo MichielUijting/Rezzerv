@@ -62,7 +62,7 @@ export default function LoginPage({ onLoggedIn }) {
           </Card>
         </div>
       </div>
-      <div className="rz-buildtag" aria-hidden="true">Rezzerv v01.03.05</div>
+      <div className="rz-buildtag" aria-hidden="true">Rezzerv v01.04.01</div>
     </div>
   )
 }
