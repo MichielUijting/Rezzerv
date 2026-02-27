@@ -1,3 +1,4 @@
+import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import LoginPage from "../../features/auth/LoginPage";
 import HomePage from "../../features/home/HomePage";
@@ -21,12 +22,20 @@ function LoginRoute() {
 
 
 function ResetSessionRoute() {
-  const navigate = useNavigate();
+  // Robuuste PO-proof reset: wis token(s) en forceer een volledige navigatie naar /login.
+  // Dit voorkomt issues met browser history/replace en eventuele strict-mode render-volgorde.
+  React.useEffect(() => {
+    try {
+      localStorage.removeItem("rezzerv_token");
+      sessionStorage.clear();
+      // Als er ooit extra keys bijkomen, is dit een veilige fallback:
+      // localStorage.clear();
+    } finally {
+      window.location.replace("/login");
+    }
+  }, []);
 
-  // PO-proof: bezoek /reset-session om de opgeslagen login te wissen
-  // en terug te gaan naar het inlogscherm.
-  localStorage.removeItem("rezzerv_token");
-  return <Navigate to="/login" replace />;
+  return null;
 }
 
 export default function AppRouter() {
