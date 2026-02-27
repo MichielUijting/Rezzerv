@@ -1,7 +1,9 @@
 @echo off
 echo ========================================
 echo        Rezzerv Startup Routine
-echo Version: Rezzerv-v01.03.03
+for /f "usebackq delims=" %%v in ("VERSION.txt") do set "REZZERV_VERSION=%%v"
+if "%REZZERV_VERSION%"=="" set "REZZERV_VERSION=Rezzerv-unknown"
+echo Version: %REZZERV_VERSION%
 echo ========================================
 
 
