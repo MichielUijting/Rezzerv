@@ -1,13 +1,12 @@
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
-import os
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql+psycopg2://postgres:postgres@rezzerv_db:5432/rezzerv"
+DATABASE_URL = "sqlite:///./rezzerv.db"
+
+engine = create_engine(
+    DATABASE_URL, connect_args={"check_same_thread": False}
 )
 
-engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
