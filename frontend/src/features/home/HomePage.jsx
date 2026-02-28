@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 
@@ -17,6 +18,7 @@ const tiles = [
 ]
 
 export default function HomePage() {
+  const navigate = useNavigate();
   const [householdName, setHouseholdName] = useState("");
   const [householdError, setHouseholdError] = useState("");
 
@@ -49,7 +51,16 @@ export default function HomePage() {
           <Card>
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
               {tiles.map(t => (
-                <div key={t.key} className="rz-tile">
+                <div
+                  key={t.key}
+                  className="rz-tile"
+                  onClick={() => {
+                    if (t.key === "voorraad") {
+                      navigate("/voorraad");
+                    }
+                  }}
+                  style={{ cursor: t.key === "voorraad" ? "pointer" : "default" }}
+                >
                   <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>
                   <div className="rz-tile-label">{t.label}</div>
                 </div>
