@@ -1,0 +1,18 @@
+
+/* =========================================
+   REZZERV CARD COMPONENT v1.0
+========================================= */
+
+.rz-card {
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+}
+
+.rz-card-elevated {
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: var(--elevation-2);
+  border: 2px solid var(--color-brand-primary);
+}

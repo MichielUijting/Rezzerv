@@ -79,13 +79,7 @@ body {
 /* ---------------------------
    Card surface
 --------------------------- */
-.rz-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  padding: 24px;
-}
+
 
 /* ---------------------------
    Inputs & Buttons (v2.15 rules)
@@ -463,15 +457,7 @@ body {
    ELEVATED CARD
 ================================= */
 
-.rz-card-elevated {
-  background: #ffffff;
-  border: 2px solid var(--color-brand-primary);
-  border-radius: 14px;
-  padding: 20px;
-  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
-  max-width: 900px;
-  margin: 0 auto;
-}
+
 
 /* ===============================
    MATRIX TABLE
@@ -577,6 +563,4 @@ body {
 }
 
 /* Apply elevation to cards */
-.rz-card-elevated {
-  box-shadow: var(--elevation-2);
-}
+
