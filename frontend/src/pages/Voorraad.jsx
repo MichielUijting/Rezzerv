@@ -92,7 +92,7 @@ export default function Voorraad() {
             </table>
 
             <div style={{ marginTop: "18px", display: "flex", gap: "12px" }}>
-              <button className="rz-button-secondary">Verwijderen</button>
+              <button className="rz-button-primary">Verwijderen</button>
               <button className="rz-button-primary">Exporteren</button>
             </div>
 

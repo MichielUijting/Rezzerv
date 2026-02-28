@@ -508,3 +508,36 @@ body {
 .rz-align-left {
   text-align: left;
 }
+
+
+/* ===============================
+   BUTTON SYSTEM (REFACTORED)
+================================= */
+
+.rz-button-primary {
+  background-color: var(--color-brand-primary);
+  color: #ffffff;
+  font-weight: 600;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.rz-button-primary:hover {
+  filter: brightness(0.92);
+}
+
+.rz-button-secondary {
+  background-color: #ffffff;
+  color: var(--color-brand-primary);
+  border: 2px solid var(--color-brand-primary);
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.rz-button-secondary:hover {
+  background-color: #f3faf6;
+}
