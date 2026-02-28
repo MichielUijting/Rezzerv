@@ -76,3 +76,39 @@ from app.db import engine, Base
 from app.models import household, space, sublocation, inventory
 
 Base.metadata.create_all(bind=engine)
+from app.models import location, sublocation, inventory_item
+
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from app.db import SessionLocal
+
+router = APIRouter()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@router.get("/api/locations")
+def get_locations(db: Session = Depends(get_db)):
+    items = db.query(location.Location).all()
+    return [{"id": i.id, "name": i.name} for i in items]
+
+@router.get("/api/inventory")
+def get_inventory(db: Session = Depends(get_db)):
+    items = db.query(inventory_item.InventoryItem).all()
+    return [
+        {
+            "id": i.id,
+            "name": i.name,
+            "quantity": i.quantity,
+            "location_id": i.location_id,
+            "sublocation_id": i.sublocation_id
+        }
+        for i in items
+    ]
+
+app.include_router(router)
