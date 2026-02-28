@@ -43,11 +43,6 @@ export default function Voorraad() {
             padding: "16px"
           }}>
 
-            <div style={{ marginBottom: "12px", display: "flex", gap: "12px" }}>
-              <button className="rz-button-secondary">Verwijderen</button>
-              <button className="rz-button-primary">Exporteren</button>
-            </div>
-
             <table style={{
               width: "100%",
               borderCollapse: "collapse",
@@ -55,7 +50,12 @@ export default function Voorraad() {
             }}>
               <thead>
                 <tr>
-                  <th style={{ border: "1px solid #8fd19e", width: "50px" }}>
+                  <th style={{
+                    border: "1px solid #8fd19e",
+                    width: "50px",
+                    background: "#0b5d3b",
+                    color: "#ffffff"
+                  }}>
                     <input
                       type="checkbox"
                       style={{ accentColor: "#0b5d3b" }}
@@ -66,7 +66,12 @@ export default function Voorraad() {
                     />
                   </th>
                   {["artikel", "aantal", "locatie", "sublocatie"].map(col => (
-                    <th key={col} style={{ border: "1px solid #8fd19e", padding: "6px" }}>
+                    <th key={col} style={{
+                      border: "1px solid #8fd19e",
+                      padding: "6px",
+                      background: "#0b5d3b",
+                      color: "#ffffff"
+                    }}>
                       <div style={{ fontWeight: "600" }}>
                         {col.charAt(0).toUpperCase() + col.slice(1)}
                       </div>
@@ -75,7 +80,11 @@ export default function Voorraad() {
                         value={filters[col] || ""}
                         onChange={(e) => handleFilterChange(col, e.target.value)}
                         placeholder="Filter"
-                        style={{ width: "100%", marginTop: "4px" }}
+                        style={{
+                          width: "100%",
+                          marginTop: "4px",
+                          background: "#d9f5e0"
+                        }}
                       />
                     </th>
                   ))}
@@ -106,6 +115,11 @@ export default function Voorraad() {
                 ))}
               </tbody>
             </table>
+
+            <div style={{ marginTop: "16px", display: "flex", gap: "12px" }}>
+              <button className="rz-button-secondary">Verwijderen</button>
+              <button className="rz-button-primary">Exporteren</button>
+            </div>
 
           </div>
         </div>
