@@ -1,0 +1,38 @@
+
+/* =========================================
+   REZZERV BUTTON COMPONENT v1.0
+========================================= */
+
+button.rz-button-primary {
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--elevation-1);
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+button.rz-button-primary:hover {
+  box-shadow: var(--elevation-1-hover);
+  transform: translateY(-1px);
+}
+
+button.rz-button-secondary {
+  background: #ffffff;
+  color: var(--color-brand-primary);
+  border: 2px solid var(--color-brand-primary);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--elevation-1);
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
+}
+
+button.rz-button-secondary:hover {
+  box-shadow: var(--elevation-1-hover);
+  transform: translateY(-1px);
+}
