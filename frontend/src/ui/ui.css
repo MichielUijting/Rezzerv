@@ -8,7 +8,7 @@
   --color-text-muted: #6B7280;
 
   --radius-card: 12px;
-  
+  --shadow-card: 0 1px 4px rgba(0,0,0,0.08);
   --m-std: 24px;
 }
 
@@ -83,7 +83,7 @@ body {
   background: var(--color-surface);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-card);
-  box-shadow: var(
+  box-shadow: var(--shadow-card);
   padding: 24px;
 }
 
@@ -514,13 +514,29 @@ body {
    BUTTON SYSTEM (REFACTORED)
 ================================= */
 
-
+.rz-button-primary {
+  background-color: var(--color-brand-primary);
+  color: #ffffff;
+  font-weight: 600;
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
 
 .rz-button-primary:hover {
   filter: brightness(0.92);
 }
 
-
+.rz-button-secondary {
+  background-color: #ffffff;
+  color: var(--color-brand-primary);
+  border: 2px solid var(--color-brand-primary);
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+}
 
 .rz-button-secondary:hover {
   background-color: #f3faf6;
@@ -540,14 +556,20 @@ body {
 }
 
 /* Apply elevation to buttons */
-
+.rz-button-primary {
+  box-shadow: var(--elevation-1);
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
+}
 
 .rz-button-primary:hover {
   box-shadow: var(--elevation-1-hover);
   transform: translateY(-1px);
 }
 
-
+.rz-button-secondary {
+  box-shadow: var(--elevation-1);
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
+}
 
 .rz-button-secondary:hover {
   box-shadow: var(--elevation-1-hover);
@@ -557,27 +579,4 @@ body {
 /* Apply elevation to cards */
 .rz-card-elevated {
   box-shadow: var(--elevation-2);
-}
-
-
-/* Button Elevation Override (Controlled Repair) */
-
-button.rz-button-primary {
-  box-shadow: var(--elevation-1);
-  transition: box-shadow 0.15s ease, transform 0.05s ease;
-}
-
-button.rz-button-primary:hover {
-  box-shadow: var(--elevation-1-hover);
-  transform: translateY(-1px);
-}
-
-button.rz-button-secondary {
-  box-shadow: var(--elevation-1);
-  transition: box-shadow 0.15s ease, transform 0.05s ease;
-}
-
-button.rz-button-secondary:hover {
-  box-shadow: var(--elevation-1-hover);
-  transform: translateY(-1px);
 }
