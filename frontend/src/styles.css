@@ -32,7 +32,8 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
   background:var(--rz-card);
   border:2px solid var(--rz-frame);
   border-radius:var(--rz-radius);
-  
+  box-shadow:var(
+  padding:26px;
 }
 
 .card-login{
@@ -97,7 +98,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 
 .input:focus{
   border-color: var(--rz-accent-dark);
-  
+  box-shadow: 0 0 0 4px rgba(141,216,166,0.25);
 }
 
 .input::placeholder{
