@@ -1,3 +1,4 @@
+import Voorraad from "../../pages/Voorraad";
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import LoginPage from "../../features/auth/LoginPage";
@@ -55,7 +56,8 @@ export default function AppRouter() {
         />
         {/* Catch-all */}
         <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
+        <Route path="/voorraad" element={<Voorraad />} />
+</Routes>
     </BrowserRouter>
   );
 }
