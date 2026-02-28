@@ -58,9 +58,7 @@ body {
   justify-content: space-between;
   padding: 0 var(--m-std);
 }
-.rz-header-title {
-  font-weight: normal;
-}
+
 .rz-header-logo img{
   height:28px !important;
   width:auto !important;
@@ -402,9 +400,7 @@ body {
   justify-content: flex-start;
 }
 
-.rz-header-title {
-  font-weight: normal;
-}
+
 
 .rz-userbox-wrapper {
   position: absolute;
@@ -443,4 +439,11 @@ body {
 .rz-header-logo {
   display: flex;
   align-items: center;
+}
+
+
+/* ===== Header Title Color Conform Styleguide v05.10 ===== */
+.rz-header-title {
+  color: #FFFFFF;
+  font-weight: normal;
 }
