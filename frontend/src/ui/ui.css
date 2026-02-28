@@ -1,520 +1,21 @@
-:root {
-  /* ColorDefinitions (approximated; aligned with SG naming) */
-  --color-screen-background: #EAF6EE; /* lichtgroen */
-  --color-brand-green: #1A3E2B;       /* donkergroen */
-  --color-surface: #FFFFFF;           /* wit */
-  --color-border-light: #D1D5DB; /* lichtgrijs kader inputs */
-  --color-text-default: #111827;
-  --color-text-muted: #6B7280;
 
-  --radius-card: 12px;
-  --shadow-card: 0 1px 4px rgba(0,0,0,0.08);
-  --m-std: 24px;
-}
-
-* { box-sizing: border-box; }
-html, body { height: 100%; }
-body {
-  margin: 0;
-  font-family: "Nunito", Arial, sans-serif; /* C01 */
-  color: var(--color-text-default);
-  background: var(--color-screen-background); /* C00 */
-}
-
-/* ---------------------------
-   C00 – SchermComponent
---------------------------- */
-.rz-screen {
-  min-height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.rz-content {
-  flex: 1;
-  padding: var(--m-std);
-  display: flex;
-  justify-content: center;
-}
-
-.rz-content-inner {
-  width: 100%;
-  max-width: 620px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--m-std);
-}
-
-/* ---------------------------
-   C02 – HeaderComponent
-   Height 56px, brand green bg, title left margin 24px, logo right margin 24px
---------------------------- */
-.rz-header {
-  height: 56px;
-  width: 100%;
-  background: var(--color-brand-green);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--m-std);
-}
-
-.rz-header-logo img{
-  height:28px !important;
-  width:auto !important;
-}
-
-/* ---------------------------
-   C03 – BrandLogoComponent
---------------------------- */
-.rz-logo-login {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 10px;
-}
-.rz-logo-login img {
-  height: 72px; /* login: logo replaces title */
-}
-
-/* ---------------------------
-   Card surface
---------------------------- */
-.rz-card {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
-  padding: 24px;
-}
-
-/* ---------------------------
-   Inputs & Buttons (v2.15 rules)
---------------------------- */
-.rz-label {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--color-text-default);
-  margin-bottom: 6px;
-}
-.rz-input {
-  width: 100%;
-  background: #FFFFFF;
-  border: 2px solid var(--color-border-light);
-  border-radius: 10px;
-  padding: 10px 12px;
-  font-size: 14px;
-  color: var(--color-text-default);
-}
-
-.rz-input::placeholder {
-  font-weight: 400; /* v05.08: knoppen niet vet */
-  color: var(--color-text-muted);
-}
-
-.rz-input:focus {
-  outline: none;
-  border-color: var(--color-brand-green);
-  box-shadow: 0 0 0 3px rgba(26, 62, 43, 0.15);
-}
-.rz-input::placeholder {
-  font-weight: 400; /* v05.08: knoppen niet vet */
-  color: #9CA3AF;
-}
-.rz-input:focus {
-  border-color: var(--color-brand-green);
-  box-shadow: 0 0 0 3px rgba(26,62,43,0.16);
-}
-
-.rz-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: none;
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-size: 16px;
-  font-weight: 400; /* v05.08: knoppen niet vet */
-  cursor: pointer;
-  width: fit-content;
-  justify-self: start; /* voorkomt grid-stretch */
-}
-
-.rz-btn:disabled { opacity: 0.7; cursor: not-allowed; }
-
-.rz-btn-primary {
-  font-weight: 400;
-  background: var(--color-brand-green);
-  color: #FFFFFF;
-}
-
-.rz-btn-secondary {
-  background: #111827;
-  color: #FFFFFF;
-}
-
-.rz-alert {
-  border: 1px solid rgba(180,35,24,0.35);
-  background: rgba(180,35,24,0.08);
-  color: #B42318;
-  padding: 12px;
-  border-radius: 12px;
-  font-weight: 700;
-}
-
-.rz-row {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.rz-muted {
-  color: var(--color-text-muted);
-}
-
-.rz-brandlogo-login {
-  height: 72px;
-  width: auto;
-  display: block;
-  margin: 0 auto;
-}
-.rz-brandlogo-header{
-  height:28px !important;
-  width:auto !important;
-  display:block;
-}
-
-.rz-btn-full{width:100%; justify-self: stretch;}
-
-.rz-exitbar{padding:0 var(--m-std) var(--m-std);}
-
-.rz-form{display:grid; gap:14px;}
-
-.rz-h1{margin:0;font-size:20px;font-weight:700;}
-.rz-link{color:var(--color-brand-green);font-weight:700;text-decoration:none;}
-.rz-link:hover{text-decoration:underline;}
-
-.rz-btn-center{justify-self:center;}
-
-
-.rz-action-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 24px;
-}
-
-.rz-action-btn {
-  width: 100%;
-  padding: 14px 16px;
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  font-weight: 600;
-  color: #1f2937;
-  cursor: pointer;
-}
-
-.rz-action-btn:hover {
-  background: #f3faf6;
-}
-
-.rz-login-title {
-  text-align: center;
-  color: #065f46;
-  font-size: 28px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.rz-login-subtitle {
-  text-align: center;
-  color: #374151;
-  font-size: 14px;
-  margin-bottom: 24px;
-}
-
-.rz-action-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-top: 24px;
-}
-
-.rz-action-btn {
-  width: 100%;
-  padding: 14px 16px;
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  font-weight: 600;
-  color: #1f2937;
-  cursor: pointer;
-}
-
-.rz-action-btn:hover {
-  background: #f3faf6;
-}
-
-
-/* Tile grid responsive */
-.rz-tile-grid {
-  display: grid;
-  gap: 20px;
-  grid-template-columns: repeat(1, 1fr);
-}
-
-@media (min-width: 480px) {
-  .rz-tile-grid { grid-template-columns: repeat(2, 1fr); }
-}
-
-@media (min-width: 768px) {
-  .rz-tile-grid { grid-template-columns: repeat(3, 1fr); }
-}
-
-@media (min-width: 1200px) {
-  .rz-tile-grid { grid-template-columns: repeat(4, 1fr); }
-}
-
-.rz-tile {
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
-  border-radius: 12px;
-  padding: 24px;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.rz-tile:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-  border-color: #d1d5db;
-}
-
-/* Startpagina tiles */
-.rz-tile-grid{
-  display:grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;      /* marge tussen tegels */
-  padding: 16px;  /* standaard marge rondom tegels */
-}
-
-.rz-tile-btn{
-  width: 100%;
-  justify-self: stretch;
-  justify-content: flex-start;
-  font-weight: 400 !important; /* ook voor actietegels: niet vet */
-}
-
-.rz-tile-label{
-  font-weight: 400 !important;
-}
-
-.rz-buildtag{
-  display:inline-block;
-  margin: 0 0 10px 2px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(0,0,0,0.12);
-  background: rgba(255,255,255,0.7);
-  font-size: 12px;
-}
-/* End Startpagina tiles */
-
-/* Startpagina tiles v01.03.02 */
-.rz-tile-grid{
-  display:grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  max-width: 1000px;
-  gap:16px;
-  padding:16px;
-}
-
-@media (min-width:1100px){
-  .rz-tile-grid{
-    grid-template-columns: repeat(4, 1fr); /* max 4 horizontaal */
-  }
-}
-
-.rz-tile{
-  aspect-ratio:1/1;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  background:#ffffff;
-  border-radius:12px;
-  box-shadow:0 3px 8px rgba(0,0,0,0.08);
-  transition:transform .15s ease, box-shadow .15s ease;
-  cursor:pointer;
-}
-
-.rz-tile:hover{
-  transform:translateY(-2px);
-  box-shadow:0 6px 14px rgba(0,0,0,0.12);
-}
-
-.rz-tile-icon{
-  font-size:2.2rem; /* icon verdubbeld */
-}
-
-.rz-tile-label{
-  margin-top:8px;
-  font-weight:400;
-  color:#1b5e20; /* donkergroen */
-  text-align:center;
-}
-
-.rz-buildtag{
-  position:fixed;
-  right:16px;
-  bottom:12px;
-  font-size:12px;
-  opacity:0.55;
-  pointer-events:none;
-}
-/* End Startpagina tiles v01.03.02 */
-
-
-/* ===== User & Household box in header ===== */
-.rz-userbox {
-  background: #ffffff;
-  padding: 6px 16px;
-  border-radius: 4px;
-  text-align: center;
-  margin: 4px 0; /* minimal top and bottom margin */
-}
-
-.rz-userbox div {
-  font-size: 14px;
-  font-weight: normal;
-}
-
-
-/* ===== Header Layout Final ===== */
-.rz-header {
-  position: relative;
-  display: flex;
-  align-items: center; /* vertical center */
-  justify-content: flex-start;
-}
-
-
-
-.rz-userbox-wrapper {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.rz-userbox {
-  background: #ffffff;
-  padding: 6px 16px;
-  border-radius: 4px;
-  text-align: center;
-  margin: 4px 0; /* minimal top and bottom margin */
-}
-
-.rz-userbox div {
-  font-size: 14px;
-  font-weight: normal;
-}
-
-
-/* ===== Header layout aligned with styleguide ===== */
-.rz-header {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.rz-header-left {
-  display: flex;
-  align-items: center;
-}
-
-.rz-header-logo {
-  display: flex;
-  align-items: center;
-}
-
-
-/* ===== Header Title Color Conform Styleguide v05.10 ===== */
-.rz-header-title {
-  color: #FFFFFF;
-  font-weight: normal;
-}
-
-
-/* ===============================
-   BRAND TOKENS
-================================= */
+/* =========================================
+   REZZERV DESIGN FOUNDATION v1.0
+========================================= */
 
 :root {
   --color-brand-primary: #1A3E2B;
-  --color-table-grid: #8fd19e;
-  --color-table-filter: #d9f5e0;
+
+  --elevation-0: none;
+  --elevation-1: 0 2px 6px rgba(0,0,0,0.10);
+  --elevation-1-hover: 0 4px 10px rgba(0,0,0,0.14);
+  --elevation-2: 0 10px 24px rgba(0,0,0,0.18);
+  --elevation-3: 0 18px 40px rgba(0,0,0,0.28);
 }
 
-/* ===============================
-   ELEVATED CARD
-================================= */
+/* ================= BUTTONS ================= */
 
-.rz-card-elevated {
-  background: #ffffff;
-  border: 2px solid var(--color-brand-primary);
-  border-radius: 14px;
-  padding: 20px;
-  box-shadow: 0 10px 28px rgba(0,0,0,0.18);
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-/* ===============================
-   MATRIX TABLE
-================================= */
-
-.rz-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.rz-table th {
-  background: var(--color-brand-primary);
-  color: #ffffff;
-  border: 1px solid var(--color-table-grid);
-  padding: 8px;
-}
-
-.rz-table td {
-  background: #ffffff;
-  border: 1px solid var(--color-table-grid);
-  padding: 8px;
-}
-
-.rz-table-filter {
-  background: var(--color-table-filter);
-  width: 100%;
-  margin-top: 4px;
-}
-
-.rz-align-right {
-  text-align: right;
-}
-
-.rz-align-left {
-  text-align: left;
-}
-
-
-/* ===============================
-   BUTTON SYSTEM (REFACTORED)
-================================= */
-
-.rz-button-primary {
+button.rz-button-primary {
   background-color: var(--color-brand-primary);
   color: #ffffff;
   font-weight: 600;
@@ -522,13 +23,16 @@ body {
   padding: 8px 14px;
   border-radius: 6px;
   cursor: pointer;
+  box-shadow: var(--elevation-1);
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
 }
 
-.rz-button-primary:hover {
-  filter: brightness(0.92);
+button.rz-button-primary:hover {
+  box-shadow: var(--elevation-1-hover);
+  transform: translateY(-1px);
 }
 
-.rz-button-secondary {
+button.rz-button-secondary {
   background-color: #ffffff;
   color: var(--color-brand-primary);
   border: 2px solid var(--color-brand-primary);
@@ -536,8 +40,21 @@ body {
   padding: 8px 14px;
   border-radius: 6px;
   cursor: pointer;
+  box-shadow: var(--elevation-1);
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
 }
 
-.rz-button-secondary:hover {
-  background-color: #f3faf6;
+button.rz-button-secondary:hover {
+  box-shadow: var(--elevation-1-hover);
+  transform: translateY(-1px);
+}
+
+/* ================= CARD ================= */
+
+.rz-card-elevated {
+  background: #ffffff;
+  border: 2px solid var(--color-brand-primary);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: var(--elevation-2);
 }

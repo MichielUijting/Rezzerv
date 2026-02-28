@@ -8,7 +8,7 @@
   --rz-accent-dark: #2e7d4d;
   --rz-danger: #b42318;
   --rz-radius: 18px;
-  --rz-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  
 }
 
 *{ box-sizing:border-box; }
@@ -32,8 +32,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
   background:var(--rz-card);
   border:2px solid var(--rz-frame);
   border-radius:var(--rz-radius);
-  box-shadow:var(--rz-shadow);
-  padding:26px;
+  
 }
 
 .card-login{
@@ -98,7 +97,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 
 .input:focus{
   border-color: var(--rz-accent-dark);
-  box-shadow: 0 0 0 4px rgba(141,216,166,0.25);
+  
 }
 
 .input::placeholder{
