@@ -38,7 +38,7 @@ export default function Voorraad() {
         <div className="rz-content-inner">
           <div style={{
             background: "#ffffff",
-            border: "2px solid #0b5d3b",
+            border: "2px solid #1f5f3a",
             borderRadius: "14px",
             padding: "20px",
             boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
@@ -56,13 +56,13 @@ export default function Voorraad() {
                   <th style={{
                     border: "1px solid #8fd19e",
                     width: "50px",
-                    background: "#0b5d3b",
+                    background: "#1f5f3a",
                     color: "#ffffff",
                     textAlign: "left"
                   }}>
                     <input
                       type="checkbox"
-                      style={{ accentColor: "#0b5d3b" }}
+                      style={{ accentColor: "#1f5f3a" }}
                       checked={selected.length === filteredData.length && filteredData.length > 0}
                       onChange={() =>
                         setSelected(selected.length === filteredData.length ? [] : filteredData.map(d => d.id))
@@ -78,7 +78,7 @@ export default function Voorraad() {
                     <th key={col.key} style={{
                       border: "1px solid #8fd19e",
                       padding: "6px",
-                      background: "#0b5d3b",
+                      background: "#1f5f3a",
                       color: "#ffffff",
                       textAlign: col.align
                     }}>
@@ -108,7 +108,7 @@ export default function Voorraad() {
                     <td style={{ border: "1px solid #8fd19e", textAlign: "left" }}>
                       <input
                         type="checkbox"
-                        style={{ accentColor: "#0b5d3b" }}
+                        style={{ accentColor: "#1f5f3a" }}
                         checked={selected.includes(row.id)}
                         onChange={() => toggleSelect(row.id)}
                       />
