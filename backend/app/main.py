@@ -40,7 +40,9 @@ def ensure_household(email: str):
     return households[email]
 
 
-
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
 
 
 @app.post("/api/auth/login")
@@ -67,54 +69,3 @@ def get_household(authorization: Optional[str] = Header(None)):
 
     household = ensure_household(email)
     return household
-
-
-# =========================
-# Database Setup
-# =========================
-import os
-import time
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.orm import declarative_base
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-engine = create_engine(DATABASE_URL)
-SessionLocal = sessionmaker(bind=engine)
-Base = declarative_base()
-
-# Retry DB connect
-for attempt in range(10):
-    try:
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        break
-    except Exception:
-        time.sleep(1)
-else:
-    raise Exception("Database not reachable after retries")
-
-# Extended health endpoint
-
-    except Exception:
-        return {"status": "degraded", "database": "unreachable"}
-
-
-# =========================
-# Single Health Endpoint
-# =========================
-from sqlalchemy import text
-import os
-
-@app.get("/api/health")
-def health():
-    try:
-        DATABASE_URL = os.getenv("DATABASE_URL")
-        from sqlalchemy import create_engine
-        engine = create_engine(DATABASE_URL)
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-        return {"status": "ok", "database": "connected"}
-    except Exception:
-        return {"status": "degraded", "database": "unreachable"}
