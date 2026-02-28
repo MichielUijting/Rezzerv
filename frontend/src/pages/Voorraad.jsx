@@ -36,33 +36,15 @@ export default function Voorraad() {
       <Header title="Voorraad" />
       <div className="rz-content">
         <div className="rz-content-inner">
-          <div style={{
-            background: "#ffffff",
-            border: "2px solid #1f5f3a",
-            borderRadius: "14px",
-            padding: "20px",
-            boxShadow: "0 8px 24px rgba(0,0,0,0.15)",
-            maxWidth: "900px",
-            margin: "0 auto"
-          }}>
+          <div className="rz-card-elevated">
 
-            <table style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              background: "#ffffff"
-            }}>
+            <table className="rz-table">
               <thead>
                 <tr>
-                  <th style={{
-                    border: "1px solid #8fd19e",
-                    width: "50px",
-                    background: "#1f5f3a",
-                    color: "#ffffff",
-                    textAlign: "left"
-                  }}>
+                  <th className="rz-align-left">
                     <input
                       type="checkbox"
-                      style={{ accentColor: "#1f5f3a" }}
+                      style={{ accentColor: "var(--color-brand-primary)" }}
                       checked={selected.length === filteredData.length && filteredData.length > 0}
                       onChange={() =>
                         setSelected(selected.length === filteredData.length ? [] : filteredData.map(d => d.id))
@@ -70,32 +52,19 @@ export default function Voorraad() {
                     />
                   </th>
                   {[
-                    { key: "artikel", align: "left" },
-                    { key: "aantal", align: "right" },
-                    { key: "locatie", align: "left" },
-                    { key: "sublocatie", align: "left" }
+                    { key: "artikel", align: "rz-align-left" },
+                    { key: "aantal", align: "rz-align-right" },
+                    { key: "locatie", align: "rz-align-left" },
+                    { key: "sublocatie", align: "rz-align-left" }
                   ].map(col => (
-                    <th key={col.key} style={{
-                      border: "1px solid #8fd19e",
-                      padding: "6px",
-                      background: "#1f5f3a",
-                      color: "#ffffff",
-                      textAlign: col.align
-                    }}>
-                      <div style={{ fontWeight: "600" }}>
-                        {col.key.charAt(0).toUpperCase() + col.key.slice(1)}
-                      </div>
+                    <th key={col.key} className={col.align}>
+                      {col.key.charAt(0).toUpperCase() + col.key.slice(1)}
                       <input
                         type="text"
+                        className={"rz-table-filter " + col.align}
                         value={filters[col.key] || ""}
                         onChange={(e) => handleFilterChange(col.key, e.target.value)}
                         placeholder="Filter"
-                        style={{
-                          width: "100%",
-                          marginTop: "4px",
-                          background: "#d9f5e0",
-                          textAlign: col.align
-                        }}
                       />
                     </th>
                   ))}
@@ -105,26 +74,18 @@ export default function Voorraad() {
               <tbody>
                 {filteredData.map(row => (
                   <tr key={row.id}>
-                    <td style={{ border: "1px solid #8fd19e", textAlign: "left" }}>
+                    <td className="rz-align-left">
                       <input
                         type="checkbox"
-                        style={{ accentColor: "#1f5f3a" }}
+                        style={{ accentColor: "var(--color-brand-primary)" }}
                         checked={selected.includes(row.id)}
                         onChange={() => toggleSelect(row.id)}
                       />
                     </td>
-                    <td style={{ border: "1px solid #8fd19e", padding: "8px", textAlign: "left" }}>
-                      {row.artikel}
-                    </td>
-                    <td style={{ border: "1px solid #8fd19e", padding: "8px", textAlign: "right" }}>
-                      {row.aantal}
-                    </td>
-                    <td style={{ border: "1px solid #8fd19e", padding: "8px", textAlign: "left" }}>
-                      {row.locatie}
-                    </td>
-                    <td style={{ border: "1px solid #8fd19e", padding: "8px", textAlign: "left" }}>
-                      {row.sublocatie}
-                    </td>
+                    <td className="rz-align-left">{row.artikel}</td>
+                    <td className="rz-align-right">{row.aantal}</td>
+                    <td className="rz-align-left">{row.locatie}</td>
+                    <td className="rz-align-left">{row.sublocatie}</td>
                   </tr>
                 ))}
               </tbody>
