@@ -69,3 +69,10 @@ def get_household(authorization: Optional[str] = Header(None)):
 
     household = ensure_household(email)
     return household
+
+
+# SQLite datamodel initialization
+from app.db import engine, Base
+from app.models import household, space, sublocation, inventory
+
+Base.metadata.create_all(bind=engine)
