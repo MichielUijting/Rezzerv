@@ -6,6 +6,26 @@ from datetime import datetime
 
 app = FastAPI()
 
+from sqlalchemy import text
+import time
+from app.db.session import engine
+from app.db.base import Base
+
+# Database retry
+for attempt in range(10):
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        break
+    except Exception:
+        time.sleep(1)
+else:
+    raise Exception("Database not reachable after retries")
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+
 # In-memory opslag (MVP)
 households = {}
 users = {
