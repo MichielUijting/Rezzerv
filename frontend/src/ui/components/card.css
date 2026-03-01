@@ -15,4 +15,5 @@
   padding: var(--space-lg);
   box-shadow: var(--elevation-2);
   border: 2px solid var(--color-brand-primary);
+  overflow: hidden;
 }

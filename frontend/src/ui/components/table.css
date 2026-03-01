@@ -13,18 +13,18 @@ table.rz-table {
   border-collapse: collapse;
   table-layout: fixed;
   background: #ffffff;
-  border: 2px solid var(--color-brand-primary); /* dark green outline */
 }
 
 /* Header row */
 table.rz-table thead th {
+  height: 56px;
   background: var(--color-brand-primary);
   color: var(--color-text-inverse);
   font-weight: 700;
   text-align: left;
-  padding: var(--space-sm);
-  border: 1px solid var(--color-border-default); /* light green gridlines */
-  vertical-align: bottom;
+  padding: var(--space-md);
+  border: 1px solid var(--color-table-grid); /* light green gridlines */
+  vertical-align: middle;
 }
 
 table.rz-table thead th.rz-align-right {
@@ -35,9 +35,9 @@ table.rz-table thead th.rz-align-right {
 table.rz-table thead input.rz-table-filter {
   width: 100%;
   margin-top: var(--space-xs);
-  padding: 6px 8px;
+  padding: 0 var(--space-sm); height: 36px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border-default);
+  border: 1px solid var(--color-table-grid);
   background: var(--color-brand-light);
   color: var(--color-text-primary);
   font-weight: 600; /* matches earlier spec for placeholders & inputs */
@@ -49,8 +49,8 @@ table.rz-table thead input.rz-table-filter::placeholder {
 
 /* Body cells */
 table.rz-table tbody td {
-  padding: var(--space-sm);
-  border: 1px solid var(--color-border-default);
+  padding: var(--space-md);
+  border: 1px solid var(--color-table-grid);
   background: #ffffff;
   vertical-align: middle;
 }
@@ -63,8 +63,8 @@ table.rz-table tbody tr:nth-child(even) td {
 /* Checkbox column */
 table.rz-table th.rz-col-select,
 table.rz-table td.rz-col-select {
-  width: 44px;
-  padding: var(--space-sm);
+  width: 48px;
+  padding: var(--space-md);
   text-align: center;
 }
 

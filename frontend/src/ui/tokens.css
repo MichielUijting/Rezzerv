@@ -8,12 +8,15 @@
   /* ================= Colors ================= */
 
   --color-brand-primary: #1A3E2B;
+  --color-brand-green: var(--color-brand-primary);
   --color-brand-light: #D9F5E0;
 
   --color-text-primary: #1A1A1A;
   --color-text-inverse: #FFFFFF;
 
-  --color-border-default: #CFE8D6;
+  --color-border-default: #8FD19E;
+  --color-table-grid: var(--color-border-default);
+  --color-table-filter: var(--color-brand-light);
 
   /* ================= Radius ================= */
 
