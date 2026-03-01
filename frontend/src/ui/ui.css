@@ -564,3 +564,16 @@ body {
 
 /* Apply elevation to cards */
 
+
+
+/* =========================================
+   UI COMPONENT LAYER IMPORTS (v1.0)
+   Loaded last so component CSS wins.
+========================================= */
+@import "./tokens.css";
+@import "./base.css";
+@import "./components/button.css";
+@import "./components/card.css";
+@import "./components/header.css";
+@import "./components/table.css";
+@import "./components/form.css";
