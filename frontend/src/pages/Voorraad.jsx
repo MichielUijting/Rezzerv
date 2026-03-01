@@ -1,8 +1,4 @@
-import "../ui/components/table.css";
-
-import React
-import Card from '../ui/Card';
-import Button from '../ui/Button';, { useState } from "react";
+import React, { useState } from "react";
 import Header from "../ui/Header";
 
 const initialData = [
@@ -39,7 +35,7 @@ export default function Voorraad() {
       <Header title="Voorraad" />
       <div className="rz-content">
         <div className="rz-content-inner">
-          <Card>
+          <div className="rz-card-elevated">
 
             <table className="rz-table">
               <thead>
@@ -95,9 +91,9 @@ export default function Voorraad() {
             </table>
 
             <div style={{ marginTop: "18px", display: "flex", gap: "12px" }}>
-              <Button variant="primary">Verwijderen</Button>
-              <Button variant="primary">Exporteren</Button>
-            </Card>
+              <button className="rz-button-primary">Verwijderen</button>
+              <button className="rz-button-primary">Exporteren</button>
+            </div>
 
           </div>
         </div>
