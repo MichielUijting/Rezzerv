@@ -1,0 +1,47 @@
+
+/* =========================================
+   REZZERV TABLE COMPONENT v1.0
+========================================= */
+
+.rz-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rz-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.rz-table th {
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+  text-align: left;
+  padding: var(--space-sm);
+}
+
+.rz-table td {
+  padding: var(--space-sm);
+  border: 1px solid var(--color-border-default);
+}
+
+.rz-table tr:nth-child(even) {
+  background: var(--color-brand-light);
+}
+
+.rz-table-filter {
+  background: var(--color-brand-light);
+  padding: var(--space-xs);
+}
+
+.rz-table-checkbox {
+  text-align: center;
+}
+
+.rz-table-footer {
+  margin-top: var(--space-md);
+  display: flex;
+  gap: var(--space-sm);
+}
+

@@ -1,3 +1,4 @@
+import "../ui/components/table.css";
 
 import React, { useState } from "react";
 import Header from "../ui/Header";
