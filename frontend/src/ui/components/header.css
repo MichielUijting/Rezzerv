@@ -1,0 +1,62 @@
+
+/* =========================================
+   REZZERV HEADER COMPONENT v1.0
+   Token-first, fallback-safe (no UI break)
+========================================= */
+
+.rz-header {
+  height: 56px; /* styleguide header height */
+  width: 100%;
+  background: var(--color-brand-primary, var(--color-brand-green));
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 0 var(--space-lg, var(--m-std));
+}
+
+.rz-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.rz-header-title {
+  color: var(--color-text-inverse, #FFFFFF);
+  font-weight: normal;
+}
+
+/* Centered userbox */
+.rz-userbox-wrapper {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.rz-userbox {
+  background: #ffffff;
+  border-radius: var(--radius-sm, 4px);
+  padding: 6px 16px;
+  text-align: center;
+
+  /* minimal vertical margin inside header */
+  margin: 4px 0;
+}
+
+.rz-userbox div {
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--color-text-primary, var(--color-text-default));
+}
+
+.rz-header-logo {
+  display: flex;
+  align-items: center;
+}
+
+.rz-header-logo img {
+  height: 28px !important;
+  width: auto !important;
+}

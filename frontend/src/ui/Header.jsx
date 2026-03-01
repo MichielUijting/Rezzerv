@@ -1,5 +1,6 @@
 import { useLocation } from "react-router-dom";
 import BrandLogo from "./BrandLogo.jsx";
+import "./components/header.css";
 
 export default function Header({ title }) {
   const location = useLocation();
