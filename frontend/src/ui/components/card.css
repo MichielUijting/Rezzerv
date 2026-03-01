@@ -1,19 +1,10 @@
-
-/* =========================================
-   REZZERV CARD COMPONENT v1.0
-========================================= */
-
-.rz-card {
+/* REZZERV CARD COMPONENT v1.1 (token-driven) */
+.rz-card,
+.rz-card-elevated{
   background: #ffffff;
   border-radius: var(--radius-lg);
   padding: var(--space-lg);
-}
-
-.rz-card-elevated {
-  background: #ffffff;
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  box-shadow: var(--elevation-2);
   border: 2px solid var(--color-brand-primary);
+  box-shadow: var(--elevation-2);
   overflow: hidden;
 }

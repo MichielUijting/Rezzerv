@@ -39,13 +39,14 @@ export default function Voorraad() {
         <div className="rz-content-inner">
           <div className="rz-card-elevated">
 
-            <div className="rz-table-scroll">
             <table className="rz-table">
               <thead>
                 <tr>
-                  <th className="rz-col-select">
+                  <th className="rz-align-left">
                     <input
-                      type="checkbox"                      checked={selected.length === filteredData.length && filteredData.length > 0}
+                      type="checkbox"
+                      style={{ accentColor: "var(--color-brand-primary)" }}
+                      checked={selected.length === filteredData.length && filteredData.length > 0}
                       onChange={() =>
                         setSelected(selected.length === filteredData.length ? [] : filteredData.map(d => d.id))
                       }
@@ -74,9 +75,11 @@ export default function Voorraad() {
               <tbody>
                 {filteredData.map(row => (
                   <tr key={row.id}>
-                    <td className="rz-col-select">
+                    <td className="rz-align-left">
                       <input
-                        type="checkbox"                        checked={selected.includes(row.id)}
+                        type="checkbox"
+                        style={{ accentColor: "var(--color-brand-primary)" }}
+                        checked={selected.includes(row.id)}
                         onChange={() => toggleSelect(row.id)}
                       />
                     </td>
@@ -87,9 +90,7 @@ export default function Voorraad() {
                   </tr>
                 ))}
               </tbody>
-            
             </table>
-          </div>
 
             <div style={{ marginTop: "18px", display: "flex", gap: "12px" }}>
               <button className="rz-button-primary">Verwijderen</button>
