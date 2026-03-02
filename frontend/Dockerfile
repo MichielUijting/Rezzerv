@@ -1,5 +1,9 @@
 FROM node:18-alpine AS build
 WORKDIR /app
+
+# Inject build tag into the Vite build (so the UI can show the correct version).
+ARG REZZERV_VERSION
+ENV VITE_REZZERV_VERSION=${REZZERV_VERSION}
 COPY package.json .
 RUN npm install
 COPY . .
