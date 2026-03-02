@@ -6,10 +6,12 @@
   padding: var(--space-xl);
 }
 
+
 .rz-card-login {
+  max-width: 520px;
   width: 100%;
-  max-width: 560px;
 }
+
 
 .rz-card-home {
   width: 100%;
@@ -42,4 +44,10 @@
 
 .rz-tile-label {
   font-weight: 500;
+}
+
+
+/* Ensure card height is content-driven */
+.rz-card {
+  height: auto;
 }

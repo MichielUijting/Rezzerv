@@ -36,12 +36,16 @@ body {
   flex-direction: column;
 }
 
+
 .rz-content {
   flex: 1;
   display: flex;
   justify-content: center;
-  padding: 24px;
+  align-items: flex-start;   /* start below header */
+  padding: 32px 24px;        /* normal margin top & sides */
 }
+
+
 
 .rz-content-inner {
   width: 100%;
@@ -49,3 +53,4 @@ body {
   display: flex;
   justify-content: center;
 }
+
