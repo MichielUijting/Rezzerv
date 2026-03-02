@@ -2,7 +2,6 @@ import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 import Input from '../../ui/Input.jsx'
 import Button from '../../ui/Button.jsx'
-import BrandLogo from '../../ui/BrandLogo.jsx'
 import { apiPost } from '../../lib/apiClient.js'
 import { useState } from 'react'
 
@@ -34,11 +33,7 @@ export default function LoginPage({ onLoggedIn }) {
       <div className="rz-content">
         <div className="rz-content-inner">
           <Card className="rz-card-login">
-            <div className="rz-logo-login">
-              <BrandLogo  />
-            </div>
-
-            <form className="rz-form" onSubmit={onSubmit}>
+<form className="rz-form" onSubmit={onSubmit}>
               <Input
                 label="E-mail"
                 value={email}
