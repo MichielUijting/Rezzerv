@@ -51,3 +51,19 @@
 .rz-card {
   height: auto;
 }
+
+
+/* Reduce tile dimensions by 30% */
+.rz-tile {
+  width: 70%;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto;
+}
+
+.rz-tile-icon {
+  font-size: 20px; /* reduced from 28px approx */
+}
+
+.rz-tile-label {
+  font-size: 0.9rem;
+}

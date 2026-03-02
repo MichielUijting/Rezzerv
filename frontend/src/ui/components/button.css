@@ -33,3 +33,11 @@ a.rz-button-secondary[role="button"]:hover{
   box-shadow: var(--elevation-1-hover);
   transform: translateY(-1px);
 }
+
+
+/* Buttons size based on content */
+button.rz-button-primary,
+button.rz-button-secondary {
+  display: inline-block;
+  width: auto;
+}
