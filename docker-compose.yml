@@ -1,7 +1,6 @@
 services:
   db:
     image: postgres:15
-    container_name: rezzerv_db
     restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
@@ -14,7 +13,6 @@ services:
 
   backend:
     build: ./backend
-    container_name: rezzerv_backend
     restart: unless-stopped
     ports:
       - "8000:8000"
@@ -25,8 +23,11 @@ services:
       - db
 
   frontend:
-    build: ./frontend
-    container_name: rezzerv_frontend
+    build:
+      context: ./frontend
+      args:
+        # Provided by start.bat (reads VERSION.txt). Fallback keeps compose usable without the bat.
+        REZZERV_VERSION: ${REZZERV_VERSION:-Rezzerv-dev}
     restart: unless-stopped
     ports:
       - "5173:80"

@@ -8,15 +8,12 @@
   /* ================= Colors ================= */
 
   --color-brand-primary: #1A3E2B;
-  --color-brand-green: var(--color-brand-primary);
   --color-brand-light: #D9F5E0;
 
   --color-text-primary: #1A1A1A;
   --color-text-inverse: #FFFFFF;
 
-  --color-border-default: #8FD19E;
-  --color-table-grid: var(--color-border-default);
-  --color-table-filter: var(--color-brand-light);
+  --color-border-default: #CFE8D6;
 
   /* ================= Radius ================= */
 
@@ -42,4 +39,5 @@
   --elevation-2: 0 10px 24px rgba(0,0,0,0.18);
   --elevation-3: 0 18px 40px rgba(0,0,0,0.28);
 
+  --color-table-grid: #8FD19E;
 }

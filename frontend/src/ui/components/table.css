@@ -1,103 +1,80 @@
-/* =========================================
-   REZZERV TABLE COMPONENT v1.0 (Voorraad)
-   Spreadsheet-like matrix table.
-   Uses ONLY tokens.
-========================================= */
+/* REZZERV TABLE COMPONENT v2.0 (spreadsheet matrix) */
 
-.rz-table-wrap {
+.rz-table-wrapper,
+.rz-table-scroll{
   width: 100%;
+  overflow-x: auto;
 }
 
-table.rz-table {
+table.rz-table{
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
   background: #ffffff;
 }
 
-/* Header row */
-table.rz-table thead th {
-  height: 56px;
+/* header row */
+.rz-table thead tr.rz-table-header th,
+.rz-table thead tr:first-child th{
   background: var(--color-brand-primary);
   color: var(--color-text-inverse);
-  font-weight: 700;
-  text-align: left;
-  padding: var(--space-md);
-  border: 1px solid var(--color-table-grid); /* light green gridlines */
-  vertical-align: middle;
-}
-
-table.rz-table thead th.rz-align-right {
-  text-align: right;
-}
-
-/* Filter inputs inside header cells */
-table.rz-table thead input.rz-table-filter {
-  width: 100%;
-  margin-top: var(--space-xs);
-  padding: 0 var(--space-sm); height: 36px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-table-grid);
-  background: var(--color-brand-light);
-  color: var(--color-text-primary);
-  font-weight: 600; /* matches earlier spec for placeholders & inputs */
-}
-
-table.rz-table thead input.rz-table-filter::placeholder {
   font-weight: 600;
+  height: 56px;
 }
 
-/* Body cells */
-table.rz-table tbody td {
-  padding: var(--space-md);
+/* filter row */
+.rz-table thead tr.rz-table-filter,
+.rz-table thead tr:nth-child(2){
+  background: var(--color-brand-light);
+}
+
+.rz-table th,
+.rz-table td{
   border: 1px solid var(--color-table-grid);
-  background: #ffffff;
+  padding: var(--space-md);
   vertical-align: middle;
 }
 
-/* zebra subtle (optional) */
-table.rz-table tbody tr:nth-child(even) td {
+/* inputs inside filter row */
+.rz-table thead input,
+.rz-table thead select{
+  width: 100%;
+  height: 36px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-table-grid);
+  border-radius: var(--radius-sm);
   background: #ffffff;
 }
 
-/* Checkbox column */
-table.rz-table th.rz-col-select,
-table.rz-table td.rz-col-select {
+/* checkbox column */
+.rz-table th:first-child,
+.rz-table td:first-child{
   width: 48px;
-  padding: var(--space-md);
   text-align: center;
 }
 
-table.rz-table input[type="checkbox"] {
-  accent-color: var(--color-brand-primary);
-  width: 16px;
-  height: 16px;
-}
-
-/* Right-align numeric column */
-table.rz-table td.rz-align-right {
+/* numeric alignment helper */
+.rz-num,
+.rz-table td.rz-num,
+.rz-table th.rz-num{
   text-align: right;
+  padding-right: var(--space-lg);
 }
 
-/* Prevent text from colliding in narrow layouts */
-table.rz-table td,
-table.rz-table th {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+/* row height feel */
+.rz-table tbody td{
+  height: 52px;
 }
 
-/* Responsive: allow horizontal scroll on small screens */
-.rz-table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  width: 100%;
+/* hover + subtle zebra */
+.rz-table tbody tr:nth-child(even){
+  background: #fafafa;
+}
+.rz-table tbody tr:hover{
+  background: var(--color-brand-light);
 }
 
-/* Table footer actions inside card */
-.rz-table-actions {
-  display: flex;
-  gap: var(--space-sm);
-  justify-content: flex-start;
-  margin-top: var(--space-md);
+/* checkbox color */
+.rz-table input[type="checkbox"]{
+  accent-color: var(--color-brand-primary);
 }
