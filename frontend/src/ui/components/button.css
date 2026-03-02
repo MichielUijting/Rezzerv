@@ -41,3 +41,12 @@ button.rz-button-secondary {
   display: inline-block;
   width: auto;
 }
+
+
+/* Global button behaviour: never stretch */
+button.rz-button-primary,
+button.rz-button-secondary {
+  display: inline-block;
+  width: auto;
+  align-self: flex-start;
+}

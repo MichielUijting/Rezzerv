@@ -57,11 +57,14 @@ body {
 
 
 /* --- Form vertical spacing normalisation --- */
+
 .rz-form {
   display: flex;
   flex-direction: column;
-  gap: 20px;   /* consistent spacing between fields */
+  gap: 20px;
+  align-items: flex-start;   /* prevent button stretch globally */
 }
+
 
 .rz-form-actions {
   margin-top: 4px;
