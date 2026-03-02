@@ -70,7 +70,7 @@
   height: 110px;
   background: #ffffff;
   border-radius: 16px;
-  border: 2px solid var(--color-brand-primary);
+  border: 1px solid #F5F7F6;   /* subtle light-green border (same as page background) */
   box-shadow: var(--elevation-1);
   display: flex;
   flex-direction: column;
