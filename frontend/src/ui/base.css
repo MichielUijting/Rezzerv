@@ -54,3 +54,15 @@ body {
   justify-content: center;
 }
 
+
+
+/* --- Form vertical spacing normalisation --- */
+.rz-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;   /* consistent spacing between fields */
+}
+
+.rz-form-actions {
+  margin-top: 4px;
+}
