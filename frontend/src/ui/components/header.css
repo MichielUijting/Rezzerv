@@ -22,10 +22,11 @@
   align-items: center;
 }
 
+
 .rz-header-title {
-  color: var(--color-text-inverse, #FFFFFF);
-  font-weight: normal;
+  font-weight: 700;
 }
+
 
 /* Centered userbox */
 .rz-userbox-wrapper {
