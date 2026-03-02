@@ -1,29 +1,34 @@
-
-import BrandLogo from "./BrandLogo";
+import { useLocation } from "react-router-dom";
+import BrandLogo from "./BrandLogo.jsx";
 import "./components/header.css";
 
-export default function Header({ title, user }) {
-  const version = import.meta.env.VITE_REZZERV_VERSION;
+export default function Header({ title }) {
+  const location = useLocation();
+
+  const email = localStorage.getItem("rezzerv_user_email") || "";
+  const household = localStorage.getItem("rezzerv_household_name") || "";
+
+  const showBox =
+    location.pathname !== "/login" && (email || household);
 
   return (
-    <header className="app-header">
-      <div className="app-header__title">{title}</div>
+    <div className="rz-header">
+      <div className="rz-header-left">
+        <div className="rz-header-title">{title}</div>
+      </div>
 
-      <div className="app-header__center">
-        {user && (
-          <div className="userbox">
-            {user.email}
+      {showBox && (
+        <div className="rz-userbox-wrapper">
+          <div className="rz-userbox">
+            {email && <div>{email}</div>}
+            {household && <div>{household}</div>}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div className="app-header__logo">
-        <BrandLogo />
+      <div className="rz-header-logo">
+        <BrandLogo variant="header" />
       </div>
-
-      <div className="app-header__version">
-        Rezzerv v{version}
-      </div>
-    </header>
+    </div>
   );
 }

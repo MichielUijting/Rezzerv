@@ -6,7 +6,7 @@ export default function App() {
   return (
     <>
       <AppRouter />
-      <div className="rz-buildtag" aria-hidden="true">{buildTag}</div>
+      <div className="rz-buildtag" aria-hidden="true">Rezzerv v{buildTag}</div>
     </>
   );
 }

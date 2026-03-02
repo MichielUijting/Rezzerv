@@ -1,44 +1,62 @@
 
-.app-header {
+/* =========================================
+   REZZERV HEADER COMPONENT v1.0
+   Token-first, fallback-safe (no UI break)
+========================================= */
+
+.rz-header {
+  height: 56px; /* styleguide header height */
+  width: 100%;
+  background: var(--color-brand-primary, var(--color-brand-green));
   position: relative;
-  height: 64px;
+
   display: flex;
   align-items: center;
-  background: var(--brand-green);
-  padding: 0 24px;
+  justify-content: space-between;
+
+  padding: 0 var(--space-lg, var(--m-std));
 }
 
-.app-header__title {
-  color: #ffffff;
-  font-weight: 400;
+.rz-header-left {
+  display: flex;
+  align-items: center;
 }
 
-.app-header__center {
+.rz-header-title {
+  color: var(--color-text-inverse, #FFFFFF);
+  font-weight: normal;
+}
+
+/* Centered userbox */
+.rz-userbox-wrapper {
   position: absolute;
   left: 50%;
-  transform: translateX(-50%);
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
-.app-header__logo {
-  margin-left: auto;
-}
-
-.app-header__version {
-  position: fixed;
-  bottom: 16px;
-  right: 16px;
-  background: #e5e5e5;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  color: #555;
-  font-weight: 400;
-}
-
-.userbox {
+.rz-userbox {
   background: #ffffff;
-  border-radius: 8px;
-  padding: 6px 12px;
+  border-radius: var(--radius-sm, 4px);
+  padding: 6px 16px;
+  text-align: center;
+
+  /* minimal vertical margin inside header */
+  margin: 4px 0;
+}
+
+.rz-userbox div {
   font-size: 14px;
-  font-weight: 400;
+  font-weight: normal;
+  color: var(--color-text-primary, var(--color-text-default));
+}
+
+.rz-header-logo {
+  display: flex;
+  align-items: center;
+}
+
+.rz-header-logo img {
+  height: 28px !important;
+  width: auto !important;
 }

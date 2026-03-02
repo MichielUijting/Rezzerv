@@ -13,3 +13,18 @@ body {
   color: var(--color-text-primary);
   background: #F5F7F6;
 }
+
+/* Build tag (version) pill for debugging */
+.rz-buildtag {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  background: #e5e5e5;
+  color: #555;
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-weight: 400;
+  z-index: 9999;
+  pointer-events: none;
+}
