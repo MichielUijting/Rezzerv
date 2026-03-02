@@ -1,12 +1,4 @@
 @echo off
-setlocal enabledelayedexpansion
-
-REM Ensure REZZERV_VERSION is available for docker-compose build args.
-REM start.bat normally sets this from VERSION.txt, but hard-reset.bat might be run standalone.
-if "%REZZERV_VERSION%"=="" (
-  for /f "usebackq delims=" %%v in ("VERSION.txt") do set "REZZERV_VERSION=%%v"
-)
-
 echo ========================================
 echo       Rezzerv Hard Reset Routine
 echo ========================================
