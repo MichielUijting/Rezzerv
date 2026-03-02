@@ -64,17 +64,20 @@
   gap: 24px;
 }
 
+
 .rz-tile {
   width: 110px;
   height: 110px;
   background: #ffffff;
   border-radius: 16px;
+  border: 2px solid var(--color-brand-primary);
   box-shadow: var(--elevation-1);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
 }
+
 
 .rz-tile-icon {
   font-size: 18px;
