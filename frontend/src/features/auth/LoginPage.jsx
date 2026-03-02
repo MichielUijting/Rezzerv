@@ -35,7 +35,7 @@ export default function LoginPage({ onLoggedIn }) {
         <div className="rz-content-inner">
           <Card className="rz-card-login">
             <div className="rz-logo-login">
-              <BrandLogo variant="login" />
+              <BrandLogo  />
             </div>
 
             <form className="rz-form" onSubmit={onSubmit}>

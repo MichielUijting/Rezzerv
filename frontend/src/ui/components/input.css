@@ -1,0 +1,13 @@
+
+.rz-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 1px solid #ccc;
+  font-size: 14px;
+  background: #ffffff;
+}
+.rz-label {
+  margin-bottom: 6px;
+  font-weight: 500;
+}

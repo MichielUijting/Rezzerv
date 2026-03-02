@@ -1,8 +1,7 @@
-export default function Button({ variant = 'primary', fullWidth = false, className = '', ...props }) {
+
+export default function Button({ variant = 'primary', className = '', ...props }) {
   const cls = [
-    'rz-btn',
-    variant === 'primary' ? 'rz-btn-primary' : 'rz-btn-secondary',
-    fullWidth ? 'rz-btn-full' : '',
+    variant === 'primary' ? 'rz-button-primary' : 'rz-button-secondary',
     className
   ].filter(Boolean).join(' ')
   return <button className={cls} {...props} />
