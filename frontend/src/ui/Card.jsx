@@ -1,3 +1,8 @@
-export default function Card({ children }) {
-  return <div className="rz-card">{children}</div>
+
+export default function Card({ children, className = "" }) {
+  return (
+    <div className={`rz-card ${className}`.trim()}>
+      {children}
+    </div>
+  );
 }

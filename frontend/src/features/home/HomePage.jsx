@@ -48,7 +48,7 @@ export default function HomePage() {
 
       <div className="rz-content">
         <div className="rz-content-inner">
-          <Card>
+          <Card className="rz-card-home">
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
               {tiles.map(t => (
                 <div

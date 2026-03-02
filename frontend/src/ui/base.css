@@ -28,3 +28,24 @@ body {
   z-index: 9999;
   pointer-events: none;
 }
+
+
+.rz-screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.rz-content {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.rz-content-inner {
+  width: 100%;
+  max-width: 1120px;
+  display: flex;
+  justify-content: center;
+}

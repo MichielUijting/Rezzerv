@@ -33,7 +33,7 @@ export default function LoginPage({ onLoggedIn }) {
       <Header title="Inloggen" />
       <div className="rz-content">
         <div className="rz-content-inner">
-          <Card>
+          <Card className="rz-card-login">
             <div className="rz-logo-login">
               <BrandLogo variant="login" />
             </div>

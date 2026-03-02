@@ -5,3 +5,13 @@
   border: 2px solid var(--color-brand-primary);
   padding: var(--space-xl);
 }
+
+.rz-card-login {
+  width: 100%;
+  max-width: 560px;
+}
+
+.rz-card-home {
+  width: 100%;
+  max-width: 1120px;
+}
