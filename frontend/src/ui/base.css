@@ -142,3 +142,21 @@ body {
   height: 20px;
   line-height: 1.1;
 }
+
+
+/* --- Normalize checkbox size in table --- */
+.rz-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
+/* --- Reduce header row height (~25%) --- */
+.rz-table thead tr:first-child th {
+  padding: 3px 6px !important;
+  line-height: 1.1;
+}
+
+/* --- Increase filter row height (~25%) --- */
+.rz-table thead tr:nth-child(2) th {
+  padding: 6px 8px !important;
+}
