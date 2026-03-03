@@ -107,3 +107,38 @@ body {
   line-height: 1.2;
   vertical-align: middle;
 }
+
+
+/* --- UI Debug overlay (only when ?uiDebug=1) --- */
+.rz-debug-overlay {
+  border: 1px dashed rgba(0,0,0,0.2);
+  background: rgba(255,255,255,0.8);
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.rz-debug-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.rz-debug-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  font-size: 12px;
+}
+
+.rz-debug-details {
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.rz-debug-details pre {
+  max-height: 220px;
+  overflow: auto;
+  background: rgba(0,0,0,0.04);
+  padding: 8px;
+  border-radius: 8px;
+}

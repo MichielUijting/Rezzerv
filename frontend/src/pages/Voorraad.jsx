@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { isUiDebugEnabled, measureTable } from "../ui/debug/cssProbe.js";
 import Header from "../ui/Header";
 
 const initialData = [
@@ -12,6 +13,25 @@ const initialData = [
 export default function Voorraad() {
   const [data] = useState(initialData);
   const [filters, setFilters] = useState({});
+  const tableRef = useRef(null);
+  const [uiDebug, setUiDebug] = useState(null);
+  const uiDebugEnabled = useMemo(() => (typeof window !== 'undefined' ? isUiDebugEnabled() : false), []);
+
+  useEffect(() => {
+    if (!uiDebugEnabled) return;
+    const t = tableRef.current;
+    if (!t) return;
+    // measure after paint
+    const id = window.requestAnimationFrame(() => {
+      const snapshot = measureTable(t);
+      setUiDebug(snapshot);
+      // also log for easy copy/paste
+      console.group('[Rezzerv UI Debug] Voorraad table metrics');
+      console.log(snapshot);
+      console.groupEnd();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [uiDebugEnabled, filters, selected]);
   const [selected, setSelected] = useState([]);
 
   const handleFilterChange = (key, value) => {
@@ -37,7 +57,7 @@ export default function Voorraad() {
         <div className="rz-content-inner">
           <div className="rz-card">
 
-            <table className="rz-table">
+            <table className="rz-table" ref={tableRef}>
               
               <thead>
                 <tr>
