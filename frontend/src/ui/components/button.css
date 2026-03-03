@@ -50,3 +50,11 @@ button.rz-button-secondary {
   width: auto;
   align-self: flex-start;
 }
+
+
+/* --- Taller buttons + elevation --- */
+button.rz-button-primary,
+button.rz-button-secondary {
+  padding: 12px 20px;   /* approx +20% height */
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}

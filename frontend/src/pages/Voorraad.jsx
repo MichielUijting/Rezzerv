@@ -35,7 +35,7 @@ export default function Voorraad() {
       <Header title="Voorraad" />
       <div className="rz-content">
         <div className="rz-content-inner">
-          <div className="rz-card-elevated">
+          <div className="rz-card">
 
             <table className="rz-table">
               
