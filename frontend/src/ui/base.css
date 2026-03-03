@@ -126,3 +126,19 @@ body {
 .rz-table .rz-input {
   padding: 2px 4px;
 }
+
+
+/* --- Force compact table rows (specificity fix) --- */
+.rz-table tr th,
+.rz-table tr td {
+  padding: 4px 6px !important;
+  line-height: 1.1 !important;
+  vertical-align: middle;
+}
+
+/* Compact filter inputs inside table */
+.rz-table tr .rz-input {
+  padding: 2px 4px !important;
+  height: 20px;
+  line-height: 1.1;
+}
