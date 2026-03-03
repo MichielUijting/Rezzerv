@@ -113,3 +113,16 @@ body {
 .rz-table td:nth-child(2) {
   font-weight: 700;
 }
+
+
+/* --- Further compact table rows (~additional 25%) --- */
+.rz-table th,
+.rz-table td {
+  padding: 4px 6px;
+  line-height: 1.15;
+  vertical-align: middle;
+}
+
+.rz-table .rz-input {
+  padding: 2px 4px;
+}
