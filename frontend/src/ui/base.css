@@ -94,3 +94,22 @@ body {
   padding: 6px 8px;
   font-size: 13px;
 }
+
+
+/* --- Compact table rows (~25% lower) --- */
+.rz-table th,
+.rz-table td {
+  padding: 5px 8px;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+
+/* Compact filter inputs only inside table */
+.rz-table .rz-input {
+  padding: 3px 5px;
+}
+
+/* Artikel column emphasis */
+.rz-table td:nth-child(2) {
+  font-weight: 700;
+}
