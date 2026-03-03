@@ -38,6 +38,7 @@ export default function Voorraad() {
           <div className="rz-card-elevated">
 
             <table className="rz-table">
+              
               <thead>
                 <tr>
                   <th className="rz-align-left">
@@ -50,27 +51,64 @@ export default function Voorraad() {
                       }
                     />
                   </th>
-                  {[
-                    { key: "artikel", align: "rz-align-left" },
-                    { key: "aantal", align: "rz-align-right" },
-                    { key: "locatie", align: "rz-align-left" },
-                    { key: "sublocatie", align: "rz-align-left" }
-                  ].map(col => (
-                    <th key={col.key} className={col.align}>
-                      {col.key.charAt(0).toUpperCase() + col.key.slice(1)}
-                      <input
-                        type="text"
-                        className={"rz-table-filter " + col.align}
-                        value={filters[col.key] || ""}
-                        onChange={(e) => handleFilterChange(col.key, e.target.value)}
-                        placeholder="Filter"
-                      />
-                    </th>
-                  ))}
+                  <th className="rz-align-left">Artikel</th>
+                  <th className="rz-align-right">Aantal</th>
+                  <th className="rz-align-left">Locatie</th>
+                  <th className="rz-align-left">Sublocatie</th>
+                </tr>
+
+                <tr className="rz-table-filters">
+                  <th></th>
+                  <th className="rz-align-left">
+                    <input
+                      type="text"
+                      className="rz-input"
+                      value={filters.artikel || ""}
+                      onChange={(e) => handleFilterChange("artikel", e.target.value)}
+                      placeholder="Filter"
+                    />
+                  </th>
+                  <th className="rz-align-right">
+                    <input
+                      type="text"
+                      className="rz-input"
+                      value={filters.aantal || ""}
+                      onChange={(e) => handleFilterChange("aantal", e.target.value)}
+                      placeholder="Filter"
+                    />
+                  </th>
+                  <th className="rz-align-left">
+                    <input
+                      type="text"
+                      className="rz-input"
+                      value={filters.locatie || ""}
+                      onChange={(e) => handleFilterChange("locatie", e.target.value)}
+                      placeholder="Filter"
+                    />
+                  </th>
+                  <th className="rz-align-left">
+                    <input
+                      type="text"
+                      className="rz-input"
+                      value={filters.sublocatie || ""}
+                      onChange={(e) => handleFilterChange("sublocatie", e.target.value)}
+                      placeholder="Filter"
+                    />
+                  </th>
                 </tr>
               </thead>
+    
 
+              
               <tbody>
+                {filteredData.length === 0 && (
+                  <tr>
+                    <td colSpan="5" style={{ textAlign: "center", padding: "24px", opacity: 0.6 }}>
+                      Geen artikelen gevonden.
+                    </td>
+                  </tr>
+                )}
+
                 {filteredData.map(row => (
                   <tr key={row.id}>
                     <td className="rz-align-left">
@@ -88,11 +126,12 @@ export default function Voorraad() {
                   </tr>
                 ))}
               </tbody>
+    
             </table>
 
             <div style={{ marginTop: "18px", display: "flex", gap: "12px" }}>
-              <button className="rz-button-primary">Verwijderen</button>
-              <button className="rz-button-primary">Exporteren</button>
+              <button className="rz-button-primary" disabled={selected.length === 0}>Verwijderen</button>
+              <button className="rz-button-primary" disabled={selected.length === 0}>Exporteren</button>
             </div>
 
           </div>

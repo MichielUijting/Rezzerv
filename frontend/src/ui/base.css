@@ -69,3 +69,10 @@ body {
 .rz-form-actions {
   margin-top: 4px;
 }
+
+
+/* Subtle separation for filter row */
+.rz-table-filters th {
+  padding-top: 8px;
+  padding-bottom: 12px;
+}
