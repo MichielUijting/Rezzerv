@@ -96,67 +96,14 @@ body {
 }
 
 
-/* --- Compact table rows (~25% lower) --- */
+/* --- Structural table row height fix --- */
+.rz-table {
+  border-collapse: collapse;
+}
+
 .rz-table th,
 .rz-table td {
-  padding: 5px 8px;
+  padding: 6px 10px;
   line-height: 1.2;
   vertical-align: middle;
-}
-
-/* Compact filter inputs only inside table */
-.rz-table .rz-input {
-  padding: 3px 5px;
-}
-
-/* Artikel column emphasis */
-.rz-table td:nth-child(2) {
-  font-weight: 700;
-}
-
-
-/* --- Further compact table rows (~additional 25%) --- */
-.rz-table th,
-.rz-table td {
-  padding: 4px 6px;
-  line-height: 1.15;
-  vertical-align: middle;
-}
-
-.rz-table .rz-input {
-  padding: 2px 4px;
-}
-
-
-/* --- Force compact table rows (specificity fix) --- */
-.rz-table tr th,
-.rz-table tr td {
-  padding: 4px 6px !important;
-  line-height: 1.1 !important;
-  vertical-align: middle;
-}
-
-/* Compact filter inputs inside table */
-.rz-table tr .rz-input {
-  padding: 2px 4px !important;
-  height: 20px;
-  line-height: 1.1;
-}
-
-
-/* --- Normalize checkbox size in table --- */
-.rz-table input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-}
-
-/* --- Reduce header row height (~25%) --- */
-.rz-table thead tr:first-child th {
-  padding: 3px 6px !important;
-  line-height: 1.1;
-}
-
-/* --- Increase filter row height (~25%) --- */
-.rz-table thead tr:nth-child(2) th {
-  padding: 6px 8px !important;
 }
