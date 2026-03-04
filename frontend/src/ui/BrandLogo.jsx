@@ -8,12 +8,3 @@ export default function BrandLogo({ variant = "header" }) {
   const cls = variant === "login" ? "rz-brandlogo-login" : "rz-brandlogo-header";
   return <img src={REZZERV_LOGO_WHITE} alt="Rezzerv" className={cls} />;
 }
-
-
-// TABLE ROW HEIGHT DEBUG
-setTimeout(()=>{
-  try{
-    const r=document.querySelector("tbody tr");
-    if(r){console.debug("TABLE ROW HEIGHT DEBUG:", r.getBoundingClientRect().height);}
-  }catch(e){}
-},1000);

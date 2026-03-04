@@ -1,4 +1,3 @@
-:root{--rz-table-row-height:34px;}
 
 /* =========================================
    REZZERV BASE STYLES v1.0
@@ -81,7 +80,9 @@ body {
 
 /* --- Compact table styling --- */
 .rz-table th,
-.rz-table td{height:var(--rz-table-row-height);padding:0 10px;line-height:var(--rz-table-row-height);}
+.rz-table td {
+  padding: 4px 8px;   /* reduced from default */
+}
 
 .rz-table-filters th {
   padding-top: 4px;
@@ -101,4 +102,8 @@ body {
 }
 
 .rz-table th,
-.rz-table td{height:var(--rz-table-row-height);padding:0 10px;line-height:var(--rz-table-row-height);}
+.rz-table td {
+  padding: 4px 8px;
+  line-height: 1.2;
+  vertical-align: middle;
+}

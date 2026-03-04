@@ -1,4 +1,3 @@
-:root{--rz-table-row-height:34px;}
 /* REZZERV TABLE COMPONENT v2.0 (spreadsheet matrix) */
 
 .rz-table-wrapper,
@@ -30,7 +29,12 @@ table.rz-table{
 }
 
 .rz-table th,
-.rz-table td{height:var(--rz-table-row-height);padding:0 10px;line-height:var(--rz-table-row-height);}
+.rz-table td{
+  border: 1px solid var(--color-table-grid);
+  padding: var(--space-md);
+  vertical-align: middle;
+  text-align: left; /* ensure non-numeric headers/values are left-aligned (th defaults to center in browser CSS) */
+}
 
 /* inputs inside filter row */
 .rz-table thead input,
