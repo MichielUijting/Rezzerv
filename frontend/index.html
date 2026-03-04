@@ -100,5 +100,61 @@ setTimeout(function(){
 })();
 </script>
 
+<script>
+console.log("=== TABLE DEBUG THEORY TEST ===");
+
+const table=document.querySelector("table");
+if(!table){
+  console.log("TABLE DEBUG: no table element found");
+}else{
+  const td=table.querySelector("tbody td");
+  const tr=table.querySelector("tbody tr");
+  const th=table.querySelector("thead th");
+
+  if(td){
+    const cs=getComputedStyle(td);
+    console.log("TD classList:", td.className);
+    console.log("TD padding-top:", cs.paddingTop);
+    console.log("TD padding-bottom:", cs.paddingBottom);
+    console.log("TD line-height:", cs.lineHeight);
+    console.log("TD height:", td.getBoundingClientRect().height);
+  }
+
+  if(tr){
+    console.log("TR classList:", tr.className);
+    console.log("TR height:", tr.getBoundingClientRect().height);
+  }
+
+  if(th){
+    const cs=getComputedStyle(th);
+    console.log("TH classList:", th.className);
+    console.log("TH padding-top:", cs.paddingTop);
+    console.log("TH padding-bottom:", cs.paddingBottom);
+    console.log("TH height:", th.getBoundingClientRect().height);
+  }
+
+  const all=table.querySelectorAll("td");
+  if(all.length){
+    const classes=new Set();
+    all.forEach(e=>{
+      e.classList.forEach(c=>classes.add(c));
+    });
+    console.log("ALL TD CLASSES FOUND:", [...classes]);
+  }
+}
+
+console.log("=== END TABLE DEBUG ===");
+</script>
+<script>
+fetch('/version.json')
+.then(r=>r.json())
+.then(v=>{
+ console.log("REZZERV BUILD INFO");
+ console.log("version:", v.version);
+ console.log("build:", v.build);
+})
+.catch(()=>console.log("REZZERV BUILD INFO: version file missing"));
+</script>
+
 </body>
 </html>
