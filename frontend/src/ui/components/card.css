@@ -71,7 +71,7 @@
   height: 110px;
   background: #ffffff;
   border-radius: 16px;
-  border: 1px solid #DCEFE8; /* slightly darker than page background, still light green */
+  border: 2px solid #DCEFE8; /* slightly darker than page background, still light green */
   box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18); /* darker, clearer elevation */
   display: flex;
   flex-direction: column;
