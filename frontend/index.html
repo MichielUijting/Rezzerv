@@ -33,16 +33,30 @@ table td{
 </style>
 
 
-<style id="rezzerv-header-filter-padding-fix">
-thead th,
-thead td{
+<style id="rezzerv-table-final-fix">
+/* BODY rows controlled by line-height */
+tbody td{
   padding-top:0px !important;
   padding-bottom:0px !important;
+  line-height:20px !important;
 }
 
+/* HEADER compact but readable */
+thead th{
+  padding-top:4px !important;
+  padding-bottom:4px !important;
+}
+
+/* FILTER row determined by input padding */
+thead input{
+  padding-top:2px !important;
+  padding-bottom:2px !important;
+  height:auto !important;
+}
+
+/* remove first-row border anomalies */
 tbody tr:first-child td{
-  padding-top:0px !important;
-  padding-bottom:0px !important;
+  border-top:none !important;
 }
 </style>
 
