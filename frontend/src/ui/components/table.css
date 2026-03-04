@@ -31,7 +31,7 @@ table.rz-table{
 .rz-table th,
 .rz-table td{
   border: 1px solid var(--color-table-grid);
-  padding: 6px 10px;
+  padding: var(--space-md);
   vertical-align: middle;
 }
 
@@ -77,4 +77,10 @@ table.rz-table{
 /* checkbox color */
 .rz-table input[type="checkbox"]{
   accent-color: var(--color-brand-primary);
+}
+
+/* checkbox size normalization */
+.rz-table input[type="checkbox"]{
+  width:16px;
+  height:16px;
 }

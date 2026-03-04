@@ -41,7 +41,7 @@ export default function Voorraad() {
               
               <thead>
                 <tr>
-                  <th className="rz-align-left">
+                  <th>
                     <input
                       type="checkbox"
                       style={{ accentColor: "var(--color-brand-primary)" }}
@@ -52,14 +52,14 @@ export default function Voorraad() {
                     />
                   </th>
                   <th className="rz-align-left">Artikel</th>
-                  <th className="rz-align-right">Aantal</th>
+                  <th className="rz-num">Aantal</th>
                   <th className="rz-align-left">Locatie</th>
                   <th className="rz-align-left">Sublocatie</th>
                 </tr>
 
                 <tr className="rz-table-filters">
                   <th></th>
-                  <th className="rz-align-left">
+                  <th>
                     <input
                       type="text"
                       className="rz-input"
@@ -77,7 +77,7 @@ export default function Voorraad() {
                       placeholder="Filter"
                     />
                   </th>
-                  <th className="rz-align-left">
+                  <th>
                     <input
                       type="text"
                       className="rz-input"
@@ -86,7 +86,7 @@ export default function Voorraad() {
                       placeholder="Filter"
                     />
                   </th>
-                  <th className="rz-align-left">
+                  <th>
                     <input
                       type="text"
                       className="rz-input"
@@ -111,7 +111,7 @@ export default function Voorraad() {
 
                 {filteredData.map(row => (
                   <tr key={row.id}>
-                    <td className="rz-align-left">
+                    <td style={{textAlign:"center"}}>
                       <input
                         type="checkbox"
                         style={{ accentColor: "var(--color-brand-primary)" }}
@@ -120,7 +120,7 @@ export default function Voorraad() {
                       />
                     </td>
                     <td className="rz-align-left">{row.artikel}</td>
-                    <td className="rz-align-right">{row.aantal}</td>
+                    <td className="rz-num">{row.aantal}</td>
                     <td className="rz-align-left">{row.locatie}</td>
                     <td className="rz-align-left">{row.sublocatie}</td>
                   </tr>
