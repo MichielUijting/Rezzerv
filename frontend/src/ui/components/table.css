@@ -33,6 +33,7 @@ table.rz-table{
   border: 1px solid var(--color-table-grid);
   padding: var(--space-md);
   vertical-align: middle;
+  text-align: left; /* ensure non-numeric headers/values are left-aligned (th defaults to center in browser CSS) */
 }
 
 /* inputs inside filter row */

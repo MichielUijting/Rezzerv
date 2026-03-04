@@ -68,7 +68,7 @@ export default function Voorraad() {
                       placeholder="Filter"
                     />
                   </th>
-                  <th className="rz-align-right">
+                  <th className="rz-num">
                     <input
                       type="text"
                       className="rz-input"
