@@ -81,7 +81,7 @@ body {
 /* --- Compact table styling --- */
 .rz-table th,
 .rz-table td {
-  padding: 8px 12px;   /* reduced from default */
+  padding: 4px 8px;   /* reduced from default */
 }
 
 .rz-table-filters th {
@@ -103,7 +103,7 @@ body {
 
 .rz-table th,
 .rz-table td {
-  padding: 6px 10px;
+  padding: 4px 8px;
   line-height: 1.2;
   vertical-align: middle;
 }
