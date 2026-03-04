@@ -107,6 +107,7 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .btn{
+  border:2px solid var(--rz-accent);
   width:100%;
   border:none;
   border-radius:14px;

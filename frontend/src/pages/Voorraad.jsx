@@ -10,6 +10,7 @@ const initialData = [
 ];
 
 export default function Voorraad() {
+  const [detailItem,setDetailItem]=React.useState(null);
   const [data] = useState(initialData);
   const [filters, setFilters] = useState({});
   const [selected, setSelected] = useState([]);
@@ -31,6 +32,27 @@ export default function Voorraad() {
   };
 
   return (
+<>
+
+      {detailItem && (
+        <div className="rz-screen">
+          <Header title="Artikel details" />
+          <div className="rz-content">
+            <div className="rz-content-inner">
+              <div className="rz-card">
+                <div className="rz-form">
+                  <div><strong>Artikel:</strong> {detailItem.artikel}</div>
+                  <div><strong>Aantal:</strong> {detailItem.aantal}</div>
+                  <div><strong>Locatie:</strong> {detailItem.locatie}</div>
+                  <div><strong>Sublocatie:</strong> {detailItem.sublocatie}</div>
+                  <button className="btn btn-primary" onClick={()=>setDetailItem(null)}>Sluiten</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="rz-screen">
       <Header title="Voorraad" />
       <div className="rz-content">
@@ -110,7 +132,7 @@ export default function Voorraad() {
                 )}
 
                 {filteredData.map(row => (
-                  <tr key={row.id}>
+                  <tr key={row.id} onDoubleClick={()=>setDetailItem(row)} style={{cursor:'pointer'}}>
                     <td style={{textAlign:"center"}}>
                       <input
                         type="checkbox"
@@ -138,5 +160,6 @@ export default function Voorraad() {
         </div>
       </div>
     </div>
+</>
   );
 }
