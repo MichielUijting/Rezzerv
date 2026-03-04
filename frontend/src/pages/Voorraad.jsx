@@ -140,3 +140,11 @@ export default function Voorraad() {
     </div>
   );
 }
+
+// TABLE ROW HEIGHT DEBUG
+setTimeout(()=>{
+  try{
+    const r=document.querySelector("tbody tr");
+    if(r){console.debug("TABLE ROW HEIGHT DEBUG:", r.getBoundingClientRect().height);}
+  }catch(e){}
+},1000);
