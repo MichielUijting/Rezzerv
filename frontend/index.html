@@ -82,6 +82,33 @@ body{
 
 </style>
 
+
+<style id="rezzerv-ui-tuning-10505">
+
+/* LOGIN LABELS BOLD (more specific selectors) */
+label,
+.login label,
+form div label{
+  font-weight:700 !important;
+}
+
+/* BUTTON SHADOW (force override Tailwind / component styles) */
+button,
+input[type="button"],
+input[type="submit"],
+a[role="button"]{
+  box-shadow:0 4px 10px rgba(0,0,0,0.25) !important;
+  border-radius:6px;
+}
+
+/* ensure visible lift */
+button:hover,
+input[type="submit"]:hover{
+  box-shadow:0 6px 14px rgba(0,0,0,0.30) !important;
+}
+
+</style>
+
 </head>
   <body>
     <div id="root"></div>
