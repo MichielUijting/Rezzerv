@@ -31,7 +31,7 @@ table.rz-table{
 .rz-table th,
 .rz-table td{
   border: 1px solid var(--color-table-grid);
-  padding: var(--space-md);
+  padding: 6px 10px;
   vertical-align: middle;
 }
 
