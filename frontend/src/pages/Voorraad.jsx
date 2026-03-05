@@ -13,8 +13,7 @@ const initialData = [
 export default function Voorraad() {
   const navigate = useNavigate();
   const openArticle = (id) => { navigate(`/voorraad/${id}`); };
-  const [detailItem,setDetailItem]=React.useState(null);
-  const [data] = useState(initialData);
+    const [data] = useState(initialData);
   const [filters, setFilters] = useState({});
   const [selected, setSelected] = useState([]);
 
@@ -37,18 +36,7 @@ export default function Voorraad() {
   return (
 <>
 
-      {detailItem && (
-        <div className="rz-screen">
-          <Header title="Artikel details" />
-          <div className="rz-content">
-            <div className="rz-content-inner">
-              <div className="rz-card">
-                <div className="rz-form">
-                  <div><strong>Artikel:</strong> {detailItem.artikel}</div>
-                  <div><strong>Aantal:</strong> {detailItem.aantal}</div>
-                  <div><strong>Locatie:</strong> {detailItem.locatie}</div>
-                  <div><strong>Sublocatie:</strong> {detailItem.sublocatie}</div>
-                  <button className="btn btn-primary" onClick={()=>setDetailItem(null)}>Sluiten</button>
+      >Sluiten</button>
                 </div>
               </div>
             </div>
@@ -135,7 +123,7 @@ export default function Voorraad() {
                 )}
 
                 {filteredData.map(row => (
-                  <tr key={row.id} onDoubleClick={()=>setDetailItem(row)} style={{cursor:'pointer'}}>
+                  <tr key={row.id} onDoubleClick={()=>openArticle(row.id)} style={{cursor:'pointer'}}>
                     <td style={{textAlign:"center"}}>
                       <input
                         type="checkbox"
