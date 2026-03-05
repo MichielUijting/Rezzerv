@@ -1,5 +1,6 @@
-import { useNavigate } from "react-router-dom";
+
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
 
 const initialData = [
@@ -11,39 +12,15 @@ const initialData = [
 ];
 
 export default function Voorraad() {
+
   const navigate = useNavigate();
-  const openArticle = (id) => { navigate(`/voorraad/${id}`); };
-    const [data] = useState(initialData);
-  const [filters, setFilters] = useState({});
-  const [selected, setSelected] = useState([]);
+  const [data] = useState(initialData);
 
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  };
-
-  const filteredData = data.filter(row =>
-    Object.keys(filters).every(key =>
-      !filters[key] || row[key].toString().toLowerCase().includes(filters[key].toLowerCase())
-    )
-  );
-
-  const toggleSelect = (id) => {
-    setSelected(prev =>
-      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
-    );
+  const openArticle = (id) => {
+    navigate(`/voorraad/${id}`);
   };
 
   return (
-<>
-
-      >Sluiten</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
     <div className="rz-screen">
       <Header title="Voorraad" />
       <div className="rz-content">
@@ -51,106 +28,29 @@ export default function Voorraad() {
           <div className="rz-card">
 
             <table className="rz-table">
-              
               <thead>
                 <tr>
-                  <th>
-                    <input
-                      type="checkbox"
-                      style={{ accentColor: "var(--color-brand-primary)" }}
-                      checked={selected.length === filteredData.length && filteredData.length > 0}
-                      onChange={() =>
-                        setSelected(selected.length === filteredData.length ? [] : filteredData.map(d => d.id))
-                      }
-                    />
-                  </th>
-                  <th className="rz-align-left">Artikel</th>
-                  <th className="rz-num">Aantal</th>
-                  <th className="rz-align-left">Locatie</th>
-                  <th className="rz-align-left">Sublocatie</th>
-                </tr>
-
-                <tr className="rz-table-filters">
-                  <th></th>
-                  <th>
-                    <input
-                      type="text"
-                      className="rz-input"
-                      value={filters.artikel || ""}
-                      onChange={(e) => handleFilterChange("artikel", e.target.value)}
-                      placeholder="Filter"
-                    />
-                  </th>
-                  <th className="rz-num">
-                    <input
-                      type="text"
-                      className="rz-input"
-                      value={filters.aantal || ""}
-                      onChange={(e) => handleFilterChange("aantal", e.target.value)}
-                      placeholder="Filter"
-                    />
-                  </th>
-                  <th>
-                    <input
-                      type="text"
-                      className="rz-input"
-                      value={filters.locatie || ""}
-                      onChange={(e) => handleFilterChange("locatie", e.target.value)}
-                      placeholder="Filter"
-                    />
-                  </th>
-                  <th>
-                    <input
-                      type="text"
-                      className="rz-input"
-                      value={filters.sublocatie || ""}
-                      onChange={(e) => handleFilterChange("sublocatie", e.target.value)}
-                      placeholder="Filter"
-                    />
-                  </th>
+                  <th>Artikel</th>
+                  <th>Aantal</th>
+                  <th>Locatie</th>
+                  <th>Sublocatie</th>
                 </tr>
               </thead>
-    
-
-              
               <tbody>
-                {filteredData.length === 0 && (
-                  <tr>
-                    <td colSpan="5" style={{ textAlign: "center", padding: "24px", opacity: 0.6 }}>
-                      Geen artikelen gevonden.
-                    </td>
-                  </tr>
-                )}
-
-                {filteredData.map(row => (
-                  <tr key={row.id} onDoubleClick={()=>openArticle(row.id)} style={{cursor:'pointer'}}>
-                    <td style={{textAlign:"center"}}>
-                      <input
-                        type="checkbox"
-                        style={{ accentColor: "var(--color-brand-primary)" }}
-                        checked={selected.includes(row.id)}
-                        onChange={() => toggleSelect(row.id)}
-                      />
-                    </td>
-                    <td className="rz-align-left">{row.artikel}</td>
-                    <td className="rz-num">{row.aantal}</td>
-                    <td className="rz-align-left">{row.locatie}</td>
-                    <td className="rz-align-left">{row.sublocatie}</td>
+                {data.map(row => (
+                  <tr key={row.id} onDoubleClick={() => openArticle(row.id)}>
+                    <td>{row.artikel}</td>
+                    <td>{row.aantal}</td>
+                    <td>{row.locatie}</td>
+                    <td>{row.sublocatie}</td>
                   </tr>
                 ))}
               </tbody>
-    
             </table>
-
-            <div style={{ marginTop: "18px", display: "flex", gap: "12px" }}>
-              <button className="rz-button-primary" disabled={selected.length === 0}>Verwijderen</button>
-              <button className="rz-button-primary" disabled={selected.length === 0}>Exporteren</button>
-            </div>
 
           </div>
         </div>
       </div>
     </div>
-</>
   );
 }
