@@ -9,14 +9,9 @@ export default function ArticlePage() {
   const navigate = useNavigate();
 
   return (
-    <AppShell title={`Artikel details`}>
-
-      <button onClick={() => navigate("/voorraad")}>
-        ← Voorraad
-      </button>
-
+    <AppShell title={"Artikel details"}>
+      <button onClick={() => navigate("/voorraad")}>← Voorraad</button>
       <ArticleTabs articleId={articleId} />
-
     </AppShell>
   );
 }
