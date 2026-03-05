@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import React, { useState } from "react";
 import Header from "../ui/Header";
 
@@ -9,7 +10,13 @@ const initialData = [
   { id: 5, artikel: "Shampoo", aantal: 4, locatie: "Badkamer", sublocatie: "Kast" }
 ];
 
-export default function Voorraad() {
+export default 
+const navigate = useNavigate();
+const openArticle = (id) => {
+  navigate(`/voorraad/${id}`);
+};
+
+function Voorraad() {
   const [detailItem,setDetailItem]=React.useState(null);
   const [data] = useState(initialData);
   const [filters, setFilters] = useState({});

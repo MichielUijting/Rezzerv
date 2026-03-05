@@ -1,3 +1,4 @@
+import ArticlePage from "../../features/articles/ArticlePage";
 import Voorraad from "../../pages/Voorraad";
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
@@ -55,7 +56,9 @@ export default function AppRouter() {
           }
         />
         {/* Catch-all */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        
+<Route path="/voorraad/:articleId" element={<ArticlePage />} />
+<Route path="*" element={<Navigate to="/login" replace />} />
         <Route path="/voorraad" element={<Voorraad />} />
 </Routes>
     </BrowserRouter>
