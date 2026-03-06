@@ -1,127 +1,117 @@
 
 import { useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import AppShell from "../../app/AppShell";
-import ScreenCard from "../../ui/ScreenCard";
-import Tabs from "../../ui/Tabs";
+import { useState } from "react";
+import data from "../../demo-articles.json";
 
-export default function ArticlePage() {
+export default function ArticlePage(){
 
-  const { articleId } = useParams();
+ const { articleId } = useParams();
+ const article = data.articles.find(a=>String(a.id)===String(articleId)) || data.articles[0];
 
-  const [artikel,setArtikel]=useState(null);
-  const [rows,setRows]=useState([]);
+ const [tab,setTab]=useState("Overzicht");
 
-  useEffect(()=>{
+ const totaal = article.locations.reduce((s,l)=>s+l.aantal,0);
 
-    fetch("/api/dev/inventory-preview")
-      .then(r=>r.json())
-      .then(data=>{
+ return (
 
-        const all=data.rows || [];
+  <div style={{padding:"20px"}}>
 
-        const selected=all.find(r=>String(r.id)===String(articleId));
+    <div style={{width:"100%",background:"#fff",padding:"20px"}}>
 
-        if(!selected){
-          return;
-        }
+      <h2>{article.name}</h2>
 
-        const artikelNaam=selected.artikel;
+      <div style={{display:"flex",gap:"30px",borderBottom:"1px solid #ccc",marginBottom:"20px"}}>
+        {["Overzicht","Voorraad","Locaties","Product","Specificaties","Verpakking","Winkels","Notities"].map(t=>(
+          <div
+            key={t}
+            onClick={()=>setTab(t)}
+            style={{
+              padding:"6px",
+              cursor:"pointer",
+              borderBottom:tab===t?"3px solid #1f6f43":"none",
+              fontWeight:tab===t?600:400
+            }}
+          >
+            {t}
+          </div>
+        ))}
+      </div>
 
-        const artikelRows=all.filter(r=>r.artikel===artikelNaam);
+      {tab==="Overzicht" && (
+        <div>
+          <p><b>Merk:</b> {article.brand}</p>
+          <p><b>Variant:</b> {article.variant}</p>
+          <p><b>Artikeltype:</b> {article.type}</p>
+          <p><b>Categorie:</b> {article.category}</p>
+          <p><b>Subcategorie:</b> {article.subcategory}</p>
+          <p><b>Totale voorraad:</b> {totaal}</p>
+        </div>
+      )}
 
-        setArtikel(artikelNaam);
-        setRows(artikelRows);
+      {tab==="Voorraad" && (
+        <table>
+          <thead>
+            <tr>
+              <th>Locatie</th>
+              <th>Sublocatie</th>
+              <th>Aantal</th>
+            </tr>
+          </thead>
+          <tbody>
+            {article.locations.map((l,i)=>(
+              <tr key={i}>
+                <td>{l.locatie}</td>
+                <td>{l.sublocatie}</td>
+                <td>{l.aantal}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
 
-      });
+      {tab==="Locaties" && (
+        <ul>
+          {article.locations.map((l,i)=>(
+            <li key={i}>{l.locatie} → {l.sublocatie}</li>
+          ))}
+        </ul>
+      )}
 
-  },[articleId]);
+      {tab==="Product" && (
+        <div>
+          <p><b>Barcode:</b> {article.barcode}</p>
+          <p><b>Fabrikant:</b> {article.manufacturer}</p>
+          <p><b>Land van herkomst:</b> {article.country}</p>
+        </div>
+      )}
 
-  const totaal = rows.reduce((s,r)=>s + Number(r.aantal||0),0);
+      {tab==="Specificaties" && (
+        <div>
+          <p><b>Gewicht:</b> {article.weight}</p>
+        </div>
+      )}
 
-  return (
-    <AppShell title="Artikel details" showExit={false}>
+      {tab==="Verpakking" && (
+        <div>
+          <p>Verpakkingstype: onbekend</p>
+        </div>
+      )}
 
-      <ScreenCard>
+      {tab==="Winkels" && (
+        <div>
+          <p>Favoriete winkel: nog niet ingesteld</p>
+        </div>
+      )}
 
-        <h2 style={{marginBottom:"16px"}}>{artikel || "Artikel"}</h2>
+      {tab==="Notities" && (
+        <div>
+          <p>Notities voor dit artikel.</p>
+        </div>
+      )}
 
-        <Tabs
-          tabs={["Overzicht","Voorraad","Locaties","Winkels","Product"]}
-          defaultTab="Overzicht"
-        >
-          {(tab)=>{
+    </div>
 
-            if(tab==="Overzicht"){
-              return (
-                <div>
-                  <div><strong>Artikel:</strong> {artikel}</div>
-                  <div><strong>Totaal in huis:</strong> {totaal}</div>
-                  <div><strong>Aantal locaties:</strong> {rows.length}</div>
-                </div>
-              )
-            }
+  </div>
 
-            if(tab==="Voorraad"){
-              return (
-                <table className="rz-table">
-                  <thead>
-                    <tr>
-                      <th>Locatie</th>
-                      <th>Sublocatie</th>
-                      <th>Aantal</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map(r=>(
-                      <tr key={r.id}>
-                        <td>{r.locatie}</td>
-                        <td>{r.sublocatie}</td>
-                        <td>{r.aantal}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )
-            }
-
-            if(tab==="Locaties"){
-              return (
-                <ul>
-                  {rows.map(r=>(
-                    <li key={r.id}>
-                      {r.locatie} → {r.sublocatie}
-                    </li>
-                  ))}
-                </ul>
-              )
-            }
-
-            if(tab==="Winkels"){
-              return (
-                <div>
-                  <div><strong>Favoriete winkel:</strong> nog niet ingesteld</div>
-                  <div>Prijsinformatie volgt later</div>
-                </div>
-              )
-            }
-
-            if(tab==="Product"){
-              return (
-                <div>
-                  <div><strong>Artikeltype:</strong> Voedsel & drank</div>
-                  <div><strong>Categorie:</strong> Groenten</div>
-                  <div><strong>Subcategorie:</strong> {artikel}</div>
-                  <div><strong>Barcode:</strong> onbekend</div>
-                </div>
-              )
-            }
-
-          }}
-        </Tabs>
-
-      </ScreenCard>
-
-    </AppShell>
-  );
+ )
 }

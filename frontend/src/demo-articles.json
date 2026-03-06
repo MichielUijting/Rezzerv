@@ -1,0 +1,69 @@
+{
+  "articles": [
+    {
+      "id": 1,
+      "name": "Tomaten",
+      "brand": "Mutti",
+      "variant": "Gepeld",
+      "type": "Voedsel & drank",
+      "category": "Groenten",
+      "subcategory": "Tomaten",
+      "barcode": "80042556",
+      "manufacturer": "Mutti",
+      "country": "Italië",
+      "weight": "400 g",
+      "locations": [
+        {
+          "locatie": "Keuken",
+          "sublocatie": "Koelkast",
+          "aantal": 4
+        },
+        {
+          "locatie": "Berging",
+          "sublocatie": "Voorraadkast",
+          "aantal": 2
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Spaghetti",
+      "brand": "Barilla",
+      "variant": "No.5",
+      "type": "Voedsel & drank",
+      "category": "Granen & pasta",
+      "subcategory": "Spaghetti",
+      "barcode": "8076800195057",
+      "manufacturer": "Barilla",
+      "country": "Italië",
+      "weight": "500 g",
+      "locations": [
+        {
+          "locatie": "Keuken",
+          "sublocatie": "Kast 2",
+          "aantal": 3
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Boormachine",
+      "brand": "Bosch",
+      "variant": "EasyDrill",
+      "type": "Gereedschap",
+      "category": "Elektrisch gereedschap",
+      "subcategory": "Boormachine",
+      "barcode": "316514083",
+      "manufacturer": "Bosch",
+      "country": "Duitsland",
+      "weight": "1.2 kg",
+      "locations": [
+        {
+          "locatie": "Schuur",
+          "sublocatie": "Werkbank",
+          "aantal": 1
+        }
+      ]
+    }
+  ]
+}
