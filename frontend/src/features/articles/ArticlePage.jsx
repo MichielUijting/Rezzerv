@@ -1,6 +1,8 @@
 
 import { useParams } from "react-router-dom";
 import { useState } from "react";
+import AppShell from "../../app/AppShell";
+import ScreenCard from "../../ui/ScreenCard";
 import data from "../../demo-articles.json";
 
 export default function ArticlePage(){
@@ -14,11 +16,11 @@ export default function ArticlePage(){
 
  return (
 
-  <div style={{padding:"20px"}}>
+  <AppShell title="Artikel details" showExit={false}>
 
-    <div style={{width:"100%",background:"#fff",padding:"20px"}}>
+    <ScreenCard fullWidth>
 
-      <h2>{article.name}</h2>
+      <h2 style={{marginBottom:"10px"}}>{article.name}</h2>
 
       <div style={{display:"flex",gap:"30px",borderBottom:"1px solid #ccc",marginBottom:"20px"}}>
         {["Overzicht","Voorraad","Locaties","Product","Specificaties","Verpakking","Winkels","Notities"].map(t=>(
@@ -109,9 +111,9 @@ export default function ArticlePage(){
         </div>
       )}
 
-    </div>
+    </ScreenCard>
 
-  </div>
+  </AppShell>
 
  )
 }
