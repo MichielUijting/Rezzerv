@@ -1,117 +1,127 @@
 
 import { useParams } from "react-router-dom";
-import { useState } from "react";
+import AppShell from "../../app/AppShell";
+import ScreenCard from "../../ui/ScreenCard";
+import Tabs from "../../ui/Tabs";
 import data from "../../demo-articles.json";
 
 export default function ArticlePage(){
 
- const { articleId } = useParams();
- const article = data.articles.find(a=>String(a.id)===String(articleId)) || data.articles[0];
+  const { articleId } = useParams();
+  const article =
+    data.articles.find(a => String(a.id) === String(articleId)) ||
+    data.articles[0];
 
- const [tab,setTab]=useState("Overzicht");
+  const tabs = [
+    "Overzicht",
+    "Voorraad",
+    "Locaties",
+    "Product",
+    "Specificaties",
+    "Verpakking",
+    "Winkels",
+    "Notities"
+  ];
 
- const totaal = article.locations.reduce((s,l)=>s+l.aantal,0);
+  const totaal = article.locations.reduce((s,l)=>s+l.aantal,0);
 
- return (
+  return (
+    <AppShell title="Artikel details" showExit={false}>
 
-  <div style={{padding:"20px"}}>
+      <ScreenCard fullWidth>
 
-    <div style={{width:"100%",background:"#fff",padding:"20px"}}>
+        <h2 style={{marginBottom:"16px"}}>{article.name}</h2>
 
-      <h2>{article.name}</h2>
+        <Tabs tabs={tabs}>
 
-      <div style={{display:"flex",gap:"30px",borderBottom:"1px solid #ccc",marginBottom:"20px"}}>
-        {["Overzicht","Voorraad","Locaties","Product","Specificaties","Verpakking","Winkels","Notities"].map(t=>(
-          <div
-            key={t}
-            onClick={()=>setTab(t)}
-            style={{
-              padding:"6px",
-              cursor:"pointer",
-              borderBottom:tab===t?"3px solid #1f6f43":"none",
-              fontWeight:tab===t?600:400
-            }}
-          >
-            {t}
-          </div>
-        ))}
-      </div>
+          {(active)=>{
 
-      {tab==="Overzicht" && (
-        <div>
-          <p><b>Merk:</b> {article.brand}</p>
-          <p><b>Variant:</b> {article.variant}</p>
-          <p><b>Artikeltype:</b> {article.type}</p>
-          <p><b>Categorie:</b> {article.category}</p>
-          <p><b>Subcategorie:</b> {article.subcategory}</p>
-          <p><b>Totale voorraad:</b> {totaal}</p>
-        </div>
-      )}
+            if(active==="Overzicht"){
+              return (
+                <div>
+                  <p><strong>Merk:</strong> {article.brand}</p>
+                  <p><strong>Variant:</strong> {article.variant}</p>
+                  <p><strong>Categorie:</strong> {article.category}</p>
+                  <p><strong>Subcategorie:</strong> {article.subcategory}</p>
+                  <p><strong>Barcode:</strong> {article.barcode}</p>
+                </div>
+              );
+            }
 
-      {tab==="Voorraad" && (
-        <table>
-          <thead>
-            <tr>
-              <th>Locatie</th>
-              <th>Sublocatie</th>
-              <th>Aantal</th>
-            </tr>
-          </thead>
-          <tbody>
-            {article.locations.map((l,i)=>(
-              <tr key={i}>
-                <td>{l.locatie}</td>
-                <td>{l.sublocatie}</td>
-                <td>{l.aantal}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+            if(active==="Voorraad"){
+              return (
+                <div>
+                  <p><strong>Totaal:</strong> {totaal}</p>
+                  {article.locations.map((l,i)=>(
+                    <div key={i}>
+                      {l.locatie} → {l.sublocatie}: {l.aantal}
+                    </div>
+                  ))}
+                </div>
+              );
+            }
 
-      {tab==="Locaties" && (
-        <ul>
-          {article.locations.map((l,i)=>(
-            <li key={i}>{l.locatie} → {l.sublocatie}</li>
-          ))}
-        </ul>
-      )}
+            if(active==="Locaties"){
+              return (
+                <div>
+                  {article.locations.map((l,i)=>(
+                    <div key={i}>
+                      {l.locatie} → {l.sublocatie}
+                    </div>
+                  ))}
+                </div>
+              );
+            }
 
-      {tab==="Product" && (
-        <div>
-          <p><b>Barcode:</b> {article.barcode}</p>
-          <p><b>Fabrikant:</b> {article.manufacturer}</p>
-          <p><b>Land van herkomst:</b> {article.country}</p>
-        </div>
-      )}
+            if(active==="Product"){
+              return (
+                <div>
+                  <p><strong>Type:</strong> {article.type}</p>
+                  <p><strong>Land:</strong> {article.country}</p>
+                  <p><strong>Fabrikant:</strong> {article.manufacturer}</p>
+                </div>
+              );
+            }
 
-      {tab==="Specificaties" && (
-        <div>
-          <p><b>Gewicht:</b> {article.weight}</p>
-        </div>
-      )}
+            if(active==="Specificaties"){
+              return (
+                <div>
+                  <p><strong>Gewicht:</strong> {article.weight}</p>
+                </div>
+              );
+            }
 
-      {tab==="Verpakking" && (
-        <div>
-          <p>Verpakkingstype: onbekend</p>
-        </div>
-      )}
+            if(active==="Verpakking"){
+              return (
+                <div>
+                  <p>Verpakkingsinformatie volgt.</p>
+                </div>
+              );
+            }
 
-      {tab==="Winkels" && (
-        <div>
-          <p>Favoriete winkel: nog niet ingesteld</p>
-        </div>
-      )}
+            if(active==="Winkels"){
+              return (
+                <div>
+                  <p>Winkelinformatie volgt.</p>
+                </div>
+              );
+            }
 
-      {tab==="Notities" && (
-        <div>
-          <p>Notities voor dit artikel.</p>
-        </div>
-      )}
+            if(active==="Notities"){
+              return (
+                <div>
+                  <p>Notities bij dit artikel.</p>
+                </div>
+              );
+            }
 
-    </div>
+            return null;
+          }}
 
-  </div>
+        </Tabs>
 
- )
+      </ScreenCard>
+
+    </AppShell>
+  )
 }
