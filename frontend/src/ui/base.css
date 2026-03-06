@@ -133,3 +133,16 @@ body {
   width: 100%;
   overflow-x: auto;
 }
+
+
+/* Rezzerv v01.06.02 voorraad editing adjustments */
+.rz-table td .rz-inline-input,
+.rz-table th .rz-inline-input{
+  padding: 5px 8px; /* +1px top/bottom */
+}
+
+.rz-inline-input:focus{
+  outline:none;
+  border:1px solid #1f7a3f; /* donkergroen */
+  box-shadow:0 0 0 1px #1f7a3f;
+}
