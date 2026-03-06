@@ -107,3 +107,29 @@ body {
   line-height: 1.2;
   vertical-align: middle;
 }
+
+
+/* Voorraad inline editing */
+.rz-inline-cell{
+  min-height: 20px;
+  width: 100%;
+  cursor: text;
+}
+
+.rz-inline-input{
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rz-table td .rz-inline-input,
+.rz-table th .rz-inline-input{
+  padding: 4px 8px;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.rz-table-wrapper{
+  width: 100%;
+  overflow-x: auto;
+}
