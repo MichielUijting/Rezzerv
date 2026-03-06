@@ -264,3 +264,51 @@ def generate_demo_data():
         "sublocations": count_table("sublocations"),
         "inventory": count_table("inventory"),
     }
+
+
+@app.post("/api/dev/generate-large-dataset")
+def generate_large_dataset():
+    import random
+    reset_dev_tables()
+
+    spaces=["Keuken","Berging","Badkamer","Garage","Kantoor"]
+    sub=["Kast 1","Kast 2","Koelkast","Diepvries","Plank"]
+
+    with engine.begin() as conn:
+
+        space_ids=[]
+        for s in spaces:
+            sid=conn.execute(
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, 'demo-household') RETURNING id"),
+                {"naam":s}
+            ).scalar_one()
+            space_ids.append(sid)
+
+        sub_ids=[]
+        for sid in space_ids:
+            for name in sub:
+                subid=conn.execute(
+                    text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :sid) RETURNING id"),
+                    {"naam":name,"sid":sid}
+                ).scalar_one()
+                sub_ids.append((sid,subid))
+
+        products=[
+            "Rijst","Pasta","Tomaten","Koffie","Thee","Melk","Yoghurt","Bonen",
+            "Mais","Erwten","Zout","Peper","Olijfolie","Suiker","Meel"
+        ]
+
+        for i in range(200):
+            naam=random.choice(products)+" "+str(i)
+            aantal=random.randint(1,10)
+            sid,subid=random.choice(sub_ids)
+
+            conn.execute(
+                text("""
+                INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id)
+                VALUES (lower(hex(randomblob(16))), :naam, :aantal, 'demo-household', :sid, :subid)
+                """),
+                {"naam":naam,"aantal":aantal,"sid":sid,"subid":subid}
+            )
+
+    return {"status":"ok","inventory":count_table("inventory")}

@@ -14,11 +14,6 @@ export default function ArticlePage() {
 
       <ScreenCard>
 
-        <div style={{marginBottom:"12px",cursor:"pointer"}}
-             onClick={()=>navigate("/voorraad")}>
-          ← Voorraad
-        </div>
-
         <Tabs
           tabs={["Overzicht","Voorraad","Locaties","Historie","Analyse"]}
           defaultTab="Overzicht"
