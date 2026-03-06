@@ -92,3 +92,8 @@ table.rz-table{
   padding-top:1px !important;
   padding-bottom:1px !important;
 }
+
+/* Rezzerv v01.06.05 line-height adjustment */
+.rz-table tbody tr td{
+  line-height: 24px !important;
+}
