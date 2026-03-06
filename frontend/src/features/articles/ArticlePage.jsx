@@ -10,7 +10,7 @@ export default function ArticlePage() {
   const navigate = useNavigate();
 
   return (
-    <AppShell title="Artikel details">
+    <AppShell title="Artikel details" showExit={false}>
 
       <ScreenCard>
 

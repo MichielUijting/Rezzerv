@@ -5,6 +5,14 @@ import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 
 export default function AdminPage() {
+
+  async function handleResetGenerate() {
+    setMessage("");
+    await fetch("/api/dev/reset-data",{method:"POST"});
+    await fetch("/api/dev/generate-demo-data",{method:"POST"});
+    window.location.href="/voorraad";
+  }
+
   const [status, setStatus] = useState({ spaces: 0, sublocations: 0, inventory: 0 });
   const [message, setMessage] = useState("");
 
@@ -105,6 +113,7 @@ export default function AdminPage() {
             </p>
             <div className="rz-admin-actions">
               <Button variant="primary" onClick={handleGenerateDemo}>Genereer demo data</Button>
+              <Button variant="secondary" onClick={handleResetGenerate}>Reset + Demo data</Button>
               <Button variant="secondary" onClick={handleReset}>Reset demo data</Button>
             </div>
           </div>
