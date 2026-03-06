@@ -44,10 +44,10 @@ export default function ArticlePage() {
 
       <ScreenCard>
 
-        <h2 style={{marginBottom:"10px"}}>{artikel || "Artikel"}</h2>
+        <h2 style={{marginBottom:"16px"}}>{artikel || "Artikel"}</h2>
 
         <Tabs
-          tabs={["Overzicht","Voorraad","Locaties","Historie","Analyse"]}
+          tabs={["Overzicht","Voorraad","Locaties","Winkels","Product"]}
           defaultTab="Overzicht"
         >
           {(tab)=>{
@@ -55,8 +55,9 @@ export default function ArticlePage() {
             if(tab==="Overzicht"){
               return (
                 <div>
-                  <div>Totaal in huis: <strong>{totaal}</strong></div>
-                  <div>Aantal locaties: {rows.length}</div>
+                  <div><strong>Artikel:</strong> {artikel}</div>
+                  <div><strong>Totaal in huis:</strong> {totaal}</div>
+                  <div><strong>Aantal locaties:</strong> {rows.length}</div>
                 </div>
               )
             }
@@ -96,12 +97,24 @@ export default function ArticlePage() {
               )
             }
 
-            if(tab==="Historie"){
-              return <div>Historie volgt later</div>
+            if(tab==="Winkels"){
+              return (
+                <div>
+                  <div><strong>Favoriete winkel:</strong> nog niet ingesteld</div>
+                  <div>Prijsinformatie volgt later</div>
+                </div>
+              )
             }
 
-            if(tab==="Analyse"){
-              return <div>Analyse volgt later</div>
+            if(tab==="Product"){
+              return (
+                <div>
+                  <div><strong>Artikeltype:</strong> Voedsel & drank</div>
+                  <div><strong>Categorie:</strong> Groenten</div>
+                  <div><strong>Subcategorie:</strong> {artikel}</div>
+                  <div><strong>Barcode:</strong> onbekend</div>
+                </div>
+              )
             }
 
           }}
