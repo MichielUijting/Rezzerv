@@ -1,13 +1,13 @@
 {
   "name": "rezzerv-frontend",
   "private": true,
-  "version": "01.06.18",
+  "version": "01.06.19",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "npm run check:version && vite build",
     "preview": "vite preview",
-    "check:version": "node check-version.js"
+    "check:version": "node check-version.cjs"
   },
   "dependencies": {
     "react": "^18.2.0",
