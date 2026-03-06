@@ -312,3 +312,58 @@ def generate_large_dataset():
             )
 
     return {"status":"ok","inventory":count_table("inventory")}
+
+
+@app.post("/api/dev/generate-article-testdata")
+def generate_article_testdata():
+    """Dataset speciaal voor testen Artikel Details"""
+    import random
+
+    reset_dev_tables()
+
+    spaces=["Keuken","Berging","Koelkast","Voorraadkast"]
+    sublocs=["Kast 1","Kast 2","Boven","Onder","Plank A","Plank B"]
+
+    with engine.begin() as conn:
+
+        space_ids=[]
+        for s in spaces:
+            sid=conn.execute(
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, 'demo-household') RETURNING id"),
+                {"naam":s}
+            ).scalar_one()
+            space_ids.append(sid)
+
+        sub_ids=[]
+        for sid in space_ids:
+            for name in sublocs[:3]:
+                subid=conn.execute(
+                    text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :sid) RETURNING id"),
+                    {"naam":name,"sid":sid}
+                ).scalar_one()
+                sub_ids.append((sid,subid))
+
+        artikelen=[
+            "Tomaten","Spaghetti","Koffie","Thee","Melk","Yoghurt","Rijst",
+            "Bonen","Mais","Olijfolie","Pasta saus","Paprika","Tuna"
+        ]
+
+        # meerdere voorraadlocaties per artikel
+        for artikel in artikelen:
+            locaties=random.sample(sub_ids, random.randint(1,3))
+
+            for sid,subid in locaties:
+                conn.execute(
+                    text("""
+                    INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id)
+                    VALUES (lower(hex(randomblob(16))), :naam, :aantal, 'demo-household', :sid, :subid)
+                    """),
+                    {
+                        "naam":artikel,
+                        "aantal":random.randint(1,8),
+                        "sid":sid,
+                        "subid":subid
+                    }
+                )
+
+    return {"status":"ok","inventory":count_table("inventory")}

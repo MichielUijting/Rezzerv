@@ -115,6 +115,7 @@ export default function AdminPage() {
               <Button variant="primary" onClick={handleGenerateDemo}>Genereer demo data</Button>
               <Button variant="secondary" onClick={handleResetGenerate}>Reset + Demo data</Button>
               <Button variant="secondary" onClick={handleReset}>Reset demo data</Button>
+              <Button variant="secondary" onClick={async ()=>{await fetch("/api/dev/generate-article-testdata",{method:"POST"});window.location.href="/voorraad";}}>Artikel testdata</Button>
             </div>
           </div>
 
