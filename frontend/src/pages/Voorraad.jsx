@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
 
@@ -20,6 +20,25 @@ const editableColumns = [
 export default function Voorraad() {
   const navigate = useNavigate();
   const [rows, setRows] = useState(initialData);
+
+  useEffect(() => {
+    let alive = true;
+
+    fetch("/api/dev/inventory-preview")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!alive || !data || !Array.isArray(data.rows) || data.rows.length === 0) return;
+        setRows(data.rows.map((row) => ({ ...row, checked: false })));
+      })
+      .catch(() => {
+        // fallback naar lokale startdata
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   const [filters, setFilters] = useState({
     artikel: "",
     aantal: "",

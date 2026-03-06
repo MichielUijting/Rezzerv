@@ -1,3 +1,4 @@
+import AdminPage from "../../features/admin/AdminPage";
 import ArticlePage from "../../features/articles/ArticlePage";
 import Voorraad from "../../pages/Voorraad";
 import React from "react";
@@ -60,6 +61,7 @@ export default function AppRouter() {
 <Route path="/voorraad/:articleId" element={<ArticlePage />} />
 <Route path="*" element={<Navigate to="/login" replace />} />
         <Route path="/voorraad" element={<Voorraad />} />
+        <Route path="/admin" element={<AdminPage />} />
 </Routes>
     </BrowserRouter>
   );

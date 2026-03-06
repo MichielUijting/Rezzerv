@@ -153,3 +153,44 @@ body {
   padding-top: 1px;
   padding-bottom: 1px;
 }
+
+
+/* Rezzerv v01.06.07 admin/testdata tooling */
+.rz-admin-grid{
+  display:grid;
+  gap:16px;
+}
+
+.rz-admin-panel{
+  border:1px solid #dfe4ea;
+  border-radius:12px;
+  padding:16px;
+}
+
+.rz-admin-panel h3{
+  margin:0 0 8px 0;
+  font-size:16px;
+  font-weight:normal;
+}
+
+.rz-admin-muted{
+  margin:0 0 12px 0;
+  color:#667085;
+}
+
+.rz-admin-actions,
+.rz-admin-form{
+  display:grid;
+  gap:10px;
+  margin-top:10px;
+}
+
+.rz-admin-stats{
+  display:grid;
+  gap:8px;
+}
+
+.rz-admin-message{
+  margin-top:12px;
+  color:#2e7d4d;
+}

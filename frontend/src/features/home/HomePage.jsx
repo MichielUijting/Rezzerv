@@ -14,7 +14,8 @@ const tiles = [
   { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳' },
   { key: 'recepten', label: 'Recepten', icon: '🍳' },
   { key: 'bestellen', label: 'Bestellen', icon: '📋' },
-  { key: 'verlengen', label: 'Verlengen', icon: '⏳' }
+  { key: 'verlengen', label: 'Verlengen', icon: '⏳' },
+  { key: 'admin', label: 'Admin', icon: '🛠️' }
 ]
 
 export default function HomePage() {
@@ -58,8 +59,11 @@ export default function HomePage() {
                     if (t.key === "voorraad") {
                       navigate("/voorraad");
                     }
+                    if (t.key === "admin") {
+                      navigate("/admin");
+                    }
                   }}
-                  style={{ cursor: t.key === "voorraad" ? "pointer" : "default" }}
+                  style={{ cursor: ["voorraad","admin"].includes(t.key) ? "pointer" : "default" }}
                 >
                   <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>
                   <div className="rz-tile-label">{t.label}</div>
