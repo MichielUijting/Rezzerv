@@ -3,7 +3,7 @@ const fs = require("fs");
 
 const expected = "01.06.19";
 
-const versionTxt = fs.readFileSync("../VERSION.txt","utf8").trim();
+const versionTxt = fs.readFileSync("./VERSION.txt","utf8").trim();
 const pkg = JSON.parse(fs.readFileSync("package.json","utf8")).version;
 
 if(versionTxt !== expected || pkg !== expected){
