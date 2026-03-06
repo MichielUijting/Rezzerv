@@ -1,20 +1,15 @@
 
-import React from "react";
+import Card from "./Card";
 
-export default function ScreenCard({children, fullWidth=false}){
-
-  const style = {
-    background:"#fff",
-    padding:"20px",
-    borderRadius:"8px",
-    width:"100%",
-    maxWidth: fullWidth ? "none" : "900px",
-    margin:"0 auto"
-  };
-
+export default function ScreenCard({ title, children }) {
   return (
-    <div style={style}>
+    <Card>
+      {title && (
+        <div style={{marginBottom:"16px",fontWeight:"bold"}}>
+          {title}
+        </div>
+      )}
       {children}
-    </div>
+    </Card>
   );
 }
