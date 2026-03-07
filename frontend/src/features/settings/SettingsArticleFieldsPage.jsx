@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { unstable_useBlocker as useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -33,26 +34,23 @@ export default function SettingsArticleFieldsPage() {
   const [saveError, setSaveError] = useState('')
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
   const [showLeaveModal, setShowLeaveModal] = useState(false)
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const dismissTimerRef = useRef(null)
-  const bypassLeaveGuardRef = useRef(false)
-  const pendingBrowserBackRef = useRef(false)
 
   const groupedFieldsByTab = useMemo(() => ({
     [ARTICLE_TABS.OVERVIEW]: getFieldsByTabAndGroup(ARTICLE_TABS.OVERVIEW),
-    [ARTICLE_TABS.STOCK]: getFieldsByTabAndGroup(ARTICLE_TABS.STOCK),
+    [ARTICLE_TABS.STOCK]: {},
     [ARTICLE_TABS.LOCATIONS]: {},
     [ARTICLE_TABS.HISTORY]: {},
     [ARTICLE_TABS.ANALYTICS]: {},
   }), [])
 
   const currentSnapshot = useMemo(() => stableStringify(visibilityMap || {}), [visibilityMap])
-  const isDirty = hasUnsavedChanges || (!isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot)
+  const isDirty = !isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot
+  const blocker = useBlocker(isDirty)
 
   useEffect(() => {
     if (!isLoading && !lastSavedSnapshot) {
       setLastSavedSnapshot(currentSnapshot)
-      setHasUnsavedChanges(false)
     }
   }, [isLoading, lastSavedSnapshot, currentSnapshot])
 
@@ -71,29 +69,20 @@ export default function SettingsArticleFieldsPage() {
   }, [])
 
   useEffect(() => {
+    if (blocker.state === 'blocked') {
+      setShowLeaveModal(true)
+    }
+  }, [blocker.state])
+
+  useEffect(() => {
     function handleBeforeUnload(event) {
-      if (!isDirty || bypassLeaveGuardRef.current) return
+      if (!isDirty) return
       event.preventDefault()
       event.returnValue = ''
     }
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [isDirty])
-
-  useEffect(() => {
-    function handlePopState() {
-      if (!isDirty || bypassLeaveGuardRef.current) {
-        return
-      }
-
-      pendingBrowserBackRef.current = true
-      setShowLeaveModal(true)
-      window.history.go(1)
-    }
-
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
   }, [isDirty])
 
   function queueSuccessMessage(text) {
@@ -110,7 +99,6 @@ export default function SettingsArticleFieldsPage() {
     if (result.ok) {
       const savedSnapshot = stableStringify(result.data || visibilityMap || {})
       setLastSavedSnapshot(savedSnapshot)
-      setHasUnsavedChanges(false)
       queueSuccessMessage('Opgeslagen')
       return true
     }
@@ -122,34 +110,35 @@ export default function SettingsArticleFieldsPage() {
   async function handleSaveAndLeave() {
     const ok = await handleSave()
     if (!ok) return
-    bypassLeaveGuardRef.current = true
     setShowLeaveModal(false)
-    if (pendingBrowserBackRef.current) {
-      pendingBrowserBackRef.current = false
-      window.history.back()
+    if (blocker.state === 'blocked') {
+      blocker.proceed()
     }
   }
 
   function handleLeaveWithoutSaving() {
-    bypassLeaveGuardRef.current = true
     setShowLeaveModal(false)
-    if (pendingBrowserBackRef.current) {
-      pendingBrowserBackRef.current = false
-      window.history.back()
+    if (blocker.state === 'blocked') {
+      blocker.proceed()
+    }
+  }
+
+  function handleStay() {
+    setShowLeaveModal(false)
+    if (blocker.state === 'blocked') {
+      blocker.reset()
     }
   }
 
   function handleResetDefaults() {
     setSaveError('')
     setSaveMessage('')
-    setHasUnsavedChanges(true)
     resetToDefault()
   }
 
   function handleShowAll() {
     setSaveError('')
     setSaveMessage('')
-    setHasUnsavedChanges(true)
     showAllFields()
   }
 
@@ -165,7 +154,7 @@ export default function SettingsArticleFieldsPage() {
           {isLoading ? <div>Instellingen laden…</div> : (
             <>
               {error ? <div className="rz-inline-feedback rz-inline-feedback--warning">De standaardweergave is geladen omdat voorkeuren niet konden worden opgehaald.</div> : null}
-              <FieldVisibilitySection title={TAB_LABELS.overview} tabKey={ARTICLE_TABS.OVERVIEW} groupedFields={groupedFieldsByTab[ARTICLE_TABS.OVERVIEW]} visibilityMap={visibilityMap} alwaysVisibleKeys={alwaysVisibleKeys} onToggle={(tabKey, fieldKey) => { setHasUnsavedChanges(true); toggleFieldVisibility(tabKey, fieldKey) }} />
+              <FieldVisibilitySection title={TAB_LABELS.overview} tabKey={ARTICLE_TABS.OVERVIEW} groupedFields={groupedFieldsByTab[ARTICLE_TABS.OVERVIEW]} visibilityMap={visibilityMap} alwaysVisibleKeys={alwaysVisibleKeys} onToggle={toggleFieldVisibility} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   <Button variant="secondary" onClick={handleResetDefaults} disabled={isSaving}>Herstel standaardweergave</Button>
@@ -191,6 +180,7 @@ export default function SettingsArticleFieldsPage() {
             <h3 id="leave-modal-title" className="rz-modal-title">Wijzigingen niet opgeslagen</h3>
             <p className="rz-modal-text">Je hebt wijzigingen aangebracht die nog niet zijn opgeslagen.</p>
             <div className="rz-modal-actions">
+              <Button variant="secondary" onClick={handleStay}>Blijven</Button>
               <Button variant="secondary" onClick={handleLeaveWithoutSaving}>Niet opslaan</Button>
               <Button onClick={handleSaveAndLeave} disabled={isSaving}>{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
             </div>
