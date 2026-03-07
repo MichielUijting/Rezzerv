@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
-from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse
+from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
 from datetime import datetime
 from sqlalchemy import text
@@ -271,12 +271,18 @@ def generate_demo_data():
 
 @app.post("/api/dev/run-smoke-tests", response_model=TestStartResponse)
 def run_smoke_tests():
-    return testing_service.start_test("smoke")
+    return testing_service.start_external_test("smoke")
 
 
 @app.post("/api/dev/run-regression-tests", response_model=TestStartResponse)
 def run_regression_tests():
     return testing_service.start_test("regression")
+
+
+@app.post("/api/dev/test-report", response_model=TestStatusResponse)
+def complete_test_report(payload: TestCompleteRequest):
+    results = [item.model_dump() for item in payload.results]
+    return testing_service.complete_external_test(payload.test_type, results)
 
 
 @app.get("/api/dev/test-status", response_model=TestStatusResponse)

@@ -150,9 +150,27 @@ export default function AdminPage() {
     try {
       const result = await runSmokeTests();
       setTestStatus((current) => ({ ...current, ...result }));
-      setTestMessage(result.started ? "Smoke test gestart" : "Er loopt al een test");
+      if (!result.started) {
+        setTestMessage("Er loopt al een test");
+        await refreshTestStatus();
+        return;
+      }
+
+      setTestMessage("Smoke test gestart");
+      const results = await runBrowserSmokeTests();
+      await submitTestResults('smoke', results);
       await refreshTestStatus();
+      const latestReport = await fetchLatestTestReport();
+      setTestReport(latestReport);
+      setShowReport(true);
+      setTestMessage('Smoke test afgerond');
     } catch (error) {
+      try {
+        await submitTestResults('smoke', [{ name: 'Smoke test runner', status: 'failed', error: error.message || 'Smoke test kon niet worden uitgevoerd' }]);
+        await refreshTestStatus();
+      } catch {
+        // negeer secundaire fout
+      }
       setTestMessage(error.message || "Smoke test kon niet worden gestart");
     }
   }

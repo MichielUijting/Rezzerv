@@ -27,3 +27,8 @@ class TestReportResponse(BaseModel):
     test_type: Optional[str] = None
     last_run_at: Optional[str] = None
     results: List[TestScenarioResult] = []
+
+
+class TestCompleteRequest(BaseModel):
+    test_type: str
+    results: List[TestScenarioResult]

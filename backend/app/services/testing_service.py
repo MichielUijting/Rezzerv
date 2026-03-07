@@ -74,6 +74,21 @@ class TestingService:
                 "results": results,
             }
 
+    def start_external_test(self, test_type: str) -> Dict[str, Any]:
+        with self._lock:
+            if self._status.get("status") == "running":
+                return {
+                    "started": False,
+                    "test_type": self._status.get("test_type") or test_type,
+                    "status": "running",
+                }
+        self._set_running(test_type)
+        return {"started": True, "test_type": test_type, "status": "running"}
+
+    def complete_external_test(self, test_type: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+        self._finish(test_type, results)
+        return self.get_status()
+
     def start_test(self, test_type: str) -> Dict[str, Any]:
         with self._lock:
             if self._status.get("status") == "running":

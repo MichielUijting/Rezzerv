@@ -88,3 +88,10 @@ export async function fetchLatestTestReport() {
 }
 
 export { AdminTestingServiceError, EMPTY_STATUS, EMPTY_REPORT }
+
+export async function submitTestResults(testType, results) {
+  return request('/api/dev/test-report', {
+    method: 'POST',
+    body: JSON.stringify({ test_type: testType, results }),
+  })
+}
