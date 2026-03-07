@@ -21,18 +21,3 @@ export default function AppShell({ title, children, showExit = true }) {
     </div>
   )
 }
-
-
-export function VersionLabel() {
-  return (
-    <div style={{
-      position:"fixed",
-      bottom:"6px",
-      right:"10px",
-      fontSize:"11px",
-      color:"#888"
-    }}>
-      Rezzerv v01.06.16
-    </div>
-  )
-}
