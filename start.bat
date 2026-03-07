@@ -98,17 +98,17 @@ where curl >nul 2>&1
 if %errorlevel%==0 (
   :waithealth_curl
   timeout /t 3 >nul
-  curl -s http://localhost:8000/api/health | find "ok" >nul
+  curl -s http://localhost:8001/api/health | find "ok" >nul
   if %errorlevel% neq 0 goto waithealth_curl
 ) else (
   :waithealth_ps
   timeout /t 3 >nul
-  powershell -NoProfile -Command "try { $r = Invoke-RestMethod -Uri http://localhost:8000/api/health -TimeoutSec 2; if ($r.status -ne 'ok') { exit 1 } } catch { exit 1 }" >nul 2>&1
+  powershell -NoProfile -Command "try { $r = Invoke-RestMethod -Uri http://localhost:8001/api/health -TimeoutSec 2; if ($r.status -ne 'ok') { exit 1 } } catch { exit 1 }" >nul 2>&1
   if %errorlevel% neq 0 goto waithealth_ps
 )
 
 echo Opening application...
-start http://localhost:5173
+start http://localhost:5174
 
 echo Startup complete.
 pause
