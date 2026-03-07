@@ -33,6 +33,7 @@ export default function SettingsArticleFieldsPage() {
   const [saveError, setSaveError] = useState('')
   const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
   const [showLeaveModal, setShowLeaveModal] = useState(false)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const dismissTimerRef = useRef(null)
   const bypassLeaveGuardRef = useRef(false)
   const pendingBrowserBackRef = useRef(false)
@@ -46,11 +47,12 @@ export default function SettingsArticleFieldsPage() {
   }), [])
 
   const currentSnapshot = useMemo(() => stableStringify(visibilityMap || {}), [visibilityMap])
-  const isDirty = !isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot
+  const isDirty = hasUnsavedChanges || (!isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot)
 
   useEffect(() => {
     if (!isLoading && !lastSavedSnapshot) {
       setLastSavedSnapshot(currentSnapshot)
+      setHasUnsavedChanges(false)
     }
   }, [isLoading, lastSavedSnapshot, currentSnapshot])
 
@@ -108,6 +110,7 @@ export default function SettingsArticleFieldsPage() {
     if (result.ok) {
       const savedSnapshot = stableStringify(result.data || visibilityMap || {})
       setLastSavedSnapshot(savedSnapshot)
+      setHasUnsavedChanges(false)
       queueSuccessMessage('Opgeslagen')
       return true
     }
@@ -139,12 +142,14 @@ export default function SettingsArticleFieldsPage() {
   function handleResetDefaults() {
     setSaveError('')
     setSaveMessage('')
+    setHasUnsavedChanges(true)
     resetToDefault()
   }
 
   function handleShowAll() {
     setSaveError('')
     setSaveMessage('')
+    setHasUnsavedChanges(true)
     showAllFields()
   }
 
@@ -160,7 +165,7 @@ export default function SettingsArticleFieldsPage() {
           {isLoading ? <div>Instellingen laden…</div> : (
             <>
               {error ? <div className="rz-inline-feedback rz-inline-feedback--warning">De standaardweergave is geladen omdat voorkeuren niet konden worden opgehaald.</div> : null}
-              <FieldVisibilitySection title={TAB_LABELS.overview} tabKey={ARTICLE_TABS.OVERVIEW} groupedFields={groupedFieldsByTab[ARTICLE_TABS.OVERVIEW]} visibilityMap={visibilityMap} alwaysVisibleKeys={alwaysVisibleKeys} onToggle={toggleFieldVisibility} />
+              <FieldVisibilitySection title={TAB_LABELS.overview} tabKey={ARTICLE_TABS.OVERVIEW} groupedFields={groupedFieldsByTab[ARTICLE_TABS.OVERVIEW]} visibilityMap={visibilityMap} alwaysVisibleKeys={alwaysVisibleKeys} onToggle={(tabKey, fieldKey) => { setHasUnsavedChanges(true); toggleFieldVisibility(tabKey, fieldKey) }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                   <Button variant="secondary" onClick={handleResetDefaults} disabled={isSaving}>Herstel standaardweergave</Button>
