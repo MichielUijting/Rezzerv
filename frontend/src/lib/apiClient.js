@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8000'
+const API_BASE = 'http://localhost:8001'
 
 export async function apiPost(path, body) {
   const token = localStorage.getItem('rezzerv_token') || ''
