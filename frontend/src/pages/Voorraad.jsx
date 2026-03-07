@@ -1,14 +1,28 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
+import demoData from "../demo-articles.json";
 
-const initialData = [
-  { id: 1, artikel: "Rijst", aantal: 2, locatie: "Keuken", sublocatie: "Kast 1", checked: false },
-  { id: 2, artikel: "Pasta", aantal: 3, locatie: "Voorraadkast", sublocatie: "Plank 2", checked: false },
-  { id: 3, artikel: "Tomaten", aantal: 6, locatie: "Keuken", sublocatie: "Koelkast", checked: false },
-  { id: 4, artikel: "Koffie", aantal: 1, locatie: "Keuken", sublocatie: "Kast 2", checked: false },
-  { id: 5, artikel: "Shampoo", aantal: 4, locatie: "Badkamer", sublocatie: "Kast", checked: false }
-];
+function buildRowsFromArticles(articles) {
+  return articles.map((article) => {
+    const firstLocation = article.locations?.[0] || {};
+    const totalQuantity = (article.locations || []).reduce(
+      (sum, entry) => sum + (Number(entry.aantal) || 0),
+      0
+    );
+
+    return {
+      id: article.id,
+      artikel: article.name,
+      aantal: totalQuantity,
+      locatie: firstLocation.locatie || "",
+      sublocatie: firstLocation.sublocatie || "",
+      checked: false,
+    };
+  });
+}
+
+const initialData = buildRowsFromArticles(demoData.articles || []);
 
 const editableColumns = [
   { key: "artikel", label: "Artikel", type: "text", width: "34%" },
@@ -20,25 +34,6 @@ const editableColumns = [
 export default function Voorraad() {
   const navigate = useNavigate();
   const [rows, setRows] = useState(initialData);
-
-  useEffect(() => {
-    let alive = true;
-
-    fetch("/api/dev/inventory-preview")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (!alive || !data || !Array.isArray(data.rows) || data.rows.length === 0) return;
-        setRows(data.rows.map((row) => ({ ...row, checked: false })));
-      })
-      .catch(() => {
-        // fallback naar lokale startdata
-      });
-
-    return () => {
-      alive = false;
-    };
-  }, []);
-
   const [filters, setFilters] = useState({
     artikel: "",
     aantal: "",
