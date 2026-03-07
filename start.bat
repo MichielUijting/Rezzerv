@@ -84,7 +84,9 @@ if %errorlevel% neq 0 (
 )
 
 echo Performing HARD RESET (no-cache build + clean volumes/images)...
+echo Calling hard-reset.bat...
 call hard-reset.bat
+echo Returned from hard-reset.bat.
 if %errorlevel% neq 0 (
   echo [ERROR] hard-reset failed.
   pause
