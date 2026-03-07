@@ -1,5 +1,5 @@
 import React from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { Navigate, RouterProvider, createBrowserRouter, useNavigate } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
 import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
@@ -36,21 +36,19 @@ function Protected({ children }) {
   return <AuthGuard>{children}</AuthGuard>
 }
 
+const router = createBrowserRouter([
+  { path: '/login', element: <LoginRoute /> },
+  { path: '/reset-session', element: <ResetSessionRoute /> },
+  { path: '/', element: <Navigate to="/login" replace /> },
+  { path: '/home', element: <Protected><HomePage /></Protected> },
+  { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
+  { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
+  { path: '/instellingen', element: <Protected><SettingsPage /></Protected> },
+  { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <Protected><SettingsArticleFieldsPage /></Protected> },
+  { path: '/admin', element: <Protected><AdminPage /></Protected> },
+  { path: '*', element: <Navigate to="/login" replace /> },
+])
+
 export default function AppRouter() {
-  return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<LoginRoute />} />
-        <Route path="/reset-session" element={<ResetSessionRoute />} />
-        <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="/home" element={<Protected><HomePage /></Protected>} />
-        <Route path="/voorraad" element={<Protected><Voorraad /></Protected>} />
-        <Route path="/voorraad/:articleId" element={<Protected><ArticlePage /></Protected>} />
-        <Route path="/instellingen" element={<Protected><SettingsPage /></Protected>} />
-        <Route path="/instellingen/artikeldetails/veldzichtbaarheid" element={<Protected><SettingsArticleFieldsPage /></Protected>} />
-        <Route path="/admin" element={<Protected><AdminPage /></Protected>} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
-      </Routes>
-    </BrowserRouter>
-  )
+  return <RouterProvider router={router} />
 }
