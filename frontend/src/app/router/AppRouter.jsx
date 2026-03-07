@@ -1,44 +1,39 @@
-import AdminPage from "../../features/admin/AdminPage";
-import ArticlePage from "../../features/articles/ArticlePage";
-import Voorraad from "../../pages/Voorraad";
-import React from "react";
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
-import LoginPage from "../../features/auth/LoginPage";
-import HomePage from "../../features/home/HomePage";
-import AuthGuard from "./AuthGuard";
+import React from 'react'
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import AdminPage from '../../features/admin/AdminPage'
+import ArticlePage from '../../features/articles/ArticlePage'
+import LoginPage from '../../features/auth/LoginPage'
+import HomePage from '../../features/home/HomePage'
+import SettingsPage from '../../features/settings/SettingsPage'
+import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFieldsPage'
+import Voorraad from '../../pages/Voorraad'
+import AuthGuard from './AuthGuard'
 
 function LoginRoute() {
-  const navigate = useNavigate();
-  const token = localStorage.getItem("rezzerv_token");
-
-  // PO-keuze: altijd starten op /login, ook als er al een token is.
+  const navigate = useNavigate()
   function handleLogin(newToken, email) {
-    // login-mechanisme blijft: token in localStorage
-    localStorage.setItem("rezzerv_token", newToken);
-    if (email) localStorage.setItem("rezzerv_user_email", email);
-    navigate("/home", { replace: false });
+    localStorage.setItem('rezzerv_token', newToken)
+    if (email) localStorage.setItem('rezzerv_user_email', email)
+    navigate('/home', { replace: false })
   }
-
-  return <LoginPage onLoggedIn={handleLogin} />;
+  return <LoginPage onLoggedIn={handleLogin} />
 }
 
-
 function ResetSessionRoute() {
-  // Robuuste PO-proof reset: wis token(s) en forceer een volledige navigatie naar /login.
-  // Dit voorkomt issues met browser history/replace en eventuele strict-mode render-volgorde.
   React.useEffect(() => {
     try {
-      localStorage.removeItem("rezzerv_token");
-      localStorage.removeItem("rezzerv_user_email");
-      sessionStorage.clear();
-      // Als er ooit extra keys bijkomen, is dit een veilige fallback:
-      // localStorage.clear();
+      localStorage.removeItem('rezzerv_token')
+      localStorage.removeItem('rezzerv_user_email')
+      sessionStorage.clear()
     } finally {
-      window.location.replace("/login");
+      window.location.replace('/login')
     }
-  }, []);
+  }, [])
+  return null
+}
 
-  return null;
+function Protected({ children }) {
+  return <AuthGuard>{children}</AuthGuard>
 }
 
 export default function AppRouter() {
@@ -48,21 +43,14 @@ export default function AppRouter() {
         <Route path="/login" element={<LoginRoute />} />
         <Route path="/reset-session" element={<ResetSessionRoute />} />
         <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route
-          path="/home"
-          element={
-            <AuthGuard>
-              <HomePage />
-            </AuthGuard>
-          }
-        />
-        {/* Catch-all */}
-        
-<Route path="/voorraad/:articleId" element={<ArticlePage />} />
-<Route path="*" element={<Navigate to="/login" replace />} />
-        <Route path="/voorraad" element={<Voorraad />} />
-        <Route path="/admin" element={<AdminPage />} />
-</Routes>
+        <Route path="/home" element={<Protected><HomePage /></Protected>} />
+        <Route path="/voorraad" element={<Protected><Voorraad /></Protected>} />
+        <Route path="/voorraad/:articleId" element={<Protected><ArticlePage /></Protected>} />
+        <Route path="/instellingen" element={<Protected><SettingsPage /></Protected>} />
+        <Route path="/instellingen/artikeldetails/veldzichtbaarheid" element={<Protected><SettingsArticleFieldsPage /></Protected>} />
+        <Route path="/admin" element={<Protected><AdminPage /></Protected>} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
     </BrowserRouter>
-  );
+  )
 }

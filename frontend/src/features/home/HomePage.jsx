@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
 
@@ -15,64 +15,56 @@ const tiles = [
   { key: 'recepten', label: 'Recepten', icon: '🍳' },
   { key: 'bestellen', label: 'Bestellen', icon: '📋' },
   { key: 'verlengen', label: 'Verlengen', icon: '⏳' },
-  { key: 'admin', label: 'Admin', icon: '🛠️' }
+  { key: 'instellingen', label: 'Instellingen', icon: '⚙️' },
+  { key: 'admin', label: 'Admin', icon: '🛠️' },
 ]
 
 export default function HomePage() {
-  const navigate = useNavigate();
-  const [householdName, setHouseholdName] = useState("");
-  const [householdError, setHouseholdError] = useState("");
+  const navigate = useNavigate()
+  const [householdName, setHouseholdName] = useState('')
 
   useEffect(() => {
-    const token = localStorage.getItem("rezzerv_token");
-    if (!token) return;
-    fetch("/api/household", {
-      headers: { Authorization: `Bearer ${token}` },
-    })
+    const token = localStorage.getItem('rezzerv_token')
+    if (!token) return
+    fetch('/api/household', { headers: { Authorization: `Bearer ${token}` } })
       .then(async (res) => {
-        if (!res.ok) throw new Error("Huishouden niet beschikbaar");
-        return res.json();
+        if (!res.ok) throw new Error('Huishouden niet beschikbaar')
+        return res.json()
       })
       .then((data) => {
-        const name = data?.naam || "Mijn huishouden";
-        setHouseholdName(name);
-        localStorage.setItem("rezzerv_household_name", name);
+        const name = data?.naam || 'Mijn huishouden'
+        setHouseholdName(name)
+        localStorage.setItem('rezzerv_household_name', name)
       })
-      .catch(() => {
-        setHouseholdError("Huishouden niet beschikbaar");
-      });
-  }, []);
+      .catch(() => {})
+  }, [])
+
+  function openTile(key) {
+    if (key === 'voorraad') navigate('/voorraad')
+    if (key === 'instellingen') navigate('/instellingen')
+    if (key === 'admin') navigate('/admin')
+  }
 
   return (
     <div className="rz-screen">
       <Header title="Startpagina" />
-
       <div className="rz-content">
         <div className="rz-content-inner">
           <Card className="rz-card-home">
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
-              {tiles.map(t => (
-                <div
-                  key={t.key}
-                  className="rz-tile"
-                  onClick={() => {
-                    if (t.key === "voorraad") {
-                      navigate("/voorraad");
-                    }
-                    if (t.key === "admin") {
-                      navigate("/admin");
-                    }
-                  }}
-                  style={{ cursor: ["voorraad","admin"].includes(t.key) ? "pointer" : "default" }}
-                >
-                  <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>
-                  <div className="rz-tile-label">{t.label}</div>
-                </div>
-              ))}
+              {tiles.map((t) => {
+                const clickable = ['voorraad', 'instellingen', 'admin'].includes(t.key)
+                return (
+                  <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
+                    <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>
+                    <div className="rz-tile-label">{t.label}</div>
+                  </div>
+                )
+              })}
             </div>
           </Card>
         </div>
       </div>
-</div>
+    </div>
   )
 }
