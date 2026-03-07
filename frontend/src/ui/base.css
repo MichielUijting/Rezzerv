@@ -194,3 +194,127 @@ body {
   margin-top:12px;
   color:#2e7d4d;
 }
+
+
+/* Rezzerv v01.06.31 artikeldetails + instellingen polish */
+.rz-inline-feedback {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.rz-inline-feedback--warning {
+  color: #8a4b0f;
+  background: #fff4e5;
+  border: 1px solid #f0d7b8;
+}
+
+.rz-inline-feedback--success {
+  color: var(--color-brand-primary);
+  background: #eef8f1;
+  border: 1px solid var(--color-border-default);
+}
+
+.rz-inline-feedback--error {
+  color: #9c4221;
+  background: #fff1ed;
+  border: 1px solid #f3c7bb;
+}
+
+.rz-tabbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+button.rz-tab {
+  appearance: none;
+  border: 2px solid var(--color-brand-primary);
+  background: #ffffff;
+  color: var(--color-brand-primary);
+  border-radius: 12px 12px 0 0;
+  padding: 10px 18px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+button.rz-tab.rz-tab-active {
+  background: var(--color-brand-light);
+  color: var(--color-brand-primary);
+}
+
+.rz-tabcontent {
+  padding-top: 8px;
+}
+
+.rz-overview-tab {
+  display: grid;
+  gap: 20px;
+}
+
+.rz-overview-group-title {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+}
+
+.rz-field-row {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 2px solid #dfe7e1;
+}
+
+.rz-field-row-label {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+
+.rz-field-row-value {
+  color: var(--color-text-primary);
+}
+
+.rz-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid #e4ebe6;
+}
+
+.rz-toggle-row-text {
+  display: grid;
+  gap: 4px;
+}
+
+.rz-toggle-row-label {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+
+.rz-toggle-row-helper {
+  color: #667085;
+  font-size: 13px;
+}
+
+.rz-toggle-row-input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-brand-primary);
+  cursor: pointer;
+}
+
+.rz-toggle-row--disabled .rz-toggle-row-input {
+  cursor: not-allowed;
+}
+
+.rz-toggle-row--disabled .rz-toggle-row-label,
+.rz-toggle-row--disabled .rz-toggle-row-helper {
+  opacity: 0.85;
+}

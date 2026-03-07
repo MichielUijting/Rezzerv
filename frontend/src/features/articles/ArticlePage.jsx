@@ -1,4 +1,4 @@
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { useMemo } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
@@ -41,10 +41,7 @@ export default function ArticlePage() {
     <AppShell title={pageTitle} showExit={false}>
       <Card className="rz-card-home">
         <div style={{ display: 'grid', gap: '18px', width: '100%' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <Link to="/voorraad" style={{ color: '#2e7d4d', textDecoration: 'none', fontWeight: 600 }}>← Voorraad</Link>
-            {visibilityError ? <div style={{ color: '#9c4221', fontSize: '14px' }}>Standaardweergave actief.</div> : null}
-          </div>
+          {visibilityError ? <div className="rz-inline-feedback rz-inline-feedback--warning">Standaardweergave actief.</div> : null}
           {visibilityLoading ? <div>Gegevens laden…</div> : (
             <Tabs tabs={TABS} defaultTab="Overzicht">
               {(tab) => {

@@ -12,9 +12,9 @@ const GROUP_LABELS = {
 
 function FieldRow({ label, value }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '12px', padding: '8px 0', borderBottom: '1px solid #eef1ef' }}>
-      <div style={{ color: '#667085' }}>{label}</div>
-      <div>{value || EMPTY_VALUE}</div>
+    <div className="rz-field-row">
+      <div className="rz-field-row-label">{label}</div>
+      <div className="rz-field-row-value">{value || EMPTY_VALUE}</div>
     </div>
   )
 }
@@ -36,11 +36,11 @@ export default function ArticleOverviewTab({ articleData = {}, visibilityMap = {
   }
 
   return (
-    <div style={{ display: 'grid', gap: '20px' }}>
+    <div className="rz-overview-tab">
       {Object.entries(visibleGroups).map(([groupKey, fields]) => (
-        <section key={groupKey}>
-          <h3 style={{ margin: '0 0 10px 0', fontSize: '16px', fontWeight: 600 }}>{GROUP_LABELS[groupKey] || groupKey}</h3>
-          <div>
+        <section key={groupKey} className="rz-overview-group">
+          <h3 className="rz-overview-group-title">{GROUP_LABELS[groupKey] || groupKey}</h3>
+          <div className="rz-overview-group-body">
             {fields.map((field) => (
               <FieldRow key={field.key} label={field.label} value={resolveArticleFieldValue(field.key, articleData)} />
             ))}
