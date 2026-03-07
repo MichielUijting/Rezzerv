@@ -16,7 +16,15 @@ const TAB_LABELS = {
 }
 
 function stableStringify(value) {
-  return JSON.stringify(value, Object.keys(value || {}).sort())
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(',')}]`
+  }
+
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`
+  }
+
+  return JSON.stringify(value)
 }
 
 export default function SettingsArticleFieldsPage() {
@@ -155,7 +163,7 @@ export default function SettingsArticleFieldsPage() {
                 </div>
                 <div className="rz-save-cluster">
                   {(saveMessage || saveError) ? (
-                    <div className={saveError ? 'rz-inline-feedback rz-inline-feedback--error rz-save-feedback' : 'rz-inline-feedback rz-inline-feedback--success rz-save-feedback'}>
+                    <div className={saveError ? 'rz-inline-feedback rz-inline-feedback--error rz-save-feedback rz-save-feedback-overlay' : 'rz-inline-feedback rz-inline-feedback--success rz-save-feedback rz-save-feedback-overlay'}>
                       {saveError || saveMessage}
                     </div>
                   ) : null}

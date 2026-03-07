@@ -322,6 +322,7 @@ button.rz-tab.rz-tab-active {
 
 
 .rz-save-cluster {
+  position: relative;
   display: grid;
   justify-items: end;
   gap: 8px;
@@ -330,6 +331,15 @@ button.rz-tab.rz-tab-active {
 .rz-save-feedback {
   min-width: 120px;
   text-align: center;
+}
+
+.rz-save-feedback-overlay {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  white-space: nowrap;
 }
 
 .rz-modal-backdrop {
