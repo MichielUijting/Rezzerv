@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { unstable_useBlocker as useBlocker } from 'react-router-dom'
+import { useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
