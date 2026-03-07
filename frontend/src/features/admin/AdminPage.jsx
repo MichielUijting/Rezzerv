@@ -3,6 +3,14 @@ import AppShell from "../../app/AppShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Input from "../../ui/Input";
+import TestRunPanel from "./components/TestRunPanel";
+import TestStatusCard from "./components/TestStatusCard";
+import {
+  fetchLatestTestReport,
+  fetchLatestTestStatus,
+  runRegressionTests,
+  runSmokeTests,
+} from "./services/adminTestingService";
 
 export default function AdminPage() {
 
@@ -25,6 +33,18 @@ export default function AdminPage() {
   const [inventorySpaceId, setInventorySpaceId] = useState("");
   const [inventorySublocationId, setInventorySublocationId] = useState("");
 
+  const [testStatus, setTestStatus] = useState({
+    test_type: null,
+    status: "idle",
+    last_run_at: null,
+    passed_count: 0,
+    failed_count: 0,
+    last_error: null,
+  });
+  const [testReport, setTestReport] = useState(null);
+  const [testMessage, setTestMessage] = useState("");
+  const [showReport, setShowReport] = useState(false);
+
   async function fetchStatus() {
     try {
       const res = await fetch("/api/dev/status");
@@ -35,9 +55,31 @@ export default function AdminPage() {
     }
   }
 
+  async function refreshTestStatus() {
+    try {
+      const statusData = await fetchLatestTestStatus();
+      setTestStatus(statusData);
+    } catch {
+      setTestMessage("Teststatus niet beschikbaar");
+    }
+  }
+
   useEffect(() => {
     fetchStatus();
+    refreshTestStatus();
   }, []);
+
+  useEffect(() => {
+    if (testStatus.status !== "running") {
+      return undefined;
+    }
+
+    const timer = window.setInterval(() => {
+      refreshTestStatus();
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [testStatus.status]);
 
   async function postJson(url, payload, successMessage) {
     setMessage("");
@@ -102,6 +144,43 @@ export default function AdminPage() {
     setInventorySublocationId("");
   }
 
+  async function handleRunSmoke() {
+    setTestMessage("");
+    setShowReport(false);
+    try {
+      const result = await runSmokeTests();
+      setTestStatus((current) => ({ ...current, ...result }));
+      setTestMessage(result.started ? "Smoke test gestart" : "Er loopt al een test");
+      await refreshTestStatus();
+    } catch (error) {
+      setTestMessage(error.message || "Smoke test kon niet worden gestart");
+    }
+  }
+
+  async function handleRunRegression() {
+    setTestMessage("");
+    setShowReport(false);
+    try {
+      const result = await runRegressionTests();
+      setTestStatus((current) => ({ ...current, ...result }));
+      setTestMessage(result.started ? "Volledige regressietest gestart" : "Er loopt al een test");
+      await refreshTestStatus();
+    } catch (error) {
+      setTestMessage(error.message || "Regressietest kon niet worden gestart");
+    }
+  }
+
+  async function handleViewReport() {
+    setTestMessage("");
+    try {
+      const report = await fetchLatestTestReport();
+      setTestReport(report);
+      setShowReport(true);
+    } catch (error) {
+      setTestMessage(error.message || "Testrapport niet beschikbaar");
+    }
+  }
+
   return (
     <AppShell title="Admin / Testdata" showExit={false}>
       <Card>
@@ -126,6 +205,38 @@ export default function AdminPage() {
               <div>Sublocaties: {status.sublocations}</div>
               <div>Voorraadregels: {status.inventory}</div>
             </div>
+          </div>
+
+          <div className="rz-admin-panel">
+            <h3>Testen</h3>
+            <p className="rz-admin-muted">
+              Start hier een smoke test of een volledige regressietest en bekijk de laatste status.
+            </p>
+            <TestRunPanel
+              isRunning={testStatus.status === "running"}
+              onRunSmoke={handleRunSmoke}
+              onRunRegression={handleRunRegression}
+              onViewReport={handleViewReport}
+            />
+            {testMessage ? <div className="rz-admin-message">{testMessage}</div> : null}
+            <TestStatusCard status={testStatus} />
+            {showReport && testReport ? (
+              <div className="rz-admin-report">
+                <h4 className="rz-admin-status-title">Laatste testrapport</h4>
+                <div className="rz-admin-report-meta">
+                  <div>Testtype: {testReport.test_type || "Onbekend"}</div>
+                  <div>Laatste run: {testReport.last_run_at ? new Date(testReport.last_run_at).toLocaleString("nl-NL") : "Nog geen rapport"}</div>
+                </div>
+                <div className="rz-admin-report-list">
+                  {testReport.results?.length ? testReport.results.map((result) => (
+                    <div key={result.name} className={`rz-admin-report-row rz-admin-report-row--${result.status}`}>
+                      <span>{result.name}</span>
+                      <span>{result.status === "passed" ? "Geslaagd" : "Gefaald"}</span>
+                    </div>
+                  )) : <div className="rz-admin-muted">Nog geen rapport beschikbaar</div>}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="rz-admin-panel">

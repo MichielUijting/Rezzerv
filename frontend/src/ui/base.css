@@ -381,3 +381,50 @@ button.rz-tab.rz-tab-active {
   gap: 12px;
   flex-wrap: wrap;
 }
+
+/* Rezzerv v01.06.42 admin testing panel */
+.rz-admin-status-card,
+.rz-admin-report {
+  margin-top: 14px;
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+  padding: 14px;
+  background: #fff;
+}
+
+.rz-admin-status-title {
+  margin: 0 0 10px 0;
+  color: var(--color-brand-primary);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rz-admin-report-meta {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.rz-admin-report-list {
+  display: grid;
+  gap: 8px;
+}
+
+.rz-admin-report-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #dfe4ea;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.rz-admin-report-row--passed {
+  border-color: #cfe7d7;
+  background: #f5fbf7;
+}
+
+.rz-admin-report-row--failed {
+  border-color: #f3c7bb;
+  background: #fff4f1;
+}
