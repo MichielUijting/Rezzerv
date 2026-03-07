@@ -319,3 +319,55 @@ button.rz-tab.rz-tab-active {
 .rz-toggle-row--disabled .rz-toggle-row-helper {
   opacity: 0.85;
 }
+
+
+.rz-save-cluster {
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.rz-save-feedback {
+  min-width: 120px;
+  text-align: center;
+}
+
+.rz-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.28);
+  display: grid;
+  place-items: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.rz-modal-card {
+  width: min(480px, 100%);
+  background: #fff;
+  border: 2px solid var(--color-brand-primary);
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.18);
+  padding: 20px;
+  display: grid;
+  gap: 12px;
+}
+
+.rz-modal-title {
+  margin: 0;
+  color: var(--color-brand-primary);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.rz-modal-text {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+
+.rz-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -15,9 +15,18 @@ const TAB_LABELS = {
   [ARTICLE_TABS.ANALYTICS]: 'Analyse',
 }
 
+function stableStringify(value) {
+  return JSON.stringify(value, Object.keys(value || {}).sort())
+}
+
 export default function SettingsArticleFieldsPage() {
   const { visibilityMap, alwaysVisibleKeys, isLoading, isSaving, error, toggleFieldVisibility, resetToDefault, showAllFields, saveVisibility } = useArticleFieldVisibility()
-  const [message, setMessage] = useState('')
+  const [saveMessage, setSaveMessage] = useState('')
+  const [saveError, setSaveError] = useState('')
+  const [lastSavedSnapshot, setLastSavedSnapshot] = useState('')
+  const [showLeaveModal, setShowLeaveModal] = useState(false)
+  const dismissTimerRef = useRef(null)
+  const bypassLeaveGuardRef = useRef(false)
 
   const groupedFieldsByTab = useMemo(() => ({
     [ARTICLE_TABS.OVERVIEW]: getFieldsByTabAndGroup(ARTICLE_TABS.OVERVIEW),
@@ -27,9 +36,103 @@ export default function SettingsArticleFieldsPage() {
     [ARTICLE_TABS.ANALYTICS]: {},
   }), [])
 
+  const currentSnapshot = useMemo(() => stableStringify(visibilityMap || {}), [visibilityMap])
+  const isDirty = !isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot
+
+  useEffect(() => {
+    if (!isLoading && !lastSavedSnapshot) {
+      setLastSavedSnapshot(currentSnapshot)
+    }
+  }, [isLoading, lastSavedSnapshot, currentSnapshot])
+
+  useEffect(() => {
+    if (saveMessage && isDirty) {
+      setSaveMessage('')
+    }
+  }, [isDirty, saveMessage])
+
+  useEffect(() => {
+    return () => {
+      if (dismissTimerRef.current) {
+        clearTimeout(dismissTimerRef.current)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    function handleBeforeUnload(event) {
+      if (!isDirty || bypassLeaveGuardRef.current) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
+
+  useEffect(() => {
+    if (isLoading) return undefined
+
+    window.history.pushState({ settingsGuard: true }, '', window.location.href)
+
+    function handlePopState() {
+      if (!isDirty || bypassLeaveGuardRef.current) {
+        return
+      }
+      setShowLeaveModal(true)
+      window.history.pushState({ settingsGuard: true }, '', window.location.href)
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [isLoading, isDirty])
+
+  function queueSuccessMessage(text) {
+    setSaveError('')
+    setSaveMessage(text)
+    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
+    dismissTimerRef.current = setTimeout(() => setSaveMessage(''), 3000)
+  }
+
   async function handleSave() {
+    setSaveError('')
     const result = await saveVisibility()
-    setMessage(result.ok ? 'Instellingen opgeslagen.' : 'Opslaan is niet gelukt.')
+
+    if (result.ok) {
+      const savedSnapshot = stableStringify(result.data || visibilityMap || {})
+      setLastSavedSnapshot(savedSnapshot)
+      queueSuccessMessage('Opgeslagen')
+      return true
+    }
+
+    setSaveError(result.error?.message || 'Opslaan is niet gelukt.')
+    return false
+  }
+
+  async function handleSaveAndLeave() {
+    const ok = await handleSave()
+    if (!ok) return
+    bypassLeaveGuardRef.current = true
+    setShowLeaveModal(false)
+    window.history.back()
+  }
+
+  function handleLeaveWithoutSaving() {
+    bypassLeaveGuardRef.current = true
+    setShowLeaveModal(false)
+    window.history.back()
+  }
+
+  function handleResetDefaults() {
+    setSaveError('')
+    setSaveMessage('')
+    resetToDefault()
+  }
+
+  function handleShowAll() {
+    setSaveError('')
+    setSaveMessage('')
+    showAllFields()
   }
 
   return (
@@ -43,20 +146,39 @@ export default function SettingsArticleFieldsPage() {
 
           {isLoading ? <div>Instellingen laden…</div> : (
             <>
-              {error ? <div style={{ color: '#9c4221' }}>De standaardweergave is geladen omdat voorkeuren niet konden worden opgehaald.</div> : null}
+              {error ? <div className="rz-inline-feedback rz-inline-feedback--warning">De standaardweergave is geladen omdat voorkeuren niet konden worden opgehaald.</div> : null}
               <FieldVisibilitySection title={TAB_LABELS.overview} tabKey={ARTICLE_TABS.OVERVIEW} groupedFields={groupedFieldsByTab[ARTICLE_TABS.OVERVIEW]} visibilityMap={visibilityMap} alwaysVisibleKeys={alwaysVisibleKeys} onToggle={toggleFieldVisibility} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <Button variant="secondary" onClick={() => { setMessage(''); resetToDefault() }} disabled={isSaving}>Herstel standaardweergave</Button>
-                  <Button variant="secondary" onClick={() => { setMessage(''); showAllFields() }} disabled={isSaving}>Alles tonen</Button>
+                  <Button variant="secondary" onClick={handleResetDefaults} disabled={isSaving}>Herstel standaardweergave</Button>
+                  <Button variant="secondary" onClick={handleShowAll} disabled={isSaving}>Alles tonen</Button>
                 </div>
-                <Button onClick={handleSave} disabled={isSaving}>{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
+                <div className="rz-save-cluster">
+                  {(saveMessage || saveError) ? (
+                    <div className={saveError ? 'rz-inline-feedback rz-inline-feedback--error rz-save-feedback' : 'rz-inline-feedback rz-inline-feedback--success rz-save-feedback'}>
+                      {saveError || saveMessage}
+                    </div>
+                  ) : null}
+                  <Button onClick={handleSave} disabled={isSaving}>{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
+                </div>
               </div>
-              {message ? <div style={{ color: '#2e7d4d' }}>{message}</div> : null}
             </>
           )}
         </div>
       </Card>
+
+      {showLeaveModal ? (
+        <div className="rz-modal-backdrop" role="presentation">
+          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="leave-modal-title">
+            <h3 id="leave-modal-title" className="rz-modal-title">Wijzigingen niet opgeslagen</h3>
+            <p className="rz-modal-text">Je hebt wijzigingen aangebracht die nog niet zijn opgeslagen.</p>
+            <div className="rz-modal-actions">
+              <Button variant="secondary" onClick={handleLeaveWithoutSaving}>Niet opslaan</Button>
+              <Button onClick={handleSaveAndLeave} disabled={isSaving}>{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppShell>
   )
 }
