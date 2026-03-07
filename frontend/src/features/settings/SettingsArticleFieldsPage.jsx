@@ -35,6 +35,7 @@ export default function SettingsArticleFieldsPage() {
   const [showLeaveModal, setShowLeaveModal] = useState(false)
   const dismissTimerRef = useRef(null)
   const bypassLeaveGuardRef = useRef(false)
+  const pendingBrowserBackRef = useRef(false)
 
   const groupedFieldsByTab = useMemo(() => ({
     [ARTICLE_TABS.OVERVIEW]: getFieldsByTabAndGroup(ARTICLE_TABS.OVERVIEW),
@@ -79,21 +80,19 @@ export default function SettingsArticleFieldsPage() {
   }, [isDirty])
 
   useEffect(() => {
-    if (isLoading) return undefined
-
-    window.history.pushState({ settingsGuard: true }, '', window.location.href)
-
     function handlePopState() {
       if (!isDirty || bypassLeaveGuardRef.current) {
         return
       }
+
+      pendingBrowserBackRef.current = true
       setShowLeaveModal(true)
-      window.history.pushState({ settingsGuard: true }, '', window.location.href)
+      window.history.go(1)
     }
 
     window.addEventListener('popstate', handlePopState)
     return () => window.removeEventListener('popstate', handlePopState)
-  }, [isLoading, isDirty])
+  }, [isDirty])
 
   function queueSuccessMessage(text) {
     setSaveError('')
@@ -122,13 +121,19 @@ export default function SettingsArticleFieldsPage() {
     if (!ok) return
     bypassLeaveGuardRef.current = true
     setShowLeaveModal(false)
-    window.history.back()
+    if (pendingBrowserBackRef.current) {
+      pendingBrowserBackRef.current = false
+      window.history.back()
+    }
   }
 
   function handleLeaveWithoutSaving() {
     bypassLeaveGuardRef.current = true
     setShowLeaveModal(false)
-    window.history.back()
+    if (pendingBrowserBackRef.current) {
+      pendingBrowserBackRef.current = false
+      window.history.back()
+    }
   }
 
   function handleResetDefaults() {
