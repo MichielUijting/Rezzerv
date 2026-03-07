@@ -18,9 +18,9 @@ a.rz-button-primary[role="button"]:hover{
 }
 button.rz-button-secondary,
 a.rz-button-secondary[role="button"]{
-  background: #ffffff;
-  color: var(--color-brand-primary);
-  border: 2px solid var(--color-brand-primary);
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+  border: none;
   border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-md);
   font-weight: 600;
