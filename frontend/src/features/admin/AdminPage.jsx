@@ -10,7 +10,9 @@ import {
   fetchLatestTestStatus,
   runRegressionTests,
   runSmokeTests,
+  submitTestResults,
 } from "./services/adminTestingService";
+import { runBrowserSmokeTests } from "./lib/browserSmokeRunner";
 
 export default function AdminPage() {
 
