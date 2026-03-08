@@ -1,0 +1,16 @@
+Lidl pilot — Release 2 — table alignment fix validatierapport
+
+Versie: 01.06.79
+Basis: 01.06.78
+
+Aangepast
+- Importreview-tabel volgt nu expliciet de horizontale uitlijning van rz-table/Voorraad
+- Alle tekstkolommen links uitgelijnd
+- Numerieke kolom Aantal rechts uitgelijnd
+- Selectvelden links uitgelijnd
+
+Niet aangepast
+- Geen functionele wijzigingen
+- Geen backendwijzigingen
+- Geen writes naar inventory
+- Geen writes naar inventory_events

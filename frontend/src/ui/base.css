@@ -1010,11 +1010,20 @@ button.rz-tab.rz-tab-active {
   width: 100%;
 }
 
-.rz-store-review-table thead th {
+.rz-store-review-table th,
+.rz-store-review-table td {
   text-align: left;
+}
+
+.rz-store-review-table thead th {
   border-bottom: 1px solid #d0d5dd;
   padding-top: 8px;
   padding-bottom: 8px;
+}
+
+.rz-store-review-table thead th.rz-num,
+.rz-store-review-table tbody td.rz-num {
+  text-align: right;
 }
 
 .rz-store-review-table tbody td {
@@ -1022,6 +1031,11 @@ button.rz-tab.rz-tab-active {
   padding-top: 8px;
   padding-bottom: 8px;
   vertical-align: top;
+}
+
+.rz-store-primary,
+.rz-store-secondary {
+  text-align: left;
 }
 
 .rz-store-primary {
@@ -1039,6 +1053,7 @@ button.rz-tab.rz-tab-active {
 
 .rz-store-amount {
   font-weight: 600;
+  text-align: right;
 }
 
 .rz-store-select {
@@ -1047,4 +1062,6 @@ button.rz-tab.rz-tab-active {
   padding: 5px 8px;
   font-size: 13px;
   line-height: 1.2;
+  text-align: left;
+  text-align-last: left;
 }
