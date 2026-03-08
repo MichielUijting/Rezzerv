@@ -135,19 +135,27 @@ function buildChartBuckets(history) {
     .slice(-6)
 }
 
-function AnalysisCard({ title, rows }) {
+function AnalyticsAccordion({ title, rows = [], children = null, defaultOpen = false, variant = '' }) {
   return (
-    <section className="rz-analytics-card">
-      <h3 className="rz-analytics-card-title">{title}</h3>
-      <div className="rz-analytics-card-body">
-        {rows.map((row) => (
-          <div key={row.label} className="rz-analytics-row">
-            <div className="rz-analytics-row-label">{row.label}</div>
-            <div className="rz-analytics-row-value">{row.value}</div>
+    <details className={`rz-analytics-accordion ${variant ? `rz-analytics-accordion--${variant}` : ''}`} open={defaultOpen}>
+      <summary className="rz-analytics-accordion-summary">
+        <span className="rz-analytics-card-title">{title}</span>
+        <span className="rz-analytics-accordion-indicator" aria-hidden="true">▾</span>
+      </summary>
+      <div className="rz-analytics-accordion-content">
+        {rows.length > 0 ? (
+          <div className="rz-analytics-card-body">
+            {rows.map((row) => (
+              <div key={row.label} className="rz-analytics-row">
+                <div className="rz-analytics-row-label">{row.label}</div>
+                <div className="rz-analytics-row-value">{row.value}</div>
+              </div>
+            ))}
           </div>
-        ))}
+        ) : null}
+        {children}
       </div>
-    </section>
+    </details>
   )
 }
 
@@ -230,15 +238,14 @@ export default function ArticleAnalyticsTab({ articleData = {} }) {
 
   return (
     <div className="rz-analytics-tab">
-      <AnalysisCard title="Prijsinzichten" rows={analytics.price} />
-      <AnalysisCard title="Verbruiksbeeld" rows={analytics.consumption} />
-      <AnalysisCard title="Voorraadprognose" rows={analytics.forecast} />
-      <section className="rz-analytics-card rz-analytics-card--advice">
-        <h3 className="rz-analytics-card-title">Aanbeveling</h3>
-        <p className="rz-analytics-advice-text">{analytics.recommendation}</p>
-      </section>
       <AnalyticsChart buckets={analytics.chartBuckets} />
-      <AnalysisCard title="Onderbouwing" rows={analytics.quality} />
+      <AnalyticsAccordion title="Prijsinzichten" rows={analytics.price} />
+      <AnalyticsAccordion title="Verbruiksbeeld" rows={analytics.consumption} />
+      <AnalyticsAccordion title="Voorraadprognose" rows={analytics.forecast} />
+      <AnalyticsAccordion title="Aanbeveling" variant="advice" defaultOpen>
+        <p className="rz-analytics-advice-text">{analytics.recommendation}</p>
+      </AnalyticsAccordion>
+      <AnalyticsAccordion title="Onderbouwing" rows={analytics.quality} />
     </div>
   )
 }

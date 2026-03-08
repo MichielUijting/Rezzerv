@@ -803,3 +803,45 @@ button.rz-tab.rz-tab-active {
 .rz-analytics-chart-swatch--consume {
   background: #9fbba6;
 }
+
+
+/* Rezzerv v01.06.60 analytics layout refinement */
+.rz-analytics-accordion {
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.rz-analytics-accordion--advice {
+  background: #f8fbf9;
+}
+
+.rz-analytics-accordion-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.rz-analytics-accordion-summary::-webkit-details-marker {
+  display: none;
+}
+
+.rz-analytics-accordion-indicator {
+  color: var(--color-brand-primary);
+  font-size: 18px;
+  line-height: 1;
+  transform: rotate(-90deg);
+  transition: transform 0.15s ease;
+}
+
+.rz-analytics-accordion[open] .rz-analytics-accordion-indicator {
+  transform: rotate(0deg);
+}
+
+.rz-analytics-accordion-content {
+  padding: 0 16px 14px;
+}
