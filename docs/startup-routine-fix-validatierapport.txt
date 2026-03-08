@@ -1,0 +1,29 @@
+Rezzerv Startup Routine mini-fixrelease — v01.06.81
+
+Doel
+- start.bat en hard-reset.bat vereenvoudigd zodat de routine niet stil blijft hangen na docker compose down
+- duidelijke tussenstappen toegevoegd
+- reset/build-flow simpeler en beter uitleesbaar gemaakt
+
+Wijzigingen
+- hard-reset.bat verwijdert geen losse images meer
+- hard-reset.bat gebruikt nu een 4-stappenflow:
+  1. docker compose down --volumes --remove-orphans
+  2. docker compose build --no-cache
+  3. docker compose up -d
+  4. successmelding
+- na docker compose down wordt bij foutcode een waarschuwing gegeven, maar de rebuild gaat door
+- start.bat roept hard-reset.bat nu aan via expliciet absoluut pad in de tijdelijke buildmap
+- foutpad na robocopy opgeschoond
+
+Validatie
+- batchbestanden syntactisch gecontroleerd op structuur en version bump
+- docker-compose.yml ongewijzigd gelaten
+- geen wijzigingen aan applicatielogica
+- geen wijzigingen aan inventory of inventory_events
+
+Bewust niet gewijzigd
+- frontend
+- backend
+- database schema
+- winkel/mockfunctionaliteit
