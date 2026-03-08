@@ -910,3 +910,73 @@ button.rz-tab.rz-tab-active {
   color: #1d4d3f;
   font-weight: 700;
 }
+
+
+/* Rezzerv v01.06.66 article auto-consume override */
+.rz-article-automation-card {
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 16px;
+  display: grid;
+  gap: 16px;
+}
+
+.rz-article-automation-title {
+  margin-bottom: 6px;
+}
+
+.rz-article-automation-text {
+  margin: 0;
+  color: #667085;
+}
+
+.rz-article-automation-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.rz-article-automation-field {
+  display: grid;
+  gap: 8px;
+}
+
+.rz-article-automation-label {
+  color: var(--color-brand-primary);
+  font-weight: 400;
+}
+
+.rz-article-automation-select {
+  min-width: 320px;
+  max-width: 100%;
+  border: 1px solid #bcc9bc;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--color-text-primary);
+  background: #ffffff;
+}
+
+.rz-article-automation-select:disabled {
+  background: #f6f7f6;
+  color: #98a2b3;
+  cursor: not-allowed;
+}
+
+.rz-article-automation-helper-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.rz-article-automation-helper {
+  color: #667085;
+  font-size: 14px;
+}
+
+.rz-article-automation-feedback {
+  min-width: 110px;
+  text-align: center;
+}

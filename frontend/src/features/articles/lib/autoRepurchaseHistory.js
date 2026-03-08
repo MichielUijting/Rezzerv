@@ -1,4 +1,5 @@
 import { getHouseholdAutomationSettings } from '../../settings/services/householdAutomationService'
+import { AUTO_CONSUME_MODES, getArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
 
 function isConsumable(article = {}) {
   if (article.consumable === true) return true
@@ -17,11 +18,21 @@ function shiftTimeOneMinuteBack(value) {
   return date.toISOString()
 }
 
+function shouldApplyAutoRepurchase(article = {}, settings = {}) {
+  if (!isConsumable(article)) return false
+
+  const overrideMode = getArticleAutoConsumeMode(article.id)
+  if (overrideMode === AUTO_CONSUME_MODES.ALWAYS_ON) return true
+  if (overrideMode === AUTO_CONSUME_MODES.ALWAYS_OFF) return false
+
+  return Boolean(settings.autoConsumeOnRepurchase)
+}
+
 export function applyAutoRepurchaseHistory(article = {}) {
   const settings = getHouseholdAutomationSettings()
   const history = Array.isArray(article.history) ? article.history : []
 
-  if (!settings.autoConsumeOnRepurchase || !isConsumable(article) || !history.length) {
+  if (!shouldApplyAutoRepurchase(article, settings) || !history.length) {
     return history
   }
 
