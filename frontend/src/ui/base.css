@@ -845,3 +845,38 @@ button.rz-tab.rz-tab-active {
 .rz-analytics-accordion-content {
   padding: 0 16px 14px;
 }
+
+
+.rz-analytics-chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.rz-analytics-period-switch {
+  display: inline-flex;
+  gap: 6px;
+  background: #f3f6f2;
+  border: 1px solid #bcc9bc;
+  border-radius: 999px;
+  padding: 4px;
+}
+
+.rz-analytics-period-button {
+  border: 0;
+  background: transparent;
+  color: #1f4d3a;
+  font-weight: 400;
+  padding: 8px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.rz-analytics-period-button.is-active {
+  background: #dcefdc;
+  color: #1f4d3a;
+  font-weight: 700;
+}

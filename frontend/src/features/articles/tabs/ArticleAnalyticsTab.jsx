@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 
 function formatCurrency(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
@@ -112,7 +112,26 @@ function buildRecommendation(priceInsights, forecast, articleName) {
     : `Nog onvoldoende prijsdata beschikbaar voor ${articleName.toLowerCase()}.`
 }
 
-function buildChartBuckets(history) {
+function getWeekStart(date) {
+  const normalized = new Date(date)
+  normalized.setHours(0, 0, 0, 0)
+  const day = normalized.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  normalized.setDate(normalized.getDate() + diff)
+  return normalized
+}
+
+function getQuarterLabel(date) {
+  const quarter = Math.floor(date.getMonth() / 3) + 1
+  return `K${quarter} ${date.getFullYear()}`
+}
+
+function getWeekLabel(date) {
+  const weekStart = getWeekStart(date)
+  return formatDate(weekStart.toISOString())
+}
+
+function buildChartBuckets(history, period = 'month') {
   const relevant = history.filter((entry) => entry?.type === 'Aankoop' || entry?.type === 'Verbruik')
   if (!relevant.length) return []
 
@@ -120,9 +139,23 @@ function buildChartBuckets(history) {
   relevant.forEach((entry) => {
     const date = new Date(entry.datetime)
     if (Number.isNaN(date.getTime())) return
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+    let key = ''
+    let label = ''
+    if (period === 'week') {
+      const weekStart = getWeekStart(date)
+      key = `W-${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`
+      label = getWeekLabel(date)
+    } else if (period === 'quarter') {
+      key = `Q-${date.getFullYear()}-${Math.floor(date.getMonth() / 3) + 1}`
+      label = getQuarterLabel(date)
+    } else {
+      key = `M-${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      label = new Intl.DateTimeFormat('nl-NL', { month: 'short', year: 'numeric' }).format(date)
+    }
+
     if (!buckets.has(key)) {
-      buckets.set(key, { label: formatDate(entry.datetime), purchases: 0, consumes: 0 })
+      buckets.set(key, { label, purchases: 0, consumes: 0 })
     }
     const bucket = buckets.get(key)
     if (entry.type === 'Aankoop') bucket.purchases += Number(entry.quantity_change || 0)
@@ -132,7 +165,7 @@ function buildChartBuckets(history) {
   return Array.from(buckets.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([, value]) => value)
-    .slice(-6)
+    .slice(-8)
 }
 
 function AnalyticsAccordion({ title, rows = [], children = null, defaultOpen = false, variant = '' }) {
@@ -159,7 +192,7 @@ function AnalyticsAccordion({ title, rows = [], children = null, defaultOpen = f
   )
 }
 
-function AnalyticsChart({ buckets }) {
+function AnalyticsChart({ buckets, period, onPeriodChange }) {
   if (!buckets.length) {
     return <div className="rz-empty-state">Nog onvoldoende mutaties voor een tijdgrafiek.</div>
   }
@@ -168,7 +201,26 @@ function AnalyticsChart({ buckets }) {
 
   return (
     <section className="rz-analytics-card">
-      <h3 className="rz-analytics-card-title">Aankoop en verbruik in de tijd</h3>
+      <div className="rz-analytics-chart-header">
+        <h3 className="rz-analytics-card-title">Aankoop en verbruik in de tijd</h3>
+        <div className="rz-analytics-period-switch" role="tablist" aria-label="Periodekeuze grafiek">
+          {[
+            { key: 'week', label: 'Week' },
+            { key: 'month', label: 'Maand' },
+            { key: 'quarter', label: 'Kwartaal' },
+          ].map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              className={`rz-analytics-period-button ${period === option.key ? 'is-active' : ''}`}
+              onClick={() => onPeriodChange(option.key)}
+              aria-pressed={period === option.key}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
       <div className="rz-analytics-chart">
         {buckets.map((bucket) => {
           const purchaseHeight = `${(bucket.purchases / maxValue) * 100}%`
@@ -197,6 +249,7 @@ function AnalyticsChart({ buckets }) {
 }
 
 export default function ArticleAnalyticsTab({ articleData = {} }) {
+  const [period, setPeriod] = useState('month')
   const locations = Array.isArray(articleData.locations) ? articleData.locations : []
   const history = Array.isArray(articleData.history) ? getSortedHistory(articleData.history) : []
 
@@ -227,18 +280,18 @@ export default function ArticleAnalyticsTab({ articleData = {} }) {
         { label: 'Signaal', value: forecast.signal },
       ],
       recommendation,
-      chartBuckets,
+      chartBuckets: buildChartBuckets(history, period),
       quality: [
         { label: 'Laatste mutatie', value: latestEvent ? formatDateTime(latestEvent.datetime) : '—' },
         { label: 'Laatste bron', value: latestEvent?.source || '—' },
         { label: 'Aantal locaties', value: String(locations.length) },
       ],
     }
-  }, [articleData.name, history, locations])
+  }, [articleData.name, history, locations, period])
 
   return (
     <div className="rz-analytics-tab">
-      <AnalyticsChart buckets={analytics.chartBuckets} />
+      <AnalyticsChart buckets={analytics.chartBuckets} period={period} onPeriodChange={setPeriod} />
       <AnalyticsAccordion title="Prijsinzichten" rows={analytics.price} />
       <AnalyticsAccordion title="Verbruiksbeeld" rows={analytics.consumption} />
       <AnalyticsAccordion title="Voorraadprognose" rows={analytics.forecast} />
