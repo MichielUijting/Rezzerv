@@ -1,0 +1,21 @@
+Lidl pilot — Release 2 UX-fix validatierapport
+Versie: 01.06.76
+
+Aangepast:
+- Batchstatus op de Winkels-pagina wordt nu gebruikersvriendelijk getoond:
+  - new -> Nog te beoordelen
+  - in_review -> In beoordeling
+  - reviewed -> Beoordeling afgerond
+- Taal in de reviewlijst aangescherpt:
+  - Later beoordelen -> Nog te beoordelen
+  - Nog niet gekoppeld -> Kies artikel
+  - Nog geen voorkeurslocatie -> Geen voorkeurslocatie
+- Extra helpertekst toegevoegd onder de beoordelingskeuze.
+- Kolombreedtes en uitlijning verbeterd voor een rustiger reviewoverzicht.
+
+Validatie:
+- Frontend build geslaagd.
+- Geen wijziging aan review-/mapping-endpoints.
+- Geen writes naar inventory toegevoegd.
+- Geen writes naar inventory_events toegevoegd.
+- Functionele scope van Release 2 niet verbreed.

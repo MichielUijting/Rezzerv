@@ -51,6 +51,23 @@ function articleLabel(article) {
   return article.brand ? `${article.name} — ${article.brand}` : article.name
 }
 
+
+function batchStatusLabel(value) {
+  if (value === 'reviewed') return 'Beoordeling afgerond'
+  if (value === 'in_review') return 'In beoordeling'
+  return 'Nog te beoordelen'
+}
+
+function reviewDecisionLabel(value) {
+  if (value === 'selected') return 'Geselecteerd voor later verwerken'
+  if (value === 'ignored') return 'Gemarkeerd als negeren'
+  return 'Nog te beoordelen'
+}
+
+function formatQuantity(value, unit) {
+  return [value, unit].filter(Boolean).join(' ')
+}
+
 export default function StoresPage() {
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
@@ -302,7 +319,7 @@ export default function StoresPage() {
                 <div>
                   <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Importreview Lidl</h3>
                   <div style={{ color: '#667085', fontSize: '14px' }}>
-                    Batch: {activeBatch.batch_id} · Status: {activeBatch.import_status}
+                    Batch: {activeBatch.batch_id} · Status: {batchStatusLabel(activeBatch.import_status)}
                   </div>
                   <div style={{ color: '#667085', fontSize: '14px' }}>
                     Totaal: {activeBatch.summary?.total || 0} · Geselecteerd: {activeBatch.summary?.selected || 0} · Genegeerd: {activeBatch.summary?.ignored || 0} · Open: {activeBatch.summary?.pending || 0}
@@ -317,11 +334,11 @@ export default function StoresPage() {
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr>
-                      <th style={tableHeadStyle}>Artikel</th>
-                      <th style={tableHeadStyle}>Aantal</th>
-                      <th style={tableHeadStyle}>Review</th>
-                      <th style={tableHeadStyle}>Koppelen aan</th>
-                      <th style={tableHeadStyle}>Locatie</th>
+                      <th style={{ ...tableHeadStyle, width: '26%' }}>Artikel</th>
+                      <th style={{ ...tableHeadStyle, width: '12%' }}>Aantal</th>
+                      <th style={{ ...tableHeadStyle, width: '20%' }}>Beoordeling</th>
+                      <th style={{ ...tableHeadStyle, width: '22%' }}>Koppelen aan</th>
+                      <th style={{ ...tableHeadStyle, width: '20%' }}>Locatie</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -331,7 +348,9 @@ export default function StoresPage() {
                           <div style={{ fontWeight: 700 }}>{line.article_name_raw}</div>
                           <div style={{ color: '#667085', fontSize: '13px' }}>{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
                         </td>
-                        <td style={tableCellStyle}>{line.quantity_raw} {line.unit_raw || ''}</td>
+                        <td style={tableCellStyle}>
+                          <div style={{ fontWeight: 600 }}>{formatQuantity(line.quantity_raw, line.unit_raw)}</div>
+                        </td>
                         <td style={tableCellStyle}>
                           <select
                             style={selectStyle}
@@ -339,10 +358,13 @@ export default function StoresPage() {
                             disabled={busyLineId === line.id}
                             onChange={(event) => handleReviewDecision(line.id, event.target.value)}
                           >
-                            <option value="pending">Later beoordelen</option>
+                            <option value="pending">Nog te beoordelen</option>
                             <option value="selected">Verwerken</option>
                             <option value="ignored">Negeren</option>
                           </select>
+                          <div style={{ color: '#667085', fontSize: '12px', marginTop: '4px' }}>
+                            {reviewDecisionLabel(line.review_decision || 'pending')}
+                          </div>
                         </td>
                         <td style={tableCellStyle}>
                           <select
@@ -351,13 +373,13 @@ export default function StoresPage() {
                             disabled={busyLineId === line.id}
                             onChange={(event) => handleMapLine(line.id, event.target.value)}
                           >
-                            <option value="">Nog niet gekoppeld</option>
+                            <option value="">Kies artikel</option>
                             {articleOptions.map((article) => (
                               <option key={article.id} value={article.id}>{articleLabel(article)}</option>
                             ))}
                           </select>
                           <div style={{ color: '#667085', fontSize: '12px', marginTop: '4px' }}>
-                            {line.match_status === 'matched' ? 'Gekoppeld aan bestaand artikel' : 'Nog geen koppeling'}
+                            {line.match_status === 'matched' ? 'Gekoppeld aan bestaand artikel' : 'Nog geen artikel gekozen'}
                           </div>
                         </td>
                         <td style={tableCellStyle}>
@@ -367,7 +389,7 @@ export default function StoresPage() {
                             disabled={busyLineId === line.id}
                             onChange={(event) => handleTargetLocation(line.id, event.target.value)}
                           >
-                            <option value="">Nog geen voorkeurslocatie</option>
+                            <option value="">Geen voorkeurslocatie</option>
                             {locationOptions.map((location) => (
                               <option key={location.id} value={location.id}>{location.label}</option>
                             ))}
