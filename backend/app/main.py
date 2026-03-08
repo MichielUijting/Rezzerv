@@ -67,6 +67,35 @@ class PullPurchasesRequest(BaseModel):
     mock_profile: str = "default"
 
 
+
+class ReviewLineRequest(BaseModel):
+    review_decision: str
+
+    @field_validator("review_decision")
+    @classmethod
+    def validate_review_decision(cls, value):
+        allowed = {"pending", "selected", "ignored"}
+        if value not in allowed:
+            raise ValueError("Ongeldige reviewbeslissing")
+        return value
+
+
+class MapLineRequest(BaseModel):
+    household_article_id: str | int
+
+    @field_validator("household_article_id", mode="before")
+    @classmethod
+    def normalize_article_id(cls, value):
+        if value is None or str(value).strip() == "":
+            raise ValueError("household_article_id is verplicht")
+        return str(value)
+
+
+class TargetLocationRequest(BaseModel):
+    target_location_id: Optional[str] = None
+
+
+
 MOCK_LIDL_PURCHASES = {
     "default": [
         {
@@ -113,6 +142,16 @@ MOCK_LIDL_PURCHASES = {
 }
 
 
+MOCK_ARTICLE_OPTIONS = [
+    {"id": "1", "name": "Tomaten", "brand": "Mutti"},
+    {"id": "2", "name": "Spaghetti", "brand": "Barilla"},
+    {"id": "3", "name": "Koffie", "brand": "Douwe Egberts"},
+    {"id": "4", "name": "Melk", "brand": "Campina"},
+    {"id": "5", "name": "Banaan", "brand": "Huismerk"},
+    {"id": "6", "name": "Volkoren pasta", "brand": "Barilla"},
+]
+
+
 def utc_now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
@@ -139,6 +178,64 @@ def seed_store_providers():
                     "import_mode": "mock",
                 },
             )
+
+
+
+
+def ensure_release_2_schema():
+    with engine.begin() as conn:
+        line_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(purchase_import_lines)")).fetchall()}
+        batch_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(purchase_import_batches)")).fetchall()}
+
+        if "matched_household_article_id" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN matched_household_article_id TEXT"))
+        if "review_decision" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN review_decision TEXT DEFAULT 'pending'"))
+        if "reviewed_at" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN reviewed_at DATETIME"))
+        if "reviewed_by" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN reviewed_by TEXT"))
+        if "ui_sort_order" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN ui_sort_order INTEGER"))
+
+        if "import_status" not in batch_columns:
+            conn.execute(text("ALTER TABLE purchase_import_batches ADD COLUMN import_status TEXT DEFAULT 'new'"))
+
+
+def compute_batch_status(conn, batch_id: str) -> str:
+    rows = conn.execute(
+        text(
+            """
+            SELECT review_decision
+            FROM purchase_import_lines
+            WHERE batch_id = :batch_id
+            """
+        ),
+        {"batch_id": batch_id},
+    ).fetchall()
+    decisions = [row[0] or "pending" for row in rows]
+    if not decisions:
+        return "new"
+    if all(decision != "pending" for decision in decisions):
+        return "reviewed"
+    if any(decision != "pending" for decision in decisions):
+        return "in_review"
+    return "new"
+
+
+def update_batch_status(conn, batch_id: str) -> str:
+    status = compute_batch_status(conn, batch_id)
+    conn.execute(
+        text(
+            """
+            UPDATE purchase_import_batches
+            SET import_status = :status
+            WHERE id = :id
+            """
+        ),
+        {"status": status, "id": batch_id},
+    )
+    return status
 
 
 def ensure_store_provider(provider_code: str):
@@ -212,6 +309,7 @@ from app.db import engine, Base
 from app.models import household, space, sublocation, inventory, store_provider, store_connection, purchase_import
 
 Base.metadata.create_all(bind=engine)
+ensure_release_2_schema()
 seed_store_providers()
 
 def reset_dev_tables():
@@ -560,17 +658,18 @@ def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
                     INSERT INTO purchase_import_lines (
                         id, batch_id, external_line_ref, external_article_code, article_name_raw,
                         brand_raw, quantity_raw, unit_raw, line_price_raw, currency_code,
-                        match_status, created_at
+                        match_status, review_decision, ui_sort_order, created_at
                     ) VALUES (
                         :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw,
                         :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
-                        'unmatched', CURRENT_TIMESTAMP
+                        'unmatched', 'pending', :ui_sort_order, CURRENT_TIMESTAMP
                     )
                     """
                 ),
                 {
                     "id": str(uuid.uuid4()),
                     "batch_id": batch_id,
+                    "ui_sort_order": lines.index(line) + 1,
                     **line,
                 },
             )
@@ -628,10 +727,11 @@ def get_purchase_import_batch(batch_id: str):
                 """
                 SELECT
                     id, article_name_raw, brand_raw, quantity_raw, unit_raw,
-                    line_price_raw, currency_code, match_status
+                    line_price_raw, currency_code, match_status, review_decision,
+                    matched_household_article_id, target_location_id
                 FROM purchase_import_lines
                 WHERE batch_id = :batch_id
-                ORDER BY created_at ASC, id ASC
+                ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
                 """
             ),
             {"batch_id": batch_id},
@@ -642,12 +742,182 @@ def get_purchase_import_batch(batch_id: str):
     batch_result["lines"] = [
         {
             **dict(line),
+            "review_decision": line["review_decision"] or "pending",
             "quantity_raw": float(line["quantity_raw"]) if line["quantity_raw"] is not None else None,
             "line_price_raw": float(line["line_price_raw"]) if line["line_price_raw"] is not None else None,
         }
         for line in lines
     ]
+    selected_count = sum(1 for line in batch_result["lines"] if line.get("review_decision") == "selected")
+    ignored_count = sum(1 for line in batch_result["lines"] if line.get("review_decision") == "ignored")
+    pending_count = sum(1 for line in batch_result["lines"] if line.get("review_decision") == "pending")
+    batch_result["summary"] = {
+        "total": len(batch_result["lines"]),
+        "selected": selected_count,
+        "ignored": ignored_count,
+        "pending": pending_count,
+    }
     return batch_result
+
+
+@app.get("/api/store-review-articles")
+def get_store_review_articles(q: Optional[str] = Query(None)):
+    query = (q or "").strip().lower()
+    items = []
+    for item in MOCK_ARTICLE_OPTIONS:
+        haystack = f"{item['name']} {item.get('brand') or ''}".lower()
+        if not query or query in haystack:
+            items.append(item)
+    return items
+
+
+@app.get("/api/store-location-options")
+def get_store_location_options(householdId: str = Query(...)):
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                    s.id AS space_id,
+                    s.naam AS space_name,
+                    sl.id AS sublocation_id,
+                    sl.naam AS sublocation_name
+                FROM spaces s
+                LEFT JOIN sublocations sl ON sl.space_id = s.id
+                WHERE s.household_id = 'demo-household' OR s.household_id = :household_id
+                ORDER BY s.naam ASC, sl.naam ASC
+                """
+            ),
+            {"household_id": householdId},
+        ).mappings().all()
+    return [
+        {
+            "id": row["sublocation_id"] or row["space_id"],
+            "label": f"{row['space_name']} / {row['sublocation_name']}" if row["sublocation_name"] else row["space_name"],
+        }
+        for row in rows
+    ]
+
+
+@app.post("/api/purchase-import-lines/{line_id}/review")
+def review_purchase_import_line(line_id: str, payload: ReviewLineRequest):
+    with engine.begin() as conn:
+        line = conn.execute(
+            text("SELECT id, batch_id FROM purchase_import_lines WHERE id = :id"),
+            {"id": line_id},
+        ).mappings().first()
+        if not line:
+            raise HTTPException(status_code=404, detail="Onbekende importregel")
+
+        conn.execute(
+            text(
+                """
+                UPDATE purchase_import_lines
+                SET review_decision = :review_decision, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {"review_decision": payload.review_decision, "id": line_id},
+        )
+        status = update_batch_status(conn, line["batch_id"])
+        updated = conn.execute(
+            text(
+                """
+                SELECT id, batch_id, review_decision, matched_household_article_id, target_location_id, match_status
+                FROM purchase_import_lines WHERE id = :id
+                """
+            ),
+            {"id": line_id},
+        ).mappings().first()
+    result = dict(updated)
+    result["batch_status"] = status
+    return result
+
+
+@app.post("/api/purchase-import-lines/{line_id}/map")
+def map_purchase_import_line(line_id: str, payload: MapLineRequest):
+    with engine.begin() as conn:
+        line = conn.execute(
+            text("SELECT id, batch_id FROM purchase_import_lines WHERE id = :id"),
+            {"id": line_id},
+        ).mappings().first()
+        if not line:
+            raise HTTPException(status_code=404, detail="Onbekende importregel")
+
+        conn.execute(
+            text(
+                """
+                UPDATE purchase_import_lines
+                SET matched_household_article_id = :article_id, match_status = 'matched', updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {"article_id": payload.household_article_id, "id": line_id},
+        )
+        status = update_batch_status(conn, line["batch_id"])
+        updated = conn.execute(
+            text(
+                """
+                SELECT id, batch_id, review_decision, matched_household_article_id, target_location_id, match_status
+                FROM purchase_import_lines WHERE id = :id
+                """
+            ),
+            {"id": line_id},
+        ).mappings().first()
+    result = dict(updated)
+    result["batch_status"] = status
+    return result
+
+
+@app.post("/api/purchase-import-lines/{line_id}/target-location")
+def set_purchase_import_line_target_location(line_id: str, payload: TargetLocationRequest):
+    with engine.begin() as conn:
+        line = conn.execute(
+            text("SELECT id, batch_id FROM purchase_import_lines WHERE id = :id"),
+            {"id": line_id},
+        ).mappings().first()
+        if not line:
+            raise HTTPException(status_code=404, detail="Onbekende importregel")
+
+        conn.execute(
+            text(
+                """
+                UPDATE purchase_import_lines
+                SET target_location_id = :target_location_id, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {"target_location_id": payload.target_location_id, "id": line_id},
+        )
+        status = update_batch_status(conn, line["batch_id"])
+        updated = conn.execute(
+            text(
+                """
+                SELECT id, batch_id, review_decision, matched_household_article_id, target_location_id, match_status
+                FROM purchase_import_lines WHERE id = :id
+                """
+            ),
+            {"id": line_id},
+        ).mappings().first()
+    result = dict(updated)
+    result["batch_status"] = status
+    return result
+
+
+@app.post("/api/purchase-import-batches/{batch_id}/complete-review")
+def complete_purchase_import_batch_review(batch_id: str):
+    with engine.begin() as conn:
+        batch = conn.execute(
+            text("SELECT id FROM purchase_import_batches WHERE id = :id"),
+            {"id": batch_id},
+        ).first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Onbekende purchase import batch")
+        status = update_batch_status(conn, batch_id)
+        if status == "new":
+            status = "in_review"
+            conn.execute(text("UPDATE purchase_import_batches SET import_status = 'in_review' WHERE id = :id"), {"id": batch_id})
+    return {"batch_id": batch_id, "import_status": status}
 
 
 @app.post("/api/dev/run-smoke-tests", response_model=TestStartResponse)

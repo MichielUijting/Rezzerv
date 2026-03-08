@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
+import demoData from '../../demo-articles.json'
 
 function normalizeErrorMessage(value) {
   if (!value) return 'Verzoek mislukt'
@@ -10,9 +11,7 @@ function normalizeErrorMessage(value) {
     const first = value[0]
     if (typeof first === 'string') return first
     if (first && typeof first === 'object') {
-      const location = Array.isArray(first.loc) ? first.loc.join(' > ') : null
       const message = first.msg || first.message || null
-      if (location && message) return `${location}: ${message}`
       if (message) return message
     }
     return 'Verzoek mislukt'
@@ -42,16 +41,30 @@ async function fetchJson(url, options = {}) {
   return data
 }
 
+const articleFallbackOptions = demoData.articles.map((article) => ({
+  id: String(article.id),
+  name: article.name,
+  brand: article.brand || '',
+}))
+
+function articleLabel(article) {
+  return article.brand ? `${article.name} — ${article.brand}` : article.name
+}
+
 export default function StoresPage() {
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [connections, setConnections] = useState([])
   const [activeBatch, setActiveBatch] = useState(null)
+  const [articleOptions, setArticleOptions] = useState(articleFallbackOptions)
+  const [locationOptions, setLocationOptions] = useState([])
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isConnecting, setIsConnecting] = useState(false)
   const [isPulling, setIsPulling] = useState(false)
+  const [busyLineId, setBusyLineId] = useState('')
+  const [isCompletingReview, setIsCompletingReview] = useState(false)
 
   const lidlProvider = useMemo(
     () => providers.find((provider) => provider.code === 'lidl') || null,
@@ -63,6 +76,12 @@ export default function StoresPage() {
     [connections],
   )
 
+  async function refreshBatch(batchId) {
+    const batch = await fetchJson(`/api/purchase-import-batches/${batchId}`)
+    setActiveBatch(batch)
+    return batch
+  }
+
   async function loadPageData() {
     setIsLoading(true)
     setError('')
@@ -73,13 +92,17 @@ export default function StoresPage() {
       })
       setHousehold(householdData)
 
-      const [providerData, connectionData] = await Promise.all([
+      const [providerData, connectionData, backendArticles, backendLocations] = await Promise.all([
         fetchJson('/api/store-providers'),
         fetchJson(`/api/store-connections?householdId=${encodeURIComponent(householdData.id)}`),
+        fetchJson('/api/store-review-articles').catch(() => articleFallbackOptions),
+        fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdData.id)}`).catch(() => []),
       ])
 
       setProviders(providerData)
       setConnections(connectionData)
+      setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? backendArticles : articleFallbackOptions)
+      setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelgegevens konden niet worden geladen.')
     } finally {
@@ -99,7 +122,7 @@ export default function StoresPage() {
     try {
       const connection = await fetchJson('/api/store-connections', {
         method: 'POST',
-        body: JSON.stringify({ household_id: String(household.id), store_provider_code: 'lidl' }),
+        body: JSON.stringify({ household_id: household.id, store_provider_code: 'lidl' }),
       })
       setConnections((current) => {
         const filtered = current.filter((item) => item.id !== connection.id)
@@ -107,7 +130,7 @@ export default function StoresPage() {
       })
       setStatus('Lidl is gekoppeld aan dit huishouden.')
     } catch (err) {
-      setError('Lidl koppelen mislukt. Controleer het huishouden en probeer opnieuw.')
+      setError(normalizeErrorMessage(err?.message) || 'Lidl kon niet worden gekoppeld.')
     } finally {
       setIsConnecting(false)
     }
@@ -123,15 +146,86 @@ export default function StoresPage() {
         method: 'POST',
         body: JSON.stringify({ mock_profile: 'default' }),
       })
-      const batch = await fetchJson(`/api/purchase-import-batches/${pullResult.batch_id}`)
-      setActiveBatch(batch)
-      setStatus('Mock aankopen zijn opgehaald. Deze regels zijn nog niet verwerkt naar voorraad.')
+      await refreshBatch(pullResult.batch_id)
+      setStatus('Mock aankopen zijn opgehaald. Beoordeel nu per regel wat ermee moet gebeuren.')
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
     } catch (err) {
-      setError('Aankopen ophalen mislukt. Probeer het opnieuw.')
+      setError(normalizeErrorMessage(err?.message) || 'Aankopen konden niet worden opgehaald.')
     } finally {
       setIsPulling(false)
+    }
+  }
+
+  async function handleReviewDecision(lineId, reviewDecision) {
+    setBusyLineId(lineId)
+    setError('')
+    setStatus('')
+    try {
+      await fetchJson(`/api/purchase-import-lines/${lineId}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ review_decision: reviewDecision }),
+      })
+      await refreshBatch(activeBatch.batch_id)
+      setStatus('De beoordeling is opgeslagen.')
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'De beoordeling kon niet worden opgeslagen.')
+    } finally {
+      setBusyLineId('')
+    }
+  }
+
+  async function handleMapLine(lineId, articleId) {
+    setBusyLineId(lineId)
+    setError('')
+    setStatus('')
+    try {
+      await fetchJson(`/api/purchase-import-lines/${lineId}/map`, {
+        method: 'POST',
+        body: JSON.stringify({ household_article_id: articleId }),
+      })
+      await refreshBatch(activeBatch.batch_id)
+      setStatus('De artikelkoppeling is opgeslagen.')
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'De artikelkoppeling kon niet worden opgeslagen.')
+    } finally {
+      setBusyLineId('')
+    }
+  }
+
+  async function handleTargetLocation(lineId, targetLocationId) {
+    setBusyLineId(lineId)
+    setError('')
+    setStatus('')
+    try {
+      await fetchJson(`/api/purchase-import-lines/${lineId}/target-location`, {
+        method: 'POST',
+        body: JSON.stringify({ target_location_id: targetLocationId || null }),
+      })
+      await refreshBatch(activeBatch.batch_id)
+      setStatus('De voorkeurslocatie is opgeslagen.')
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'De voorkeurslocatie kon niet worden opgeslagen.')
+    } finally {
+      setBusyLineId('')
+    }
+  }
+
+  async function handleCompleteReview() {
+    if (!activeBatch) return
+    setIsCompletingReview(true)
+    setError('')
+    setStatus('')
+    try {
+      await fetchJson(`/api/purchase-import-batches/${activeBatch.batch_id}/complete-review`, {
+        method: 'POST',
+      })
+      await refreshBatch(activeBatch.batch_id)
+      setStatus('De batch is als beoordeeld opgeslagen. Er is nog niets naar voorraad verwerkt.')
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'De batch kon niet worden afgerond.')
+    } finally {
+      setIsCompletingReview(false)
     }
   }
 
@@ -143,7 +237,7 @@ export default function StoresPage() {
             <div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Winkelkoppelingen</h2>
               <p style={{ margin: 0, color: '#667085' }}>
-                Koppel hier winkels en haal voorbeeld-aankopen op. In deze release gaat het om een rudimentaire Lidl-pilot.
+                Koppel hier winkels, haal voorbeeld-aankopen op en beoordeel per regel wat later verwerkt mag worden.
               </p>
             </div>
             {household && (
@@ -195,7 +289,7 @@ export default function StoresPage() {
               </div>
 
               <div style={{ borderTop: '1px solid #e4e7ec', paddingTop: '14px', color: '#667085', fontSize: '14px' }}>
-                Deze pilot maakt alleen een importbatch met regels aan. Voorraad wordt nog niet bijgewerkt.
+                Deze release laat je regels beoordelen en koppelen. Voorraad wordt nog niet bijgewerkt.
               </div>
             </div>
           )}
@@ -203,12 +297,20 @@ export default function StoresPage() {
 
         {activeBatch && (
           <Card>
-            <div style={{ display: 'grid', gap: '12px' }}>
-              <div>
-                <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Laatste opgehaalde aankopen</h3>
-                <div style={{ color: '#667085', fontSize: '14px' }}>
-                  Batch: {activeBatch.batch_id} · Bron: {activeBatch.store_provider_code} · Status: {activeBatch.import_status}
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                <div>
+                  <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Importreview Lidl</h3>
+                  <div style={{ color: '#667085', fontSize: '14px' }}>
+                    Batch: {activeBatch.batch_id} · Status: {activeBatch.import_status}
+                  </div>
+                  <div style={{ color: '#667085', fontSize: '14px' }}>
+                    Totaal: {activeBatch.summary?.total || 0} · Geselecteerd: {activeBatch.summary?.selected || 0} · Genegeerd: {activeBatch.summary?.ignored || 0} · Open: {activeBatch.summary?.pending || 0}
+                  </div>
                 </div>
+                <Button variant="primary" onClick={handleCompleteReview} disabled={isCompletingReview}>
+                  {isCompletingReview ? 'Opslaan…' : 'Beoordeling afronden'}
+                </Button>
               </div>
 
               <div style={{ overflowX: 'auto' }}>
@@ -216,18 +318,61 @@ export default function StoresPage() {
                   <thead>
                     <tr>
                       <th style={tableHeadStyle}>Artikel</th>
-                      <th style={tableHeadStyle}>Merk</th>
                       <th style={tableHeadStyle}>Aantal</th>
-                      <th style={tableHeadStyle}>Prijs</th>
+                      <th style={tableHeadStyle}>Review</th>
+                      <th style={tableHeadStyle}>Koppelen aan</th>
+                      <th style={tableHeadStyle}>Locatie</th>
                     </tr>
                   </thead>
                   <tbody>
                     {activeBatch.lines.map((line) => (
                       <tr key={line.id}>
-                        <td style={tableCellStyle}>{line.article_name_raw}</td>
-                        <td style={tableCellStyle}>{line.brand_raw || '—'}</td>
+                        <td style={tableCellStyle}>
+                          <div style={{ fontWeight: 700 }}>{line.article_name_raw}</div>
+                          <div style={{ color: '#667085', fontSize: '13px' }}>{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
+                        </td>
                         <td style={tableCellStyle}>{line.quantity_raw} {line.unit_raw || ''}</td>
-                        <td style={tableCellStyle}>{line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : '—'}</td>
+                        <td style={tableCellStyle}>
+                          <select
+                            style={selectStyle}
+                            value={line.review_decision || 'pending'}
+                            disabled={busyLineId === line.id}
+                            onChange={(event) => handleReviewDecision(line.id, event.target.value)}
+                          >
+                            <option value="pending">Later beoordelen</option>
+                            <option value="selected">Verwerken</option>
+                            <option value="ignored">Negeren</option>
+                          </select>
+                        </td>
+                        <td style={tableCellStyle}>
+                          <select
+                            style={selectStyle}
+                            value={line.matched_household_article_id || ''}
+                            disabled={busyLineId === line.id}
+                            onChange={(event) => handleMapLine(line.id, event.target.value)}
+                          >
+                            <option value="">Nog niet gekoppeld</option>
+                            {articleOptions.map((article) => (
+                              <option key={article.id} value={article.id}>{articleLabel(article)}</option>
+                            ))}
+                          </select>
+                          <div style={{ color: '#667085', fontSize: '12px', marginTop: '4px' }}>
+                            {line.match_status === 'matched' ? 'Gekoppeld aan bestaand artikel' : 'Nog geen koppeling'}
+                          </div>
+                        </td>
+                        <td style={tableCellStyle}>
+                          <select
+                            style={selectStyle}
+                            value={line.target_location_id || ''}
+                            disabled={busyLineId === line.id}
+                            onChange={(event) => handleTargetLocation(line.id, event.target.value)}
+                          >
+                            <option value="">Nog geen voorkeurslocatie</option>
+                            {locationOptions.map((location) => (
+                              <option key={location.id} value={location.id}>{location.label}</option>
+                            ))}
+                          </select>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -252,4 +397,14 @@ const tableCellStyle = {
   padding: '10px 8px',
   borderBottom: '1px solid #eaecf0',
   fontSize: '14px',
+  verticalAlign: 'top',
+}
+
+const selectStyle = {
+  width: '100%',
+  padding: '8px 10px',
+  borderRadius: '8px',
+  border: '1px solid #d0d5dd',
+  fontSize: '14px',
+  background: '#ffffff',
 }

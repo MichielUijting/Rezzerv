@@ -1,0 +1,55 @@
+Lidl pilot — Release 2 validatierapport
+Versie: 01.06.75
+
+Gebouwd:
+- purchase_import_lines uitgebreid met review- en mappingvelden
+- batchstatuslogica uitgebreid met new / in_review / reviewed
+- nieuwe endpoints voor review, mapping, targetlocatie en batch afronden
+- Winkels/Lidl-flow uitgebreid met importreviewlijst
+- keuzes blijven opgeslagen in purchase_import_lines en purchase_import_batches
+- geen writes naar inventory
+- geen writes naar inventory_events
+
+Technische samenvatting:
+- Backend:
+  - schema-uitbreiding afgevangen via startup schema check voor bestaande SQLite database
+  - GET /api/purchase-import-batches/{id} uitgebreid met reviewvelden en samenvatting
+  - toegevoegd:
+    - GET /api/store-review-articles
+    - GET /api/store-location-options
+    - POST /api/purchase-import-lines/{id}/review
+    - POST /api/purchase-import-lines/{id}/map
+    - POST /api/purchase-import-lines/{id}/target-location
+    - POST /api/purchase-import-batches/{id}/complete-review
+- Frontend:
+  - StoresPage toont importreviewlijst met reviewkeuze, artikelkoppeling en optionele locatiekeuze
+  - statusmeldingen en batchsamenvatting toegevoegd
+  - beoordeling en mapping verversen de batch direct
+
+Validatie tegen acceptatiecriteria:
+1. Opgehaalde batch zichtbaar als reviewlijst: voldaan
+2. Per regel reviewstatus opslaan: voldaan
+3. Per regel selected / ignored / pending kiezen: voldaan
+4. Per regel bestaand artikel koppelen: voldaan
+5. Batchstatus gaat naar in_review / reviewed waar van toepassing: voldaan
+6. Duidelijke feedback bij opslaan: voldaan
+7. Geen writes naar inventory: voldaan
+8. Geen writes naar inventory_events: voldaan
+9. Bestaande Lidl mockflow blijft werken: voldaan
+10. Bestaande Artikeldetails en automatiseringslogica niet aangepast: voldaan
+
+Uitgevoerde checks:
+- Backend functioneel getest via FastAPI TestClient
+- Frontend production build geslaagd via Vite
+
+Opmerking targetlocatie:
+- endpoint en UI zijn aanwezig
+- dropdown toont opties zodra locatiedata beschikbaar is in spaces/sublocations
+- zonder beschikbare locaties blijft deze keuze leeg, zonder andere flows te blokkeren
+
+Bewust niet gebouwd:
+- geen voorraadverwerking
+- geen process naar inventory_events
+- geen AI-matching
+- geen echte Lidl-login of live sync
+- geen uitbreiding buiten Winkels/Lidl reviewflow
