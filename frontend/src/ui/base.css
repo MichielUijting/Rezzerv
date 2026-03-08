@@ -587,3 +587,80 @@ button.rz-tab.rz-tab-active {
   color: var(--color-brand-primary);
   font-weight: 600;
 }
+
+
+/* Rezzerv v01.06.56 article history tab */
+.rz-history-tab {
+  display: grid;
+  gap: 20px;
+}
+
+.rz-history-group-title {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+}
+
+.rz-history-group-body {
+  display: grid;
+  gap: 12px;
+}
+
+.rz-history-card {
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #ffffff;
+  display: grid;
+  gap: 12px;
+}
+
+.rz-history-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+}
+
+.rz-history-card-datetime {
+  color: #667085;
+  font-size: 13px;
+}
+
+.rz-history-card-type {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.rz-history-card-values {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-primary);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rz-history-card-meta {
+  display: grid;
+  gap: 8px;
+}
+
+.rz-history-meta-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #e8eeea;
+}
+
+.rz-history-meta-label {
+  color: var(--color-brand-primary);
+  font-weight: 400;
+}
+
+.rz-history-meta-value {
+  color: var(--color-text-primary);
+}

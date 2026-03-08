@@ -8,6 +8,7 @@ import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility'
 import ArticleOverviewTab from './tabs/ArticleOverviewTab'
 import ArticleStockTab from './tabs/ArticleStockTab'
 import ArticleLocationsTab from './tabs/ArticleLocationsTab'
+import ArticleHistoryTab from './tabs/ArticleHistoryTab'
 
 const TABS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
 
@@ -50,7 +51,7 @@ export default function ArticlePage() {
                 if (tab === 'Overzicht') return <ArticleOverviewTab articleData={articleData} visibilityMap={visibilityMap} />
                 if (tab === 'Voorraad') return <ArticleStockTab articleData={articleData} />
                 if (tab === 'Locaties') return <ArticleLocationsTab articleData={articleData} />
-                if (tab === 'Historie') return <PlaceholderTab text="Historie-tab volgt in de volgende stap." />
+                if (tab === 'Historie') return <ArticleHistoryTab articleData={articleData} />
                 return <PlaceholderTab text="Analyse-tab volgt in de volgende stap." />
               }}
             </Tabs>

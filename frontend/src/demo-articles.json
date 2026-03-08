@@ -23,6 +23,35 @@
           "sublocatie": "Voorraadkast",
           "aantal": 2
         }
+      ],
+      "history": [
+        {
+          "datetime": "2026-03-04T18:20:00",
+          "type": "Aankoop",
+          "old_value": "2",
+          "new_value": "6",
+          "location": "Keuken / Koelkast",
+          "source": "Kassabon",
+          "note": "Mutti tomaten toegevoegd na supermarktbezoek."
+        },
+        {
+          "datetime": "2026-03-03T12:10:00",
+          "type": "Verbruik",
+          "old_value": "3",
+          "new_value": "2",
+          "location": "Keuken / Koelkast",
+          "source": "Handmatig",
+          "note": "Gebruikt voor lunch."
+        },
+        {
+          "datetime": "2026-03-01T09:05:00",
+          "type": "Correctie",
+          "old_value": "4",
+          "new_value": "3",
+          "location": "Berging / Voorraadkast",
+          "source": "Handmatig",
+          "note": "Voorraad geteld en aangepast."
+        }
       ]
     },
     {
@@ -43,6 +72,26 @@
           "sublocatie": "Kast 2",
           "aantal": 3
         }
+      ],
+      "history": [
+        {
+          "datetime": "2026-03-05T17:45:00",
+          "type": "Aankoop",
+          "old_value": "0",
+          "new_value": "3",
+          "location": "Keuken / Kast 2",
+          "source": "Kassabon",
+          "note": "Nieuwe voorraad spaghetti toegevoegd."
+        },
+        {
+          "datetime": "2026-02-28T19:30:00",
+          "type": "Verbruik",
+          "old_value": "4",
+          "new_value": "0",
+          "location": "Keuken / Kast 2",
+          "source": "Recept",
+          "note": "Laatste pak gebruikt voor pasta-avond."
+        }
       ]
     },
     {
@@ -62,6 +111,26 @@
           "locatie": "Schuur",
           "sublocatie": "Werkbank",
           "aantal": 1
+        }
+      ],
+      "history": [
+        {
+          "datetime": "2026-03-02T15:00:00",
+          "type": "Uitlenen",
+          "old_value": "1",
+          "new_value": "1",
+          "location": "Schuur / Werkbank",
+          "source": "Handmatig",
+          "note": "Kort uitgeleend aan buurman, daarna retour."
+        },
+        {
+          "datetime": "2026-01-15T10:15:00",
+          "type": "Aankoop",
+          "old_value": "0",
+          "new_value": "1",
+          "location": "Schuur / Werkbank",
+          "source": "Handmatig",
+          "note": "Boormachine toegevoegd aan inventaris."
         }
       ]
     }
