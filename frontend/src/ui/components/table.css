@@ -54,6 +54,13 @@ table.rz-table{
   text-align: center;
 }
 
+
+.rz-store-review-table th:first-child,
+.rz-store-review-table td:first-child{
+  width: auto;
+  text-align: left;
+}
+
 /* numeric alignment helper */
 .rz-num,
 .rz-table td.rz-num,

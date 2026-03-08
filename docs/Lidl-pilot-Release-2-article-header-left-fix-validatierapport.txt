@@ -1,0 +1,13 @@
+Rezzerv Lidl pilot Release 2 article header left alignment fix validatierapport
+
+Versie: 01.06.82
+
+Wijziging:
+- Override toegevoegd voor rz-store-review-table zodat de eerste kolom niet meer als checkboxkolom behandeld wordt.
+- Kolomkop Artikel en de bijbehorende cellen zijn links uitgelijnd.
+
+Niet gewijzigd:
+- Geen functionele wijzigingen
+- Geen backendwijzigingen
+- Geen writes naar inventory
+- Geen writes naar inventory_events
