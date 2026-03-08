@@ -1,0 +1,13 @@
+Lidl pilot — Release 2 article header alignment fix
+
+Versie: 01.06.80
+
+Aangepast:
+- Importreview-tabel override toegevoegd zodat de eerste kolom niet meer de generieke checkboxkolom-uitlijning erft.
+- Kolomtitel Artikel is nu links uitgelijnd, conform rz-table / Voorraad-conventie.
+
+Niet gewijzigd:
+- geen functionele wijzigingen
+- geen backendwijzigingen
+- geen writes naar inventory
+- geen writes naar inventory_events

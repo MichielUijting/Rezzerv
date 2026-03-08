@@ -1015,6 +1015,12 @@ button.rz-tab.rz-tab-active {
   text-align: left;
 }
 
+.rz-store-review-table th:first-child,
+.rz-store-review-table td:first-child {
+  width: auto;
+  text-align: left;
+}
+
 .rz-store-review-table thead th {
   border-bottom: 1px solid #d0d5dd;
   padding-top: 8px;
