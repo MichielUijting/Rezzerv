@@ -96,6 +96,19 @@ class TargetLocationRequest(BaseModel):
 
 
 
+class ProcessBatchRequest(BaseModel):
+    processed_by: str = "ui"
+    mode: str = "selected_only"
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value):
+        if value != "selected_only":
+            raise ValueError("Alleen selected_only wordt ondersteund")
+        return value
+
+
+
 MOCK_LIDL_PURCHASES = {
     "default": [
         {
@@ -152,6 +165,9 @@ MOCK_ARTICLE_OPTIONS = [
 ]
 
 
+MOCK_ARTICLE_LOOKUP = {item["id"]: item for item in MOCK_ARTICLE_OPTIONS}
+
+
 def utc_now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
@@ -202,20 +218,73 @@ def ensure_release_2_schema():
             conn.execute(text("ALTER TABLE purchase_import_batches ADD COLUMN import_status TEXT DEFAULT 'new'"))
 
 
+def ensure_release_3_schema():
+    with engine.begin() as conn:
+        line_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(purchase_import_lines)")).fetchall()}
+        batch_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(purchase_import_batches)")).fetchall()}
+
+        if "processing_status" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN processing_status TEXT DEFAULT 'pending'"))
+        if "processed_at" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN processed_at DATETIME"))
+        if "processed_event_id" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN processed_event_id TEXT"))
+        if "processing_error" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN processing_error TEXT"))
+        if "final_location_id" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN final_location_id TEXT"))
+
+        if "processed_at" not in batch_columns:
+            conn.execute(text("ALTER TABLE purchase_import_batches ADD COLUMN processed_at DATETIME"))
+
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS inventory_events (
+                    id TEXT PRIMARY KEY,
+                    household_id TEXT NOT NULL,
+                    article_id TEXT,
+                    article_name TEXT NOT NULL,
+                    location_id TEXT,
+                    location_label TEXT,
+                    event_type TEXT NOT NULL,
+                    quantity NUMERIC NOT NULL,
+                    source TEXT NOT NULL,
+                    note TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+
+
 def compute_batch_status(conn, batch_id: str) -> str:
     rows = conn.execute(
         text(
             """
-            SELECT review_decision
+            SELECT review_decision, processing_status
             FROM purchase_import_lines
             WHERE batch_id = :batch_id
             """
         ),
         {"batch_id": batch_id},
     ).fetchall()
-    decisions = [row[0] or "pending" for row in rows]
-    if not decisions:
+
+    if not rows:
         return "new"
+
+    decisions = [(row[0] or "pending") for row in rows]
+    selected_rows = [row for row in rows if (row[0] or "pending") == "selected"]
+    selected_processing = [(row[1] or "pending") for row in selected_rows]
+
+    if selected_rows:
+        if all(status == "processed" for status in selected_processing):
+            return "processed"
+        if all(status == "failed" for status in selected_processing):
+            return "failed"
+        if any(status in {"processed", "failed"} for status in selected_processing):
+            return "partially_processed"
+
     if all(decision != "pending" for decision in decisions):
         return "reviewed"
     if any(decision != "pending" for decision in decisions):
@@ -236,6 +305,129 @@ def update_batch_status(conn, batch_id: str) -> str:
         {"status": status, "id": batch_id},
     )
     return status
+
+
+def resolve_target_location(conn, target_location_id: str | None):
+    if not target_location_id:
+        return None
+
+    sublocation = conn.execute(
+        text(
+            """
+            SELECT sl.id AS location_id, sl.space_id, s.naam AS space_name, sl.naam AS sublocation_name
+            FROM sublocations sl
+            JOIN spaces s ON s.id = sl.space_id
+            WHERE sl.id = :id
+            """
+        ),
+        {"id": target_location_id},
+    ).mappings().first()
+    if sublocation:
+        return {
+            "location_id": sublocation["location_id"],
+            "space_id": sublocation["space_id"],
+            "sublocation_id": sublocation["location_id"],
+            "location_label": f"{sublocation['space_name']} / {sublocation['sublocation_name']}",
+        }
+
+    space = conn.execute(
+        text("SELECT id, naam FROM spaces WHERE id = :id"),
+        {"id": target_location_id},
+    ).mappings().first()
+    if space:
+        return {
+            "location_id": space["id"],
+            "space_id": space["id"],
+            "sublocation_id": None,
+            "location_label": space["naam"],
+        }
+    return None
+
+
+def apply_inventory_purchase(conn, household_id: str, article_name: str, quantity: float, resolved_location: dict):
+    space_id = resolved_location["space_id"]
+    sublocation_id = resolved_location["sublocation_id"]
+
+    existing = conn.execute(
+        text(
+            """
+            SELECT id, aantal
+            FROM inventory
+            WHERE household_id = :household_id
+              AND naam = :naam
+              AND COALESCE(space_id, '') = COALESCE(:space_id, '')
+              AND COALESCE(sublocation_id, '') = COALESCE(:sublocation_id, '')
+            """
+        ),
+        {
+            "household_id": household_id,
+            "naam": article_name,
+            "space_id": space_id,
+            "sublocation_id": sublocation_id,
+        },
+    ).mappings().first()
+
+    quantity_int = int(quantity)
+
+    if existing:
+        conn.execute(
+            text(
+                """
+                UPDATE inventory
+                SET aantal = aantal + :quantity, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {"quantity": quantity_int, "id": existing["id"]},
+        )
+        return existing["id"]
+
+    inventory_id = str(uuid.uuid4())
+    conn.execute(
+        text(
+            """
+            INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id)
+            VALUES (:id, :naam, :aantal, :household_id, :space_id, :sublocation_id)
+            """
+        ),
+        {
+            "id": inventory_id,
+            "naam": article_name,
+            "aantal": quantity_int,
+            "household_id": household_id,
+            "space_id": space_id,
+            "sublocation_id": sublocation_id,
+        },
+    )
+    return inventory_id
+
+
+def create_inventory_purchase_event(conn, household_id: str, article_id: str, article_name: str, quantity: float, resolved_location: dict, note: str):
+    event_id = str(uuid.uuid4())
+    conn.execute(
+        text(
+            """
+            INSERT INTO inventory_events (
+                id, household_id, article_id, article_name, location_id, location_label,
+                event_type, quantity, source, note, created_at
+            ) VALUES (
+                :id, :household_id, :article_id, :article_name, :location_id, :location_label,
+                'purchase', :quantity, 'store_import', :note, CURRENT_TIMESTAMP
+            )
+            """
+        ),
+        {
+            "id": event_id,
+            "household_id": household_id,
+            "article_id": article_id,
+            "article_name": article_name,
+            "location_id": resolved_location["location_id"],
+            "location_label": resolved_location["location_label"],
+            "quantity": quantity,
+            "note": note,
+        },
+    )
+    return event_id
 
 
 def ensure_store_provider(provider_code: str):
@@ -310,6 +502,7 @@ from app.models import household, space, sublocation, inventory, store_provider,
 
 Base.metadata.create_all(bind=engine)
 ensure_release_2_schema()
+ensure_release_3_schema()
 seed_store_providers()
 
 def reset_dev_tables():
@@ -728,7 +921,8 @@ def get_purchase_import_batch(batch_id: str):
                 SELECT
                     id, article_name_raw, brand_raw, quantity_raw, unit_raw,
                     line_price_raw, currency_code, match_status, review_decision,
-                    matched_household_article_id, target_location_id
+                    matched_household_article_id, target_location_id,
+                    processing_status, processed_at, processed_event_id, processing_error, final_location_id
                 FROM purchase_import_lines
                 WHERE batch_id = :batch_id
                 ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
@@ -743,19 +937,25 @@ def get_purchase_import_batch(batch_id: str):
         {
             **dict(line),
             "review_decision": line["review_decision"] or "pending",
+            "processing_status": line["processing_status"] or "pending",
             "quantity_raw": float(line["quantity_raw"]) if line["quantity_raw"] is not None else None,
             "line_price_raw": float(line["line_price_raw"]) if line["line_price_raw"] is not None else None,
+            "processed_at": normalize_datetime(line["processed_at"]),
         }
         for line in lines
     ]
     selected_count = sum(1 for line in batch_result["lines"] if line.get("review_decision") == "selected")
     ignored_count = sum(1 for line in batch_result["lines"] if line.get("review_decision") == "ignored")
     pending_count = sum(1 for line in batch_result["lines"] if line.get("review_decision") == "pending")
+    processed_count = sum(1 for line in batch_result["lines"] if line.get("processing_status") == "processed")
+    failed_count = sum(1 for line in batch_result["lines"] if line.get("processing_status") == "failed")
     batch_result["summary"] = {
         "total": len(batch_result["lines"]),
         "selected": selected_count,
         "ignored": ignored_count,
         "pending": pending_count,
+        "processed": processed_count,
+        "failed": failed_count,
     }
     return batch_result
 
@@ -918,6 +1118,107 @@ def complete_purchase_import_batch_review(batch_id: str):
             status = "in_review"
             conn.execute(text("UPDATE purchase_import_batches SET import_status = 'in_review' WHERE id = :id"), {"id": batch_id})
     return {"batch_id": batch_id, "import_status": status}
+
+
+@app.post("/api/purchase-import-batches/{batch_id}/process")
+def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
+    with engine.begin() as conn:
+        batch = conn.execute(
+            text(
+                """
+                SELECT id, household_id, import_status
+                FROM purchase_import_batches
+                WHERE id = :id
+                """
+            ),
+            {"id": batch_id},
+        ).mappings().first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Onbekende purchase import batch")
+
+        lines = conn.execute(
+            text(
+                """
+                SELECT id, article_name_raw, quantity_raw, review_decision, matched_household_article_id,
+                       target_location_id, processing_status, processed_event_id
+                FROM purchase_import_lines
+                WHERE batch_id = :batch_id
+                ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
+                """
+            ),
+            {"batch_id": batch_id},
+        ).mappings().all()
+
+        selected_lines = [line for line in lines if (line["review_decision"] or "pending") == "selected"]
+        if not selected_lines:
+            raise HTTPException(status_code=400, detail="Er zijn geen geselecteerde regels om te verwerken")
+
+        results = []
+        processed_count = 0
+        failed_count = 0
+
+        for line in selected_lines:
+            line_id = line["id"]
+            if line["processing_status"] == "processed" and line["processed_event_id"]:
+                results.append({"line_id": line_id, "status": "processed", "event_id": line["processed_event_id"], "message": "Al eerder verwerkt"})
+                processed_count += 1
+                continue
+
+            article_id = line["matched_household_article_id"]
+            if not article_id or article_id not in MOCK_ARTICLE_LOOKUP:
+                error = "Geen geldige artikelkoppeling gekozen"
+                conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
+                results.append({"line_id": line_id, "status": "failed", "error": error})
+                failed_count += 1
+                continue
+
+            resolved_location = resolve_target_location(conn, line["target_location_id"])
+            if not resolved_location:
+                error = "Geen geldige locatie gekozen"
+                conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
+                results.append({"line_id": line_id, "status": "failed", "error": error})
+                failed_count += 1
+                continue
+
+            quantity = float(line["quantity_raw"] or 0)
+            if quantity <= 0:
+                error = "Ongeldige hoeveelheid"
+                conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
+                results.append({"line_id": line_id, "status": "failed", "error": error})
+                failed_count += 1
+                continue
+
+            article = MOCK_ARTICLE_LOOKUP[article_id]
+            article_name = article["name"]
+            note = f"store_import;lidl;batch={batch_id};line={line_id};raw={line['article_name_raw']}"
+            event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
+            apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
+            conn.execute(
+                text(
+                    """
+                    UPDATE purchase_import_lines
+                    SET processing_status = 'processed', processed_at = CURRENT_TIMESTAMP,
+                        processed_event_id = :event_id, processing_error = NULL,
+                        final_location_id = :final_location_id, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                    """
+                ),
+                {"event_id": event_id, "final_location_id": resolved_location["location_id"], "id": line_id},
+            )
+            results.append({"line_id": line_id, "status": "processed", "event_id": event_id})
+            processed_count += 1
+
+        batch_status = update_batch_status(conn, batch_id)
+        if batch_status in {"processed", "partially_processed"}:
+            conn.execute(text("UPDATE purchase_import_batches SET processed_at = CURRENT_TIMESTAMP WHERE id = :id"), {"id": batch_id})
+
+    return {
+        "batch_id": batch_id,
+        "status": batch_status,
+        "processed_count": processed_count,
+        "failed_count": failed_count,
+        "results": results,
+    }
 
 
 @app.post("/api/dev/run-smoke-tests", response_model=TestStartResponse)

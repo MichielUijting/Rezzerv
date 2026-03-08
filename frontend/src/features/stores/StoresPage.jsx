@@ -53,15 +53,18 @@ function articleLabel(article) {
 
 
 function batchStatusLabel(value) {
+  if (value === 'processed') return 'Verwerkt naar voorraad'
+  if (value === 'partially_processed') return 'Gedeeltelijk verwerkt'
+  if (value === 'failed') return 'Verwerking mislukt'
   if (value === 'reviewed') return 'Beoordeling afgerond'
   if (value === 'in_review') return 'In beoordeling'
   return 'Nog te beoordelen'
 }
 
-function reviewDecisionLabel(value) {
-  if (value === 'selected') return 'Geselecteerd voor later verwerken'
-  if (value === 'ignored') return 'Gemarkeerd als negeren'
-  return 'Nog te beoordelen'
+function processingStatusLabel(value) {
+  if (value === 'processed') return 'Verwerkt'
+  if (value === 'failed') return 'Mislukt'
+  return 'Nog niet verwerkt'
 }
 
 function formatQuantity(value, unit) {
@@ -82,6 +85,7 @@ export default function StoresPage() {
   const [isPulling, setIsPulling] = useState(false)
   const [busyLineId, setBusyLineId] = useState('')
   const [isCompletingReview, setIsCompletingReview] = useState(false)
+  const [isProcessingBatch, setIsProcessingBatch] = useState(false)
 
   const lidlProvider = useMemo(
     () => providers.find((provider) => provider.code === 'lidl') || null,
@@ -91,6 +95,15 @@ export default function StoresPage() {
   const lidlConnection = useMemo(
     () => connections.find((connection) => connection.store_provider_code === 'lidl') || null,
     [connections],
+  )
+
+
+  const selectedLines = activeBatch?.lines?.filter((line) => (line.review_decision || 'pending') === 'selected') || []
+  const canProcessBatch = Boolean(
+    activeBatch &&
+      ['reviewed', 'processed', 'partially_processed'].includes(activeBatch.import_status) &&
+      selectedLines.length > 0 &&
+      selectedLines.every((line) => line.matched_household_article_id && line.target_location_id)
   )
 
   async function refreshBatch(batchId) {
@@ -246,6 +259,30 @@ export default function StoresPage() {
     }
   }
 
+
+  async function handleProcessBatch() {
+    if (!activeBatch) return
+    setIsProcessingBatch(true)
+    setError('')
+    setStatus('')
+    try {
+      const result = await fetchJson(`/api/purchase-import-batches/${activeBatch.batch_id}/process`, {
+        method: 'POST',
+        body: JSON.stringify({ processed_by: 'ui', mode: 'selected_only' }),
+      })
+      await refreshBatch(activeBatch.batch_id)
+      if (result.failed_count > 0) {
+        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
+      } else {
+        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) zijn naar voorraad verwerkt.`)
+      }
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
+    } finally {
+      setIsProcessingBatch(false)
+    }
+  }
+
   return (
     <AppShell title="Winkels" showExit={false}>
       <div style={{ display: 'grid', gap: '18px' }}>
@@ -306,7 +343,7 @@ export default function StoresPage() {
               </div>
 
               <div style={{ borderTop: '1px solid #e4e7ec', paddingTop: '14px', color: '#667085', fontSize: '14px' }}>
-                Deze release laat je regels beoordelen en koppelen. Voorraad wordt nog niet bijgewerkt.
+                Deze release laat je regels beoordelen, koppelen en geselecteerde regels expliciet naar voorraad verwerken.
               </div>
             </div>
           )}
@@ -322,22 +359,28 @@ export default function StoresPage() {
                     Batch: {activeBatch.batch_id} · Status: {batchStatusLabel(activeBatch.import_status)}
                   </div>
                   <div className="rz-store-review-meta">
-                    Totaal: {activeBatch.summary?.total || 0} · Geselecteerd: {activeBatch.summary?.selected || 0} · Genegeerd: {activeBatch.summary?.ignored || 0} · Open: {activeBatch.summary?.pending || 0}
+                    Totaal: {activeBatch.summary?.total || 0} · Geselecteerd: {activeBatch.summary?.selected || 0} · Genegeerd: {activeBatch.summary?.ignored || 0} · Open: {activeBatch.summary?.pending || 0} · Verwerkt: {activeBatch.summary?.processed || 0} · Mislukt: {activeBatch.summary?.failed || 0}
                   </div>
                 </div>
-                <Button variant="primary" onClick={handleCompleteReview} disabled={isCompletingReview}>
-                  {isCompletingReview ? 'Opslaan…' : 'Beoordeling afronden'}
-                </Button>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  <Button variant="secondary" onClick={handleCompleteReview} disabled={isCompletingReview}>
+                    {isCompletingReview ? 'Opslaan…' : 'Beoordeling afronden'}
+                  </Button>
+                  <Button variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
+                    {isProcessingBatch ? 'Verwerken…' : 'Naar voorraad verwerken'}
+                  </Button>
+                </div>
               </div>
 
               <div className="rz-table-wrapper">
                 <table className="rz-table rz-store-review-table">
                   <colgroup>
-                    <col style={{ width: '30%' }} />
-                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '27%' }} />
+                    <col style={{ width: '11%' }} />
+                    <col style={{ width: '18%' }} />
                     <col style={{ width: '20%' }} />
-                    <col style={{ width: '22%' }} />
-                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '14%' }} />
+                    <col style={{ width: '10%' }} />
                   </colgroup>
                   <thead>
                     <tr className="rz-table-header">
@@ -346,6 +389,7 @@ export default function StoresPage() {
                       <th>Beoordeling</th>
                       <th>Koppelen aan</th>
                       <th>Locatie</th>
+                      <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -395,6 +439,12 @@ export default function StoresPage() {
                               <option key={location.id} value={location.id}>{location.label}</option>
                             ))}
                           </select>
+                        </td>
+                        <td>
+                          <div className={`rz-store-processing rz-store-processing--${line.processing_status || 'pending'}`}>
+                            {processingStatusLabel(line.processing_status)}
+                          </div>
+                          {line.processing_error ? <div className="rz-store-processing-error">{line.processing_error}</div> : null}
                         </td>
                       </tr>
                     ))}

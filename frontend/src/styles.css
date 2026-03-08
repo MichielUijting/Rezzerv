@@ -166,3 +166,26 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
   color:var(--rz-muted);
   font-size:14px;
 }
+
+.rz-store-processing {
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.rz-store-processing--processed {
+  color: #0f5132;
+}
+
+.rz-store-processing--failed {
+  color: #b42318;
+}
+
+.rz-store-processing--pending {
+  color: #667085;
+}
+
+.rz-store-processing-error {
+  margin-top: 4px;
+  color: #b42318;
+  font-size: 12px;
+}

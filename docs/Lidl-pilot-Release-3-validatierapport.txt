@@ -1,0 +1,47 @@
+Lidl pilot — Release 3 validatierapport
+Versie: 01.06.83
+
+Opgeleverd
+- purchase_import_lines uitgebreid met verwerkingsvelden
+- batchstatus uitgebreid met verwerkingsstatussen
+- endpoint POST /api/purchase-import-batches/{batchId}/process toegevoegd
+- alleen geselecteerde regels worden verwerkt
+- per geldige regel wordt exact één purchase event geschreven in inventory_events
+- source staat op store_import
+- voorraadprojectie wordt bijgewerkt via de bestaande backendlogica voor inventory
+- verwerkingsstatus is zichtbaar in de Winkels/importreviewflow
+- dubbele verwerking wordt voorkomen via processed_event_id + processing_status
+- geen stille mutaties buiten de eventketen
+
+Uitgevoerde validatie
+1. Backend compile
+- python -m py_compile backend/app/main.py: geslaagd
+
+2. Frontend build
+- node node_modules/vite/bin/vite.js build: geslaagd
+
+3. Functionele backendcheck
+- login + household ophalen: geslaagd
+- demo-locaties genereren: geslaagd
+- Lidl koppelen: geslaagd
+- mock aankopen ophalen: geslaagd
+- regel selecteren + koppelen + locatie kiezen: geslaagd
+- batch afronden: geslaagd
+- batch verwerken: geslaagd
+- inventory_events aangemaakt met event_type purchase en source store_import: geslaagd
+- inventory bijgewerkt op gekozen locatie: geslaagd
+- tweede verwerkingspoging maakt geen dubbele events aan: geslaagd
+
+Acceptatiecriteria
+- geselecteerde importregels verwerken naar inventory_events en voorraad: voldaan
+- volledige uitlegbaarheid via bron store_import: voldaan
+- geen stille mutaties buiten eventketen: voldaan
+- dubbele verwerking voorkomen: voldaan
+- verwerkingsstatus zichtbaar in importreviewflow: voldaan
+
+Bewust niet gebouwd
+- echte Lidl-authenticatie
+- live synchronisatie
+- AI-matching
+- multi-store uitbreiding
+- automatische verwerking zonder review
