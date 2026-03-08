@@ -1,74 +1,138 @@
 import { useMemo } from 'react'
 
-function formatDateTime(value) {
-  if (!value) return 'Onbekend moment'
+function formatCurrency(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
+  return new Intl.NumberFormat('nl-NL', { style: 'currency', currency: 'EUR' }).format(Number(value))
+}
+
+function formatDate(value) {
+  if (!value) return '—'
   const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
+  if (Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleDateString('nl-NL')
+}
+
+function formatDateTime(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
   return date.toLocaleString('nl-NL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
   })
 }
 
-function countByType(history) {
-  return history.reduce((acc, entry) => {
-    const key = String(entry?.type || '').toLowerCase()
-    if (!key) return acc
-    acc[key] = (acc[key] || 0) + 1
-    return acc
-  }, {})
+function daysBetween(a, b) {
+  return Math.max(0, (a - b) / (1000 * 60 * 60 * 24))
 }
 
-function getLatestEntry(history) {
-  if (!history.length) return null
-  return [...history].sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0))[0]
+function getSortedHistory(history) {
+  return [...history].sort((a, b) => new Date(a.datetime || 0) - new Date(b.datetime || 0))
 }
 
-function buildStockSignal(totalQuantity, locationCount) {
-  if (totalQuantity <= 0) return 'Geen voorraad beschikbaar'
-  if (totalQuantity <= 2) return 'Lage voorraad'
-  if (locationCount > 1) return 'Voorraad gespreid over meerdere locaties'
-  return 'Voorraad op niveau'
-}
-
-function buildUsageSignal(articleType, latestType, historyCount) {
-  if (articleType === 'Gereedschap') {
-    return historyCount >= 2 ? 'Activiteit geregistreerd in gebruiksgeschiedenis' : 'Beperkte gebruiksgeschiedenis'
+function buildPriceInsights(history) {
+  const purchases = history.filter((entry) => entry?.type === 'Aankoop' && typeof entry?.price === 'number')
+  if (!purchases.length) {
+    return {
+      lowestPrice: '—',
+      cheapestStore: 'Onbekend',
+      averagePrice: '—',
+      latestPrice: '—',
+    }
   }
 
-  if (latestType === 'Verbruik') return 'Recent verbruik geregistreerd'
-  if (latestType === 'Aankoop') return 'Recent aangevuld'
-  if (latestType === 'Correctie') return 'Recent handmatig aangepast'
-  return 'Nog beperkt gebruiksbeeld beschikbaar'
+  const cheapest = purchases.reduce((best, entry) => (entry.price < best.price ? entry : best), purchases[0])
+  const latest = [...purchases].sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0))[0]
+  const average = purchases.reduce((sum, entry) => sum + Number(entry.price || 0), 0) / purchases.length
+
+  return {
+    lowestPrice: formatCurrency(cheapest.price),
+    cheapestStore: cheapest.store || 'Onbekend',
+    averagePrice: formatCurrency(average),
+    latestPrice: formatCurrency(latest.price),
+  }
 }
 
-function buildMetadataScore(articleData, history) {
-  let score = 0
-  const checks = [
-    articleData?.brand,
-    articleData?.barcode,
-    articleData?.category,
-    articleData?.subcategory,
-    articleData?.weight,
-    Array.isArray(articleData?.locations) && articleData.locations.length > 0,
-    history.length > 0,
-  ]
+function buildConsumptionInsights(history) {
+  const consumes = history.filter((entry) => entry?.type === 'Verbruik')
+  if (!consumes.length) {
+    return {
+      perWeek: 'Nog onvoldoende verbruiksdata',
+      weeklyValue: null,
+      lastConsumptionAt: '—',
+    }
+  }
 
-  checks.forEach((value) => {
-    if (value) score += 1
+  const sorted = [...consumes].sort((a, b) => new Date(a.datetime || 0) - new Date(b.datetime || 0))
+  const totalConsumed = sorted.reduce((sum, entry) => sum + Number(entry.quantity_change || 0), 0)
+  const firstDate = new Date(sorted[0].datetime)
+  const lastDate = new Date(sorted[sorted.length - 1].datetime)
+  const periodDays = Math.max(7, daysBetween(lastDate, firstDate) || 7)
+  const perWeek = (totalConsumed / periodDays) * 7
+
+  return {
+    perWeek: `${perWeek.toFixed(1)} stuks per week`,
+    weeklyValue: perWeek,
+    lastConsumptionAt: formatDate(sorted[sorted.length - 1].datetime),
+  }
+}
+
+function buildRunoutForecast(totalQuantity, weeklyConsumption) {
+  if (!weeklyConsumption || weeklyConsumption <= 0 || totalQuantity <= 0) {
+    return {
+      date: 'Niet te bepalen',
+      daysLeft: '—',
+      signal: totalQuantity > 0 ? 'Nog onvoldoende verbruiksdata' : 'Geen voorraad beschikbaar',
+    }
+  }
+
+  const daysLeft = Math.round((totalQuantity / weeklyConsumption) * 7)
+  const runout = new Date()
+  runout.setDate(runout.getDate() + daysLeft)
+
+  let signal = 'Op schema'
+  if (daysLeft <= 7) signal = 'Binnen 1 week op'
+  else if (daysLeft <= 14) signal = 'Binnen 2 weken op'
+
+  return {
+    date: formatDate(runout.toISOString()),
+    daysLeft: `${daysLeft} dagen`,
+    signal,
+  }
+}
+
+function buildRecommendation(priceInsights, forecast, articleName) {
+  if (forecast.signal === 'Binnen 1 week op') {
+    return `Aanbevolen: koop ${articleName.toLowerCase()} deze week opnieuw in. ${priceInsights.cheapestStore !== 'Onbekend' ? `${priceInsights.cheapestStore} heeft nu de laagste bekende prijs.` : ''}`.trim()
+  }
+  if (forecast.signal === 'Binnen 2 weken op') {
+    return `Plan een aanvulling binnen twee weken. ${priceInsights.cheapestStore !== 'Onbekend' ? `${priceInsights.cheapestStore} is momenteel het voordeligst.` : ''}`.trim()
+  }
+  return priceInsights.cheapestStore !== 'Onbekend'
+    ? `${priceInsights.cheapestStore} heeft momenteel de laagste bekende prijs voor ${articleName.toLowerCase()}.`
+    : `Nog onvoldoende prijsdata beschikbaar voor ${articleName.toLowerCase()}.`
+}
+
+function buildChartBuckets(history) {
+  const relevant = history.filter((entry) => entry?.type === 'Aankoop' || entry?.type === 'Verbruik')
+  if (!relevant.length) return []
+
+  const buckets = new Map()
+  relevant.forEach((entry) => {
+    const date = new Date(entry.datetime)
+    if (Number.isNaN(date.getTime())) return
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    if (!buckets.has(key)) {
+      buckets.set(key, { label: formatDate(entry.datetime), purchases: 0, consumes: 0 })
+    }
+    const bucket = buckets.get(key)
+    if (entry.type === 'Aankoop') bucket.purchases += Number(entry.quantity_change || 0)
+    if (entry.type === 'Verbruik') bucket.consumes += Number(entry.quantity_change || 0)
   })
 
-  if (score >= 7) return 'Hoog'
-  if (score >= 5) return 'Goed'
-  if (score >= 3) return 'Basis'
-  return 'Beperkt'
-}
-
-function uniqueSources(history) {
-  return [...new Set(history.map((entry) => entry?.source).filter(Boolean))]
+  return Array.from(buckets.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([, value]) => value)
+    .slice(-6)
 }
 
 function AnalysisCard({ title, rows }) {
@@ -87,49 +151,94 @@ function AnalysisCard({ title, rows }) {
   )
 }
 
+function AnalyticsChart({ buckets }) {
+  if (!buckets.length) {
+    return <div className="rz-empty-state">Nog onvoldoende mutaties voor een tijdgrafiek.</div>
+  }
+
+  const maxValue = Math.max(1, ...buckets.flatMap((bucket) => [bucket.purchases, bucket.consumes]))
+
+  return (
+    <section className="rz-analytics-card">
+      <h3 className="rz-analytics-card-title">Aankoop en verbruik in de tijd</h3>
+      <div className="rz-analytics-chart">
+        {buckets.map((bucket) => {
+          const purchaseHeight = `${(bucket.purchases / maxValue) * 100}%`
+          const consumeHeight = `${(bucket.consumes / maxValue) * 100}%`
+          return (
+            <div key={bucket.label} className="rz-analytics-chart-group">
+              <div className="rz-analytics-chart-bars">
+                <div className="rz-analytics-chart-bar-wrap">
+                  <div className="rz-analytics-chart-bar rz-analytics-chart-bar--purchase" style={{ height: purchaseHeight }} title={`Aankoop: ${bucket.purchases}`} />
+                </div>
+                <div className="rz-analytics-chart-bar-wrap">
+                  <div className="rz-analytics-chart-bar rz-analytics-chart-bar--consume" style={{ height: consumeHeight }} title={`Verbruik: ${bucket.consumes}`} />
+                </div>
+              </div>
+              <div className="rz-analytics-chart-label">{bucket.label}</div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="rz-analytics-chart-legend">
+        <span><i className="rz-analytics-chart-swatch rz-analytics-chart-swatch--purchase" /> Aankoop</span>
+        <span><i className="rz-analytics-chart-swatch rz-analytics-chart-swatch--consume" /> Verbruik</span>
+      </div>
+    </section>
+  )
+}
+
 export default function ArticleAnalyticsTab({ articleData = {} }) {
   const locations = Array.isArray(articleData.locations) ? articleData.locations : []
-  const history = Array.isArray(articleData.history) ? articleData.history : []
+  const history = Array.isArray(articleData.history) ? getSortedHistory(articleData.history) : []
 
   const analytics = useMemo(() => {
     const totalQuantity = locations.reduce((sum, entry) => sum + (Number(entry?.aantal) || 0), 0)
-    const locationCount = locations.length
-    const counts = countByType(history)
-    const latestEntry = getLatestEntry(history)
-    const sources = uniqueSources(history)
-    const metadataScore = buildMetadataScore(articleData, history)
+    const priceInsights = buildPriceInsights(history)
+    const consumption = buildConsumptionInsights(history)
+    const forecast = buildRunoutForecast(totalQuantity, consumption.weeklyValue)
+    const latestEvent = history.length ? history[history.length - 1] : null
+    const recommendation = buildRecommendation(priceInsights, forecast, articleData.name || 'dit artikel')
+    const chartBuckets = buildChartBuckets(history)
 
     return {
-      stock: [
-        { label: 'Status', value: buildStockSignal(totalQuantity, locationCount) },
-        { label: 'Totale voorraad', value: String(totalQuantity) },
-        { label: 'Aantal locaties', value: String(locationCount) },
+      price: [
+        { label: 'Laagste bekende prijs', value: priceInsights.lowestPrice },
+        { label: 'Winkel met laagste prijs', value: priceInsights.cheapestStore },
+        { label: 'Gemiddelde prijs', value: priceInsights.averagePrice },
+        { label: 'Laatste aankoopprijs', value: priceInsights.latestPrice },
       ],
-      mutations: [
-        { label: 'Signaal', value: history.length >= 3 ? 'Meerdere mutaties geregistreerd' : 'Beperkte mutatiehistorie' },
-        { label: 'Totaal gebeurtenissen', value: String(history.length) },
-        { label: 'Aankopen', value: String(counts['aankoop'] || 0) },
-        { label: 'Verbruik', value: String(counts['verbruik'] || 0) },
-        { label: 'Correcties', value: String(counts['correctie'] || 0) },
+      consumption: [
+        { label: 'Gemiddeld verbruik per week', value: consumption.perWeek },
+        { label: 'Laatste verbruik', value: consumption.lastConsumptionAt },
+        { label: 'Totale voorraad nu', value: String(totalQuantity) },
       ],
-      usage: [
-        { label: 'Gebruikssignaal', value: buildUsageSignal(articleData.type, latestEntry?.type, history.length) },
-        { label: 'Laatste mutatie', value: latestEntry ? formatDateTime(latestEntry.datetime) : 'Nog geen mutaties' },
-        { label: 'Laatste bron', value: latestEntry?.source || 'Onbekend' },
+      forecast: [
+        { label: 'Verwachte datum lege voorraad', value: forecast.date },
+        { label: 'Resterende tijd', value: forecast.daysLeft },
+        { label: 'Signaal', value: forecast.signal },
       ],
+      recommendation,
+      chartBuckets,
       quality: [
-        { label: 'Metadata score', value: metadataScore },
-        { label: 'Gebruikte bronnen', value: sources.length ? sources.join(', ') : 'Nog geen bronnen bekend' },
+        { label: 'Laatste mutatie', value: latestEvent ? formatDateTime(latestEvent.datetime) : '—' },
+        { label: 'Laatste bron', value: latestEvent?.source || '—' },
+        { label: 'Aantal locaties', value: String(locations.length) },
       ],
     }
-  }, [articleData, history, locations])
+  }, [articleData.name, history, locations])
 
   return (
     <div className="rz-analytics-tab">
-      <AnalysisCard title="Voorraadsignaal" rows={analytics.stock} />
-      <AnalysisCard title="Mutatiebeeld" rows={analytics.mutations} />
-      <AnalysisCard title="Gebruiksbeeld" rows={analytics.usage} />
-      <AnalysisCard title="Datakwaliteit" rows={analytics.quality} />
+      <AnalysisCard title="Prijsinzichten" rows={analytics.price} />
+      <AnalysisCard title="Verbruiksbeeld" rows={analytics.consumption} />
+      <AnalysisCard title="Voorraadprognose" rows={analytics.forecast} />
+      <section className="rz-analytics-card rz-analytics-card--advice">
+        <h3 className="rz-analytics-card-title">Aanbeveling</h3>
+        <p className="rz-analytics-advice-text">{analytics.recommendation}</p>
+      </section>
+      <AnalyticsChart buckets={analytics.chartBuckets} />
+      <AnalysisCard title="Onderbouwing" rows={analytics.quality} />
     </div>
   )
 }
