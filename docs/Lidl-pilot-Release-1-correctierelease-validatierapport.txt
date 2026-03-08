@@ -1,0 +1,41 @@
+Rezzerv v01.06.72 — Correctierelease Lidl pilot UI-ingang
+
+Doel
+- De tegel 'Winkels' op de startpagina daadwerkelijk bruikbaar maken.
+- Een beperkte, toetsbare UI-flow toevoegen voor de bestaande Lidl pilot backendfundering.
+
+Gebouwd
+- Startpagina: tegel 'Winkels' opent nu route /winkels.
+- Nieuwe pagina 'Winkels' toegevoegd.
+- Op pagina 'Winkels' kan de gebruiker:
+  1. Lidl koppelen
+  2. Mock aankopen ophalen
+  3. Laatste opgehaalde importbatch en regels bekijken
+- De pagina benoemt expliciet dat voorraad nog niet wordt bijgewerkt.
+
+Validatie
+1. Frontend route /winkels aanwezig: voldaan
+2. Tegel 'Winkels' op HomePage navigeert naar /winkels: voldaan
+3. Frontend build succesvol: voldaan
+   - uitgevoerd met: node node_modules/vite/bin/vite.js build
+4. GET /api/store-providers retourneert Lidl: voldaan
+5. POST /api/store-connections koppelt Lidl: voldaan
+6. GET /api/store-connections toont gekoppelde Lidl: voldaan
+7. POST /api/store-connections/{id}/pull-purchases maakt batch aan: voldaan
+8. GET /api/purchase-import-batches/{id} toont batch + regels: voldaan
+9. Geen write naar inventory: voldaan
+10. Geen write naar inventory_events: voldaan
+
+Technische notitie
+- De meegeleverde node_modules bevat een kapotte .bin/vite verwijzing. Daarom is de build validatie uitgevoerd via:
+  node node_modules/vite/bin/vite.js build
+- Dit verandert niets aan de appcode; het is alleen relevant voor lokale validatie in deze container.
+
+Bewust niet gebouwd
+- Verwerking naar voorraad
+- map-line endpoint
+- process endpoint
+- echte Lidl authenticatie
+- live externe koppeling
+- OCR / e-mailimport
+- brede winkeloverzichten voor meerdere providers

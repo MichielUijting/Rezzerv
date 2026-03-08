@@ -4,6 +4,7 @@ import AdminPage from '../../features/admin/AdminPage'
 import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
+import StoresPage from '../../features/stores/StoresPage'
 import SettingsPage from '../../features/settings/SettingsPage'
 import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFieldsPage'
 import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHouseholdAutomationPage'
@@ -43,6 +44,7 @@ const router = createBrowserRouter([
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/home', element: <Protected><HomePage /></Protected> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
+  { path: '/winkels', element: <Protected><StoresPage /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <Protected><SettingsPage /></Protected> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <Protected><SettingsArticleFieldsPage /></Protected> },
