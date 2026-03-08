@@ -504,3 +504,86 @@ button.rz-tab.rz-tab-active {
   color: var(--color-text-primary);
   font-weight: 600;
 }
+
+
+.rz-locations-tab {
+  display: grid;
+  gap: 20px;
+}
+
+.rz-locations-summary-card {
+  border: 1px solid #dfe4ea;
+  border-radius: 14px;
+  padding: 16px 18px;
+  background: #ffffff;
+  display: grid;
+  gap: 4px;
+}
+
+.rz-locations-summary-label {
+  color: #667085;
+  font-size: 14px;
+}
+
+.rz-locations-summary-value {
+  color: var(--color-brand-primary);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.rz-locations-summary-subvalue {
+  color: var(--color-text-primary);
+}
+
+.rz-locations-group-title {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+}
+
+.rz-locations-group-body {
+  display: grid;
+  gap: 12px;
+}
+
+.rz-location-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #ffffff;
+}
+
+.rz-location-row-main {
+  display: grid;
+  gap: 4px;
+}
+
+.rz-location-row-title {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}
+
+.rz-location-row-subtitle {
+  color: var(--color-text-primary);
+}
+
+.rz-location-row-meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.rz-location-row-label {
+  color: #667085;
+  font-size: 13px;
+}
+
+.rz-location-row-value {
+  color: var(--color-brand-primary);
+  font-weight: 600;
+}

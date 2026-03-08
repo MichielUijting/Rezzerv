@@ -7,6 +7,7 @@ import demoData from '../../demo-articles.json'
 import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility'
 import ArticleOverviewTab from './tabs/ArticleOverviewTab'
 import ArticleStockTab from './tabs/ArticleStockTab'
+import ArticleLocationsTab from './tabs/ArticleLocationsTab'
 
 const TABS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
 
@@ -48,7 +49,7 @@ export default function ArticlePage() {
               {(tab) => {
                 if (tab === 'Overzicht') return <ArticleOverviewTab articleData={articleData} visibilityMap={visibilityMap} />
                 if (tab === 'Voorraad') return <ArticleStockTab articleData={articleData} />
-                if (tab === 'Locaties') return <PlaceholderTab text="Locaties-tab volgt in de volgende stap." />
+                if (tab === 'Locaties') return <ArticleLocationsTab articleData={articleData} />
                 if (tab === 'Historie') return <PlaceholderTab text="Historie-tab volgt in de volgende stap." />
                 return <PlaceholderTab text="Analyse-tab volgt in de volgende stap." />
               }}
