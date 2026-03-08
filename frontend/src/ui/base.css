@@ -428,3 +428,79 @@ button.rz-tab.rz-tab-active {
   border-color: #f3c7bb;
   background: #fff4f1;
 }
+
+
+/* Rezzerv v01.06.54 article stock tab */
+.rz-stock-tab {
+  display: grid;
+  gap: 18px;
+}
+
+.rz-stock-summary-card {
+  border: 2px solid #dfe7e1;
+  border-radius: 14px;
+  padding: 16px 18px;
+  background: #ffffff;
+  display: grid;
+  gap: 6px;
+  width: min(280px, 100%);
+}
+
+.rz-stock-summary-label {
+  color: var(--color-brand-primary);
+  font-size: 15px;
+  font-weight: 400;
+}
+
+.rz-stock-summary-value {
+  color: var(--color-text-primary);
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.rz-stock-blocks {
+  display: grid;
+  gap: 16px;
+}
+
+.rz-stock-block {
+  border: 2px solid #dfe7e1;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.rz-stock-block-title {
+  margin: 0;
+  padding: 14px 16px;
+  color: var(--color-brand-primary);
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 2px solid #dfe7e1;
+}
+
+.rz-stock-block-body {
+  display: grid;
+}
+
+.rz-stock-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 2px solid #dfe7e1;
+}
+
+.rz-stock-row:last-child {
+  border-bottom: none;
+}
+
+.rz-stock-row-location {
+  color: var(--color-text-primary);
+}
+
+.rz-stock-row-quantity {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}

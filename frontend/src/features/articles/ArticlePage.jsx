@@ -6,6 +6,7 @@ import Tabs from '../../ui/Tabs'
 import demoData from '../../demo-articles.json'
 import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility'
 import ArticleOverviewTab from './tabs/ArticleOverviewTab'
+import ArticleStockTab from './tabs/ArticleStockTab'
 
 const TABS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
 
@@ -46,7 +47,7 @@ export default function ArticlePage() {
             <Tabs tabs={TABS} defaultTab="Overzicht">
               {(tab) => {
                 if (tab === 'Overzicht') return <ArticleOverviewTab articleData={articleData} visibilityMap={visibilityMap} />
-                if (tab === 'Voorraad') return <PlaceholderTab text="Voorraad-tab volgt in de volgende stap." />
+                if (tab === 'Voorraad') return <ArticleStockTab articleData={articleData} />
                 if (tab === 'Locaties') return <PlaceholderTab text="Locaties-tab volgt in de volgende stap." />
                 if (tab === 'Historie') return <PlaceholderTab text="Historie-tab volgt in de volgende stap." />
                 return <PlaceholderTab text="Analyse-tab volgt in de volgende stap." />
