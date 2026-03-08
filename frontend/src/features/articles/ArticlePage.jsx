@@ -9,6 +9,7 @@ import ArticleOverviewTab from './tabs/ArticleOverviewTab'
 import ArticleStockTab from './tabs/ArticleStockTab'
 import ArticleLocationsTab from './tabs/ArticleLocationsTab'
 import ArticleHistoryTab from './tabs/ArticleHistoryTab'
+import ArticleAnalyticsTab from './tabs/ArticleAnalyticsTab'
 
 const TABS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
 
@@ -52,7 +53,8 @@ export default function ArticlePage() {
                 if (tab === 'Voorraad') return <ArticleStockTab articleData={articleData} />
                 if (tab === 'Locaties') return <ArticleLocationsTab articleData={articleData} />
                 if (tab === 'Historie') return <ArticleHistoryTab articleData={articleData} />
-                return <PlaceholderTab text="Analyse-tab volgt in de volgende stap." />
+                if (tab === 'Analyse') return <ArticleAnalyticsTab articleData={articleData} />
+                return <PlaceholderTab text="Onbekende tab." />
               }}
             </Tabs>
           )}

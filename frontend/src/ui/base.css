@@ -664,3 +664,52 @@ button.rz-tab.rz-tab-active {
 .rz-history-meta-value {
   color: var(--color-text-primary);
 }
+
+
+/* Rezzerv v01.06.58 article analytics tab */
+.rz-analytics-tab {
+  display: grid;
+  gap: 20px;
+}
+
+.rz-analytics-card {
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: #ffffff;
+  display: grid;
+  gap: 12px;
+}
+
+.rz-analytics-card-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-brand-primary);
+}
+
+.rz-analytics-card-body {
+  display: grid;
+}
+
+.rz-analytics-row {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid #e8eeea;
+}
+
+.rz-analytics-row:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.rz-analytics-row-label {
+  color: var(--color-brand-primary);
+  font-weight: 400;
+}
+
+.rz-analytics-row-value {
+  color: var(--color-text-primary);
+}
