@@ -1,0 +1,58 @@
+Rezzerv Release 1 — Lidl pilot (mock store connection + purchase import batch)
+Versie: 01.06.71
+Basis: 01.06.70
+
+Technische samenvatting
+- Nieuwe backend-domeinlaag toegevoegd voor store providers, store connections en purchase imports.
+- Nieuwe SQLAlchemy-modellen toegevoegd:
+  - backend/app/models/store_provider.py
+  - backend/app/models/store_connection.py
+  - backend/app/models/purchase_import.py
+- Backend uitgebreid met nieuwe endpoints in backend/app/main.py:
+  - GET /api/store-providers
+  - POST /api/store-connections
+  - GET /api/store-connections
+  - POST /api/store-connections/{id}/pull-purchases
+  - GET /api/purchase-import-batches/{id}
+- Lidl wordt automatisch geseed als actieve provider met import_mode = mock.
+- pull-purchases maakt uitsluitend een purchase_import_batch en purchase_import_lines aan.
+- Er wordt niets geschreven naar inventory of inventory_events.
+
+Validatierapport tegen acceptatiecriteria
+1. Lidl beschikbaar via GET /api/store-providers — VOLDAAN
+2. Lidl kan gekoppeld worden aan een huishouden — VOLDAAN
+3. Duplicaatkoppelingen ontstaan niet — VOLDAAN
+4. pull-purchases maakt exact één nieuwe importbatch aan — VOLDAAN
+5. Batch bevat minimaal 3 regels — VOLDAAN (4 regels)
+6. Batch en regels zijn uitleesbaar — VOLDAAN
+7. Geen voorraadmutatie vindt plaats — VOLDAAN
+8. Geen inventory_events worden geschreven — VOLDAAN
+9. Bestaande kernflows blijven intact — VOLDAAN
+
+Uitgevoerde validatie
+- GET /api/store-providers retourneert Lidl active/mock
+- POST /api/store-connections werkt en is idempotent
+- GET /api/store-connections toont exact 1 Lidl-koppeling voor demo-household
+- POST /api/store-connections/{id}/pull-purchases maakt 1 batch met 4 regels aan
+- GET /api/purchase-import-batches/{id} toont batchheader en regels
+- inventory-count vóór en ná pull-purchases blijft gelijk
+- inventory_events bestaat in deze basis niet en is dus ook niet aangeraakt
+- Login werkt nog
+- Health endpoint werkt nog
+
+Bewust niet gebouwd
+- echte Lidl-authenticatie
+- live Lidl API-koppeling
+- e-mailimport
+- OCR / bonherkenning
+- processing naar inventory
+- schrijven naar inventory_events
+- artikelmapping
+- review-UI
+- process-endpoint
+- map-line-endpoint
+
+Restrisico's
+- Deze release legt alleen de backendfundering; er is nog geen gebruikersreviewflow.
+- created_at/linked_at komen uit SQLite momenteel als datumstring terug.
+- Geen aparte inventory_events-tabel aanwezig in deze MVP-basis; validatie hierop is daarom negatief-afgebakend.

@@ -1,6 +1,8 @@
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+import json
+import uuid
 from typing import Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
@@ -48,6 +50,114 @@ class InventoryCreate(BaseModel):
     sublocation_id: Optional[str] = None
 
 
+class StoreConnectionCreate(BaseModel):
+    household_id: str
+    store_provider_code: str
+
+
+class PullPurchasesRequest(BaseModel):
+    mock_profile: str = "default"
+
+
+MOCK_LIDL_PURCHASES = {
+    "default": [
+        {
+            "external_line_ref": "lidl-line-1",
+            "external_article_code": "LIDL-1001",
+            "article_name_raw": "Halfvolle melk",
+            "brand_raw": "Lidl",
+            "quantity_raw": 1,
+            "unit_raw": "liter",
+            "line_price_raw": 1.29,
+            "currency_code": "EUR",
+        },
+        {
+            "external_line_ref": "lidl-line-2",
+            "external_article_code": "LIDL-2001",
+            "article_name_raw": "Banaan",
+            "brand_raw": "Lidl",
+            "quantity_raw": 1,
+            "unit_raw": "kg",
+            "line_price_raw": 1.89,
+            "currency_code": "EUR",
+        },
+        {
+            "external_line_ref": "lidl-line-3",
+            "external_article_code": "LIDL-3001",
+            "article_name_raw": "Volkoren pasta",
+            "brand_raw": "Lidl",
+            "quantity_raw": 500,
+            "unit_raw": "g",
+            "line_price_raw": 0.99,
+            "currency_code": "EUR",
+        },
+        {
+            "external_line_ref": "lidl-line-4",
+            "external_article_code": "LIDL-4001",
+            "article_name_raw": "Tomatenblokjes",
+            "brand_raw": "Lidl",
+            "quantity_raw": 2,
+            "unit_raw": "stuks",
+            "line_price_raw": 1.18,
+            "currency_code": "EUR",
+        },
+    ]
+}
+
+
+def utc_now_iso() -> str:
+    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+
+def seed_store_providers():
+    with engine.begin() as conn:
+        existing = conn.execute(
+            text("SELECT id FROM store_providers WHERE code = :code"),
+            {"code": "lidl"},
+        ).first()
+        if not existing:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO store_providers (id, code, name, status, import_mode)
+                    VALUES (:id, :code, :name, :status, :import_mode)
+                    """
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "code": "lidl",
+                    "name": "Lidl",
+                    "status": "active",
+                    "import_mode": "mock",
+                },
+            )
+
+
+def ensure_store_provider(provider_code: str):
+    with engine.begin() as conn:
+        provider = conn.execute(
+            text(
+                """
+                SELECT id, code, name, status, import_mode
+                FROM store_providers
+                WHERE code = :code AND status = 'active'
+                """
+            ),
+            {"code": provider_code},
+        ).mappings().first()
+    if not provider:
+        raise HTTPException(status_code=404, detail="Onbekende of inactieve store provider")
+    return dict(provider)
+
+
+def normalize_datetime(value):
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
 def ensure_household(email: str):
     if email not in households:
         households[email] = {
@@ -91,9 +201,10 @@ def get_household(authorization: Optional[str] = Header(None)):
 
 # SQLite datamodel initialization
 from app.db import engine, Base
-from app.models import household, space, sublocation, inventory
+from app.models import household, space, sublocation, inventory, store_provider, store_connection, purchase_import
 
 Base.metadata.create_all(bind=engine)
+seed_store_providers()
 
 def reset_dev_tables():
     with engine.begin() as conn:
@@ -269,6 +380,266 @@ def generate_demo_data():
         "inventory": count_table("inventory"),
     }
 
+
+
+@app.get("/api/store-providers")
+def get_store_providers():
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, code, name, status, import_mode
+                FROM store_providers
+                WHERE status = 'active'
+                ORDER BY name ASC
+                """
+            )
+        ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+@app.post("/api/store-connections")
+def create_store_connection(payload: StoreConnectionCreate):
+    provider = ensure_store_provider(payload.store_provider_code)
+
+    with engine.begin() as conn:
+        existing = conn.execute(
+            text(
+                """
+                SELECT hsc.id, hsc.household_id, hsc.store_provider_id, hsc.connection_status,
+                       hsc.linked_at, sp.code AS store_provider_code
+                FROM household_store_connections hsc
+                JOIN store_providers sp ON sp.id = hsc.store_provider_id
+                WHERE hsc.household_id = :household_id
+                  AND hsc.store_provider_id = :store_provider_id
+                """
+            ),
+            {
+                "household_id": payload.household_id,
+                "store_provider_id": provider["id"],
+            },
+        ).mappings().first()
+
+        if existing:
+            result = dict(existing)
+            result["linked_at"] = normalize_datetime(result.get("linked_at"))
+            return result
+
+        connection_id = str(uuid.uuid4())
+        conn.execute(
+            text(
+                """
+                INSERT INTO household_store_connections (
+                    id, household_id, store_provider_id, connection_status, linked_at
+                ) VALUES (
+                    :id, :household_id, :store_provider_id, 'active', CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": connection_id,
+                "household_id": payload.household_id,
+                "store_provider_id": provider["id"],
+            },
+        )
+        created = conn.execute(
+            text(
+                """
+                SELECT hsc.id, hsc.household_id, hsc.store_provider_id, hsc.connection_status,
+                       hsc.linked_at, sp.code AS store_provider_code
+                FROM household_store_connections hsc
+                JOIN store_providers sp ON sp.id = hsc.store_provider_id
+                WHERE hsc.id = :id
+                """
+            ),
+            {"id": connection_id},
+        ).mappings().first()
+
+    result = dict(created)
+    result["linked_at"] = normalize_datetime(result.get("linked_at"))
+    return result
+
+
+@app.get("/api/store-connections")
+def get_store_connections(householdId: str = Query(...)):
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                    hsc.id,
+                    hsc.household_id,
+                    hsc.connection_status,
+                    hsc.linked_at,
+                    hsc.last_sync_at,
+                    sp.code AS store_provider_code,
+                    sp.name AS store_provider_name
+                FROM household_store_connections hsc
+                JOIN store_providers sp ON sp.id = hsc.store_provider_id
+                WHERE hsc.household_id = :household_id
+                ORDER BY hsc.linked_at ASC
+                """
+            ),
+            {"household_id": householdId},
+        ).mappings().all()
+
+    results = []
+    for row in rows:
+        item = dict(row)
+        item["linked_at"] = normalize_datetime(item.get("linked_at"))
+        item["last_sync_at"] = normalize_datetime(item.get("last_sync_at"))
+        results.append(item)
+    return results
+
+
+@app.post("/api/store-connections/{connection_id}/pull-purchases")
+def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
+    lines = MOCK_LIDL_PURCHASES.get(payload.mock_profile)
+    if not lines:
+        raise HTTPException(status_code=400, detail="Onbekend mock_profile")
+
+    batch_id = str(uuid.uuid4())
+    now_iso = utc_now_iso()
+
+    with engine.begin() as conn:
+        connection = conn.execute(
+            text(
+                """
+                SELECT
+                    hsc.id, hsc.household_id, hsc.store_provider_id, hsc.connection_status,
+                    sp.code AS store_provider_code, sp.name AS store_provider_name
+                FROM household_store_connections hsc
+                JOIN store_providers sp ON sp.id = hsc.store_provider_id
+                WHERE hsc.id = :id
+                """
+            ),
+            {"id": connection_id},
+        ).mappings().first()
+
+        if not connection:
+            raise HTTPException(status_code=404, detail="Onbekende store connection")
+
+        if connection["connection_status"] != "active":
+            raise HTTPException(status_code=400, detail="Store connection is niet actief")
+
+        raw_payload = json.dumps({"mock_profile": payload.mock_profile, "lines": lines})
+        conn.execute(
+            text(
+                """
+                INSERT INTO purchase_import_batches (
+                    id, household_id, store_provider_id, connection_id, source_type,
+                    source_reference, import_status, raw_payload, created_at
+                ) VALUES (
+                    :id, :household_id, :store_provider_id, :connection_id, 'mock',
+                    :source_reference, 'new', :raw_payload, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": batch_id,
+                "household_id": connection["household_id"],
+                "store_provider_id": connection["store_provider_id"],
+                "connection_id": connection_id,
+                "source_reference": f"mock:{payload.mock_profile}",
+                "raw_payload": raw_payload,
+            },
+        )
+
+        for line in lines:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO purchase_import_lines (
+                        id, batch_id, external_line_ref, external_article_code, article_name_raw,
+                        brand_raw, quantity_raw, unit_raw, line_price_raw, currency_code,
+                        match_status, created_at
+                    ) VALUES (
+                        :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw,
+                        :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
+                        'unmatched', CURRENT_TIMESTAMP
+                    )
+                    """
+                ),
+                {
+                    "id": str(uuid.uuid4()),
+                    "batch_id": batch_id,
+                    **line,
+                },
+            )
+
+        conn.execute(
+            text(
+                """
+                UPDATE household_store_connections
+                SET last_sync_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {"id": connection_id},
+        )
+
+    return {
+        "batch_id": batch_id,
+        "connection_id": connection_id,
+        "store_provider_code": "lidl",
+        "source_type": "mock",
+        "import_status": "new",
+        "line_count": len(lines),
+        "created_at": now_iso,
+    }
+
+
+@app.get("/api/purchase-import-batches/{batch_id}")
+def get_purchase_import_batch(batch_id: str):
+    with engine.begin() as conn:
+        batch = conn.execute(
+            text(
+                """
+                SELECT
+                    pib.id AS batch_id,
+                    pib.household_id,
+                    sp.code AS store_provider_code,
+                    pib.connection_id,
+                    pib.source_type,
+                    pib.source_reference,
+                    pib.import_status,
+                    pib.created_at
+                FROM purchase_import_batches pib
+                JOIN store_providers sp ON sp.id = pib.store_provider_id
+                WHERE pib.id = :id
+                """
+            ),
+            {"id": batch_id},
+        ).mappings().first()
+
+        if not batch:
+            raise HTTPException(status_code=404, detail="Onbekende purchase import batch")
+
+        lines = conn.execute(
+            text(
+                """
+                SELECT
+                    id, article_name_raw, brand_raw, quantity_raw, unit_raw,
+                    line_price_raw, currency_code, match_status
+                FROM purchase_import_lines
+                WHERE batch_id = :batch_id
+                ORDER BY created_at ASC, id ASC
+                """
+            ),
+            {"batch_id": batch_id},
+        ).mappings().all()
+
+    batch_result = dict(batch)
+    batch_result["created_at"] = normalize_datetime(batch_result.get("created_at"))
+    batch_result["lines"] = [
+        {
+            **dict(line),
+            "quantity_raw": float(line["quantity_raw"]) if line["quantity_raw"] is not None else None,
+            "line_price_raw": float(line["line_price_raw"]) if line["line_price_raw"] is not None else None,
+        }
+        for line in lines
+    ]
+    return batch_result
 
 
 @app.post("/api/dev/run-smoke-tests", response_model=TestStartResponse)
