@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Tabs from '../../ui/Tabs'
@@ -21,6 +21,22 @@ function PlaceholderTab({ text }) {
 export default function ArticlePage() {
   const { articleId } = useParams()
   const { visibilityMap, isLoading: visibilityLoading, error: visibilityError } = useArticleFieldVisibility()
+  const [automationVersion, setAutomationVersion] = useState(0)
+
+  useEffect(() => {
+    function handleAutomationChange() {
+      setAutomationVersion((value) => value + 1)
+    }
+
+    window.addEventListener('rezzerv-household-automation-updated', handleAutomationChange)
+    window.addEventListener('rezzerv-article-auto-consume-overrides-updated', handleAutomationChange)
+
+    return () => {
+      window.removeEventListener('rezzerv-household-automation-updated', handleAutomationChange)
+      window.removeEventListener('rezzerv-article-auto-consume-overrides-updated', handleAutomationChange)
+    }
+  }, [])
+
   const articleData = useMemo(() => {
     const article = demoData.articles.find((a) => String(a.id) === String(articleId)) || demoData.articles[0]
     const firstLocation = article.locations?.[0] || {}
@@ -40,7 +56,7 @@ export default function ArticlePage() {
       main_location: firstLocation.locatie || '',
       sub_location: firstLocation.sublocatie || '',
     }
-  }, [articleId])
+  }, [articleId, automationVersion])
 
   const pageTitle = `Artikel details: ${articleData.name || 'Onbekend artikel'}`
 
