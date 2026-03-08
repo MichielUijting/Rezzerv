@@ -13,6 +13,7 @@ import {
   submitTestResults,
 } from "./services/adminTestingService";
 import { runBrowserSmokeTests } from "./lib/browserSmokeRunner";
+import { runBrowserRegressionTests } from "./lib/browserRegressionRunner";
 
 export default function AdminPage() {
 
@@ -183,9 +184,27 @@ export default function AdminPage() {
     try {
       const result = await runRegressionTests();
       setTestStatus((current) => ({ ...current, ...result }));
-      setTestMessage(result.started ? "Volledige regressietest gestart" : "Er loopt al een test");
+      if (!result.started) {
+        setTestMessage("Er loopt al een test");
+        await refreshTestStatus();
+        return;
+      }
+
+      setTestMessage("Volledige regressietest gestart");
+      const results = await runBrowserRegressionTests();
+      await submitTestResults('regression', results);
       await refreshTestStatus();
+      const latestReport = await fetchLatestTestReport();
+      setTestReport(latestReport);
+      setShowReport(true);
+      setTestMessage('Volledige regressietest afgerond');
     } catch (error) {
+      try {
+        await submitTestResults('regression', [{ name: 'Regressietest runner', status: 'failed', error: error.message || 'Regressietest kon niet worden uitgevoerd' }]);
+        await refreshTestStatus();
+      } catch {
+        // negeer secundaire fout
+      }
       setTestMessage(error.message || "Regressietest kon niet worden gestart");
     }
   }

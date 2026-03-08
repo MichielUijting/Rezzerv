@@ -278,7 +278,7 @@ def run_smoke_tests():
 
 @app.post("/api/dev/run-regression-tests", response_model=TestStartResponse)
 def run_regression_tests():
-    return testing_service.start_test("regression")
+    return testing_service.start_external_test("regression")
 
 
 @app.post("/api/dev/test-report", response_model=TestStatusResponse)
