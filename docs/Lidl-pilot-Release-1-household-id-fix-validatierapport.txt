@@ -1,0 +1,58 @@
+Rezzerv v01.06.74 — Lidl pilot Release 1 mini-fix
+
+Doel
+- Contractmismatch oplossen voor household_id in de Lidl-koppelflow.
+- Zorgen dat Lidl koppelen werkt zonder technische validatiefout voor de gebruiker.
+
+Technische samenvatting
+Frontend
+- StoresPage stuurt household_id nu expliciet als string in POST /api/store-connections.
+- Technische backendvalidatieteksten worden niet meer direct aan de gebruiker getoond in de koppelflow.
+- Gebruikersmelding bij koppelmislukking is generiek en leesbaar gemaakt.
+
+Backend
+- StoreConnectionCreate accepteert household_id nu als str | int.
+- household_id wordt via validator genormaliseerd naar string.
+- Hiermee blijft de endpoint robuust voor zowel bestaande numerieke frontendstate als string-input.
+
+Leidend type
+- In de store-connection flow wordt household_id uiteindelijk als string verwerkt.
+
+Validatie
+1. GET /api/store-providers
+- Resultaat: geslaagd
+- Lidl aanwezig als actieve mock provider.
+
+2. POST /api/store-connections
+- Resultaat: geslaagd
+- household_id als numerieke waarde geaccepteerd en genormaliseerd.
+- Koppeling succesvol opgeslagen.
+
+3. Herhaalde POST /api/store-connections
+- Resultaat: geslaagd
+- Geen dubbele actieve koppeling.
+- Bestaande connectie idempotent teruggegeven.
+
+4. GET /api/store-connections?householdId=...
+- Resultaat: geslaagd
+- Gekoppelde Lidl zichtbaar.
+
+5. POST /api/store-connections/{id}/pull-purchases
+- Resultaat: geslaagd
+- Batch aangemaakt met 4 regels.
+
+6. GET /api/purchase-import-batches/{id}
+- Resultaat: geslaagd
+- Batch en regels uitleesbaar.
+
+7. Negatieve validatie
+- Geen writes naar inventory.
+- Geen writes naar inventory_events.
+- Geen voorraadmutatie uitgevoerd.
+
+Bewust niet gebouwd
+- Geen echte Lidl-authenticatie
+- Geen live winkel-API
+- Geen voorraadverwerking
+- Geen artikelmapping
+- Geen extra schermen of bredere UX-uitbreiding

@@ -99,7 +99,7 @@ export default function StoresPage() {
     try {
       const connection = await fetchJson('/api/store-connections', {
         method: 'POST',
-        body: JSON.stringify({ household_id: household.id, store_provider_code: 'lidl' }),
+        body: JSON.stringify({ household_id: String(household.id), store_provider_code: 'lidl' }),
       })
       setConnections((current) => {
         const filtered = current.filter((item) => item.id !== connection.id)
@@ -107,7 +107,7 @@ export default function StoresPage() {
       })
       setStatus('Lidl is gekoppeld aan dit huishouden.')
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'Lidl kon niet worden gekoppeld.')
+      setError('Lidl koppelen mislukt. Controleer het huishouden en probeer opnieuw.')
     } finally {
       setIsConnecting(false)
     }
@@ -129,7 +129,7 @@ export default function StoresPage() {
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'Aankopen konden niet worden opgehaald.')
+      setError('Aankopen ophalen mislukt. Probeer het opnieuw.')
     } finally {
       setIsPulling(false)
     }

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import json
 import uuid
 from typing import Optional
@@ -51,8 +51,16 @@ class InventoryCreate(BaseModel):
 
 
 class StoreConnectionCreate(BaseModel):
-    household_id: str
+    household_id: str | int
     store_provider_code: str
+
+    @field_validator("household_id", mode="before")
+    @classmethod
+    def normalize_household_id(cls, value):
+        if value is None:
+            raise ValueError("household_id is verplicht")
+        return str(value)
+
 
 
 class PullPurchasesRequest(BaseModel):
