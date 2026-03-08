@@ -369,9 +369,6 @@ export default function StoresPage() {
                             <option value="selected">Verwerken</option>
                             <option value="ignored">Negeren</option>
                           </select>
-                          <div className="rz-store-secondary rz-store-inline-note">
-                            {reviewDecisionLabel(line.review_decision || 'pending')}
-                          </div>
                         </td>
                         <td>
                           <select
@@ -385,9 +382,6 @@ export default function StoresPage() {
                               <option key={article.id} value={article.id}>{articleLabel(article)}</option>
                             ))}
                           </select>
-                          <div className="rz-store-secondary rz-store-inline-note">
-                            {line.match_status === 'matched' ? 'Gekoppeld aan bestaand artikel' : 'Nog geen artikel gekozen'}
-                          </div>
                         </td>
                         <td>
                           <select

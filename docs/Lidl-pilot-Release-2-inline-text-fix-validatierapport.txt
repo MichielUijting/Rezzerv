@@ -1,0 +1,16 @@
+Lidl pilot Release 2 - inline tekst fix validatierapport
+Versie: 01.06.78
+
+Aangepast:
+- Lichte secundaire teksten onder de dropdowns in de kolommen Beoordeling en Koppelen aan verwijderd.
+- Artikel-subregel met bron en prijs behouden.
+
+Niet aangepast:
+- Geen functionele wijzigingen
+- Geen backendwijzigingen
+- Geen writes naar inventory
+- Geen writes naar inventory_events
+
+Validatie:
+- Frontendcomponent aangepast zonder wijzigingen aan reviewlogica
+- Alleen visuele vereenvoudiging van de tabelrijen
