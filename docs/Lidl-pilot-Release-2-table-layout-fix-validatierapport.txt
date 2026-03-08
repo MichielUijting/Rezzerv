@@ -1,0 +1,25 @@
+Lidl pilot — Release 2 table layout fix validatierapport
+Versie: 01.06.77
+
+Doel
+- Importreview-tabel visueel en structureel laten aansluiten op het scherm Voorraad.
+- Geen functionele wijzigingen aan review, mapping, targetlocatie of batchafronding.
+
+Aangepast
+- Importreview gebruikt nu dezelfde tabelconventies als Voorraad via rz-table en rz-table-wrapper.
+- Kolommen zijn strakker uitgelijnd met vaste colgroup-breedtes.
+- Rijpresentatie is compacter gemaakt.
+- Primaire en secundaire tekst in de artikelkolom zijn rustiger gepresenteerd.
+- Dropdowns zijn compact gemaakt zodat ze beter passen in de Voorraad-achtige tabelstructuur.
+- Batchsamenvatting blijft boven de tabel staan als apart blok.
+
+Niet aangepast
+- Geen wijzigingen aan backend endpoints.
+- Geen wijzigingen aan review-opslag of mappinglogica.
+- Geen writes naar inventory.
+- Geen writes naar inventory_events.
+
+Validatie
+- Frontend build geslaagd via directe Vite CLI.
+- Importreview render gebruikt nu dezelfde tabelbasis als Voorraad.
+- Functionele flow ongewijzigd gehouden.

@@ -980,3 +980,71 @@ button.rz-tab.rz-tab-active {
   min-width: 110px;
   text-align: center;
 }
+
+
+/* Rezzerv v01.06.77 stores review table aligns with Voorraad */
+.rz-store-review {
+  display: grid;
+  gap: 16px;
+}
+
+.rz-store-review-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.rz-store-review-title {
+  margin: 0 0 6px 0;
+  font-size: 18px;
+}
+
+.rz-store-review-meta {
+  color: #667085;
+  font-size: 14px;
+}
+
+.rz-store-review-table {
+  width: 100%;
+}
+
+.rz-store-review-table thead th {
+  text-align: left;
+  border-bottom: 1px solid #d0d5dd;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.rz-store-review-table tbody td {
+  border-bottom: 1px solid #eaecf0;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  vertical-align: top;
+}
+
+.rz-store-primary {
+  font-weight: 700;
+}
+
+.rz-store-secondary {
+  color: #667085;
+  font-size: 13px;
+}
+
+.rz-store-inline-note {
+  margin-top: 4px;
+}
+
+.rz-store-amount {
+  font-weight: 600;
+}
+
+.rz-store-select {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 13px;
+  line-height: 1.2;
+}

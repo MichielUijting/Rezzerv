@@ -314,14 +314,14 @@ export default function StoresPage() {
 
         {activeBatch && (
           <Card>
-            <div style={{ display: 'grid', gap: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+            <div className="rz-store-review">
+              <div className="rz-store-review-summary">
                 <div>
-                  <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Importreview Lidl</h3>
-                  <div style={{ color: '#667085', fontSize: '14px' }}>
+                  <h3 className="rz-store-review-title">Importreview Lidl</h3>
+                  <div className="rz-store-review-meta">
                     Batch: {activeBatch.batch_id} · Status: {batchStatusLabel(activeBatch.import_status)}
                   </div>
-                  <div style={{ color: '#667085', fontSize: '14px' }}>
+                  <div className="rz-store-review-meta">
                     Totaal: {activeBatch.summary?.total || 0} · Geselecteerd: {activeBatch.summary?.selected || 0} · Genegeerd: {activeBatch.summary?.ignored || 0} · Open: {activeBatch.summary?.pending || 0}
                   </div>
                 </div>
@@ -330,30 +330,37 @@ export default function StoresPage() {
                 </Button>
               </div>
 
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div className="rz-table-wrapper">
+                <table className="rz-table rz-store-review-table">
+                  <colgroup>
+                    <col style={{ width: '30%' }} />
+                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '22%' }} />
+                    <col style={{ width: '16%' }} />
+                  </colgroup>
                   <thead>
-                    <tr>
-                      <th style={{ ...tableHeadStyle, width: '26%' }}>Artikel</th>
-                      <th style={{ ...tableHeadStyle, width: '12%' }}>Aantal</th>
-                      <th style={{ ...tableHeadStyle, width: '20%' }}>Beoordeling</th>
-                      <th style={{ ...tableHeadStyle, width: '22%' }}>Koppelen aan</th>
-                      <th style={{ ...tableHeadStyle, width: '20%' }}>Locatie</th>
+                    <tr className="rz-table-header">
+                      <th>Artikel</th>
+                      <th className="rz-num">Aantal</th>
+                      <th>Beoordeling</th>
+                      <th>Koppelen aan</th>
+                      <th>Locatie</th>
                     </tr>
                   </thead>
                   <tbody>
                     {activeBatch.lines.map((line) => (
                       <tr key={line.id}>
-                        <td style={tableCellStyle}>
-                          <div style={{ fontWeight: 700 }}>{line.article_name_raw}</div>
-                          <div style={{ color: '#667085', fontSize: '13px' }}>{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
+                        <td>
+                          <div className="rz-store-primary">{line.article_name_raw}</div>
+                          <div className="rz-store-secondary">{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
                         </td>
-                        <td style={tableCellStyle}>
-                          <div style={{ fontWeight: 600 }}>{formatQuantity(line.quantity_raw, line.unit_raw)}</div>
+                        <td className="rz-num">
+                          <div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div>
                         </td>
-                        <td style={tableCellStyle}>
+                        <td>
                           <select
-                            style={selectStyle}
+                            className="rz-input rz-store-select"
                             value={line.review_decision || 'pending'}
                             disabled={busyLineId === line.id}
                             onChange={(event) => handleReviewDecision(line.id, event.target.value)}
@@ -362,13 +369,13 @@ export default function StoresPage() {
                             <option value="selected">Verwerken</option>
                             <option value="ignored">Negeren</option>
                           </select>
-                          <div style={{ color: '#667085', fontSize: '12px', marginTop: '4px' }}>
+                          <div className="rz-store-secondary rz-store-inline-note">
                             {reviewDecisionLabel(line.review_decision || 'pending')}
                           </div>
                         </td>
-                        <td style={tableCellStyle}>
+                        <td>
                           <select
-                            style={selectStyle}
+                            className="rz-input rz-store-select"
                             value={line.matched_household_article_id || ''}
                             disabled={busyLineId === line.id}
                             onChange={(event) => handleMapLine(line.id, event.target.value)}
@@ -378,13 +385,13 @@ export default function StoresPage() {
                               <option key={article.id} value={article.id}>{articleLabel(article)}</option>
                             ))}
                           </select>
-                          <div style={{ color: '#667085', fontSize: '12px', marginTop: '4px' }}>
+                          <div className="rz-store-secondary rz-store-inline-note">
                             {line.match_status === 'matched' ? 'Gekoppeld aan bestaand artikel' : 'Nog geen artikel gekozen'}
                           </div>
                         </td>
-                        <td style={tableCellStyle}>
+                        <td>
                           <select
-                            style={selectStyle}
+                            className="rz-input rz-store-select"
                             value={line.target_location_id || ''}
                             disabled={busyLineId === line.id}
                             onChange={(event) => handleTargetLocation(line.id, event.target.value)}
