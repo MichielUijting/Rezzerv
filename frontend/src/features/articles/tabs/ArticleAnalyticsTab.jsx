@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { AUTO_CONSUME_MODES, getArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
+import { getHouseholdAutomationSettings } from '../../settings/services/householdAutomationService'
 
 function formatCurrency(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
@@ -248,10 +250,39 @@ function AnalyticsChart({ buckets, period, onPeriodChange }) {
   )
 }
 
+function isConsumable(articleData = {}) {
+  if (articleData.consumable === true) return true
+  return articleData.article_type === 'Voedsel & drank' || articleData.type === 'Voedsel & drank' || articleData.article_type === 'Huishoudelijk' || articleData.type === 'Huishoudelijk'
+}
+
+function getAutoConsumeModeLabel(mode) {
+  if (mode === AUTO_CONSUME_MODES.ALWAYS_ON) return 'Altijd automatisch afboeken'
+  if (mode === AUTO_CONSUME_MODES.ALWAYS_OFF) return 'Nooit automatisch afboeken'
+  return 'Huishoudinstelling volgen'
+}
+
 export default function ArticleAnalyticsTab({ articleData = {} }) {
   const [period, setPeriod] = useState('month')
+  const [householdSettings, setHouseholdSettings] = useState(() => getHouseholdAutomationSettings())
+  const [articleMode, setArticleMode] = useState(() => getArticleAutoConsumeMode(articleData?.id))
   const locations = Array.isArray(articleData.locations) ? articleData.locations : []
   const history = Array.isArray(articleData.history) ? getSortedHistory(articleData.history) : []
+
+  useEffect(() => {
+    function syncAutomationState() {
+      setHouseholdSettings(getHouseholdAutomationSettings())
+      setArticleMode(getArticleAutoConsumeMode(articleData?.id))
+    }
+
+    syncAutomationState()
+    window.addEventListener('rezzerv-household-automation-updated', syncAutomationState)
+    window.addEventListener('rezzerv-article-auto-consume-overrides-updated', syncAutomationState)
+
+    return () => {
+      window.removeEventListener('rezzerv-household-automation-updated', syncAutomationState)
+      window.removeEventListener('rezzerv-article-auto-consume-overrides-updated', syncAutomationState)
+    }
+  }, [articleData?.id])
 
   const analytics = useMemo(() => {
     const totalQuantity = locations.reduce((sum, entry) => sum + (Number(entry?.aantal) || 0), 0)
@@ -262,7 +293,23 @@ export default function ArticleAnalyticsTab({ articleData = {} }) {
     const recommendation = buildRecommendation(priceInsights, forecast, articleData.name || 'dit artikel')
     const chartBuckets = buildChartBuckets(history)
 
+    const consumable = isConsumable(articleData)
+    const effectiveAutomation = !consumable
+      ? 'Niet van toepassing'
+      : articleMode === AUTO_CONSUME_MODES.ALWAYS_ON
+        ? 'Actief via artikeloverride'
+        : articleMode === AUTO_CONSUME_MODES.ALWAYS_OFF
+          ? 'Geblokkeerd via artikeloverride'
+          : householdSettings.autoConsumeOnRepurchase
+            ? 'Actief via huishoudinstelling'
+            : 'Uit via huishoudinstelling'
+
     return {
+      automation: [
+        { label: 'Artikeloverride', value: getAutoConsumeModeLabel(articleMode) },
+        { label: 'Huishoudinstelling', value: householdSettings.autoConsumeOnRepurchase ? 'Aan' : 'Uit' },
+        { label: 'Effectieve automatische afboeking', value: effectiveAutomation },
+      ],
       price: [
         { label: 'Laagste bekende prijs', value: priceInsights.lowestPrice },
         { label: 'Winkel met laagste prijs', value: priceInsights.cheapestStore },
@@ -287,11 +334,12 @@ export default function ArticleAnalyticsTab({ articleData = {} }) {
         { label: 'Aantal locaties', value: String(locations.length) },
       ],
     }
-  }, [articleData.name, history, locations, period])
+  }, [articleData, articleMode, householdSettings, history, locations, period])
 
   return (
     <div className="rz-analytics-tab">
       <AnalyticsChart buckets={analytics.chartBuckets} period={period} onPeriodChange={setPeriod} />
+      <AnalyticsAccordion title="Automatisering" rows={analytics.automation} defaultOpen />
       <AnalyticsAccordion title="Prijsinzichten" rows={analytics.price} />
       <AnalyticsAccordion title="Verbruiksbeeld" rows={analytics.consumption} />
       <AnalyticsAccordion title="Voorraadprognose" rows={analytics.forecast} />
