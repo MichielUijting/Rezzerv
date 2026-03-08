@@ -3,6 +3,26 @@ import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 
+function normalizeErrorMessage(value) {
+  if (!value) return 'Verzoek mislukt'
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) {
+    const first = value[0]
+    if (typeof first === 'string') return first
+    if (first && typeof first === 'object') {
+      const location = Array.isArray(first.loc) ? first.loc.join(' > ') : null
+      const message = first.msg || first.message || null
+      if (location && message) return `${location}: ${message}`
+      if (message) return message
+    }
+    return 'Verzoek mislukt'
+  }
+  if (typeof value === 'object') {
+    return value.detail || value.message || value.msg || 'Verzoek mislukt'
+  }
+  return 'Verzoek mislukt'
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     headers: {
@@ -16,7 +36,7 @@ async function fetchJson(url, options = {}) {
   const data = text ? JSON.parse(text) : null
 
   if (!response.ok) {
-    throw new Error(data?.detail || 'Verzoek mislukt')
+    throw new Error(normalizeErrorMessage(data?.detail || data))
   }
 
   return data
@@ -61,7 +81,7 @@ export default function StoresPage() {
       setProviders(providerData)
       setConnections(connectionData)
     } catch (err) {
-      setError(err.message || 'Winkelgegevens konden niet worden geladen.')
+      setError(normalizeErrorMessage(err?.message) || 'Winkelgegevens konden niet worden geladen.')
     } finally {
       setIsLoading(false)
     }
@@ -87,7 +107,7 @@ export default function StoresPage() {
       })
       setStatus('Lidl is gekoppeld aan dit huishouden.')
     } catch (err) {
-      setError(err.message || 'Lidl kon niet worden gekoppeld.')
+      setError(normalizeErrorMessage(err?.message) || 'Lidl kon niet worden gekoppeld.')
     } finally {
       setIsConnecting(false)
     }
@@ -109,7 +129,7 @@ export default function StoresPage() {
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
     } catch (err) {
-      setError(err.message || 'Aankopen konden niet worden opgehaald.')
+      setError(normalizeErrorMessage(err?.message) || 'Aankopen konden niet worden opgehaald.')
     } finally {
       setIsPulling(false)
     }

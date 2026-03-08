@@ -1,0 +1,25 @@
+Lidl pilot — Release 1 fixrelease validatierapport
+Versie: 01.06.73
+
+Doel van de fixrelease
+- Herstel van foutafhandeling op de Winkels-pagina.
+- Voorkomen dat ruwe foutobjecten als [object Object] in de UI worden getoond.
+
+Uitgevoerde fix
+- In frontend/src/features/stores/StoresPage.jsx is foutnormalisatie toegevoegd.
+- API-fouten met string, object of validatie-array worden nu omgezet naar leesbare tekst.
+- De StoresPage rendert geen ruwe objecten meer in de foutkaart.
+
+Validatie
+- Winkels-pagina compileert in de frontend build: voldaan.
+- [object Object] wordt niet meer direct vanuit de foutkaart gerenderd: voldaan.
+- Lidl-kaart en bestaande rudimentaire flow blijven intact: voldaan.
+- Geen wijzigingen aan inventory of inventory_events: voldaan.
+- Geen uitbreiding van scope buiten foutafhandeling/statusweergave: voldaan.
+
+Bewust niet gebouwd
+- Geen voorraadverwerking
+- Geen echte Lidl-login
+- Geen live API-koppeling
+- Geen mapping
+- Geen extra reviewflow
