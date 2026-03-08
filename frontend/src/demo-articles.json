@@ -236,6 +236,54 @@
           "quantity_change": 1
         }
       ]
+    },
+    {
+      "id": 4,
+      "name": "Mosterd",
+      "brand": "Maille",
+      "variant": "Dijon",
+      "type": "Voedsel & drank",
+      "consumable": true,
+      "category": "Sauzen",
+      "subcategory": "Mosterd",
+      "barcode": "8723456789012",
+      "manufacturer": "Maille",
+      "country": "Frankrijk",
+      "weight": "200 g",
+      "locations": [
+        {
+          "locatie": "Keuken",
+          "sublocatie": "Koelkast",
+          "aantal": 1
+        }
+      ],
+      "history": [
+        {
+          "datetime": "2026-03-01T10:15:00",
+          "type": "Aankoop",
+          "old_value": "0",
+          "new_value": "1",
+          "location": "Keuken / Koelkast",
+          "source": "Kassabon",
+          "note": "Nieuwe pot mosterd toegevoegd.",
+          "store": "Lidl",
+          "price": 1.49,
+          "quantity_change": 1
+        },
+        {
+          "datetime": "2026-03-07T16:20:00",
+          "type": "Aankoop",
+          "old_value": "1",
+          "new_value": "2",
+          "location": "Keuken / Koelkast",
+          "source": "Kassabon",
+          "note": "Nieuwe pot mosterd gekocht bij herhaalaankoop.",
+          "store": "Albert Heijn",
+          "price": 1.69,
+          "quantity_change": 1,
+          "auto_repurchase_candidate": true
+        }
+      ]
     }
   ]
 }

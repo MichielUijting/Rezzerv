@@ -10,6 +10,7 @@ import ArticleStockTab from './tabs/ArticleStockTab'
 import ArticleLocationsTab from './tabs/ArticleLocationsTab'
 import ArticleHistoryTab from './tabs/ArticleHistoryTab'
 import ArticleAnalyticsTab from './tabs/ArticleAnalyticsTab'
+import { applyAutoRepurchaseHistory } from './lib/autoRepurchaseHistory'
 
 const TABS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
 
@@ -24,8 +25,10 @@ export default function ArticlePage() {
     const article = demoData.articles.find((a) => String(a.id) === String(articleId)) || demoData.articles[0]
     const firstLocation = article.locations?.[0] || {}
     const totalQuantity = (article.locations || []).reduce((sum, entry) => sum + (Number(entry.aantal) || 0), 0)
+    const history = applyAutoRepurchaseHistory(article)
     return {
       ...article,
+      history,
       article_type: article.type,
       size_value: article.weight,
       notes: article.notes || '',

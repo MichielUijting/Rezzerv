@@ -17,6 +17,11 @@ function normalize(value, fallback = "—") {
   return value || fallback
 }
 
+function formatSource(value) {
+  if (value === 'auto_repurchase') return 'Automatisch (herhaalaankoop)'
+  return normalize(value)
+}
+
 export default function ArticleHistoryTab({ articleData = {} }) {
   const historyEntries = useMemo(() => {
     const items = Array.isArray(articleData.history) ? articleData.history : []
@@ -53,7 +58,7 @@ export default function ArticleHistoryTab({ articleData = {} }) {
                 </div>
                 <div className="rz-history-meta-row">
                   <span className="rz-history-meta-label">Bron</span>
-                  <span className="rz-history-meta-value">{normalize(entry.source)}</span>
+                  <span className={`rz-history-meta-value ${entry.source === 'auto_repurchase' ? 'rz-history-meta-value--auto' : ''}`}>{formatSource(entry.source)}</span>
                 </div>
                 <div className="rz-history-meta-row">
                   <span className="rz-history-meta-label">Opmerking</span>

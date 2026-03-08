@@ -880,3 +880,33 @@ button.rz-tab.rz-tab-active {
   color: #1f4d3a;
   font-weight: 700;
 }
+
+.rz-automation-setting-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+}
+
+.rz-automation-setting-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.rz-automation-setting-title {
+  font-weight: 700;
+  color: #1d4d3f;
+}
+
+.rz-automation-setting-text {
+  color: #667085;
+  font-size: 14px;
+}
+
+.rz-history-meta-value--auto {
+  color: #1d4d3f;
+  font-weight: 700;
+}

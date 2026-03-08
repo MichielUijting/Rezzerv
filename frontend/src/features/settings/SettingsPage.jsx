@@ -18,6 +18,14 @@ export default function SettingsPage() {
             </div>
             <div aria-hidden="true">→</div>
           </Link>
+
+          <Link to="/instellingen/huishoudautomatisering" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: '1px solid #dfe4ea', borderRadius: '12px', color: 'inherit', textDecoration: 'none' }}>
+            <div>
+              <div style={{ fontWeight: 600 }}>Huishoudautomatisering</div>
+              <div style={{ color: '#667085', fontSize: '14px' }}>Slim afboeken bij herhaalaankoop</div>
+            </div>
+            <div aria-hidden="true">→</div>
+          </Link>
         </div>
       </Card>
     </AppShell>

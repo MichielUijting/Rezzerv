@@ -6,6 +6,7 @@ import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
 import SettingsPage from '../../features/settings/SettingsPage'
 import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFieldsPage'
+import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHouseholdAutomationPage'
 import Voorraad from '../../pages/Voorraad'
 import AuthGuard from './AuthGuard'
 
@@ -45,6 +46,7 @@ const router = createBrowserRouter([
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <Protected><SettingsPage /></Protected> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <Protected><SettingsArticleFieldsPage /></Protected> },
+  { path: '/instellingen/huishoudautomatisering', element: <Protected><SettingsHouseholdAutomationPage /></Protected> },
   { path: '/admin', element: <Protected><AdminPage /></Protected> },
   { path: '*', element: <Navigate to="/login" replace /> },
 ])
