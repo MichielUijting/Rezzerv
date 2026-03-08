@@ -29,15 +29,16 @@ export function applyAutoRepurchaseHistory(article = {}) {
   const enriched = []
 
   sorted.forEach((entry) => {
-    const qualifies = entry?.type === 'Aankoop' && Boolean(entry?.auto_repurchase_candidate) && toNumber(entry?.old_value) > 0
+    const isPurchase = entry?.type === 'Aankoop'
+    const previousStock = toNumber(entry?.old_value)
+    const alreadyAutoRepurchase = entry?.source === 'auto_repurchase' || entry?.auto_generated === true
+    const purchaseQuantity = toNumber(entry?.quantity_change || Math.max(0, toNumber(entry?.new_value) - previousStock))
+    const qualifies = isPurchase && !alreadyAutoRepurchase && previousStock > 0 && purchaseQuantity > 0
 
     if (!qualifies) {
       enriched.push(entry)
       return
     }
-
-    const previousStock = toNumber(entry.old_value)
-    const purchaseQuantity = toNumber(entry.quantity_change || Math.max(0, toNumber(entry.new_value) - previousStock))
 
     enriched.push({
       datetime: shiftTimeOneMinuteBack(entry.datetime),
