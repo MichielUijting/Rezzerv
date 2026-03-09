@@ -12,7 +12,7 @@ echo Modus: persistente normale start ^(databasevolume blijft behouden^)
 echo Gebruik hard-reset.bat alleen voor een expliciete schone reset.
 
 REM --- Build from local TEMP copy to avoid OneDrive placeholder/lock issues ---
-set "BUILD_DIR=%TEMP%ezzerv_build"
+set "BUILD_DIR=%TEMP%\rezzerv_build"
 if exist "%BUILD_DIR%" (
   rmdir /s /q "%BUILD_DIR%" >nul 2>&1
 )
@@ -47,8 +47,8 @@ if not exist "frontend" (
 
 echo Cleaning accidental .dockerignore files ^(can break Docker builds^)...
 for /r %%F in (.dockerignore) do (
-  if /I not "%%F"=="%cd%rontend\.dockerignore" (
-    if /I not "%%F"=="%cd%ackend\.dockerignore" (
+  if /I not "%%F"=="%cd%\frontend\.dockerignore" (
+    if /I not "%%F"=="%cd%\backend\.dockerignore" (
       del /f /q "%%F" >nul 2>&1
     )
   )

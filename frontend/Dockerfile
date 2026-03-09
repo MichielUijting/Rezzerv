@@ -7,7 +7,7 @@ ENV VITE_REZZERV_VERSION=${REZZERV_VERSION}
 COPY package.json .
 RUN npm install
 COPY . .
-RUN npm run build
+RUN node ./node_modules/vite/bin/vite.js build
 
 FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html

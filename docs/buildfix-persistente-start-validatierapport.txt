@@ -1,0 +1,16 @@
+Release: Rezzerv-v01.06.97
+
+Technische samenvatting
+- frontend/Dockerfile gebruikt nu directe Vite-CLI build: node ./node_modules/vite/bin/vite.js build
+- start.bat gebruikt weer een correcte TEMP-buildmap: %TEMP%\rezzerv_build
+- persistente startlogica en hard-reset scheiding zijn intact gehouden
+
+Validatie
+- frontend/Dockerfile visueel gecontroleerd op directe Vite-CLI route
+- start.bat visueel gecontroleerd op correct buildpad en ongewijzigde persistente startflow
+- hard-reset.bat ongemoeid gelaten als expliciete resetroute
+
+Buiten scope
+- geen wijziging aan Lidl-flow
+- geen wijziging aan voorraadlogica
+- geen wijziging aan backend/API
