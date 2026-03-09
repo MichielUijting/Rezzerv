@@ -137,12 +137,10 @@ export default function StoresPage() {
     [activeBatch],
   )
 
-  const selectedLines = visibleLines.filter((line) => (line.review_decision || 'pending') === 'selected')
-  const canProcessBatch = Boolean(
-    activeBatch &&
-      selectedLines.length > 0 &&
-      selectedLines.every((line) => !getLineBlockerReason(line, validArticleIds))
-  )
+  const selectedLines = visibleLines.filter((line) => (line.review_decision || 'selected') === 'selected')
+  const linesMissingArticle = selectedLines.filter((line) => !line.matched_household_article_id).length
+  const linesMissingLocation = selectedLines.filter((line) => !line.target_location_id).length
+  const canProcessBatch = Boolean(activeBatch && selectedLines.length > 0)
 
   async function refreshBatch(batchId) {
     const batch = await fetchJson(`/api/purchase-import-batches/${batchId}`)
@@ -152,7 +150,7 @@ export default function StoresPage() {
 
   async function refreshLocationOptions(householdId) {
     if (!householdId) return []
-    const backendLocations = await fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdId)}`).catch(() => [])
+    const backendLocations = await fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdId)}&_ts=${Date.now()}`, { cache: 'no-store' }).catch(() => [])
     const nextLocations = Array.isArray(backendLocations) ? backendLocations : []
     setLocationOptions(nextLocations)
     return nextLocations
@@ -192,7 +190,7 @@ export default function StoresPage() {
         fetchJson('/api/store-providers'),
         fetchJson(`/api/store-connections?householdId=${encodeURIComponent(householdData.id)}`),
         fetchJson('/api/store-review-articles').catch(() => articleFallbackOptions),
-        fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdData.id)}`).catch(() => []),
+        fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdData.id)}&_ts=${Date.now()}`, { cache: 'no-store' }).catch(() => []),
       ])
 
       setProviders(providerData)
@@ -369,6 +367,16 @@ export default function StoresPage() {
 
   async function handleProcessBatch() {
     if (!activeBatch) return
+    if (linesMissingLocation > 0) {
+      setError('')
+      setStatus(`Nog ${linesMissingLocation} artikel(en) zonder locatie.`)
+      return
+    }
+    if (linesMissingArticle > 0) {
+      setError('')
+      setStatus(`Nog ${linesMissingArticle} artikel(en) zonder artikelkoppeling.`)
+      return
+    }
     setIsProcessingBatch(true)
     setError('')
     setStatus('')
@@ -379,9 +387,6 @@ export default function StoresPage() {
       })
       const refreshedBatch = await refreshBatch(activeBatch.batch_id)
       showProcessFeedback('Verwerkt!')
-      if (result.processed_count === 0 && result.failed_count > 0) {
-        setError('Geen regels verwerkt. Controleer per regel de melding in de kolom Status.')
-      }
       if (result.failed_count > 0) {
         setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
       } else {
@@ -408,11 +413,6 @@ export default function StoresPage() {
                 Koppel hier winkels, haal voorbeeld-aankopen op en beoordeel per regel wat later verwerkt mag worden.
               </p>
             </div>
-            {household && (
-              <div style={{ color: '#344054', fontSize: '14px' }}>
-                Huishouden: <strong>{household.naam}</strong>
-              </div>
-            )}
           </div>
         </Card>
 
@@ -470,7 +470,7 @@ export default function StoresPage() {
                 <div>
                   <h3 className="rz-store-review-title">Kassabon Lidl</h3>
                   <div className="rz-store-review-meta">
-                    Batch: {activeBatch.batch_id} · Status: {batchStatusLabel(activeBatch.import_status)}
+                    Batch: {activeBatch.batch_id}
                   </div>
                   <div className="rz-store-review-meta">
                     Totaal open: {visibleLines.length} · Geselecteerd: {selectedLines.length} · Genegeerd: {visibleLines.filter((line) => (line.review_decision || 'pending') === 'ignored').length} · Open: {visibleLines.filter((line) => (line.review_decision || 'pending') === 'pending').length} · Verwerkt: {activeBatch.summary?.processed || 0} · Mislukt: {visibleLines.filter((line) => (line.processing_status || 'pending') === 'failed').length}
@@ -478,16 +478,6 @@ export default function StoresPage() {
                   <div className="rz-store-review-meta">
                     Automatisch voorbereid: {visibleLines.filter((line) => line.is_auto_prefilled).length} · Voorstellen controleren: {visibleLines.filter((line) => !line.is_auto_prefilled && (line.suggested_household_article_id || line.suggested_location_id)).length}
                   </div>
-
-                  {(() => {
-                    const linesMissingArticle = visibleLines.filter((line) => !line.matched_household_article_id).length
-                    const linesMissingLocation = visibleLines.filter((line) => !line.target_location_id).length
-                    if (!linesMissingArticle && !linesMissingLocation) return null
-                    const parts = []
-                    if (linesMissingArticle) parts.push(`${linesMissingArticle} artikel(en) zonder koppeling`)
-                    if (linesMissingLocation) parts.push(`${linesMissingLocation} artikel(en) zonder locatie`)
-                    return <div className="rz-store-warning">Let op: {parts.join(' · ')}. Vul dit eerst aan voordat je naar voorraad verwerkt.</div>
-                  })()}
                 </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <Button variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
@@ -519,7 +509,7 @@ export default function StoresPage() {
                     {visibleLines.length === 0 ? (
                       <tr><td colSpan={5}>Er staan geen open regels meer in deze kassabon.</td></tr>
                     ) : visibleLines.map((line) => (
-                      <tr key={line.id} className={line.target_location_id ? 'rz-store-row--linked' : ''}>
+                      <tr key={line.id} className={line.target_location_id && locationOptions.some((location) => String(location.id) === String(line.target_location_id)) ? 'rz-store-row--linked' : ''}>
                         <td>
                           <div className="rz-store-primary">{line.article_name_raw}</div>
                           <div className="rz-store-secondary">{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
@@ -531,7 +521,7 @@ export default function StoresPage() {
                         <td>
                           <select
                             className="rz-input rz-store-select"
-                            value={line.review_decision || 'pending'}
+                            value={line.review_decision || 'selected'}
                             disabled={busyLineId === line.id}
                             onChange={(event) => handleReviewDecision(line.id, event.target.value)}
                           >

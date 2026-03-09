@@ -1,0 +1,13 @@
+Release: 01.07.03
+
+Aangepast:
+- Kassabonregels tonen standaard "Verwerken" als selectie wanneer geen reviewstatus aanwezig is.
+- Lichtgroene accentuering alleen nog bij een gekozen locatie die ook echt in de actuele dropdown-opties voorkomt.
+- Huishouden-regel uit de eerste card verwijderd.
+- Statuskolom blijft verwijderd; batchmeta toont geen statuslabel meer.
+- Waarschuwing boven de tabel verwijderd; bij klikken op "Naar voorraad" volgt nu een melding hoeveel artikelen nog geen locatie of artikelkoppeling hebben.
+- Locatieopties worden met no-store + timestamp actiever ververst.
+
+Niet gewijzigd:
+- Geen backendwijziging aan eventketen.
+- Geen wijziging aan voorraadverwerkingslogica.
