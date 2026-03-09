@@ -258,6 +258,207 @@ def ensure_release_3_schema():
         )
 
 
+
+def ensure_release_4_schema():
+    with engine.begin() as conn:
+        line_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(purchase_import_lines)")).fetchall()}
+
+        if "suggested_household_article_id" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN suggested_household_article_id TEXT"))
+        if "suggested_location_id" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN suggested_location_id TEXT"))
+        if "suggestion_confidence" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN suggestion_confidence TEXT"))
+        if "suggestion_reason" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN suggestion_reason TEXT"))
+        if "is_auto_prefilled" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN is_auto_prefilled INTEGER DEFAULT 0"))
+
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS store_import_memory (
+                    id TEXT PRIMARY KEY,
+                    household_id TEXT NOT NULL,
+                    store_provider_code TEXT NOT NULL,
+                    raw_article_name TEXT NOT NULL,
+                    raw_brand TEXT,
+                    normalized_key TEXT NOT NULL,
+                    matched_household_article_id TEXT NOT NULL,
+                    preferred_location_id TEXT,
+                    times_confirmed INTEGER NOT NULL DEFAULT 1,
+                    last_used_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_store_import_memory_unique ON store_import_memory (household_id, store_provider_code, normalized_key)"))
+
+
+def normalize_store_memory_key(article_name: str | None, brand: str | None):
+    name = (article_name or "").strip().lower()
+    brand_value = (brand or "").strip().lower()
+    return f"{name}||{brand_value}"
+
+
+def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provider_code: str):
+    lines = conn.execute(
+        text(
+            """
+            SELECT id, article_name_raw, brand_raw
+            FROM purchase_import_lines
+            WHERE batch_id = :batch_id
+            ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
+            """
+        ),
+        {"batch_id": batch_id},
+    ).mappings().all()
+
+    article_prefills = 0
+    location_prefills = 0
+    fully_prefilled = 0
+
+    for line in lines:
+        memory = conn.execute(
+            text(
+                """
+                SELECT matched_household_article_id, preferred_location_id, times_confirmed
+                FROM store_import_memory
+                WHERE household_id = :household_id
+                  AND store_provider_code = :store_provider_code
+                  AND normalized_key = :normalized_key
+                ORDER BY last_used_at DESC
+                LIMIT 1
+                """
+            ),
+            {
+                "household_id": household_id,
+                "store_provider_code": store_provider_code,
+                "normalized_key": normalize_store_memory_key(line["article_name_raw"], line["brand_raw"]),
+            },
+        ).mappings().first()
+
+        if not memory:
+            continue
+
+        matched_article_id = memory["matched_household_article_id"]
+        preferred_location_id = memory["preferred_location_id"]
+        times_confirmed = int(memory["times_confirmed"] or 0)
+        is_safe_match = bool(matched_article_id)
+        should_auto_select = is_safe_match and bool(preferred_location_id) and times_confirmed >= 1
+        suggestion_reason = "Automatisch voorgesteld" if should_auto_select else "Controleer voorstel"
+
+        conn.execute(
+            text(
+                """
+                UPDATE purchase_import_lines
+                SET suggested_household_article_id = :suggested_article_id,
+                    suggested_location_id = :suggested_location_id,
+                    suggestion_confidence = :suggestion_confidence,
+                    suggestion_reason = :suggestion_reason,
+                    is_auto_prefilled = :is_auto_prefilled,
+                    matched_household_article_id = COALESCE(:matched_household_article_id, matched_household_article_id),
+                    target_location_id = COALESCE(:target_location_id, target_location_id),
+                    match_status = CASE WHEN :matched_household_article_id IS NOT NULL THEN 'matched' ELSE match_status END,
+                    review_decision = CASE WHEN :should_auto_select = 1 THEN 'selected' ELSE review_decision END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {
+                "id": line["id"],
+                "suggested_article_id": matched_article_id,
+                "suggested_location_id": preferred_location_id,
+                "suggestion_confidence": "high" if should_auto_select else "medium",
+                "suggestion_reason": suggestion_reason,
+                "is_auto_prefilled": 1 if should_auto_select or matched_article_id or preferred_location_id else 0,
+                "matched_household_article_id": matched_article_id,
+                "target_location_id": preferred_location_id,
+                "should_auto_select": 1 if should_auto_select else 0,
+            },
+        )
+        if matched_article_id:
+            article_prefills += 1
+        if preferred_location_id:
+            location_prefills += 1
+        if should_auto_select:
+            fully_prefilled += 1
+
+    return {
+        "article_prefills": article_prefills,
+        "location_prefills": location_prefills,
+        "fully_prefilled": fully_prefilled,
+    }
+
+
+def remember_store_import_choice(conn, household_id: str, store_provider_code: str, raw_article_name: str, raw_brand: str | None, matched_household_article_id: str, preferred_location_id: str | None):
+    normalized_key = normalize_store_memory_key(raw_article_name, raw_brand)
+    existing = conn.execute(
+        text(
+            """
+            SELECT id, times_confirmed
+            FROM store_import_memory
+            WHERE household_id = :household_id
+              AND store_provider_code = :store_provider_code
+              AND normalized_key = :normalized_key
+            """
+        ),
+        {
+            "household_id": household_id,
+            "store_provider_code": store_provider_code,
+            "normalized_key": normalized_key,
+        },
+    ).mappings().first()
+    if existing:
+        conn.execute(
+            text(
+                """
+                UPDATE store_import_memory
+                SET matched_household_article_id = :matched_household_article_id,
+                    preferred_location_id = :preferred_location_id,
+                    times_confirmed = :times_confirmed,
+                    last_used_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {
+                "id": existing["id"],
+                "matched_household_article_id": matched_household_article_id,
+                "preferred_location_id": preferred_location_id,
+                "times_confirmed": int(existing["times_confirmed"] or 0) + 1,
+            },
+        )
+    else:
+        conn.execute(
+            text(
+                """
+                INSERT INTO store_import_memory (
+                    id, household_id, store_provider_code, raw_article_name, raw_brand,
+                    normalized_key, matched_household_article_id, preferred_location_id,
+                    times_confirmed, last_used_at, created_at, updated_at
+                ) VALUES (
+                    :id, :household_id, :store_provider_code, :raw_article_name, :raw_brand,
+                    :normalized_key, :matched_household_article_id, :preferred_location_id,
+                    1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "household_id": household_id,
+                "store_provider_code": store_provider_code,
+                "raw_article_name": raw_article_name,
+                "raw_brand": raw_brand,
+                "normalized_key": normalized_key,
+                "matched_household_article_id": matched_household_article_id,
+                "preferred_location_id": preferred_location_id,
+            },
+        )
+
+
 def compute_batch_status(conn, batch_id: str) -> str:
     rows = conn.execute(
         text(
@@ -503,6 +704,7 @@ from app.models import household, space, sublocation, inventory, store_provider,
 Base.metadata.create_all(bind=engine)
 ensure_release_2_schema()
 ensure_release_3_schema()
+ensure_release_4_schema()
 seed_store_providers()
 
 def reset_dev_tables():
@@ -915,6 +1117,8 @@ def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
                 },
             )
 
+        prefill_summary = apply_prefill_to_batch(conn, batch_id, str(connection["household_id"]), connection["store_provider_code"])
+
         conn.execute(
             text(
                 """
@@ -934,6 +1138,7 @@ def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
         "import_status": "new",
         "line_count": len(lines),
         "created_at": now_iso,
+        "prefill_summary": prefill_summary,
     }
 
 
@@ -970,6 +1175,7 @@ def get_purchase_import_batch(batch_id: str):
                     id, article_name_raw, brand_raw, quantity_raw, unit_raw,
                     line_price_raw, currency_code, match_status, review_decision,
                     matched_household_article_id, target_location_id,
+                    suggested_household_article_id, suggested_location_id, suggestion_confidence, suggestion_reason, is_auto_prefilled,
                     processing_status, processed_at, processed_event_id, processing_error, final_location_id
                 FROM purchase_import_lines
                 WHERE batch_id = :batch_id
@@ -989,6 +1195,7 @@ def get_purchase_import_batch(batch_id: str):
             "quantity_raw": float(line["quantity_raw"]) if line["quantity_raw"] is not None else None,
             "line_price_raw": float(line["line_price_raw"]) if line["line_price_raw"] is not None else None,
             "processed_at": normalize_datetime(line["processed_at"]),
+            "is_auto_prefilled": bool(line["is_auto_prefilled"]),
         }
         for line in lines
     ]
@@ -1047,6 +1254,27 @@ def get_store_location_options(householdId: str = Query(...)):
     ]
 
 
+
+
+@app.post("/api/purchase-import-batches/{batch_id}/prefill")
+def prefill_purchase_import_batch(batch_id: str):
+    with engine.begin() as conn:
+        batch = conn.execute(
+            text(
+                """
+                SELECT pib.id, pib.household_id, sp.code AS store_provider_code
+                FROM purchase_import_batches pib
+                JOIN store_providers sp ON sp.id = pib.store_provider_id
+                WHERE pib.id = :id
+                """
+            ),
+            {"id": batch_id},
+        ).mappings().first()
+        if not batch:
+            raise HTTPException(status_code=404, detail="Onbekende purchase import batch")
+        summary = apply_prefill_to_batch(conn, batch_id, str(batch["household_id"]), batch["store_provider_code"])
+        status = update_batch_status(conn, batch_id)
+    return {"batch_id": batch_id, "import_status": status, **summary}
 
 
 @app.get("/api/store-connections/{connection_id}/latest-batch")
@@ -1198,8 +1426,9 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
         batch = conn.execute(
             text(
                 """
-                SELECT id, household_id, import_status
-                FROM purchase_import_batches
+                SELECT pib.id, pib.household_id, pib.import_status, sp.code AS store_provider_code
+                FROM purchase_import_batches pib
+                JOIN store_providers sp ON sp.id = pib.store_provider_id
                 WHERE id = :id
                 """
             ),
@@ -1211,7 +1440,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
         lines = conn.execute(
             text(
                 """
-                SELECT id, article_name_raw, quantity_raw, review_decision, matched_household_article_id,
+                SELECT id, article_name_raw, brand_raw, quantity_raw, review_decision, matched_household_article_id,
                        target_location_id, processing_status, processed_event_id
                 FROM purchase_import_lines
                 WHERE batch_id = :batch_id
@@ -1276,6 +1505,15 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                     """
                 ),
                 {"event_id": event_id, "final_location_id": resolved_location["location_id"], "id": line_id},
+            )
+            remember_store_import_choice(
+                conn,
+                str(batch["household_id"]),
+                batch["store_provider_code"],
+                line["article_name_raw"],
+                line.get("brand_raw"),
+                article_id,
+                resolved_location["location_id"],
             )
             results.append({"line_id": line_id, "status": "processed", "event_id": event_id})
             processed_count += 1

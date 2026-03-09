@@ -194,3 +194,17 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
   font-weight: 700;
   color: #0f5132;
 }
+
+.rz-store-suggestion {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rz-store-suggestion--auto {
+  color: #0f5132;
+}
+
+.rz-store-suggestion--check {
+  color: #b54708;
+}

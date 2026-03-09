@@ -1,0 +1,26 @@
+Lidl pilot — Release 4 validatierapport
+Versie: 01.06.91
+
+Gebouwd:
+- Geheugenlaag toegevoegd voor bevestigde winkelimport-keuzes: store_import_memory
+- Voor purchase_import_lines suggestievelden toegevoegd:
+  - suggested_household_article_id
+  - suggested_location_id
+  - suggestion_confidence
+  - suggestion_reason
+  - is_auto_prefilled
+- Na succesvolle verwerking wordt geheugen bijgewerkt met artikelkoppeling en gekozen locatie
+- Bij nieuwe importbatch wordt veilige voorinvulling toegepast op basis van eerdere bevestigde keuzes
+- Review-UI toont zichtbare markering voor automatische voorstellen
+- Gebruiker kan voorstellen blijven overschrijven via bestaande dropdowns
+- Verwerking naar inventory_events ongewijzigd intact gehouden
+
+Validatie:
+- Python syntaxcheck backend/app/main.py: geslaagd
+- Frontend build: geslaagd via directe Vite-CLI (node node_modules/vite/bin/vite.js build)
+- Geen AI-matching toegevoegd
+- Geen stille verwerking toegevoegd
+- Bestaande process-flow naar inventory_events intact gelaten
+
+Bekende noot:
+- De meegeleverde npm-wrapper frontend/node_modules/.bin/vite is in deze zip nog steeds niet portable in deze container; de directe Vite-CLI werkt wel en is gebruikt voor de buildcheck.

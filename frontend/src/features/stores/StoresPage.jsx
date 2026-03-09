@@ -67,6 +67,16 @@ function processingStatusLabel(value) {
   return 'Nog niet verwerkt'
 }
 
+function suggestionLabel(line) {
+  if (line.is_auto_prefilled && (line.review_decision || 'pending') === 'selected' && line.matched_household_article_id && line.target_location_id) {
+    return 'Automatisch voorgesteld'
+  }
+  if (line.suggested_household_article_id || line.suggested_location_id) {
+    return 'Controleer voorstel'
+  }
+  return ''
+}
+
 function formatQuantity(value, unit) {
   return [value, unit].filter(Boolean).join(' ')
 }
@@ -208,7 +218,14 @@ export default function StoresPage() {
         body: JSON.stringify({ mock_profile: 'default' }),
       })
       await refreshBatch(pullResult.batch_id)
-      setStatus('Mock aankopen zijn opgehaald. Kies per regel wat naar voorraad mag.')
+      const p = pullResult.prefill_summary || {}
+      const fullyPrefilled = p.fully_prefilled || 0
+      const articlePrefills = p.article_prefills || 0
+      if (fullyPrefilled > 0 || articlePrefills > 0) {
+        setStatus(`Mock aankopen zijn opgehaald. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een artikelvoorstel.`)
+      } else {
+        setStatus('Mock aankopen zijn opgehaald. Kies per regel wat naar voorraad mag.')
+      }
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
     } catch (err) {
@@ -396,6 +413,9 @@ export default function StoresPage() {
                   <div className="rz-store-review-meta">
                     Totaal: {activeBatch.summary?.total || 0} · Geselecteerd: {activeBatch.summary?.selected || 0} · Genegeerd: {activeBatch.summary?.ignored || 0} · Open: {activeBatch.summary?.pending || 0} · Verwerkt: {activeBatch.summary?.processed || 0} · Mislukt: {activeBatch.summary?.failed || 0}
                   </div>
+                  <div className="rz-store-review-meta">
+                    Automatisch voorbereid: {activeBatch.lines?.filter((line) => line.is_auto_prefilled).length || 0} · Voorstellen controleren: {activeBatch.lines?.filter((line) => !line.is_auto_prefilled && (line.suggested_household_article_id || line.suggested_location_id)).length || 0}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <Button variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
@@ -431,6 +451,7 @@ export default function StoresPage() {
                         <td>
                           <div className="rz-store-primary">{line.article_name_raw}</div>
                           <div className="rz-store-secondary">{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
+                          {suggestionLabel(line) ? <div className={`rz-store-suggestion ${line.is_auto_prefilled ? 'rz-store-suggestion--auto' : 'rz-store-suggestion--check'}`}>{suggestionLabel(line)}</div> : null}
                         </td>
                         <td className="rz-num">
                           <div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div>
