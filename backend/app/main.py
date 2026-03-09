@@ -1192,7 +1192,7 @@ def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
                     ) VALUES (
                         :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw,
                         :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
-                        'unmatched', 'pending', :ui_sort_order, CURRENT_TIMESTAMP
+                        'unmatched', 'selected', :ui_sort_order, CURRENT_TIMESTAMP
                     )
                     """
                 ),

@@ -1,0 +1,6 @@
+v01.07.02
+- Locatieopties in winkelreview worden actiever ververst (batch open, focus op dropdown, window focus).
+- Nieuwe kassabonregels staan standaard op Verwerken.
+- Kolom Status verwijderd; batchwaarschuwing toegevoegd voor ontbrekende artikel-/locatiekoppelingen.
+- Rijen met gekozen locatie krijgen lichtgroene accentuering.
+- Titel gewijzigd van Importreview Lidl naar Kassabon Lidl.

@@ -1071,3 +1071,14 @@ button.rz-tab.rz-tab-active {
   text-align: left;
   text-align-last: left;
 }
+
+.rz-store-row--linked td {
+  background: #ecfdf3;
+}
+
+.rz-store-warning {
+  margin-top: 8px;
+  color: #b54708;
+  font-size: 14px;
+  font-weight: 700;
+}
