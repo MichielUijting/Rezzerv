@@ -1,0 +1,14 @@
+Release: Rezzerv-v01.07.05
+
+Uitgevoerd:
+- Admin uitgebreid met runtime-diagnose voor store-location-options
+- Admin uitgebreid met runtime-diagnose voor verwerkvalidatie van kassabonregels
+- Winkels/Kassabon gebruikt nu een overlay-modal bij ontbrekende geldige locaties of artikelkoppelingen bij 'Naar voorraad'
+- Geen status-card meer voor deze blokkadeboodschap
+
+Validatie:
+- backend syntaxcheck geslaagd (py_compile)
+- frontend build geslaagd via directe Vite-CLI
+
+Niet opgelost in deze release:
+- de onderliggende oorzaak waardoor handmatig toegevoegde Admin-locaties nog niet in de kassabon-dropdown verschijnen, voor zover die nog bestaat; deze release bouwt expliciete runtime-diagnose in zodat de oorzaak in de app zichtbaar wordt

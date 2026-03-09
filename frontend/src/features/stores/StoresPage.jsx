@@ -118,6 +118,7 @@ export default function StoresPage() {
   const [isCompletingReview, setIsCompletingReview] = useState(false)
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
   const [processFeedback, setProcessFeedback] = useState('')
+  const [processWarning, setProcessWarning] = useState(null)
   const processFeedbackTimer = useRef(null)
 
   const lidlProvider = useMemo(
@@ -367,18 +368,8 @@ export default function StoresPage() {
   }
 
 
-  async function handleProcessBatch() {
+  async function processBatchNow() {
     if (!activeBatch) return
-    if (linesMissingLocation > 0) {
-      setError('')
-      setStatus(`Nog ${linesMissingLocation} artikel(en) zonder geldige locatie.`)
-      return
-    }
-    if (linesMissingArticle > 0) {
-      setError('')
-      setStatus(`Nog ${linesMissingArticle} artikel(en) zonder artikelkoppeling.`)
-      return
-    }
     setIsProcessingBatch(true)
     setError('')
     setStatus('')
@@ -402,6 +393,19 @@ export default function StoresPage() {
     } finally {
       setIsProcessingBatch(false)
     }
+  }
+
+  async function handleProcessBatch() {
+    if (!activeBatch) return
+    if (linesMissingLocation > 0 || linesMissingArticle > 0) {
+      setError('')
+      setProcessWarning({
+        missingLocations: linesMissingLocation,
+        missingArticles: linesMissingArticle,
+      })
+      return
+    }
+    await processBatchNow()
   }
 
   return (
@@ -569,6 +573,25 @@ export default function StoresPage() {
           </Card>
         )}
       </div>
+
+        {processWarning && (
+          <div className="rz-modal-backdrop" role="presentation">
+            <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="process-warning-title">
+              <h3 id="process-warning-title" className="rz-modal-title">Nog niet alle regels zijn klaar</h3>
+              <p className="rz-modal-text">
+                {processWarning.missingLocations > 0 && processWarning.missingArticles > 0
+                  ? `Nog ${processWarning.missingLocations} artikel(en) zonder geldige locatie en ${processWarning.missingArticles} artikel(en) zonder geldig artikel.`
+                  : processWarning.missingLocations > 0
+                    ? `Nog ${processWarning.missingLocations} artikel(en) zonder geldige locatie.`
+                    : `Nog ${processWarning.missingArticles} artikel(en) zonder geldig artikel.`}
+              </p>
+              <div className="rz-modal-actions">
+                <Button variant="secondary" onClick={() => setProcessWarning(null)}>Terug naar Winkel</Button>
+                <Button onClick={async () => { setProcessWarning(null); await processBatchNow(); }} disabled={isProcessingBatch}>Negeren</Button>
+              </div>
+            </div>
+          </div>
+        )}
     </AppShell>
   )
 }

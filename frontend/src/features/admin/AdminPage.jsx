@@ -48,6 +48,10 @@ export default function AdminPage() {
   const [testReport, setTestReport] = useState(null);
   const [testMessage, setTestMessage] = useState("");
   const [showReport, setShowReport] = useState(false);
+  const [diagnostics, setDiagnostics] = useState({ location: null, process: null });
+  const [diagnosticMessage, setDiagnosticMessage] = useState("");
+  const [isRunningLocationDiagnostic, setIsRunningLocationDiagnostic] = useState(false);
+  const [isRunningProcessDiagnostic, setIsRunningProcessDiagnostic] = useState(false);
 
   async function fetchStatus() {
     try {
@@ -109,6 +113,48 @@ export default function AdminPage() {
     setMessage(successMessage);
     await fetchStatus();
     return data;
+  }
+
+  async function handleRunLocationDiagnostic() {
+    setDiagnosticMessage("");
+    setIsRunningLocationDiagnostic(true);
+    try {
+      const res = await fetch('/api/dev/diagnostics/store-location-options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ household_id: householdId }),
+      });
+      const data = await res.json();
+      setDiagnostics((current) => ({ ...current, location: data }));
+      setDiagnosticMessage(data.visible_in_store_location_options
+        ? 'Dropdown-diagnose geslaagd: testlocatie zit in store-location-options.'
+        : 'Dropdown-diagnose gefaald: testlocatie ontbreekt in store-location-options.');
+    } catch {
+      setDiagnosticMessage('Dropdown-diagnose kon niet worden uitgevoerd');
+    } finally {
+      setIsRunningLocationDiagnostic(false);
+    }
+  }
+
+  async function handleRunProcessDiagnostic() {
+    setDiagnosticMessage("");
+    setIsRunningProcessDiagnostic(true);
+    try {
+      const res = await fetch(`/api/dev/diagnostics/store-process-validation?householdId=${encodeURIComponent(householdId)}`);
+      const data = await res.json();
+      setDiagnostics((current) => ({ ...current, process: data }));
+      if (!data.has_batch) {
+        setDiagnosticMessage('Geen kassabonbatch beschikbaar voor validatiediagnose.');
+      } else if ((data.missing_valid_location_count || 0) > 0 || (data.missing_article_count || 0) > 0) {
+        setDiagnosticMessage(`Diagnose afgerond: ${data.missing_valid_location_count || 0} regel(s) zonder geldige locatie, ${data.missing_article_count || 0} regel(s) zonder geldig artikel.`);
+      } else {
+        setDiagnosticMessage('Diagnose geslaagd: alle geselecteerde regels zijn verwerkbaar.');
+      }
+    } catch {
+      setDiagnosticMessage('Validatiediagnose kon niet worden uitgevoerd');
+    } finally {
+      setIsRunningProcessDiagnostic(false);
+    }
   }
 
   async function handleGenerateDemo() {
@@ -283,6 +329,43 @@ export default function AdminPage() {
                       <span>{result.status === "passed" ? "Geslaagd" : "Gefaald"}</span>
                     </div>
                   )) : <div className="rz-admin-muted">Nog geen rapport beschikbaar</div>}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rz-admin-panel">
+            <h3>Runtime diagnose winkelkoppeling</h3>
+            <p className="rz-admin-muted">
+              Draai hier gerichte runtime-checks voor locatie-opties in de kassabon en voor geldige verwerkbaarheid van geselecteerde regels.
+            </p>
+            <div className="rz-admin-actions">
+              <Button variant="secondary" onClick={handleRunLocationDiagnostic} disabled={isRunningLocationDiagnostic}>
+                {isRunningLocationDiagnostic ? 'Test draait…' : 'Test dropdown-locaties'}
+              </Button>
+              <Button variant="secondary" onClick={handleRunProcessDiagnostic} disabled={isRunningProcessDiagnostic}>
+                {isRunningProcessDiagnostic ? 'Test draait…' : 'Test verwerkvalidatie'}
+              </Button>
+            </div>
+            {diagnosticMessage ? <div className="rz-admin-message">{diagnosticMessage}</div> : null}
+            {diagnostics.location ? (
+              <div className="rz-admin-report">
+                <h4 className="rz-admin-status-title">Laatste dropdown-diagnose</h4>
+                <div className="rz-admin-report-meta">
+                  <div>Zichtbaar in store-location-options: {diagnostics.location.visible_in_store_location_options ? 'ja' : 'nee'}</div>
+                  <div>Huishouden: {diagnostics.location.household_id}</div>
+                  <div>Verwachte label: {diagnostics.location.created?.expected_label}</div>
+                </div>
+              </div>
+            ) : null}
+            {diagnostics.process ? (
+              <div className="rz-admin-report">
+                <h4 className="rz-admin-status-title">Laatste validatiediagnose</h4>
+                <div className="rz-admin-report-meta">
+                  <div>Batch: {diagnostics.process.has_batch ? diagnostics.process.batch_id : 'geen batch'}</div>
+                  <div>Geselecteerde regels: {diagnostics.process.selected_lines ?? 0}</div>
+                  <div>Zonder geldige locatie: {diagnostics.process.missing_valid_location_count ?? 0}</div>
+                  <div>Zonder geldig artikel: {diagnostics.process.missing_article_count ?? 0}</div>
                 </div>
               </div>
             ) : null}

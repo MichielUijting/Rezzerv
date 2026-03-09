@@ -59,6 +59,10 @@ class InventoryCreate(BaseModel):
     sublocation_id: Optional[str] = None
 
 
+class DiagnosticRequest(BaseModel):
+    household_id: Optional[str] = None
+
+
 class StoreConnectionCreate(BaseModel):
     household_id: str | int
     store_provider_code: str
@@ -817,6 +821,160 @@ def get_dev_status():
 def reset_data():
     reset_dev_tables()
     return {"status": "ok"}
+
+
+@app.post("/api/dev/diagnostics/store-location-options")
+def run_store_location_diagnostic(payload: DiagnosticRequest):
+    effective_household_id = str(payload.household_id or 'demo-household')
+    test_space_name = f"ZZ diagnose ruimte {uuid.uuid4().hex[:6]}"
+    test_sublocation_name = f"ZZ diagnose sub {uuid.uuid4().hex[:6]}"
+
+    with engine.begin() as conn:
+        space_row = conn.execute(
+            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
+            {"naam": test_space_name, "household_id": effective_household_id},
+        ).first()
+        space_id = space_row[0] if space_row else None
+        sub_row = conn.execute(
+            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :space_id) RETURNING id"),
+            {"naam": test_sublocation_name, "space_id": space_id},
+        ).first()
+        sublocation_id = sub_row[0] if sub_row else None
+
+        options = conn.execute(
+            text(
+                """
+                SELECT
+                    s.id AS space_id,
+                    s.naam AS space_name,
+                    s.household_id AS household_id,
+                    sl.id AS sublocation_id,
+                    sl.naam AS sublocation_name
+                FROM spaces s
+                LEFT JOIN sublocations sl ON sl.space_id = s.id
+                WHERE s.household_id = 'demo-household' OR s.household_id = :household_id
+                ORDER BY s.naam ASC, sl.naam ASC
+                """
+            ),
+            {"household_id": effective_household_id},
+        ).mappings().all()
+
+    expected_label = f"{test_space_name} / {test_sublocation_name}"
+    labels = [f"{row['space_name']} / {row['sublocation_name']}" if row['sublocation_name'] else row['space_name'] for row in options]
+    matching_option = next((row for row in options if str(row['space_id']) == str(space_id) and str(row['sublocation_id']) == str(sublocation_id)), None)
+
+    return {
+        "status": "ok",
+        "household_id": effective_household_id,
+        "created": {
+            "space_id": space_id,
+            "space_name": test_space_name,
+            "sublocation_id": sublocation_id,
+            "sublocation_name": test_sublocation_name,
+            "expected_label": expected_label,
+        },
+        "visible_in_store_location_options": matching_option is not None,
+        "matching_option": {
+            "id": matching_option['sublocation_id'] or matching_option['space_id'],
+            "label": expected_label,
+            "household_id": matching_option['household_id'],
+        } if matching_option else None,
+        "options_count": len(options),
+        "recent_labels": labels[-10:],
+    }
+
+
+@app.get("/api/dev/diagnostics/store-process-validation")
+def run_store_process_validation_diagnostic(householdId: str = Query(...)):
+    with engine.begin() as conn:
+        batch = conn.execute(
+            text(
+                """
+                SELECT id, import_status
+                FROM purchase_import_batches
+                WHERE household_id = :household_id
+                ORDER BY datetime(created_at) DESC, id DESC
+                LIMIT 1
+                """
+            ),
+            {"household_id": householdId},
+        ).mappings().first()
+
+        location_rows = conn.execute(
+            text(
+                """
+                SELECT sl.id AS id
+                FROM spaces s
+                LEFT JOIN sublocations sl ON sl.space_id = s.id
+                WHERE s.household_id = 'demo-household' OR s.household_id = :household_id
+                """
+            ),
+            {"household_id": householdId},
+        ).mappings().all()
+        valid_location_ids = {str(row['id']) for row in location_rows if row['id']}
+
+        article_rows = get_store_review_article_options(conn)
+        valid_article_ids = {str(row['id']) for row in article_rows}
+
+        if not batch:
+            return {
+                "status": "ok",
+                "has_batch": False,
+                "message": "Geen kassabonbatch beschikbaar voor diagnose",
+                "valid_location_ids_count": len(valid_location_ids),
+                "valid_article_ids_count": len(valid_article_ids),
+            }
+
+        lines = conn.execute(
+            text(
+                """
+                SELECT id, article_name_raw, review_decision, matched_household_article_id, target_location_id, processing_status
+                FROM purchase_import_lines
+                WHERE batch_id = :batch_id
+                ORDER BY created_at ASC, id ASC
+                """
+            ),
+            {"batch_id": batch['id']},
+        ).mappings().all()
+
+    detailed = []
+    selected_count = 0
+    missing_article = 0
+    missing_valid_location = 0
+    for line in lines:
+        decision = line['review_decision'] or 'selected'
+        is_selected = decision == 'selected' and (line['processing_status'] or 'pending') != 'processed'
+        article_valid = bool(line['matched_household_article_id']) and str(line['matched_household_article_id']) in valid_article_ids
+        location_valid = bool(line['target_location_id']) and str(line['target_location_id']) in valid_location_ids
+        if is_selected:
+            selected_count += 1
+            if not article_valid:
+                missing_article += 1
+            if not location_valid:
+                missing_valid_location += 1
+        detailed.append({
+            "line_id": line['id'],
+            "article_name_raw": line['article_name_raw'],
+            "review_decision": decision,
+            "matched_household_article_id": line['matched_household_article_id'],
+            "target_location_id": line['target_location_id'],
+            "article_valid": article_valid,
+            "location_valid": location_valid,
+            "processing_status": line['processing_status'] or 'pending',
+        })
+
+    return {
+        "status": "ok",
+        "has_batch": True,
+        "batch_id": batch['id'],
+        "batch_status": batch['import_status'],
+        "selected_lines": selected_count,
+        "missing_article_count": missing_article,
+        "missing_valid_location_count": missing_valid_location,
+        "valid_location_ids_count": len(valid_location_ids),
+        "valid_article_ids_count": len(valid_article_ids),
+        "lines": detailed,
+    }
 
 @app.post("/api/dev/spaces")
 def create_space(payload: SpaceCreate):
