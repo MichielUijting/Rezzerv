@@ -1,0 +1,21 @@
+Release: Rezzerv-v01.06.93
+
+Technische samenvatting
+- Frontend fetchJson op de Winkels-pagina parseert responses niet meer blind als JSON.
+- Non-JSON responses leveren nu een nette gebruikersmelding op in plaats van een ruwe JSON.parse-fout.
+- Backend API-fouten vallen nu terug op een JSON-response voor onverwachte serverfouten onder /api/.
+
+Waarschijnlijke oorzaak
+- Op de Winkels-pagina kwam ten minste één non-JSON response terug vanuit een API-call in de store-flow.
+- Die response werd direct met JSON.parse verwerkt, wat de zichtbare parsefout veroorzaakte.
+- De exacte endpoint-oorzaak was in deze container niet deterministisch te reproduceren, maar de foutafhandeling is nu robuust gemaakt en onverwachte API-serverfouten leveren JSON terug.
+
+Validatie
+- Backend syntaxcheck: geslaagd
+- Frontend build via directe Vite-CLI: geslaagd
+- fetchJson is gecontroleerd op non-JSON response-afhandeling
+
+Buiten scope gebleven
+- Geen wijziging aan de Lidl-verwerkingsketen zelf
+- Geen wijziging aan voorraadlogica
+- Geen redesign van de Winkels-pagina

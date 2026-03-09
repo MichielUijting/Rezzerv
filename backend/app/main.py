@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException, Header, Query
+from fastapi import FastAPI, HTTPException, Header, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 import json
 import uuid
@@ -10,6 +11,13 @@ from datetime import datetime
 from sqlalchemy import text
 
 app = FastAPI()
+
+
+@app.exception_handler(Exception)
+async def unhandled_api_exception_handler(request: Request, exc: Exception):
+    if request.url.path.startswith('/api/'):
+        return JSONResponse(status_code=500, content={'detail': 'Interne serverfout in de winkelkoppeling'})
+    raise exc
 
 # In-memory opslag (MVP login)
 households = {}

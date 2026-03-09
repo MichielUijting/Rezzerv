@@ -31,11 +31,28 @@ async function fetchJson(url, options = {}) {
     ...options,
   })
 
-  const text = await response.text()
-  const data = text ? JSON.parse(text) : null
+  const responseText = await response.text()
+  const contentType = (response.headers.get('content-type') || '').toLowerCase()
+  const looksLikeJson = contentType.includes('application/json') || /^\s*[\[{]/.test(responseText)
+
+  let data = null
+  if (responseText) {
+    if (looksLikeJson) {
+      try {
+        data = JSON.parse(responseText)
+      } catch (error) {
+        if (!response.ok) {
+          throw new Error('Winkelgegevens konden niet volledig worden geladen')
+        }
+        throw new Error('De server gaf ongeldige gegevens terug')
+      }
+    } else if (!response.ok) {
+      throw new Error(normalizeErrorMessage(responseText) || 'Winkelgegevens konden niet volledig worden geladen')
+    }
+  }
 
   if (!response.ok) {
-    throw new Error(normalizeErrorMessage(data?.detail || data))
+    throw new Error(normalizeErrorMessage(data?.detail || data || responseText))
   }
 
   return data
