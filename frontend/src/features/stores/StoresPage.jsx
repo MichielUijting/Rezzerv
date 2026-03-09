@@ -122,9 +122,12 @@ export default function StoresPage() {
   async function restoreLatestBatch(connectionId) {
     try {
       const latest = await fetchJson(`/api/store-connections/${connectionId}/latest-batch`)
-      if (latest?.batch_id) {
-        await refreshBatch(latest.batch_id)
+      if (!latest?.batch_id) return
+      if (latest.import_status === 'processed') {
+        setActiveBatch(null)
+        return
       }
+      await refreshBatch(latest.batch_id)
     } catch (err) {
       // Geen eerdere batch is toegestaan; negeren.
     }
@@ -298,11 +301,15 @@ export default function StoresPage() {
         method: 'POST',
         body: JSON.stringify({ processed_by: 'ui', mode: 'selected_only' }),
       })
-      await refreshBatch(activeBatch.batch_id)
+      const refreshedBatch = await refreshBatch(activeBatch.batch_id)
+      showProcessFeedback('Verwerkt!')
       if (result.failed_count > 0) {
         setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
       } else {
         setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) zijn naar voorraad verwerkt.`)
+      }
+      if (refreshedBatch?.import_status === 'processed') {
+        window.setTimeout(() => setActiveBatch(null), 1200)
       }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')

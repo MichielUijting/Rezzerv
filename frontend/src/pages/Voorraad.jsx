@@ -33,12 +33,13 @@ function mergeInventoryRows(liveRows = []) {
   const merged = []
   const seen = new Set()
 
-  liveRows.forEach((row) => {
+  liveRows.forEach((row, index) => {
     const key = normalizeName(row?.artikel)
     const demoRow = demoByName.get(key)
     merged.push({
       ...row,
-      id: demoRow?.id || row.id,
+      id: row.id || `${key}-${index}`,
+      detailId: demoRow?.id || row.id,
       artikel: row.artikel || demoRow?.artikel || '',
       aantal: row.aantal ?? demoRow?.aantal ?? '',
       locatie: row.locatie ?? demoRow?.locatie ?? '',
@@ -51,7 +52,7 @@ function mergeInventoryRows(liveRows = []) {
   initialData.forEach((row) => {
     const key = normalizeName(row.artikel)
     if (seen.has(key)) return
-    merged.push({ ...row, checked: false })
+    merged.push({ ...row, detailId: row.id, checked: false })
   })
 
   return merged.sort((a, b) => String(a.artikel || '').localeCompare(String(b.artikel || ''), 'nl'))
@@ -98,8 +99,8 @@ export default function Voorraad() {
     };
   }, []);
 
-  const openArticle = (id) => {
-    navigate(`/voorraad/${id}`);
+  const openArticle = (detailId) => {
+    navigate(`/voorraad/${detailId}`);
   };
 
   const handleFilterChange = (key, value) => {
@@ -265,7 +266,7 @@ export default function Voorraad() {
 
                 <tbody>
                   {filteredRows.map((row) => (
-                    <tr key={row.id} onDoubleClick={() => openArticle(row.id)}>
+                    <tr key={row.id} onDoubleClick={() => openArticle(row.detailId || row.id)}>
                       <td>
                         <input
                           type="checkbox"

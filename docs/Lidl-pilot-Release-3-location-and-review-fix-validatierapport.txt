@@ -1,0 +1,15 @@
+Release 3a correctierelease – locatie- en reviewweergavefix
+
+Aangepast:
+- Voorraad gebruikt nu unieke rij-id's per live inventoryrecord, zodat hetzelfde artikel op meerdere locaties correct zichtbaar blijft.
+- Artikeldetails blijven via detailId naar het juiste demo-artikel wijzen voor regressietests.
+- Winkels herstelt een volledig verwerkte batch niet meer automatisch als actieve review bij terugkeer.
+- Na succesvolle verwerking toont de knop een korte inline melding: Verwerkt!
+
+Doel:
+- gekozen testlocaties ook zichtbaar maken in Voorraad
+- verwerkte batches niet meer als open review terugplaatsen bij opnieuw openen van Winkels
+
+Niet gewijzigd:
+- geen backendlogica voor inventory-events aangepast
+- geen wijzigingen aan regressielogica buiten de weergave in Voorraad
