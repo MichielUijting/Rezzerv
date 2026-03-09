@@ -24,12 +24,45 @@ function buildRowsFromArticles(articles) {
 
 const initialData = buildRowsFromArticles(demoData.articles || []);
 
+function normalizeName(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function mergeInventoryRows(liveRows = []) {
+  const demoByName = new Map(initialData.map((row) => [normalizeName(row.artikel), row]))
+  const merged = []
+  const seen = new Set()
+
+  liveRows.forEach((row) => {
+    const key = normalizeName(row?.artikel)
+    const demoRow = demoByName.get(key)
+    merged.push({
+      ...row,
+      id: demoRow?.id || row.id,
+      artikel: row.artikel || demoRow?.artikel || '',
+      aantal: row.aantal ?? demoRow?.aantal ?? '',
+      locatie: row.locatie ?? demoRow?.locatie ?? '',
+      sublocatie: row.sublocatie ?? demoRow?.sublocatie ?? '',
+      checked: false,
+    })
+    seen.add(key)
+  })
+
+  initialData.forEach((row) => {
+    const key = normalizeName(row.artikel)
+    if (seen.has(key)) return
+    merged.push({ ...row, checked: false })
+  })
+
+  return merged.sort((a, b) => String(a.artikel || '').localeCompare(String(b.artikel || ''), 'nl'))
+}
+
 async function fetchInventoryRows() {
   const response = await fetch("/api/dev/inventory-preview")
   if (!response.ok) throw new Error("Voorraad kon niet worden geladen")
   const data = await response.json()
   if (!Array.isArray(data?.rows)) return initialData
-  return data.rows.map((row) => ({ ...row, checked: false }))
+  return mergeInventoryRows(data.rows)
 }
 
 const editableColumns = [

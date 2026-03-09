@@ -1,0 +1,14 @@
+Rezzerv v01.06.85
+
+Doel
+- regressietest voor Artikeldetail/automatisering herstellen zonder Lidl-flow te breken.
+
+Aangepast
+- Voorraad merge nu live backend-rijen met demo-artikelen op naam.
+- Bekende demo-artikelen behouden hun artikel-id zodat Artikeldetails en regressietests de juiste detailpagina openen.
+- Ontbrekende demo-artikelen zoals Mosterd en Boormachine blijven zichtbaar naast live voorraadregels.
+
+Niet gewijzigd
+- geen backendwijzigingen
+- geen wijziging aan Lidl-importflow
+- geen wijziging aan inventory_events logica
