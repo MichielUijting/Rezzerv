@@ -1,0 +1,10 @@
+Release: Rezzerv-v01.06.99
+
+Aangepast:
+- docker-compose.yml declareert nu sqlite_data op top-level onder volumes
+- backend mount sqlite_data naar /app/data
+- DATABASE_URL blijft wijzen naar sqlite:////app/data/rezzerv.db
+
+Validatie:
+- docker-compose.yml bevat nu de vereiste named volume declaratie
+- compose-config is hiermee structureel consistent voor sqlite persistence
