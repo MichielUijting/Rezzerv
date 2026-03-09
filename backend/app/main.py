@@ -999,6 +999,30 @@ def get_store_location_options(householdId: str = Query(...)):
     ]
 
 
+
+
+@app.get("/api/store-connections/{connection_id}/latest-batch")
+def get_latest_purchase_import_batch_for_connection(connection_id: str):
+    with engine.begin() as conn:
+        batch = conn.execute(
+            text(
+                """
+                SELECT id AS batch_id, import_status, created_at
+                FROM purchase_import_batches
+                WHERE connection_id = :connection_id
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                """
+            ),
+            {"connection_id": connection_id},
+        ).mappings().first()
+    if not batch:
+        raise HTTPException(status_code=404, detail="Nog geen importbatch voor deze winkelkoppeling")
+    result = dict(batch)
+    result["created_at"] = normalize_datetime(result.get("created_at"))
+    return result
+
+
 @app.post("/api/purchase-import-lines/{line_id}/review")
 def review_purchase_import_line(line_id: str, payload: ReviewLineRequest):
     with engine.begin() as conn:

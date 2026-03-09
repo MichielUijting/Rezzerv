@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -86,6 +86,8 @@ export default function StoresPage() {
   const [busyLineId, setBusyLineId] = useState('')
   const [isCompletingReview, setIsCompletingReview] = useState(false)
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
+  const [processFeedback, setProcessFeedback] = useState('')
+  const processFeedbackTimer = useRef(null)
 
   const lidlProvider = useMemo(
     () => providers.find((provider) => provider.code === 'lidl') || null,
@@ -101,15 +103,31 @@ export default function StoresPage() {
   const selectedLines = activeBatch?.lines?.filter((line) => (line.review_decision || 'pending') === 'selected') || []
   const canProcessBatch = Boolean(
     activeBatch &&
-      ['reviewed', 'processed', 'partially_processed'].includes(activeBatch.import_status) &&
       selectedLines.length > 0 &&
-      selectedLines.every((line) => line.matched_household_article_id && line.target_location_id)
+      selectedLines.every((line) => line.matched_household_article_id && line.target_location_id && (line.processing_status || 'pending') !== 'processed')
   )
 
   async function refreshBatch(batchId) {
     const batch = await fetchJson(`/api/purchase-import-batches/${batchId}`)
     setActiveBatch(batch)
     return batch
+  }
+
+  function showProcessFeedback(message) {
+    if (processFeedbackTimer.current) window.clearTimeout(processFeedbackTimer.current)
+    setProcessFeedback(message)
+    processFeedbackTimer.current = window.setTimeout(() => setProcessFeedback(''), 2200)
+  }
+
+  async function restoreLatestBatch(connectionId) {
+    try {
+      const latest = await fetchJson(`/api/store-connections/${connectionId}/latest-batch`)
+      if (latest?.batch_id) {
+        await refreshBatch(latest.batch_id)
+      }
+    } catch (err) {
+      // Geen eerdere batch is toegestaan; negeren.
+    }
   }
 
   async function loadPageData() {
@@ -133,6 +151,13 @@ export default function StoresPage() {
       setConnections(connectionData)
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? backendArticles : articleFallbackOptions)
       setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
+
+      const existingLidlConnection = connectionData.find((connection) => connection.store_provider_code === 'lidl')
+      if (existingLidlConnection?.id) {
+        await restoreLatestBatch(existingLidlConnection.id)
+      } else {
+        setActiveBatch(null)
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelgegevens konden niet worden geladen.')
     } finally {
@@ -142,6 +167,9 @@ export default function StoresPage() {
 
   useEffect(() => {
     loadPageData()
+    return () => {
+      if (processFeedbackTimer.current) window.clearTimeout(processFeedbackTimer.current)
+    }
   }, [])
 
   async function handleConnect() {
@@ -177,7 +205,7 @@ export default function StoresPage() {
         body: JSON.stringify({ mock_profile: 'default' }),
       })
       await refreshBatch(pullResult.batch_id)
-      setStatus('Mock aankopen zijn opgehaald. Beoordeel nu per regel wat ermee moet gebeuren.')
+      setStatus('Mock aankopen zijn opgehaald. Kies per regel wat naar voorraad mag.')
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
     } catch (err) {
@@ -362,13 +390,11 @@ export default function StoresPage() {
                     Totaal: {activeBatch.summary?.total || 0} · Geselecteerd: {activeBatch.summary?.selected || 0} · Genegeerd: {activeBatch.summary?.ignored || 0} · Open: {activeBatch.summary?.pending || 0} · Verwerkt: {activeBatch.summary?.processed || 0} · Mislukt: {activeBatch.summary?.failed || 0}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  <Button variant="secondary" onClick={handleCompleteReview} disabled={isCompletingReview}>
-                    {isCompletingReview ? 'Opslaan…' : 'Beoordeling afronden'}
-                  </Button>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <Button variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
-                    {isProcessingBatch ? 'Verwerken…' : 'Naar voorraad verwerken'}
+                    {isProcessingBatch ? 'Bezig…' : 'Naar voorraad'}
                   </Button>
+                  {processFeedback ? <span className="rz-store-inline-feedback">{processFeedback}</span> : null}
                 </div>
               </div>
 

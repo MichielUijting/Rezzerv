@@ -1,0 +1,19 @@
+Lidl pilot Release 3 — post-testfix validatierapport
+
+Aangepast
+- knoptekst gewijzigd van "Naar voorraad verwerken" naar "Naar voorraad"
+- korte inline feedback "Verwerkt!" toegevoegd na succesvolle batchverwerking
+- overbodige knop "Beoordeling afronden" verwijderd uit de Winkels-flow
+- laatste importbatch wordt nu automatisch herladen bij terugkeer naar het scherm Winkels
+- Voorraad-pagina leest nu live uit /api/dev/inventory-preview met demo-fallback
+
+Gevalideerd
+- backend syntaxcheck geslaagd (py_compile)
+- frontend build geslaagd via directe Vite CLI
+- geen wijziging aan writes buiten inventory_events + inventory projectie
+
+Bewust niet gewijzigd
+- geen echte Lidl-authenticatie
+- geen live winkel-API
+- geen AI-matching
+- geen scopeverbreding buiten deze testreparaties

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
 import demoData from "../demo-articles.json";
@@ -24,6 +24,14 @@ function buildRowsFromArticles(articles) {
 
 const initialData = buildRowsFromArticles(demoData.articles || []);
 
+async function fetchInventoryRows() {
+  const response = await fetch("/api/dev/inventory-preview")
+  if (!response.ok) throw new Error("Voorraad kon niet worden geladen")
+  const data = await response.json()
+  if (!Array.isArray(data?.rows)) return initialData
+  return data.rows.map((row) => ({ ...row, checked: false }))
+}
+
 const editableColumns = [
   { key: "artikel", label: "Artikel", type: "text", width: "34%" },
   { key: "aantal", label: "Aantal", type: "number", width: "12%" },
@@ -41,6 +49,21 @@ export default function Voorraad() {
     sublocatie: ""
   });
   const [editingCell, setEditingCell] = useState(null);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchInventoryRows()
+      .then((loadedRows) => {
+        if (!cancelled && loadedRows.length) setRows(loadedRows);
+      })
+      .catch(() => {
+        if (!cancelled) setLoadError("Live voorraad kon niet worden geladen. Demo-overzicht wordt getoond.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const openArticle = (id) => {
     navigate(`/voorraad/${id}`);
@@ -139,6 +162,7 @@ export default function Voorraad() {
       <div className="rz-content">
         <div className="rz-content-inner">
           <div className="rz-card">
+            {loadError && <div style={{ marginBottom: "12px", color: "#b42318", fontWeight: 700 }}>{loadError}</div>}
             <div className="rz-table-wrapper">
               <table className="rz-table">
                 <colgroup>

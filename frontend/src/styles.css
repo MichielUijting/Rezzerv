@@ -189,3 +189,8 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
   color: #b42318;
   font-size: 12px;
 }
+
+.rz-store-inline-feedback {
+  font-weight: 700;
+  color: #0f5132;
+}
