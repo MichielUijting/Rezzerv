@@ -138,7 +138,12 @@ export default function StoresPage() {
 
   const validArticleIds = useMemo(() => new Set(articleOptions.map((article) => String(article.id))), [articleOptions])
 
-  const selectedLines = activeBatch?.lines?.filter((line) => (line.review_decision || 'pending') === 'selected') || []
+  const visibleLines = useMemo(
+    () => activeBatch?.lines?.filter((line) => (line.processing_status || 'pending') !== 'processed') || [],
+    [activeBatch],
+  )
+
+  const selectedLines = visibleLines.filter((line) => (line.review_decision || 'pending') === 'selected')
   const canProcessBatch = Boolean(
     activeBatch &&
       selectedLines.length > 0 &&
@@ -442,10 +447,10 @@ export default function StoresPage() {
                     Batch: {activeBatch.batch_id} · Status: {batchStatusLabel(activeBatch.import_status)}
                   </div>
                   <div className="rz-store-review-meta">
-                    Totaal: {activeBatch.summary?.total || 0} · Geselecteerd: {activeBatch.summary?.selected || 0} · Genegeerd: {activeBatch.summary?.ignored || 0} · Open: {activeBatch.summary?.pending || 0} · Verwerkt: {activeBatch.summary?.processed || 0} · Mislukt: {activeBatch.summary?.failed || 0}
+                    Totaal open: {visibleLines.length} · Geselecteerd: {selectedLines.length} · Genegeerd: {visibleLines.filter((line) => (line.review_decision || 'pending') === 'ignored').length} · Open: {visibleLines.filter((line) => (line.review_decision || 'pending') === 'pending').length} · Verwerkt: {activeBatch.summary?.processed || 0} · Mislukt: {visibleLines.filter((line) => (line.processing_status || 'pending') === 'failed').length}
                   </div>
                   <div className="rz-store-review-meta">
-                    Automatisch voorbereid: {activeBatch.lines?.filter((line) => line.is_auto_prefilled).length || 0} · Voorstellen controleren: {activeBatch.lines?.filter((line) => !line.is_auto_prefilled && (line.suggested_household_article_id || line.suggested_location_id)).length || 0}
+                    Automatisch voorbereid: {visibleLines.filter((line) => line.is_auto_prefilled).length} · Voorstellen controleren: {visibleLines.filter((line) => !line.is_auto_prefilled && (line.suggested_household_article_id || line.suggested_location_id)).length}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -477,7 +482,9 @@ export default function StoresPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {activeBatch.lines.map((line) => (
+                    {visibleLines.length === 0 ? (
+                      <tr><td colSpan={6}>Er staan geen open regels meer in deze importbatch.</td></tr>
+                    ) : visibleLines.map((line) => (
                       <tr key={line.id}>
                         <td>
                           <div className="rz-store-primary">{line.article_name_raw}</div>

@@ -1,0 +1,9 @@
+Rezzerv v01.06.98
+
+Uitgevoerde root-cause fix:
+- backend gebruikt nu DATABASE_URL uit environment in plaats van hardcoded sqlite:///rezzerv.db
+- docker-compose laat backenddata persistent opslaan in named volume sqlite_data op /app/data/rezzerv.db
+- Stores review verbergt reeds verwerkte regels, zodat een teruggehaalde batch niet aanvoelt alsof dezelfde open bon terugkomt
+
+Aandachtspunt:
+- postgres-service staat nog in compose maar wordt niet door de backend gebruikt; buiten scope van deze fix.
