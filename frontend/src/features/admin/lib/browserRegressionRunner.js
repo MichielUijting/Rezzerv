@@ -125,6 +125,67 @@ async function runScenario(name, fn, results) {
   }
 }
 
+
+async function requestJson(path, options = {}) {
+  const response = await fetch(path, {
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    ...options,
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const detail = data?.detail || data?.message || `Request mislukt voor ${path}`
+    throw new Error(typeof detail === 'string' ? detail : `Request mislukt voor ${path}`)
+  }
+  return data
+}
+
+async function prepareRegressionFixture(frame) {
+  await requestJson('/api/dev/reset-data', { method: 'POST', body: '{}' })
+  await requestJson('/api/dev/generate-demo-data', { method: 'POST', body: '{}' })
+
+  const kitchen = await requestJson('/api/dev/spaces', {
+    method: 'POST',
+    body: JSON.stringify({ naam: 'Schuur' }),
+  })
+
+  const workbench = await requestJson('/api/dev/sublocations', {
+    method: 'POST',
+    body: JSON.stringify({ naam: 'Werkbank', space_id: kitchen.id }),
+  })
+
+  const pantry = await requestJson('/api/dev/spaces', {
+    method: 'POST',
+    body: JSON.stringify({ naam: 'Voorraad test' }),
+  })
+
+  const shelf = await requestJson('/api/dev/sublocations', {
+    method: 'POST',
+    body: JSON.stringify({ naam: 'Plank test', space_id: pantry.id }),
+  })
+
+  await requestJson('/api/dev/inventory', {
+    method: 'POST',
+    body: JSON.stringify({
+      naam: 'Mosterd',
+      aantal: 1,
+      space_id: pantry.id,
+      sublocation_id: shelf.id,
+    }),
+  })
+
+  await requestJson('/api/dev/inventory', {
+    method: 'POST',
+    body: JSON.stringify({
+      naam: 'Boormachine',
+      aantal: 1,
+      space_id: kitchen.id,
+      sublocation_id: workbench.id,
+    }),
+  })
+
+  resetAutomationState(frame)
+}
+
 async function ensureLoggedIn(frame) {
   await navigateFrame(frame, '/login')
   const doc = getFrameDocument(frame)
@@ -223,7 +284,7 @@ export async function runBrowserRegressionTests() {
 
   try {
     await ensureLoggedIn(frame)
-    resetAutomationState(frame)
+    await prepareRegressionFixture(frame)
 
     await runScenario('Artikeldetail Overzicht toont inhoud', async () => {
       await openArticleFromInventory(frame, 'Tomaten')

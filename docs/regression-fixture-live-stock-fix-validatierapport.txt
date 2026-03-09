@@ -1,0 +1,12 @@
+Rezzerv v01.07.00 - validatierapport regressiefixture live voorraad
+
+Aangepast:
+- browserRegressionRunner zet nu eerst gecontroleerde live testdata klaar
+- test gebruikt niet langer verborgen demo-voorraad als impliciete voorwaarde
+- fixture maakt Tomaten via generate-demo-data beschikbaar en voegt Mosterd en Boormachine live toe
+- automatiseringsscenario's draaien daarna tegen live Voorraad
+
+Niet gewijzigd:
+- geen wijziging aan winkelkoppeling
+- geen wijziging aan voorraadverwerking
+- geen wijziging aan eventarchitectuur
