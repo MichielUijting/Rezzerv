@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
@@ -95,8 +95,39 @@ async function fetchArticleHistory(articleName) {
   return Array.isArray(data?.rows) ? data.rows : []
 }
 
+function buildLiveOnlyArticle(articleName, liveRows) {
+  const normalizedTarget = normalizeName(articleName)
+  const matchingRows = Array.isArray(liveRows) ? liveRows.filter((row) => normalizeName(row?.artikel) === normalizedTarget) : []
+  const liveLocations = matchingRows.map((row) => ({
+    locatie: row?.locatie || '',
+    sublocatie: row?.sublocatie || '',
+    aantal: Number(row?.aantal) || 0,
+  }))
+  const firstLocation = liveLocations[0] || {}
+  const totalQuantity = liveLocations.reduce((sum, entry) => sum + (Number(entry.aantal) || 0), 0)
+  return {
+    id: `live-${normalizedTarget || 'unknown'}`,
+    name: articleName || 'Onbekend artikel',
+    type: '',
+    article_type: '',
+    weight: '',
+    size_value: '',
+    notes: '',
+    calories: '',
+    fat_total: '',
+    emballage: false,
+    emballage_amount: '',
+    history: [],
+    locations: liveLocations,
+    total_quantity: totalQuantity,
+    main_location: firstLocation.locatie || '',
+    sub_location: firstLocation.sublocatie || '',
+  }
+}
+
 export default function ArticlePage() {
   const { articleId } = useParams()
+  const [searchParams] = useSearchParams()
   const { visibilityMap, isLoading: visibilityLoading, error: visibilityError } = useArticleFieldVisibility()
   const [automationVersion, setAutomationVersion] = useState(0)
   const [liveInventoryRows, setLiveInventoryRows] = useState([])
@@ -118,9 +149,29 @@ export default function ArticlePage() {
     }
   }, [])
 
+  const requestedArticleName = useMemo(() => searchParams.get('artikel') || '', [searchParams])
+
   const activeArticle = useMemo(() => {
-    return demoData.articles.find((a) => String(a.id) === String(articleId)) || demoData.articles[0]
-  }, [articleId])
+    const directMatch = demoData.articles.find((a) => String(a.id) === String(articleId))
+    if (directMatch) return directMatch
+
+    if (requestedArticleName) {
+      const nameMatch = demoData.articles.find((a) => normalizeName(a.name) === normalizeName(requestedArticleName))
+      if (nameMatch) return nameMatch
+      return buildLiveOnlyArticle(requestedArticleName, liveInventoryRows)
+    }
+
+    const liveRowMatch = Array.isArray(liveInventoryRows)
+      ? liveInventoryRows.find((row) => String(row?.id) === String(articleId))
+      : null
+    if (liveRowMatch?.artikel) {
+      const nameMatch = demoData.articles.find((a) => normalizeName(a.name) === normalizeName(liveRowMatch.artikel))
+      if (nameMatch) return nameMatch
+      return buildLiveOnlyArticle(liveRowMatch.artikel, liveInventoryRows)
+    }
+
+    return demoData.articles[0]
+  }, [articleId, requestedArticleName, liveInventoryRows])
 
   useEffect(() => {
     let cancelled = false

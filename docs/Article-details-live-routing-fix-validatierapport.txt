@@ -1,0 +1,20 @@
+Release: Rezzerv-v01.06.89
+Onderwerp: Voorraad -> Artikeldetails live routing fix
+
+Aangepast:
+- Voorraad geeft bij openen van Artikeldetails nu altijd ook de actuele artikelnaam mee in de routequery.
+- Artikeldetails kan nu live artikelen zonder demo-id openen op basis van de meegegeven artikelnaam of live inventory-id.
+- Artikeldetails valt niet meer standaard terug op het eerste demo-artikel (Tomaten) als een live voorraadregel geen demo-id heeft.
+
+Validatie:
+- Backend syntaxcheck: geslaagd
+- Frontend build via directe Vite CLI: geslaagd
+
+Verwacht resultaat:
+- Vanuit Voorraad opent een live artikel nu het werkelijk aangeklikte artikel.
+- Locaties, Voorraad en Historie laden daarna voor dat echte artikel.
+
+Niet gewijzigd:
+- Geen wijziging aan inventory_events write-logica
+- Geen wijziging aan Lidl importflow
+- Geen wijziging aan regressietestlogica buiten de detail-routing

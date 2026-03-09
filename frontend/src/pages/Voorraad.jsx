@@ -99,8 +99,10 @@ export default function Voorraad() {
     };
   }, []);
 
-  const openArticle = (detailId) => {
-    navigate(`/voorraad/${detailId}`);
+  const openArticle = (row) => {
+    const detailId = row?.detailId || row?.id
+    const artikel = encodeURIComponent(row?.artikel || '')
+    navigate(`/voorraad/${detailId}?artikel=${artikel}`);
   };
 
   const handleFilterChange = (key, value) => {
@@ -266,7 +268,7 @@ export default function Voorraad() {
 
                 <tbody>
                   {filteredRows.map((row) => (
-                    <tr key={row.id} onDoubleClick={() => openArticle(row.detailId || row.id)}>
+                    <tr key={row.id} onDoubleClick={() => openArticle(row)}>
                       <td>
                         <input
                           type="checkbox"
