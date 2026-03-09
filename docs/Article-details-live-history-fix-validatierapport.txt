@@ -1,0 +1,21 @@
+Release: Rezzerv-v01.06.88
+Onderwerp: Artikeldetails -> Historie live uit inventory_events
+
+Uitgevoerd:
+- Nieuw backend read-endpoint toegevoegd: GET /api/dev/article-history?article_name=...
+- Endpoint leest live uit inventory_events en retourneert event_type, quantity, source, note, created_at en location_label
+- ArticlePage haalt nu naast inventory-preview ook live artikelhistorie op
+- Live historie overschrijft demo-historie alleen als live events aanwezig zijn
+- Demo-historie blijft fallback bij afwezige live historie of laadfout
+- Bronweergave 'store_import' wordt in de UI getoond als 'Winkelimport'
+
+Validatie:
+- Backend syntaxcheck: geslaagd
+- Frontend build: geslaagd
+- Live historiepad in Artikeldetails gebruikt nu inventory_events in plaats van uitsluitend demo-data
+- Locatie in Historie wordt nu gevuld uit location_label van het event
+
+Niet gewijzigd:
+- Geen wijziging aan inventory_events write-keten
+- Geen wijziging aan Lidl-importverwerking
+- Geen wijziging aan Analyse-tab

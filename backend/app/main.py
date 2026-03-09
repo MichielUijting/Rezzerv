@@ -610,6 +610,54 @@ def inventory_preview():
         ).mappings().all()
     return {"rows": [dict(r) for r in rows]}
 
+
+
+@app.get("/api/dev/article-history")
+def article_history(article_name: str):
+    article_name = (article_name or "").strip()
+    if not article_name:
+        raise HTTPException(status_code=400, detail="article_name is verplicht")
+
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                  id,
+                  article_id,
+                  article_name,
+                  location_id,
+                  location_label,
+                  event_type,
+                  quantity,
+                  source,
+                  note,
+                  created_at
+                FROM inventory_events
+                WHERE lower(article_name) = lower(:article_name)
+                ORDER BY datetime(created_at) DESC, id DESC
+                """
+            ),
+            {"article_name": article_name},
+        ).mappings().all()
+
+    return {"rows": [
+        {
+            "id": row["id"],
+            "article_id": row["article_id"],
+            "article_name": row["article_name"],
+            "location_id": row["location_id"],
+            "location_label": row["location_label"],
+            "event_type": row["event_type"],
+            "quantity": row["quantity"],
+            "source": row["source"],
+            "note": row["note"],
+            "created_at": normalize_datetime(row["created_at"]),
+        }
+        for row in rows
+    ]}
+
+
 @app.post("/api/dev/generate-demo-data")
 def generate_demo_data():
     reset_dev_tables()

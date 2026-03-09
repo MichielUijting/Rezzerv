@@ -19,6 +19,7 @@ function normalize(value, fallback = "—") {
 
 function formatSource(value) {
   if (value === 'auto_repurchase') return 'Automatisch (herhaalaankoop)'
+  if (value === 'store_import') return 'Winkelimport'
   return normalize(value)
 }
 

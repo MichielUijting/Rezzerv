@@ -75,12 +75,34 @@ async function fetchInventoryPreview() {
   return Array.isArray(data?.rows) ? data.rows : []
 }
 
+function mapLiveHistoryRows(rows = []) {
+  return rows.map((row) => ({
+    datetime: row?.created_at || '',
+    type: row?.event_type === 'purchase' ? 'Aankoop' : (row?.event_type || 'Gebeurtenis'),
+    old_value: '—',
+    new_value: row?.quantity != null ? `+${row.quantity}` : '—',
+    location: row?.location_label || '',
+    source: row?.source || '',
+    note: row?.note || '',
+    quantity_change: Number(row?.quantity) || 0,
+  }))
+}
+
+async function fetchArticleHistory(articleName) {
+  const response = await fetch(`/api/dev/article-history?article_name=${encodeURIComponent(articleName)}`)
+  if (!response.ok) throw new Error('Live artikelhistorie kon niet worden geladen')
+  const data = await response.json()
+  return Array.isArray(data?.rows) ? data.rows : []
+}
+
 export default function ArticlePage() {
   const { articleId } = useParams()
   const { visibilityMap, isLoading: visibilityLoading, error: visibilityError } = useArticleFieldVisibility()
   const [automationVersion, setAutomationVersion] = useState(0)
   const [liveInventoryRows, setLiveInventoryRows] = useState([])
+  const [liveHistoryRows, setLiveHistoryRows] = useState([])
   const [inventoryLoadError, setInventoryLoadError] = useState('')
+  const [historyLoadError, setHistoryLoadError] = useState('')
 
   useEffect(() => {
     function handleAutomationChange() {
@@ -96,9 +118,14 @@ export default function ArticlePage() {
     }
   }, [])
 
+  const activeArticle = useMemo(() => {
+    return demoData.articles.find((a) => String(a.id) === String(articleId)) || demoData.articles[0]
+  }, [articleId])
+
   useEffect(() => {
     let cancelled = false
     setInventoryLoadError('')
+    setHistoryLoadError('')
 
     fetchInventoryPreview()
       .then((rows) => {
@@ -113,15 +140,29 @@ export default function ArticlePage() {
         }
       })
 
+    fetchArticleHistory(activeArticle?.name || '')
+      .then((rows) => {
+        if (!cancelled) {
+          setLiveHistoryRows(rows)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLiveHistoryRows([])
+          setHistoryLoadError('Live artikelhistorie kon niet worden geladen. Demo-historie wordt getoond.')
+        }
+      })
+
     return () => {
       cancelled = true
     }
-  }, [articleId])
+  }, [articleId, activeArticle?.name])
 
   const articleData = useMemo(() => {
-    const article = demoData.articles.find((a) => String(a.id) === String(articleId)) || demoData.articles[0]
-    return mergeLiveLocations(article, liveInventoryRows)
-  }, [articleId, automationVersion, liveInventoryRows])
+    const merged = mergeLiveLocations(activeArticle, liveInventoryRows)
+    const liveHistory = mapLiveHistoryRows(liveHistoryRows)
+    return liveHistory.length ? { ...merged, history: liveHistory } : merged
+  }, [activeArticle, automationVersion, liveInventoryRows, liveHistoryRows])
 
   const pageTitle = `Artikel details: ${articleData.name || 'Onbekend artikel'}`
 
@@ -131,6 +172,7 @@ export default function ArticlePage() {
         <div style={{ display: 'grid', gap: '18px', width: '100%' }}>
           {visibilityError ? <div className="rz-inline-feedback rz-inline-feedback--warning">Standaardweergave actief.</div> : null}
           {inventoryLoadError ? <div className="rz-inline-feedback rz-inline-feedback--warning">{inventoryLoadError}</div> : null}
+          {historyLoadError ? <div className="rz-inline-feedback rz-inline-feedback--warning">{historyLoadError}</div> : null}
           {visibilityLoading ? <div>Gegevens laden…</div> : (
             <Tabs tabs={TABS} defaultTab="Overzicht">
               {(tab) => {
