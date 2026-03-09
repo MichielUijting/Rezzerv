@@ -1,0 +1,18 @@
+Lidl pilot Release 4 process endpoint hotfix validatierapport
+
+Oorzaak
+- POST /api/purchase-import-batches/{batchId}/process faalde door een ambigu SQL-filter: WHERE id = :id in een JOIN-query op purchase_import_batches en store_providers.
+- Daardoor gaf SQLite een OperationalError: ambiguous column name: id.
+
+Fix
+- WHERE-clause aangepast naar WHERE pib.id = :id.
+
+Validatie
+- Procesflow lokaal gereproduceerd met TestClient.
+- Review, mapping en target-location opgeslagen.
+- Process-endpoint gaf na fix 200-response terug en schreef 1 inventory_event.
+- Voorraadregel werd aangemaakt voor het gekozen artikel en de gekozen sublocatie.
+
+Niet gewijzigd
+- Geen wijziging aan de review-UI buiten bestaande foutmelding.
+- Geen wijziging aan inventory event-semantiek.

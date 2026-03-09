@@ -1502,7 +1502,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 SELECT pib.id, pib.household_id, pib.import_status, sp.code AS store_provider_code
                 FROM purchase_import_batches pib
                 JOIN store_providers sp ON sp.id = pib.store_provider_id
-                WHERE id = :id
+                WHERE pib.id = :id
                 """
             ),
             {"id": batch_id},
