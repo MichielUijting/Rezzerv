@@ -454,8 +454,8 @@ button.rz-tab.rz-tab-active {
 
 .rz-stock-summary-value {
   color: var(--color-text-primary);
-  font-size: 30px;
-  line-height: 1;
+  font-size: 20px;
+  line-height: 1.2;
   font-weight: 600;
 }
 

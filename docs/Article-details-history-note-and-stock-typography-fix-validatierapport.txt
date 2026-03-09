@@ -1,0 +1,10 @@
+Rezzerv v01.06.90 validatierapport
+
+Wijzigingen
+- Artikeldetails > Historie toont voor winkelimporten een gebruikersvriendelijke opmerking in plaats van ruwe metadata.
+- Artikeldetails > Voorraad gebruikt een normalere typografie voor de waarde in de samenvattingskaart.
+
+Validatie
+- Frontend build uitgevoerd: geslaagd.
+- Geen backendwijzigingen.
+- Geen wijzigingen aan inventory_events of Lidl-verwerkingslogica.

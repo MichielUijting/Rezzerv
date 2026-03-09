@@ -23,6 +23,11 @@ function formatSource(value) {
   return normalize(value)
 }
 
+function formatNote(entry) {
+  if (entry?.source === 'store_import') return 'Geïmporteerd via Lidl'
+  return normalize(entry?.note)
+}
+
 export default function ArticleHistoryTab({ articleData = {} }) {
   const historyEntries = useMemo(() => {
     const items = Array.isArray(articleData.history) ? articleData.history : []
@@ -63,7 +68,7 @@ export default function ArticleHistoryTab({ articleData = {} }) {
                 </div>
                 <div className="rz-history-meta-row">
                   <span className="rz-history-meta-label">Opmerking</span>
-                  <span className="rz-history-meta-value">{normalize(entry.note)}</span>
+                  <span className="rz-history-meta-value">{formatNote(entry)}</span>
                 </div>
               </div>
             </article>
