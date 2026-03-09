@@ -1,0 +1,10 @@
+Rezzerv v01.07.01
+
+Aangepast:
+- Voorraad aggregeert live voorraadregels nu per artikel in het hoofdscherm.
+- Meerdere locaties voor hetzelfde artikel leiden niet meer tot meerdere hoofdregels.
+- Locatie- en sublocatiedropdown in de Lidl-reviewflow worden actief ververst bij focus/terugkeer en na relevante acties.
+
+Niet aangepast:
+- Onderliggende eventketen en locatiegebonden opslag blijven intact.
+- Artikeldetails Locaties blijft de uitsplitsing per locatie tonen via de bestaande live detailread.

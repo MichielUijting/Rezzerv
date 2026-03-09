@@ -156,6 +156,14 @@ export default function StoresPage() {
     return batch
   }
 
+  async function refreshLocationOptions(householdId) {
+    if (!householdId) return []
+    const backendLocations = await fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdId)}`).catch(() => [])
+    const nextLocations = Array.isArray(backendLocations) ? backendLocations : []
+    setLocationOptions(nextLocations)
+    return nextLocations
+  }
+
   function showProcessFeedback(message) {
     if (processFeedbackTimer.current) window.clearTimeout(processFeedbackTimer.current)
     setProcessFeedback(message)
@@ -218,6 +226,21 @@ export default function StoresPage() {
     }
   }, [])
 
+  useEffect(() => {
+    function handleRefresh() {
+      if (household?.id) {
+        refreshLocationOptions(household.id)
+      }
+    }
+
+    window.addEventListener('focus', handleRefresh)
+    document.addEventListener('visibilitychange', handleRefresh)
+    return () => {
+      window.removeEventListener('focus', handleRefresh)
+      document.removeEventListener('visibilitychange', handleRefresh)
+    }
+  }, [household?.id])
+
   async function handleConnect() {
     if (!household) return
     setIsConnecting(true)
@@ -232,6 +255,7 @@ export default function StoresPage() {
         const filtered = current.filter((item) => item.id !== connection.id)
         return [...filtered, connection]
       })
+      await refreshLocationOptions(household.id)
       setStatus('Lidl is gekoppeld aan dit huishouden.')
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Lidl kon niet worden gekoppeld.')
@@ -261,6 +285,7 @@ export default function StoresPage() {
       }
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
+      await refreshLocationOptions(household.id)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Aankopen konden niet worden opgehaald.')
     } finally {
@@ -314,6 +339,7 @@ export default function StoresPage() {
         body: JSON.stringify({ target_location_id: targetLocationId || null }),
       })
       await refreshBatch(activeBatch.batch_id)
+      await refreshLocationOptions(household?.id)
       setStatus('De voorkeurslocatie is opgeslagen.')
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De voorkeurslocatie kon niet worden opgeslagen.')

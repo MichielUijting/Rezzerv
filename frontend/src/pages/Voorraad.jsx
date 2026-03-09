@@ -30,24 +30,49 @@ function normalizeName(value) {
 }
 
 function mergeInventoryRows(liveRows = []) {
-  const demoByName = new Map(demoRows.map((row) => [normalizeName(row.artikel), row]))
-  const merged = []
-  const seen = new Set()
+  const grouped = new Map()
 
   liveRows.forEach((row, index) => {
-    const key = normalizeName(row?.artikel)
-    const demoRow = demoByName.get(key)
-    merged.push({
-      ...row,
-      id: row.id || `${key}-${index}`,
-      detailId: demoRow?.id || row.id,
-      artikel: row.artikel || demoRow?.artikel || '',
-      aantal: row.aantal ?? demoRow?.aantal ?? '',
-      locatie: row.locatie ?? demoRow?.locatie ?? '',
-      sublocatie: row.sublocatie ?? demoRow?.sublocatie ?? '',
+    const artikel = row?.artikel || ''
+    const key = normalizeName(artikel) || `unknown-${index}`
+    const existing = grouped.get(key)
+    const aantal = Number(row?.aantal) || 0
+    const locatie = row?.locatie || ''
+    const sublocatie = row?.sublocatie || ''
+
+    if (!existing) {
+      grouped.set(key, {
+        id: `agg-${key}`,
+        detailId: row.id || `agg-${key}`,
+        artikel,
+        aantal,
+        locatie,
+        sublocatie,
+        checked: false,
+        _locations: new Set([locatie].filter(Boolean)),
+        _sublocations: new Set([`${locatie}__${sublocatie}`].filter(() => Boolean(sublocatie || locatie))),
+      })
+      return
+    }
+
+    existing.aantal += aantal
+    if (locatie) existing._locations.add(locatie)
+    if (sublocatie || locatie) existing._sublocations.add(`${locatie}__${sublocatie}`)
+    if (!existing.detailId && row.id) existing.detailId = row.id
+  })
+
+  const merged = [...grouped.values()].map((row) => {
+    const locations = [...row._locations]
+    const sublocations = [...row._sublocations]
+    return {
+      id: row.id,
+      detailId: row.detailId,
+      artikel: row.artikel,
+      aantal: row.aantal,
+      locatie: locations.length <= 1 ? (locations[0] || '') : 'Meerdere locaties',
+      sublocatie: sublocations.length <= 1 ? ((sublocations[0] || '').split('__')[1] || '') : 'Meerdere sublocaties',
       checked: false,
-    })
-    seen.add(key)
+    }
   })
 
   return merged.sort((a, b) => String(a.artikel || '').localeCompare(String(b.artikel || ''), 'nl'))
