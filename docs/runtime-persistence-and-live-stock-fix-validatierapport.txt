@@ -1,0 +1,11 @@
+Release 01.06.96
+
+Aangepast:
+- start.bat doet nu een persistente normale start zonder volume-reset
+- hard-reset.bat blijft expliciet beschikbaar voor schone reset met volume-verwijdering
+- Voorraad toont geen demo-data meer als stille fallback bij lege live backend
+
+Verwachte runtime-test:
+1. Verwerk Lidl-aankoop naar voorraad
+2. Herstart via start.bat
+3. Controleer dat voorraad, locaties en historie behouden blijven

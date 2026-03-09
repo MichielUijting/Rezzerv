@@ -22,14 +22,15 @@ function buildRowsFromArticles(articles) {
   });
 }
 
-const initialData = buildRowsFromArticles(demoData.articles || []);
+const demoRows = buildRowsFromArticles(demoData.articles || []);
+const initialData = [];
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase()
 }
 
 function mergeInventoryRows(liveRows = []) {
-  const demoByName = new Map(initialData.map((row) => [normalizeName(row.artikel), row]))
+  const demoByName = new Map(demoRows.map((row) => [normalizeName(row.artikel), row]))
   const merged = []
   const seen = new Set()
 
@@ -49,12 +50,6 @@ function mergeInventoryRows(liveRows = []) {
     seen.add(key)
   })
 
-  initialData.forEach((row) => {
-    const key = normalizeName(row.artikel)
-    if (seen.has(key)) return
-    merged.push({ ...row, detailId: row.id, checked: false })
-  })
-
   return merged.sort((a, b) => String(a.artikel || '').localeCompare(String(b.artikel || ''), 'nl'))
 }
 
@@ -62,7 +57,7 @@ async function fetchInventoryRows() {
   const response = await fetch("/api/dev/inventory-preview")
   if (!response.ok) throw new Error("Voorraad kon niet worden geladen")
   const data = await response.json()
-  if (!Array.isArray(data?.rows)) return initialData
+  if (!Array.isArray(data?.rows)) return []
   return mergeInventoryRows(data.rows)
 }
 
@@ -89,10 +84,16 @@ export default function Voorraad() {
     let cancelled = false;
     fetchInventoryRows()
       .then((loadedRows) => {
-        if (!cancelled && loadedRows.length) setRows(loadedRows);
+        if (!cancelled) {
+          setRows(loadedRows);
+          setLoadError(loadedRows.length ? "" : "Nog geen live voorraad beschikbaar.");
+        }
       })
       .catch(() => {
-        if (!cancelled) setLoadError("Live voorraad kon niet worden geladen. Demo-overzicht wordt getoond.");
+        if (!cancelled) {
+          setRows([]);
+          setLoadError("Live voorraad kon niet worden geladen.");
+        }
       });
     return () => {
       cancelled = true;
@@ -290,7 +291,7 @@ export default function Voorraad() {
 
                   {filteredRows.length === 0 && (
                     <tr>
-                      <td colSpan={5}>Geen artikelen gevonden.</td>
+                      <td colSpan={5}>{loadError || "Nog geen live voorraad beschikbaar."}</td>
                     </tr>
                   )}
                 </tbody>

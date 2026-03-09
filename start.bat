@@ -8,8 +8,11 @@ if "%REZZERV_VERSION%"=="" set "REZZERV_VERSION=Rezzerv-unknown"
 echo Version: %REZZERV_VERSION%
 echo ========================================
 
+echo Modus: persistente normale start ^(databasevolume blijft behouden^)
+echo Gebruik hard-reset.bat alleen voor een expliciete schone reset.
+
 REM --- Build from local TEMP copy to avoid OneDrive placeholder/lock issues ---
-set "BUILD_DIR=%TEMP%\rezzerv_build"
+set "BUILD_DIR=%TEMP%ezzerv_build"
 if exist "%BUILD_DIR%" (
   rmdir /s /q "%BUILD_DIR%" >nul 2>&1
 )
@@ -42,10 +45,10 @@ if not exist "frontend" (
   exit /b 1
 )
 
-echo Cleaning accidental .dockerignore files (can break Docker builds)...
+echo Cleaning accidental .dockerignore files ^(can break Docker builds^)...
 for /r %%F in (.dockerignore) do (
-  if /I not "%%F"=="%cd%\frontend\.dockerignore" (
-    if /I not "%%F"=="%cd%\backend\.dockerignore" (
+  if /I not "%%F"=="%cd%rontend\.dockerignore" (
+    if /I not "%%F"=="%cd%ackend\.dockerignore" (
       del /f /q "%%F" >nul 2>&1
     )
   )
@@ -81,17 +84,24 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-echo Performing HARD RESET (no-cache build + clean volumes)...
-echo Calling hard-reset.bat...
-call "%BUILD_DIR%\hard-reset.bat"
-echo Returned from hard-reset.bat.
+echo Starting application persistently ^(no volume reset^)...
+echo [1/3] Building updated images if needed...
+docker compose build
 if %errorlevel% neq 0 (
-  echo [ERROR] hard-reset failed.
+  echo [ERROR] docker compose build failed.
   pause
   exit /b 1
 )
 
-echo Waiting for backend health...
+echo [2/3] Starting containers without deleting data volume...
+docker compose up -d
+if %errorlevel% neq 0 (
+  echo [ERROR] docker compose up failed.
+  pause
+  exit /b 1
+)
+
+echo [3/3] Waiting for backend health...
 where curl >nul 2>&1
 if %errorlevel%==0 (
   :waithealth_curl

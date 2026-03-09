@@ -8,6 +8,8 @@ if "%REZZERV_VERSION%"=="" (
 echo ========================================
 echo       Rezzerv Hard Reset Routine
 echo ========================================
+echo LET OP: deze routine verwijdert bewust de databasevolume.
+echo Gebruik start.bat voor een normale persistente start.
 
 echo [1/4] Stopping containers and removing volumes...
 docker compose down --volumes --remove-orphans
