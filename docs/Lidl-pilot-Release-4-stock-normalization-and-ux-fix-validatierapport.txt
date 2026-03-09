@@ -1,0 +1,18 @@
+Release: 01.06.95
+
+Wijzigingen:
+- Voorraad-tabel typografie geharmoniseerd via rz-stock-table.
+- Winkelimport-hoeveelheden genormaliseerd naar gebruikerslogische voorraad-eenheden.
+- Statusmelding bij nieuwe mockpull verduidelijkt.
+
+Normalisatie:
+- g/kg/ml/l/liter => +1 verpakking
+- stuk/stuks => +quantity_raw
+- onbekende/lege unit => +1
+
+Validatie:
+- 1 liter melk => +1
+- 1 kg banaan => +1
+- 500 g volkoren pasta => +1
+- 2 stuks tomatenblokjes => +2
+- eventketen via inventory_events intact gehouden

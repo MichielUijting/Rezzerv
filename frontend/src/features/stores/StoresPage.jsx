@@ -250,9 +250,9 @@ export default function StoresPage() {
       const fullyPrefilled = p.fully_prefilled || 0
       const articlePrefills = p.article_prefills || 0
       if (fullyPrefilled > 0 || articlePrefills > 0) {
-        setStatus(`Mock aankopen zijn opgehaald. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een artikelvoorstel.`)
+        setStatus(`Nieuwe mockaankopen zijn opgehaald. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een artikelvoorstel.`)
       } else {
-        setStatus('Mock aankopen zijn opgehaald. Kies per regel wat naar voorraad mag.')
+        setStatus('Nieuwe mockaankopen zijn opgehaald. Kies per regel wat naar voorraad mag.')
       }
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)

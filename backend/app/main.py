@@ -615,6 +615,23 @@ def resolve_target_location(conn, target_location_id: str | None):
     return None
 
 
+def normalize_store_import_quantity(quantity_raw, unit_raw):
+    try:
+        quantity = float(quantity_raw or 0)
+    except (TypeError, ValueError):
+        quantity = 0
+
+    if quantity <= 0:
+        return 0
+
+    unit = (unit_raw or '').strip().lower()
+    if unit in {'stuk', 'stuks', 'pcs', 'piece', 'pieces'}:
+        return max(1, int(round(quantity)))
+    if unit in {'g', 'gram', 'grams', 'kg', 'kilogram', 'kilograms', 'ml', 'milliliter', 'milliliters', 'l', 'liter', 'liters'}:
+        return 1
+    return 1
+
+
 def apply_inventory_purchase(conn, household_id: str, article_name: str, quantity: float, resolved_location: dict):
     space_id = resolved_location["space_id"]
     sublocation_id = resolved_location["sublocation_id"]
@@ -1513,7 +1530,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
         lines = conn.execute(
             text(
                 """
-                SELECT id, article_name_raw, brand_raw, quantity_raw, review_decision, matched_household_article_id,
+                SELECT id, article_name_raw, brand_raw, quantity_raw, unit_raw, review_decision, matched_household_article_id,
                        target_location_id, processing_status, processed_event_id
                 FROM purchase_import_lines
                 WHERE batch_id = :batch_id
@@ -1555,7 +1572,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 failed_count += 1
                 continue
 
-            quantity = float(line["quantity_raw"] or 0)
+            quantity = normalize_store_import_quantity(line.get("quantity_raw"), line.get("unit_raw"))
             if quantity <= 0:
                 error = "Ongeldige hoeveelheid"
                 conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})

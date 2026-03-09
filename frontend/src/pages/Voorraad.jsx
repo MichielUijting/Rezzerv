@@ -200,7 +200,7 @@ export default function Voorraad() {
           <div className="rz-card">
             {loadError && <div style={{ marginBottom: "12px", color: "#b42318", fontWeight: 700 }}>{loadError}</div>}
             <div className="rz-table-wrapper">
-              <table className="rz-table">
+              <table className="rz-table rz-stock-table">
                 <colgroup>
                   <col style={{ width: "48px" }} />
                   <col style={{ width: "34%" }} />
