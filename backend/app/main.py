@@ -46,6 +46,7 @@ class LoginRequest(BaseModel):
 
 class SpaceCreate(BaseModel):
     naam: str
+    household_id: Optional[str] = None
 
 class SublocationCreate(BaseModel):
     naam: str
@@ -819,13 +820,14 @@ def reset_data():
 
 @app.post("/api/dev/spaces")
 def create_space(payload: SpaceCreate):
+    household_id = (payload.household_id or 'demo-household').strip() if payload.household_id else 'demo-household'
     with engine.begin() as conn:
         result = conn.execute(
-            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, 'demo-household') RETURNING id"),
-            {"naam": payload.naam},
+            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
+            {"naam": payload.naam, "household_id": household_id},
         )
         row = result.first()
-    return {"status": "ok", "id": row[0] if row else None}
+    return {"status": "ok", "id": row[0] if row else None, "household_id": household_id}
 
 @app.post("/api/dev/sublocations")
 def create_sublocation(payload: SublocationCreate):

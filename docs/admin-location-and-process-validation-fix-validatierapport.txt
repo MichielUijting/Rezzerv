@@ -1,0 +1,12 @@
+Release: Rezzerv-v01.07.04
+
+Aangepast:
+- Admin stuurt bij POST /api/dev/spaces nu expliciet household_id mee op basis van het actieve huishouden (fallback demo-household).
+- Backend accepteert optioneel household_id voor spaces en schrijft die weg.
+- Kassabon-validatie bij Naar voorraad telt een regel alleen als geldig gekoppeld wanneer target_location_id voorkomt in de actuele locatie-opties.
+- Lichtgroene accentuering gebruikt dezelfde geldige-locatiecheck.
+- Locatie-select refresht ook op mouse down.
+
+Doel:
+- nieuw aangemaakte Admin-locaties kunnen in store-location-options landen voor het juiste huishouden
+- Naar voorraad meldt ontbrekende of ongeldige locaties correct

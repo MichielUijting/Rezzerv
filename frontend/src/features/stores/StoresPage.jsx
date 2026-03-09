@@ -92,12 +92,13 @@ function formatQuantity(value, unit) {
   return [value, unit].filter(Boolean).join(' ')
 }
 
-function getLineBlockerReason(line, validArticleIds) {
+function getLineBlockerReason(line, validArticleIds, validLocationIds) {
   if ((line.processing_status || 'pending') === 'processed') return ''
   if ((line.review_decision || 'pending') !== 'selected') return 'Zet beoordeling op Verwerken'
   if (!line.matched_household_article_id) return 'Kies eerst een artikel'
   if (validArticleIds && !validArticleIds.has(String(line.matched_household_article_id))) return 'Kies een geldig artikel'
   if (!line.target_location_id) return 'Kies eerst een locatie'
+  if (validLocationIds && !validLocationIds.has(String(line.target_location_id))) return 'Kies een geldige locatie'
   return ''
 }
 
@@ -131,6 +132,7 @@ export default function StoresPage() {
 
 
   const validArticleIds = useMemo(() => new Set(articleOptions.map((article) => String(article.id))), [articleOptions])
+  const validLocationIds = useMemo(() => new Set(locationOptions.map((location) => String(location.id))), [locationOptions])
 
   const visibleLines = useMemo(
     () => activeBatch?.lines?.filter((line) => (line.processing_status || 'pending') !== 'processed') || [],
@@ -139,7 +141,7 @@ export default function StoresPage() {
 
   const selectedLines = visibleLines.filter((line) => (line.review_decision || 'selected') === 'selected')
   const linesMissingArticle = selectedLines.filter((line) => !line.matched_household_article_id).length
-  const linesMissingLocation = selectedLines.filter((line) => !line.target_location_id).length
+  const linesMissingLocation = selectedLines.filter((line) => !line.target_location_id || !validLocationIds.has(String(line.target_location_id))).length
   const canProcessBatch = Boolean(activeBatch && selectedLines.length > 0)
 
   async function refreshBatch(batchId) {
@@ -369,7 +371,7 @@ export default function StoresPage() {
     if (!activeBatch) return
     if (linesMissingLocation > 0) {
       setError('')
-      setStatus(`Nog ${linesMissingLocation} artikel(en) zonder locatie.`)
+      setStatus(`Nog ${linesMissingLocation} artikel(en) zonder geldige locatie.`)
       return
     }
     if (linesMissingArticle > 0) {
@@ -509,7 +511,7 @@ export default function StoresPage() {
                     {visibleLines.length === 0 ? (
                       <tr><td colSpan={5}>Er staan geen open regels meer in deze kassabon.</td></tr>
                     ) : visibleLines.map((line) => (
-                      <tr key={line.id} className={line.target_location_id && locationOptions.some((location) => String(location.id) === String(line.target_location_id)) ? 'rz-store-row--linked' : ''}>
+                      <tr key={line.id} className={line.target_location_id && validLocationIds.has(String(line.target_location_id)) ? 'rz-store-row--linked' : ''}>
                         <td>
                           <div className="rz-store-primary">{line.article_name_raw}</div>
                           <div className="rz-store-secondary">{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
@@ -549,6 +551,7 @@ export default function StoresPage() {
                             value={line.target_location_id || ''}
                             disabled={busyLineId === line.id}
                             onFocus={() => household?.id && refreshLocationOptions(household.id)}
+                            onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
                             onChange={(event) => handleTargetLocation(line.id, event.target.value)}
                           >
                             <option value="">Geen voorkeurslocatie</option>

@@ -26,6 +26,7 @@ export default function AdminPage() {
 
   const [status, setStatus] = useState({ spaces: 0, sublocations: 0, inventory: 0 });
   const [message, setMessage] = useState("");
+  const [householdId, setHouseholdId] = useState("demo-household");
 
   const [spaceName, setSpaceName] = useState("");
   const [spaceId, setSpaceId] = useState("");
@@ -70,6 +71,15 @@ export default function AdminPage() {
   useEffect(() => {
     fetchStatus();
     refreshTestStatus();
+    const token = localStorage.getItem("rezzerv_token");
+    fetch("/api/household", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.id) setHouseholdId(String(data.id))
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -112,7 +122,7 @@ export default function AdminPage() {
   async function handleCreateSpace() {
     const data = await postJson(
       "/api/dev/spaces",
-      { naam: spaceName },
+      { naam: spaceName, household_id: householdId },
       "Ruimte toegevoegd"
     );
     if (data?.id) {
