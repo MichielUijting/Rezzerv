@@ -1,0 +1,11 @@
+Rezzerv v01.06.87 – validatierapport Artikeldetails live locaties
+
+Aangepast:
+- Artikeldetails haalt locatie- en voorraadgegevens nu live uit /api/dev/inventory-preview
+- Demo-data blijft fallback als live data ontbreekt
+- Overzicht, Voorraad en Locaties gebruiken daardoor actuele locaties uit Admin en Lidl-imports
+
+Niet aangepast:
+- Historie blijft demo/fallback-gebaseerd
+- Analyse-logica niet gewijzigd
+- Geen wijziging aan inventory_events of verwerkingsketen

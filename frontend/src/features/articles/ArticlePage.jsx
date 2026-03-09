@@ -18,10 +18,69 @@ function PlaceholderTab({ text }) {
   return <div style={{ color: '#667085' }}>{text}</div>
 }
 
+function normalizeName(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function buildFallbackArticle(article) {
+  const firstLocation = article.locations?.[0] || {}
+  const totalQuantity = (article.locations || []).reduce((sum, entry) => sum + (Number(entry.aantal) || 0), 0)
+  const history = applyAutoRepurchaseHistory(article)
+  return {
+    ...article,
+    history,
+    article_type: article.type,
+    size_value: article.weight,
+    notes: article.notes || '',
+    calories: article.calories ?? '',
+    fat_total: article.fat_total ?? '',
+    emballage: article.emballage ?? false,
+    emballage_amount: article.emballage_amount ?? '',
+    total_quantity: totalQuantity,
+    main_location: firstLocation.locatie || '',
+    sub_location: firstLocation.sublocatie || '',
+  }
+}
+
+function mergeLiveLocations(baseArticle, liveRows) {
+  const fallbackArticle = buildFallbackArticle(baseArticle)
+  if (!Array.isArray(liveRows) || !liveRows.length) return fallbackArticle
+
+  const nameKey = normalizeName(baseArticle?.name)
+  const matchingRows = liveRows.filter((row) => normalizeName(row?.artikel) === nameKey)
+  if (!matchingRows.length) return fallbackArticle
+
+  const liveLocations = matchingRows.map((row) => ({
+    locatie: row?.locatie || '',
+    sublocatie: row?.sublocatie || '',
+    aantal: Number(row?.aantal) || 0,
+  }))
+
+  const firstLocation = liveLocations[0] || {}
+  const totalQuantity = liveLocations.reduce((sum, entry) => sum + (Number(entry.aantal) || 0), 0)
+
+  return {
+    ...fallbackArticle,
+    locations: liveLocations,
+    total_quantity: totalQuantity,
+    main_location: firstLocation.locatie || '',
+    sub_location: firstLocation.sublocatie || '',
+  }
+}
+
+async function fetchInventoryPreview() {
+  const response = await fetch('/api/dev/inventory-preview')
+  if (!response.ok) throw new Error('Live artikelvoorraad kon niet worden geladen')
+  const data = await response.json()
+  return Array.isArray(data?.rows) ? data.rows : []
+}
+
 export default function ArticlePage() {
   const { articleId } = useParams()
   const { visibilityMap, isLoading: visibilityLoading, error: visibilityError } = useArticleFieldVisibility()
   const [automationVersion, setAutomationVersion] = useState(0)
+  const [liveInventoryRows, setLiveInventoryRows] = useState([])
+  const [inventoryLoadError, setInventoryLoadError] = useState('')
 
   useEffect(() => {
     function handleAutomationChange() {
@@ -37,26 +96,32 @@ export default function ArticlePage() {
     }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    setInventoryLoadError('')
+
+    fetchInventoryPreview()
+      .then((rows) => {
+        if (!cancelled) {
+          setLiveInventoryRows(rows)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLiveInventoryRows([])
+          setInventoryLoadError('Live artikelvoorraad kon niet worden geladen. Demo-locaties worden getoond.')
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [articleId])
+
   const articleData = useMemo(() => {
     const article = demoData.articles.find((a) => String(a.id) === String(articleId)) || demoData.articles[0]
-    const firstLocation = article.locations?.[0] || {}
-    const totalQuantity = (article.locations || []).reduce((sum, entry) => sum + (Number(entry.aantal) || 0), 0)
-    const history = applyAutoRepurchaseHistory(article)
-    return {
-      ...article,
-      history,
-      article_type: article.type,
-      size_value: article.weight,
-      notes: article.notes || '',
-      calories: article.calories ?? '',
-      fat_total: article.fat_total ?? '',
-      emballage: article.emballage ?? false,
-      emballage_amount: article.emballage_amount ?? '',
-      total_quantity: totalQuantity,
-      main_location: firstLocation.locatie || '',
-      sub_location: firstLocation.sublocatie || '',
-    }
-  }, [articleId, automationVersion])
+    return mergeLiveLocations(article, liveInventoryRows)
+  }, [articleId, automationVersion, liveInventoryRows])
 
   const pageTitle = `Artikel details: ${articleData.name || 'Onbekend artikel'}`
 
@@ -65,6 +130,7 @@ export default function ArticlePage() {
       <Card className="rz-card-home">
         <div style={{ display: 'grid', gap: '18px', width: '100%' }}>
           {visibilityError ? <div className="rz-inline-feedback rz-inline-feedback--warning">Standaardweergave actief.</div> : null}
+          {inventoryLoadError ? <div className="rz-inline-feedback rz-inline-feedback--warning">{inventoryLoadError}</div> : null}
           {visibilityLoading ? <div>Gegevens laden…</div> : (
             <Tabs tabs={TABS} defaultTab="Overzicht">
               {(tab) => {
