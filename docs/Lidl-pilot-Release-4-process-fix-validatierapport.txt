@@ -1,0 +1,37 @@
+Release: Rezzerv-v01.06.92
+Onderwerp: Fixrelease voor 'Naar voorraad' in Lidl importreview
+
+Technische samenvatting
+- Backend en review-UI gebruiken nu dezelfde geldige artikelbron voor reviewmapping.
+- /api/store-review-articles retourneert nu een gecombineerde lijst van mock-artikelen en unieke live artikelen uit inventory.
+- De process-endpoint valideert artikelkoppelingen niet langer alleen tegen MOCK_ARTICLE_OPTIONS, maar kan nu ook live artikelopties verwerken.
+- De review-UI toont per regel expliciet waarom een regel nog niet verwerkbaar is.
+- De batchknop 'Naar voorraad' is alleen actief als alle geselecteerde regels echt verwerkbaar zijn.
+
+Aangepast
+- backend/app/main.py
+  - store review artikelen uitgebreid met live inventory-artikelen
+  - resolver toegevoegd voor geldige artikelopties bij batchverwerking
+  - process-flow gebruikt nu de resolver in plaats van alleen MOCK_ARTICLE_LOOKUP
+- frontend/src/features/stores/StoresPage.jsx
+  - blocker-redenen per regel toegevoegd
+  - verwerkbaarheid gecontroleerd tegen echte artikelopties
+  - duidelijkere foutmelding bij 0 verwerkte regels
+
+Validatie
+- Python syntaxcheck backend/app/main.py: geslaagd
+- Frontend build via directe Vite-CLI: geslaagd
+- Opmerking: lokale end-to-end API-test kon in deze container niet worden uitgevoerd omdat de benodigde Python packages van de backend hier niet geïnstalleerd waren.
+
+Acceptatie-inschatting
+- Volledig geldige regels kunnen nu verwerkt worden met consistente artikelvalidatie.
+- Onvolledige regels tonen nu expliciet waarom ze nog niet verwerkbaar zijn.
+- Geen AI toegevoegd.
+- Geen stille verwerking toegevoegd.
+- inventory_events-keten intact gehouden.
+
+Bewust niet gebouwd
+- Geen nieuwe winkelprovider
+- Geen echte Lidl-authenticatie
+- Geen AI/fuzzy matching
+- Geen bredere redesign van de Winkels-flow

@@ -168,6 +168,68 @@ MOCK_ARTICLE_OPTIONS = [
 MOCK_ARTICLE_LOOKUP = {item["id"]: item for item in MOCK_ARTICLE_OPTIONS}
 
 
+def build_live_article_option_id(article_name: str) -> str:
+    return f"live::{(article_name or '').strip()}"
+
+
+def get_store_review_article_options(conn):
+    items = [dict(item) for item in MOCK_ARTICLE_OPTIONS]
+    seen_names = {item["name"].strip().lower() for item in items if item.get("name")}
+
+    live_names = conn.execute(
+        text(
+            """
+            SELECT DISTINCT naam AS article_name
+            FROM inventory
+            WHERE trim(COALESCE(naam, '')) <> ''
+            ORDER BY lower(naam) ASC
+            """
+        )
+    ).mappings().all()
+
+    for row in live_names:
+        article_name = (row["article_name"] or "").strip()
+        if not article_name:
+            continue
+        normalized = article_name.lower()
+        if normalized in seen_names:
+            continue
+        items.append({"id": build_live_article_option_id(article_name), "name": article_name, "brand": ""})
+        seen_names.add(normalized)
+
+    return items
+
+
+def resolve_review_article_option(conn, article_id: str | None):
+    if not article_id:
+        return None
+    article_id = str(article_id)
+    if article_id in MOCK_ARTICLE_LOOKUP:
+        return dict(MOCK_ARTICLE_LOOKUP[article_id])
+    if article_id.startswith("live::"):
+        article_name = article_id.split("::", 1)[1].strip()
+        if article_name:
+            return {"id": article_id, "name": article_name, "brand": ""}
+        return None
+
+    inventory_match = conn.execute(
+        text(
+            """
+            SELECT naam
+            FROM inventory
+            WHERE lower(naam) = lower(:article_name)
+            LIMIT 1
+            """
+        ),
+        {"article_name": article_id},
+    ).mappings().first()
+    if inventory_match and inventory_match.get("naam"):
+        article_name = inventory_match["naam"].strip()
+        return {"id": build_live_article_option_id(article_name), "name": article_name, "brand": ""}
+
+    return None
+
+
 def utc_now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
@@ -1218,8 +1280,11 @@ def get_purchase_import_batch(batch_id: str):
 @app.get("/api/store-review-articles")
 def get_store_review_articles(q: Optional[str] = Query(None)):
     query = (q or "").strip().lower()
+    with engine.begin() as conn:
+        all_items = get_store_review_article_options(conn)
+
     items = []
-    for item in MOCK_ARTICLE_OPTIONS:
+    for item in all_items:
         haystack = f"{item['name']} {item.get('brand') or ''}".lower()
         if not query or query in haystack:
             items.append(item)
@@ -1466,7 +1531,8 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 continue
 
             article_id = line["matched_household_article_id"]
-            if not article_id or article_id not in MOCK_ARTICLE_LOOKUP:
+            article = resolve_review_article_option(conn, article_id)
+            if not article:
                 error = "Geen geldige artikelkoppeling gekozen"
                 conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
                 results.append({"line_id": line_id, "status": "failed", "error": error})
@@ -1489,7 +1555,6 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 failed_count += 1
                 continue
 
-            article = MOCK_ARTICLE_LOOKUP[article_id]
             article_name = article["name"]
             note = f"store_import;lidl;batch={batch_id};line={line_id};raw={line['article_name_raw']}"
             event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)

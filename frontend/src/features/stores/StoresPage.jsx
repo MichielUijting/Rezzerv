@@ -81,6 +81,15 @@ function formatQuantity(value, unit) {
   return [value, unit].filter(Boolean).join(' ')
 }
 
+function getLineBlockerReason(line, validArticleIds) {
+  if ((line.processing_status || 'pending') === 'processed') return ''
+  if ((line.review_decision || 'pending') !== 'selected') return 'Zet beoordeling op Verwerken'
+  if (!line.matched_household_article_id) return 'Kies eerst een artikel'
+  if (validArticleIds && !validArticleIds.has(String(line.matched_household_article_id))) return 'Kies een geldig artikel'
+  if (!line.target_location_id) return 'Kies eerst een locatie'
+  return ''
+}
+
 export default function StoresPage() {
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
@@ -110,11 +119,13 @@ export default function StoresPage() {
   )
 
 
+  const validArticleIds = useMemo(() => new Set(articleOptions.map((article) => String(article.id))), [articleOptions])
+
   const selectedLines = activeBatch?.lines?.filter((line) => (line.review_decision || 'pending') === 'selected') || []
   const canProcessBatch = Boolean(
     activeBatch &&
       selectedLines.length > 0 &&
-      selectedLines.every((line) => line.matched_household_article_id && line.target_location_id && (line.processing_status || 'pending') !== 'processed')
+      selectedLines.every((line) => !getLineBlockerReason(line, validArticleIds))
   )
 
   async function refreshBatch(batchId) {
@@ -320,6 +331,9 @@ export default function StoresPage() {
       })
       const refreshedBatch = await refreshBatch(activeBatch.batch_id)
       showProcessFeedback('Verwerkt!')
+      if (result.processed_count === 0 && result.failed_count > 0) {
+        setError('Geen regels verwerkt. Controleer per regel de melding in de kolom Status.')
+      }
       if (result.failed_count > 0) {
         setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
       } else {
@@ -498,6 +512,7 @@ export default function StoresPage() {
                           <div className={`rz-store-processing rz-store-processing--${line.processing_status || 'pending'}`}>
                             {processingStatusLabel(line.processing_status)}
                           </div>
+                          {getLineBlockerReason(line, validArticleIds) ? <div className="rz-store-processing-error">{getLineBlockerReason(line, validArticleIds)}</div> : null}
                           {line.processing_error ? <div className="rz-store-processing-error">{line.processing_error}</div> : null}
                         </td>
                       </tr>
