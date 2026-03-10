@@ -8,6 +8,7 @@ import StoresPage from '../../features/stores/StoresPage'
 import SettingsPage from '../../features/settings/SettingsPage'
 import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFieldsPage'
 import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHouseholdAutomationPage'
+import SettingsStoreImportPage from '../../features/settings/SettingsStoreImportPage'
 import Voorraad from '../../pages/Voorraad'
 import AuthGuard from './AuthGuard'
 
@@ -49,6 +50,7 @@ const router = createBrowserRouter([
   { path: '/instellingen', element: <Protected><SettingsPage /></Protected> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <Protected><SettingsArticleFieldsPage /></Protected> },
   { path: '/instellingen/huishoudautomatisering', element: <Protected><SettingsHouseholdAutomationPage /></Protected> },
+  { path: '/instellingen/winkelimport', element: <Protected><SettingsStoreImportPage /></Protected> },
   { path: '/admin', element: <Protected><AdminPage /></Protected> },
   { path: '*', element: <Navigate to="/login" replace /> },
 ])

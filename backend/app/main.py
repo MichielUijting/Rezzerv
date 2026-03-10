@@ -23,8 +23,19 @@ async def unhandled_api_exception_handler(request: Request, exc: Exception):
 households = {}
 users = {
     "admin@rezzerv.local": {
-        "password": "Rezzerv123"
-    }
+        "password": "Rezzerv123",
+        "role": "admin",
+        "household_key": "default-household",
+        "household_id": "1",
+        "household_name": "Mijn huishouden",
+    },
+    "lid@rezzerv.local": {
+        "password": "Rezzerv123",
+        "role": "member",
+        "household_key": "default-household",
+        "household_id": "1",
+        "household_name": "Mijn huishouden",
+    },
 }
 
 app.add_middleware(
@@ -257,6 +268,112 @@ MOCK_ARTICLE_OPTIONS = [
 
 
 MOCK_ARTICLE_LOOKUP = {item["id"]: item for item in MOCK_ARTICLE_OPTIONS}
+
+
+STORE_IMPORT_SIMPLIFICATION_KEY = "store_import_simplification_level"
+STORE_IMPORT_SIMPLIFICATION_ALLOWED = {"voorzichtig", "gebalanceerd", "maximaal_gemak"}
+STORE_IMPORT_SIMPLIFICATION_DEFAULT = "gebalanceerd"
+
+
+def ensure_household_settings_schema():
+    with engine.begin() as conn:
+        conn.execute(text(
+            """
+            CREATE TABLE IF NOT EXISTS household_settings (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                setting_key TEXT NOT NULL,
+                setting_value TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_household_settings_unique ON household_settings (household_id, setting_key)"
+        ))
+
+
+def normalize_store_import_simplification_level(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized not in STORE_IMPORT_SIMPLIFICATION_ALLOWED:
+        return STORE_IMPORT_SIMPLIFICATION_DEFAULT
+    return normalized
+
+
+def get_household_store_import_simplification_level(conn, household_id: str) -> str:
+    row = conn.execute(
+        text(
+            "SELECT setting_value FROM household_settings WHERE household_id = :household_id AND setting_key = :setting_key"
+        ),
+        {"household_id": str(household_id), "setting_key": STORE_IMPORT_SIMPLIFICATION_KEY},
+    ).mappings().first()
+    return normalize_store_import_simplification_level(row["setting_value"] if row else None)
+
+
+def set_household_store_import_simplification_level(conn, household_id: str, value: str) -> str:
+    normalized = normalize_store_import_simplification_level(value)
+    conn.execute(
+        text(
+            """
+            INSERT INTO household_settings (id, household_id, setting_key, setting_value, updated_at)
+            VALUES (:id, :household_id, :setting_key, :setting_value, CURRENT_TIMESTAMP)
+            ON CONFLICT(household_id, setting_key)
+            DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP
+            """
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "household_id": str(household_id),
+            "setting_key": STORE_IMPORT_SIMPLIFICATION_KEY,
+            "setting_value": normalized,
+        },
+    )
+    return normalized
+
+
+def build_auth_token(email: str) -> str:
+    return f"rezzerv-dev-token::{email}"
+
+
+def get_current_user_from_authorization(authorization: str | None):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    token = authorization.split(" ", 1)[1].strip()
+    if token == "rezzerv-dev-token":
+        email = "admin@rezzerv.local"
+    elif token.startswith("rezzerv-dev-token::"):
+        email = token.split("::", 1)[1].strip().lower()
+    else:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    user = users.get(email)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    return {"email": email, **user}
+
+
+def get_household_payload_for_user(user: dict):
+    household = ensure_household(user["email"])
+    return {
+        **household,
+        "current_user_email": user["email"],
+        "is_household_admin": user.get("role") == "admin",
+        "can_edit_store_import_simplification_level": user.get("role") == "admin",
+    }
+
+
+class StoreImportSimplificationUpdateRequest(BaseModel):
+    store_import_simplification_level: str
+
+    @field_validator("store_import_simplification_level")
+    @classmethod
+    def validate_level(cls, value):
+        normalized = normalize_store_import_simplification_level(value)
+        if normalized not in STORE_IMPORT_SIMPLIFICATION_ALLOWED:
+            raise ValueError("Ongeldig vereenvoudigingsniveau")
+        return normalized
 
 
 def build_live_article_option_id(article_name: str) -> str:
@@ -870,13 +987,15 @@ def normalize_datetime(value):
 
 
 def ensure_household(email: str):
-    if email not in households:
-        households[email] = {
-            "id": len(households) + 1,
-            "naam": "Mijn huishouden",
-            "created_at": datetime.utcnow().isoformat()
+    user = users.get(email, {})
+    household_key = user.get("household_key", email)
+    if household_key not in households:
+        households[household_key] = {
+            "id": str(user.get("household_id") or len(households) + 1),
+            "naam": user.get("household_name") or "Mijn huishouden",
+            "created_at": datetime.utcnow().isoformat(),
         }
-    return households[email]
+    return households[household_key]
 
 
 @app.get("/api/health")
@@ -892,8 +1011,8 @@ def login(payload: LoginRequest):
         ensure_household(payload.email)
 
         return {
-            "token": "rezzerv-dev-token",
-            "user": {"email": payload.email}
+            "token": build_auth_token(payload.email),
+            "user": {"email": payload.email, "role": user.get("role", "member")}
         }
 
     raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
@@ -901,13 +1020,41 @@ def login(payload: LoginRequest):
 
 @app.get("/api/household")
 def get_household(authorization: Optional[str] = Header(None)):
-    if authorization != "Bearer rezzerv-dev-token":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    email = "admin@rezzerv.local"
-
-    household = ensure_household(email)
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    with engine.begin() as conn:
+        household["store_import_simplification_level"] = get_household_store_import_simplification_level(conn, household["id"])
     return household
+
+
+@app.get("/api/household/store-import-settings")
+def get_store_import_settings(authorization: Optional[str] = Header(None)):
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    with engine.begin() as conn:
+        level = get_household_store_import_simplification_level(conn, household["id"])
+    return {
+        "household_id": household["id"],
+        "store_import_simplification_level": level,
+        "can_edit_store_import_simplification_level": household["can_edit_store_import_simplification_level"],
+        "is_household_admin": household["is_household_admin"],
+    }
+
+
+@app.put("/api/household/store-import-settings")
+def update_store_import_settings(payload: StoreImportSimplificationUpdateRequest, authorization: Optional[str] = Header(None)):
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    if not household["can_edit_store_import_simplification_level"]:
+        raise HTTPException(status_code=403, detail="Alleen de beheerder van het huishouden mag dit wijzigen")
+    with engine.begin() as conn:
+        level = set_household_store_import_simplification_level(conn, household["id"], payload.store_import_simplification_level)
+    return {
+        "household_id": household["id"],
+        "store_import_simplification_level": level,
+        "can_edit_store_import_simplification_level": household["can_edit_store_import_simplification_level"],
+        "is_household_admin": household["is_household_admin"],
+    }
 
 
 # SQLite datamodel initialization
@@ -915,6 +1062,7 @@ from app.db import engine, Base
 from app.models import household, space, sublocation, inventory, store_provider, store_connection, purchase_import
 
 Base.metadata.create_all(bind=engine)
+ensure_household_settings_schema()
 ensure_release_2_schema()
 ensure_release_3_schema()
 ensure_release_4_schema()

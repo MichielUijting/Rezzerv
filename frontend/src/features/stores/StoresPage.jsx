@@ -3,6 +3,7 @@ import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import demoData from '../../demo-articles.json'
+import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 
 function normalizeErrorMessage(value) {
   if (!value) return 'Verzoek mislukt'
@@ -166,6 +167,7 @@ export default function StoresPage() {
   const linesMissingArticle = selectedLines.filter((line) => !line.matched_household_article_id).length
   const linesMissingLocation = selectedLines.filter((line) => !line.target_location_id || !validLocationIds.has(String(line.target_location_id))).length
   const canProcessBatch = Boolean(activeBatch && selectedLines.length > 0)
+  const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
   async function refreshBatch(batchId) {
     const batch = await fetchJson(`/api/purchase-import-batches/${batchId}`)
@@ -441,6 +443,13 @@ export default function StoresPage() {
                 Koppel hier winkels, haal voorbeeld-aankopen op en beoordeel per regel wat later verwerkt mag worden.
               </p>
             </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div className="rz-inline-feedback rz-inline-feedback--warning" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <span>Vereenvoudigingsniveau winkelimport: <strong>{simplificationLevelLabel}</strong></span>
+            <span>Deze instelling geldt voor het hele huishouden.</span>
           </div>
         </Card>
 
