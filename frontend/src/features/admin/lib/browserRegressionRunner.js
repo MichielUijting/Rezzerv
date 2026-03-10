@@ -222,9 +222,8 @@ async function prepareRegressionFixture(frame) {
 }
 
 async function setStoreImportSimplificationLevel(level) {
-  return requestJson('/api/household/store-import-settings', {
+  return requestJson('/api/dev/household/store-import-settings?household_id=demo-household', {
     method: 'PUT',
-    headers: { Authorization: 'Bearer rezzerv-dev-token::admin@rezzerv.local' },
     body: JSON.stringify({ store_import_simplification_level: level }),
   })
 }

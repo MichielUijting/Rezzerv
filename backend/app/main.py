@@ -1069,6 +1069,19 @@ def update_store_import_settings(payload: StoreImportSimplificationUpdateRequest
     }
 
 
+@app.put("/api/dev/household/store-import-settings")
+def update_dev_store_import_settings(payload: StoreImportSimplificationUpdateRequest, household_id: str = Query("demo-household")):
+    effective_household_id = (household_id or "demo-household").strip() or "demo-household"
+    with engine.begin() as conn:
+        level = set_household_store_import_simplification_level(conn, effective_household_id, payload.store_import_simplification_level)
+    return {
+        "household_id": effective_household_id,
+        "store_import_simplification_level": level,
+        "can_edit_store_import_simplification_level": True,
+        "is_household_admin": True,
+    }
+
+
 # SQLite datamodel initialization
 from app.db import engine, Base
 from app.models import household, space, sublocation, inventory, store_provider, store_connection, purchase_import
