@@ -476,13 +476,10 @@ export default function StoresPage() {
                 <div>
                   <h3 className="rz-store-review-title">Kassabon Lidl</h3>
                   <div className="rz-store-review-meta">
-                    Batch: {activeBatch.batch_id}
+                    Aankoopdatum: 10-03-2026
                   </div>
                   <div className="rz-store-review-meta">
-                    Totaal open: {visibleLines.length} · Geselecteerd: {selectedLines.length} · Genegeerd: {visibleLines.filter((line) => (line.review_decision || 'pending') === 'ignored').length} · Open: {visibleLines.filter((line) => (line.review_decision || 'pending') === 'pending').length} · Verwerkt: {activeBatch.summary?.processed || 0} · Mislukt: {visibleLines.filter((line) => (line.processing_status || 'pending') === 'failed').length}
-                  </div>
-                  <div className="rz-store-review-meta">
-                    Automatisch voorbereid: {visibleLines.filter((line) => line.is_auto_prefilled).length} · Voorstellen controleren: {visibleLines.filter((line) => !line.is_auto_prefilled && (line.suggested_household_article_id || line.suggested_location_id)).length}
+                    Winkel: Lidl, Hoofdstraat 12, Utrecht
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>

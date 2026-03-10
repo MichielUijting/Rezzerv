@@ -1,0 +1,9 @@
+Rezzerv v01.07.06
+
+Aangepast:
+- Header onder Kassabon Lidl toont nu uitsluitend mock-data voor aankoopdatum en winkeladres/plaats.
+- Overige technische en samenvattende regels op die plek zijn verwijderd.
+
+Validatie:
+- Frontend broncode bijgewerkt in StoresPage.jsx
+- VERSION.txt en version.json opgehoogd naar 01.07.06
