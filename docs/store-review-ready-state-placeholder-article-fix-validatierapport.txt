@@ -1,0 +1,15 @@
+Rezzerv v01.07.26 validatierapport
+
+Wijziging:
+- Bugfix in Winkelkoppelingen: een regel wordt alleen nog groen/gekoppeld weergegeven als aan alle voorwaarden voor verwerking is voldaan.
+- Voorwaarde is nu: review = selected, geldig gekoppeld artikel én geldige locatie.
+- Hierdoor geldt "Kies artikel" niet langer als schijnbaar geldige artikelkeuze.
+
+Technische validatie:
+- Frontend build geslaagd via Vite production build.
+- Versiebestanden gelijkgetrokken naar 01.07.26.
+
+Niet gewijzigd:
+- Geen backend-logica voor winkelimport aangepast.
+- Geen wijziging aan voorraadverwerking.
+- Geen wijziging aan vereenvoudigingsniveaus.

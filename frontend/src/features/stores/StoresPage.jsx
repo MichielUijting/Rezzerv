@@ -579,8 +579,12 @@ export default function StoresPage() {
                   <tbody>
                     {visibleLines.length === 0 ? (
                       <tr><td colSpan={5}>Er staan geen open regels meer in deze kassabon.</td></tr>
-                    ) : visibleLines.map((line) => (
-                      <tr key={line.id} className={line.target_location_id && validLocationIds.has(String(line.target_location_id)) ? 'rz-store-row--linked' : ''}>
+                    ) : visibleLines.map((line) => {
+                      const hasValidArticle = Boolean(line.matched_household_article_id) && validArticleIds.has(String(line.matched_household_article_id))
+                      const hasValidLocation = Boolean(line.target_location_id) && validLocationIds.has(String(line.target_location_id))
+                      const isReadyForProcessing = (line.review_decision || 'selected') === 'selected' && hasValidArticle && hasValidLocation
+                      return (
+                      <tr key={line.id} className={isReadyForProcessing ? 'rz-store-row--linked' : ''}>
                         <td>
                           <div className="rz-store-primary">{line.article_name_raw}</div>
                           <div className="rz-store-secondary">{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
@@ -635,7 +639,7 @@ export default function StoresPage() {
                           </select>
                         </td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
               </div>
