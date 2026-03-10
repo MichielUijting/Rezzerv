@@ -72,10 +72,12 @@ function articleLabel(article) {
 
 function StoreArticleSelector({
   lineId,
+  lineName,
   selectedArticleId,
   articleOptions,
   disabled,
   onChange,
+  onCreateArticle,
 }) {
   const datalistId = `store-article-options-${lineId}`
   const optionsByLabel = useMemo(() => {
@@ -92,6 +94,20 @@ function StoreArticleSelector({
     const nextValue = selectedArticleId ? (labelById.get(String(selectedArticleId)) || '') : ''
     setQuery(nextValue)
   }, [selectedArticleId, labelById])
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const hasExactMatch = Boolean(normalizedQuery && Array.from(optionsByLabel.keys()).some((label) => label.trim().toLowerCase() === normalizedQuery))
+  const canCreateArticle = Boolean(normalizedQuery) && !hasExactMatch && !selectedArticleId
+
+  async function handleCreateArticle() {
+    const baseName = query.trim() || lineName || ''
+    const nextName = window.prompt('Nieuw artikel aanmaken', baseName)
+    if (!nextName) return
+    const created = await onCreateArticle(nextName)
+    if (created?.name) {
+      setQuery(articleLabel(created))
+    }
+  }
 
   function handleInputChange(event) {
     const nextQuery = event.target.value
@@ -144,6 +160,17 @@ function StoreArticleSelector({
           <option key={article.id} value={article.id}>{articleLabel(article)}</option>
         ))}
       </select>
+      {canCreateArticle ? (
+        <button
+          type="button"
+          className="rz-link-button"
+          style={createArticleButtonStyle}
+          disabled={disabled}
+          onClick={handleCreateArticle}
+        >
+          Nieuw artikel aanmaken
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -459,6 +486,37 @@ export default function StoresPage() {
     }
   }
 
+  async function handleCreateArticleFromLine(lineId, articleName) {
+    setBusyLineId(lineId)
+    setError('')
+    setStatus('')
+    try {
+      const result = await fetchJson(`/api/purchase-import-lines/${lineId}/create-article`, {
+        method: 'POST',
+        body: JSON.stringify({ article_name: articleName }),
+      })
+      if (result?.article_option) {
+        setArticleOptions((current) => {
+          const next = Array.isArray(current) ? [...current] : []
+          const exists = next.some((item) => String(item.id) === String(result.article_option.id))
+          if (!exists) {
+            next.push(result.article_option)
+            next.sort((a, b) => articleLabel(a).localeCompare(articleLabel(b), 'nl'))
+          }
+          return next
+        })
+      }
+      await refreshBatch(activeBatch.batch_id)
+      setStatus('Nieuw artikel aangemaakt en gekoppeld aan de bonregel.')
+      return result?.article_option || null
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'Het nieuwe artikel kon niet worden aangemaakt.')
+      return null
+    } finally {
+      setBusyLineId('')
+    }
+  }
+
   async function handleTargetLocation(lineId, targetLocationId) {
     setBusyLineId(lineId)
     setError('')
@@ -692,10 +750,12 @@ export default function StoresPage() {
                         <td>
                           <StoreArticleSelector
                             lineId={line.id}
+                            lineName={line.article_name_raw}
                             selectedArticleId={line.matched_household_article_id || ''}
                             articleOptions={articleOptions}
                             disabled={busyLineId === line.id}
                             onChange={(nextArticleId) => handleMapLine(line.id, nextArticleId)}
+                            onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
                           />
                         </td>
                         <td>
@@ -781,4 +841,17 @@ const selectStyle = {
   border: '1px solid #d0d5dd',
   fontSize: '14px',
   background: '#ffffff',
+}
+
+
+const createArticleButtonStyle = {
+  alignSelf: 'flex-start',
+  background: 'none',
+  border: 'none',
+  padding: 0,
+  marginTop: '4px',
+  color: '#0f766e',
+  fontWeight: 700,
+  cursor: 'pointer',
+  textDecoration: 'underline',
 }

@@ -119,6 +119,18 @@ class TargetLocationRequest(BaseModel):
     target_location_id: Optional[str] = None
 
 
+class CreateArticleFromLineRequest(BaseModel):
+    article_name: str
+
+    @field_validator("article_name")
+    @classmethod
+    def validate_article_name(cls, value):
+        normalized = normalize_household_article_name(value)
+        if not normalized:
+            raise ValueError("Artikelnaam is verplicht")
+        return normalized
+
+
 
 class ProcessBatchRequest(BaseModel):
     processed_by: str = "ui"
@@ -293,6 +305,79 @@ def ensure_household_settings_schema():
         ))
 
 
+def ensure_household_articles_schema():
+    with engine.begin() as conn:
+        conn.execute(text(
+            """
+            CREATE TABLE IF NOT EXISTS household_articles (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                naam TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )
+            """
+        ))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_household_articles_household_name ON household_articles (household_id, naam)"))
+
+
+def normalize_household_article_name(value: str | None) -> str:
+    return " ".join(str(value or "").strip().split())
+
+
+def find_existing_household_article_name(conn, household_id: str, article_name: str) -> str | None:
+    normalized = normalize_household_article_name(article_name)
+    if not normalized:
+        return None
+
+    row = conn.execute(
+        text(
+            """
+            SELECT naam FROM household_articles
+            WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))
+            LIMIT 1
+            """
+        ),
+        {"household_id": str(household_id), "naam": normalized},
+    ).mappings().first()
+    if row and row.get("naam"):
+        return row["naam"]
+
+    row = conn.execute(
+        text(
+            """
+            SELECT naam FROM inventory
+            WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))
+            LIMIT 1
+            """
+        ),
+        {"household_id": str(household_id), "naam": normalized},
+    ).mappings().first()
+    if row and row.get("naam"):
+        return row["naam"]
+    return None
+
+
+def ensure_household_article(conn, household_id: str, article_name: str) -> str:
+    normalized = normalize_household_article_name(article_name)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Artikelnaam is verplicht")
+
+    existing_name = find_existing_household_article_name(conn, household_id, normalized)
+    final_name = existing_name or normalized
+    if not existing_name:
+        conn.execute(
+            text(
+                """
+                INSERT INTO household_articles (id, household_id, naam, updated_at)
+                VALUES (:id, :household_id, :naam, CURRENT_TIMESTAMP)
+                """
+            ),
+            {"id": str(uuid.uuid4()), "household_id": str(household_id), "naam": normalized},
+        )
+    return build_live_article_option_id(final_name)
+
+
 def normalize_store_import_simplification_level(value: str | None) -> str:
     normalized = str(value or "").strip().lower()
     if normalized not in STORE_IMPORT_SIMPLIFICATION_ALLOWED:
@@ -387,10 +472,13 @@ def get_store_review_article_options(conn):
     live_names = conn.execute(
         text(
             """
-            SELECT DISTINCT naam AS article_name
-            FROM inventory
-            WHERE trim(COALESCE(naam, '')) <> ''
-            ORDER BY lower(naam) ASC
+            SELECT DISTINCT article_name
+            FROM (
+                SELECT naam AS article_name FROM inventory WHERE trim(COALESCE(naam, '')) <> ''
+                UNION
+                SELECT naam AS article_name FROM household_articles WHERE trim(COALESCE(naam, '')) <> ''
+            ) src
+            ORDER BY lower(article_name) ASC
             """
         )
     ).mappings().all()
@@ -423,9 +511,13 @@ def resolve_review_article_option(conn, article_id: str | None):
     inventory_match = conn.execute(
         text(
             """
-            SELECT naam
-            FROM inventory
-            WHERE lower(naam) = lower(:article_name)
+            SELECT article_name AS naam
+            FROM (
+                SELECT naam AS article_name FROM inventory
+                UNION
+                SELECT naam AS article_name FROM household_articles
+            ) src
+            WHERE lower(article_name) = lower(:article_name)
             LIMIT 1
             """
         ),
@@ -1089,6 +1181,7 @@ from app.models import household, space, sublocation, inventory, store_provider,
 
 Base.metadata.create_all(bind=engine)
 ensure_household_settings_schema()
+ensure_household_articles_schema()
 ensure_release_2_schema()
 ensure_release_3_schema()
 ensure_release_4_schema()
@@ -1101,6 +1194,7 @@ def reset_dev_tables():
         conn.execute(text("DELETE FROM household_store_connections"))
         conn.execute(text("DELETE FROM store_import_memory"))
         conn.execute(text("DELETE FROM inventory_events"))
+        conn.execute(text("DELETE FROM household_articles"))
         conn.execute(text("DELETE FROM inventory"))
         conn.execute(text("DELETE FROM sublocations"))
         conn.execute(text("DELETE FROM spaces"))
@@ -1989,6 +2083,46 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
     result = dict(updated)
     result["batch_status"] = status
     return result
+
+
+@app.post("/api/purchase-import-lines/{line_id}/create-article")
+def create_article_from_purchase_import_line(line_id: str, payload: CreateArticleFromLineRequest):
+    with engine.begin() as conn:
+        line = conn.execute(
+            text(
+                """
+                SELECT pil.id, pil.batch_id, pib.household_id
+                FROM purchase_import_lines pil
+                JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+                WHERE pil.id = :id
+                """
+            ),
+            {"id": line_id},
+        ).mappings().first()
+        if not line:
+            raise HTTPException(status_code=404, detail="Onbekende importregel")
+
+        article_option_id = ensure_household_article(conn, str(line["household_id"]), payload.article_name)
+        conn.execute(
+            text(
+                """
+                UPDATE purchase_import_lines
+                SET matched_household_article_id = :article_id, match_status = 'matched', updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {"article_id": article_option_id, "id": line_id},
+        )
+        status = update_batch_status(conn, line["batch_id"])
+        article = resolve_review_article_option(conn, article_option_id)
+
+    return {
+        "line_id": line_id,
+        "batch_id": line["batch_id"],
+        "batch_status": status,
+        "article_option": article,
+        "matched_household_article_id": article_option_id,
+    }
 
 
 @app.post("/api/purchase-import-lines/{line_id}/target-location")
