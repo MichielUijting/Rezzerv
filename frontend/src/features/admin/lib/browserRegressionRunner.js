@@ -121,25 +121,34 @@ function queryText(doc, text) {
 }
 
 function setInputValue(input, value) {
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
+  const view = input?.ownerDocument?.defaultView || window
+  const setter = Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, 'value')?.set
   setter?.call(input, value)
-  input.dispatchEvent(new Event('input', { bubbles: true }))
-  input.dispatchEvent(new Event('change', { bubbles: true }))
+  input.dispatchEvent(new view.Event('input', { bubbles: true }))
+  input.dispatchEvent(new view.Event('change', { bubbles: true }))
 }
 
 function setSelectValue(select, value) {
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set
-  setter?.call(select, value)
-  select.dispatchEvent(new Event('input', { bubbles: true }))
-  select.dispatchEvent(new Event('change', { bubbles: true }))
+  const view = select?.ownerDocument?.defaultView || window
+  const normalizedValue = value == null ? '' : String(value)
+  const setter = Object.getOwnPropertyDescriptor(view.HTMLSelectElement.prototype, 'value')?.set
+  setter?.call(select, normalizedValue)
+  if (select.value !== normalizedValue) {
+    const fallbackOption = Array.from(select.options || []).find((option) => String(option.value) === normalizedValue)
+    if (fallbackOption) fallbackOption.selected = true
+  }
+  select.dispatchEvent(new view.Event('input', { bubbles: true }))
+  select.dispatchEvent(new view.Event('change', { bubbles: true }))
 }
 
 function clickElement(element) {
-  element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
+  const view = element?.ownerDocument?.defaultView || window
+  element.dispatchEvent(new view.MouseEvent('click', { bubbles: true, cancelable: true, view }))
 }
 
 function dblClickElement(element) {
-  element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window }))
+  const view = element?.ownerDocument?.defaultView || window
+  element.dispatchEvent(new view.MouseEvent('dblclick', { bubbles: true, cancelable: true, view }))
 }
 
 async function runScenario(name, fn, results) {
