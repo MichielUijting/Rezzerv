@@ -310,8 +310,13 @@ async function setStoreLineArticle(frame, articleName, mappedArticleId) {
   articleSelect.dispatchEvent(new Event('change', { bubbles: true }))
   await waitForCondition(() => {
     const refreshedRow = getStoreLineRow(frame, articleName)
-    return refreshedRow?.querySelectorAll('select')?.[1]?.value === mappedArticleId
-  }, WAIT_TIMEOUT, `Artikelkoppeling werd niet opgeslagen voor ${articleName}`)
+    return String(refreshedRow?.querySelectorAll('select')?.[1]?.value || '') === String(mappedArticleId)
+  }, WAIT_TIMEOUT, (() => {
+    const refreshedRow = getStoreLineRow(frame, articleName)
+    const articleSelect = refreshedRow?.querySelectorAll('select')?.[1] || null
+    const options = Array.from(articleSelect?.options || []).map((entry) => `${entry.textContent?.trim() || '?'}=${entry.value}`).join(', ')
+    return `Artikelkoppeling werd niet opgeslagen voor ${articleName}. Geprobeerd: ${mappedArticleId}. Beschikbare opties: ${options}`
+  })())
 }
 
 async function setStoreLineLocationByLabel(frame, articleName, expectedLabel) {
@@ -431,6 +436,21 @@ async function getInventoryArticleId(articleName) {
   if (!match?.id) {
     throw new Error(`Artikel ${articleName} niet gevonden in live voorraad-preview`)
   }
+  return String(match.id)
+}
+
+async function getStoreReviewArticleOptionId(articleName) {
+  const items = await requestJson('/api/store-review-articles')
+  const normalized = String(articleName || '').trim().toLowerCase()
+  const match = Array.isArray(items)
+    ? items.find((item) => String(item?.name || '').trim().toLowerCase() === normalized)
+    : null
+
+  if (!match?.id) {
+    const available = Array.isArray(items) ? items.map((item) => `${item?.name || '?'}=${item?.id || '?'}`).join(', ') : ''
+    throw new Error(`Review-artikeloptie ${articleName} niet gevonden. Beschikbaar: ${available}`)
+  }
+
   return String(match.id)
 }
 
@@ -659,7 +679,7 @@ export async function runBrowserRegressionTests() {
 
     await runScenario('Lidl-flow kan een regel koppelen en naar voorraad verwerken', async () => {
       await prepareRegressionFixture(frame)
-      const melkId = await getInventoryArticleId('Melk')
+      const melkId = await getStoreReviewArticleOptionId('Melk')
       await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
       await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
@@ -674,7 +694,7 @@ export async function runBrowserRegressionTests() {
 
     await runScenario('Jumbo-flow kan een regel koppelen en naar voorraad verwerken', async () => {
       await prepareRegressionFixture(frame)
-      const tomatenId = await getInventoryArticleId('Tomaten')
+      const tomatenId = await getStoreReviewArticleOptionId('Tomaten')
       await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
       await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
       await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
@@ -689,7 +709,7 @@ export async function runBrowserRegressionTests() {
 
     await runScenario('Winkelimport bewaart twee losse events voor hetzelfde artikel en Historie toont beide', async () => {
       await prepareRegressionFixture(frame)
-      const tomatenId = await getInventoryArticleId('Tomaten')
+      const tomatenId = await getStoreReviewArticleOptionId('Tomaten')
       const baselineQuantity = await getInventoryQuantity('Tomaten')
 
       await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
