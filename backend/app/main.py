@@ -128,6 +128,11 @@ STORE_PROVIDER_DEFINITIONS = {
         "status": "active",
         "import_mode": "mock",
     },
+    "jumbo": {
+        "name": "Jumbo",
+        "status": "active",
+        "import_mode": "mock",
+    },
 }
 
 
@@ -175,7 +180,51 @@ MOCK_PURCHASES_BY_PROVIDER = {
                 "currency_code": "EUR",
             },
         ]
-    }
+    },
+    "jumbo": {
+        "default": [
+            {
+                "external_line_ref": "jumbo-line-1",
+                "external_article_code": "JUMBO-1001",
+                "article_name_raw": "Magere yoghurt",
+                "brand_raw": "Jumbo",
+                "quantity_raw": 1,
+                "unit_raw": "liter",
+                "line_price_raw": 1.59,
+                "currency_code": "EUR",
+            },
+            {
+                "external_line_ref": "jumbo-line-2",
+                "external_article_code": "JUMBO-2001",
+                "article_name_raw": "Appelsap",
+                "brand_raw": "Jumbo",
+                "quantity_raw": 1,
+                "unit_raw": "liter",
+                "line_price_raw": 1.99,
+                "currency_code": "EUR",
+            },
+            {
+                "external_line_ref": "jumbo-line-3",
+                "external_article_code": "JUMBO-3001",
+                "article_name_raw": "Pindakaas",
+                "brand_raw": "Calvé",
+                "quantity_raw": 1,
+                "unit_raw": "pot",
+                "line_price_raw": 3.49,
+                "currency_code": "EUR",
+            },
+            {
+                "external_line_ref": "jumbo-line-4",
+                "external_article_code": "JUMBO-4001",
+                "article_name_raw": "Tomaten",
+                "brand_raw": "Jumbo",
+                "quantity_raw": 6,
+                "unit_raw": "stuks",
+                "line_price_raw": 2.19,
+                "currency_code": "EUR",
+            },
+        ]
+    },
 }
 
 
@@ -186,7 +235,14 @@ MOCK_BATCH_METADATA_BY_PROVIDER = {
             "store_name": "Lidl",
             "store_label": "Lidl, Hoofdstraat 12, Utrecht",
         }
-    }
+    },
+    "jumbo": {
+        "default": {
+            "purchase_date": "10-03-2026",
+            "store_name": "Jumbo",
+            "store_label": "Jumbo, Marktplein 8, Utrecht",
+        }
+    },
 }
 
 
@@ -866,6 +922,11 @@ seed_store_providers()
 
 def reset_dev_tables():
     with engine.begin() as conn:
+        conn.execute(text("DELETE FROM purchase_import_lines"))
+        conn.execute(text("DELETE FROM purchase_import_batches"))
+        conn.execute(text("DELETE FROM household_store_connections"))
+        conn.execute(text("DELETE FROM store_import_memory"))
+        conn.execute(text("DELETE FROM inventory_events"))
         conn.execute(text("DELETE FROM inventory"))
         conn.execute(text("DELETE FROM sublocations"))
         conn.execute(text("DELETE FROM spaces"))

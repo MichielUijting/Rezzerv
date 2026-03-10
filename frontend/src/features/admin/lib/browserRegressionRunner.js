@@ -218,25 +218,32 @@ async function clickButtonByText(doc, label) {
   return button
 }
 
-async function ensureLidlConnectionAndBatch(frame) {
+async function ensureProviderConnectionAndBatch(frame, providerName, expectedArticleName) {
   await openStoresPage(frame)
   let doc = getFrameDocument(frame)
 
-  const connectButton = Array.from(doc?.querySelectorAll('button') || []).find((entry) => entry.textContent?.includes('Lidl koppelen'))
+  const connectButton = Array.from(doc?.querySelectorAll('button') || []).find((entry) => entry.textContent?.includes(`${providerName} koppelen`))
   if (connectButton) {
     clickElement(connectButton)
-    await waitForCondition(() => queryText(getFrameDocument(frame), 'Lidl is gekoppeld aan dit huishouden.') || queryText(getFrameDocument(frame), 'Koppeling: gekoppeld'), WAIT_TIMEOUT, 'Lidl koppelen werd niet bevestigd')
+    await waitForCondition(
+      () => queryText(getFrameDocument(frame), `${providerName} is gekoppeld aan dit huishouden.`) || queryText(getFrameDocument(frame), 'Koppeling: gekoppeld'),
+      WAIT_TIMEOUT,
+      `${providerName} koppelen werd niet bevestigd`
+    )
   }
 
   doc = getFrameDocument(frame)
-  const pullButton = await waitForCondition(
-    () => Array.from(getFrameDocument(frame)?.querySelectorAll('button') || []).find((entry) => entry.textContent?.includes('Aankopen ophalen')),
-    WAIT_TIMEOUT,
-    'Knop Aankopen ophalen niet gevonden'
-  )
+  const pullButton = await waitForCondition(() => {
+    const buttons = Array.from(getFrameDocument(frame)?.querySelectorAll('button') || [])
+    return buttons.find((entry) => {
+      if (entry.textContent?.trim() !== 'Aankopen ophalen') return false
+      const providerBlock = entry.closest('div[style]')?.parentElement || entry.parentElement?.parentElement || entry.parentElement
+      return providerBlock?.textContent?.includes(providerName)
+    }) || null
+  }, WAIT_TIMEOUT, 'Knop Aankopen ophalen niet gevonden')
   clickElement(pullButton)
-  await waitForCondition(() => queryText(getFrameDocument(frame), 'Kassabon Lidl'), WAIT_TIMEOUT, 'Kassabon Lidl werd niet geladen')
-  await waitForCondition(() => getStoreLineRow(frame, 'Halfvolle melk'), WAIT_TIMEOUT, 'Regel Halfvolle melk niet zichtbaar in Kassabon Lidl')
+  await waitForCondition(() => queryText(getFrameDocument(frame), `Kassabon ${providerName}`), WAIT_TIMEOUT, `Kassabon ${providerName} werd niet geladen`)
+  await waitForCondition(() => getStoreLineRow(frame, expectedArticleName), WAIT_TIMEOUT, `Regel ${expectedArticleName} niet zichtbaar in Kassabon ${providerName}`)
 }
 
 function getStoreLineRow(frame, articleName) {
@@ -285,6 +292,27 @@ async function setStoreLineLocationByLabel(frame, articleName, expectedLabel) {
     const refreshedRow = getStoreLineRow(frame, articleName)
     return refreshedRow?.querySelectorAll('select')?.[2]?.value === option.value
   }, WAIT_TIMEOUT, `Locatie ${expectedLabel} werd niet opgeslagen voor ${articleName}`)
+}
+
+async function ensureStoreLineReadyForProcessing(frame, articleName, mappedArticleId, expectedLocationLabel) {
+  const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
+  const selects = row.querySelectorAll('select')
+  const reviewValue = selects[0]?.value || 'pending'
+  const articleValue = selects[1]?.value || ''
+  const locationSelect = selects[2]
+  const locationOption = Array.from(locationSelect?.options || []).find((entry) => entry.textContent?.trim() === expectedLocationLabel)
+  const locationValue = locationSelect?.value || ''
+
+  if (reviewValue !== 'selected') {
+    await setStoreLineReviewDecision(frame, articleName, 'selected')
+  }
+  if (articleValue !== mappedArticleId) {
+    await setStoreLineArticle(frame, articleName, mappedArticleId)
+  }
+  if (!locationOption) throw new Error(`Locatie ${expectedLocationLabel} niet gevonden voor ${articleName}`)
+  if (locationValue !== locationOption.value) {
+    await setStoreLineLocationByLabel(frame, articleName, expectedLocationLabel)
+  }
 }
 
 async function processCurrentStoreBatch(frame) {
@@ -470,19 +498,25 @@ export async function runBrowserRegressionTests() {
     }, results)
 
     await runScenario('Lidl-flow opent kassabon na koppelen en aankopen ophalen', async () => {
-      await ensureLidlConnectionAndBatch(frame)
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       const doc = getFrameDocument(frame)
       await waitForCondition(() => queryText(doc, 'Aankoopdatum: 10-03-2026'), WAIT_TIMEOUT, 'Mock aankoopdatum ontbreekt in Kassabon Lidl')
       await waitForCondition(() => queryText(doc, 'Winkel: Lidl, Hoofdstraat 12, Utrecht'), WAIT_TIMEOUT, 'Mock winkelheader ontbreekt in Kassabon Lidl')
     }, results)
 
+    await runScenario('Jumbo-flow opent kassabon na koppelen en aankopen ophalen', async () => {
+      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Magere yoghurt')
+      const doc = getFrameDocument(frame)
+      await waitForCondition(() => queryText(doc, 'Aankoopdatum: 10-03-2026'), WAIT_TIMEOUT, 'Mock aankoopdatum ontbreekt in Kassabon Jumbo')
+      await waitForCondition(() => queryText(doc, 'Winkel: Jumbo, Marktplein 8, Utrecht'), WAIT_TIMEOUT, 'Mock winkelheader ontbreekt in Kassabon Jumbo')
+    }, results)
+
     await runScenario('Lidl-flow kan een regel koppelen en naar voorraad verwerken', async () => {
-      await ensureLidlConnectionAndBatch(frame)
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
       await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
       await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
-      await setStoreLineArticle(frame, 'Halfvolle melk', '4')
-      await setStoreLineLocationByLabel(frame, 'Halfvolle melk', 'Voorraad test / Plank test')
+      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', '4', 'Voorraad test / Plank test')
       await processCurrentStoreBatch(frame)
       await ensureInventoryContainsArticle(frame, 'Melk')
       await openArticleFromInventory(frame, 'Melk')
