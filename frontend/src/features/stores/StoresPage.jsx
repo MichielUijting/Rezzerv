@@ -190,18 +190,35 @@ export default function StoresPage() {
     processFeedbackTimer.current = window.setTimeout(() => setProcessFeedback(''), 2200)
   }
 
-  async function restoreLatestBatch(connectionId) {
+  async function getLatestBatchMeta(connectionId) {
     try {
       const latest = await fetchJson(`/api/store-connections/${connectionId}/latest-batch`)
-      if (!latest?.batch_id) return
-      if (latest.import_status === 'processed') {
-        setActiveBatch(null)
-        return
-      }
-      await refreshBatch(latest.batch_id)
+      return latest?.batch_id ? latest : null
     } catch (err) {
-      // Geen eerdere batch is toegestaan; negeren.
+      return null
     }
+  }
+
+  async function openLatestBatchForConnection(connectionId) {
+    if (!connectionId) return null
+    const latest = await getLatestBatchMeta(connectionId)
+    if (!latest?.batch_id) return null
+    if (latest.import_status === 'processed') {
+      setActiveBatch((current) => (current?.connection_id === connectionId ? null : current))
+      return null
+    }
+    return refreshBatch(latest.batch_id)
+  }
+
+  async function restoreLatestBatch(connectionsToCheck) {
+    const latestCandidates = (await Promise.all((connectionsToCheck || []).map((connection) => getLatestBatchMeta(connection.id))))
+      .filter((item) => item?.batch_id && item.import_status !== 'processed')
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+    if (!latestCandidates.length) {
+      setActiveBatch(null)
+      return null
+    }
+    return refreshBatch(latestCandidates[0].batch_id)
   }
 
   async function loadPageData() {
@@ -226,9 +243,9 @@ export default function StoresPage() {
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? backendArticles : articleFallbackOptions)
       setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
 
-      const existingPrimaryConnection = connectionData.find((connection) => providerData.some((provider) => provider.code === connection.store_provider_code))
-      if (existingPrimaryConnection?.id) {
-        await restoreLatestBatch(existingPrimaryConnection.id)
+      const existingConnections = connectionData.filter((connection) => providerData.some((provider) => provider.code === connection.store_provider_code))
+      if (existingConnections.length > 0) {
+        await restoreLatestBatch(existingConnections)
       } else {
         setActiveBatch(null)
       }
@@ -491,9 +508,14 @@ export default function StoresPage() {
                             {isConnecting ? 'Koppelen…' : `${provider.name} koppelen`}
                           </Button>
                         ) : (
-                          <Button variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
-                            {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
-                          </Button>
+                          <>
+                            <Button variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
+                              {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
+                            </Button>
+                            <Button variant="secondary" onClick={() => openLatestBatchForConnection(connection.id)} disabled={isPulling}>
+                              Laatste bon openen
+                            </Button>
+                          </>
                         )}
                       </div>
                     </div>
