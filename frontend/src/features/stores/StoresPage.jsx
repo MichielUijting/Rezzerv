@@ -69,6 +69,85 @@ function articleLabel(article) {
   return article.brand ? `${article.name} — ${article.brand}` : article.name
 }
 
+
+function StoreArticleSelector({
+  lineId,
+  selectedArticleId,
+  articleOptions,
+  disabled,
+  onChange,
+}) {
+  const datalistId = `store-article-options-${lineId}`
+  const optionsByLabel = useMemo(() => {
+    const entries = articleOptions.map((article) => [articleLabel(article), String(article.id)])
+    return new Map(entries)
+  }, [articleOptions])
+  const labelById = useMemo(() => {
+    const entries = articleOptions.map((article) => [String(article.id), articleLabel(article)])
+    return new Map(entries)
+  }, [articleOptions])
+  const [query, setQuery] = useState(selectedArticleId ? (labelById.get(String(selectedArticleId)) || '') : '')
+
+  useEffect(() => {
+    const nextValue = selectedArticleId ? (labelById.get(String(selectedArticleId)) || '') : ''
+    setQuery(nextValue)
+  }, [selectedArticleId, labelById])
+
+  function handleInputChange(event) {
+    const nextQuery = event.target.value
+    setQuery(nextQuery)
+    if (!nextQuery) {
+      onChange('')
+      return
+    }
+    const matchedId = optionsByLabel.get(nextQuery)
+    if (matchedId) {
+      onChange(matchedId)
+    }
+  }
+
+  function handleSelectChange(event) {
+    const nextId = String(event.target.value || '')
+    const nextLabel = nextId ? (labelById.get(nextId) || '') : ''
+    setQuery(nextLabel)
+    onChange(nextId)
+  }
+
+  return (
+    <div className="rz-store-article-search" style={articleSearchStyle}>
+      <input
+        className="rz-input rz-store-article-search-input" style={articleSearchInputStyle}
+        type="text"
+        list={datalistId}
+        value={query}
+        placeholder="Kies artikel"
+        disabled={disabled}
+        onChange={handleInputChange}
+      />
+      <datalist id={datalistId}>
+        {articleOptions.map((article) => (
+          <option key={article.id} value={articleLabel(article)} />
+        ))}
+      </datalist>
+      <select
+        className="rz-input rz-store-select rz-store-select--hidden"
+        style={{ display: 'none' }}
+        data-store-article-select="true"
+        value={selectedArticleId || ''}
+        disabled={disabled}
+        onChange={handleSelectChange}
+        aria-hidden="true"
+        tabIndex={-1}
+      >
+        <option value="">Kies artikel</option>
+        {articleOptions.map((article) => (
+          <option key={article.id} value={article.id}>{articleLabel(article)}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 function providerLabel(providerOrConnection) {
   return providerOrConnection?.store_provider_name || providerOrConnection?.name || providerOrConnection?.store_provider_code || providerOrConnection?.code || 'Winkel'
 }
@@ -611,17 +690,13 @@ export default function StoresPage() {
                           </select>
                         </td>
                         <td>
-                          <select
-                            className="rz-input rz-store-select"
-                            value={line.matched_household_article_id || ''}
+                          <StoreArticleSelector
+                            lineId={line.id}
+                            selectedArticleId={line.matched_household_article_id || ''}
+                            articleOptions={articleOptions}
                             disabled={busyLineId === line.id}
-                            onChange={(event) => handleMapLine(line.id, event.target.value)}
-                          >
-                            <option value="">Kies artikel</option>
-                            {articleOptions.map((article) => (
-                              <option key={article.id} value={article.id}>{articleLabel(article)}</option>
-                            ))}
-                          </select>
+                            onChange={(nextArticleId) => handleMapLine(line.id, nextArticleId)}
+                          />
                         </td>
                         <td>
                           <select
@@ -682,6 +757,21 @@ const tableCellStyle = {
   borderBottom: '1px solid #eaecf0',
   fontSize: '14px',
   verticalAlign: 'top',
+}
+
+const articleSearchStyle = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+}
+
+const articleSearchInputStyle = {
+  width: '100%',
+  padding: '8px 10px',
+  borderRadius: '8px',
+  border: '1px solid #d0d5dd',
+  fontSize: '14px',
+  background: '#ffffff',
 }
 
 const selectStyle = {
