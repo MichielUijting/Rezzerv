@@ -105,13 +105,13 @@ class ReviewLineRequest(BaseModel):
 
 
 class MapLineRequest(BaseModel):
-    household_article_id: str | int
+    household_article_id: Optional[str | int] = None
 
     @field_validator("household_article_id", mode="before")
     @classmethod
     def normalize_article_id(cls, value):
         if value is None or str(value).strip() == "":
-            raise ValueError("household_article_id is verplicht")
+            return None
         return str(value)
 
 
@@ -1964,15 +1964,17 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
         if not line:
             raise HTTPException(status_code=404, detail="Onbekende importregel")
 
+        article_id = payload.household_article_id
+        match_status = 'matched' if article_id else 'unmatched'
         conn.execute(
             text(
                 """
                 UPDATE purchase_import_lines
-                SET matched_household_article_id = :article_id, match_status = 'matched', updated_at = CURRENT_TIMESTAMP
+                SET matched_household_article_id = :article_id, match_status = :match_status, updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
             ),
-            {"article_id": payload.household_article_id, "id": line_id},
+            {"article_id": article_id, "match_status": match_status, "id": line_id},
         )
         status = update_batch_status(conn, line["batch_id"])
         updated = conn.execute(
