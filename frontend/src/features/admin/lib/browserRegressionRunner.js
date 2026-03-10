@@ -221,6 +221,14 @@ async function prepareRegressionFixture(frame) {
   resetAutomationState(frame)
 }
 
+async function setStoreImportSimplificationLevel(level) {
+  return requestJson('/api/household/store-import-settings', {
+    method: 'PUT',
+    headers: { Authorization: 'Bearer rezzerv-dev-token::admin@rezzerv.local' },
+    body: JSON.stringify({ store_import_simplification_level: level }),
+  })
+}
+
 async function ensureLoggedIn(frame) {
   await navigateFrame(frame, '/login')
   const doc = getFrameDocument(frame)
@@ -285,6 +293,33 @@ function getStoreLineRow(frame, articleName) {
   const doc = getFrameDocument(frame)
   const rows = Array.from(doc?.querySelectorAll('.rz-store-review-table tbody tr') || [])
   return rows.find((row) => row.querySelector('td .rz-store-primary')?.textContent?.trim() === articleName) || null
+}
+
+function getStoreLineState(frame, articleName) {
+  const row = getStoreLineRow(frame, articleName)
+  if (!row) return null
+  const selects = row.querySelectorAll('select')
+  const suggestion = row.querySelector('.rz-store-suggestion')?.textContent?.trim() || ''
+  return {
+    review: selects[0]?.value || '',
+    mappedArticle: selects[1]?.value || '',
+    location: selects[2]?.value || '',
+    suggestion,
+  }
+}
+
+async function ensureStoreLineSuggestionState(frame, articleName, mode) {
+  await waitForCondition(() => {
+    const state = getStoreLineState(frame, articleName)
+    if (!state) return false
+    if (mode === 'suggest-only') {
+      return Boolean(state.suggestion) && !state.mappedArticle && !state.location
+    }
+    if (mode === 'auto-ready') {
+      return Boolean(state.mappedArticle) && Boolean(state.location) && state.review === 'selected'
+    }
+    return false
+  }, WAIT_TIMEOUT, `Voorstelstatus ${mode} werd niet bereikt voor ${articleName}. Diagnose: ${JSON.stringify(getStoreLineState(frame, articleName))}`)
 }
 
 async function setStoreLineReviewDecision(frame, articleName, decision) {
@@ -675,6 +710,69 @@ export async function runBrowserRegressionTests() {
       const doc = getFrameDocument(frame)
       await waitForCondition(() => queryText(doc, 'Aankoopdatum: 10-03-2026'), WAIT_TIMEOUT, 'Mock aankoopdatum ontbreekt in Kassabon Jumbo')
       await waitForCondition(() => queryText(doc, 'Winkel: Jumbo, Marktplein 8, Utrecht'), WAIT_TIMEOUT, 'Mock winkelheader ontbreekt in Kassabon Jumbo')
+    }, results)
+
+    await runScenario('Vereenvoudigingsniveau voorzichtig laat bekende regels als voorstel open staan', async () => {
+      await prepareRegressionFixture(frame)
+      const melkId = await getStoreReviewArticleOptionId('Melk')
+      await setStoreImportSimplificationLevel('gebalanceerd')
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
+      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
+      await processCurrentStoreBatch(frame)
+      await waitForAsyncCondition(async () => (await getInventoryQuantity('Melk')) > 0, WAIT_TIMEOUT, 'Voorbereidende Lidl-opboeking voor Melk mislukte')
+
+      await setStoreImportSimplificationLevel('voorzichtig')
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
+      await ensureStoreLineSuggestionState(frame, 'Halfvolle melk', 'suggest-only')
+    }, results)
+
+    await runScenario('Vereenvoudigingsniveau gebalanceerd vult bekende regels automatisch in', async () => {
+      await prepareRegressionFixture(frame)
+      const melkId = await getStoreReviewArticleOptionId('Melk')
+      await setStoreImportSimplificationLevel('gebalanceerd')
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
+      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
+      await processCurrentStoreBatch(frame)
+      await waitForAsyncCondition(async () => (await getInventoryQuantity('Melk')) > 0, WAIT_TIMEOUT, 'Voorbereidende Lidl-opboeking voor Melk mislukte')
+
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
+      await ensureStoreLineSuggestionState(frame, 'Halfvolle melk', 'auto-ready')
+    }, results)
+
+    await runScenario('Vereenvoudigingsniveau maximaal gemak bereidt bekende regels automatisch voor maar verwerkt niet stil', async () => {
+      await prepareRegressionFixture(frame)
+      const tomatenId = await getStoreReviewArticleOptionId('Tomaten')
+      await setStoreImportSimplificationLevel('gebalanceerd')
+      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
+      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
+      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
+      await processCurrentStoreBatch(frame)
+      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > 0, WAIT_TIMEOUT, 'Voorbereidende Jumbo-opboeking voor Tomaten mislukte')
+
+      const beforeQuantity = await getInventoryQuantity('Tomaten')
+      await setStoreImportSimplificationLevel('maximaal_gemak')
+      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
+      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
+      await ensureStoreLineSuggestionState(frame, 'Tomaten', 'auto-ready')
+      if ((await getInventoryQuantity('Tomaten')) !== beforeQuantity) {
+        throw new Error('Maximaal gemak verwerkte Tomaten stilzwijgend zonder expliciete actie')
+      }
     }, results)
 
     await runScenario('Lidl-flow kan een regel koppelen en naar voorraad verwerken', async () => {

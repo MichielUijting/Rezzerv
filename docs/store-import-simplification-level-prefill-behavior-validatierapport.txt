@@ -1,0 +1,38 @@
+Rezzerv v01.07.18 — validatierapport
+Doel van deze release:
+- huishoudniveau voor vereenvoudiging van winkelimport echt laten doorwerken in de prefill-logica
+- bestaande Lidl- en Jumbo-flow behouden
+- gerichte regressietests toevoegen voor voorzichtig, gebalanceerd en maximaal gemak
+
+Uitgevoerde wijzigingen
+1. Backend
+- apply_prefill_to_batch gebruikt nu het huishoudniveau store_import_simplification_level
+- voorzichtig:
+  - wel suggesties
+  - geen automatische invulling van artikel en locatie
+  - geen automatische klaarzetting
+- gebalanceerd:
+  - stabiele bekende regels worden automatisch voorbereid
+- maximaal_gemak:
+  - volgt in deze release dezelfde automatische voorbereiding als gebalanceerd
+  - verwerking naar voorraad blijft expliciete gebruikersactie
+- suggestion_reason is niveau-specifiek gemaakt
+
+2. Frontend
+- Winkels toont nu niveau-afhankelijke uitleg boven de reviewtabel
+- suggestielabels tonen voortaan suggestion_reason uit de backend
+
+3. Regressietest Admin
+- scenario toegevoegd voor voorzichtig
+- scenario toegevoegd voor gebalanceerd
+- scenario toegevoegd voor maximaal_gemak zonder stille verwerking
+
+Uitgevoerde validatie
+- backend syntax-check geslaagd via py_compile
+- frontend productiebuild geslaagd via Vite
+- browserregressies zijn inhoudelijk uitgebreid in de runnercode, maar niet volledig end-to-end uitgevoerd in deze container
+
+Belangrijke functionele grens in deze release
+- verwerking naar voorraad blijft expliciete actie van de gebruiker
+- geen nieuwe winkel toegevoegd
+- geen brede UI-herbouw uitgevoerd

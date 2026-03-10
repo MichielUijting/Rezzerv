@@ -94,8 +94,9 @@ function batchStatusLabel(value) {
 }
 
 function suggestionLabel(line) {
+  if (line?.suggestion_reason) return line.suggestion_reason
   if (line.is_auto_prefilled && (line.review_decision || 'pending') === 'selected' && line.matched_household_article_id && line.target_location_id) {
-    return 'Automatisch voorgesteld'
+    return 'Automatisch voorbereid'
   }
   if (line.suggested_household_article_id || line.suggested_location_id) {
     return 'Controleer voorstel'
@@ -526,6 +527,10 @@ export default function StoresPage() {
                   </Button>
                   {processFeedback ? <span className="rz-store-inline-feedback">{processFeedback}</span> : null}
                 </div>
+              </div>
+
+              <div className="rz-store-review-meta" style={{ marginBottom: '12px' }}>
+                Vereenvoudigingsniveau actief: {simplificationLevelLabel}. Bekende regels worden volgens dit niveau voorgesteld of automatisch voorbereid.
               </div>
 
               <div className="rz-table-wrapper">

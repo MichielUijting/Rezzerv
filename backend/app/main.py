@@ -617,6 +617,7 @@ def normalize_store_memory_key(article_name: str | None, brand: str | None):
 
 
 def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provider_code: str):
+    simplification_level = get_household_store_import_simplification_level(conn, household_id)
     lines = conn.execute(
         text(
             """
@@ -659,9 +660,19 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
         matched_article_id = memory["matched_household_article_id"]
         preferred_location_id = memory["preferred_location_id"]
         times_confirmed = int(memory["times_confirmed"] or 0)
-        is_safe_match = bool(matched_article_id)
-        should_auto_select = is_safe_match and bool(preferred_location_id) and times_confirmed >= 1
-        suggestion_reason = "Automatisch voorgesteld" if should_auto_select else "Controleer voorstel"
+        can_suggest_article = bool(matched_article_id)
+        can_suggest_location = bool(preferred_location_id)
+        can_auto_fill = simplification_level in {"gebalanceerd", "maximaal_gemak"} and can_suggest_article and can_suggest_location and times_confirmed >= 1
+
+        if simplification_level == "voorzichtig":
+            suggestion_reason = "Voorstel op basis van eerdere keuze — niveau Voorzichtig"
+            suggestion_confidence = "medium" if (can_suggest_article or can_suggest_location) else None
+        elif simplification_level == "maximaal_gemak":
+            suggestion_reason = "Automatisch voorbereid — niveau Maximaal gemak"
+            suggestion_confidence = "high" if can_auto_fill else "medium"
+        else:
+            suggestion_reason = "Automatisch voorbereid — niveau Gebalanceerd" if can_auto_fill else "Controleer voorstel — niveau Gebalanceerd"
+            suggestion_confidence = "high" if can_auto_fill else "medium"
 
         conn.execute(
             text(
@@ -672,37 +683,38 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
                     suggestion_confidence = :suggestion_confidence,
                     suggestion_reason = :suggestion_reason,
                     is_auto_prefilled = :is_auto_prefilled,
-                    matched_household_article_id = COALESCE(:matched_household_article_id, matched_household_article_id),
-                    target_location_id = COALESCE(:target_location_id, target_location_id),
-                    match_status = CASE WHEN :matched_household_article_id IS NOT NULL THEN 'matched' ELSE match_status END,
-                    review_decision = CASE WHEN :should_auto_select = 1 THEN 'selected' ELSE review_decision END,
+                    matched_household_article_id = CASE WHEN :can_auto_fill = 1 THEN :matched_household_article_id ELSE NULL END,
+                    target_location_id = CASE WHEN :can_auto_fill = 1 THEN :target_location_id ELSE NULL END,
+                    match_status = CASE WHEN :can_auto_fill = 1 AND :matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END,
+                    review_decision = CASE WHEN :can_auto_fill = 1 THEN 'selected' ELSE 'pending' END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
             ),
             {
                 "id": line["id"],
-                "suggested_article_id": matched_article_id,
-                "suggested_location_id": preferred_location_id,
-                "suggestion_confidence": "high" if should_auto_select else "medium",
+                "suggested_article_id": matched_article_id if can_suggest_article else None,
+                "suggested_location_id": preferred_location_id if can_suggest_location else None,
+                "suggestion_confidence": suggestion_confidence,
                 "suggestion_reason": suggestion_reason,
-                "is_auto_prefilled": 1 if should_auto_select or matched_article_id or preferred_location_id else 0,
-                "matched_household_article_id": matched_article_id,
-                "target_location_id": preferred_location_id,
-                "should_auto_select": 1 if should_auto_select else 0,
+                "is_auto_prefilled": 1 if can_auto_fill else 0,
+                "matched_household_article_id": matched_article_id if can_auto_fill else None,
+                "target_location_id": preferred_location_id if can_auto_fill else None,
+                "can_auto_fill": 1 if can_auto_fill else 0,
             },
         )
-        if matched_article_id:
+        if can_suggest_article:
             article_prefills += 1
-        if preferred_location_id:
+        if can_suggest_location:
             location_prefills += 1
-        if should_auto_select:
+        if can_auto_fill:
             fully_prefilled += 1
 
     return {
         "article_prefills": article_prefills,
         "location_prefills": location_prefills,
         "fully_prefilled": fully_prefilled,
+        "simplification_level": simplification_level,
     }
 
 
