@@ -68,6 +68,20 @@ function articleLabel(article) {
   return article.brand ? `${article.name} — ${article.brand}` : article.name
 }
 
+function providerLabel(providerOrConnection) {
+  return providerOrConnection?.store_provider_name || providerOrConnection?.name || providerOrConnection?.store_provider_code || providerOrConnection?.code || 'Winkel'
+}
+
+function providerStatusLabel(provider) {
+  if (!provider) return 'niet beschikbaar'
+  return `${provider.status} / ${provider.import_mode}`
+}
+
+function buildBatchTitle(batch) {
+  const providerName = batch?.store_provider_name || batch?.store_name || 'Winkel'
+  return `Kassabon ${providerName}`
+}
+
 
 function batchStatusLabel(value) {
   if (value === 'processed') return 'Verwerkt naar voorraad'
@@ -121,16 +135,24 @@ export default function StoresPage() {
   const [processWarning, setProcessWarning] = useState(null)
   const processFeedbackTimer = useRef(null)
 
-  const lidlProvider = useMemo(
-    () => providers.find((provider) => provider.code === 'lidl') || null,
+  const providersByCode = useMemo(
+    () => Object.fromEntries(providers.map((provider) => [provider.code, provider])),
     [providers],
   )
 
-  const lidlConnection = useMemo(
-    () => connections.find((connection) => connection.store_provider_code === 'lidl') || null,
+  const connectionsByProviderCode = useMemo(
+    () => Object.fromEntries(connections.map((connection) => [connection.store_provider_code, connection])),
     [connections],
   )
 
+  const primaryProvider = useMemo(
+    () => providers[0] || null,
+    [providers],
+  )
+
+  const activeProviderCode = activeBatch?.store_provider_code || primaryProvider?.code || null
+  const activeProvider = activeProviderCode ? providersByCode[activeProviderCode] || null : null
+  const activeConnection = activeProviderCode ? connectionsByProviderCode[activeProviderCode] || null : null
 
   const validArticleIds = useMemo(() => new Set(articleOptions.map((article) => String(article.id))), [articleOptions])
   const validLocationIds = useMemo(() => new Set(locationOptions.map((location) => String(location.id))), [locationOptions])
@@ -201,9 +223,9 @@ export default function StoresPage() {
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? backendArticles : articleFallbackOptions)
       setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
 
-      const existingLidlConnection = connectionData.find((connection) => connection.store_provider_code === 'lidl')
-      if (existingLidlConnection?.id) {
-        await restoreLatestBatch(existingLidlConnection.id)
+      const existingPrimaryConnection = connectionData.find((connection) => providerData.some((provider) => provider.code === connection.store_provider_code))
+      if (existingPrimaryConnection?.id) {
+        await restoreLatestBatch(existingPrimaryConnection.id)
       } else {
         setActiveBatch(null)
       }
@@ -242,36 +264,36 @@ export default function StoresPage() {
     }
   }, [household?.id, activeBatch?.batch_id])
 
-  async function handleConnect() {
-    if (!household) return
+  async function handleConnect(providerCode, providerName) {
+    if (!household || !providerCode) return
     setIsConnecting(true)
     setError('')
     setStatus('')
     try {
       const connection = await fetchJson('/api/store-connections', {
         method: 'POST',
-        body: JSON.stringify({ household_id: household.id, store_provider_code: 'lidl' }),
+        body: JSON.stringify({ household_id: household.id, store_provider_code: providerCode }),
       })
       setConnections((current) => {
         const filtered = current.filter((item) => item.id !== connection.id)
         return [...filtered, connection]
       })
       await refreshLocationOptions(household.id)
-      setStatus('Lidl is gekoppeld aan dit huishouden.')
+      setStatus(`${providerName || providerCode} is gekoppeld aan dit huishouden.`)
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'Lidl kon niet worden gekoppeld.')
+      setError(normalizeErrorMessage(err?.message) || `${providerName || providerCode} kon niet worden gekoppeld.`)
     } finally {
       setIsConnecting(false)
     }
   }
 
-  async function handlePullPurchases() {
-    if (!lidlConnection) return
+  async function handlePullPurchases(connection, providerName) {
+    if (!connection) return
     setIsPulling(true)
     setError('')
     setStatus('')
     try {
-      const pullResult = await fetchJson(`/api/store-connections/${lidlConnection.id}/pull-purchases`, {
+      const pullResult = await fetchJson(`/api/store-connections/${connection.id}/pull-purchases`, {
         method: 'POST',
         body: JSON.stringify({ mock_profile: 'default' }),
       })
@@ -280,9 +302,9 @@ export default function StoresPage() {
       const fullyPrefilled = p.fully_prefilled || 0
       const articlePrefills = p.article_prefills || 0
       if (fullyPrefilled > 0 || articlePrefills > 0) {
-        setStatus(`Nieuwe mockaankopen zijn opgehaald. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een artikelvoorstel.`)
+        setStatus(`Nieuwe mockaankopen van ${providerName || 'de winkel'} zijn opgehaald. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een artikelvoorstel.`)
       } else {
-        setStatus('Nieuwe mockaankopen zijn opgehaald. Kies per regel wat naar voorraad mag.')
+        setStatus(`Nieuwe mockaankopen van ${providerName || 'de winkel'} zijn opgehaald. Kies per regel wat naar voorraad mag.`)
       }
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
@@ -439,32 +461,39 @@ export default function StoresPage() {
             <div>Winkelgegevens laden…</div>
           ) : (
             <div style={{ display: 'grid', gap: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '18px' }}>Lidl</div>
-                  <div style={{ color: '#667085', fontSize: '14px' }}>
-                    Status provider: {lidlProvider ? `${lidlProvider.status} / ${lidlProvider.import_mode}` : 'niet beschikbaar'}
-                  </div>
-                  <div style={{ color: '#667085', fontSize: '14px' }}>
-                    Koppeling: {lidlConnection ? 'gekoppeld' : 'nog niet gekoppeld'}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                  {!lidlConnection ? (
-                    <Button variant="primary" onClick={handleConnect} disabled={isConnecting || !lidlProvider}>
-                      {isConnecting ? 'Koppelen…' : 'Lidl koppelen'}
-                    </Button>
-                  ) : (
-                    <Button variant="secondary" onClick={handlePullPurchases} disabled={isPulling}>
-                      {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
-                    </Button>
-                  )}
-                </div>
-              </div>
+              {providers.map((provider) => {
+                const connection = connectionsByProviderCode[provider.code] || null
+                return (
+                  <div key={provider.code} style={{ display: 'grid', gap: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '18px' }}>{provider.name}</div>
+                        <div style={{ color: '#667085', fontSize: '14px' }}>
+                          Status provider: {providerStatusLabel(provider)}
+                        </div>
+                        <div style={{ color: '#667085', fontSize: '14px' }}>
+                          Koppeling: {connection ? 'gekoppeld' : 'nog niet gekoppeld'}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                        {!connection ? (
+                          <Button variant="primary" onClick={() => handleConnect(provider.code, provider.name)} disabled={isConnecting}>
+                            {isConnecting ? 'Koppelen…' : `${provider.name} koppelen`}
+                          </Button>
+                        ) : (
+                          <Button variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
+                            {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
 
-              <div style={{ borderTop: '1px solid #e4e7ec', paddingTop: '14px', color: '#667085', fontSize: '14px' }}>
-                Deze release laat je regels beoordelen, koppelen en geselecteerde regels expliciet naar voorraad verwerken.
-              </div>
+                    <div style={{ borderTop: '1px solid #e4e7ec', paddingTop: '14px', color: '#667085', fontSize: '14px' }}>
+                      Deze release laat je regels beoordelen, koppelen en geselecteerde regels expliciet naar voorraad verwerken.
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
         </Card>
@@ -474,12 +503,12 @@ export default function StoresPage() {
             <div className="rz-store-review">
               <div className="rz-store-review-summary">
                 <div>
-                  <h3 className="rz-store-review-title">Kassabon Lidl</h3>
+                  <h3 className="rz-store-review-title">{buildBatchTitle(activeBatch)}</h3>
                   <div className="rz-store-review-meta">
-                    Aankoopdatum: 10-03-2026
+                    Aankoopdatum: {activeBatch.purchase_date || 'Onbekend'}
                   </div>
                   <div className="rz-store-review-meta">
-                    Winkel: Lidl, Hoofdstraat 12, Utrecht
+                    Winkel: {activeBatch.store_label || activeBatch.store_name || providerLabel(activeProvider)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>

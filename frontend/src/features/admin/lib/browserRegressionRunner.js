@@ -204,6 +204,108 @@ function resetAutomationState(frame) {
   frame.contentWindow.localStorage.removeItem(ARTICLE_OVERRIDE_KEY)
 }
 
+
+async function openStoresPage(frame) {
+  await navigateFrame(frame, '/winkels')
+  const doc = getFrameDocument(frame)
+  await waitForCondition(() => queryText(doc, 'Winkelkoppelingen'), WAIT_TIMEOUT, 'Winkelkoppelingen pagina opent niet')
+}
+
+async function clickButtonByText(doc, label) {
+  const button = Array.from(doc?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === label)
+  if (!button) throw new Error(`Knop ${label} niet gevonden`)
+  clickElement(button)
+  return button
+}
+
+async function ensureLidlConnectionAndBatch(frame) {
+  await openStoresPage(frame)
+  let doc = getFrameDocument(frame)
+
+  const connectButton = Array.from(doc?.querySelectorAll('button') || []).find((entry) => entry.textContent?.includes('Lidl koppelen'))
+  if (connectButton) {
+    clickElement(connectButton)
+    await waitForCondition(() => queryText(getFrameDocument(frame), 'Lidl is gekoppeld aan dit huishouden.') || queryText(getFrameDocument(frame), 'Koppeling: gekoppeld'), WAIT_TIMEOUT, 'Lidl koppelen werd niet bevestigd')
+  }
+
+  doc = getFrameDocument(frame)
+  const pullButton = await waitForCondition(
+    () => Array.from(getFrameDocument(frame)?.querySelectorAll('button') || []).find((entry) => entry.textContent?.includes('Aankopen ophalen')),
+    WAIT_TIMEOUT,
+    'Knop Aankopen ophalen niet gevonden'
+  )
+  clickElement(pullButton)
+  await waitForCondition(() => queryText(getFrameDocument(frame), 'Kassabon Lidl'), WAIT_TIMEOUT, 'Kassabon Lidl werd niet geladen')
+  await waitForCondition(() => getStoreLineRow(frame, 'Halfvolle melk'), WAIT_TIMEOUT, 'Regel Halfvolle melk niet zichtbaar in Kassabon Lidl')
+}
+
+function getStoreLineRow(frame, articleName) {
+  const doc = getFrameDocument(frame)
+  const rows = Array.from(doc?.querySelectorAll('.rz-store-review-table tbody tr') || [])
+  return rows.find((row) => row.querySelector('td .rz-store-primary')?.textContent?.trim() === articleName) || null
+}
+
+async function setStoreLineReviewDecision(frame, articleName, decision) {
+  const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
+  const selects = row.querySelectorAll('select')
+  const reviewSelect = selects[0]
+  if (!reviewSelect) throw new Error(`Review-select ontbreekt voor ${articleName}`)
+  setSelectValue(reviewSelect, decision)
+  await delay(30)
+  reviewSelect.dispatchEvent(new Event('change', { bubbles: true }))
+  await waitForCondition(() => {
+    const refreshedRow = getStoreLineRow(frame, articleName)
+    return refreshedRow?.querySelectorAll('select')?.[0]?.value === decision
+  }, WAIT_TIMEOUT, `Reviewbeslissing ${decision} werd niet opgeslagen voor ${articleName}`)
+}
+
+async function setStoreLineArticle(frame, articleName, mappedArticleId) {
+  const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
+  const articleSelect = row.querySelectorAll('select')[1]
+  if (!articleSelect) throw new Error(`Artikelselect ontbreekt voor ${articleName}`)
+  setSelectValue(articleSelect, mappedArticleId)
+  await delay(30)
+  articleSelect.dispatchEvent(new Event('change', { bubbles: true }))
+  await waitForCondition(() => {
+    const refreshedRow = getStoreLineRow(frame, articleName)
+    return refreshedRow?.querySelectorAll('select')?.[1]?.value === mappedArticleId
+  }, WAIT_TIMEOUT, `Artikelkoppeling werd niet opgeslagen voor ${articleName}`)
+}
+
+async function setStoreLineLocationByLabel(frame, articleName, expectedLabel) {
+  const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
+  const locationSelect = row.querySelectorAll('select')[2]
+  if (!locationSelect) throw new Error(`Locatieselect ontbreekt voor ${articleName}`)
+  const option = Array.from(locationSelect.options).find((entry) => entry.textContent?.trim() === expectedLabel)
+  if (!option) throw new Error(`Locatie ${expectedLabel} niet gevonden voor ${articleName}`)
+  setSelectValue(locationSelect, option.value)
+  await delay(30)
+  locationSelect.dispatchEvent(new Event('change', { bubbles: true }))
+  await waitForCondition(() => {
+    const refreshedRow = getStoreLineRow(frame, articleName)
+    return refreshedRow?.querySelectorAll('select')?.[2]?.value === option.value
+  }, WAIT_TIMEOUT, `Locatie ${expectedLabel} werd niet opgeslagen voor ${articleName}`)
+}
+
+async function processCurrentStoreBatch(frame) {
+  const processButton = await waitForCondition(
+    () => Array.from(getFrameDocument(frame)?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Naar voorraad'),
+    WAIT_TIMEOUT,
+    'Knop Naar voorraad niet gevonden'
+  )
+  clickElement(processButton)
+  await waitForCondition(() => queryText(getFrameDocument(frame), 'Verwerkt naar voorraad'), WAIT_TIMEOUT, 'Verwerken naar voorraad werd niet bevestigd')
+}
+
+async function ensureInventoryContainsArticle(frame, articleName) {
+  await navigateFrame(frame, '/voorraad')
+  await waitForCondition(() => {
+    const doc = getFrameDocument(frame)
+    const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
+    return rows.some((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName)
+  }, WAIT_TIMEOUT, `Artikel ${articleName} niet zichtbaar in Voorraad`)
+}
+
 async function openSettings(frame) {
   await navigateFrame(frame, '/instellingen')
 }
@@ -365,6 +467,27 @@ export async function runBrowserRegressionTests() {
       await openArticleFromInventory(frame, 'Boormachine')
       await ensureHistoryAutoState(frame, 'Boormachine', false)
       await ensureAnalysisStatus(frame, 'Niet van toepassing')
+    }, results)
+
+    await runScenario('Lidl-flow opent kassabon na koppelen en aankopen ophalen', async () => {
+      await ensureLidlConnectionAndBatch(frame)
+      const doc = getFrameDocument(frame)
+      await waitForCondition(() => queryText(doc, 'Aankoopdatum: 10-03-2026'), WAIT_TIMEOUT, 'Mock aankoopdatum ontbreekt in Kassabon Lidl')
+      await waitForCondition(() => queryText(doc, 'Winkel: Lidl, Hoofdstraat 12, Utrecht'), WAIT_TIMEOUT, 'Mock winkelheader ontbreekt in Kassabon Lidl')
+    }, results)
+
+    await runScenario('Lidl-flow kan een regel koppelen en naar voorraad verwerken', async () => {
+      await ensureLidlConnectionAndBatch(frame)
+      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
+      await setStoreLineArticle(frame, 'Halfvolle melk', '4')
+      await setStoreLineLocationByLabel(frame, 'Halfvolle melk', 'Voorraad test / Plank test')
+      await processCurrentStoreBatch(frame)
+      await ensureInventoryContainsArticle(frame, 'Melk')
+      await openArticleFromInventory(frame, 'Melk')
+      await ensureTabContains(frame, 'Locaties', 'Primaire locatie', 'Locaties-tab toont geen inhoud voor Melk')
+      await ensureTabContains(frame, 'Historie', 'Winkelimport', 'Historie-tab toont geen winkelimport voor Melk')
     }, results)
   } finally {
     removeExistingFrame()
