@@ -1724,6 +1724,10 @@ def get_purchase_import_batch(batch_id: str):
             refresh_batch_status = update_batch_status(conn, batch_id)
             batch = dict(batch)
             batch["import_status"] = refresh_batch_status
+        else:
+            batch = dict(batch)
+
+        batch["store_import_simplification_level"] = get_household_store_import_simplification_level(conn, str(batch["household_id"]))
 
         lines = conn.execute(
             text(
@@ -1757,7 +1761,7 @@ def get_purchase_import_batch(batch_id: str):
         article_from_memory = bool(line.get("suggested_household_article_id"))
         location_from_memory = bool(line.get("suggested_location_id"))
         memory_found = article_from_memory or location_from_memory
-        simplification_level = batch_result.get("store_import_simplification_level") or get_household_store_import_simplification_level(conn, str(batch_result.get("household_id")))
+        simplification_level = batch_result.get("store_import_simplification_level") or "gebalanceerd"
         simplification_label = {
             "voorzichtig": "Voorzichtig",
             "gebalanceerd": "Gebalanceerd",
