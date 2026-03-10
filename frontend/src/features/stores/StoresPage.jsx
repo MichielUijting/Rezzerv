@@ -313,6 +313,13 @@ export default function StoresPage() {
     setError('')
     setStatus('')
     try {
+      const existingBatch = await openLatestBatchForConnection(connection.id)
+      if (existingBatch) {
+        setStatus(`De laatste open bon van ${providerName || 'de winkel'} is opnieuw geladen met het actuele gemaksniveau.`)
+        await refreshLocationOptions(household.id)
+        return
+      }
+
       const pullResult = await fetchJson(`/api/store-connections/${connection.id}/pull-purchases`, {
         method: 'POST',
         body: JSON.stringify({ mock_profile: 'default' }),
@@ -508,14 +515,9 @@ export default function StoresPage() {
                             {isConnecting ? 'Koppelen…' : `${provider.name} koppelen`}
                           </Button>
                         ) : (
-                          <>
-                            <Button variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
-                              {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
-                            </Button>
-                            <Button variant="secondary" onClick={() => openLatestBatchForConnection(connection.id)} disabled={isPulling}>
-                              Laatste bon openen
-                            </Button>
-                          </>
+                          <Button variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
+                            {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
+                          </Button>
                         )}
                       </div>
                     </div>
