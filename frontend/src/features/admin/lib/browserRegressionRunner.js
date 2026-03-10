@@ -341,6 +341,33 @@ async function ensureStoreLineReadyForProcessing(frame, articleName, mappedArtic
   }
 }
 
+function describeStoreReviewState(frame) {
+  const doc = getFrameDocument(frame)
+  const rows = Array.from(doc?.querySelectorAll('.rz-store-review-table tbody tr') || [])
+  const details = rows.map((row) => {
+    const cells = row.querySelectorAll('td')
+    const selects = row.querySelectorAll('select')
+    return {
+      article: row.querySelector('td .rz-store-primary')?.textContent?.trim() || '',
+      review: selects[0]?.value || '',
+      mappedArticle: selects[1]?.value || '',
+      location: selects[2]?.value || '',
+      blockerText: cells[4]?.textContent?.trim() || '',
+    }
+  })
+  const warningTitle = doc?.querySelector('#process-warning-title')?.textContent?.trim() || ''
+  const warningText = doc?.querySelector('.rz-modal-text')?.textContent?.trim() || ''
+  const statusCards = Array.from(doc?.querySelectorAll('.rz-card') || [])
+    .map((card) => card.textContent?.trim() || '')
+    .filter(Boolean)
+  return {
+    warningTitle,
+    warningText,
+    statusCards,
+    rows: details,
+  }
+}
+
 async function processCurrentStoreBatch(frame) {
   const processButton = await waitForCondition(
     () => Array.from(getFrameDocument(frame)?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Naar voorraad'),
@@ -348,10 +375,33 @@ async function processCurrentStoreBatch(frame) {
     'Knop Naar voorraad niet gevonden'
   )
   clickElement(processButton)
-  await waitForCondition(() => {
+  await delay(250)
+
+  const immediateState = describeStoreReviewState(frame)
+  if (immediateState.warningTitle || immediateState.warningText) {
+    throw new Error(`Verwerken geblokkeerd: ${immediateState.warningTitle || 'waarschuwing'} ${immediateState.warningText}`.trim())
+  }
+
+  await waitForAsyncCondition(async () => {
     const doc = getFrameDocument(frame)
-    return queryText(doc, 'Verwerkt naar voorraad') || queryText(doc, 'Er staan geen open regels meer in deze kassabon.')
-  }, WAIT_TIMEOUT, 'Verwerken naar voorraad werd niet bevestigd')
+    const texts = [
+      'Verwerking afgerond',
+      'Verwerkt!',
+      'Verwerkt naar voorraad',
+      'Er staan geen open regels meer in deze kassabon.',
+    ]
+    if (texts.some((entry) => queryText(doc, entry))) return true
+
+    const busyButton = Array.from(doc?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Bezig…')
+    if (busyButton) return false
+
+    const state = describeStoreReviewState(frame)
+    if (state.warningTitle || state.warningText) {
+      throw new Error(`Verwerken geblokkeerd: ${state.warningTitle || 'waarschuwing'} ${state.warningText}`.trim())
+    }
+
+    return false
+  }, WAIT_TIMEOUT, `Verwerken naar voorraad werd niet bevestigd. Diagnose: ${JSON.stringify(describeStoreReviewState(frame))}`)
 }
 
 async function getInventoryRows() {
