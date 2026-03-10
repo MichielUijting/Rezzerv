@@ -1,0 +1,36 @@
+Rezzerv validatierapport — store-provider-neutral-backend-release-a
+Versie: 01.07.07
+Datum: 2026-03-10
+
+Doel
+- Backend van de winkelimport provider-neutraal maken zonder regressie in de bestaande Lidl-flow.
+
+Uitgevoerde wijzigingen
+- Providerregistratie gecentraliseerd in STORE_PROVIDER_DEFINITIONS.
+- Mock pull-flow omgezet van Lidl-hardcoding naar providergestuurde batchopbouw.
+- Generieke batchmetadata toegevoegd aan purchase_import_batches:
+  - purchase_date
+  - store_name
+  - store_label
+- Batch-endpoint levert nu providernaam en batchheaderdata terug.
+- Event-note voor voorraadverwerking aangepast van store_import;lidl;... naar store_import;provider=...;
+- Seedlogica voor providers aangepast zodat actieve providerdata wordt geüpdatet of aangemaakt vanuit providerdefinities.
+
+Niet gewijzigd
+- Geen tweede winkel toegevoegd.
+- Geen brede UI-ombouw uitgevoerd.
+- Bestaande Lidl-flow in frontend intact gelaten.
+- Voorraadmodel en event-based verwerkingsprincipe ongewijzigd.
+
+Validatie
+1. Python syntax-check uitgevoerd op backend/app/main.py en backend/app/models/purchase_import.py.
+2. End-to-end API-check uitgevoerd met TestClient op lokale sqlite database:
+   - store connection aanmaken voor Lidl
+   - mock purchases ophalen
+   - batch uitlezen inclusief nieuwe metadata
+   - review/map/location zetten op regel
+   - batch verwerken naar voorraad
+3. Bevestigd dat event-note nu provider-neutraal is met provider=lidl.
+
+Resultaat
+- Release A-doel gehaald: backendcontract van de winkelimport is provider-neutraal gemaakt, terwijl de functionele Lidl-flow intact blijft.

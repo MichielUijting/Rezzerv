@@ -122,49 +122,63 @@ class ProcessBatchRequest(BaseModel):
 
 
 
-MOCK_LIDL_PURCHASES = {
-    "default": [
-        {
-            "external_line_ref": "lidl-line-1",
-            "external_article_code": "LIDL-1001",
-            "article_name_raw": "Halfvolle melk",
-            "brand_raw": "Lidl",
-            "quantity_raw": 1,
-            "unit_raw": "liter",
-            "line_price_raw": 1.29,
-            "currency_code": "EUR",
+STORE_PROVIDER_DEFINITIONS = {
+    "lidl": {
+        "code": "lidl",
+        "name": "Lidl",
+        "status": "active",
+        "import_mode": "mock",
+        "mock_batches": {
+            "default": {
+                "purchase_date": "2026-03-10",
+                "store_name": "Lidl",
+                "store_label": "Lidl, Hoofdstraat 12, Utrecht",
+                "source_reference": "mock:lidl:default",
+                "lines": [
+                    {
+                        "external_line_ref": "lidl-line-1",
+                        "external_article_code": "LIDL-1001",
+                        "article_name_raw": "Halfvolle melk",
+                        "brand_raw": "Lidl",
+                        "quantity_raw": 1,
+                        "unit_raw": "liter",
+                        "line_price_raw": 1.29,
+                        "currency_code": "EUR",
+                    },
+                    {
+                        "external_line_ref": "lidl-line-2",
+                        "external_article_code": "LIDL-2001",
+                        "article_name_raw": "Banaan",
+                        "brand_raw": "Lidl",
+                        "quantity_raw": 1,
+                        "unit_raw": "kg",
+                        "line_price_raw": 1.89,
+                        "currency_code": "EUR",
+                    },
+                    {
+                        "external_line_ref": "lidl-line-3",
+                        "external_article_code": "LIDL-3001",
+                        "article_name_raw": "Volkoren pasta",
+                        "brand_raw": "Lidl",
+                        "quantity_raw": 500,
+                        "unit_raw": "g",
+                        "line_price_raw": 0.99,
+                        "currency_code": "EUR",
+                    },
+                    {
+                        "external_line_ref": "lidl-line-4",
+                        "external_article_code": "LIDL-4001",
+                        "article_name_raw": "Tomatenblokjes",
+                        "brand_raw": "Lidl",
+                        "quantity_raw": 2,
+                        "unit_raw": "stuks",
+                        "line_price_raw": 1.18,
+                        "currency_code": "EUR",
+                    },
+                ],
+            }
         },
-        {
-            "external_line_ref": "lidl-line-2",
-            "external_article_code": "LIDL-2001",
-            "article_name_raw": "Banaan",
-            "brand_raw": "Lidl",
-            "quantity_raw": 1,
-            "unit_raw": "kg",
-            "line_price_raw": 1.89,
-            "currency_code": "EUR",
-        },
-        {
-            "external_line_ref": "lidl-line-3",
-            "external_article_code": "LIDL-3001",
-            "article_name_raw": "Volkoren pasta",
-            "brand_raw": "Lidl",
-            "quantity_raw": 500,
-            "unit_raw": "g",
-            "line_price_raw": 0.99,
-            "currency_code": "EUR",
-        },
-        {
-            "external_line_ref": "lidl-line-4",
-            "external_article_code": "LIDL-4001",
-            "article_name_raw": "Tomatenblokjes",
-            "brand_raw": "Lidl",
-            "quantity_raw": 2,
-            "unit_raw": "stuks",
-            "line_price_raw": 1.18,
-            "currency_code": "EUR",
-        },
-    ]
+    }
 }
 
 
@@ -247,13 +261,60 @@ def utc_now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
 
+def get_store_provider_definition(provider_code: str):
+    return STORE_PROVIDER_DEFINITIONS.get((provider_code or "").strip().lower())
+
+
+def get_mock_purchase_batch(provider_code: str, mock_profile: str):
+    definition = get_store_provider_definition(provider_code)
+    if not definition:
+        raise HTTPException(status_code=404, detail="Onbekende of inactieve store provider")
+
+    mock_batches = definition.get("mock_batches") or {}
+    batch = mock_batches.get(mock_profile or "default")
+    if not batch:
+        raise HTTPException(status_code=404, detail="Geen mock-aankopen gevonden voor dit profiel")
+
+    lines = [dict(line) for line in batch.get("lines") or []]
+    return {
+        "provider_code": definition["code"],
+        "provider_name": definition["name"],
+        "import_mode": definition.get("import_mode", "mock"),
+        "purchase_date": batch.get("purchase_date"),
+        "store_name": batch.get("store_name") or definition["name"],
+        "store_label": batch.get("store_label") or definition["name"],
+        "source_reference": batch.get("source_reference"),
+        "lines": lines,
+    }
+
+
 def seed_store_providers():
     with engine.begin() as conn:
-        existing = conn.execute(
-            text("SELECT id FROM store_providers WHERE code = :code"),
-            {"code": "lidl"},
-        ).first()
-        if not existing:
+        for provider in STORE_PROVIDER_DEFINITIONS.values():
+            existing = conn.execute(
+                text("SELECT id FROM store_providers WHERE code = :code"),
+                {"code": provider["code"]},
+            ).first()
+            if existing:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE store_providers
+                        SET name = :name,
+                            status = :status,
+                            import_mode = :import_mode
+                        WHERE code = :code
+                        """
+                    ),
+                    {
+                        "code": provider["code"],
+                        "name": provider["name"],
+                        "status": provider.get("status", "active"),
+                        "import_mode": provider.get("import_mode", "mock"),
+                    },
+                )
+                continue
+
             conn.execute(
                 text(
                     """
@@ -263,13 +324,12 @@ def seed_store_providers():
                 ),
                 {
                     "id": str(uuid.uuid4()),
-                    "code": "lidl",
-                    "name": "Lidl",
-                    "status": "active",
-                    "import_mode": "mock",
+                    "code": provider["code"],
+                    "name": provider["name"],
+                    "status": provider.get("status", "active"),
+                    "import_mode": provider.get("import_mode", "mock"),
                 },
             )
-
 
 
 
@@ -370,6 +430,18 @@ def ensure_release_4_schema():
             )
         )
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_store_import_memory_unique ON store_import_memory (household_id, store_provider_code, normalized_key)"))
+
+
+def ensure_release_5_schema():
+    with engine.begin() as conn:
+        batch_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(purchase_import_batches)")).fetchall()}
+
+        if "purchase_date" not in batch_columns:
+            conn.execute(text("ALTER TABLE purchase_import_batches ADD COLUMN purchase_date TEXT"))
+        if "store_name" not in batch_columns:
+            conn.execute(text("ALTER TABLE purchase_import_batches ADD COLUMN store_name TEXT"))
+        if "store_label" not in batch_columns:
+            conn.execute(text("ALTER TABLE purchase_import_batches ADD COLUMN store_label TEXT"))
 
 
 def normalize_store_memory_key(article_name: str | None, brand: str | None):
@@ -797,6 +869,7 @@ Base.metadata.create_all(bind=engine)
 ensure_release_2_schema()
 ensure_release_3_schema()
 ensure_release_4_schema()
+ensure_release_5_schema()
 seed_store_providers()
 
 def reset_dev_tables():
@@ -1290,12 +1363,7 @@ def get_store_connections(householdId: str = Query(...)):
 
 @app.post("/api/store-connections/{connection_id}/pull-purchases")
 def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
-    lines = MOCK_LIDL_PURCHASES.get(payload.mock_profile)
-    if not lines:
-        raise HTTPException(status_code=400, detail="Onbekend mock_profile")
-
     batch_id = str(uuid.uuid4())
-    now_iso = utc_now_iso()
 
     with engine.begin() as conn:
         connection = conn.execute(
@@ -1303,31 +1371,46 @@ def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
                 """
                 SELECT
                     hsc.id, hsc.household_id, hsc.store_provider_id, hsc.connection_status,
-                    sp.code AS store_provider_code, sp.name AS store_provider_name
+                    sp.code AS store_provider_code, sp.name AS store_provider_name, sp.import_mode
                 FROM household_store_connections hsc
                 JOIN store_providers sp ON sp.id = hsc.store_provider_id
-                WHERE hsc.id = :id
+                WHERE hsc.id = :connection_id
                 """
             ),
-            {"id": connection_id},
+            {"connection_id": connection_id},
         ).mappings().first()
 
         if not connection:
             raise HTTPException(status_code=404, detail="Onbekende store connection")
-
         if connection["connection_status"] != "active":
             raise HTTPException(status_code=400, detail="Store connection is niet actief")
 
-        raw_payload = json.dumps({"mock_profile": payload.mock_profile, "lines": lines})
+        provider_batch = get_mock_purchase_batch(connection["store_provider_code"], payload.mock_profile)
+        lines = provider_batch["lines"]
+        raw_payload = json.dumps(
+            {
+                "profile": payload.mock_profile,
+                "provider_code": provider_batch["provider_code"],
+                "provider_name": provider_batch["provider_name"],
+                "purchase_date": provider_batch.get("purchase_date"),
+                "store_name": provider_batch.get("store_name"),
+                "store_label": provider_batch.get("store_label"),
+                "source_reference": provider_batch.get("source_reference"),
+                "lines": lines,
+            }
+        )
+
         conn.execute(
             text(
                 """
                 INSERT INTO purchase_import_batches (
                     id, household_id, store_provider_id, connection_id, source_type,
-                    source_reference, import_status, raw_payload, created_at
+                    source_reference, raw_payload, import_status, purchase_date,
+                    store_name, store_label, created_at
                 ) VALUES (
-                    :id, :household_id, :store_provider_id, :connection_id, 'mock',
-                    :source_reference, 'new', :raw_payload, CURRENT_TIMESTAMP
+                    :id, :household_id, :store_provider_id, :connection_id, :source_type,
+                    :source_reference, :raw_payload, 'new', :purchase_date,
+                    :store_name, :store_label, CURRENT_TIMESTAMP
                 )
                 """
             ),
@@ -1336,12 +1419,17 @@ def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
                 "household_id": connection["household_id"],
                 "store_provider_id": connection["store_provider_id"],
                 "connection_id": connection_id,
-                "source_reference": f"mock:{payload.mock_profile}",
+                "source_type": connection.get("import_mode") or provider_batch.get("import_mode") or "mock",
+                "source_reference": provider_batch.get("source_reference") or f"mock:{connection['store_provider_code']}:{payload.mock_profile}",
                 "raw_payload": raw_payload,
+                "purchase_date": provider_batch.get("purchase_date"),
+                "store_name": provider_batch.get("store_name"),
+                "store_label": provider_batch.get("store_label"),
             },
         )
 
-        for line in lines:
+        for index, line in enumerate(lines):
+            line_id = str(uuid.uuid4())
             conn.execute(
                 text(
                     """
@@ -1352,25 +1440,33 @@ def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
                     ) VALUES (
                         :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw,
                         :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
-                        'unmatched', 'selected', :ui_sort_order, CURRENT_TIMESTAMP
+                        'unmatched', 'pending', :ui_sort_order, CURRENT_TIMESTAMP
                     )
                     """
                 ),
                 {
-                    "id": str(uuid.uuid4()),
+                    "id": line_id,
                     "batch_id": batch_id,
-                    "ui_sort_order": lines.index(line) + 1,
-                    **line,
+                    "external_line_ref": line["external_line_ref"],
+                    "external_article_code": line.get("external_article_code"),
+                    "article_name_raw": line["article_name_raw"],
+                    "brand_raw": line.get("brand_raw"),
+                    "quantity_raw": line.get("quantity_raw", 1),
+                    "unit_raw": line.get("unit_raw"),
+                    "line_price_raw": line.get("line_price_raw"),
+                    "currency_code": line.get("currency_code", "EUR"),
+                    "ui_sort_order": index,
                 },
             )
 
         prefill_summary = apply_prefill_to_batch(conn, batch_id, str(connection["household_id"]), connection["store_provider_code"])
+        status = update_batch_status(conn, batch_id)
 
         conn.execute(
             text(
                 """
                 UPDATE household_store_connections
-                SET last_sync_at = CURRENT_TIMESTAMP
+                SET last_sync_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
             ),
@@ -1379,12 +1475,13 @@ def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
 
     return {
         "batch_id": batch_id,
-        "connection_id": connection_id,
-        "store_provider_code": "lidl",
-        "source_type": "mock",
-        "import_status": "new",
-        "line_count": len(lines),
-        "created_at": now_iso,
+        "import_status": status,
+        "store_provider_code": provider_batch["provider_code"],
+        "store_provider_name": provider_batch["provider_name"],
+        "purchase_date": provider_batch.get("purchase_date"),
+        "store_name": provider_batch.get("store_name"),
+        "store_label": provider_batch.get("store_label"),
+        "source_reference": provider_batch.get("source_reference"),
         "prefill_summary": prefill_summary,
     }
 
@@ -1399,9 +1496,13 @@ def get_purchase_import_batch(batch_id: str):
                     pib.id AS batch_id,
                     pib.household_id,
                     sp.code AS store_provider_code,
+                    sp.name AS store_provider_name,
                     pib.connection_id,
                     pib.source_type,
                     pib.source_reference,
+                    pib.purchase_date,
+                    pib.store_name,
+                    pib.store_label,
                     pib.import_status,
                     pib.created_at
                 FROM purchase_import_batches pib
@@ -1741,7 +1842,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 continue
 
             article_name = article["name"]
-            note = f"store_import;lidl;batch={batch_id};line={line_id};raw={line['article_name_raw']}"
+            note = f"store_import;provider={batch['store_provider_code']};batch={batch_id};line={line_id};raw={line['article_name_raw']}"
             event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
             apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
             conn.execute(
