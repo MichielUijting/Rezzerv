@@ -221,8 +221,17 @@ async function prepareRegressionFixture(frame) {
   resetAutomationState(frame)
 }
 
-async function setStoreImportSimplificationLevel(level) {
-  return requestJson('/api/dev/household/store-import-settings?household_id=demo-household', {
+async function getRegressionHouseholdId(frame) {
+  const token = frame?.contentWindow?.localStorage?.getItem('rezzerv_token') || ''
+  const household = await requestJson('/api/household', {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  return String(household?.id || '1')
+}
+
+async function setStoreImportSimplificationLevel(frame, level) {
+  const householdId = await getRegressionHouseholdId(frame)
+  return requestJson(`/api/dev/household/store-import-settings?household_id=${encodeURIComponent(householdId)}`, {
     method: 'PUT',
     body: JSON.stringify({ store_import_simplification_level: level }),
   })
@@ -714,7 +723,7 @@ export async function runBrowserRegressionTests() {
     await runScenario('Vereenvoudigingsniveau voorzichtig laat bekende regels als voorstel open staan', async () => {
       await prepareRegressionFixture(frame)
       const melkId = await getStoreReviewArticleOptionId('Melk')
-      await setStoreImportSimplificationLevel('gebalanceerd')
+      await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
       await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
       await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
@@ -723,7 +732,7 @@ export async function runBrowserRegressionTests() {
       await processCurrentStoreBatch(frame)
       await waitForAsyncCondition(async () => (await getInventoryQuantity('Melk')) > 0, WAIT_TIMEOUT, 'Voorbereidende Lidl-opboeking voor Melk mislukte')
 
-      await setStoreImportSimplificationLevel('voorzichtig')
+      await setStoreImportSimplificationLevel(frame, 'voorzichtig')
       await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
       await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
@@ -734,7 +743,7 @@ export async function runBrowserRegressionTests() {
     await runScenario('Vereenvoudigingsniveau gebalanceerd vult bekende regels automatisch in', async () => {
       await prepareRegressionFixture(frame)
       const melkId = await getStoreReviewArticleOptionId('Melk')
-      await setStoreImportSimplificationLevel('gebalanceerd')
+      await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
       await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
       await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
@@ -753,7 +762,7 @@ export async function runBrowserRegressionTests() {
     await runScenario('Vereenvoudigingsniveau maximaal gemak bereidt bekende regels automatisch voor maar verwerkt niet stil', async () => {
       await prepareRegressionFixture(frame)
       const tomatenId = await getStoreReviewArticleOptionId('Tomaten')
-      await setStoreImportSimplificationLevel('gebalanceerd')
+      await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
       await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
       await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
       await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
@@ -763,7 +772,7 @@ export async function runBrowserRegressionTests() {
       await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > 0, WAIT_TIMEOUT, 'Voorbereidende Jumbo-opboeking voor Tomaten mislukte')
 
       const beforeQuantity = await getInventoryQuantity('Tomaten')
-      await setStoreImportSimplificationLevel('maximaal_gemak')
+      await setStoreImportSimplificationLevel(frame, 'maximaal_gemak')
       await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
       await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
       await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')

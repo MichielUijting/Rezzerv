@@ -1,0 +1,19 @@
+Release: Rezzerv-v01.07.20
+Onderwerp: herstel regressietest vereenvoudigingsniveau voorzichtig
+
+Uitgevoerde wijziging:
+- De Admin-regressietest bepaalt het doelhuishouden voor store-import-simplificatieniveau nu dynamisch via /api/household op basis van het ingelogde account in de iframe-runner.
+- Daarna schrijft de runner het vereenvoudigingsniveau via het bestaande dev-endpoint naar datzelfde huishouden.
+
+Aanleiding:
+- In v01.07.19 werd het niveau hard naar demo-household geschreven.
+- De winkeltests draaiden in de UI echter op het huishouden van de ingelogde gebruiker.
+- Daardoor konden gebalanceerd/maximaal gemak per toeval slagen, terwijl voorzichtig bleef falen.
+
+Validatie:
+- Backend compile-check geslaagd (python -m py_compile backend/app/main.py)
+- Frontend build geslaagd (node node_modules/vite/bin/vite.js build)
+
+Scope:
+- Alleen Admin-regressietesthelper aangepast.
+- Geen productfunctionaliteit gewijzigd.
