@@ -382,6 +382,18 @@ async function ensureArticleHistoryContainsStoreImport(articleName, providerCode
   }, WAIT_TIMEOUT, `Geen winkelimport-historie gevonden voor ${articleName}`)
 }
 
+async function ensureArticleHistoryStoreImportCount(articleName, minimumCount, providerCode = null) {
+  await waitForAsyncCondition(async () => {
+    const rows = await getArticleHistoryRows(articleName)
+    const matchingRows = rows.filter((row) => {
+      if (row?.source !== 'store_import') return false
+      if (!providerCode) return true
+      return String(row?.note || '').includes(`provider=${providerCode}`)
+    })
+    return matchingRows.length >= minimumCount
+  }, WAIT_TIMEOUT, `Minder dan ${minimumCount} winkelimport-events gevonden voor ${articleName}`)
+}
+
 async function ensureInventoryContainsArticle(frame, articleName) {
   await navigateFrame(frame, '/voorraad')
   await waitForCondition(() => {
@@ -463,6 +475,15 @@ async function ensureAnalysisStatus(frame, expectedText) {
   const doc = getFrameDocument(frame)
   await waitForCondition(() => queryText(doc, 'Automatisering'), WAIT_TIMEOUT, 'Analyse-tab Automatisering niet zichtbaar')
   await waitForCondition(() => queryText(doc, expectedText), WAIT_TIMEOUT, `Analyse toont niet de verwachte automatiseringsstatus: ${expectedText}`)
+}
+
+async function ensureHistoryCardsAtLeast(frame, minimumCount) {
+  await openArticleTab(frame, 'Historie')
+  await waitForCondition(() => {
+    const doc = getFrameDocument(frame)
+    const cards = Array.from(doc?.querySelectorAll('.rz-history-card') || [])
+    return cards.length >= minimumCount
+  }, WAIT_TIMEOUT, `Minder dan ${minimumCount} historiekaarten zichtbaar in Artikeldetails`)
 }
 
 export async function runBrowserRegressionTests() {
@@ -596,6 +617,35 @@ export async function runBrowserRegressionTests() {
       await openArticleFromInventory(frame, 'Tomaten')
       await ensureTabContains(frame, 'Locaties', 'Primaire locatie', 'Locaties-tab toont geen inhoud voor Tomaten')
       await ensureTabContains(frame, 'Historie', 'Voorraadhistorie', 'Historie-tab toont geen inhoud voor Tomaten')
+    }, results)
+
+    await runScenario('Winkelimport bewaart twee losse events voor hetzelfde artikel en Historie toont beide', async () => {
+      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
+      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
+      const beforeQuantity = await getInventoryQuantity('Tomaten')
+      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', '1', 'Voorraad test / Plank test')
+      await processCurrentStoreBatch(frame)
+      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > beforeQuantity, WAIT_TIMEOUT, 'Eerste extra Jumbo-opboeking voor Tomaten werd niet verwerkt')
+
+      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
+      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
+      const afterFirstRepeatQuantity = await getInventoryQuantity('Tomaten')
+      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', '1', 'Voorraad test / Plank test')
+      await processCurrentStoreBatch(frame)
+      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > afterFirstRepeatQuantity, WAIT_TIMEOUT, 'Tweede extra Jumbo-opboeking voor Tomaten werd niet verwerkt')
+
+      await ensureArticleHistoryStoreImportCount('Tomaten', 3, 'jumbo')
+      await openArticleFromInventory(frame, 'Tomaten')
+      await ensureHistoryCardsAtLeast(frame, 3)
+      await waitForCondition(() => {
+        const doc = getFrameDocument(frame)
+        const notes = Array.from(doc?.querySelectorAll('.rz-history-meta-row .rz-history-meta-value') || []).map((entry) => entry.textContent || '')
+        return notes.filter((value) => value.includes('Geïmporteerd via Jumbo')).length >= 3
+      }, WAIT_TIMEOUT, 'Historie toont niet alle Jumbo-opboekingen voor Tomaten')
     }, results)
   } finally {
     removeExistingFrame()
