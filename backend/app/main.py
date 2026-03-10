@@ -624,6 +624,7 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
             SELECT id, article_name_raw, brand_raw
             FROM purchase_import_lines
             WHERE batch_id = :batch_id
+              AND COALESCE(processing_status, 'pending') != 'processed'
             ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
             """
         ),
@@ -1717,6 +1718,12 @@ def get_purchase_import_batch(batch_id: str):
 
         if not batch:
             raise HTTPException(status_code=404, detail="Onbekende purchase import batch")
+
+        if batch["import_status"] != "processed":
+            apply_prefill_to_batch(conn, batch_id, str(batch["household_id"]), batch["store_provider_code"])
+            refresh_batch_status = update_batch_status(conn, batch_id)
+            batch = dict(batch)
+            batch["import_status"] = refresh_batch_status
 
         lines = conn.execute(
             text(
