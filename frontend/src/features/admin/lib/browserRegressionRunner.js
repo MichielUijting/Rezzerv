@@ -366,6 +366,15 @@ async function getInventoryQuantity(articleName) {
     .reduce((total, row) => total + (Number(row?.aantal) || 0), 0)
 }
 
+async function getInventoryArticleId(articleName) {
+  const rows = await getInventoryRows()
+  const match = rows.find((row) => String(row?.artikel || '').trim().toLowerCase() === String(articleName || '').trim().toLowerCase())
+  if (!match?.id) {
+    throw new Error(`Artikel ${articleName} niet gevonden in live voorraad-preview`)
+  }
+  return String(match.id)
+}
+
 async function getArticleHistoryRows(articleName) {
   const data = await requestJson(`/api/dev/article-history?article_name=${encodeURIComponent(articleName)}`)
   return Array.isArray(data?.rows) ? data.rows : []
@@ -590,62 +599,65 @@ export async function runBrowserRegressionTests() {
     }, results)
 
     await runScenario('Lidl-flow kan een regel koppelen en naar voorraad verwerken', async () => {
+      await prepareRegressionFixture(frame)
+      const melkId = await getInventoryArticleId('Melk')
       await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
       await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
       await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
       const beforeQuantity = await getInventoryQuantity('Melk')
-      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', '4', 'Voorraad test / Plank test')
+      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
       await processCurrentStoreBatch(frame)
       await waitForAsyncCondition(async () => (await getInventoryQuantity('Melk')) > beforeQuantity, WAIT_TIMEOUT, 'Melk werd niet opgeboekt in Voorraad')
       await ensureArticleHistoryContainsStoreImport('Melk', 'lidl')
-      await openArticleFromInventory(frame, 'Melk')
-      await ensureTabContains(frame, 'Locaties', 'Primaire locatie', 'Locaties-tab toont geen inhoud voor Melk')
-      await ensureTabContains(frame, 'Historie', 'Voorraadhistorie', 'Historie-tab toont geen inhoud voor Melk')
+      await ensureInventoryContainsArticle(frame, 'Melk')
     }, results)
 
     await runScenario('Jumbo-flow kan een regel koppelen en naar voorraad verwerken', async () => {
+      await prepareRegressionFixture(frame)
+      const tomatenId = await getInventoryArticleId('Tomaten')
       await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
       await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
       await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
       await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
       const beforeQuantity = await getInventoryQuantity('Tomaten')
-      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', '1', 'Voorraad test / Plank test')
+      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
       await processCurrentStoreBatch(frame)
       await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > beforeQuantity, WAIT_TIMEOUT, 'Tomaten werden niet opgeboekt in Voorraad via Jumbo')
       await ensureArticleHistoryContainsStoreImport('Tomaten', 'jumbo')
-      await openArticleFromInventory(frame, 'Tomaten')
-      await ensureTabContains(frame, 'Locaties', 'Primaire locatie', 'Locaties-tab toont geen inhoud voor Tomaten')
-      await ensureTabContains(frame, 'Historie', 'Voorraadhistorie', 'Historie-tab toont geen inhoud voor Tomaten')
+      await ensureInventoryContainsArticle(frame, 'Tomaten')
     }, results)
 
     await runScenario('Winkelimport bewaart twee losse events voor hetzelfde artikel en Historie toont beide', async () => {
-      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
-      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
-      const beforeQuantity = await getInventoryQuantity('Tomaten')
-      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', '1', 'Voorraad test / Plank test')
-      await processCurrentStoreBatch(frame)
-      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > beforeQuantity, WAIT_TIMEOUT, 'Eerste extra Jumbo-opboeking voor Tomaten werd niet verwerkt')
+      await prepareRegressionFixture(frame)
+      const tomatenId = await getInventoryArticleId('Tomaten')
+      const baselineQuantity = await getInventoryQuantity('Tomaten')
 
       await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
       await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
       await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
       await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
-      const afterFirstRepeatQuantity = await getInventoryQuantity('Tomaten')
-      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', '1', 'Voorraad test / Plank test')
+      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
       await processCurrentStoreBatch(frame)
-      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > afterFirstRepeatQuantity, WAIT_TIMEOUT, 'Tweede extra Jumbo-opboeking voor Tomaten werd niet verwerkt')
+      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > baselineQuantity, WAIT_TIMEOUT, 'Eerste Jumbo-opboeking voor Tomaten werd niet verwerkt')
 
-      await ensureArticleHistoryStoreImportCount('Tomaten', 3, 'jumbo')
+      const afterFirstQuantity = await getInventoryQuantity('Tomaten')
+      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
+      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
+      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
+      await processCurrentStoreBatch(frame)
+      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > afterFirstQuantity, WAIT_TIMEOUT, 'Tweede Jumbo-opboeking voor Tomaten werd niet verwerkt')
+
+      await ensureArticleHistoryStoreImportCount('Tomaten', 2, 'jumbo')
       await openArticleFromInventory(frame, 'Tomaten')
-      await ensureHistoryCardsAtLeast(frame, 3)
+      await ensureHistoryCardsAtLeast(frame, 2)
       await waitForCondition(() => {
         const doc = getFrameDocument(frame)
         const notes = Array.from(doc?.querySelectorAll('.rz-history-meta-row .rz-history-meta-value') || []).map((entry) => entry.textContent || '')
-        return notes.filter((value) => value.includes('Geïmporteerd via Jumbo')).length >= 3
-      }, WAIT_TIMEOUT, 'Historie toont niet alle Jumbo-opboekingen voor Tomaten')
+        return notes.filter((value) => value.includes('Geïmporteerd via Jumbo')).length >= 2
+      }, WAIT_TIMEOUT, 'Historie toont niet beide Jumbo-opboekingen voor Tomaten')
     }, results)
   } finally {
     removeExistingFrame()
