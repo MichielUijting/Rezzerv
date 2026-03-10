@@ -23,8 +23,20 @@ function formatSource(value) {
   return normalize(value)
 }
 
+function formatStoreImportProvider(note) {
+  const value = String(note || '')
+  const match = value.match(/(?:^|;)provider=([^;]+)/i)
+  if (!match?.[1]) return null
+  const provider = match[1].trim()
+  if (!provider) return null
+  return provider.charAt(0).toUpperCase() + provider.slice(1)
+}
+
 function formatNote(entry) {
-  if (entry?.source === 'store_import') return 'Geïmporteerd via Lidl'
+  if (entry?.source === 'store_import') {
+    const providerName = formatStoreImportProvider(entry?.note)
+    return providerName ? `Geïmporteerd via ${providerName}` : 'Geïmporteerd via winkel'
+  }
   return normalize(entry?.note)
 }
 
