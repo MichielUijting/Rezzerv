@@ -330,6 +330,14 @@ async function ensureStoreLineSuggestionState(frame, articleName, mode) {
   }, WAIT_TIMEOUT, `Voorstelstatus ${mode} werd niet bereikt voor ${articleName}. Diagnose: ${JSON.stringify(getStoreLineState(frame, articleName))}`)
 }
 
+async function ensureStoreLineExplanationContains(frame, articleName, expectedText) {
+  await waitForCondition(() => {
+    const row = getStoreLineRow(frame, articleName)
+    const text = row?.textContent || ''
+    return text.includes(expectedText)
+  }, WAIT_TIMEOUT, `Uitleg voor ${articleName} bevat niet: ${expectedText}`)
+}
+
 async function setStoreLineReviewDecision(frame, articleName, decision) {
   const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
   const selects = row.querySelectorAll('select')
@@ -781,6 +789,35 @@ export async function runBrowserRegressionTests() {
       if ((await getInventoryQuantity('Tomaten')) !== beforeQuantity) {
         throw new Error('Maximaal gemak verwerkte Tomaten stilzwijgend zonder expliciete actie')
       }
+    }, results)
+
+
+    await runScenario('Winkelimport toont uitleg bij bekende regel met alleen voorstel', async () => {
+      await prepareRegressionFixture(frame)
+      const melkId = await getStoreReviewArticleOptionId('Melk')
+      await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
+      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
+      await processCurrentStoreBatch(frame)
+      await waitForAsyncCondition(async () => (await getInventoryQuantity('Melk')) > 0, WAIT_TIMEOUT, 'Voorbereidende Lidl-opboeking voor Melk mislukte')
+
+      await setStoreImportSimplificationLevel(frame, 'voorzichtig')
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
+      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
+      await ensureStoreLineExplanationContains(frame, 'Halfvolle melk', 'Eerdere mapping gevonden: artikel + locatie')
+      await ensureStoreLineExplanationContains(frame, 'Halfvolle melk', 'Alleen voorstel door niveau Voorzichtig')
+    }, results)
+
+    await runScenario('Winkelimport toont uitleg bij onbekende regel zonder mapping', async () => {
+      await prepareRegressionFixture(frame)
+      await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      await ensureStoreLineExplanationContains(frame, 'Banaan', 'Geen eerdere mapping gevonden')
     }, results)
 
     await runScenario('Lidl-flow kan een regel koppelen en naar voorraad verwerken', async () => {

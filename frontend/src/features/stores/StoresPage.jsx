@@ -94,6 +94,7 @@ function batchStatusLabel(value) {
 }
 
 function suggestionLabel(line) {
+  if (line?.preparation_explanation) return line.preparation_explanation
   if (line?.suggestion_reason) return line.suggestion_reason
   if (line.is_auto_prefilled && (line.review_decision || 'pending') === 'selected' && line.matched_household_article_id && line.target_location_id) {
     return 'Automatisch voorbereid'
@@ -101,7 +102,7 @@ function suggestionLabel(line) {
   if (line.suggested_household_article_id || line.suggested_location_id) {
     return 'Controleer voorstel'
   }
-  return ''
+  return 'Geen eerdere mapping gevonden'
 }
 
 function formatQuantity(value, unit) {
@@ -584,6 +585,11 @@ export default function StoresPage() {
                           <div className="rz-store-primary">{line.article_name_raw}</div>
                           <div className="rz-store-secondary">{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
                           {suggestionLabel(line) ? <div className={`rz-store-suggestion ${line.is_auto_prefilled ? 'rz-store-suggestion--auto' : 'rz-store-suggestion--check'}`}>{suggestionLabel(line)}</div> : null}
+                          {line?.preparation_mode ? (
+                            <div className="rz-store-secondary">
+                              Status voorbereiding: {line.preparation_mode === 'auto_ready' ? 'Automatisch klaargezet' : line.preparation_mode === 'suggest_only' ? 'Alleen voorstel' : 'Geen voorbereiding'}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="rz-num">
                           <div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div>

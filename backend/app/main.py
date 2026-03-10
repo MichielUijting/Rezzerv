@@ -1753,9 +1753,56 @@ def get_purchase_import_batch(batch_id: str):
     batch_result["purchase_date"] = batch_metadata.get("purchase_date")
     batch_result["store_name"] = batch_metadata.get("store_name") or batch_result.get("store_provider_name")
     batch_result["store_label"] = batch_metadata.get("store_label") or batch_result.get("store_provider_name")
+    def build_line_explanation(line):
+        article_from_memory = bool(line.get("suggested_household_article_id"))
+        location_from_memory = bool(line.get("suggested_location_id"))
+        memory_found = article_from_memory or location_from_memory
+        simplification_level = batch_result.get("store_import_simplification_level") or get_household_store_import_simplification_level(conn, str(batch_result.get("household_id")))
+        simplification_label = {
+            "voorzichtig": "Voorzichtig",
+            "gebalanceerd": "Gebalanceerd",
+            "maximaal_gemak": "Maximaal gemak",
+        }.get(simplification_level, "Gebalanceerd")
+
+        if line.get("is_auto_prefilled") and line.get("matched_household_article_id") and line.get("target_location_id"):
+            preparation_mode = "auto_ready"
+        elif memory_found:
+            preparation_mode = "suggest_only"
+        else:
+            preparation_mode = "none"
+
+        if article_from_memory and location_from_memory:
+            memory_text = "Eerdere mapping gevonden: artikel + locatie"
+        elif article_from_memory:
+            memory_text = "Eerdere mapping gevonden: artikel"
+        elif location_from_memory:
+            memory_text = "Eerdere mapping gevonden: locatie"
+        else:
+            memory_text = "Geen eerdere mapping gevonden"
+
+        if preparation_mode == "auto_ready":
+            explanation = f"{memory_text}. Automatisch voorbereid door niveau {simplification_label}"
+        elif preparation_mode == "suggest_only":
+            if simplification_level == "voorzichtig":
+                explanation = f"{memory_text}. Alleen voorstel door niveau {simplification_label}"
+            else:
+                explanation = f"{memory_text}. Controleer voorstel bij niveau {simplification_label}"
+        else:
+            explanation = memory_text
+
+        return {
+            "memory_match_found": memory_found,
+            "article_from_memory": article_from_memory,
+            "location_from_memory": location_from_memory,
+            "applied_simplification_level": simplification_level,
+            "preparation_mode": preparation_mode,
+            "preparation_explanation": explanation,
+        }
+
     batch_result["lines"] = [
         {
             **dict(line),
+            **build_line_explanation(dict(line)),
             "review_decision": line["review_decision"] or "pending",
             "processing_status": line["processing_status"] or "pending",
             "quantity_raw": float(line["quantity_raw"]) if line["quantity_raw"] is not None else None,
