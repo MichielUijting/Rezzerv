@@ -1,0 +1,7 @@
+Release Protocol v1.0 – Compliance Check:
+UI-release. Doel: Winkelimport splitsen in overzichtsscherm en apart bondetailscherm.
+Gewijzigd: frontend/src/features/stores/StoresPage.jsx, frontend/src/app/router/AppRouter.jsx, frontend/tests/e2e/stores.spec.js.
+Niet gewijzigd: backend contracts, verwerkingslogica, providerlogica, voorraadmodel.
+Getest: frontend build, versie-updates, route aanwezig.
+Niet getest: live end-to-end tegen lokale runtime.
+Risico: detailroute hangt af van batchlaadpad in runtime.

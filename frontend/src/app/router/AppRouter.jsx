@@ -46,6 +46,7 @@ const router = createBrowserRouter([
   { path: '/home', element: <Protected><HomePage /></Protected> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/winkels', element: <Protected><StoresPage /></Protected> },
+  { path: '/winkels/batch/:batchId', element: <Protected><StoresPage /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <Protected><SettingsPage /></Protected> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <Protected><SettingsArticleFieldsPage /></Protected> },

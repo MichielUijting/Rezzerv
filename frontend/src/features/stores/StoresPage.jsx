@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -292,6 +293,10 @@ function formatBatchLastChange(batch) {
 }
 
 export default function StoresPage() {
+  const navigate = useNavigate()
+  const { batchId: batchIdParam } = useParams()
+  const detailBatchId = batchIdParam || ''
+  const isBatchDetailRoute = Boolean(detailBatchId)
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [connections, setConnections] = useState([])
@@ -342,6 +347,8 @@ export default function StoresPage() {
   const linesMissingLocation = selectedLines.filter((line) => !line.target_location_id || !validLocationIds.has(String(line.target_location_id))).length
   const canProcessBatch = Boolean(activeBatch && selectedLines.length > 0)
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
+  const overviewBatchCount = batchItems.length
+  const detailBatchUiState = activeBatch ? deriveBatchUiState(activeBatch) : null
 
   const batchItems = useMemo(() => {
     return (openBatches || []).map((batch) => ({
@@ -446,7 +453,9 @@ export default function StoresPage() {
 
     const selectedBatch = nextBatchId
       ? loadedBatches.find((batch) => batch.batch_id === nextBatchId) || null
-      : sortedBatches[0] || null
+      : isBatchDetailRoute
+        ? null
+        : sortedBatches[0] || null
 
     setActiveBatch(selectedBatch)
     return loadedBatches
@@ -474,7 +483,14 @@ export default function StoresPage() {
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? backendArticles : articleFallbackOptions)
       setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
 
-      await loadOpenBatches(connectionData)
+      await loadOpenBatches(connectionData, detailBatchId || null)
+      if (detailBatchId) {
+        try {
+          await refreshBatch(detailBatchId)
+        } catch (detailError) {
+          setError(normalizeErrorMessage(detailError?.message) || 'De geselecteerde bon kon niet worden geladen.')
+        }
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelgegevens konden niet worden geladen.')
     } finally {
@@ -487,7 +503,7 @@ export default function StoresPage() {
     return () => {
       if (processFeedbackTimer.current) window.clearTimeout(processFeedbackTimer.current)
     }
-  }, [])
+  }, [detailBatchId])
 
   useEffect(() => {
     function handleRefresh() {
@@ -683,6 +699,9 @@ export default function StoresPage() {
         : connections
       setConnections(refreshedConnections)
       await loadOpenBatches(refreshedConnections)
+      if (isBatchDetailRoute) {
+        navigate('/winkels')
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
     } finally {
@@ -694,7 +713,7 @@ export default function StoresPage() {
   async function handleSelectBatch(batchId) {
     setError('')
     setStatus('')
-    await refreshBatch(batchId)
+    navigate(`/winkels/batch/${batchId}`)
   }
 
   async function handlePrimaryBatchAction(batch) {
@@ -728,16 +747,16 @@ export default function StoresPage() {
             <div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Winkelimport</h2>
               <p style={{ margin: 0, color: '#667085' }}>
-                Werk eerst je open bonnen af. Verbonden winkels beheer je hieronder.
+                Werk eerst je open bonnen af. Verbonden winkels blijven beschikbaar om nieuwe aankopen op te halen.
               </p>
             </div>
           </div>
         </Card>
 
         <Card>
-          <div data-testid="store-import-simplification-banner" className="rz-inline-feedback rz-inline-feedback--warning" style={simplificationBannerStyle}>
+          <div data-testid="store-import-simplification-banner" className="rz-inline-feedback rz-inline-feedback--warning" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <span>Vereenvoudigingsniveau winkelimport: <strong>{simplificationLevelLabel}</strong></span>
-            <span>{batchItems.length > 0 ? `${batchItems.length} open bon(nen)` : 'Geen open bonnen'} in deze huishoudcontext.</span>
+            <span>{overviewBatchCount > 0 ? `${overviewBatchCount} open bon(nen)` : 'Geen open bonnen'} in deze huishoudcontext.</span>
           </div>
         </Card>
 
@@ -749,38 +768,43 @@ export default function StoresPage() {
 
         {status && (
           <Card>
-            <div data-testid="store-import-status" style={statusMessageStyle}>{status}</div>
+            <div style={{ color: '#0f5132', fontWeight: 700 }}>{status}</div>
           </Card>
         )}
 
-        <Card>
-          <div data-testid="open-batches-section" style={{ display: 'grid', gap: '14px' }}>
-            <div>
-              <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Open bonnen</h3>
-              <div style={{ color: '#667085', fontSize: '14px' }}>Open, hervat en verwerk hier je bonnen.</div>
-            </div>
+        {!isBatchDetailRoute ? (
+          <Card>
+            <div data-testid="open-batches-section" style={{ display: 'grid', gap: '14px' }}>
+              <div>
+                <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Open bonnen</h3>
+                <div style={{ color: '#667085', fontSize: '14px' }}>Open, hervat en verwerk hier je bonnen.</div>
+              </div>
 
-            {isLoading ? (
-              <div>Winkelgegevens laden…</div>
-            ) : batchItems.length === 0 ? (
-              <div data-testid="open-batches-empty" style={{ color: '#667085' }}>Geen open bonnen</div>
-            ) : (
-              <div style={{ display: 'grid', gap: '12px' }}>
-                {batchItems.map((batch) => {
-                  const isActive = activeBatch?.batch_id === batch.batch_id
-                  return (
+              {isLoading ? (
+                <div>Winkelgegevens laden…</div>
+              ) : batchItems.length === 0 ? (
+                <div data-testid="open-batches-empty" style={{ color: '#667085' }}>Geen open bonnen</div>
+              ) : (
+                <div style={{ display: 'grid', gap: '12px' }}>
+                  {batchItems.map((batch) => (
                     <div
                       key={batch.batch_id}
                       data-testid={`open-batch-${batch.batch_id}`}
                       style={{
-                        ...batchCardStyle,
-                        background: isActive ? '#f8fafc' : '#ffffff',
+                        border: '1px solid #d0d5dd',
+                        borderRadius: '12px',
+                        padding: '14px 16px',
+                        display: 'grid',
+                        gap: '10px',
+                        background: '#ffffff',
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'grid', gap: '4px' }}>
+                        <div style={{ display: 'grid', gap: '6px' }}>
                           <div style={{ fontWeight: 700, fontSize: '18px' }}>{batch.store_provider_name || batch.store_name}</div>
-                          <div style={{ color: '#667085', fontSize: '14px' }}>{batch.purchase_date || 'Onbekend'} · {batch.store_label || batch.store_name || providerLabel(providersByCode[batch.store_provider_code])}</div>
+                          <div style={{ color: '#667085', fontSize: '14px' }}>
+                            {batch.purchase_date || 'Onbekend'} · {batch.store_label || batch.store_name || providerLabel(providersByCode[batch.store_provider_code])}
+                          </div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[batch.uiState.statusKey] || batchStatusToneStyles.open) }}>{batch.uiState.label}</span>
@@ -795,33 +819,33 @@ export default function StoresPage() {
                         </div>
                       </div>
 
-                      <div style={batchMetaGridStyle}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', color: '#667085', fontSize: '14px' }}>
                         <div>Aantal regels: <strong>{batch.summary?.total || batch.lines?.length || 0}</strong></div>
                         <div>{batch.uiState.progressText}</div>
                         <div>Laatste wijziging: {formatBatchLastChange(batch)}</div>
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        ) : null}
 
-        {activeBatch && (
-          <Card>
+        {isBatchDetailRoute && activeBatch ? (
+          <Card fullWidth>
             <div data-testid="active-batch-card" className="rz-store-review">
               <div className="rz-store-review-summary">
                 <div>
+                  <div style={{ marginBottom: '10px' }}>
+                    <Button variant="secondary" onClick={() => navigate('/winkels')}>Terug naar overzicht</Button>
+                  </div>
                   <h3 data-testid="active-batch-title" className="rz-store-review-title">{buildBatchTitle(activeBatch)}</h3>
-                  <div className="rz-store-review-meta">
-                    Aankoopdatum: {activeBatch.purchase_date || 'Onbekend'}
-                  </div>
-                  <div className="rz-store-review-meta">
-                    Winkel: {activeBatch.store_label || activeBatch.store_name || providerLabel(activeProvider)}
-                  </div>
+                  <div className="rz-store-review-meta">Aankoopdatum: {activeBatch.purchase_date || 'Onbekend'}</div>
+                  <div className="rz-store-review-meta">Winkel: {activeBatch.store_label || activeBatch.store_name || providerLabel(activeProvider)}</div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  {detailBatchUiState ? <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[detailBatchUiState.statusKey] || batchStatusToneStyles.open) }}>{detailBatchUiState.label}</span> : null}
                   <Button data-testid="process-active-batch" variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
                     {isProcessingBatch ? 'Bezig…' : 'Naar voorraad'}
                   </Button>
@@ -833,11 +857,11 @@ export default function StoresPage() {
                 Vereenvoudigingsniveau actief: {simplificationLevelLabel}. Bekende regels worden volgens dit niveau voorgesteld of automatisch voorbereid.
               </div>
 
-              <div className="rz-table-wrapper">
-                <table className="rz-table rz-store-review-table">
+              <div className="rz-store-table-wrap">
+                <table className="rz-table rz-store-table" data-testid="store-review-table">
                   <colgroup>
-                    <col style={{ width: '27%' }} />
-                    <col style={{ width: '11%' }} />
+                    <col style={{ width: '34%' }} />
+                    <col style={{ width: '12%' }} />
                     <col style={{ width: '18%' }} />
                     <col style={{ width: '20%' }} />
                     <col style={{ width: '18%' }} />
@@ -870,16 +894,9 @@ export default function StoresPage() {
                               </div>
                             ) : null}
                           </td>
-                          <td className="rz-num">
-                            <div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div>
-                          </td>
+                          <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                           <td>
-                            <select
-                              className="rz-input rz-store-select"
-                              value={line.review_decision || 'selected'}
-                              disabled={busyLineId === line.id}
-                              onChange={(event) => handleReviewDecision(line.id, event.target.value)}
-                            >
+                            <select className="rz-input rz-store-select" value={line.review_decision || 'selected'} disabled={busyLineId === line.id} onChange={(event) => handleReviewDecision(line.id, event.target.value)}>
                               <option value="pending">Nog te beoordelen</option>
                               <option value="selected">Verwerken</option>
                               <option value="ignored">Negeren</option>
@@ -897,14 +914,7 @@ export default function StoresPage() {
                             />
                           </td>
                           <td>
-                            <select
-                              className="rz-input rz-store-select"
-                              value={line.target_location_id || ''}
-                              disabled={busyLineId === line.id}
-                              onFocus={() => household?.id && refreshLocationOptions(household.id)}
-                              onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
-                              onChange={(event) => handleTargetLocation(line.id, event.target.value)}
-                            >
+                            <select className="rz-input rz-store-select" value={line.target_location_id || ''} disabled={busyLineId === line.id} onFocus={() => household?.id && refreshLocationOptions(household.id)} onMouseDown={() => household?.id && refreshLocationOptions(household.id)} onChange={(event) => handleTargetLocation(line.id, event.target.value)}>
                               <option value="">Geen voorkeurslocatie</option>
                               {locationOptions.map((location) => (
                                 <option key={location.id} value={location.id}>{location.label}</option>
@@ -919,8 +929,7 @@ export default function StoresPage() {
               </div>
             </div>
           </Card>
-        )}
-
+        ) : null}
         <Card>
           <div data-testid="connected-stores-section">
             {isLoading ? (
@@ -1045,39 +1054,6 @@ const batchStatusToneStyles = {
     background: '#ecfdf3',
     color: '#027a48',
   },
-}
-
-const simplificationBannerStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: '10px',
-  flexWrap: 'wrap',
-  padding: '8px 12px',
-  minHeight: 'auto',
-  fontSize: '14px',
-}
-
-const statusMessageStyle = {
-  color: '#0f5132',
-  fontWeight: 700,
-  fontSize: '15px',
-  padding: '2px 0',
-}
-
-const batchCardStyle = {
-  border: '1px solid #d0d5dd',
-  borderRadius: '12px',
-  padding: '12px 16px',
-  display: 'grid',
-  gap: '10px',
-}
-
-const batchMetaGridStyle = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-  gap: '8px',
-  color: '#667085',
-  fontSize: '14px',
 }
 
 const connectedStoreRowStyle = {
