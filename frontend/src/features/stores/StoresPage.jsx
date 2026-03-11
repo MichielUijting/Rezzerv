@@ -599,7 +599,7 @@ export default function StoresPage() {
     <AppShell title="Winkels" showExit={false}>
       <div style={{ display: 'grid', gap: '18px' }}>
         <Card>
-          <div style={{ display: 'grid', gap: '10px' }}>
+          <div data-testid="stores-page-intro" style={{ display: 'grid', gap: '10px' }}>
             <div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Winkelkoppelingen</h2>
               <p style={{ margin: 0, color: '#667085' }}>
@@ -610,7 +610,7 @@ export default function StoresPage() {
         </Card>
 
         <Card>
-          <div className="rz-inline-feedback rz-inline-feedback--warning" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <div data-testid="store-import-simplification-banner" className="rz-inline-feedback rz-inline-feedback--warning" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <span>Vereenvoudigingsniveau winkelimport: <strong>{simplificationLevelLabel}</strong></span>
             <span>Deze instelling geldt voor het hele huishouden.</span>
           </div>
@@ -629,6 +629,7 @@ export default function StoresPage() {
         )}
 
         <Card>
+          <div data-testid="connected-stores-section">
           {isLoading ? (
             <div>Winkelgegevens laden…</div>
           ) : (
@@ -636,7 +637,7 @@ export default function StoresPage() {
               {providers.map((provider) => {
                 const connection = connectionsByProviderCode[provider.code] || null
                 return (
-                  <div key={provider.code} style={{ display: 'grid', gap: '16px' }}>
+                  <div key={provider.code} data-testid={`store-provider-${provider.code}`} style={{ display: 'grid', gap: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '18px' }}>{provider.name}</div>
@@ -649,11 +650,11 @@ export default function StoresPage() {
                       </div>
                       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                         {!connection ? (
-                          <Button variant="primary" onClick={() => handleConnect(provider.code, provider.name)} disabled={isConnecting}>
+                          <Button data-testid={`connect-store-${provider.code}`} variant="primary" onClick={() => handleConnect(provider.code, provider.name)} disabled={isConnecting}>
                             {isConnecting ? 'Koppelen…' : `${provider.name} koppelen`}
                           </Button>
                         ) : (
-                          <Button variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
+                          <Button data-testid={`pull-purchases-${provider.code}`} variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
                             {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
                           </Button>
                         )}
@@ -668,14 +669,15 @@ export default function StoresPage() {
               })}
             </div>
           )}
+          </div>
         </Card>
 
         {activeBatch && (
           <Card>
-            <div className="rz-store-review">
+            <div data-testid="active-batch-card" className="rz-store-review">
               <div className="rz-store-review-summary">
                 <div>
-                  <h3 className="rz-store-review-title">{buildBatchTitle(activeBatch)}</h3>
+                  <h3 data-testid="active-batch-title" className="rz-store-review-title">{buildBatchTitle(activeBatch)}</h3>
                   <div className="rz-store-review-meta">
                     Aankoopdatum: {activeBatch.purchase_date || 'Onbekend'}
                   </div>
@@ -684,7 +686,7 @@ export default function StoresPage() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <Button variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
+                  <Button data-testid="process-active-batch" variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
                     {isProcessingBatch ? 'Bezig…' : 'Naar voorraad'}
                   </Button>
                   {processFeedback ? <span className="rz-store-inline-feedback">{processFeedback}</span> : null}
