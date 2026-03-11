@@ -728,14 +728,14 @@ export default function StoresPage() {
             <div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Winkelimport</h2>
               <p style={{ margin: 0, color: '#667085' }}>
-                Werk eerst je open bonnen af. Verbonden winkels blijven beschikbaar om nieuwe aankopen op te halen.
+                Werk eerst je open bonnen af. Verbonden winkels beheer je hieronder.
               </p>
             </div>
           </div>
         </Card>
 
         <Card>
-          <div data-testid="store-import-simplification-banner" className="rz-inline-feedback rz-inline-feedback--warning" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+          <div data-testid="store-import-simplification-banner" className="rz-inline-feedback rz-inline-feedback--warning" style={simplificationBannerStyle}>
             <span>Vereenvoudigingsniveau winkelimport: <strong>{simplificationLevelLabel}</strong></span>
             <span>{batchItems.length > 0 ? `${batchItems.length} open bon(nen)` : 'Geen open bonnen'} in deze huishoudcontext.</span>
           </div>
@@ -749,7 +749,7 @@ export default function StoresPage() {
 
         {status && (
           <Card>
-            <div style={{ color: '#0f5132', fontWeight: 700 }}>{status}</div>
+            <div data-testid="store-import-status" style={statusMessageStyle}>{status}</div>
           </Card>
         )}
 
@@ -757,7 +757,7 @@ export default function StoresPage() {
           <div data-testid="open-batches-section" style={{ display: 'grid', gap: '14px' }}>
             <div>
               <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Open bonnen</h3>
-              <div style={{ color: '#667085', fontSize: '14px' }}>Dit is de primaire werkstroom: openen, hervatten en direct verwerken.</div>
+              <div style={{ color: '#667085', fontSize: '14px' }}>Open, hervat en verwerk hier je bonnen.</div>
             </div>
 
             {isLoading ? (
@@ -773,19 +773,14 @@ export default function StoresPage() {
                       key={batch.batch_id}
                       data-testid={`open-batch-${batch.batch_id}`}
                       style={{
-                        border: '1px solid #d0d5dd',
-                        borderRadius: '12px',
-                        padding: '14px 16px',
-                        display: 'grid',
-                        gap: '10px',
+                        ...batchCardStyle,
                         background: isActive ? '#f8fafc' : '#ffffff',
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                         <div style={{ display: 'grid', gap: '4px' }}>
-                          <div style={{ fontWeight: 700 }}>{batch.store_provider_name || batch.store_name}</div>
-                          <div style={{ color: '#667085', fontSize: '14px' }}>Aankoopdatum: {batch.purchase_date || 'Onbekend'}</div>
-                          <div style={{ color: '#667085', fontSize: '14px' }}>Winkel: {batch.store_label || batch.store_name || providerLabel(providersByCode[batch.store_provider_code])}</div>
+                          <div style={{ fontWeight: 700, fontSize: '18px' }}>{batch.store_provider_name || batch.store_name}</div>
+                          <div style={{ color: '#667085', fontSize: '14px' }}>{batch.purchase_date || 'Onbekend'} · {batch.store_label || batch.store_name || providerLabel(providersByCode[batch.store_provider_code])}</div>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[batch.uiState.statusKey] || batchStatusToneStyles.open) }}>{batch.uiState.label}</span>
@@ -800,11 +795,10 @@ export default function StoresPage() {
                         </div>
                       </div>
 
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', color: '#667085', fontSize: '14px' }}>
+                      <div style={batchMetaGridStyle}>
                         <div>Aantal regels: <strong>{batch.summary?.total || batch.lines?.length || 0}</strong></div>
                         <div>{batch.uiState.progressText}</div>
                         <div>Laatste wijziging: {formatBatchLastChange(batch)}</div>
-                        <div>Batchstatus backend: {batchStatusLabel(batch.import_status)}</div>
                       </div>
                     </div>
                   )
@@ -935,7 +929,7 @@ export default function StoresPage() {
               <div style={{ display: 'grid', gap: '14px' }}>
                 <div>
                   <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Verbonden winkels</h3>
-                  <div style={{ color: '#667085', fontSize: '14px' }}>Beheerlaag voor nieuwe aankopen en koppelingen. Niet de primaire werkstroom.</div>
+                  <div style={{ color: '#667085', fontSize: '14px' }}>Beheer hier je gekoppelde winkels en haal nieuwe aankopen op.</div>
                 </div>
                 {connectedStoreItems.map((item) => {
                   const provider = item.provider
@@ -946,8 +940,7 @@ export default function StoresPage() {
                     <div key={item.code} data-testid={`store-provider-${item.code}`} style={connectedStoreRowStyle}>
                       <div style={{ display: 'grid', gap: '2px' }}>
                         <div style={{ fontWeight: 700 }}>{providerName}</div>
-                        <div style={{ color: '#667085', fontSize: '14px' }}>Status provider: {providerStatusLabel(provider)}</div>
-                        <div style={{ color: '#667085', fontSize: '14px' }}>Koppeling: {connection ? 'gekoppeld / actief' : 'nog niet gekoppeld'}</div>
+                        <div style={{ color: '#667085', fontSize: '14px' }}>Status: {connection ? 'gekoppeld / actief' : 'nog niet gekoppeld'}</div>
                         <div style={{ color: '#667085', fontSize: '14px' }}>Laatste activiteit: {providerOpenBatch ? formatBatchLastChange(providerOpenBatch) : 'Nog geen open bon'}</div>
                       </div>
                       <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -1052,6 +1045,39 @@ const batchStatusToneStyles = {
     background: '#ecfdf3',
     color: '#027a48',
   },
+}
+
+const simplificationBannerStyle = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: '10px',
+  flexWrap: 'wrap',
+  padding: '8px 12px',
+  minHeight: 'auto',
+  fontSize: '14px',
+}
+
+const statusMessageStyle = {
+  color: '#0f5132',
+  fontWeight: 700,
+  fontSize: '15px',
+  padding: '2px 0',
+}
+
+const batchCardStyle = {
+  border: '1px solid #d0d5dd',
+  borderRadius: '12px',
+  padding: '12px 16px',
+  display: 'grid',
+  gap: '10px',
+}
+
+const batchMetaGridStyle = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+  gap: '8px',
+  color: '#667085',
+  fontSize: '14px',
 }
 
 const connectedStoreRowStyle = {

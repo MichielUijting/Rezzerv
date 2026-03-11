@@ -1,0 +1,10 @@
+Release: Rezzerv-v01.07.36
+
+Wijzigingen:
+- UX-polish op Winkelimport: compactere intro, rustiger statusmelding, compactere batchkaart en rustiger beheerlaag.
+- Cache/asset-verversing verbeterd via no-cache headers voor index/html-routes en immutable cache voor gehashte assets.
+
+Validatie:
+- Geen functionele scopewijziging in batchlogica.
+- Footer- en schermversie opgehoogd naar 01.07.36.
+- Nginx-config aangepast voor betrouwbaardere frontendverversing na update.
