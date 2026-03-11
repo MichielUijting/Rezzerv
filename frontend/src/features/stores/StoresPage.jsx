@@ -353,6 +353,36 @@ export default function StoresPage() {
     })
   }, [openBatches])
 
+  const connectedStoreItems = useMemo(() => {
+    const itemsByCode = new Map()
+
+    providers.forEach((provider) => {
+      const code = provider?.code || ''
+      if (!code) return
+      itemsByCode.set(code, {
+        code,
+        provider,
+        connection: connectionsByProviderCode[code] || null,
+        name: provider.name || provider.code || 'Winkel',
+      })
+    })
+
+    connections.forEach((connection) => {
+      const code = connection?.store_provider_code || ''
+      if (!code) return
+      const existing = itemsByCode.get(code)
+      const provider = existing?.provider || providersByCode[code] || null
+      itemsByCode.set(code, {
+        code,
+        provider,
+        connection,
+        name: provider?.name || connection?.store_provider_name || code,
+      })
+    })
+
+    return Array.from(itemsByCode.values()).sort((a, b) => a.name.localeCompare(b.name, 'nl'))
+  }, [connections, connectionsByProviderCode, providers, providersByCode])
+
   async function refreshBatch(batchId) {
     const batch = await fetchJson(`/api/purchase-import-batches/${batchId}`)
     setActiveBatch(batch)
@@ -444,8 +474,7 @@ export default function StoresPage() {
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? backendArticles : articleFallbackOptions)
       setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
 
-      const existingConnections = connectionData.filter((connection) => providerData.some((provider) => provider.code === connection.store_provider_code))
-      await loadOpenBatches(existingConnections)
+      await loadOpenBatches(connectionData)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelgegevens konden niet worden geladen.')
     } finally {
@@ -908,13 +937,15 @@ export default function StoresPage() {
                   <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Verbonden winkels</h3>
                   <div style={{ color: '#667085', fontSize: '14px' }}>Beheerlaag voor nieuwe aankopen en koppelingen. Niet de primaire werkstroom.</div>
                 </div>
-                {providers.map((provider) => {
-                  const connection = connectionsByProviderCode[provider.code] || null
-                  const providerOpenBatch = batchItems.find((batch) => batch.store_provider_code === provider.code) || null
+                {connectedStoreItems.map((item) => {
+                  const provider = item.provider
+                  const connection = item.connection
+                  const providerOpenBatch = batchItems.find((batch) => batch.store_provider_code === item.code) || null
+                  const providerName = item.name
                   return (
-                    <div key={provider.code} data-testid={`store-provider-${provider.code}`} style={connectedStoreRowStyle}>
+                    <div key={item.code} data-testid={`store-provider-${item.code}`} style={connectedStoreRowStyle}>
                       <div style={{ display: 'grid', gap: '2px' }}>
-                        <div style={{ fontWeight: 700 }}>{provider.name}</div>
+                        <div style={{ fontWeight: 700 }}>{providerName}</div>
                         <div style={{ color: '#667085', fontSize: '14px' }}>Status provider: {providerStatusLabel(provider)}</div>
                         <div style={{ color: '#667085', fontSize: '14px' }}>Koppeling: {connection ? 'gekoppeld / actief' : 'nog niet gekoppeld'}</div>
                         <div style={{ color: '#667085', fontSize: '14px' }}>Laatste activiteit: {providerOpenBatch ? formatBatchLastChange(providerOpenBatch) : 'Nog geen open bon'}</div>
@@ -923,15 +954,15 @@ export default function StoresPage() {
                         {providerOpenBatch ? (
                           <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[providerOpenBatch.uiState.statusKey] || batchStatusToneStyles.open) }}>{providerOpenBatch.uiState.label}</span>
                         ) : null}
-                        {!connection ? (
-                          <Button data-testid={`connect-store-${provider.code}`} variant="primary" onClick={() => handleConnect(provider.code, provider.name)} disabled={isConnecting}>
-                            {isConnecting ? 'Koppelen…' : `${provider.name} koppelen`}
+                        {!connection && provider ? (
+                          <Button data-testid={`connect-store-${item.code}`} variant="primary" onClick={() => handleConnect(item.code, providerName)} disabled={isConnecting}>
+                            {isConnecting ? 'Koppelen…' : `${providerName} koppelen`}
                           </Button>
-                        ) : (
-                          <Button data-testid={`pull-purchases-${provider.code}`} variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
+                        ) : connection ? (
+                          <Button data-testid={`pull-purchases-${item.code}`} variant="secondary" onClick={() => handlePullPurchases(connection, providerName)} disabled={isPulling}>
                             {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
                           </Button>
-                        )}
+                        ) : null}
                       </div>
                     </div>
                   )

@@ -1,0 +1,19 @@
+Release: 01.07.35
+
+Doel
+- Herstel dat Jumbo zichtbaar blijft in Winkelimport / Verbonden winkels wanneer gekoppeld, ook als de providerlijst incompleet of anders geladen is.
+
+Analyse
+- v01.07.34 bouwde Verbonden winkels uitsluitend op vanuit providers.map(...).
+- Open bonnen werden bovendien alleen geladen voor connections die ook in providerData voorkwamen.
+- Daardoor kon een geldige gekoppelde winkel zoals Jumbo uit beeld vallen als de providerlijst incompleet was, terwijl de regressieflow alsnog slaagde via directe batch-/koppelpaden.
+
+Technische fix
+- connectedStoreItems opgebouwd als unie van providers + connections op provider_code.
+- loadOpenBatches(...) krijgt direct alle connectionData in plaats van een op providerData gefilterde subset.
+- Rendering van Verbonden winkels gebruikt connectedStoreItems in plaats van alleen providers.
+
+Verwacht resultaat
+- Jumbo weer zichtbaar wanneer gekoppeld.
+- Lidl blijft zichtbaar.
+- Batch-first prioriteit blijft behouden.
