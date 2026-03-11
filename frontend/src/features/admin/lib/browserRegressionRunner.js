@@ -1,5 +1,5 @@
 const FRAME_ID = "rezzerv-regression-runner-frame"
-const WAIT_TIMEOUT = 12000
+const WAIT_TIMEOUT = 8000
 const POLL_INTERVAL = 100
 const HOUSEHOLD_KEY = 'rezzerv_household_auto_consume_on_repurchase'
 const ARTICLE_OVERRIDE_KEY = 'rezzerv_article_auto_consume_overrides'
@@ -14,32 +14,6 @@ function waitForCondition(check, timeout = WAIT_TIMEOUT, errorMessage = 'Timeout
     function tick() {
       try {
         const result = check()
-        if (result) {
-          resolve(result)
-          return
-        }
-      } catch {
-        // blijf pollen
-      }
-
-      if (Date.now() - start >= timeout) {
-        reject(new Error(errorMessage))
-        return
-      }
-      window.setTimeout(tick, POLL_INTERVAL)
-    }
-    tick()
-  })
-}
-
-
-
-function waitForAsyncCondition(check, timeout = WAIT_TIMEOUT, errorMessage = 'Timeout') {
-  const start = Date.now()
-  return new Promise((resolve, reject) => {
-    async function tick() {
-      try {
-        const result = await check()
         if (result) {
           resolve(result)
           return
@@ -121,34 +95,25 @@ function queryText(doc, text) {
 }
 
 function setInputValue(input, value) {
-  const view = input?.ownerDocument?.defaultView || window
-  const setter = Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype, 'value')?.set
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set
   setter?.call(input, value)
-  input.dispatchEvent(new view.Event('input', { bubbles: true }))
-  input.dispatchEvent(new view.Event('change', { bubbles: true }))
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+  input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
 function setSelectValue(select, value) {
-  const view = select?.ownerDocument?.defaultView || window
-  const normalizedValue = value == null ? '' : String(value)
-  const setter = Object.getOwnPropertyDescriptor(view.HTMLSelectElement.prototype, 'value')?.set
-  setter?.call(select, normalizedValue)
-  if (select.value !== normalizedValue) {
-    const fallbackOption = Array.from(select.options || []).find((option) => String(option.value) === normalizedValue)
-    if (fallbackOption) fallbackOption.selected = true
-  }
-  select.dispatchEvent(new view.Event('input', { bubbles: true }))
-  select.dispatchEvent(new view.Event('change', { bubbles: true }))
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value')?.set
+  setter?.call(select, value)
+  select.dispatchEvent(new Event('input', { bubbles: true }))
+  select.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
 function clickElement(element) {
-  const view = element?.ownerDocument?.defaultView || window
-  element.dispatchEvent(new view.MouseEvent('click', { bubbles: true, cancelable: true, view }))
+  element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
 }
 
 function dblClickElement(element) {
-  const view = element?.ownerDocument?.defaultView || window
-  element.dispatchEvent(new view.MouseEvent('dblclick', { bubbles: true, cancelable: true, view }))
+  element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window }))
 }
 
 async function runScenario(name, fn, results) {
@@ -221,22 +186,6 @@ async function prepareRegressionFixture(frame) {
   resetAutomationState(frame)
 }
 
-async function getRegressionHouseholdId(frame) {
-  const token = frame?.contentWindow?.localStorage?.getItem('rezzerv_token') || ''
-  const household = await requestJson('/api/household', {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
-  return String(household?.id || '1')
-}
-
-async function setStoreImportSimplificationLevel(frame, level) {
-  const householdId = await getRegressionHouseholdId(frame)
-  return requestJson(`/api/dev/household/store-import-settings?household_id=${encodeURIComponent(householdId)}`, {
-    method: 'PUT',
-    body: JSON.stringify({ store_import_simplification_level: level }),
-  })
-}
-
 async function ensureLoggedIn(frame) {
   await navigateFrame(frame, '/login')
   const doc = getFrameDocument(frame)
@@ -253,308 +202,6 @@ async function ensureLoggedIn(frame) {
 function resetAutomationState(frame) {
   frame.contentWindow.localStorage.removeItem(HOUSEHOLD_KEY)
   frame.contentWindow.localStorage.removeItem(ARTICLE_OVERRIDE_KEY)
-}
-
-
-async function openStoresPage(frame) {
-  await navigateFrame(frame, '/winkels')
-  const doc = getFrameDocument(frame)
-  await waitForCondition(() => queryText(doc, 'Winkelkoppelingen'), WAIT_TIMEOUT, 'Winkelkoppelingen pagina opent niet')
-}
-
-async function clickButtonByText(doc, label) {
-  const button = Array.from(doc?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === label)
-  if (!button) throw new Error(`Knop ${label} niet gevonden`)
-  clickElement(button)
-  return button
-}
-
-async function ensureProviderConnectionAndBatch(frame, providerName, expectedArticleName) {
-  await openStoresPage(frame)
-  let doc = getFrameDocument(frame)
-
-  const connectButton = Array.from(doc?.querySelectorAll('button') || []).find((entry) => entry.textContent?.includes(`${providerName} koppelen`))
-  if (connectButton) {
-    clickElement(connectButton)
-    await waitForCondition(
-      () => queryText(getFrameDocument(frame), `${providerName} is gekoppeld aan dit huishouden.`) || queryText(getFrameDocument(frame), 'Koppeling: gekoppeld'),
-      WAIT_TIMEOUT,
-      `${providerName} koppelen werd niet bevestigd`
-    )
-  }
-
-  doc = getFrameDocument(frame)
-  const pullButton = await waitForCondition(() => {
-    const buttons = Array.from(getFrameDocument(frame)?.querySelectorAll('button') || [])
-    return buttons.find((entry) => {
-      if (entry.textContent?.trim() !== 'Aankopen ophalen') return false
-      const providerBlock = entry.closest('div[style]')?.parentElement || entry.parentElement?.parentElement || entry.parentElement
-      return providerBlock?.textContent?.includes(providerName)
-    }) || null
-  }, WAIT_TIMEOUT, 'Knop Aankopen ophalen niet gevonden')
-  clickElement(pullButton)
-  await waitForCondition(() => queryText(getFrameDocument(frame), `Kassabon ${providerName}`), WAIT_TIMEOUT, `Kassabon ${providerName} werd niet geladen`)
-  await waitForCondition(() => getStoreLineRow(frame, expectedArticleName), WAIT_TIMEOUT, `Regel ${expectedArticleName} niet zichtbaar in Kassabon ${providerName}`)
-}
-
-function getStoreLineRow(frame, articleName) {
-  const doc = getFrameDocument(frame)
-  const rows = Array.from(doc?.querySelectorAll('.rz-store-review-table tbody tr') || [])
-  return rows.find((row) => row.querySelector('td .rz-store-primary')?.textContent?.trim() === articleName) || null
-}
-
-function getStoreLineState(frame, articleName) {
-  const row = getStoreLineRow(frame, articleName)
-  if (!row) return null
-  const selects = row.querySelectorAll('select')
-  const suggestion = row.querySelector('.rz-store-suggestion')?.textContent?.trim() || ''
-  return {
-    review: selects[0]?.value || '',
-    mappedArticle: selects[1]?.value || '',
-    location: selects[2]?.value || '',
-    suggestion,
-  }
-}
-
-async function ensureStoreLineSuggestionState(frame, articleName, mode) {
-  await waitForCondition(() => {
-    const state = getStoreLineState(frame, articleName)
-    if (!state) return false
-    if (mode === 'suggest-only') {
-      return Boolean(state.suggestion) && !state.mappedArticle && !state.location
-    }
-    if (mode === 'auto-ready') {
-      return Boolean(state.mappedArticle) && Boolean(state.location) && state.review === 'selected'
-    }
-    return false
-  }, WAIT_TIMEOUT, `Voorstelstatus ${mode} werd niet bereikt voor ${articleName}. Diagnose: ${JSON.stringify(getStoreLineState(frame, articleName))}`)
-}
-
-async function ensureStoreLineExplanationContains(frame, articleName, expectedText) {
-  await waitForCondition(() => {
-    const row = getStoreLineRow(frame, articleName)
-    const text = row?.textContent || ''
-    return text.includes(expectedText)
-  }, WAIT_TIMEOUT, `Uitleg voor ${articleName} bevat niet: ${expectedText}`)
-}
-
-async function setStoreLineReviewDecision(frame, articleName, decision) {
-  const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
-  const selects = row.querySelectorAll('select')
-  const reviewSelect = selects[0]
-  if (!reviewSelect) throw new Error(`Review-select ontbreekt voor ${articleName}`)
-  setSelectValue(reviewSelect, decision)
-  await delay(30)
-  reviewSelect.dispatchEvent(new Event('change', { bubbles: true }))
-  await waitForCondition(() => {
-    const refreshedRow = getStoreLineRow(frame, articleName)
-    return refreshedRow?.querySelectorAll('select')?.[0]?.value === decision
-  }, WAIT_TIMEOUT, `Reviewbeslissing ${decision} werd niet opgeslagen voor ${articleName}`)
-}
-
-async function setStoreLineArticle(frame, articleName, mappedArticleId) {
-  const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
-  const articleSelect = row.querySelectorAll('select')[1]
-  if (!articleSelect) throw new Error(`Artikelselect ontbreekt voor ${articleName}`)
-  setSelectValue(articleSelect, mappedArticleId)
-  await delay(30)
-  articleSelect.dispatchEvent(new Event('change', { bubbles: true }))
-  await waitForCondition(() => {
-    const refreshedRow = getStoreLineRow(frame, articleName)
-    return String(refreshedRow?.querySelectorAll('select')?.[1]?.value || '') === String(mappedArticleId)
-  }, WAIT_TIMEOUT, (() => {
-    const refreshedRow = getStoreLineRow(frame, articleName)
-    const articleSelect = refreshedRow?.querySelectorAll('select')?.[1] || null
-    const options = Array.from(articleSelect?.options || []).map((entry) => `${entry.textContent?.trim() || '?'}=${entry.value}`).join(', ')
-    return `Artikelkoppeling werd niet opgeslagen voor ${articleName}. Geprobeerd: ${mappedArticleId}. Beschikbare opties: ${options}`
-  })())
-}
-
-async function setStoreLineLocationByLabel(frame, articleName, expectedLabel) {
-  const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
-  const locationSelect = row.querySelectorAll('select')[2]
-  if (!locationSelect) throw new Error(`Locatieselect ontbreekt voor ${articleName}`)
-  const option = Array.from(locationSelect.options).find((entry) => entry.textContent?.trim() === expectedLabel)
-  if (!option) throw new Error(`Locatie ${expectedLabel} niet gevonden voor ${articleName}`)
-  setSelectValue(locationSelect, option.value)
-  await delay(30)
-  locationSelect.dispatchEvent(new Event('change', { bubbles: true }))
-  await waitForCondition(() => {
-    const refreshedRow = getStoreLineRow(frame, articleName)
-    return refreshedRow?.querySelectorAll('select')?.[2]?.value === option.value
-  }, WAIT_TIMEOUT, `Locatie ${expectedLabel} werd niet opgeslagen voor ${articleName}`)
-}
-
-async function ensureStoreLineReadyForProcessing(frame, articleName, mappedArticleId, expectedLocationLabel) {
-  const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
-  const selects = row.querySelectorAll('select')
-  const reviewValue = selects[0]?.value || 'pending'
-  const articleValue = selects[1]?.value || ''
-  const locationSelect = selects[2]
-  const locationOption = Array.from(locationSelect?.options || []).find((entry) => entry.textContent?.trim() === expectedLocationLabel)
-  const locationValue = locationSelect?.value || ''
-
-  if (reviewValue !== 'selected') {
-    await setStoreLineReviewDecision(frame, articleName, 'selected')
-  }
-  if (articleValue !== mappedArticleId) {
-    await setStoreLineArticle(frame, articleName, mappedArticleId)
-  }
-  if (!locationOption) throw new Error(`Locatie ${expectedLocationLabel} niet gevonden voor ${articleName}`)
-  if (locationValue !== locationOption.value) {
-    await setStoreLineLocationByLabel(frame, articleName, expectedLocationLabel)
-  }
-}
-
-function describeStoreReviewState(frame) {
-  const doc = getFrameDocument(frame)
-  const rows = Array.from(doc?.querySelectorAll('.rz-store-review-table tbody tr') || [])
-  const details = rows.map((row) => {
-    const cells = row.querySelectorAll('td')
-    const selects = row.querySelectorAll('select')
-    return {
-      article: row.querySelector('td .rz-store-primary')?.textContent?.trim() || '',
-      review: selects[0]?.value || '',
-      mappedArticle: selects[1]?.value || '',
-      location: selects[2]?.value || '',
-      blockerText: cells[4]?.textContent?.trim() || '',
-    }
-  })
-  const warningTitle = doc?.querySelector('#process-warning-title')?.textContent?.trim() || ''
-  const warningText = doc?.querySelector('.rz-modal-text')?.textContent?.trim() || ''
-  const statusCards = Array.from(doc?.querySelectorAll('.rz-card') || [])
-    .map((card) => card.textContent?.trim() || '')
-    .filter(Boolean)
-  return {
-    warningTitle,
-    warningText,
-    statusCards,
-    rows: details,
-  }
-}
-
-async function processCurrentStoreBatch(frame) {
-  const processButton = await waitForCondition(
-    () => Array.from(getFrameDocument(frame)?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Naar voorraad'),
-    WAIT_TIMEOUT,
-    'Knop Naar voorraad niet gevonden'
-  )
-  clickElement(processButton)
-  await delay(250)
-
-  const immediateState = describeStoreReviewState(frame)
-  if (immediateState.warningTitle || immediateState.warningText) {
-    throw new Error(`Verwerken geblokkeerd: ${immediateState.warningTitle || 'waarschuwing'} ${immediateState.warningText}`.trim())
-  }
-
-  await waitForAsyncCondition(async () => {
-    const doc = getFrameDocument(frame)
-    const texts = [
-      'Verwerking afgerond',
-      'Verwerkt!',
-      'Verwerkt naar voorraad',
-      'Er staan geen open regels meer in deze kassabon.',
-    ]
-    if (texts.some((entry) => queryText(doc, entry))) return true
-
-    const busyButton = Array.from(doc?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Bezig…')
-    if (busyButton) return false
-
-    const state = describeStoreReviewState(frame)
-    if (state.warningTitle || state.warningText) {
-      throw new Error(`Verwerken geblokkeerd: ${state.warningTitle || 'waarschuwing'} ${state.warningText}`.trim())
-    }
-
-    return false
-  }, WAIT_TIMEOUT, `Verwerken naar voorraad werd niet bevestigd. Diagnose: ${JSON.stringify(describeStoreReviewState(frame))}`)
-}
-
-async function getInventoryRows() {
-  const data = await requestJson('/api/dev/inventory-preview')
-  return Array.isArray(data?.rows) ? data.rows : []
-}
-
-async function getInventoryQuantity(articleName) {
-  const rows = await getInventoryRows()
-  return rows
-    .filter((row) => String(row?.artikel || '').trim().toLowerCase() === String(articleName || '').trim().toLowerCase())
-    .reduce((total, row) => total + (Number(row?.aantal) || 0), 0)
-}
-
-async function getInventoryArticleId(articleName) {
-  const rows = await getInventoryRows()
-  const match = rows.find((row) => String(row?.artikel || '').trim().toLowerCase() === String(articleName || '').trim().toLowerCase())
-  if (!match?.id) {
-    throw new Error(`Artikel ${articleName} niet gevonden in live voorraad-preview`)
-  }
-  return String(match.id)
-}
-
-async function getStoreReviewArticleOptionId(articleName) {
-  const items = await requestJson('/api/store-review-articles')
-  const normalized = String(articleName || '').trim().toLowerCase()
-  const match = Array.isArray(items)
-    ? items.find((item) => String(item?.name || '').trim().toLowerCase() === normalized)
-    : null
-
-  if (!match?.id) {
-    const available = Array.isArray(items) ? items.map((item) => `${item?.name || '?'}=${item?.id || '?'}`).join(', ') : ''
-    throw new Error(`Review-artikeloptie ${articleName} niet gevonden. Beschikbaar: ${available}`)
-  }
-
-  return String(match.id)
-}
-
-async function getArticleHistoryRows(articleName) {
-  const data = await requestJson(`/api/dev/article-history?article_name=${encodeURIComponent(articleName)}`)
-  return Array.isArray(data?.rows) ? data.rows : []
-}
-
-
-async function ensureStoreImportPersisted(articleName, beforeQuantity, providerCode = null, timeout = WAIT_TIMEOUT) {
-  await waitForAsyncCondition(async () => {
-    const quantity = await getInventoryQuantity(articleName)
-    if (Number(quantity) <= Number(beforeQuantity)) return false
-
-    const rows = await getArticleHistoryRows(articleName)
-    return rows.some((row) => {
-      if (row?.source !== 'store_import') return false
-      if (!providerCode) return true
-      return String(row?.note || '').includes(`provider=${providerCode}`)
-    })
-  }, timeout, `Winkelimport voor ${articleName} werd niet volledig bevestigd${providerCode ? ` via ${providerCode}` : ''}`)
-}
-
-async function ensureArticleHistoryContainsStoreImport(articleName, providerCode = null) {
-  await waitForAsyncCondition(async () => {
-    const rows = await getArticleHistoryRows(articleName)
-    return rows.some((row) => {
-      if (row?.source !== 'store_import') return false
-      if (!providerCode) return true
-      return String(row?.note || '').includes(`provider=${providerCode}`)
-    })
-  }, WAIT_TIMEOUT, `Geen winkelimport-historie gevonden voor ${articleName}`)
-}
-
-async function ensureArticleHistoryStoreImportCount(articleName, minimumCount, providerCode = null) {
-  await waitForAsyncCondition(async () => {
-    const rows = await getArticleHistoryRows(articleName)
-    const matchingRows = rows.filter((row) => {
-      if (row?.source !== 'store_import') return false
-      if (!providerCode) return true
-      return String(row?.note || '').includes(`provider=${providerCode}`)
-    })
-    return matchingRows.length >= minimumCount
-  }, WAIT_TIMEOUT, `Minder dan ${minimumCount} winkelimport-events gevonden voor ${articleName}`)
-}
-
-async function ensureInventoryContainsArticle(frame, articleName) {
-  await navigateFrame(frame, '/voorraad')
-  await waitForCondition(() => {
-    const doc = getFrameDocument(frame)
-    const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
-    return rows.some((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName)
-  }, WAIT_TIMEOUT, `Artikel ${articleName} niet zichtbaar in Voorraad`)
 }
 
 async function openSettings(frame) {
@@ -629,15 +276,6 @@ async function ensureAnalysisStatus(frame, expectedText) {
   const doc = getFrameDocument(frame)
   await waitForCondition(() => queryText(doc, 'Automatisering'), WAIT_TIMEOUT, 'Analyse-tab Automatisering niet zichtbaar')
   await waitForCondition(() => queryText(doc, expectedText), WAIT_TIMEOUT, `Analyse toont niet de verwachte automatiseringsstatus: ${expectedText}`)
-}
-
-async function ensureHistoryCardsAtLeast(frame, minimumCount) {
-  await openArticleTab(frame, 'Historie')
-  await waitForCondition(() => {
-    const doc = getFrameDocument(frame)
-    const cards = Array.from(doc?.querySelectorAll('.rz-history-card') || [])
-    return cards.length >= minimumCount
-  }, WAIT_TIMEOUT, `Minder dan ${minimumCount} historiekaarten zichtbaar in Artikeldetails`)
 }
 
 export async function runBrowserRegressionTests() {
@@ -727,172 +365,6 @@ export async function runBrowserRegressionTests() {
       await openArticleFromInventory(frame, 'Boormachine')
       await ensureHistoryAutoState(frame, 'Boormachine', false)
       await ensureAnalysisStatus(frame, 'Niet van toepassing')
-    }, results)
-
-    await runScenario('Lidl-flow opent kassabon na koppelen en aankopen ophalen', async () => {
-      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
-      const doc = getFrameDocument(frame)
-      await waitForCondition(() => queryText(doc, 'Aankoopdatum: 10-03-2026'), WAIT_TIMEOUT, 'Mock aankoopdatum ontbreekt in Kassabon Lidl')
-      await waitForCondition(() => queryText(doc, 'Winkel: Lidl, Hoofdstraat 12, Utrecht'), WAIT_TIMEOUT, 'Mock winkelheader ontbreekt in Kassabon Lidl')
-    }, results)
-
-    await runScenario('Jumbo-flow opent kassabon na koppelen en aankopen ophalen', async () => {
-      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Magere yoghurt')
-      const doc = getFrameDocument(frame)
-      await waitForCondition(() => queryText(doc, 'Aankoopdatum: 10-03-2026'), WAIT_TIMEOUT, 'Mock aankoopdatum ontbreekt in Kassabon Jumbo')
-      await waitForCondition(() => queryText(doc, 'Winkel: Jumbo, Marktplein 8, Utrecht'), WAIT_TIMEOUT, 'Mock winkelheader ontbreekt in Kassabon Jumbo')
-    }, results)
-
-    await runScenario('Vereenvoudigingsniveau voorzichtig laat bekende regels als voorstel open staan', async () => {
-      await prepareRegressionFixture(frame)
-      const melkId = await getStoreReviewArticleOptionId('Melk')
-      await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
-      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
-      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
-      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
-      await processCurrentStoreBatch(frame)
-      await waitForAsyncCondition(async () => (await getInventoryQuantity('Melk')) > 0, WAIT_TIMEOUT, 'Voorbereidende Lidl-opboeking voor Melk mislukte')
-
-      await setStoreImportSimplificationLevel(frame, 'voorzichtig')
-      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
-      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
-      await ensureStoreLineSuggestionState(frame, 'Halfvolle melk', 'suggest-only')
-    }, results)
-
-    await runScenario('Vereenvoudigingsniveau gebalanceerd vult bekende regels automatisch in', async () => {
-      await prepareRegressionFixture(frame)
-      const melkId = await getStoreReviewArticleOptionId('Melk')
-      await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
-      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
-      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
-      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
-      await processCurrentStoreBatch(frame)
-      await waitForAsyncCondition(async () => (await getInventoryQuantity('Melk')) > 0, WAIT_TIMEOUT, 'Voorbereidende Lidl-opboeking voor Melk mislukte')
-
-      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
-      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
-      await ensureStoreLineSuggestionState(frame, 'Halfvolle melk', 'auto-ready')
-    }, results)
-
-    await runScenario('Vereenvoudigingsniveau maximaal gemak bereidt bekende regels automatisch voor maar verwerkt niet stil', async () => {
-      await prepareRegressionFixture(frame)
-      const tomatenId = await getStoreReviewArticleOptionId('Tomaten')
-      await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
-      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
-      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
-      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
-      await processCurrentStoreBatch(frame)
-      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > 0, WAIT_TIMEOUT, 'Voorbereidende Jumbo-opboeking voor Tomaten mislukte')
-
-      const beforeQuantity = await getInventoryQuantity('Tomaten')
-      await setStoreImportSimplificationLevel(frame, 'maximaal_gemak')
-      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
-      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
-      await ensureStoreLineSuggestionState(frame, 'Tomaten', 'auto-ready')
-      if ((await getInventoryQuantity('Tomaten')) !== beforeQuantity) {
-        throw new Error('Maximaal gemak verwerkte Tomaten stilzwijgend zonder expliciete actie')
-      }
-    }, results)
-
-
-    await runScenario('Winkelimport toont uitleg bij bekende regel met alleen voorstel', async () => {
-      await prepareRegressionFixture(frame)
-      const melkId = await getStoreReviewArticleOptionId('Melk')
-      await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
-      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
-      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
-      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
-      await processCurrentStoreBatch(frame)
-      await waitForAsyncCondition(async () => (await getInventoryQuantity('Melk')) > 0, WAIT_TIMEOUT, 'Voorbereidende Lidl-opboeking voor Melk mislukte')
-
-      await setStoreImportSimplificationLevel(frame, 'voorzichtig')
-      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
-      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
-      await ensureStoreLineExplanationContains(frame, 'Halfvolle melk', 'Eerdere mapping gevonden: artikel + locatie')
-      await ensureStoreLineExplanationContains(frame, 'Halfvolle melk', 'Alleen voorstel door niveau Voorzichtig')
-    }, results)
-
-    await runScenario('Winkelimport toont uitleg bij onbekende regel zonder mapping', async () => {
-      await prepareRegressionFixture(frame)
-      await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
-      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
-      await ensureStoreLineExplanationContains(frame, 'Banaan', 'Geen eerdere mapping gevonden')
-    }, results)
-
-    await runScenario('Lidl-flow kan een regel koppelen en naar voorraad verwerken', async () => {
-      await prepareRegressionFixture(frame)
-      const melkId = await getStoreReviewArticleOptionId('Melk')
-      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
-      await setStoreLineReviewDecision(frame, 'Banaan', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Volkoren pasta', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Tomatenblokjes', 'ignored')
-      const beforeQuantity = await getInventoryQuantity('Melk')
-      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
-      await processCurrentStoreBatch(frame)
-      await ensureStoreImportPersisted('Melk', beforeQuantity, 'lidl')
-      await ensureInventoryContainsArticle(frame, 'Melk')
-    }, results)
-
-    await runScenario('Jumbo-flow kan een regel koppelen en naar voorraad verwerken', async () => {
-      await prepareRegressionFixture(frame)
-      const tomatenId = await getStoreReviewArticleOptionId('Tomaten')
-      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
-      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
-      const beforeQuantity = await getInventoryQuantity('Tomaten')
-      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
-      await processCurrentStoreBatch(frame)
-      await ensureStoreImportPersisted('Tomaten', beforeQuantity, 'jumbo')
-      await ensureInventoryContainsArticle(frame, 'Tomaten')
-    }, results)
-
-    await runScenario('Winkelimport bewaart twee losse events voor hetzelfde artikel en Historie toont beide', async () => {
-      await prepareRegressionFixture(frame)
-      const tomatenId = await getStoreReviewArticleOptionId('Tomaten')
-      const baselineQuantity = await getInventoryQuantity('Tomaten')
-
-      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
-      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
-      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
-      await processCurrentStoreBatch(frame)
-      await ensureStoreImportPersisted('Tomaten', baselineQuantity, 'jumbo')
-
-      const afterFirstQuantity = await getInventoryQuantity('Tomaten')
-      await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
-      await setStoreLineReviewDecision(frame, 'Magere yoghurt', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Appelsap', 'ignored')
-      await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
-      await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
-      await processCurrentStoreBatch(frame)
-      await ensureStoreImportPersisted('Tomaten', afterFirstQuantity, 'jumbo')
-
-      await ensureArticleHistoryStoreImportCount('Tomaten', 2, 'jumbo')
-      await openArticleFromInventory(frame, 'Tomaten')
-      await ensureHistoryCardsAtLeast(frame, 2)
-      await waitForCondition(() => {
-        const doc = getFrameDocument(frame)
-        const notes = Array.from(doc?.querySelectorAll('.rz-history-meta-row .rz-history-meta-value') || []).map((entry) => entry.textContent || '')
-        return notes.filter((value) => value.includes('Geïmporteerd via Jumbo')).length >= 2
-      }, WAIT_TIMEOUT, 'Historie toont niet beide Jumbo-opboekingen voor Tomaten')
     }, results)
   } finally {
     removeExistingFrame()

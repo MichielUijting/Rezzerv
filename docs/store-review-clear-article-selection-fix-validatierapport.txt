@@ -1,5 +1,0 @@
-Release: Rezzerv-v01.07.27
-- Bugfix: artikelkoppeling kan weer worden leeggemaakt via "Kies artikel".
-- Backend accepteert nu lege household_article_id als expliciete ontkoppeling.
-- purchase_import_lines.matched_household_article_id wordt dan NULL en match_status wordt unmatched.
-- Batchstatus wordt daarna opnieuw berekend via update_batch_status().

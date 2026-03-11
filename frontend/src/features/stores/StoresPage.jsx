@@ -3,7 +3,6 @@ import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import demoData from '../../demo-articles.json'
-import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 
 function normalizeErrorMessage(value) {
   if (!value) return 'Verzoek mislukt'
@@ -70,126 +69,6 @@ function articleLabel(article) {
 }
 
 
-function StoreArticleSelector({
-  lineId,
-  lineName,
-  selectedArticleId,
-  articleOptions,
-  disabled,
-  onChange,
-  onCreateArticle,
-}) {
-  const datalistId = `store-article-options-${lineId}`
-  const optionsByLabel = useMemo(() => {
-    const entries = articleOptions.map((article) => [articleLabel(article), String(article.id)])
-    return new Map(entries)
-  }, [articleOptions])
-  const labelById = useMemo(() => {
-    const entries = articleOptions.map((article) => [String(article.id), articleLabel(article)])
-    return new Map(entries)
-  }, [articleOptions])
-  const [query, setQuery] = useState(selectedArticleId ? (labelById.get(String(selectedArticleId)) || '') : '')
-
-  useEffect(() => {
-    const nextValue = selectedArticleId ? (labelById.get(String(selectedArticleId)) || '') : ''
-    setQuery(nextValue)
-  }, [selectedArticleId, labelById])
-
-  const normalizedQuery = query.trim().toLowerCase()
-  const hasExactMatch = Boolean(normalizedQuery && Array.from(optionsByLabel.keys()).some((label) => label.trim().toLowerCase() === normalizedQuery))
-  const canCreateArticle = Boolean(normalizedQuery) && !hasExactMatch && !selectedArticleId
-
-  async function handleCreateArticle() {
-    const baseName = query.trim() || lineName || ''
-    const nextName = window.prompt('Nieuw artikel aanmaken', baseName)
-    if (!nextName) return
-    const created = await onCreateArticle(nextName)
-    if (created?.name) {
-      setQuery(articleLabel(created))
-    }
-  }
-
-  function handleInputChange(event) {
-    const nextQuery = event.target.value
-    setQuery(nextQuery)
-    if (!nextQuery) {
-      onChange('')
-      return
-    }
-    const matchedId = optionsByLabel.get(nextQuery)
-    if (matchedId) {
-      onChange(matchedId)
-    }
-  }
-
-  function handleSelectChange(event) {
-    const nextId = String(event.target.value || '')
-    const nextLabel = nextId ? (labelById.get(nextId) || '') : ''
-    setQuery(nextLabel)
-    onChange(nextId)
-  }
-
-  return (
-    <div className="rz-store-article-search" style={articleSearchStyle}>
-      <input
-        className="rz-input rz-store-article-search-input" style={articleSearchInputStyle}
-        type="text"
-        list={datalistId}
-        value={query}
-        placeholder="Kies artikel"
-        disabled={disabled}
-        onChange={handleInputChange}
-      />
-      <datalist id={datalistId}>
-        {articleOptions.map((article) => (
-          <option key={article.id} value={articleLabel(article)} />
-        ))}
-      </datalist>
-      <select
-        className="rz-input rz-store-select rz-store-select--hidden"
-        style={{ display: 'none' }}
-        data-store-article-select="true"
-        value={selectedArticleId || ''}
-        disabled={disabled}
-        onChange={handleSelectChange}
-        aria-hidden="true"
-        tabIndex={-1}
-      >
-        <option value="">Kies artikel</option>
-        {articleOptions.map((article) => (
-          <option key={article.id} value={article.id}>{articleLabel(article)}</option>
-        ))}
-      </select>
-      {canCreateArticle ? (
-        <button
-          type="button"
-          className="rz-link-button"
-          style={createArticleButtonStyle}
-          disabled={disabled}
-          onClick={handleCreateArticle}
-        >
-          Nieuw artikel aanmaken
-        </button>
-      ) : null}
-    </div>
-  )
-}
-
-function providerLabel(providerOrConnection) {
-  return providerOrConnection?.store_provider_name || providerOrConnection?.name || providerOrConnection?.store_provider_code || providerOrConnection?.code || 'Winkel'
-}
-
-function providerStatusLabel(provider) {
-  if (!provider) return 'niet beschikbaar'
-  return `${provider.status} / ${provider.import_mode}`
-}
-
-function buildBatchTitle(batch) {
-  const providerName = batch?.store_provider_name || batch?.store_name || 'Winkel'
-  return `Kassabon ${providerName}`
-}
-
-
 function batchStatusLabel(value) {
   if (value === 'processed') return 'Verwerkt naar voorraad'
   if (value === 'partially_processed') return 'Gedeeltelijk verwerkt'
@@ -200,15 +79,13 @@ function batchStatusLabel(value) {
 }
 
 function suggestionLabel(line) {
-  if (line?.preparation_explanation) return line.preparation_explanation
-  if (line?.suggestion_reason) return line.suggestion_reason
   if (line.is_auto_prefilled && (line.review_decision || 'pending') === 'selected' && line.matched_household_article_id && line.target_location_id) {
-    return 'Automatisch voorbereid'
+    return 'Automatisch voorgesteld'
   }
   if (line.suggested_household_article_id || line.suggested_location_id) {
     return 'Controleer voorstel'
   }
-  return 'Geen eerdere mapping gevonden'
+  return ''
 }
 
 function formatQuantity(value, unit) {
@@ -244,24 +121,16 @@ export default function StoresPage() {
   const [processWarning, setProcessWarning] = useState(null)
   const processFeedbackTimer = useRef(null)
 
-  const providersByCode = useMemo(
-    () => Object.fromEntries(providers.map((provider) => [provider.code, provider])),
+  const lidlProvider = useMemo(
+    () => providers.find((provider) => provider.code === 'lidl') || null,
     [providers],
   )
 
-  const connectionsByProviderCode = useMemo(
-    () => Object.fromEntries(connections.map((connection) => [connection.store_provider_code, connection])),
+  const lidlConnection = useMemo(
+    () => connections.find((connection) => connection.store_provider_code === 'lidl') || null,
     [connections],
   )
 
-  const primaryProvider = useMemo(
-    () => providers[0] || null,
-    [providers],
-  )
-
-  const activeProviderCode = activeBatch?.store_provider_code || primaryProvider?.code || null
-  const activeProvider = activeProviderCode ? providersByCode[activeProviderCode] || null : null
-  const activeConnection = activeProviderCode ? connectionsByProviderCode[activeProviderCode] || null : null
 
   const validArticleIds = useMemo(() => new Set(articleOptions.map((article) => String(article.id))), [articleOptions])
   const validLocationIds = useMemo(() => new Set(locationOptions.map((location) => String(location.id))), [locationOptions])
@@ -275,7 +144,6 @@ export default function StoresPage() {
   const linesMissingArticle = selectedLines.filter((line) => !line.matched_household_article_id).length
   const linesMissingLocation = selectedLines.filter((line) => !line.target_location_id || !validLocationIds.has(String(line.target_location_id))).length
   const canProcessBatch = Boolean(activeBatch && selectedLines.length > 0)
-  const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
   async function refreshBatch(batchId) {
     const batch = await fetchJson(`/api/purchase-import-batches/${batchId}`)
@@ -297,35 +165,18 @@ export default function StoresPage() {
     processFeedbackTimer.current = window.setTimeout(() => setProcessFeedback(''), 2200)
   }
 
-  async function getLatestBatchMeta(connectionId) {
+  async function restoreLatestBatch(connectionId) {
     try {
       const latest = await fetchJson(`/api/store-connections/${connectionId}/latest-batch`)
-      return latest?.batch_id ? latest : null
+      if (!latest?.batch_id) return
+      if (latest.import_status === 'processed') {
+        setActiveBatch(null)
+        return
+      }
+      await refreshBatch(latest.batch_id)
     } catch (err) {
-      return null
+      // Geen eerdere batch is toegestaan; negeren.
     }
-  }
-
-  async function openLatestBatchForConnection(connectionId) {
-    if (!connectionId) return null
-    const latest = await getLatestBatchMeta(connectionId)
-    if (!latest?.batch_id) return null
-    if (latest.import_status === 'processed') {
-      setActiveBatch((current) => (current?.connection_id === connectionId ? null : current))
-      return null
-    }
-    return refreshBatch(latest.batch_id)
-  }
-
-  async function restoreLatestBatch(connectionsToCheck) {
-    const latestCandidates = (await Promise.all((connectionsToCheck || []).map((connection) => getLatestBatchMeta(connection.id))))
-      .filter((item) => item?.batch_id && item.import_status !== 'processed')
-      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-    if (!latestCandidates.length) {
-      setActiveBatch(null)
-      return null
-    }
-    return refreshBatch(latestCandidates[0].batch_id)
   }
 
   async function loadPageData() {
@@ -350,9 +201,9 @@ export default function StoresPage() {
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? backendArticles : articleFallbackOptions)
       setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
 
-      const existingConnections = connectionData.filter((connection) => providerData.some((provider) => provider.code === connection.store_provider_code))
-      if (existingConnections.length > 0) {
-        await restoreLatestBatch(existingConnections)
+      const existingLidlConnection = connectionData.find((connection) => connection.store_provider_code === 'lidl')
+      if (existingLidlConnection?.id) {
+        await restoreLatestBatch(existingLidlConnection.id)
       } else {
         setActiveBatch(null)
       }
@@ -391,43 +242,36 @@ export default function StoresPage() {
     }
   }, [household?.id, activeBatch?.batch_id])
 
-  async function handleConnect(providerCode, providerName) {
-    if (!household || !providerCode) return
+  async function handleConnect() {
+    if (!household) return
     setIsConnecting(true)
     setError('')
     setStatus('')
     try {
       const connection = await fetchJson('/api/store-connections', {
         method: 'POST',
-        body: JSON.stringify({ household_id: household.id, store_provider_code: providerCode }),
+        body: JSON.stringify({ household_id: household.id, store_provider_code: 'lidl' }),
       })
       setConnections((current) => {
         const filtered = current.filter((item) => item.id !== connection.id)
         return [...filtered, connection]
       })
       await refreshLocationOptions(household.id)
-      setStatus(`${providerName || providerCode} is gekoppeld aan dit huishouden.`)
+      setStatus('Lidl is gekoppeld aan dit huishouden.')
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || `${providerName || providerCode} kon niet worden gekoppeld.`)
+      setError(normalizeErrorMessage(err?.message) || 'Lidl kon niet worden gekoppeld.')
     } finally {
       setIsConnecting(false)
     }
   }
 
-  async function handlePullPurchases(connection, providerName) {
-    if (!connection) return
+  async function handlePullPurchases() {
+    if (!lidlConnection) return
     setIsPulling(true)
     setError('')
     setStatus('')
     try {
-      const existingBatch = await openLatestBatchForConnection(connection.id)
-      if (existingBatch) {
-        setStatus(`De laatste open bon van ${providerName || 'de winkel'} is opnieuw geladen met het actuele gemaksniveau.`)
-        await refreshLocationOptions(household.id)
-        return
-      }
-
-      const pullResult = await fetchJson(`/api/store-connections/${connection.id}/pull-purchases`, {
+      const pullResult = await fetchJson(`/api/store-connections/${lidlConnection.id}/pull-purchases`, {
         method: 'POST',
         body: JSON.stringify({ mock_profile: 'default' }),
       })
@@ -436,9 +280,9 @@ export default function StoresPage() {
       const fullyPrefilled = p.fully_prefilled || 0
       const articlePrefills = p.article_prefills || 0
       if (fullyPrefilled > 0 || articlePrefills > 0) {
-        setStatus(`Nieuwe mockaankopen van ${providerName || 'de winkel'} zijn opgehaald. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een artikelvoorstel.`)
+        setStatus(`Nieuwe mockaankopen zijn opgehaald. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een artikelvoorstel.`)
       } else {
-        setStatus(`Nieuwe mockaankopen van ${providerName || 'de winkel'} zijn opgehaald. Kies per regel wat naar voorraad mag.`)
+        setStatus('Nieuwe mockaankopen zijn opgehaald. Kies per regel wat naar voorraad mag.')
       }
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
@@ -481,37 +325,6 @@ export default function StoresPage() {
       setStatus('De artikelkoppeling is opgeslagen.')
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De artikelkoppeling kon niet worden opgeslagen.')
-    } finally {
-      setBusyLineId('')
-    }
-  }
-
-  async function handleCreateArticleFromLine(lineId, articleName) {
-    setBusyLineId(lineId)
-    setError('')
-    setStatus('')
-    try {
-      const result = await fetchJson(`/api/purchase-import-lines/${lineId}/create-article`, {
-        method: 'POST',
-        body: JSON.stringify({ article_name: articleName }),
-      })
-      if (result?.article_option) {
-        setArticleOptions((current) => {
-          const next = Array.isArray(current) ? [...current] : []
-          const exists = next.some((item) => String(item.id) === String(result.article_option.id))
-          if (!exists) {
-            next.push(result.article_option)
-            next.sort((a, b) => articleLabel(a).localeCompare(articleLabel(b), 'nl'))
-          }
-          return next
-        })
-      }
-      await refreshBatch(activeBatch.batch_id)
-      setStatus('Nieuw artikel aangemaakt en gekoppeld aan de bonregel.')
-      return result?.article_option || null
-    } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'Het nieuwe artikel kon niet worden aangemaakt.')
-      return null
     } finally {
       setBusyLineId('')
     }
@@ -599,20 +412,13 @@ export default function StoresPage() {
     <AppShell title="Winkels" showExit={false}>
       <div style={{ display: 'grid', gap: '18px' }}>
         <Card>
-          <div data-testid="stores-page-intro" style={{ display: 'grid', gap: '10px' }}>
+          <div style={{ display: 'grid', gap: '10px' }}>
             <div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Winkelkoppelingen</h2>
               <p style={{ margin: 0, color: '#667085' }}>
                 Koppel hier winkels, haal voorbeeld-aankopen op en beoordeel per regel wat later verwerkt mag worden.
               </p>
             </div>
-          </div>
-        </Card>
-
-        <Card>
-          <div data-testid="store-import-simplification-banner" className="rz-inline-feedback rz-inline-feedback--warning" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-            <span>Vereenvoudigingsniveau winkelimport: <strong>{simplificationLevelLabel}</strong></span>
-            <span>Deze instelling geldt voor het hele huishouden.</span>
           </div>
         </Card>
 
@@ -629,72 +435,59 @@ export default function StoresPage() {
         )}
 
         <Card>
-          <div data-testid="connected-stores-section">
           {isLoading ? (
             <div>Winkelgegevens laden…</div>
           ) : (
             <div style={{ display: 'grid', gap: '16px' }}>
-              {providers.map((provider) => {
-                const connection = connectionsByProviderCode[provider.code] || null
-                return (
-                  <div key={provider.code} data-testid={`store-provider-${provider.code}`} style={{ display: 'grid', gap: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: '18px' }}>{provider.name}</div>
-                        <div style={{ color: '#667085', fontSize: '14px' }}>
-                          Status provider: {providerStatusLabel(provider)}
-                        </div>
-                        <div style={{ color: '#667085', fontSize: '14px' }}>
-                          Koppeling: {connection ? 'gekoppeld' : 'nog niet gekoppeld'}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                        {!connection ? (
-                          <Button data-testid={`connect-store-${provider.code}`} variant="primary" onClick={() => handleConnect(provider.code, provider.name)} disabled={isConnecting}>
-                            {isConnecting ? 'Koppelen…' : `${provider.name} koppelen`}
-                          </Button>
-                        ) : (
-                          <Button data-testid={`pull-purchases-${provider.code}`} variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
-                            {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div style={{ borderTop: '1px solid #e4e7ec', paddingTop: '14px', color: '#667085', fontSize: '14px' }}>
-                      Deze release laat je regels beoordelen, koppelen en geselecteerde regels expliciet naar voorraad verwerken.
-                    </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '18px' }}>Lidl</div>
+                  <div style={{ color: '#667085', fontSize: '14px' }}>
+                    Status provider: {lidlProvider ? `${lidlProvider.status} / ${lidlProvider.import_mode}` : 'niet beschikbaar'}
                   </div>
-                )
-              })}
+                  <div style={{ color: '#667085', fontSize: '14px' }}>
+                    Koppeling: {lidlConnection ? 'gekoppeld' : 'nog niet gekoppeld'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  {!lidlConnection ? (
+                    <Button variant="primary" onClick={handleConnect} disabled={isConnecting || !lidlProvider}>
+                      {isConnecting ? 'Koppelen…' : 'Lidl koppelen'}
+                    </Button>
+                  ) : (
+                    <Button variant="secondary" onClick={handlePullPurchases} disabled={isPulling}>
+                      {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ borderTop: '1px solid #e4e7ec', paddingTop: '14px', color: '#667085', fontSize: '14px' }}>
+                Deze release laat je regels beoordelen, koppelen en geselecteerde regels expliciet naar voorraad verwerken.
+              </div>
             </div>
           )}
-          </div>
         </Card>
 
         {activeBatch && (
           <Card>
-            <div data-testid="active-batch-card" className="rz-store-review">
+            <div className="rz-store-review">
               <div className="rz-store-review-summary">
                 <div>
-                  <h3 data-testid="active-batch-title" className="rz-store-review-title">{buildBatchTitle(activeBatch)}</h3>
+                  <h3 className="rz-store-review-title">Kassabon Lidl</h3>
                   <div className="rz-store-review-meta">
-                    Aankoopdatum: {activeBatch.purchase_date || 'Onbekend'}
+                    Aankoopdatum: 10-03-2026
                   </div>
                   <div className="rz-store-review-meta">
-                    Winkel: {activeBatch.store_label || activeBatch.store_name || providerLabel(activeProvider)}
+                    Winkel: Lidl, Hoofdstraat 12, Utrecht
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <Button data-testid="process-active-batch" variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
+                  <Button variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
                     {isProcessingBatch ? 'Bezig…' : 'Naar voorraad'}
                   </Button>
                   {processFeedback ? <span className="rz-store-inline-feedback">{processFeedback}</span> : null}
                 </div>
-              </div>
-
-              <div className="rz-store-review-meta" style={{ marginBottom: '12px' }}>
-                Vereenvoudigingsniveau actief: {simplificationLevelLabel}. Bekende regels worden volgens dit niveau voorgesteld of automatisch voorbereid.
               </div>
 
               <div className="rz-table-wrapper">
@@ -718,21 +511,12 @@ export default function StoresPage() {
                   <tbody>
                     {visibleLines.length === 0 ? (
                       <tr><td colSpan={5}>Er staan geen open regels meer in deze kassabon.</td></tr>
-                    ) : visibleLines.map((line) => {
-                      const hasValidArticle = Boolean(line.matched_household_article_id) && validArticleIds.has(String(line.matched_household_article_id))
-                      const hasValidLocation = Boolean(line.target_location_id) && validLocationIds.has(String(line.target_location_id))
-                      const isReadyForProcessing = (line.review_decision || 'selected') === 'selected' && hasValidArticle && hasValidLocation
-                      return (
-                      <tr key={line.id} className={isReadyForProcessing ? 'rz-store-row--linked' : ''}>
+                    ) : visibleLines.map((line) => (
+                      <tr key={line.id} className={line.target_location_id && validLocationIds.has(String(line.target_location_id)) ? 'rz-store-row--linked' : ''}>
                         <td>
                           <div className="rz-store-primary">{line.article_name_raw}</div>
                           <div className="rz-store-secondary">{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
                           {suggestionLabel(line) ? <div className={`rz-store-suggestion ${line.is_auto_prefilled ? 'rz-store-suggestion--auto' : 'rz-store-suggestion--check'}`}>{suggestionLabel(line)}</div> : null}
-                          {line?.preparation_mode ? (
-                            <div className="rz-store-secondary">
-                              Status voorbereiding: {line.preparation_mode === 'auto_ready' ? 'Automatisch klaargezet' : line.preparation_mode === 'suggest_only' ? 'Alleen voorstel' : 'Geen voorbereiding'}
-                            </div>
-                          ) : null}
                         </td>
                         <td className="rz-num">
                           <div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div>
@@ -750,15 +534,17 @@ export default function StoresPage() {
                           </select>
                         </td>
                         <td>
-                          <StoreArticleSelector
-                            lineId={line.id}
-                            lineName={line.article_name_raw}
-                            selectedArticleId={line.matched_household_article_id || ''}
-                            articleOptions={articleOptions}
+                          <select
+                            className="rz-input rz-store-select"
+                            value={line.matched_household_article_id || ''}
                             disabled={busyLineId === line.id}
-                            onChange={(nextArticleId) => handleMapLine(line.id, nextArticleId)}
-                            onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
-                          />
+                            onChange={(event) => handleMapLine(line.id, event.target.value)}
+                          >
+                            <option value="">Kies artikel</option>
+                            {articleOptions.map((article) => (
+                              <option key={article.id} value={article.id}>{articleLabel(article)}</option>
+                            ))}
+                          </select>
                         </td>
                         <td>
                           <select
@@ -776,7 +562,7 @@ export default function StoresPage() {
                           </select>
                         </td>
                       </tr>
-                    )})}
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -821,21 +607,6 @@ const tableCellStyle = {
   verticalAlign: 'top',
 }
 
-const articleSearchStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '6px',
-}
-
-const articleSearchInputStyle = {
-  width: '100%',
-  padding: '8px 10px',
-  borderRadius: '8px',
-  border: '1px solid #d0d5dd',
-  fontSize: '14px',
-  background: '#ffffff',
-}
-
 const selectStyle = {
   width: '100%',
   padding: '8px 10px',
@@ -843,17 +614,4 @@ const selectStyle = {
   border: '1px solid #d0d5dd',
   fontSize: '14px',
   background: '#ffffff',
-}
-
-
-const createArticleButtonStyle = {
-  alignSelf: 'flex-start',
-  background: 'none',
-  border: 'none',
-  padding: 0,
-  marginTop: '4px',
-  color: '#0f766e',
-  fontWeight: 700,
-  cursor: 'pointer',
-  textDecoration: 'underline',
 }

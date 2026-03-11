@@ -77,7 +77,6 @@ async function fetchInventoryPreview() {
 
 function mapLiveHistoryRows(rows = []) {
   return rows.map((row) => ({
-    id: row?.id || '',
     datetime: row?.created_at || '',
     type: row?.event_type === 'purchase' ? 'Aankoop' : (row?.event_type || 'Gebeurtenis'),
     old_value: '—',

@@ -23,20 +23,8 @@ function formatSource(value) {
   return normalize(value)
 }
 
-function formatStoreImportProvider(note) {
-  const value = String(note || '')
-  const match = value.match(/(?:^|;)provider=([^;]+)/i)
-  if (!match?.[1]) return null
-  const provider = match[1].trim()
-  if (!provider) return null
-  return provider.charAt(0).toUpperCase() + provider.slice(1)
-}
-
 function formatNote(entry) {
-  if (entry?.source === 'store_import') {
-    const providerName = formatStoreImportProvider(entry?.note)
-    return providerName ? `Geïmporteerd via ${providerName}` : 'Geïmporteerd via winkel'
-  }
+  if (entry?.source === 'store_import') return 'Geïmporteerd via Lidl'
   return normalize(entry?.note)
 }
 
@@ -56,7 +44,7 @@ export default function ArticleHistoryTab({ articleData = {} }) {
         <h3 className="rz-history-group-title">Voorraadhistorie</h3>
         <div className="rz-history-group-body">
           {historyEntries.map((entry, index) => (
-            <article key={entry.id || `${entry.datetime || "moment"}-${entry.type || "event"}-${index}`} className="rz-history-card">
+            <article key={`${entry.datetime || "moment"}-${entry.type || "event"}-${index}`} className="rz-history-card">
               <div className="rz-history-card-top">
                 <div>
                   <div className="rz-history-card-datetime">{formatDateTime(entry.datetime)}</div>
