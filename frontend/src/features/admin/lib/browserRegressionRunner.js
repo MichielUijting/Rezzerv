@@ -1,5 +1,5 @@
 const FRAME_ID = "rezzerv-regression-runner-frame"
-const WAIT_TIMEOUT = 8000
+const WAIT_TIMEOUT = 12000
 const POLL_INTERVAL = 100
 const HOUSEHOLD_KEY = 'rezzerv_household_auto_consume_on_repurchase'
 const ARTICLE_OVERRIDE_KEY = 'rezzerv_article_auto_consume_overrides'
@@ -510,6 +510,21 @@ async function getArticleHistoryRows(articleName) {
   return Array.isArray(data?.rows) ? data.rows : []
 }
 
+
+async function ensureStoreImportPersisted(articleName, beforeQuantity, providerCode = null, timeout = WAIT_TIMEOUT) {
+  await waitForAsyncCondition(async () => {
+    const quantity = await getInventoryQuantity(articleName)
+    if (Number(quantity) <= Number(beforeQuantity)) return false
+
+    const rows = await getArticleHistoryRows(articleName)
+    return rows.some((row) => {
+      if (row?.source !== 'store_import') return false
+      if (!providerCode) return true
+      return String(row?.note || '').includes(`provider=${providerCode}`)
+    })
+  }, timeout, `Winkelimport voor ${articleName} werd niet volledig bevestigd${providerCode ? ` via ${providerCode}` : ''}`)
+}
+
 async function ensureArticleHistoryContainsStoreImport(articleName, providerCode = null) {
   await waitForAsyncCondition(async () => {
     const rows = await getArticleHistoryRows(articleName)
@@ -830,8 +845,7 @@ export async function runBrowserRegressionTests() {
       const beforeQuantity = await getInventoryQuantity('Melk')
       await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
       await processCurrentStoreBatch(frame)
-      await waitForAsyncCondition(async () => (await getInventoryQuantity('Melk')) > beforeQuantity, WAIT_TIMEOUT, 'Melk werd niet opgeboekt in Voorraad')
-      await ensureArticleHistoryContainsStoreImport('Melk', 'lidl')
+      await ensureStoreImportPersisted('Melk', beforeQuantity, 'lidl')
       await ensureInventoryContainsArticle(frame, 'Melk')
     }, results)
 
@@ -845,8 +859,7 @@ export async function runBrowserRegressionTests() {
       const beforeQuantity = await getInventoryQuantity('Tomaten')
       await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
       await processCurrentStoreBatch(frame)
-      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > beforeQuantity, WAIT_TIMEOUT, 'Tomaten werden niet opgeboekt in Voorraad via Jumbo')
-      await ensureArticleHistoryContainsStoreImport('Tomaten', 'jumbo')
+      await ensureStoreImportPersisted('Tomaten', beforeQuantity, 'jumbo')
       await ensureInventoryContainsArticle(frame, 'Tomaten')
     }, results)
 
@@ -861,7 +874,7 @@ export async function runBrowserRegressionTests() {
       await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
       await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
       await processCurrentStoreBatch(frame)
-      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > baselineQuantity, WAIT_TIMEOUT, 'Eerste Jumbo-opboeking voor Tomaten werd niet verwerkt')
+      await ensureStoreImportPersisted('Tomaten', baselineQuantity, 'jumbo')
 
       const afterFirstQuantity = await getInventoryQuantity('Tomaten')
       await ensureProviderConnectionAndBatch(frame, 'Jumbo', 'Tomaten')
@@ -870,7 +883,7 @@ export async function runBrowserRegressionTests() {
       await setStoreLineReviewDecision(frame, 'Pindakaas', 'ignored')
       await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
       await processCurrentStoreBatch(frame)
-      await waitForAsyncCondition(async () => (await getInventoryQuantity('Tomaten')) > afterFirstQuantity, WAIT_TIMEOUT, 'Tweede Jumbo-opboeking voor Tomaten werd niet verwerkt')
+      await ensureStoreImportPersisted('Tomaten', afterFirstQuantity, 'jumbo')
 
       await ensureArticleHistoryStoreImportCount('Tomaten', 2, 'jumbo')
       await openArticleFromInventory(frame, 'Tomaten')

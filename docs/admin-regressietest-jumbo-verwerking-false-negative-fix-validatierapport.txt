@@ -1,0 +1,17 @@
+Release: Rezzerv-v01.07.32
+Doel: herstel regressie-/false-negative rond de Admin-test “Jumbo-flow kan een regel koppelen en naar voorraad verwerken”.
+
+Uitgevoerde wijziging:
+- browserRegressionRunner wacht nu robuuster op een volledig bevestigde winkelimport: zowel voorraadtoename als provider-specifiek historie-event.
+- WAIT_TIMEOUT verhoogd van 8000ms naar 12000ms om trage UI-/iframe-updates minder broos te maken.
+- Lidl- en Jumbo-verwerktests gebruiken dezelfde helper ensureStoreImportPersisted.
+- Multi-event Jumbo-test gebruikt dezelfde persistente bevestigingshelper voor beide verwerkingen.
+
+Validatie:
+- Doel van de wijziging is uitsluitend regressietest-robustheid; productflow voor winkelimport is niet functioneel gewijzigd.
+
+Niet gewijzigd:
+- backend winkelimport-flow
+- voorraadmodel
+- providerlogica voor Lidl of Jumbo
+- Playwright basisbestanden
