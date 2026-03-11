@@ -1,0 +1,11 @@
+Rezzerv v01.07.21
+
+Wijziging
+- Het actuele vereenvoudigingsniveau voor winkelimport wordt opnieuw toegepast wanneer een bestaande batch opnieuw wordt geladen.
+
+Technische aanpassingen
+- apply_prefill_to_batch verwerkt alleen nog niet-verwerkte regels.
+- GET /api/purchase-import-batches/{batch_id} past voor niet-volledig verwerkte batches eerst opnieuw prefill toe met het actuele huishoudniveau en ververst daarna de batchstatus.
+
+Beoogd effect
+- Een gewijzigd gemaksniveau werkt niet alleen bij opnieuw inlezen van aankopen, maar ook bij het heropenen van het scherm Winkels zolang de batch nog open staat.

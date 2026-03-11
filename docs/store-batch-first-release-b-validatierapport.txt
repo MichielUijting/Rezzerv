@@ -1,0 +1,14 @@
+Release B validatierapport
+
+Wijziging:
+- Open bonnen is primaire werksectie gemaakt
+- Batchstatus en primaire batchactie toegevoegd
+- Verbonden winkels compacter en secundair gehouden
+
+Technische validatie:
+- frontend build succesvol uitgevoerd
+- bestaande provideracties behouden
+- Playwright stores-smoke aangepast aan nieuwe batch-first structuur
+
+Niet hard end-to-end gevalideerd in deze omgeving:
+- volledige browserflow met live appstack

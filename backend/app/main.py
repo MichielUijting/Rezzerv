@@ -23,8 +23,19 @@ async def unhandled_api_exception_handler(request: Request, exc: Exception):
 households = {}
 users = {
     "admin@rezzerv.local": {
-        "password": "Rezzerv123"
-    }
+        "password": "Rezzerv123",
+        "role": "admin",
+        "household_key": "default-household",
+        "household_id": "1",
+        "household_name": "Mijn huishouden",
+    },
+    "lid@rezzerv.local": {
+        "password": "Rezzerv123",
+        "role": "member",
+        "household_key": "default-household",
+        "household_id": "1",
+        "household_name": "Mijn huishouden",
+    },
 }
 
 app.add_middleware(
@@ -94,18 +105,30 @@ class ReviewLineRequest(BaseModel):
 
 
 class MapLineRequest(BaseModel):
-    household_article_id: str | int
+    household_article_id: Optional[str | int] = None
 
     @field_validator("household_article_id", mode="before")
     @classmethod
     def normalize_article_id(cls, value):
         if value is None or str(value).strip() == "":
-            raise ValueError("household_article_id is verplicht")
+            return None
         return str(value)
 
 
 class TargetLocationRequest(BaseModel):
     target_location_id: Optional[str] = None
+
+
+class CreateArticleFromLineRequest(BaseModel):
+    article_name: str
+
+    @field_validator("article_name")
+    @classmethod
+    def validate_article_name(cls, value):
+        normalized = normalize_household_article_name(value)
+        if not normalized:
+            raise ValueError("Artikelnaam is verplicht")
+        return normalized
 
 
 
@@ -122,49 +145,127 @@ class ProcessBatchRequest(BaseModel):
 
 
 
-MOCK_LIDL_PURCHASES = {
-    "default": [
-        {
-            "external_line_ref": "lidl-line-1",
-            "external_article_code": "LIDL-1001",
-            "article_name_raw": "Halfvolle melk",
-            "brand_raw": "Lidl",
-            "quantity_raw": 1,
-            "unit_raw": "liter",
-            "line_price_raw": 1.29,
-            "currency_code": "EUR",
-        },
-        {
-            "external_line_ref": "lidl-line-2",
-            "external_article_code": "LIDL-2001",
-            "article_name_raw": "Banaan",
-            "brand_raw": "Lidl",
-            "quantity_raw": 1,
-            "unit_raw": "kg",
-            "line_price_raw": 1.89,
-            "currency_code": "EUR",
-        },
-        {
-            "external_line_ref": "lidl-line-3",
-            "external_article_code": "LIDL-3001",
-            "article_name_raw": "Volkoren pasta",
-            "brand_raw": "Lidl",
-            "quantity_raw": 500,
-            "unit_raw": "g",
-            "line_price_raw": 0.99,
-            "currency_code": "EUR",
-        },
-        {
-            "external_line_ref": "lidl-line-4",
-            "external_article_code": "LIDL-4001",
-            "article_name_raw": "Tomatenblokjes",
-            "brand_raw": "Lidl",
-            "quantity_raw": 2,
-            "unit_raw": "stuks",
-            "line_price_raw": 1.18,
-            "currency_code": "EUR",
-        },
-    ]
+STORE_PROVIDER_DEFINITIONS = {
+    "lidl": {
+        "name": "Lidl",
+        "status": "active",
+        "import_mode": "mock",
+    },
+    "jumbo": {
+        "name": "Jumbo",
+        "status": "active",
+        "import_mode": "mock",
+    },
+}
+
+
+MOCK_PURCHASES_BY_PROVIDER = {
+    "lidl": {
+        "default": [
+            {
+                "external_line_ref": "lidl-line-1",
+                "external_article_code": "LIDL-1001",
+                "article_name_raw": "Halfvolle melk",
+                "brand_raw": "Lidl",
+                "quantity_raw": 1,
+                "unit_raw": "liter",
+                "line_price_raw": 1.29,
+                "currency_code": "EUR",
+            },
+            {
+                "external_line_ref": "lidl-line-2",
+                "external_article_code": "LIDL-2001",
+                "article_name_raw": "Banaan",
+                "brand_raw": "Lidl",
+                "quantity_raw": 1,
+                "unit_raw": "kg",
+                "line_price_raw": 1.89,
+                "currency_code": "EUR",
+            },
+            {
+                "external_line_ref": "lidl-line-3",
+                "external_article_code": "LIDL-3001",
+                "article_name_raw": "Volkoren pasta",
+                "brand_raw": "Lidl",
+                "quantity_raw": 500,
+                "unit_raw": "g",
+                "line_price_raw": 0.99,
+                "currency_code": "EUR",
+            },
+            {
+                "external_line_ref": "lidl-line-4",
+                "external_article_code": "LIDL-4001",
+                "article_name_raw": "Tomatenblokjes",
+                "brand_raw": "Lidl",
+                "quantity_raw": 2,
+                "unit_raw": "stuks",
+                "line_price_raw": 1.18,
+                "currency_code": "EUR",
+            },
+        ]
+    },
+    "jumbo": {
+        "default": [
+            {
+                "external_line_ref": "jumbo-line-1",
+                "external_article_code": "JUMBO-1001",
+                "article_name_raw": "Magere yoghurt",
+                "brand_raw": "Jumbo",
+                "quantity_raw": 1,
+                "unit_raw": "liter",
+                "line_price_raw": 1.59,
+                "currency_code": "EUR",
+            },
+            {
+                "external_line_ref": "jumbo-line-2",
+                "external_article_code": "JUMBO-2001",
+                "article_name_raw": "Appelsap",
+                "brand_raw": "Jumbo",
+                "quantity_raw": 1,
+                "unit_raw": "liter",
+                "line_price_raw": 1.99,
+                "currency_code": "EUR",
+            },
+            {
+                "external_line_ref": "jumbo-line-3",
+                "external_article_code": "JUMBO-3001",
+                "article_name_raw": "Pindakaas",
+                "brand_raw": "Calvé",
+                "quantity_raw": 1,
+                "unit_raw": "pot",
+                "line_price_raw": 3.49,
+                "currency_code": "EUR",
+            },
+            {
+                "external_line_ref": "jumbo-line-4",
+                "external_article_code": "JUMBO-4001",
+                "article_name_raw": "Tomaten",
+                "brand_raw": "Jumbo",
+                "quantity_raw": 6,
+                "unit_raw": "stuks",
+                "line_price_raw": 2.19,
+                "currency_code": "EUR",
+            },
+        ]
+    },
+}
+
+
+MOCK_BATCH_METADATA_BY_PROVIDER = {
+    "lidl": {
+        "default": {
+            "purchase_date": "10-03-2026",
+            "store_name": "Lidl",
+            "store_label": "Lidl, Hoofdstraat 12, Utrecht",
+        }
+    },
+    "jumbo": {
+        "default": {
+            "purchase_date": "10-03-2026",
+            "store_name": "Jumbo",
+            "store_label": "Jumbo, Marktplein 8, Utrecht",
+        }
+    },
 }
 
 
@@ -181,6 +282,185 @@ MOCK_ARTICLE_OPTIONS = [
 MOCK_ARTICLE_LOOKUP = {item["id"]: item for item in MOCK_ARTICLE_OPTIONS}
 
 
+STORE_IMPORT_SIMPLIFICATION_KEY = "store_import_simplification_level"
+STORE_IMPORT_SIMPLIFICATION_ALLOWED = {"voorzichtig", "gebalanceerd", "maximaal_gemak"}
+STORE_IMPORT_SIMPLIFICATION_DEFAULT = "gebalanceerd"
+
+
+def ensure_household_settings_schema():
+    with engine.begin() as conn:
+        conn.execute(text(
+            """
+            CREATE TABLE IF NOT EXISTS household_settings (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                setting_key TEXT NOT NULL,
+                setting_value TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        ))
+        conn.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_household_settings_unique ON household_settings (household_id, setting_key)"
+        ))
+
+
+def ensure_household_articles_schema():
+    with engine.begin() as conn:
+        conn.execute(text(
+            """
+            CREATE TABLE IF NOT EXISTS household_articles (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                naam TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )
+            """
+        ))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_household_articles_household_name ON household_articles (household_id, naam)"))
+
+
+def normalize_household_article_name(value: str | None) -> str:
+    return " ".join(str(value or "").strip().split())
+
+
+def find_existing_household_article_name(conn, household_id: str, article_name: str) -> str | None:
+    normalized = normalize_household_article_name(article_name)
+    if not normalized:
+        return None
+
+    row = conn.execute(
+        text(
+            """
+            SELECT naam FROM household_articles
+            WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))
+            LIMIT 1
+            """
+        ),
+        {"household_id": str(household_id), "naam": normalized},
+    ).mappings().first()
+    if row and row.get("naam"):
+        return row["naam"]
+
+    row = conn.execute(
+        text(
+            """
+            SELECT naam FROM inventory
+            WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))
+            LIMIT 1
+            """
+        ),
+        {"household_id": str(household_id), "naam": normalized},
+    ).mappings().first()
+    if row and row.get("naam"):
+        return row["naam"]
+    return None
+
+
+def ensure_household_article(conn, household_id: str, article_name: str) -> str:
+    normalized = normalize_household_article_name(article_name)
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Artikelnaam is verplicht")
+
+    existing_name = find_existing_household_article_name(conn, household_id, normalized)
+    final_name = existing_name or normalized
+    if not existing_name:
+        conn.execute(
+            text(
+                """
+                INSERT INTO household_articles (id, household_id, naam, updated_at)
+                VALUES (:id, :household_id, :naam, CURRENT_TIMESTAMP)
+                """
+            ),
+            {"id": str(uuid.uuid4()), "household_id": str(household_id), "naam": normalized},
+        )
+    return build_live_article_option_id(final_name)
+
+
+def normalize_store_import_simplification_level(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized not in STORE_IMPORT_SIMPLIFICATION_ALLOWED:
+        return STORE_IMPORT_SIMPLIFICATION_DEFAULT
+    return normalized
+
+
+def get_household_store_import_simplification_level(conn, household_id: str) -> str:
+    row = conn.execute(
+        text(
+            "SELECT setting_value FROM household_settings WHERE household_id = :household_id AND setting_key = :setting_key"
+        ),
+        {"household_id": str(household_id), "setting_key": STORE_IMPORT_SIMPLIFICATION_KEY},
+    ).mappings().first()
+    return normalize_store_import_simplification_level(row["setting_value"] if row else None)
+
+
+def set_household_store_import_simplification_level(conn, household_id: str, value: str) -> str:
+    normalized = normalize_store_import_simplification_level(value)
+    conn.execute(
+        text(
+            """
+            INSERT INTO household_settings (id, household_id, setting_key, setting_value, updated_at)
+            VALUES (:id, :household_id, :setting_key, :setting_value, CURRENT_TIMESTAMP)
+            ON CONFLICT(household_id, setting_key)
+            DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP
+            """
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "household_id": str(household_id),
+            "setting_key": STORE_IMPORT_SIMPLIFICATION_KEY,
+            "setting_value": normalized,
+        },
+    )
+    return normalized
+
+
+def build_auth_token(email: str) -> str:
+    return f"rezzerv-dev-token::{email}"
+
+
+def get_current_user_from_authorization(authorization: str | None):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    token = authorization.split(" ", 1)[1].strip()
+    if token == "rezzerv-dev-token":
+        email = "admin@rezzerv.local"
+    elif token.startswith("rezzerv-dev-token::"):
+        email = token.split("::", 1)[1].strip().lower()
+    else:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    user = users.get(email)
+    if not user:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    return {"email": email, **user}
+
+
+def get_household_payload_for_user(user: dict):
+    household = ensure_household(user["email"])
+    return {
+        **household,
+        "current_user_email": user["email"],
+        "is_household_admin": user.get("role") == "admin",
+        "can_edit_store_import_simplification_level": user.get("role") == "admin",
+    }
+
+
+class StoreImportSimplificationUpdateRequest(BaseModel):
+    store_import_simplification_level: str
+
+    @field_validator("store_import_simplification_level")
+    @classmethod
+    def validate_level(cls, value):
+        normalized = normalize_store_import_simplification_level(value)
+        if normalized not in STORE_IMPORT_SIMPLIFICATION_ALLOWED:
+            raise ValueError("Ongeldig vereenvoudigingsniveau")
+        return normalized
+
+
 def build_live_article_option_id(article_name: str) -> str:
     return f"live::{(article_name or '').strip()}"
 
@@ -192,10 +472,13 @@ def get_store_review_article_options(conn):
     live_names = conn.execute(
         text(
             """
-            SELECT DISTINCT naam AS article_name
-            FROM inventory
-            WHERE trim(COALESCE(naam, '')) <> ''
-            ORDER BY lower(naam) ASC
+            SELECT DISTINCT article_name
+            FROM (
+                SELECT naam AS article_name FROM inventory WHERE trim(COALESCE(naam, '')) <> ''
+                UNION
+                SELECT naam AS article_name FROM household_articles WHERE trim(COALESCE(naam, '')) <> ''
+            ) src
+            ORDER BY lower(article_name) ASC
             """
         )
     ).mappings().all()
@@ -228,9 +511,13 @@ def resolve_review_article_option(conn, article_id: str | None):
     inventory_match = conn.execute(
         text(
             """
-            SELECT naam
-            FROM inventory
-            WHERE lower(naam) = lower(:article_name)
+            SELECT article_name AS naam
+            FROM (
+                SELECT naam AS article_name FROM inventory
+                UNION
+                SELECT naam AS article_name FROM household_articles
+            ) src
+            WHERE lower(article_name) = lower(:article_name)
             LIMIT 1
             """
         ),
@@ -249,11 +536,29 @@ def utc_now_iso() -> str:
 
 def seed_store_providers():
     with engine.begin() as conn:
-        existing = conn.execute(
-            text("SELECT id FROM store_providers WHERE code = :code"),
-            {"code": "lidl"},
-        ).first()
-        if not existing:
+        for provider_code, provider in STORE_PROVIDER_DEFINITIONS.items():
+            existing = conn.execute(
+                text("SELECT id FROM store_providers WHERE code = :code"),
+                {"code": provider_code},
+            ).first()
+            if existing:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE store_providers
+                        SET name = :name, status = :status, import_mode = :import_mode
+                        WHERE code = :code
+                        """
+                    ),
+                    {
+                        "code": provider_code,
+                        "name": provider["name"],
+                        "status": provider["status"],
+                        "import_mode": provider["import_mode"],
+                    },
+                )
+                continue
+
             conn.execute(
                 text(
                     """
@@ -263,12 +568,37 @@ def seed_store_providers():
                 ),
                 {
                     "id": str(uuid.uuid4()),
-                    "code": "lidl",
-                    "name": "Lidl",
-                    "status": "active",
-                    "import_mode": "mock",
+                    "code": provider_code,
+                    "name": provider["name"],
+                    "status": provider["status"],
+                    "import_mode": provider["import_mode"],
                 },
             )
+
+
+
+def get_provider_mock_lines(provider_code: str, mock_profile: str):
+    provider_profiles = MOCK_PURCHASES_BY_PROVIDER.get(provider_code, {})
+    lines = provider_profiles.get(mock_profile)
+    if not lines:
+        raise HTTPException(status_code=400, detail="Onbekend mock_profile")
+    return [dict(line) for line in lines]
+
+
+def get_provider_mock_batch_metadata(provider_code: str, mock_profile: str):
+    provider_meta = MOCK_BATCH_METADATA_BY_PROVIDER.get(provider_code, {})
+    meta = provider_meta.get(mock_profile, {})
+    definition = STORE_PROVIDER_DEFINITIONS.get(provider_code, {})
+    provider_name = definition.get("name") or provider_code.title()
+    return {
+        "purchase_date": meta.get("purchase_date") or "Onbekend",
+        "store_name": meta.get("store_name") or provider_name,
+        "store_label": meta.get("store_label") or provider_name,
+    }
+
+
+def build_store_import_note(provider_code: str, batch_id: str, line_id: str, raw_article_name: str):
+    return f"store_import;provider={provider_code};batch={batch_id};line={line_id};raw={raw_article_name}"
 
 
 
@@ -379,12 +709,14 @@ def normalize_store_memory_key(article_name: str | None, brand: str | None):
 
 
 def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provider_code: str):
+    simplification_level = get_household_store_import_simplification_level(conn, household_id)
     lines = conn.execute(
         text(
             """
             SELECT id, article_name_raw, brand_raw
             FROM purchase_import_lines
             WHERE batch_id = :batch_id
+              AND COALESCE(processing_status, 'pending') != 'processed'
             ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
             """
         ),
@@ -421,9 +753,19 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
         matched_article_id = memory["matched_household_article_id"]
         preferred_location_id = memory["preferred_location_id"]
         times_confirmed = int(memory["times_confirmed"] or 0)
-        is_safe_match = bool(matched_article_id)
-        should_auto_select = is_safe_match and bool(preferred_location_id) and times_confirmed >= 1
-        suggestion_reason = "Automatisch voorgesteld" if should_auto_select else "Controleer voorstel"
+        can_suggest_article = bool(matched_article_id)
+        can_suggest_location = bool(preferred_location_id)
+        can_auto_fill = simplification_level in {"gebalanceerd", "maximaal_gemak"} and can_suggest_article and can_suggest_location and times_confirmed >= 1
+
+        if simplification_level == "voorzichtig":
+            suggestion_reason = "Voorstel op basis van eerdere keuze — niveau Voorzichtig"
+            suggestion_confidence = "medium" if (can_suggest_article or can_suggest_location) else None
+        elif simplification_level == "maximaal_gemak":
+            suggestion_reason = "Automatisch voorbereid — niveau Maximaal gemak"
+            suggestion_confidence = "high" if can_auto_fill else "medium"
+        else:
+            suggestion_reason = "Automatisch voorbereid — niveau Gebalanceerd" if can_auto_fill else "Controleer voorstel — niveau Gebalanceerd"
+            suggestion_confidence = "high" if can_auto_fill else "medium"
 
         conn.execute(
             text(
@@ -434,37 +776,38 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
                     suggestion_confidence = :suggestion_confidence,
                     suggestion_reason = :suggestion_reason,
                     is_auto_prefilled = :is_auto_prefilled,
-                    matched_household_article_id = COALESCE(:matched_household_article_id, matched_household_article_id),
-                    target_location_id = COALESCE(:target_location_id, target_location_id),
-                    match_status = CASE WHEN :matched_household_article_id IS NOT NULL THEN 'matched' ELSE match_status END,
-                    review_decision = CASE WHEN :should_auto_select = 1 THEN 'selected' ELSE review_decision END,
+                    matched_household_article_id = CASE WHEN :can_auto_fill = 1 THEN :matched_household_article_id ELSE NULL END,
+                    target_location_id = CASE WHEN :can_auto_fill = 1 THEN :target_location_id ELSE NULL END,
+                    match_status = CASE WHEN :can_auto_fill = 1 AND :matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END,
+                    review_decision = CASE WHEN :can_auto_fill = 1 THEN 'selected' ELSE 'pending' END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
             ),
             {
                 "id": line["id"],
-                "suggested_article_id": matched_article_id,
-                "suggested_location_id": preferred_location_id,
-                "suggestion_confidence": "high" if should_auto_select else "medium",
+                "suggested_article_id": matched_article_id if can_suggest_article else None,
+                "suggested_location_id": preferred_location_id if can_suggest_location else None,
+                "suggestion_confidence": suggestion_confidence,
                 "suggestion_reason": suggestion_reason,
-                "is_auto_prefilled": 1 if should_auto_select or matched_article_id or preferred_location_id else 0,
-                "matched_household_article_id": matched_article_id,
-                "target_location_id": preferred_location_id,
-                "should_auto_select": 1 if should_auto_select else 0,
+                "is_auto_prefilled": 1 if can_auto_fill else 0,
+                "matched_household_article_id": matched_article_id if can_auto_fill else None,
+                "target_location_id": preferred_location_id if can_auto_fill else None,
+                "can_auto_fill": 1 if can_auto_fill else 0,
             },
         )
-        if matched_article_id:
+        if can_suggest_article:
             article_prefills += 1
-        if preferred_location_id:
+        if can_suggest_location:
             location_prefills += 1
-        if should_auto_select:
+        if can_auto_fill:
             fully_prefilled += 1
 
     return {
         "article_prefills": article_prefills,
         "location_prefills": location_prefills,
         "fully_prefilled": fully_prefilled,
+        "simplification_level": simplification_level,
     }
 
 
@@ -749,13 +1092,15 @@ def normalize_datetime(value):
 
 
 def ensure_household(email: str):
-    if email not in households:
-        households[email] = {
-            "id": len(households) + 1,
-            "naam": "Mijn huishouden",
-            "created_at": datetime.utcnow().isoformat()
+    user = users.get(email, {})
+    household_key = user.get("household_key", email)
+    if household_key not in households:
+        households[household_key] = {
+            "id": str(user.get("household_id") or len(households) + 1),
+            "naam": user.get("household_name") or "Mijn huishouden",
+            "created_at": datetime.utcnow().isoformat(),
         }
-    return households[email]
+    return households[household_key]
 
 
 @app.get("/api/health")
@@ -771,8 +1116,8 @@ def login(payload: LoginRequest):
         ensure_household(payload.email)
 
         return {
-            "token": "rezzerv-dev-token",
-            "user": {"email": payload.email}
+            "token": build_auth_token(payload.email),
+            "user": {"email": payload.email, "role": user.get("role", "member")}
         }
 
     raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
@@ -780,13 +1125,54 @@ def login(payload: LoginRequest):
 
 @app.get("/api/household")
 def get_household(authorization: Optional[str] = Header(None)):
-    if authorization != "Bearer rezzerv-dev-token":
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    email = "admin@rezzerv.local"
-
-    household = ensure_household(email)
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    with engine.begin() as conn:
+        household["store_import_simplification_level"] = get_household_store_import_simplification_level(conn, household["id"])
     return household
+
+
+@app.get("/api/household/store-import-settings")
+def get_store_import_settings(authorization: Optional[str] = Header(None)):
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    with engine.begin() as conn:
+        level = get_household_store_import_simplification_level(conn, household["id"])
+    return {
+        "household_id": household["id"],
+        "store_import_simplification_level": level,
+        "can_edit_store_import_simplification_level": household["can_edit_store_import_simplification_level"],
+        "is_household_admin": household["is_household_admin"],
+    }
+
+
+@app.put("/api/household/store-import-settings")
+def update_store_import_settings(payload: StoreImportSimplificationUpdateRequest, authorization: Optional[str] = Header(None)):
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    if not household["can_edit_store_import_simplification_level"]:
+        raise HTTPException(status_code=403, detail="Alleen de beheerder van het huishouden mag dit wijzigen")
+    with engine.begin() as conn:
+        level = set_household_store_import_simplification_level(conn, household["id"], payload.store_import_simplification_level)
+    return {
+        "household_id": household["id"],
+        "store_import_simplification_level": level,
+        "can_edit_store_import_simplification_level": household["can_edit_store_import_simplification_level"],
+        "is_household_admin": household["is_household_admin"],
+    }
+
+
+@app.put("/api/dev/household/store-import-settings")
+def update_dev_store_import_settings(payload: StoreImportSimplificationUpdateRequest, household_id: str = Query("demo-household")):
+    effective_household_id = (household_id or "demo-household").strip() or "demo-household"
+    with engine.begin() as conn:
+        level = set_household_store_import_simplification_level(conn, effective_household_id, payload.store_import_simplification_level)
+    return {
+        "household_id": effective_household_id,
+        "store_import_simplification_level": level,
+        "can_edit_store_import_simplification_level": True,
+        "is_household_admin": True,
+    }
 
 
 # SQLite datamodel initialization
@@ -794,6 +1180,8 @@ from app.db import engine, Base
 from app.models import household, space, sublocation, inventory, store_provider, store_connection, purchase_import
 
 Base.metadata.create_all(bind=engine)
+ensure_household_settings_schema()
+ensure_household_articles_schema()
 ensure_release_2_schema()
 ensure_release_3_schema()
 ensure_release_4_schema()
@@ -801,6 +1189,12 @@ seed_store_providers()
 
 def reset_dev_tables():
     with engine.begin() as conn:
+        conn.execute(text("DELETE FROM purchase_import_lines"))
+        conn.execute(text("DELETE FROM purchase_import_batches"))
+        conn.execute(text("DELETE FROM household_store_connections"))
+        conn.execute(text("DELETE FROM store_import_memory"))
+        conn.execute(text("DELETE FROM inventory_events"))
+        conn.execute(text("DELETE FROM household_articles"))
         conn.execute(text("DELETE FROM inventory"))
         conn.execute(text("DELETE FROM sublocations"))
         conn.execute(text("DELETE FROM spaces"))
@@ -1290,10 +1684,6 @@ def get_store_connections(householdId: str = Query(...)):
 
 @app.post("/api/store-connections/{connection_id}/pull-purchases")
 def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
-    lines = MOCK_LIDL_PURCHASES.get(payload.mock_profile)
-    if not lines:
-        raise HTTPException(status_code=400, detail="Onbekend mock_profile")
-
     batch_id = str(uuid.uuid4())
     now_iso = utc_now_iso()
 
@@ -1318,7 +1708,9 @@ def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
         if connection["connection_status"] != "active":
             raise HTTPException(status_code=400, detail="Store connection is niet actief")
 
-        raw_payload = json.dumps({"mock_profile": payload.mock_profile, "lines": lines})
+        lines = get_provider_mock_lines(connection["store_provider_code"], payload.mock_profile)
+        batch_metadata = get_provider_mock_batch_metadata(connection["store_provider_code"], payload.mock_profile)
+        raw_payload = json.dumps({"mock_profile": payload.mock_profile, "provider_code": connection["store_provider_code"], "batch_metadata": batch_metadata, "lines": lines})
         conn.execute(
             text(
                 """
@@ -1380,11 +1772,15 @@ def pull_purchases(connection_id: str, payload: PullPurchasesRequest):
     return {
         "batch_id": batch_id,
         "connection_id": connection_id,
-        "store_provider_code": "lidl",
+        "store_provider_code": connection["store_provider_code"],
+        "store_provider_name": connection["store_provider_name"],
         "source_type": "mock",
         "import_status": "new",
         "line_count": len(lines),
         "created_at": now_iso,
+        "purchase_date": batch_metadata["purchase_date"],
+        "store_name": batch_metadata["store_name"],
+        "store_label": batch_metadata["store_label"],
         "prefill_summary": prefill_summary,
     }
 
@@ -1399,10 +1795,12 @@ def get_purchase_import_batch(batch_id: str):
                     pib.id AS batch_id,
                     pib.household_id,
                     sp.code AS store_provider_code,
+                    sp.name AS store_provider_name,
                     pib.connection_id,
                     pib.source_type,
                     pib.source_reference,
                     pib.import_status,
+                    pib.raw_payload,
                     pib.created_at
                 FROM purchase_import_batches pib
                 JOIN store_providers sp ON sp.id = pib.store_provider_id
@@ -1414,6 +1812,16 @@ def get_purchase_import_batch(batch_id: str):
 
         if not batch:
             raise HTTPException(status_code=404, detail="Onbekende purchase import batch")
+
+        if batch["import_status"] != "processed":
+            apply_prefill_to_batch(conn, batch_id, str(batch["household_id"]), batch["store_provider_code"])
+            refresh_batch_status = update_batch_status(conn, batch_id)
+            batch = dict(batch)
+            batch["import_status"] = refresh_batch_status
+        else:
+            batch = dict(batch)
+
+        batch["store_import_simplification_level"] = get_household_store_import_simplification_level(conn, str(batch["household_id"]))
 
         lines = conn.execute(
             text(
@@ -1433,10 +1841,66 @@ def get_purchase_import_batch(batch_id: str):
         ).mappings().all()
 
     batch_result = dict(batch)
+    raw_payload = {}
+    try:
+        raw_payload = json.loads(batch_result.get("raw_payload") or "{}")
+    except Exception:
+        raw_payload = {}
+    batch_metadata = raw_payload.get("batch_metadata") or get_provider_mock_batch_metadata(batch_result.get("store_provider_code"), "default")
     batch_result["created_at"] = normalize_datetime(batch_result.get("created_at"))
+    batch_result["purchase_date"] = batch_metadata.get("purchase_date")
+    batch_result["store_name"] = batch_metadata.get("store_name") or batch_result.get("store_provider_name")
+    batch_result["store_label"] = batch_metadata.get("store_label") or batch_result.get("store_provider_name")
+    def build_line_explanation(line):
+        article_from_memory = bool(line.get("suggested_household_article_id"))
+        location_from_memory = bool(line.get("suggested_location_id"))
+        memory_found = article_from_memory or location_from_memory
+        simplification_level = batch_result.get("store_import_simplification_level") or "gebalanceerd"
+        simplification_label = {
+            "voorzichtig": "Voorzichtig",
+            "gebalanceerd": "Gebalanceerd",
+            "maximaal_gemak": "Maximaal gemak",
+        }.get(simplification_level, "Gebalanceerd")
+
+        if line.get("is_auto_prefilled") and line.get("matched_household_article_id") and line.get("target_location_id"):
+            preparation_mode = "auto_ready"
+        elif memory_found:
+            preparation_mode = "suggest_only"
+        else:
+            preparation_mode = "none"
+
+        if article_from_memory and location_from_memory:
+            memory_text = "Eerdere mapping gevonden: artikel + locatie"
+        elif article_from_memory:
+            memory_text = "Eerdere mapping gevonden: artikel"
+        elif location_from_memory:
+            memory_text = "Eerdere mapping gevonden: locatie"
+        else:
+            memory_text = "Geen eerdere mapping gevonden"
+
+        if preparation_mode == "auto_ready":
+            explanation = f"{memory_text}. Automatisch voorbereid door niveau {simplification_label}"
+        elif preparation_mode == "suggest_only":
+            if simplification_level == "voorzichtig":
+                explanation = f"{memory_text}. Alleen voorstel door niveau {simplification_label}"
+            else:
+                explanation = f"{memory_text}. Controleer voorstel bij niveau {simplification_label}"
+        else:
+            explanation = memory_text
+
+        return {
+            "memory_match_found": memory_found,
+            "article_from_memory": article_from_memory,
+            "location_from_memory": location_from_memory,
+            "applied_simplification_level": simplification_level,
+            "preparation_mode": preparation_mode,
+            "preparation_explanation": explanation,
+        }
+
     batch_result["lines"] = [
         {
             **dict(line),
+            **build_line_explanation(dict(line)),
             "review_decision": line["review_decision"] or "pending",
             "processing_status": line["processing_status"] or "pending",
             "quantity_raw": float(line["quantity_raw"]) if line["quantity_raw"] is not None else None,
@@ -1594,15 +2058,17 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
         if not line:
             raise HTTPException(status_code=404, detail="Onbekende importregel")
 
+        article_id = payload.household_article_id
+        match_status = 'matched' if article_id else 'unmatched'
         conn.execute(
             text(
                 """
                 UPDATE purchase_import_lines
-                SET matched_household_article_id = :article_id, match_status = 'matched', updated_at = CURRENT_TIMESTAMP
+                SET matched_household_article_id = :article_id, match_status = :match_status, updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
             ),
-            {"article_id": payload.household_article_id, "id": line_id},
+            {"article_id": article_id, "match_status": match_status, "id": line_id},
         )
         status = update_batch_status(conn, line["batch_id"])
         updated = conn.execute(
@@ -1617,6 +2083,46 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
     result = dict(updated)
     result["batch_status"] = status
     return result
+
+
+@app.post("/api/purchase-import-lines/{line_id}/create-article")
+def create_article_from_purchase_import_line(line_id: str, payload: CreateArticleFromLineRequest):
+    with engine.begin() as conn:
+        line = conn.execute(
+            text(
+                """
+                SELECT pil.id, pil.batch_id, pib.household_id
+                FROM purchase_import_lines pil
+                JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+                WHERE pil.id = :id
+                """
+            ),
+            {"id": line_id},
+        ).mappings().first()
+        if not line:
+            raise HTTPException(status_code=404, detail="Onbekende importregel")
+
+        article_option_id = ensure_household_article(conn, str(line["household_id"]), payload.article_name)
+        conn.execute(
+            text(
+                """
+                UPDATE purchase_import_lines
+                SET matched_household_article_id = :article_id, match_status = 'matched', updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {"article_id": article_option_id, "id": line_id},
+        )
+        status = update_batch_status(conn, line["batch_id"])
+        article = resolve_review_article_option(conn, article_option_id)
+
+    return {
+        "line_id": line_id,
+        "batch_id": line["batch_id"],
+        "batch_status": status,
+        "article_option": article,
+        "matched_household_article_id": article_option_id,
+    }
 
 
 @app.post("/api/purchase-import-lines/{line_id}/target-location")
@@ -1741,7 +2247,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 continue
 
             article_name = article["name"]
-            note = f"store_import;lidl;batch={batch_id};line={line_id};raw={line['article_name_raw']}"
+            note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
             event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
             apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
             conn.execute(

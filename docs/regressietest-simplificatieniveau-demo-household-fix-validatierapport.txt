@@ -1,0 +1,10 @@
+Rezzerv v01.07.19
+
+Wijziging:
+- Admin-regressietest voor vereenvoudigingsniveaus schrijft nu naar demo-household, hetzelfde huishouden als de winkeltestfixture.
+- Nieuwe dev-endpoint toegevoegd: PUT /api/dev/household/store-import-settings?household_id=demo-household
+
+Validatie:
+- Backend compile-check uitgevoerd.
+- Frontend build uitgevoerd.
+- Doel van release: fix voor uitlijning testhuishouden, geen productwijziging in winkelimportgedrag.

@@ -1,0 +1,30 @@
+Rezzerv v01.07.15 — validatierapport
+
+Doel van deze release
+- Herstel uitsluitend de Admin-regressietesthelper voor artikelkoppeling in kassabonregels.
+- Zorg dat de helper betrouwbaar werkt binnen de verborgen iframe-runner van de browserregressietest.
+
+Analyse van v01.07.14
+- De falende foutmelding in Admin was: "Artikelkoppeling werd niet opgeslagen voor Halfvolle melk".
+- In browserRegressionRunner.js gebruikte de helper DOM-constructors en value-setters van het bovenliggende venster (`window`) voor elementen die in een iframe leven.
+- Daardoor konden input/select-wijzigingen in de regression runner niet betrouwbaar op iframe-elementen landen.
+
+Uitgevoerde wijziging
+- setInputValue gebruikt nu `input.ownerDocument.defaultView` als bron voor prototype-setter en events.
+- setSelectValue gebruikt nu `select.ownerDocument.defaultView` als bron voor prototype-setter en events.
+- setSelectValue normaliseert waarden naar string en heeft een fallback die de juiste option selecteert als de setter de waarde niet direct zet.
+- clickElement en dblClickElement gebruiken nu ook het juiste iframe-window voor MouseEvent.
+
+Niet gewijzigd
+- Geen productfunctionaliteit.
+- Geen backendwijziging.
+- Geen wijziging van winkelimport-flow.
+- Geen wijziging van voorraad- of historiegedrag.
+
+Validatie
+- Frontend build geslaagd via directe Vite-entrypoint.
+- Wijziging is beperkt tot de Admin browserRegressionRunner helperlaag.
+
+Verwacht effect
+- Artikelkoppeling, locatiekeuze en andere formulierinteracties in de verborgen iframe-regressierunner worden nu in de juiste window-context uitgevoerd.
+- Daardoor kunnen de drie falende winkelscenario's in Admin door de koppelstap heen komen in plaats van voortijdig te falen op "Artikelkoppeling werd niet opgeslagen".

@@ -9,7 +9,7 @@ export default function SettingsPage() {
         <div style={{ display: 'grid', gap: '18px' }}>
           <div>
             <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Instellingen</h2>
-            <p style={{ margin: 0, color: '#667085' }}>Beheer hier persoonlijke voorkeuren voor de weergave van Rezzerv.</p>
+            <p style={{ margin: 0, color: '#667085' }}>Beheer hier voorkeuren voor de weergave en automatisering binnen Rezzerv.</p>
           </div>
           <Link to="/instellingen/artikeldetails/veldzichtbaarheid" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: '1px solid #dfe4ea', borderRadius: '12px', color: 'inherit', textDecoration: 'none' }}>
             <div>
@@ -19,6 +19,14 @@ export default function SettingsPage() {
             <div aria-hidden="true">→</div>
           </Link>
 
+
+          <Link to="/instellingen/winkelimport" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: '1px solid #dfe4ea', borderRadius: '12px', color: 'inherit', textDecoration: 'none' }}>
+            <div>
+              <div style={{ fontWeight: 600 }}>Winkelimport</div>
+              <div style={{ color: '#667085', fontSize: '14px' }}>Vereenvoudigingsniveau voor het huishouden</div>
+            </div>
+            <div aria-hidden="true">→</div>
+          </Link>
           <Link to="/instellingen/huishoudautomatisering" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', border: '1px solid #dfe4ea', borderRadius: '12px', color: 'inherit', textDecoration: 'none' }}>
             <div>
               <div style={{ fontWeight: 600 }}>Huishoudautomatisering</div>

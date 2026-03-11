@@ -1,0 +1,22 @@
+Rezzerv v01.07.13 — Validatierapport Admin regressietest winkelverwerking
+
+Doel
+- Herstel uitsluitend de Admin-regressietest voor winkelverwerking.
+- Maak Lidl-, Jumbo- en multi-event-scenario's zelfstandig en minder broos.
+
+Uitgevoerde wijzigingen
+- Browser regression runner aangepast in frontend/src/features/admin/lib/browserRegressionRunner.js.
+- Nieuwe helper toegevoegd: getInventoryArticleId(articleName).
+- Lidl-verwerktest reset nu eerst de fixture en zoekt artikel-id voor Melk dynamisch op via live inventory-preview.
+- Jumbo-verwerktest reset nu eerst de fixture en zoekt artikel-id voor Tomaten dynamisch op via live inventory-preview.
+- Beide verwerk-scenario's valideren nu functioneel op voorraadtoename, store-import-historie en zichtbaarheid in Voorraad; de broze detailtab-checks zijn verwijderd.
+- Multi-event-scenario reset nu eerst de fixture, bouwt zelfstandig twee Jumbo-imports op en verwacht daarna 2 losse Jumbo-events in plaats van impliciet op een eerder scenario te leunen.
+- Open-scenario's voor Lidl en Jumbo zijn ongewijzigd behouden.
+
+Validatie
+- Frontend build geslaagd via directe Vite-entrypoint.
+- Backend compile-check geslaagd (python -m py_compile backend/app/main.py).
+- Versie opgehoogd naar 01.07.13 in VERSION.txt en version.json.
+
+Opmerking
+- Deze release wijzigt geen productfunctionaliteit; alleen de Admin-regressietestlaag is robuuster gemaakt.

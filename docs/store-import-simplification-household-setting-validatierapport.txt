@@ -1,0 +1,57 @@
+Rezzerv v01.07.17 — validatierapport huishoudinstelling vereenvoudigingsniveau winkelimport
+
+Doel van deze release
+- huishoudinstelling toevoegen voor vereenvoudigingsniveau van winkelimport
+- wijziging alleen toestaan voor de beheerder van het huishouden
+- instelling zichtbaar maken in Instellingen
+- winkelcontext voorbereiden op centrale uitlezing van het niveau
+
+Uitgevoerde wijzigingen
+1. Backend
+- login uitgebreid met rollen en gedeeld huishouden:
+  - admin@rezzerv.local = admin
+  - lid@rezzerv.local = member
+- tokenopbouw aangepast naar rezzerv-dev-token::<email> met compatibiliteit voor bestaand admin-token
+- nieuwe SQLite-tabel household_settings toegevoegd via ensure_household_settings_schema()
+- centrale helpers toegevoegd voor:
+  - normaliseren vereenvoudigingsniveau
+  - uitlezen huishoudniveau store import
+  - opslaan huishoudniveau store import
+- /api/household uitgebreid met:
+  - current_user_email
+  - is_household_admin
+  - can_edit_store_import_simplification_level
+  - store_import_simplification_level
+- nieuwe endpoints toegevoegd:
+  - GET /api/household/store-import-settings
+  - PUT /api/household/store-import-settings
+- backend autorisatie afdwingt dat alleen de huishoudbeheerder mag wijzigen
+
+2. Frontend
+- nieuwe instellingenpagina toegevoegd:
+  - /instellingen/winkelimport
+- nieuwe service toegevoegd voor uitlezen en opslaan van vereenvoudigingsniveau
+- instellingen-overzicht uitgebreid met tegel Winkelimport
+- winkelimport-context toont nu het actieve vereenvoudigingsniveau bovenaan het Winkels-scherm
+- routing uitgebreid met SettingsStoreImportPage
+
+3. Versiebeheer
+- VERSION.txt opgehoogd naar 01.07.17
+- version.json opgehoogd naar 01.07.17
+
+Validatie
+- backend syntax-check geslaagd met: python -m py_compile backend/app/main.py
+- frontend productiebuild geslaagd met directe Vite-entrypoint:
+  node node_modules/vite/bin/vite.js build
+
+Opmerking
+- standaard npm run build gebruikt in deze werkmap nog steeds een kapotte vite-binverwijzing; de build zelf slaagt wel via de directe Vite-entrypoint. Aan productcode is daarvoor niets gewijzigd.
+
+Verwachte handmatige test
+1. Inloggen als admin@rezzerv.local
+2. Instellingen > Winkelimport openen
+3. Niveau wijzigen en opslaan
+4. Instellingen opnieuw openen en persistentie controleren
+5. Winkels openen en controleren dat het actuele niveau zichtbaar is
+6. Inloggen als lid@rezzerv.local
+7. Instellingen > Winkelimport openen en controleren dat alleen lezen mogelijk is

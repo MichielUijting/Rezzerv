@@ -1,0 +1,19 @@
+Rezzerv v01.07.28 – Validatierapport zoekbare artikelkoppeling in bonregels
+
+Doel
+- Vervang de lange artikel-dropdown in bonregels door een zoekbare artikelselector.
+- Behoud bestaande validatie, placeholdergedrag en verwerkingslogica.
+
+Uitgevoerde wijziging
+- In frontend/src/features/stores/StoresPage.jsx is de artikelkeuze vervangen door een zoekbare selector op basis van input + datalist.
+- De bestaande artikel-id-logica blijft intact via een verborgen select die dezelfde bron en ids gebruikt.
+- Leegmaken van het zoekveld zet de koppeling terug naar geen artikel (Kies artikel).
+- De bestaande regelstatus blijft afhangen van geldige artikelkeuze + geldige locatie + reviewstatus.
+
+Validatie
+- Frontend build geslaagd via Vite productiebuild.
+- Bestaande select-gebaseerde regressiehelpers blijven bruikbaar door de verborgen select.
+- Geen backendwijziging nodig voor deze release.
+
+Opmerking
+- Deze release verandert alleen de gebruikservaring van handmatig koppelen; automatische voorbereiding, simplificatieniveaus en voorraadverwerking zijn inhoudelijk ongewijzigd.

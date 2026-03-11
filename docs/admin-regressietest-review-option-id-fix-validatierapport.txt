@@ -1,0 +1,18 @@
+Release: Rezzerv-v01.07.16
+Doel: herstel Admin-regressietest winkelverwerking door artikelmapping te laten werken met review-option-id's uit /api/store-review-articles.
+
+Uitgevoerde wijziging:
+- browserRegressionRunner gebruikt nu getStoreReviewArticleOptionId(articleName)
+- Lidl-verwerktest gebruikt review-option-id voor Melk
+- Jumbo-verwerktest gebruikt review-option-id voor Tomaten
+- multi-event-test gebruikt review-option-id voor Tomaten
+- foutmelding bij mislukte mapping toont geprobeerd id en beschikbare selectopties
+
+Validatie:
+- syntax-check browserRegressionRunner.js geslaagd
+- frontend build geslaagd via directe Vite CLI
+
+Niet gewijzigd:
+- productfunctionaliteit
+- backend winkelimport-flow
+- voorraadmodel

@@ -1,0 +1,9 @@
+Rezzerv v01.07.29 validatierapport
+- Doel: nieuw artikel direct vanuit bonregel aanmaken en direct koppelen.
+- Backend: nieuwe tabel household_articles toegevoegd voor huishouden-artikelen zonder voorraadpositie.
+- Backend: POST /api/purchase-import-lines/{line_id}/create-article maakt artikel aan voor batch-huishouden en koppelt direct aan de regel.
+- Backend: store-review-artikelopties en resolve-logica lezen nu ook household_articles.
+- Frontend: StoreArticleSelector toont 'Nieuw artikel aanmaken' wanneer zoektekst geen bestaande exacte match is.
+- Frontend: na aanmaken wordt het nieuwe artikel direct geselecteerd en de batch ververst.
+- Validatie: backend py_compile geslaagd.
+- Validatie: frontend build geslaagd.
