@@ -5,7 +5,6 @@ test.describe('Winkels scherm smoke', () => {
     await page.goto('/winkels');
 
     await expect(page.getByTestId('store-import-simplification-banner')).toContainText('Vereenvoudigingsniveau winkelimport');
-    await expect(page.getByTestId('open-batches-section')).toBeVisible();
     await expect(page.getByTestId('connected-stores-section')).toBeVisible();
 
     await expect(page.getByTestId('store-provider-lidl')).toContainText('Lidl');
@@ -14,7 +13,6 @@ test.describe('Winkels scherm smoke', () => {
     await expect(page.getByTestId('pull-purchases-lidl')).toBeVisible();
     await expect(page.getByTestId('pull-purchases-jumbo')).toBeVisible();
 
-    await expect(page.getByTestId('open-batches-section')).toContainText('Open bonnen');
     await expect(page.getByTestId('active-batch-card')).toBeVisible();
     await expect(page.getByTestId('active-batch-title')).toContainText('Kassabon Lidl');
     await expect(page.getByTestId('process-active-batch')).toBeVisible();
@@ -25,7 +23,6 @@ test.describe('Winkels scherm smoke', () => {
 
     await page.getByTestId('pull-purchases-jumbo').click();
 
-    await expect(page.getByTestId('open-batches-section')).toContainText('Jumbo');
     await expect(page.getByTestId('active-batch-card')).toBeVisible();
     await expect(page.getByTestId('active-batch-title')).toContainText('Kassabon Jumbo');
   });

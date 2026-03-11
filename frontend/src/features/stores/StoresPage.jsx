@@ -69,6 +69,7 @@ function articleLabel(article) {
   return article.brand ? `${article.name} — ${article.brand}` : article.name
 }
 
+
 function StoreArticleSelector({
   lineId,
   lineName,
@@ -188,12 +189,13 @@ function buildBatchTitle(batch) {
   return `Kassabon ${providerName}`
 }
 
+
 function batchStatusLabel(value) {
   if (value === 'processed') return 'Verwerkt naar voorraad'
   if (value === 'partially_processed') return 'Gedeeltelijk verwerkt'
   if (value === 'failed') return 'Verwerking mislukt'
   if (value === 'reviewed') return 'Beoordeling afgerond'
-  if (value === 'in_review') return 'In bewerking'
+  if (value === 'in_review') return 'In beoordeling'
   return 'Nog te beoordelen'
 }
 
@@ -213,89 +215,20 @@ function formatQuantity(value, unit) {
   return [value, unit].filter(Boolean).join(' ')
 }
 
-function deriveBatchUiState(batch) {
-  const lines = Array.isArray(batch?.lines) ? batch.lines : []
-  const visibleLines = lines.filter((line) => (line.processing_status || 'pending') !== 'processed')
-  const selectedLines = visibleLines.filter((line) => (line.review_decision || 'pending') === 'selected')
-  const readyLines = selectedLines.filter((line) => line.matched_household_article_id && line.target_location_id)
-  const blockedLines = selectedLines.length - readyLines.length
-  const pendingReviewCount = visibleLines.filter((line) => (line.review_decision || 'pending') === 'pending').length
-  const summary = batch?.summary || {}
-  const totalLines = summary.total || lines.length
-
-  if ((batch?.import_status || '') === 'processed') {
-    return {
-      statusKey: 'processed',
-      label: 'Verwerkt',
-      actionLabel: 'Openen',
-      actionType: 'open',
-      rank: 99,
-      progressText: totalLines > 0 ? `${summary.processed || 0} verwerkt` : 'Afgerond',
-    }
-  }
-
-  if (blockedLines > 0) {
-    return {
-      statusKey: 'action_needed',
-      label: 'Actie nodig',
-      actionLabel: 'Hervatten',
-      actionType: 'resume',
-      rank: 0,
-      progressText: `${readyLines.length} klaar / ${blockedLines} geblokkeerd`,
-    }
-  }
-
-  if (selectedLines.length > 0 && pendingReviewCount === 0) {
-    return {
-      statusKey: 'ready',
-      label: 'Klaar voor verwerking',
-      actionLabel: 'Naar voorraad',
-      actionType: 'process',
-      rank: 1,
-      progressText: `${readyLines.length} klaar om te verwerken`,
-    }
-  }
-
-  if ((batch?.import_status || '') === 'in_review' || (batch?.import_status || '') === 'reviewed' || selectedLines.length > 0 || pendingReviewCount < visibleLines.length) {
-    return {
-      statusKey: 'in_progress',
-      label: 'In bewerking',
-      actionLabel: 'Hervatten',
-      actionType: 'resume',
-      rank: 2,
-      progressText: visibleLines.length > 0 ? `${readyLines.length} klaar / ${Math.max(visibleLines.length - readyLines.length, 0)} open` : 'Beoordeling loopt',
-    }
-  }
-
-  return {
-    statusKey: 'open',
-    label: 'Open',
-    actionLabel: 'Openen',
-    actionType: 'open',
-    rank: 3,
-    progressText: totalLines > 0 ? `${totalLines} regel(s) wachten op beoordeling` : 'Nog te beoordelen',
-  }
-}
-
-function formatBatchLastChange(batch) {
-  const rawValue = batch?.created_at || ''
-  if (!rawValue) return 'Onbekend'
-  const date = new Date(rawValue)
-  if (Number.isNaN(date.getTime())) return rawValue
-  return new Intl.DateTimeFormat('nl-NL', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
+function getLineBlockerReason(line, validArticleIds, validLocationIds) {
+  if ((line.processing_status || 'pending') === 'processed') return ''
+  if ((line.review_decision || 'pending') !== 'selected') return 'Zet beoordeling op Verwerken'
+  if (!line.matched_household_article_id) return 'Kies eerst een artikel'
+  if (validArticleIds && !validArticleIds.has(String(line.matched_household_article_id))) return 'Kies een geldig artikel'
+  if (!line.target_location_id) return 'Kies eerst een locatie'
+  if (validLocationIds && !validLocationIds.has(String(line.target_location_id))) return 'Kies een geldige locatie'
+  return ''
 }
 
 export default function StoresPage() {
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [connections, setConnections] = useState([])
-  const [openBatches, setOpenBatches] = useState([])
   const [activeBatch, setActiveBatch] = useState(null)
   const [articleOptions, setArticleOptions] = useState(articleFallbackOptions)
   const [locationOptions, setLocationOptions] = useState([])
@@ -305,8 +238,8 @@ export default function StoresPage() {
   const [isConnecting, setIsConnecting] = useState(false)
   const [isPulling, setIsPulling] = useState(false)
   const [busyLineId, setBusyLineId] = useState('')
+  const [isCompletingReview, setIsCompletingReview] = useState(false)
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
-  const [busyBatchId, setBusyBatchId] = useState('')
   const [processFeedback, setProcessFeedback] = useState('')
   const [processWarning, setProcessWarning] = useState(null)
   const processFeedbackTimer = useRef(null)
@@ -328,6 +261,7 @@ export default function StoresPage() {
 
   const activeProviderCode = activeBatch?.store_provider_code || primaryProvider?.code || null
   const activeProvider = activeProviderCode ? providersByCode[activeProviderCode] || null : null
+  const activeConnection = activeProviderCode ? connectionsByProviderCode[activeProviderCode] || null : null
 
   const validArticleIds = useMemo(() => new Set(articleOptions.map((article) => String(article.id))), [articleOptions])
   const validLocationIds = useMemo(() => new Set(locationOptions.map((location) => String(location.id))), [locationOptions])
@@ -343,23 +277,9 @@ export default function StoresPage() {
   const canProcessBatch = Boolean(activeBatch && selectedLines.length > 0)
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
-  const batchItems = useMemo(() => {
-    return (openBatches || []).map((batch) => ({
-      ...batch,
-      uiState: deriveBatchUiState(batch),
-    })).sort((a, b) => {
-      if (a.uiState.rank !== b.uiState.rank) return a.uiState.rank - b.uiState.rank
-      return String(b.created_at || '').localeCompare(String(a.created_at || ''))
-    })
-  }, [openBatches])
-
   async function refreshBatch(batchId) {
     const batch = await fetchJson(`/api/purchase-import-batches/${batchId}`)
     setActiveBatch(batch)
-    setOpenBatches((current) => {
-      const others = (current || []).filter((item) => item.batch_id !== batch.batch_id)
-      return [...others, batch]
-    })
     return batch
   }
 
@@ -386,40 +306,26 @@ export default function StoresPage() {
     }
   }
 
-  async function loadOpenBatches(connectionsToCheck, preferredBatchId = null) {
+  async function openLatestBatchForConnection(connectionId) {
+    if (!connectionId) return null
+    const latest = await getLatestBatchMeta(connectionId)
+    if (!latest?.batch_id) return null
+    if (latest.import_status === 'processed') {
+      setActiveBatch((current) => (current?.connection_id === connectionId ? null : current))
+      return null
+    }
+    return refreshBatch(latest.batch_id)
+  }
+
+  async function restoreLatestBatch(connectionsToCheck) {
     const latestCandidates = (await Promise.all((connectionsToCheck || []).map((connection) => getLatestBatchMeta(connection.id))))
       .filter((item) => item?.batch_id && item.import_status !== 'processed')
-
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
     if (!latestCandidates.length) {
-      setOpenBatches([])
       setActiveBatch(null)
-      return []
+      return null
     }
-
-    const loadedBatches = (await Promise.all(latestCandidates.map((item) => fetchJson(`/api/purchase-import-batches/${item.batch_id}`).catch(() => null))))
-      .filter(Boolean)
-
-    setOpenBatches(loadedBatches)
-
-    const sortedBatches = [...loadedBatches].sort((a, b) => {
-      const aState = deriveBatchUiState(a)
-      const bState = deriveBatchUiState(b)
-      if (aState.rank !== bState.rank) return aState.rank - bState.rank
-      return String(b.created_at || '').localeCompare(String(a.created_at || ''))
-    })
-
-    const nextBatchId = preferredBatchId && loadedBatches.some((batch) => batch.batch_id === preferredBatchId)
-      ? preferredBatchId
-      : (activeBatch?.batch_id && loadedBatches.some((batch) => batch.batch_id === activeBatch.batch_id)
-        ? activeBatch.batch_id
-        : null)
-
-    const selectedBatch = nextBatchId
-      ? loadedBatches.find((batch) => batch.batch_id === nextBatchId) || null
-      : sortedBatches[0] || null
-
-    setActiveBatch(selectedBatch)
-    return loadedBatches
+    return refreshBatch(latestCandidates[0].batch_id)
   }
 
   async function loadPageData() {
@@ -445,7 +351,11 @@ export default function StoresPage() {
       setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
 
       const existingConnections = connectionData.filter((connection) => providerData.some((provider) => provider.code === connection.store_provider_code))
-      await loadOpenBatches(existingConnections)
+      if (existingConnections.length > 0) {
+        await restoreLatestBatch(existingConnections)
+      } else {
+        setActiveBatch(null)
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Winkelgegevens konden niet worden geladen.')
     } finally {
@@ -491,10 +401,11 @@ export default function StoresPage() {
         method: 'POST',
         body: JSON.stringify({ household_id: household.id, store_provider_code: providerCode }),
       })
-      const nextConnections = [...connections.filter((item) => item.id !== connection.id), connection]
-      setConnections(nextConnections)
+      setConnections((current) => {
+        const filtered = current.filter((item) => item.id !== connection.id)
+        return [...filtered, connection]
+      })
       await refreshLocationOptions(household.id)
-      await loadOpenBatches(nextConnections)
       setStatus(`${providerName || providerCode} is gekoppeld aan dit huishouden.`)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || `${providerName || providerCode} kon niet worden gekoppeld.`)
@@ -509,10 +420,8 @@ export default function StoresPage() {
     setError('')
     setStatus('')
     try {
-      const existingBatchMeta = await getLatestBatchMeta(connection.id)
-      if (existingBatchMeta?.batch_id && existingBatchMeta.import_status !== 'processed') {
-        await refreshBatch(existingBatchMeta.batch_id)
-        await loadOpenBatches(connections, existingBatchMeta.batch_id)
+      const existingBatch = await openLatestBatchForConnection(connection.id)
+      if (existingBatch) {
         setStatus(`De laatste open bon van ${providerName || 'de winkel'} is opnieuw geladen met het actuele gemaksniveau.`)
         await refreshLocationOptions(household.id)
         return
@@ -533,7 +442,6 @@ export default function StoresPage() {
       }
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
-      await loadOpenBatches(refreshedConnections, pullResult.batch_id)
       await refreshLocationOptions(household.id)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Aankopen konden niet worden opgehaald.')
@@ -552,7 +460,6 @@ export default function StoresPage() {
         body: JSON.stringify({ review_decision: reviewDecision }),
       })
       await refreshBatch(activeBatch.batch_id)
-      await loadOpenBatches(connections, activeBatch.batch_id)
       setStatus('De beoordeling is opgeslagen.')
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De beoordeling kon niet worden opgeslagen.')
@@ -571,7 +478,6 @@ export default function StoresPage() {
         body: JSON.stringify({ household_article_id: articleId }),
       })
       await refreshBatch(activeBatch.batch_id)
-      await loadOpenBatches(connections, activeBatch.batch_id)
       setStatus('De artikelkoppeling is opgeslagen.')
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De artikelkoppeling kon niet worden opgeslagen.')
@@ -601,7 +507,6 @@ export default function StoresPage() {
         })
       }
       await refreshBatch(activeBatch.batch_id)
-      await loadOpenBatches(connections, activeBatch.batch_id)
       setStatus('Nieuw artikel aangemaakt en gekoppeld aan de bonregel.')
       return result?.article_option || null
     } catch (err) {
@@ -622,7 +527,6 @@ export default function StoresPage() {
         body: JSON.stringify({ target_location_id: targetLocationId || null }),
       })
       await refreshBatch(activeBatch.batch_id)
-      await loadOpenBatches(connections, activeBatch.batch_id)
       await refreshLocationOptions(household?.id)
       setStatus('De voorkeurslocatie is opgeslagen.')
     } catch (err) {
@@ -632,50 +536,50 @@ export default function StoresPage() {
     }
   }
 
-  async function processBatchNow(batchToProcess = activeBatch) {
-    if (!batchToProcess) return
-    setIsProcessingBatch(true)
-    setBusyBatchId(batchToProcess.batch_id)
+  async function handleCompleteReview() {
+    if (!activeBatch) return
+    setIsCompletingReview(true)
     setError('')
     setStatus('')
     try {
-      const result = await fetchJson(`/api/purchase-import-batches/${batchToProcess.batch_id}/process`, {
+      await fetchJson(`/api/purchase-import-batches/${activeBatch.batch_id}/complete-review`, {
+        method: 'POST',
+      })
+      await refreshBatch(activeBatch.batch_id)
+      setStatus('De batch is als beoordeeld opgeslagen. Er is nog niets naar voorraad verwerkt.')
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'De batch kon niet worden afgerond.')
+    } finally {
+      setIsCompletingReview(false)
+    }
+  }
+
+
+  async function processBatchNow() {
+    if (!activeBatch) return
+    setIsProcessingBatch(true)
+    setError('')
+    setStatus('')
+    try {
+      const result = await fetchJson(`/api/purchase-import-batches/${activeBatch.batch_id}/process`, {
         method: 'POST',
         body: JSON.stringify({ processed_by: 'ui', mode: 'selected_only' }),
       })
+      const refreshedBatch = await refreshBatch(activeBatch.batch_id)
       showProcessFeedback('Verwerkt!')
       if (result.failed_count > 0) {
         setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
       } else {
         setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) zijn naar voorraad verwerkt.`)
       }
-      const refreshedConnections = household?.id
-        ? await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`).catch(() => connections)
-        : connections
-      setConnections(refreshedConnections)
-      await loadOpenBatches(refreshedConnections)
+      if (refreshedBatch?.import_status === 'processed') {
+        window.setTimeout(() => setActiveBatch(null), 1200)
+      }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
     } finally {
       setIsProcessingBatch(false)
-      setBusyBatchId('')
     }
-  }
-
-  async function handleSelectBatch(batchId) {
-    setError('')
-    setStatus('')
-    await refreshBatch(batchId)
-  }
-
-  async function handlePrimaryBatchAction(batch) {
-    if (!batch) return
-    const uiState = deriveBatchUiState(batch)
-    if (uiState.actionType === 'process') {
-      await processBatchNow(batch)
-      return
-    }
-    await handleSelectBatch(batch.batch_id)
   }
 
   async function handleProcessBatch() {
@@ -688,18 +592,18 @@ export default function StoresPage() {
       })
       return
     }
-    await processBatchNow(activeBatch)
+    await processBatchNow()
   }
 
   return (
-    <AppShell title="Winkelimport" showExit={false}>
+    <AppShell title="Winkels" showExit={false}>
       <div style={{ display: 'grid', gap: '18px' }}>
         <Card>
           <div data-testid="stores-page-intro" style={{ display: 'grid', gap: '10px' }}>
             <div>
-              <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Winkelimport</h2>
+              <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Winkelkoppelingen</h2>
               <p style={{ margin: 0, color: '#667085' }}>
-                Werk eerst je open bonnen af. Verbonden winkels blijven beschikbaar om nieuwe aankopen op te halen.
+                Koppel hier winkels, haal voorbeeld-aankopen op en beoordeel per regel wat later verwerkt mag worden.
               </p>
             </div>
           </div>
@@ -708,7 +612,7 @@ export default function StoresPage() {
         <Card>
           <div data-testid="store-import-simplification-banner" className="rz-inline-feedback rz-inline-feedback--warning" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
             <span>Vereenvoudigingsniveau winkelimport: <strong>{simplificationLevelLabel}</strong></span>
-            <span>{batchItems.length > 0 ? `${batchItems.length} open bon(nen)` : 'Geen open bonnen'} in deze huishoudcontext.</span>
+            <span>Deze instelling geldt voor het hele huishouden.</span>
           </div>
         </Card>
 
@@ -725,63 +629,46 @@ export default function StoresPage() {
         )}
 
         <Card>
-          <div data-testid="open-batches-section" style={{ display: 'grid', gap: '14px' }}>
-            <div>
-              <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Open bonnen</h3>
-              <div style={{ color: '#667085', fontSize: '14px' }}>Dit is de primaire werkstroom: openen, hervatten en direct verwerken.</div>
-            </div>
-
-            {isLoading ? (
-              <div>Winkelgegevens laden…</div>
-            ) : batchItems.length === 0 ? (
-              <div data-testid="open-batches-empty" style={{ color: '#667085' }}>Geen open bonnen</div>
-            ) : (
-              <div style={{ display: 'grid', gap: '12px' }}>
-                {batchItems.map((batch) => {
-                  const isActive = activeBatch?.batch_id === batch.batch_id
-                  return (
-                    <div
-                      key={batch.batch_id}
-                      data-testid={`open-batch-${batch.batch_id}`}
-                      style={{
-                        border: '1px solid #d0d5dd',
-                        borderRadius: '12px',
-                        padding: '14px 16px',
-                        display: 'grid',
-                        gap: '10px',
-                        background: isActive ? '#f8fafc' : '#ffffff',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'grid', gap: '4px' }}>
-                          <div style={{ fontWeight: 700 }}>{batch.store_provider_name || batch.store_name}</div>
-                          <div style={{ color: '#667085', fontSize: '14px' }}>Aankoopdatum: {batch.purchase_date || 'Onbekend'}</div>
-                          <div style={{ color: '#667085', fontSize: '14px' }}>Winkel: {batch.store_label || batch.store_name || providerLabel(providersByCode[batch.store_provider_code])}</div>
+          <div data-testid="connected-stores-section">
+          {isLoading ? (
+            <div>Winkelgegevens laden…</div>
+          ) : (
+            <div style={{ display: 'grid', gap: '16px' }}>
+              {providers.map((provider) => {
+                const connection = connectionsByProviderCode[provider.code] || null
+                return (
+                  <div key={provider.code} data-testid={`store-provider-${provider.code}`} style={{ display: 'grid', gap: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '18px' }}>{provider.name}</div>
+                        <div style={{ color: '#667085', fontSize: '14px' }}>
+                          Status provider: {providerStatusLabel(provider)}
                         </div>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                          <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[batch.uiState.statusKey] || batchStatusToneStyles.open) }}>{batch.uiState.label}</span>
-                          <Button
-                            data-testid={`batch-primary-action-${batch.batch_id}`}
-                            variant={batch.uiState.actionType === 'process' ? 'primary' : 'secondary'}
-                            onClick={() => handlePrimaryBatchAction(batch)}
-                            disabled={busyBatchId === batch.batch_id || isProcessingBatch}
-                          >
-                            {busyBatchId === batch.batch_id ? 'Bezig…' : batch.uiState.actionLabel}
-                          </Button>
+                        <div style={{ color: '#667085', fontSize: '14px' }}>
+                          Koppeling: {connection ? 'gekoppeld' : 'nog niet gekoppeld'}
                         </div>
                       </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px', color: '#667085', fontSize: '14px' }}>
-                        <div>Aantal regels: <strong>{batch.summary?.total || batch.lines?.length || 0}</strong></div>
-                        <div>{batch.uiState.progressText}</div>
-                        <div>Laatste wijziging: {formatBatchLastChange(batch)}</div>
-                        <div>Batchstatus backend: {batchStatusLabel(batch.import_status)}</div>
+                      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                        {!connection ? (
+                          <Button data-testid={`connect-store-${provider.code}`} variant="primary" onClick={() => handleConnect(provider.code, provider.name)} disabled={isConnecting}>
+                            {isConnecting ? 'Koppelen…' : `${provider.name} koppelen`}
+                          </Button>
+                        ) : (
+                          <Button data-testid={`pull-purchases-${provider.code}`} variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
+                            {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
+                          </Button>
+                        )}
                       </div>
                     </div>
-                  )
-                })}
-              </div>
-            )}
+
+                    <div style={{ borderTop: '1px solid #e4e7ec', paddingTop: '14px', color: '#667085', fontSize: '14px' }}>
+                      Deze release laat je regels beoordelen, koppelen en geselecteerde regels expliciet naar voorraad verwerken.
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
           </div>
         </Card>
 
@@ -836,132 +723,102 @@ export default function StoresPage() {
                       const hasValidLocation = Boolean(line.target_location_id) && validLocationIds.has(String(line.target_location_id))
                       const isReadyForProcessing = (line.review_decision || 'selected') === 'selected' && hasValidArticle && hasValidLocation
                       return (
-                        <tr key={line.id} className={isReadyForProcessing ? 'rz-store-row--linked' : ''}>
-                          <td>
-                            <div className="rz-store-primary">{line.article_name_raw}</div>
-                            <div className="rz-store-secondary">{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
-                            {suggestionLabel(line) ? <div className={`rz-store-suggestion ${line.is_auto_prefilled ? 'rz-store-suggestion--auto' : 'rz-store-suggestion--check'}`}>{suggestionLabel(line)}</div> : null}
-                            {line?.preparation_mode ? (
-                              <div className="rz-store-secondary">
-                                Status voorbereiding: {line.preparation_mode === 'auto_ready' ? 'Automatisch klaargezet' : line.preparation_mode === 'suggest_only' ? 'Alleen voorstel' : 'Geen voorbereiding'}
-                              </div>
-                            ) : null}
-                          </td>
-                          <td className="rz-num">
-                            <div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div>
-                          </td>
-                          <td>
-                            <select
-                              className="rz-input rz-store-select"
-                              value={line.review_decision || 'selected'}
-                              disabled={busyLineId === line.id}
-                              onChange={(event) => handleReviewDecision(line.id, event.target.value)}
-                            >
-                              <option value="pending">Nog te beoordelen</option>
-                              <option value="selected">Verwerken</option>
-                              <option value="ignored">Negeren</option>
-                            </select>
-                          </td>
-                          <td>
-                            <StoreArticleSelector
-                              lineId={line.id}
-                              lineName={line.article_name_raw}
-                              selectedArticleId={line.matched_household_article_id || ''}
-                              articleOptions={articleOptions}
-                              disabled={busyLineId === line.id}
-                              onChange={(nextArticleId) => handleMapLine(line.id, nextArticleId)}
-                              onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
-                            />
-                          </td>
-                          <td>
-                            <select
-                              className="rz-input rz-store-select"
-                              value={line.target_location_id || ''}
-                              disabled={busyLineId === line.id}
-                              onFocus={() => household?.id && refreshLocationOptions(household.id)}
-                              onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
-                              onChange={(event) => handleTargetLocation(line.id, event.target.value)}
-                            >
-                              <option value="">Geen voorkeurslocatie</option>
-                              {locationOptions.map((location) => (
-                                <option key={location.id} value={location.id}>{location.label}</option>
-                              ))}
-                            </select>
-                          </td>
-                        </tr>
-                      )
-                    })}
+                      <tr key={line.id} className={isReadyForProcessing ? 'rz-store-row--linked' : ''}>
+                        <td>
+                          <div className="rz-store-primary">{line.article_name_raw}</div>
+                          <div className="rz-store-secondary">{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
+                          {suggestionLabel(line) ? <div className={`rz-store-suggestion ${line.is_auto_prefilled ? 'rz-store-suggestion--auto' : 'rz-store-suggestion--check'}`}>{suggestionLabel(line)}</div> : null}
+                          {line?.preparation_mode ? (
+                            <div className="rz-store-secondary">
+                              Status voorbereiding: {line.preparation_mode === 'auto_ready' ? 'Automatisch klaargezet' : line.preparation_mode === 'suggest_only' ? 'Alleen voorstel' : 'Geen voorbereiding'}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="rz-num">
+                          <div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div>
+                        </td>
+                        <td>
+                          <select
+                            className="rz-input rz-store-select"
+                            value={line.review_decision || 'selected'}
+                            disabled={busyLineId === line.id}
+                            onChange={(event) => handleReviewDecision(line.id, event.target.value)}
+                          >
+                            <option value="pending">Nog te beoordelen</option>
+                            <option value="selected">Verwerken</option>
+                            <option value="ignored">Negeren</option>
+                          </select>
+                        </td>
+                        <td>
+                          <StoreArticleSelector
+                            lineId={line.id}
+                            lineName={line.article_name_raw}
+                            selectedArticleId={line.matched_household_article_id || ''}
+                            articleOptions={articleOptions}
+                            disabled={busyLineId === line.id}
+                            onChange={(nextArticleId) => handleMapLine(line.id, nextArticleId)}
+                            onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="rz-input rz-store-select"
+                            value={line.target_location_id || ''}
+                            disabled={busyLineId === line.id}
+                            onFocus={() => household?.id && refreshLocationOptions(household.id)}
+                            onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
+                            onChange={(event) => handleTargetLocation(line.id, event.target.value)}
+                          >
+                            <option value="">Geen voorkeurslocatie</option>
+                            {locationOptions.map((location) => (
+                              <option key={location.id} value={location.id}>{location.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    )})}
                   </tbody>
                 </table>
               </div>
             </div>
           </Card>
         )}
-
-        <Card>
-          <div data-testid="connected-stores-section">
-            {isLoading ? (
-              <div>Winkelgegevens laden…</div>
-            ) : (
-              <div style={{ display: 'grid', gap: '14px' }}>
-                <div>
-                  <h3 style={{ margin: '0 0 6px 0', fontSize: '18px' }}>Verbonden winkels</h3>
-                  <div style={{ color: '#667085', fontSize: '14px' }}>Beheerlaag voor nieuwe aankopen en koppelingen. Niet de primaire werkstroom.</div>
-                </div>
-                {providers.map((provider) => {
-                  const connection = connectionsByProviderCode[provider.code] || null
-                  const providerOpenBatch = batchItems.find((batch) => batch.store_provider_code === provider.code) || null
-                  return (
-                    <div key={provider.code} data-testid={`store-provider-${provider.code}`} style={connectedStoreRowStyle}>
-                      <div style={{ display: 'grid', gap: '2px' }}>
-                        <div style={{ fontWeight: 700 }}>{provider.name}</div>
-                        <div style={{ color: '#667085', fontSize: '14px' }}>Status provider: {providerStatusLabel(provider)}</div>
-                        <div style={{ color: '#667085', fontSize: '14px' }}>Koppeling: {connection ? 'gekoppeld / actief' : 'nog niet gekoppeld'}</div>
-                        <div style={{ color: '#667085', fontSize: '14px' }}>Laatste activiteit: {providerOpenBatch ? formatBatchLastChange(providerOpenBatch) : 'Nog geen open bon'}</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        {providerOpenBatch ? (
-                          <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[providerOpenBatch.uiState.statusKey] || batchStatusToneStyles.open) }}>{providerOpenBatch.uiState.label}</span>
-                        ) : null}
-                        {!connection ? (
-                          <Button data-testid={`connect-store-${provider.code}`} variant="primary" onClick={() => handleConnect(provider.code, provider.name)} disabled={isConnecting}>
-                            {isConnecting ? 'Koppelen…' : `${provider.name} koppelen`}
-                          </Button>
-                        ) : (
-                          <Button data-testid={`pull-purchases-${provider.code}`} variant="secondary" onClick={() => handlePullPurchases(connection, provider.name)} disabled={isPulling}>
-                            {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </Card>
       </div>
 
-      {processWarning && (
-        <div className="rz-modal-backdrop" role="presentation">
-          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="process-warning-title">
-            <h3 id="process-warning-title" className="rz-modal-title">Nog niet alle regels zijn klaar</h3>
-            <p className="rz-modal-text">
-              {processWarning.missingLocations > 0 && processWarning.missingArticles > 0
-                ? `Nog ${processWarning.missingLocations} artikel(en) zonder geldige locatie en ${processWarning.missingArticles} artikel(en) zonder geldig artikel.`
-                : processWarning.missingLocations > 0
-                  ? `Nog ${processWarning.missingLocations} artikel(en) zonder geldige locatie.`
-                  : `Nog ${processWarning.missingArticles} artikel(en) zonder geldig artikel.`}
-            </p>
-            <div className="rz-modal-actions">
-              <Button variant="secondary" onClick={() => setProcessWarning(null)}>Terug naar Winkel</Button>
-              <Button onClick={async () => { setProcessWarning(null); await processBatchNow(activeBatch); }} disabled={isProcessingBatch}>Negeren</Button>
+        {processWarning && (
+          <div className="rz-modal-backdrop" role="presentation">
+            <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="process-warning-title">
+              <h3 id="process-warning-title" className="rz-modal-title">Nog niet alle regels zijn klaar</h3>
+              <p className="rz-modal-text">
+                {processWarning.missingLocations > 0 && processWarning.missingArticles > 0
+                  ? `Nog ${processWarning.missingLocations} artikel(en) zonder geldige locatie en ${processWarning.missingArticles} artikel(en) zonder geldig artikel.`
+                  : processWarning.missingLocations > 0
+                    ? `Nog ${processWarning.missingLocations} artikel(en) zonder geldige locatie.`
+                    : `Nog ${processWarning.missingArticles} artikel(en) zonder geldig artikel.`}
+              </p>
+              <div className="rz-modal-actions">
+                <Button variant="secondary" onClick={() => setProcessWarning(null)}>Terug naar Winkel</Button>
+                <Button onClick={async () => { setProcessWarning(null); await processBatchNow(); }} disabled={isProcessingBatch}>Negeren</Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
     </AppShell>
   )
+}
+
+const tableHeadStyle = {
+  textAlign: 'left',
+  padding: '10px 8px',
+  borderBottom: '1px solid #d0d5dd',
+  fontSize: '14px',
+}
+
+const tableCellStyle = {
+  padding: '10px 8px',
+  borderBottom: '1px solid #eaecf0',
+  fontSize: '14px',
+  verticalAlign: 'top',
 }
 
 const articleSearchStyle = {
@@ -979,6 +836,16 @@ const articleSearchInputStyle = {
   background: '#ffffff',
 }
 
+const selectStyle = {
+  width: '100%',
+  padding: '8px 10px',
+  borderRadius: '8px',
+  border: '1px solid #d0d5dd',
+  fontSize: '14px',
+  background: '#ffffff',
+}
+
+
 const createArticleButtonStyle = {
   alignSelf: 'flex-start',
   background: 'none',
@@ -989,46 +856,4 @@ const createArticleButtonStyle = {
   fontWeight: 700,
   cursor: 'pointer',
   textDecoration: 'underline',
-}
-
-const batchStatusPillStyle = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  borderRadius: '999px',
-  padding: '4px 10px',
-  fontSize: '12px',
-  fontWeight: 700,
-}
-
-const batchStatusToneStyles = {
-  action_needed: {
-    background: '#fef3f2',
-    color: '#b42318',
-  },
-  ready: {
-    background: '#ecfdf3',
-    color: '#027a48',
-  },
-  in_progress: {
-    background: '#eff8ff',
-    color: '#175cd3',
-  },
-  open: {
-    background: '#f2f4f7',
-    color: '#344054',
-  },
-  processed: {
-    background: '#ecfdf3',
-    color: '#027a48',
-  },
-}
-
-const connectedStoreRowStyle = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  gap: '16px',
-  flexWrap: 'wrap',
-  borderTop: '1px solid #e4e7ec',
-  paddingTop: '14px',
 }
