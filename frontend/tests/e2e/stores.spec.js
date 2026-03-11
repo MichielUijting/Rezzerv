@@ -15,13 +15,8 @@ test.describe('Winkels scherm smoke', () => {
     await expect(page.getByTestId('pull-purchases-jumbo')).toBeVisible();
 
     await expect(page.getByTestId('open-batches-section')).toContainText('Open bonnen');
-    await expect(page.getByTestId('active-batch-card')).toHaveCount(0);
-
-    const firstBatchAction = page.locator('[data-testid^=batch-primary-action-]').first();
-    await firstBatchAction.click();
-
     await expect(page.getByTestId('active-batch-card')).toBeVisible();
-    await expect(page.getByTestId('active-batch-title')).toContainText('Kassabon');
+    await expect(page.getByTestId('active-batch-title')).toContainText('Kassabon Lidl');
     await expect(page.getByTestId('process-active-batch')).toBeVisible();
   });
 
@@ -31,8 +26,7 @@ test.describe('Winkels scherm smoke', () => {
     await page.getByTestId('pull-purchases-jumbo').click();
 
     await expect(page.getByTestId('open-batches-section')).toContainText('Jumbo');
-    await page.locator('[data-testid^=batch-primary-action-]').first().click();
     await expect(page.getByTestId('active-batch-card')).toBeVisible();
-    await expect(page.getByTestId('active-batch-title')).toContainText('Kassabon');
+    await expect(page.getByTestId('active-batch-title')).toContainText('Kassabon Jumbo');
   });
 });

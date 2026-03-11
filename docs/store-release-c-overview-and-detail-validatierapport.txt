@@ -1,0 +1,30 @@
+Release Protocol v1.0 – Compliance Check:
+
+Releasecategorie:
+UI-release
+
+Doelwijziging:
+Winkelimport opsplitsen in overzichtsscherm + apart bondetailscherm.
+
+Gewijzigd:
+- Overzichtsscherm /winkels toont alleen context, open bonnen en verbonden winkels.
+- Nieuw detailscherm /winkels/batch/:batchId toont de volledige bonverwerking.
+- Openen/Hervatten navigeren nu naar het detailscherm.
+- Versioning opgehoogd naar 01.07.38.
+
+Niet gewijzigd:
+- Backendcontracten
+- Voorraadverwerkingslogica
+- Providerlogica Lidl/Jumbo
+- Instellingenpagina's
+
+Getest:
+- Frontend build succesvol via vite build.
+- package-lock versioning intern consistent gemaakt.
+
+Niet getest:
+- Live end-to-end browserflow tegen lokale runtime.
+- Volledige regressietest Lidl/Jumbo.
+
+Risiconiveau:
+Middel. Grootste risico zit in routering naar batchdetail en behoud van bestaande batchinteracties.
