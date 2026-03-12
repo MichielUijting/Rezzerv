@@ -8,15 +8,18 @@ from typing import Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
 from datetime import datetime
+import logging
 from sqlalchemy import text
 
 app = FastAPI()
+logger = logging.getLogger('rezzerv.api')
 
 
 @app.exception_handler(Exception)
 async def unhandled_api_exception_handler(request: Request, exc: Exception):
     if request.url.path.startswith('/api/'):
-        return JSONResponse(status_code=500, content={'detail': 'Interne serverfout in de winkelkoppeling'})
+        logger.exception('Onverwerkte API-fout op %s', request.url.path)
+        return JSONResponse(status_code=500, content={'detail': 'Interne serverfout in de API'})
     raise exc
 
 # In-memory opslag (MVP login)
@@ -739,6 +742,8 @@ def ensure_release_3_schema():
                     location_label TEXT,
                     event_type TEXT NOT NULL,
                     quantity NUMERIC NOT NULL,
+                    old_quantity NUMERIC,
+                    new_quantity NUMERIC,
                     source TEXT NOT NULL,
                     note TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -746,6 +751,11 @@ def ensure_release_3_schema():
                 """
             )
         )
+        inventory_event_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(inventory_events)")).fetchall()}
+        if "old_quantity" not in inventory_event_columns:
+            conn.execute(text("ALTER TABLE inventory_events ADD COLUMN old_quantity NUMERIC"))
+        if "new_quantity" not in inventory_event_columns:
+            conn.execute(text("ALTER TABLE inventory_events ADD COLUMN new_quantity NUMERIC"))
 
 
 
@@ -1589,13 +1599,32 @@ def create_inventory(payload: InventoryCreate):
 def update_inventory(inventory_id: str, payload: InventoryUpdate):
     with engine.begin() as conn:
         existing = conn.execute(
-            text("SELECT id, household_id FROM inventory WHERE id = :id"),
+            text(
+                """
+                SELECT
+                  i.id,
+                  i.household_id,
+                  i.naam,
+                  i.aantal,
+                  i.space_id,
+                  i.sublocation_id,
+                  COALESCE(s.naam, '') AS locatie,
+                  COALESCE(sl.naam, '') AS sublocatie
+                FROM inventory i
+                LEFT JOIN spaces s ON s.id = i.space_id
+                LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
+                WHERE i.id = :id
+                """
+            ),
             {"id": inventory_id},
         ).mappings().first()
         if not existing:
             raise HTTPException(status_code=404, detail="Onbekende inventory-regel")
 
         household_id = existing.get('household_id') or 'demo-household'
+        old_quantity = int(existing.get('aantal') or 0)
+        new_quantity = int(payload.aantal or 0)
+
         space_id, sublocation_id = resolve_space_and_sublocation_ids(
             conn,
             household_id,
@@ -1620,7 +1649,7 @@ def update_inventory(inventory_id: str, payload: InventoryUpdate):
             {
                 "id": inventory_id,
                 "naam": payload.naam,
-                "aantal": payload.aantal,
+                "aantal": new_quantity,
                 "space_id": space_id,
                 "sublocation_id": sublocation_id,
             },
@@ -1643,7 +1672,49 @@ def update_inventory(inventory_id: str, payload: InventoryUpdate):
             ),
             {"id": inventory_id},
         ).mappings().first()
-    return dict(updated) if updated else {"id": inventory_id}
+
+        updated_row = dict(updated) if updated else {"id": inventory_id}
+        location_label = ' / '.join(part for part in [updated_row.get('locatie'), updated_row.get('sublocatie')] if part)
+        note = f"Handmatige voorraadcorrectie van {old_quantity} naar {new_quantity}"
+        event_id = str(uuid.uuid4())
+        conn.execute(
+            text(
+                """
+                INSERT INTO inventory_events (
+                    id, household_id, article_id, article_name, location_id, location_label,
+                    event_type, quantity, old_quantity, new_quantity, source, note, created_at
+                ) VALUES (
+                    :id, :household_id, :article_id, :article_name, :location_id, :location_label,
+                    'manual_adjustment', :quantity, :old_quantity, :new_quantity, 'manual_inventory', :note, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                'id': event_id,
+                'household_id': household_id,
+                'article_id': inventory_id,
+                'article_name': updated_row.get('artikel') or payload.naam,
+                'location_id': sublocation_id or space_id,
+                'location_label': location_label,
+                'quantity': new_quantity - old_quantity,
+                'old_quantity': old_quantity,
+                'new_quantity': new_quantity,
+                'note': note,
+            },
+        )
+
+        logger.info(
+            'manual_inventory_update inventory_id=%s household_id=%s article_name=%s old_quantity=%s new_quantity=%s space_id=%s sublocation_id=%s history_event_created=%s',
+            inventory_id,
+            household_id,
+            updated_row.get('artikel') or payload.naam,
+            old_quantity,
+            new_quantity,
+            space_id,
+            sublocation_id,
+            event_id,
+        )
+    return updated_row
 
 @app.get("/api/dev/inventory-preview")
 def inventory_preview():
@@ -1684,6 +1755,8 @@ def article_history(article_name: str):
                   location_label,
                   event_type,
                   quantity,
+                  old_quantity,
+                  new_quantity,
                   source,
                   note,
                   created_at
@@ -1704,6 +1777,8 @@ def article_history(article_name: str):
             "location_label": row["location_label"],
             "event_type": row["event_type"],
             "quantity": row["quantity"],
+            "old_quantity": row["old_quantity"],
+            "new_quantity": row["new_quantity"],
             "source": row["source"],
             "note": row["note"],
             "created_at": normalize_datetime(row["created_at"]),

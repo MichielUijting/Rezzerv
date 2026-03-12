@@ -133,6 +133,13 @@ function getColumnLockMessage(row, key) {
 export default function Voorraad() {
   const navigate = useNavigate();
   const [rows, setRows] = useState(initialData);
+
+  const reloadInventoryRows = async () => {
+    const loadedRows = await fetchInventoryRows()
+    setRows(loadedRows)
+    setLoadError(loadedRows.length ? '' : 'Nog geen live voorraad beschikbaar.')
+    return loadedRows
+  }
   const [filters, setFilters] = useState({
     artikel: "",
     aantal: "",
@@ -238,25 +245,8 @@ export default function Voorraad() {
     setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saving', message: 'Opslaan...' } }));
 
     try {
-      const saved = await saveInventoryRow(row)
-      setRows((prev) => prev.map((entry) => {
-        if (entry.id !== row.id) return entry
-        const merged = {
-          ...entry,
-          artikel: saved?.artikel ?? entry.artikel,
-          aantal: Number(saved?.aantal) || 0,
-          locatie: saved?.locatie ?? entry.locatie,
-          sublocatie: saved?.sublocatie ?? entry.sublocatie,
-        }
-        return {
-          ...merged,
-          canEditArtikel: true,
-          canEditAantal: true,
-          canEditLocatie: true,
-          canEditSublocatie: true,
-          isAggregated: false,
-        }
-      }))
+      await saveInventoryRow(row)
+      await reloadInventoryRows()
       setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saved', message: 'Opgeslagen' } }));
       window.setTimeout(() => {
         setSaveState((prev) => {

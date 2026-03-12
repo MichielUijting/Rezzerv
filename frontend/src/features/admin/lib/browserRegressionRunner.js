@@ -562,6 +562,78 @@ async function getInventoryArticleId(articleName) {
   return String(match.id)
 }
 
+async function setInventoryQuantityViaApi(articleName, quantity) {
+  const articleId = await getInventoryArticleId(articleName)
+  const rows = await getInventoryRows()
+  const match = rows.find((row) => String(row?.id) === String(articleId))
+  if (!match) throw new Error(`Kan artikel ${articleName} niet voorbereiden voor regressietest`)
+
+  await requestJson(`/api/dev/inventory/${encodeURIComponent(articleId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      naam: match.artikel,
+      aantal: quantity,
+      space_name: match.locatie || null,
+      sublocation_name: match.sublocatie || null,
+    }),
+  })
+}
+
+async function filterInventoryOnArticle(frame, articleName) {
+  const doc = getFrameDocument(frame)
+  const filterInput = await waitForCondition(() => doc?.querySelector('input[aria-label="Filter op artikel"]'), WAIT_TIMEOUT, 'Artikel-filter niet gevonden in Voorraad')
+  setInputValue(filterInput, articleName)
+  await delay(150)
+}
+
+async function findInventoryRowInTable(frame, articleName) {
+  return waitForCondition(() => {
+    const doc = getFrameDocument(frame)
+    const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
+    return rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName) || null
+  }, WAIT_TIMEOUT, `Artikel ${articleName} niet gevonden in Voorraad`)
+}
+
+async function updateInventoryQuantityInUi(frame, articleName, nextQuantity) {
+  await navigateFrame(frame, '/voorraad')
+  await filterInventoryOnArticle(frame, articleName)
+  const row = await findInventoryRowInTable(frame, articleName)
+  const quantityCell = row.querySelectorAll('td')[2]
+  const quantityDisplay = quantityCell?.querySelector('.rz-inline-cell')
+  if (!quantityDisplay) throw new Error(`Aantal-cel voor ${articleName} niet gevonden`)
+  clickElement(quantityDisplay)
+
+  const quantityInput = await waitForCondition(() => quantityCell.querySelector('input'), WAIT_TIMEOUT, `Inline invoerveld voor ${articleName} werd niet geopend`)
+  setInputValue(quantityInput, String(nextQuantity))
+  quantityInput.dispatchEvent(new quantityInput.ownerDocument.defaultView.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+
+  await waitForCondition(() => queryText(getFrameDocument(frame), 'Opgeslagen'), WAIT_TIMEOUT, `Opslaan werd niet bevestigd voor ${articleName}`)
+}
+
+async function ensureInventoryTableQuantity(frame, articleName, expectedQuantity) {
+  await navigateFrame(frame, '/voorraad')
+  await filterInventoryOnArticle(frame, articleName)
+  await waitForCondition(() => {
+    const doc = getFrameDocument(frame)
+    const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
+    const row = rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName)
+    if (!row) return false
+    return row.querySelectorAll('td')[2]?.textContent?.includes(String(expectedQuantity))
+  }, WAIT_TIMEOUT, `Voorraad toont ${articleName} niet met aantal ${expectedQuantity}`)
+}
+
+async function ensureManualAdjustmentHistory(frame, oldQuantity, newQuantity) {
+  await openArticleTab(frame, 'Historie')
+  await waitForCondition(() => {
+    const doc = getFrameDocument(frame)
+    const cards = Array.from(doc?.querySelectorAll('.rz-history-card') || [])
+    return cards.some((card) => {
+      const text = card.textContent || ''
+      return text.includes('Handmatige voorraadcorrectie') && text.includes(String(oldQuantity)) && text.includes(String(newQuantity))
+    })
+  }, WAIT_TIMEOUT, `Handmatige voorraadcorrectie ${oldQuantity} → ${newQuantity} niet zichtbaar in Historie`)
+}
+
 async function getStoreReviewArticleOptionId(articleName) {
   const items = await requestJson('/api/store-review-articles')
   const normalized = String(articleName || '').trim().toLowerCase()
@@ -739,6 +811,29 @@ export async function runBrowserRegressionTests() {
     await runScenario('Artikeldetail Historie toont inhoud', async () => {
       await openArticleFromInventory(frame, 'Tomaten')
       await ensureTabContains(frame, 'Historie', 'Voorraadhistorie', 'Historie-tab toont geen inhoud')
+    }, results)
+    await runScenario('Handmatige voorraadcorrectie blijft persistent en zichtbaar in historie', async () => {
+      await prepareRegressionFixture(frame)
+      await setInventoryQuantityViaApi('Tomaten', 3)
+      await ensureInventoryTableQuantity(frame, 'Tomaten', 3)
+      await updateInventoryQuantityInUi(frame, 'Tomaten', 5)
+      await openArticleFromInventory(frame, 'Tomaten')
+      await ensureTabContains(frame, 'Voorraad', 'Totale voorraad', 'Voorraad-tab toont geen inhoud na handmatige correctie')
+      await waitForCondition(() => queryText(getFrameDocument(frame), '5'), WAIT_TIMEOUT, 'Totale voorraad 5 niet zichtbaar in artikeldetail')
+      await ensureManualAdjustmentHistory(frame, 3, 5)
+      await ensureInventoryTableQuantity(frame, 'Tomaten', 5)
+      await frame.contentWindow.location.reload()
+      await waitForCondition(() => {
+        const doc = getFrameDocument(frame)
+        return doc && doc.readyState === 'complete'
+      }, WAIT_TIMEOUT, 'Herladen van Voorraad duurde te lang')
+      await filterInventoryOnArticle(frame, 'Tomaten')
+      await waitForCondition(() => {
+        const doc = getFrameDocument(frame)
+        const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
+        const row = rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === 'Tomaten')
+        return row?.querySelectorAll('td')[2]?.textContent?.includes('5')
+      }, WAIT_TIMEOUT, 'Voorraad 5 bleef niet zichtbaar na herladen')
     }, results)
 
     await runScenario('Artikeldetail Analyse toont inhoud', async () => {

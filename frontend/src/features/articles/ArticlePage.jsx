@@ -77,18 +77,38 @@ async function fetchInventoryPreview() {
   return Array.isArray(data?.rows) ? data.rows : []
 }
 
+function mapEventTypeLabel(eventType) {
+  if (eventType === 'purchase') return 'Aankoop'
+  if (eventType === 'manual_adjustment') return 'Handmatige voorraadcorrectie'
+  return eventType || 'Gebeurtenis'
+}
+
+function formatQuantityDelta(value) {
+  if (value == null || value === '') return '—'
+  const number = Number(value)
+  if (!Number.isFinite(number)) return String(value)
+  if (number > 0) return `+${number}`
+  return String(number)
+}
+
 function mapLiveHistoryRows(rows = []) {
-  return rows.map((row) => ({
-    id: row?.id || '',
-    datetime: row?.created_at || '',
-    type: row?.event_type === 'purchase' ? 'Aankoop' : (row?.event_type || 'Gebeurtenis'),
-    old_value: '—',
-    new_value: row?.quantity != null ? `+${row.quantity}` : '—',
-    location: row?.location_label || '',
-    source: row?.source || '',
-    note: row?.note || '',
-    quantity_change: Number(row?.quantity) || 0,
-  }))
+  return rows.map((row) => {
+    const isManualAdjustment = row?.event_type === 'manual_adjustment'
+    return {
+      id: row?.id || '',
+      datetime: row?.created_at || '',
+      type: mapEventTypeLabel(row?.event_type),
+      old_value: isManualAdjustment ? String(row?.old_quantity ?? '—') : '—',
+      new_value: isManualAdjustment ? String(row?.new_quantity ?? '—') : formatQuantityDelta(row?.quantity),
+      location: row?.location_label || '',
+      source: row?.source || '',
+      note: row?.note || '',
+      quantity_change: Number(row?.quantity) || 0,
+      event_type: row?.event_type || '',
+      old_quantity: row?.old_quantity,
+      new_quantity: row?.new_quantity,
+    }
+  })
 }
 
 async function fetchArticleHistory(articleName) {
