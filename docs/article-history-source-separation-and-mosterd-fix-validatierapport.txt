@@ -1,0 +1,36 @@
+Rezzerv validatierapport – Mosterd demo-fix en historiebron-scheiding
+Versie: 01.07.50
+Datum: 2026-03-12
+
+Doel
+- Mosterd demo-data consistent maken met zichtbare voorraad.
+- Hybride historieweergave in artikeldetails verwijderen.
+- Live artikelen alleen live historie laten tonen.
+- Demo-historie alleen behouden voor pure demoartikelen.
+
+Uitgevoerde wijzigingen
+1. frontend/src/demo-articles.json
+- Mosterd-historie gecorrigeerd zodat de demo-eindstand aansluit op de demo-locatievoorraad van 1.
+
+2. frontend/src/features/articles/ArticlePage.jsx
+- Scheiding aangebracht tussen:
+  - pure live artikelen: alleen live voorraad + live historie
+  - pure demoartikelen: demo-voorraad + demo-historie
+  - fallbackgevallen zonder live inventory-match: bestaand fallbackgedrag behouden
+- Historie wordt voor live artikelen niet langer vervangen of aangevuld met demo-historie.
+- Foutmelding bij live historie-fout verwijst niet meer naar demo-historie voor live artikelen.
+
+Validatie
+- Frontend dependencies lokaal geïnstalleerd met npm ci.
+- Productiebouw geslaagd met npm --prefix frontend run build.
+- Versienummer opgehoogd naar 01.07.50 in:
+  - VERSION.txt
+  - version.json
+  - frontend/version.json
+  - frontend/package.json
+  - frontend/package-lock.json
+
+Verwacht resultaat
+- Mosterd toont geen interne demo-inconsistentie meer tussen voorraad en historie.
+- Live artikelen tonen na handmatige mutatie alleen live historie.
+- Demo-historie verschijnt alleen nog bij pure demoartikelen.

@@ -164,6 +164,12 @@ function buildLiveFirstArticle(articleName, liveRows, fallbackArticle = null) {
   }
 }
 
+function hasLiveInventoryRowsForArticle(articleName, liveRows) {
+  const normalizedTarget = normalizeName(articleName)
+  if (!normalizedTarget) return false
+  return Array.isArray(liveRows) && liveRows.some((row) => normalizeName(row?.artikel) === normalizedTarget)
+}
+
 export default function ArticlePage() {
   const { articleId } = useParams()
   const [searchParams] = useSearchParams()
@@ -198,6 +204,8 @@ export default function ArticlePage() {
 
     if (preferredName) {
       const nameMatch = demoData.articles.find((a) => normalizeName(a.name) === normalizeName(preferredName))
+      const hasLiveMatch = hasLiveInventoryRowsForArticle(preferredName, liveInventoryRows)
+      if (hasLiveMatch) return buildLiveOnlyArticle(preferredName, liveInventoryRows)
       return buildLiveFirstArticle(preferredName, liveInventoryRows, nameMatch || null)
     }
 
@@ -205,7 +213,16 @@ export default function ArticlePage() {
     if (directMatch) return mergeLiveLocations(directMatch, liveInventoryRows)
 
     return mergeLiveLocations(demoData.articles[0], liveInventoryRows)
-  }, [articleId, requestedArticleName, liveInventoryRows])
+  }, [articleId, requestedArticleName, liveInventoryRows, automationVersion])
+
+  const hasLiveInventoryMatch = useMemo(() => {
+    return hasLiveInventoryRowsForArticle(activeArticle?.name || requestedArticleName || '', liveInventoryRows)
+  }, [activeArticle?.name, requestedArticleName, liveInventoryRows])
+
+  const isPureDemoArticle = useMemo(() => {
+    if (!activeArticle?.name) return false
+    return !hasLiveInventoryMatch && demoData.articles.some((article) => normalizeName(article.name) === normalizeName(activeArticle.name))
+  }, [activeArticle?.name, hasLiveInventoryMatch])
 
   useEffect(() => {
     let cancelled = false
@@ -234,20 +251,33 @@ export default function ArticlePage() {
       .catch(() => {
         if (!cancelled) {
           setLiveHistoryRows([])
-          setHistoryLoadError('Live artikelhistorie kon niet worden geladen. Demo-historie wordt getoond.')
+          setHistoryLoadError(
+            hasLiveInventoryMatch
+              ? 'Live artikelhistorie kon niet worden geladen.'
+              : 'Live artikelhistorie kon niet worden geladen. Demo-historie wordt getoond.',
+          )
         }
       })
 
     return () => {
       cancelled = true
     }
-  }, [articleId, activeArticle?.name])
+  }, [articleId, activeArticle?.name, hasLiveInventoryMatch])
 
   const articleData = useMemo(() => {
     const merged = activeArticle
     const liveHistory = mapLiveHistoryRows(liveHistoryRows)
+
+    if (hasLiveInventoryMatch) {
+      return { ...merged, history: liveHistory }
+    }
+
+    if (isPureDemoArticle) {
+      return merged
+    }
+
     return liveHistory.length ? { ...merged, history: liveHistory } : merged
-  }, [activeArticle, automationVersion, liveHistoryRows])
+  }, [activeArticle, automationVersion, liveHistoryRows, hasLiveInventoryMatch, isPureDemoArticle])
 
   const pageTitle = `Artikel details: ${articleData.name || 'Onbekend artikel'}`
 

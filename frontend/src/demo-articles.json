@@ -273,8 +273,8 @@
         {
           "datetime": "2026-03-07T16:20:00",
           "type": "Aankoop",
-          "old_value": "1",
-          "new_value": "2",
+          "old_value": "0",
+          "new_value": "1",
           "location": "Keuken / Koelkast",
           "source": "Kassabon",
           "note": "Nieuwe pot mosterd gekocht bij herhaalaankoop.",
