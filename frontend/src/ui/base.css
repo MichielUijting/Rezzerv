@@ -114,6 +114,24 @@ body {
   min-height: 20px;
   width: 100%;
   cursor: text;
+  position: relative;
+  z-index: 1;
+}
+
+.rz-stock-row-interactive td{
+  position: relative;
+}
+
+.rz-stock-row-interactive:last-child td{
+  padding-bottom: 8px;
+}
+
+.rz-stock-table tbody tr:last-child .rz-inline-cell{
+  padding-bottom: 6px;
+}
+
+.rz-table-wrapper{
+  padding-bottom: 10px;
 }
 
 .rz-inline-input{

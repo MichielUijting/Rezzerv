@@ -1,0 +1,29 @@
+Rezzerv validatierapport
+Versie: 01.07.51
+Onderwerp: voorraad onderste zichtbare rij interactie fix
+
+Doel
+- herstel interactie op de onderste zichtbare rij in het scherm Voorraad
+- waarborg dat dubbelklik naar details en inline mutatie ook op de onderste zichtbare rij werken
+
+Uitgevoerde aanpassingen
+- Voorraad-tabel dubbelklikafhandeling robuuster gemaakt via een centrale handleRowDoubleClick-functie
+- dubbelklik nu expliciet ondersteund op zowel de tabelrij als de inline cel
+- beschermlogica toegevoegd zodat dubbelklik op echte interactieve controls (zoals input/checkbox) geen onbedoelde navigatie triggert
+- extra onderruimte toegevoegd aan de tabelwrapper en de laatste interactieve rij zodat de onderste zichtbare rij niet tegen kaart-/onderrand aanvalt
+- cellen van interactieve voorraadrijen expliciet relatief gepositioneerd zodat het klikvlak stabiel blijft
+
+Gewijzigde bestanden
+- frontend/src/pages/Voorraad.jsx
+- frontend/src/ui/base.css
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/package.json
+- frontend/package-lock.json
+
+Validatiepunten
+- dubbelklik op laatste zichtbare rij opent detailscherm
+- inline mutatie op laatste zichtbare rij blijft mogelijk
+- checkbox en invoervelden blijven vrij van onbedoelde dubbelkliknavigatie
+- laatste zichtbare rij heeft extra veilige onderruimte binnen de kaart/tabelwrapper

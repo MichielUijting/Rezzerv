@@ -176,6 +176,14 @@ export default function Voorraad() {
     navigate(`/voorraad/${detailId}?artikel=${artikel}`);
   };
 
+  const handleRowDoubleClick = (event, row) => {
+    if (event.target instanceof HTMLElement) {
+      const interactiveTarget = event.target.closest('input, button, select, textarea, a, label')
+      if (interactiveTarget) return
+    }
+    openArticle(row)
+  };
+
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
@@ -299,6 +307,7 @@ export default function Voorraad() {
           (editable ? "" : " rz-inline-cell-disabled")
         }
         onClick={() => startEdit(row, column.key)}
+        onDoubleClick={(event) => handleRowDoubleClick(event, row)}
         title={editable ? 'Klik om te bewerken, dubbelklik voor details' : getColumnLockMessage(row, column.key)}
         aria-disabled={!editable}
       >
@@ -383,7 +392,7 @@ export default function Voorraad() {
 
                 <tbody>
                   {filteredRows.map((row) => (
-                    <tr key={row.id} onDoubleClick={() => openArticle(row)}>
+                    <tr key={row.id} className="rz-stock-row-interactive" onDoubleClick={(event) => handleRowDoubleClick(event, row)}>
                       <td>
                         <input
                           type="checkbox"
