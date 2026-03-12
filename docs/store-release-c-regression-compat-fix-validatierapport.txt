@@ -1,0 +1,17 @@
+Release 01.07.39
+
+Doel: Release C compatibel maken met bestaande admin-regressietest op basis van 01.07.38.
+
+Wijzigingen:
+- browserRegressionRunner aangepast voor nieuw overzichtsscherm Winkelimport
+- openStoresPage verwacht nu Winkelimport in plaats van Winkelkoppelingen
+- ensureProviderConnectionAndBatch opent na Aankopen ophalen expliciet de batch via Openen/Hervatten
+- regressieflow blijft daarna op bondetailscherm werken
+
+Niet gewijzigd:
+- winkelimport UX-structuur van Release C
+- detailroute /winkels/batch/:batchId
+- backend contracts
+
+Validatie:
+- frontend build slaagt

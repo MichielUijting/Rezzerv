@@ -259,7 +259,7 @@ function resetAutomationState(frame) {
 async function openStoresPage(frame) {
   await navigateFrame(frame, '/winkels')
   const doc = getFrameDocument(frame)
-  await waitForCondition(() => queryText(doc, 'Winkelkoppelingen'), WAIT_TIMEOUT, 'Winkelkoppelingen pagina opent niet')
+  await waitForCondition(() => queryText(doc, 'Winkelimport'), WAIT_TIMEOUT, 'Winkelimport pagina opent niet')
 }
 
 async function clickButtonByText(doc, label) {
@@ -277,22 +277,42 @@ async function ensureProviderConnectionAndBatch(frame, providerName, expectedArt
   if (connectButton) {
     clickElement(connectButton)
     await waitForCondition(
-      () => queryText(getFrameDocument(frame), `${providerName} is gekoppeld aan dit huishouden.`) || queryText(getFrameDocument(frame), 'Koppeling: gekoppeld'),
+      () => queryText(getFrameDocument(frame), `${providerName} is gekoppeld aan dit huishouden.`) || queryText(getFrameDocument(frame), 'Status: gekoppeld / actief'),
       WAIT_TIMEOUT,
       `${providerName} koppelen werd niet bevestigd`
     )
   }
 
-  doc = getFrameDocument(frame)
   const pullButton = await waitForCondition(() => {
     const buttons = Array.from(getFrameDocument(frame)?.querySelectorAll('button') || [])
     return buttons.find((entry) => {
       if (entry.textContent?.trim() !== 'Aankopen ophalen') return false
-      const providerBlock = entry.closest('div[style]')?.parentElement || entry.parentElement?.parentElement || entry.parentElement
+      const providerBlock = entry.closest('[data-testid^="store-provider-"]') || entry.closest('div[style]')?.parentElement || entry.parentElement?.parentElement || entry.parentElement
       return providerBlock?.textContent?.includes(providerName)
     }) || null
   }, WAIT_TIMEOUT, 'Knop Aankopen ophalen niet gevonden')
   clickElement(pullButton)
+
+  await waitForCondition(() => {
+    const refreshedDoc = getFrameDocument(frame)
+    return queryText(refreshedDoc, `Nieuwe mockaankopen van ${providerName}`) || queryText(refreshedDoc, 'open bon') || queryText(refreshedDoc, providerName)
+  }, WAIT_TIMEOUT, `Nieuwe aankopen voor ${providerName} werden niet bevestigd`)
+
+  const batchActionButton = await waitForCondition(() => {
+    const buttons = Array.from(getFrameDocument(frame)?.querySelectorAll('button') || [])
+    return buttons.find((entry) => {
+      const label = entry.textContent?.trim()
+      if (!['Openen', 'Hervatten', 'Naar voorraad'].includes(label || '')) return false
+      const batchCard = entry.closest('[data-testid^="open-batch-"]') || entry.closest('div[style]')
+      return batchCard?.textContent?.includes(providerName)
+    }) || null
+  }, WAIT_TIMEOUT, `Open bon voor ${providerName} niet gevonden`)
+
+  if (batchActionButton.textContent?.trim() === 'Naar voorraad') {
+    throw new Error(`Batch van ${providerName} staat direct op Naar voorraad en kan niet als detail worden geopend voor regressietest`)
+  }
+
+  clickElement(batchActionButton)
   await waitForCondition(() => queryText(getFrameDocument(frame), `Kassabon ${providerName}`), WAIT_TIMEOUT, `Kassabon ${providerName} werd niet geladen`)
   await waitForCondition(() => getStoreLineRow(frame, expectedArticleName), WAIT_TIMEOUT, `Regel ${expectedArticleName} niet zichtbaar in Kassabon ${providerName}`)
 }
