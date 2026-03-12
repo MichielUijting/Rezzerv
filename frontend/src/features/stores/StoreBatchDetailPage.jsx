@@ -223,7 +223,7 @@ export default function StoreBatchDetailPage() {
       } else {
         setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) zijn naar voorraad verwerkt.`)
       }
-      navigate('/winkels', { replace: false })
+      navigate('/winkels', { replace: true })
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
     } finally {
@@ -251,9 +251,12 @@ export default function StoreBatchDetailPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ display: 'grid', gap: '6px' }}>
               <h2 style={{ margin: 0, fontSize: '20px' }}>{batch ? buildBatchTitle(batch) : 'Bondetail'}</h2>
-              <div style={{ color: '#667085' }}>Werk deze bon af en ga daarna terug naar het overzicht.</div>
+              <div style={{ color: '#667085' }}>Werk deze bon af en ga daarna terug naar het overzicht of direct naar de startpagina.</div>
             </div>
-            <Button variant="secondary" onClick={() => navigate('/winkels')}>Terug naar overzicht</Button>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <Button variant="secondary" onClick={() => navigate('/winkels')}>Terug naar overzicht</Button>
+              <Button variant="secondary" onClick={() => navigate('/home')}>Terug naar start</Button>
+            </div>
           </div>
         </Card>
 

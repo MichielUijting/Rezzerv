@@ -249,11 +249,14 @@ export default function StoresPage() {
     <AppShell title="Winkelimport" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }}>
         <Card>
-          <div data-testid="stores-page-intro" style={{ display: 'grid', gap: '8px' }}>
-            <h2 style={{ margin: 0, fontSize: '20px' }}>Winkelimport</h2>
-            <p style={{ margin: 0, color: '#667085' }}>
-              Werk eerst je open bonnen af. Verbonden winkels beheer je hieronder.
-            </p>
+          <div data-testid="stores-page-intro" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'grid', gap: '8px' }}>
+              <h2 style={{ margin: 0, fontSize: '20px' }}>Winkelimport</h2>
+              <p style={{ margin: 0, color: '#667085' }}>
+                Werk eerst je open bonnen af. Verbonden winkels beheer je hieronder.
+              </p>
+            </div>
+            <Button variant="secondary" onClick={() => navigate('/home')}>Terug naar start</Button>
           </div>
         </Card>
 

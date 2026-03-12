@@ -1,0 +1,13 @@
+Rezzerv Release 01.07.43 – navigatiecorrectie winkelimport/bondetail
+
+Wijzigingen
+- Winkelimport-overzicht heeft nu een expliciete knop "Terug naar start".
+- Bondetailscherm heeft nu een expliciete knop "Terug naar start" naast "Terug naar overzicht".
+- Na succesvol verwerken navigeert bondetail nu met replace=true terug naar /winkels, zodat de detailroute niet onnodig in de browser history blijft hangen.
+
+Niet gewijzigd
+- Geen wijziging in winkelimportlogica, batchverwerking of regressietestlaag.
+
+Validatie
+- Bronbestanden aangepast: StoresPage.jsx, StoreBatchDetailPage.jsx
+- Versioning opgehoogd naar 01.07.43
