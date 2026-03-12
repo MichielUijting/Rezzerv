@@ -180,6 +180,23 @@ body {
 }
 
 
+.rz-stock-table-wrapper{
+  padding-bottom: 64px;
+}
+
+.rz-stock-table tbody tr:last-child td,
+.rz-stock-table tbody tr:nth-last-child(2) td{
+  padding-bottom: 14px !important;
+}
+
+.rz-stock-table tbody tr:last-child .rz-inline-cell,
+.rz-stock-table tbody tr:nth-last-child(2) .rz-inline-cell{
+  position: relative;
+  z-index: 2;
+  min-height: 28px;
+}
+
+
 /* Rezzerv v01.06.02 voorraad editing adjustments */
 .rz-table td .rz-inline-input,
 .rz-table th .rz-inline-input{

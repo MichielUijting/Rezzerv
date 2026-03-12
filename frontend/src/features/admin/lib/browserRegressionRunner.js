@@ -71,14 +71,17 @@ function createHiddenFrame() {
   frame.setAttribute('aria-hidden', 'true')
   Object.assign(frame.style, {
     position: 'fixed',
-    left: '-10000px',
-    top: '0',
+    right: '8px',
+    bottom: '8px',
     width: '1280px',
     height: '900px',
-    opacity: '0',
+    transform: 'scale(0.12)',
+    transformOrigin: 'bottom right',
+    opacity: '0.02',
     pointerEvents: 'none',
     border: '0',
     background: '#fff',
+    zIndex: '-1',
   })
   document.body.appendChild(frame)
   return frame

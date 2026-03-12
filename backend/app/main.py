@@ -1751,7 +1751,33 @@ def create_inventory(payload: InventoryCreate):
             },
         )
         row = result.first()
-    return {"status": "ok", "id": row[0] if row else None}
+        new_id = row[0] if row else None
+        if new_id:
+            resolved_location = conn.execute(
+                text(
+                    """
+                    SELECT COALESCE(s.naam, '') AS locatie, COALESCE(sl.naam, '') AS sublocatie
+                    FROM spaces s
+                    LEFT JOIN sublocations sl ON sl.id = :sublocation_id
+                    WHERE s.id = :space_id
+                    """
+                ),
+                {"space_id": space_id, "sublocation_id": sublocation_id},
+            ).mappings().first() or {}
+            location_label = ' / '.join(part for part in [resolved_location.get('locatie', ''), resolved_location.get('sublocatie', '')] if part)
+            seed_inventory_event(
+                conn,
+                article_name=payload.naam,
+                quantity=int(payload.aantal or 0),
+                old_quantity=0,
+                new_quantity=int(payload.aantal or 0),
+                event_type='purchase',
+                source='manual_seed',
+                note='Voorraadregel aangemaakt',
+                location_id=sublocation_id or space_id,
+                location_label=location_label,
+            )
+    return {"status": "ok", "id": new_id if row else None}
 
 
 @app.put("/api/dev/inventory/{inventory_id}")
@@ -1884,6 +1910,33 @@ def article_history(article_name: str):
     ]}
 
 
+
+
+def seed_inventory_event(conn, *, article_name: str, quantity: int, old_quantity: int, new_quantity: int, event_type: str = 'purchase', source: str = 'seed_demo', note: str = 'Initiële demodata', location_id: str | None = None, location_label: str = ''):
+    conn.execute(
+        text(
+            """
+            INSERT INTO inventory_events (
+              id, household_id, article_id, article_name, location_id, location_label, event_type, quantity, old_quantity, new_quantity, source, note
+            ) VALUES (
+              lower(hex(randomblob(16))), 'demo-household', :article_id, :article_name, :location_id, :location_label, :event_type, :quantity, :old_quantity, :new_quantity, :source, :note
+            )
+            """
+        ),
+        {
+            'article_id': build_live_article_option_id(article_name),
+            'article_name': article_name,
+            'location_id': location_id or '',
+            'location_label': location_label,
+            'event_type': event_type,
+            'quantity': quantity,
+            'old_quantity': old_quantity,
+            'new_quantity': new_quantity,
+            'source': source,
+            'note': note,
+        },
+    )
+
 @app.post("/api/dev/generate-demo-data")
 def generate_demo_data():
     reset_dev_tables()
@@ -1932,6 +1985,19 @@ def generate_demo_data():
             ("Thee", 8, kitchen_id, kast1_id),
         ]
 
+        space_lookup = {
+            kitchen_id: 'Keuken',
+            pantry_id: 'Berging',
+            bathroom_id: 'Badkamer',
+        }
+        sublocation_lookup = {
+            kast1_id: 'Kast 1',
+            koelkast_id: 'Koelkast',
+            voorraadkast_id: 'Voorraadkast',
+            diepvries_id: 'Diepvries',
+            badkamerkast_id: 'Kast',
+        }
+
         for naam, aantal, space_id, sublocation_id in demo_rows:
             conn.execute(
                 text("""
@@ -1944,6 +2010,18 @@ def generate_demo_data():
                     "space_id": space_id,
                     "sublocation_id": sublocation_id,
                 },
+            )
+            seed_inventory_event(
+                conn,
+                article_name=naam,
+                quantity=int(aantal),
+                old_quantity=0,
+                new_quantity=int(aantal),
+                event_type='purchase',
+                source='seed_demo',
+                note='Initiële demo-voorraad',
+                location_id=sublocation_id or space_id,
+                location_label=' / '.join(part for part in [space_lookup.get(space_id, ''), sublocation_lookup.get(sublocation_id, '')] if part),
             )
 
     return {

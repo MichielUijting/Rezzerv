@@ -1,0 +1,22 @@
+Rezzerv validatierapport
+Versie: 01.07.53
+
+Doel
+- onderste zichtbare rij in Voorraad weer betrouwbaar muteerbaar maken
+- regressierunner niet meer afhankelijk maken van geopende devtools/console
+- live artikeldetails herstellen voor Historie en automatiseringsanalyse
+
+Uitgevoerde correcties
+- Voorraad: extra onderruimte en klikruimte voor onderste zichtbare rijen in de tabelwrapper
+- Artikeldetail: live artikelen behouden nu live voorraaddata, maar nemen weer demo-metadata over als die bestaat
+- Artikeldetail: live historie wordt nu ook verrijkt met auto-repurchase afleiding op basis van live events en instellingen
+- Backend: demo-voorraad seedt nu ook inventory_events zodat Historie-tab voor seeded live artikelen inhoud heeft
+- Backend: handmatig aangemaakte inventory-regels maken nu een initiële purchase-event aan
+- Admin regressierunner: iframe niet meer volledig offscreen/onzichtbaar, zodat browser-timer-throttling minder snel de run stilzet
+- Versionering opgehoogd naar 01.07.53
+
+Verwacht testresultaat
+- onderste zichtbare rij in Voorraad is ook onderaan de tabel muteerbaar
+- Historie-tab van seeded live artikelen toont weer inhoud
+- automatiseringsanalyse voor live artikelen met demo-metadata werkt weer consistenter
+- regressierun hoort vanzelf door te lopen zonder eerst console te openen

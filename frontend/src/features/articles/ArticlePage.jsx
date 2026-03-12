@@ -205,7 +205,7 @@ export default function ArticlePage() {
     if (preferredName) {
       const nameMatch = demoData.articles.find((a) => normalizeName(a.name) === normalizeName(preferredName))
       const hasLiveMatch = hasLiveInventoryRowsForArticle(preferredName, liveInventoryRows)
-      if (hasLiveMatch) return buildLiveOnlyArticle(preferredName, liveInventoryRows)
+      if (hasLiveMatch) return buildLiveFirstArticle(preferredName, liveInventoryRows, nameMatch || null)
       return buildLiveFirstArticle(preferredName, liveInventoryRows, nameMatch || null)
     }
 
@@ -269,7 +269,7 @@ export default function ArticlePage() {
     const liveHistory = mapLiveHistoryRows(liveHistoryRows)
 
     if (hasLiveInventoryMatch) {
-      return { ...merged, history: liveHistory }
+      return { ...merged, history: applyAutoRepurchaseHistory({ ...merged, history: liveHistory }) }
     }
 
     if (isPureDemoArticle) {
