@@ -1132,9 +1132,79 @@ def normalize_store_import_quantity(quantity_raw, unit_raw):
     return 1
 
 
+def get_article_total_quantity(conn, household_id: str, article_name: str) -> int:
+    row = conn.execute(
+        text(
+            """
+            SELECT COALESCE(SUM(aantal), 0) AS total_quantity
+            FROM inventory
+            WHERE household_id = :household_id
+              AND lower(trim(naam)) = lower(trim(:naam))
+            """
+        ),
+        {"household_id": str(household_id), "naam": article_name},
+    ).mappings().first()
+    return int(row["total_quantity"] or 0) if row else 0
+
+
+def require_resolved_location(resolved_location: dict | None):
+    if not resolved_location:
+        raise HTTPException(status_code=400, detail="Geen geldige locatie beschikbaar voor voorraadmutatie")
+    if not resolved_location.get("space_id") and not resolved_location.get("sublocation_id"):
+        raise HTTPException(status_code=400, detail="Voorraadmutatie vereist een expliciete ruimte of sublocatie")
+    return resolved_location
+
+
+def create_inventory_event(
+    conn,
+    *,
+    household_id: str,
+    article_id: str,
+    article_name: str,
+    resolved_location: dict,
+    event_type: str,
+    quantity: float,
+    source: str,
+    note: str,
+    old_quantity=None,
+    new_quantity=None,
+):
+    safe_location = require_resolved_location(resolved_location)
+    event_id = str(uuid.uuid4())
+    conn.execute(
+        text(
+            """
+            INSERT INTO inventory_events (
+                id, household_id, article_id, article_name, location_id, location_label,
+                event_type, quantity, old_quantity, new_quantity, source, note, created_at
+            ) VALUES (
+                :id, :household_id, :article_id, :article_name, :location_id, :location_label,
+                :event_type, :quantity, :old_quantity, :new_quantity, :source, :note, CURRENT_TIMESTAMP
+            )
+            """
+        ),
+        {
+            "id": event_id,
+            "household_id": str(household_id),
+            "article_id": article_id,
+            "article_name": article_name,
+            "location_id": safe_location["location_id"],
+            "location_label": safe_location["location_label"],
+            "event_type": event_type,
+            "quantity": quantity,
+            "old_quantity": old_quantity,
+            "new_quantity": new_quantity,
+            "source": source,
+            "note": note,
+        },
+    )
+    return event_id
+
+
 def apply_inventory_purchase(conn, household_id: str, article_name: str, quantity: float, resolved_location: dict):
-    space_id = resolved_location["space_id"]
-    sublocation_id = resolved_location["sublocation_id"]
+    safe_location = require_resolved_location(resolved_location)
+    space_id = safe_location["space_id"]
+    sublocation_id = safe_location["sublocation_id"]
 
     existing = conn.execute(
         text(
@@ -1190,32 +1260,121 @@ def apply_inventory_purchase(conn, household_id: str, article_name: str, quantit
     return inventory_id
 
 
-def create_inventory_purchase_event(conn, household_id: str, article_id: str, article_name: str, quantity: float, resolved_location: dict, note: str):
-    event_id = str(uuid.uuid4())
+def apply_manual_inventory_adjustment(
+    conn,
+    *,
+    inventory_id: str,
+    household_id: str,
+    old_article_name: str,
+    new_article_name: str,
+    old_quantity: int,
+    new_quantity: int,
+    resolved_location: dict,
+):
+    safe_location = require_resolved_location(resolved_location)
+    space_id = safe_location["space_id"]
+    sublocation_id = safe_location["sublocation_id"]
+
+    old_total = get_article_total_quantity(conn, household_id, old_article_name)
+
     conn.execute(
         text(
             """
-            INSERT INTO inventory_events (
-                id, household_id, article_id, article_name, location_id, location_label,
-                event_type, quantity, source, note, created_at
-            ) VALUES (
-                :id, :household_id, :article_id, :article_name, :location_id, :location_label,
-                'purchase', :quantity, 'store_import', :note, CURRENT_TIMESTAMP
-            )
+            UPDATE inventory
+            SET naam = :naam,
+                aantal = :aantal,
+                space_id = :space_id,
+                sublocation_id = :sublocation_id,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
             """
         ),
         {
-            "id": event_id,
-            "household_id": household_id,
-            "article_id": article_id,
-            "article_name": article_name,
-            "location_id": resolved_location["location_id"],
-            "location_label": resolved_location["location_label"],
-            "quantity": quantity,
-            "note": note,
+            "id": inventory_id,
+            "naam": new_article_name,
+            "aantal": int(new_quantity),
+            "space_id": space_id,
+            "sublocation_id": sublocation_id,
         },
     )
-    return event_id
+
+    new_total = get_article_total_quantity(conn, household_id, new_article_name)
+    delta = int(new_quantity) - int(old_quantity)
+    article_id = build_live_article_option_id(new_article_name)
+
+    if delta > 0:
+        mutation_label = 'handmatige ophoging'
+    elif delta < 0:
+        mutation_label = 'handmatige verlaging'
+    else:
+        mutation_label = 'handmatige correctie'
+
+    note = f"{mutation_label.title()} via Voorraad: {old_total} → {new_total} (regel {old_quantity} → {new_quantity})"
+    event_id = create_inventory_event(
+        conn,
+        household_id=household_id,
+        article_id=article_id,
+        article_name=new_article_name,
+        resolved_location=safe_location,
+        event_type='manual_adjustment',
+        quantity=delta,
+        old_quantity=old_total,
+        new_quantity=new_total,
+        source='manual_inventory',
+        note=note,
+    )
+
+    updated = conn.execute(
+        text(
+            """
+            SELECT
+              i.id,
+              i.naam AS artikel,
+              i.aantal AS aantal,
+              COALESCE(s.naam, '') AS locatie,
+              COALESCE(sl.naam, '') AS sublocatie
+            FROM inventory i
+            LEFT JOIN spaces s ON s.id = i.space_id
+            LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
+            WHERE i.id = :id
+            """
+        ),
+        {"id": inventory_id},
+    ).mappings().first()
+
+    logger.info(
+        'manual_inventory_update inventory_id=%s household_id=%s article_name=%s old_total=%s new_total=%s old_row_quantity=%s new_row_quantity=%s space_id=%s sublocation_id=%s history_event_created=%s',
+        inventory_id,
+        household_id,
+        new_article_name,
+        old_total,
+        new_total,
+        old_quantity,
+        new_quantity,
+        space_id,
+        sublocation_id,
+        event_id,
+    )
+
+    return dict(updated) if updated else {"id": inventory_id, "artikel": new_article_name, "aantal": new_quantity}, event_id
+
+
+def create_inventory_purchase_event(conn, household_id: str, article_id: str, article_name: str, quantity: float, resolved_location: dict, note: str):
+    old_total = get_article_total_quantity(conn, household_id, article_name)
+    projected_new_total = old_total + int(quantity)
+    return create_inventory_event(
+        conn,
+        household_id=household_id,
+        article_id=article_id,
+        article_name=article_name,
+        resolved_location=resolved_location,
+        event_type='purchase',
+        quantity=quantity,
+        old_quantity=old_total,
+        new_quantity=projected_new_total,
+        source='store_import',
+        note=note,
+    )
 
 
 def ensure_store_provider(provider_code: str):
@@ -1634,85 +1793,23 @@ def update_inventory(inventory_id: str, payload: InventoryUpdate):
             sublocation_name=payload.sublocation_name,
         )
 
-        conn.execute(
-            text(
-                """
-                UPDATE inventory
-                SET naam = :naam,
-                    aantal = :aantal,
-                    space_id = :space_id,
-                    sublocation_id = :sublocation_id,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
-                """
-            ),
-            {
-                "id": inventory_id,
-                "naam": payload.naam,
-                "aantal": new_quantity,
-                "space_id": space_id,
-                "sublocation_id": sublocation_id,
-            },
-        )
-
-        updated = conn.execute(
-            text(
-                """
-                SELECT
-                  i.id,
-                  i.naam AS artikel,
-                  i.aantal AS aantal,
-                  COALESCE(s.naam, '') AS locatie,
-                  COALESCE(sl.naam, '') AS sublocatie
-                FROM inventory i
-                LEFT JOIN spaces s ON s.id = i.space_id
-                LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
-                WHERE i.id = :id
-                """
-            ),
-            {"id": inventory_id},
-        ).mappings().first()
-
-        updated_row = dict(updated) if updated else {"id": inventory_id}
-        location_label = ' / '.join(part for part in [updated_row.get('locatie'), updated_row.get('sublocatie')] if part)
-        note = f"Handmatige voorraadcorrectie van {old_quantity} naar {new_quantity}"
-        event_id = str(uuid.uuid4())
-        conn.execute(
-            text(
-                """
-                INSERT INTO inventory_events (
-                    id, household_id, article_id, article_name, location_id, location_label,
-                    event_type, quantity, old_quantity, new_quantity, source, note, created_at
-                ) VALUES (
-                    :id, :household_id, :article_id, :article_name, :location_id, :location_label,
-                    'manual_adjustment', :quantity, :old_quantity, :new_quantity, 'manual_inventory', :note, CURRENT_TIMESTAMP
-                )
-                """
-            ),
-            {
-                'id': event_id,
-                'household_id': household_id,
-                'article_id': inventory_id,
-                'article_name': updated_row.get('artikel') or payload.naam,
+        updated_row, event_id = apply_manual_inventory_adjustment(
+            conn,
+            inventory_id=inventory_id,
+            household_id=household_id,
+            old_article_name=existing.get('naam') or payload.naam,
+            new_article_name=payload.naam,
+            old_quantity=old_quantity,
+            new_quantity=new_quantity,
+            resolved_location={
+                'space_id': space_id,
+                'sublocation_id': sublocation_id,
                 'location_id': sublocation_id or space_id,
-                'location_label': location_label,
-                'quantity': new_quantity - old_quantity,
-                'old_quantity': old_quantity,
-                'new_quantity': new_quantity,
-                'note': note,
+                'location_label': ' / '.join(part for part in [
+                    payload.space_name or existing.get('locatie') or '',
+                    payload.sublocation_name or existing.get('sublocatie') or '',
+                ] if part),
             },
-        )
-
-        logger.info(
-            'manual_inventory_update inventory_id=%s household_id=%s article_name=%s old_quantity=%s new_quantity=%s space_id=%s sublocation_id=%s history_event_created=%s',
-            inventory_id,
-            household_id,
-            updated_row.get('artikel') or payload.naam,
-            old_quantity,
-            new_quantity,
-            space_id,
-            sublocation_id,
-            event_id,
         )
     return updated_row
 
