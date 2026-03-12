@@ -1,0 +1,16 @@
+Rezzerv v01.07.42
+
+Gerichte fixrelease op basis van v01.07.41.
+
+Aangetroffen rootcause:
+- admin browserRegressionRunner las batchId alleen uit routes met numerieke ids (/\d+).
+- Purchase import batches gebruiken UUIDs.
+- Daardoor faalden API-gebaseerde detailasserties en verwerkingsbevestiging in het overzicht/detailmodel.
+
+Wijziging:
+- route regex verruimd naar /winkels/batch/([^/?#]+)
+
+Verwacht effect:
+- vereenvoudigingsniveau-tests kunnen actieve batchregels weer via API lezen
+- verwerken naar voorraad kan weer via batch import_status bevestigd worden
+- historie/event tests kunnen weer op de juiste batch blijven toetsen

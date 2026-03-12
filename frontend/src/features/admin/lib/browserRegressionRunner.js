@@ -258,7 +258,7 @@ function resetAutomationState(frame) {
 
 function getActiveBatchId(frame) {
   const pathname = frame?.contentWindow?.location?.pathname || ''
-  const match = pathname.match(/\/winkels\/batch\/(\d+)/)
+  const match = pathname.match(/\/winkels\/batch\/([^/?#]+)/)
   return match?.[1] || null
 }
 
