@@ -41,8 +41,9 @@ export function useArticleFieldVisibility() {
     setIsLoading(true)
     setError(null)
     try {
-      const overrides = await fetchArticleFieldVisibility()
-      setVisibilityMap(forceAlwaysVisible(merge(defaultVisibility, overrides), alwaysVisibleKeys))
+      const result = await fetchArticleFieldVisibility()
+      setVisibilityMap(forceAlwaysVisible(merge(defaultVisibility, result.data), alwaysVisibleKeys))
+      setError(result.usedFallback ? result.error : null)
     } catch (err) {
       setVisibilityMap(forceAlwaysVisible(defaultVisibility, alwaysVisibleKeys))
       setError(err)
@@ -77,10 +78,11 @@ export function useArticleFieldVisibility() {
     setIsSaving(true)
     setError(null)
     try {
-      const saved = await saveArticleFieldVisibility(forceAlwaysVisible(visibilityMap, alwaysVisibleKeys))
-      const merged = forceAlwaysVisible(merge(defaultVisibility, saved), alwaysVisibleKeys)
+      const result = await saveArticleFieldVisibility(forceAlwaysVisible(visibilityMap, alwaysVisibleKeys))
+      const merged = forceAlwaysVisible(merge(defaultVisibility, result.data), alwaysVisibleKeys)
       setVisibilityMap(merged)
-      return { ok: true, data: merged }
+      setError(result.usedFallback ? result.error : null)
+      return { ok: true, data: merged, usedFallback: result.usedFallback, error: result.error }
     } catch (err) {
       setError(err)
       return { ok: false, error: err }

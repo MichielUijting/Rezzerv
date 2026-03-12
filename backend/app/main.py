@@ -285,6 +285,14 @@ MOCK_ARTICLE_LOOKUP = {item["id"]: item for item in MOCK_ARTICLE_OPTIONS}
 STORE_IMPORT_SIMPLIFICATION_KEY = "store_import_simplification_level"
 STORE_IMPORT_SIMPLIFICATION_ALLOWED = {"voorzichtig", "gebalanceerd", "maximaal_gemak"}
 STORE_IMPORT_SIMPLIFICATION_DEFAULT = "gebalanceerd"
+ARTICLE_FIELD_VISIBILITY_KEY = "article_field_visibility"
+ARTICLE_FIELD_VISIBILITY_DEFAULT = {
+    "overview": {},
+    "stock": {},
+    "locations": {},
+    "history": {},
+    "analytics": {},
+}
 
 
 def ensure_household_settings_schema():
@@ -416,6 +424,63 @@ def set_household_store_import_simplification_level(conn, household_id: str, val
     return normalized
 
 
+
+def normalize_article_field_visibility_map(value) -> dict:
+    normalized = {key: {} for key in ARTICLE_FIELD_VISIBILITY_DEFAULT.keys()}
+    if not isinstance(value, dict):
+        return normalized
+
+    for tab_key in normalized.keys():
+        tab_value = value.get(tab_key)
+        if not isinstance(tab_value, dict):
+            continue
+        cleaned_tab = {}
+        for field_key, is_visible in tab_value.items():
+            if isinstance(field_key, str) and isinstance(is_visible, bool):
+                cleaned_tab[field_key] = is_visible
+        normalized[tab_key] = cleaned_tab
+    return normalized
+
+
+def get_household_article_field_visibility(conn, household_id: str) -> dict:
+    row = conn.execute(
+        text(
+            "SELECT setting_value FROM household_settings WHERE household_id = :household_id AND setting_key = :setting_key"
+        ),
+        {"household_id": str(household_id), "setting_key": ARTICLE_FIELD_VISIBILITY_KEY},
+    ).mappings().first()
+
+    if not row or not row.get("setting_value"):
+        return normalize_article_field_visibility_map({})
+
+    try:
+        parsed = json.loads(row["setting_value"])
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return normalize_article_field_visibility_map({})
+
+    return normalize_article_field_visibility_map(parsed)
+
+
+def set_household_article_field_visibility(conn, household_id: str, value) -> dict:
+    normalized = normalize_article_field_visibility_map(value)
+    conn.execute(
+        text(
+            """
+            INSERT INTO household_settings (id, household_id, setting_key, setting_value, updated_at)
+            VALUES (:id, :household_id, :setting_key, :setting_value, CURRENT_TIMESTAMP)
+            ON CONFLICT(household_id, setting_key)
+            DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP
+            """
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "household_id": str(household_id),
+            "setting_key": ARTICLE_FIELD_VISIBILITY_KEY,
+            "setting_value": json.dumps(normalized),
+        },
+    )
+    return normalized
+
 def build_auth_token(email: str) -> str:
     return f"rezzerv-dev-token::{email}"
 
@@ -459,6 +524,17 @@ class StoreImportSimplificationUpdateRequest(BaseModel):
         if normalized not in STORE_IMPORT_SIMPLIFICATION_ALLOWED:
             raise ValueError("Ongeldig vereenvoudigingsniveau")
         return normalized
+
+
+class ArticleFieldVisibilityUpdateRequest(BaseModel):
+    overview: dict = {}
+    stock: dict = {}
+    locations: dict = {}
+    history: dict = {}
+    analytics: dict = {}
+
+    def normalized_visibility(self) -> dict:
+        return normalize_article_field_visibility_map(self.model_dump())
 
 
 def build_live_article_option_id(article_name: str) -> str:
@@ -1160,6 +1236,24 @@ def update_store_import_settings(payload: StoreImportSimplificationUpdateRequest
         "can_edit_store_import_simplification_level": household["can_edit_store_import_simplification_level"],
         "is_household_admin": household["is_household_admin"],
     }
+
+
+@app.get("/api/settings/article-field-visibility")
+def get_article_field_visibility(authorization: Optional[str] = Header(None)):
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    with engine.begin() as conn:
+        visibility = get_household_article_field_visibility(conn, household["id"])
+    return visibility
+
+
+@app.put("/api/settings/article-field-visibility")
+def update_article_field_visibility(payload: dict, authorization: Optional[str] = Header(None)):
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    with engine.begin() as conn:
+        visibility = set_household_article_field_visibility(conn, household["id"], payload)
+    return visibility
 
 
 @app.put("/api/dev/household/store-import-settings")

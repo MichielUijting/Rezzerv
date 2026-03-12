@@ -1,4 +1,6 @@
-const ENDPOINT = '/api/settings/article-field-visibility'
+import { API_BASE_URL } from '../../../lib/apiClient'
+
+const ENDPOINT = `${API_BASE_URL}/api/settings/article-field-visibility`
 const STORAGE_KEY = 'rezzerv_article_field_visibility'
 
 export class ArticleFieldVisibilityServiceError extends Error {
@@ -10,7 +12,7 @@ export class ArticleFieldVisibilityServiceError extends Error {
   }
 }
 
-function normalize(data) {
+export function normalizeArticleFieldVisibility(data) {
   const base = { overview: {}, stock: {}, locations: {}, history: {}, analytics: {} }
   if (!data || typeof data !== 'object') return base
   for (const key of Object.keys(base)) {
@@ -31,45 +33,73 @@ async function parseResponse(response) {
 
 function loadLocalFallback() {
   try {
-    return normalize(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'))
+    return normalizeArticleFieldVisibility(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'))
   } catch {
-    return normalize({})
+    return normalizeArticleFieldVisibility({})
   }
 }
 
 function saveLocalFallback(map) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalize(map)))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeArticleFieldVisibility(map)))
+}
+
+function getAuthHeaders() {
+  const token = window.localStorage.getItem('rezzerv_token') || ''
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 export async function fetchArticleFieldVisibility() {
   try {
-    const response = await fetch(ENDPOINT, { method: 'GET', headers: { Accept: 'application/json' }, credentials: 'include' })
-    if (!response.ok) throw new ArticleFieldVisibilityServiceError('Voorkeuren konden niet worden geladen.', response.status)
+    const response = await fetch(ENDPOINT, {
+      method: 'GET',
+      headers: { Accept: 'application/json', ...getAuthHeaders() },
+      credentials: 'include',
+    })
+    if (!response.ok) {
+      const data = await parseResponse(response).catch(() => null)
+      throw new ArticleFieldVisibilityServiceError(data?.detail || 'Voorkeuren konden niet worden geladen.', response.status, data)
+    }
     const data = await parseResponse(response)
-    const normalized = normalize(data)
+    const normalized = normalizeArticleFieldVisibility(data)
     saveLocalFallback(normalized)
-    return normalized
-  } catch {
-    return loadLocalFallback()
+    return { data: normalized, usedFallback: false, error: null }
+  } catch (error) {
+    const fallback = loadLocalFallback()
+    return {
+      data: fallback,
+      usedFallback: true,
+      error: error instanceof ArticleFieldVisibilityServiceError
+        ? error
+        : new ArticleFieldVisibilityServiceError('Voorkeuren konden niet worden geladen.', null, error),
+    }
   }
 }
 
 export async function saveArticleFieldVisibility(visibilityMap) {
-  const normalized = normalize(visibilityMap)
+  const normalized = normalizeArticleFieldVisibility(visibilityMap)
   try {
     const response = await fetch(ENDPOINT, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...getAuthHeaders() },
       credentials: 'include',
       body: JSON.stringify(normalized),
     })
-    if (!response.ok) throw new ArticleFieldVisibilityServiceError('Voorkeuren konden niet worden opgeslagen.', response.status)
+    if (!response.ok) {
+      const data = await parseResponse(response).catch(() => null)
+      throw new ArticleFieldVisibilityServiceError(data?.detail || 'Voorkeuren konden niet worden opgeslagen.', response.status, data)
+    }
     const data = await parseResponse(response)
-    const saved = normalize(data)
+    const saved = normalizeArticleFieldVisibility(data)
     saveLocalFallback(saved)
-    return saved
-  } catch {
+    return { data: saved, usedFallback: false, error: null }
+  } catch (error) {
     saveLocalFallback(normalized)
-    return normalized
+    return {
+      data: normalized,
+      usedFallback: true,
+      error: error instanceof ArticleFieldVisibilityServiceError
+        ? error
+        : new ArticleFieldVisibilityServiceError('Voorkeuren konden niet worden opgeslagen.', null, error),
+    }
   }
 }

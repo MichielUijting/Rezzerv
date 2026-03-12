@@ -1,4 +1,3 @@
-import { debugTablesRuntime } from './debugTableRuntime.js';
 import "./ui/tokens.css";
 import "./ui/base.css";
 import "./ui/components/button.css";
@@ -15,4 +14,3 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 )
-setTimeout(()=>{try{debugTablesRuntime()}catch(e){}},1200);

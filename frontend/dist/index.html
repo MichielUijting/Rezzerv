@@ -1,284 +1,99 @@
 <!DOCTYPE html>
 <html lang="nl">
   <head>
-    
-  <!-- PO-PROOF reset-session: early session reset before React loads -->
-  <script>
-    (function () {
-      try {
-        if (window.location.pathname === "/reset-session") {
-          try {
-            localStorage.removeItem("rezzerv_token");
-            sessionStorage.clear();
-          } catch (e) {}
-          window.location.replace("/login?reset=1");
-        }
-      } catch (e) {}
-    })();
-  </script>
-<meta charset="UTF-8" />
+    <script>
+      (function () {
+        try {
+          if (window.location.pathname === "/reset-session") {
+            try {
+              localStorage.removeItem("rezzerv_token");
+              sessionStorage.clear();
+            } catch (e) {}
+            window.location.replace("/login?reset=1");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rezzerv</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
-
-  
-<style id="rezzerv-rowheight-fix">
-/* Deterministic row height fix */
-table td{
-  padding-top:10px !important;
-  padding-bottom:10px !important;
-}
-</style>
-
-
-<style id="rezzerv-table-final-fix">
-/* BODY rows controlled by line-height */
-tbody td{
-  padding-top:0px !important;
-  padding-bottom:0px !important;
-  line-height:20px !important;
-}
-
-/* HEADER compact but readable */
-thead th{
-  padding-top:4px !important;
-  padding-bottom:4px !important;
-}
-
-/* FILTER row determined by input padding */
-thead input{
-  padding-top:2px !important;
-  padding-bottom:2px !important;
-  height:auto !important;
-}
-
-/* remove first-row border anomalies */
-tbody tr:first-child td{
-  border-top:none !important;
-}
-</style>
-
-
-<style id="rezzerv-ui-tuning-10504">
-
-/* 1. Login labels bold */
-form label{
-  font-weight:700 !important;
-}
-
-/* 2. Buttons lifted with shadow */
-button,
-a[role="button"],
-.btn{
-  box-shadow:0 2px 6px rgba(0,0,0,0.25) !important;
-}
-
-/* 3. Light green screen background */
-body{
-  background:#e8f5e9 !important;
-}
-
-</style>
-
-
-<style id="rezzerv-ui-tuning-10505">
-
-/* LOGIN LABELS BOLD (more specific selectors) */
-label,
-.login label,
-form div label{
-  font-weight:700 !important;
-}
-
-/* BUTTON SHADOW (force override Tailwind / component styles) */
-button,
-input[type="button"],
-input[type="submit"],
-a[role="button"]{
-  box-shadow:0 4px 10px rgba(0,0,0,0.25) !important;
-  border-radius:6px;
-}
-
-/* ensure visible lift */
-button:hover,
-input[type="submit"]:hover{
-  box-shadow:0 6px 14px rgba(0,0,0,0.30) !important;
-}
-
-</style>
-
-
-<style id="login-label-bold-only">
-.rz-card-login .rz-label{
-  font-weight:700 !important;
-}
-</style>
-
-  <script type="module" crossorigin src="/assets/index-CgqeMdkI.js"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-CHU0vgf-.css">
-</head>
+    <style id="rezzerv-rowheight-fix">
+      table td{
+        padding-top:10px !important;
+        padding-bottom:10px !important;
+      }
+    </style>
+    <style id="rezzerv-table-final-fix">
+      tbody td{
+        padding-top:0px !important;
+        padding-bottom:0px !important;
+        line-height:20px !important;
+      }
+      thead th{
+        padding-top:4px !important;
+        padding-bottom:4px !important;
+      }
+      thead input{
+        padding-top:2px !important;
+        padding-bottom:2px !important;
+        height:auto !important;
+      }
+      tbody tr:first-child td{
+        border-top:none !important;
+      }
+    </style>
+    <style id="rezzerv-ui-tuning-10504">
+      form label{
+        font-weight:700 !important;
+      }
+      button,
+      a[role="button"],
+      .btn{
+        box-shadow:0 2px 6px rgba(0,0,0,0.25) !important;
+      }
+      body{
+        background:#e8f5e9 !important;
+      }
+    </style>
+    <style id="rezzerv-ui-tuning-10505">
+      label,
+      .login label,
+      form div label{
+        font-weight:700 !important;
+      }
+      button,
+      input[type="button"],
+      input[type="submit"],
+      a[role="button"]{
+        box-shadow:0 4px 10px rgba(0,0,0,0.25) !important;
+        border-radius:6px;
+      }
+      button:hover,
+      input[type="submit"]:hover{
+        box-shadow:0 6px 14px rgba(0,0,0,0.30) !important;
+      }
+    </style>
+    <style id="login-label-bold-only">
+      .rz-card-login .rz-label{
+        font-weight:700 !important;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-BgJVxRup.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CHU0vgf-.css">
+  </head>
   <body>
     <div id="root"></div>
-  
-<script>
-setTimeout(function(){
-  try{
-    const tables=document.querySelectorAll("table");
-    if(!tables.length){console.log("TABLE DEBUG: no tables found");return;}
-    tables.forEach((t,i)=>{
-      const header=t.querySelector("thead tr");
-      const filter=t.querySelector("thead tr:nth-child(2)");
-      const body=t.querySelector("tbody tr");
-      const cell=t.querySelector("tbody td");
-      const input=t.querySelector("thead input");
-
-      console.log("=== TABLE DEBUG",i,"===");
-
-      if(header) console.log("header row height:",header.getBoundingClientRect().height);
-      if(filter) console.log("filter row height:",filter.getBoundingClientRect().height);
-      if(body) console.log("body row height:",body.getBoundingClientRect().height);
-
-      if(cell){
-        const s=getComputedStyle(cell);
-        console.log("td padding-top:",s.paddingTop);
-        console.log("td padding-bottom:",s.paddingBottom);
-        console.log("td line-height:",s.lineHeight);
-        console.log("td font-size:",s.fontSize);
-      }
-
-      if(input) console.log("filter input height:",input.getBoundingClientRect().height);
-
-      console.log("===================");
-    });
-  }catch(e){console.warn("TABLE DEBUG FAILED",e);}
-},1500);
-</script>
-
-
-<script>
-(function(){
-  const observer = new MutationObserver(() => {
-    const table = document.querySelector("table");
-    if (!table) return;
-
-    observer.disconnect();
-
-    const header = table.querySelector("thead tr");
-    const filter = table.querySelector("thead tr:nth-child(2)");
-    const body = table.querySelector("tbody tr");
-    const cell = table.querySelector("tbody td");
-    const input = table.querySelector("thead input");
-
-    console.log("=== TABLE DEBUG ===");
-
-    if (header) console.log("header row height:", header.getBoundingClientRect().height);
-    if (filter) console.log("filter row height:", filter.getBoundingClientRect().height);
-    if (body) console.log("body row height:", body.getBoundingClientRect().height);
-
-    if (cell) {
-      const s = getComputedStyle(cell);
-      console.log("td padding-top:", s.paddingTop);
-      console.log("td padding-bottom:", s.paddingBottom);
-      console.log("td line-height:", s.lineHeight);
-      console.log("td font-size:", s.fontSize);
-    }
-
-    if (input) console.log("filter input height:", input.getBoundingClientRect().height);
-
-    console.log("===================");
-  });
-
-  observer.observe(document.body, { childList: true, subtree: true });
-})();
-</script>
-
-<script>
-console.log("=== TABLE DEBUG THEORY TEST ===");
-
-const table=document.querySelector("table");
-if(!table){
-  console.log("TABLE DEBUG: no table element found");
-}else{
-  const td=table.querySelector("tbody td");
-  const tr=table.querySelector("tbody tr");
-  const th=table.querySelector("thead th");
-
-  if(td){
-    const cs=getComputedStyle(td);
-    console.log("TD classList:", td.className);
-    console.log("TD padding-top:", cs.paddingTop);
-    console.log("TD padding-bottom:", cs.paddingBottom);
-    console.log("TD line-height:", cs.lineHeight);
-    console.log("TD height:", td.getBoundingClientRect().height);
-  }
-
-  if(tr){
-    console.log("TR classList:", tr.className);
-    console.log("TR height:", tr.getBoundingClientRect().height);
-  }
-
-  if(th){
-    const cs=getComputedStyle(th);
-    console.log("TH classList:", th.className);
-    console.log("TH padding-top:", cs.paddingTop);
-    console.log("TH padding-bottom:", cs.paddingBottom);
-    console.log("TH height:", th.getBoundingClientRect().height);
-  }
-
-  const all=table.querySelectorAll("td");
-  if(all.length){
-    const classes=new Set();
-    all.forEach(e=>{
-      e.classList.forEach(c=>classes.add(c));
-    });
-    console.log("ALL TD CLASSES FOUND:", [...classes]);
-  }
-}
-
-console.log("=== END TABLE DEBUG ===");
-</script>
-<script>
-fetch('/version.json')
-.then(r=>r.json())
-.then(v=>{
- console.log("REZZERV BUILD INFO");
- console.log("version:", v.version);
- console.log("build:", v.build);
-})
-.catch(()=>console.log("REZZERV BUILD INFO: version file missing"));
-</script>
-
-
-<script>
-window.addEventListener("load", () => {
-  const td = document.querySelector("tbody td");
-  const tr = document.querySelector("tbody tr");
-  if(!td || !tr){
-    console.log("ROW TEST: table elements not found");
-    return;
-  }
-
-  const beforeHeight = tr.getBoundingClientRect().height;
-  const cs = getComputedStyle(td);
-
-  console.log("ROW TEST BEFORE");
-  console.log("paddingTop:", cs.paddingTop);
-  console.log("paddingBottom:", cs.paddingBottom);
-  console.log("lineHeight:", cs.lineHeight);
-  console.log("rowHeight:", beforeHeight);
-
-  td.style.paddingTop = "10px";
-  td.style.paddingBottom = "10px";
-
-  const afterHeight = tr.getBoundingClientRect().height;
-
-  console.log("ROW TEST AFTER (padding forced to 10px)");
-  console.log("rowHeight:", afterHeight);
-  console.log("delta:", afterHeight - beforeHeight);
-});
-</script>
-
-</body>
+    <script>
+      fetch('/version.json', { cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : null)
+        .then((versionInfo) => {
+          if (!versionInfo || !versionInfo.version) return
+          window.__REZZERV_VERSION__ = versionInfo
+        })
+        .catch(() => {})
+    </script>
+  </body>
 </html>
