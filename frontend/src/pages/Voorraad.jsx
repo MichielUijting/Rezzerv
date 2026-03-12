@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import Header from "../ui/Header";
 
 function normalizeName(value) {
@@ -131,7 +131,6 @@ function getColumnLockMessage(row, key) {
 }
 
 export default function Voorraad() {
-  const navigate = useNavigate();
   const [rows, setRows] = useState(initialData);
 
   const reloadInventoryRows = async () => {
@@ -170,19 +169,6 @@ export default function Voorraad() {
     };
   }, []);
 
-  const openArticle = (row) => {
-    const detailId = row?.detailId || row?.id
-    const artikel = encodeURIComponent(row?.artikel || '')
-    navigate(`/voorraad/${detailId}?artikel=${artikel}`);
-  };
-
-  const handleRowDoubleClick = (event, row) => {
-    if (event.target instanceof HTMLElement) {
-      const interactiveTarget = event.target.closest('input, button, select, textarea, a, label')
-      if (interactiveTarget) return
-    }
-    openArticle(row)
-  };
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
@@ -299,20 +285,38 @@ export default function Voorraad() {
       );
     }
 
+    if (column.key === "artikel") {
+      const detailId = row?.detailId || row?.id
+      const artikel = encodeURIComponent(row?.artikel || '')
+      const detailHref = `/voorraad/${detailId}?artikel=${artikel}`
+
+      return (
+        <Link
+          className="rz-inline-cell rz-inline-link"
+          to={detailHref}
+          title="Open details"
+          aria-label={`Open details van ${row.artikel || 'artikel'}`}
+        >
+          {row[column.key]}
+        </Link>
+      );
+    }
+
     return (
-      <div
+      <button
+        type="button"
         className={
-          "rz-inline-cell" +
+          "rz-inline-cell rz-inline-cell-button" +
           (column.key === "aantal" ? " rz-num" : "") +
           (editable ? "" : " rz-inline-cell-disabled")
         }
         onClick={() => startEdit(row, column.key)}
-        onDoubleClick={(event) => handleRowDoubleClick(event, row)}
-        title={editable ? 'Klik om te bewerken, dubbelklik voor details' : getColumnLockMessage(row, column.key)}
+        title={editable ? 'Klik om te bewerken' : getColumnLockMessage(row, column.key)}
         aria-disabled={!editable}
+        disabled={!editable}
       >
         {row[column.key]}
-      </div>
+      </button>
     );
   };
 
@@ -392,7 +396,7 @@ export default function Voorraad() {
 
                 <tbody>
                   {filteredRows.map((row) => (
-                    <tr key={row.id} className="rz-stock-row-interactive" onDoubleClick={(event) => handleRowDoubleClick(event, row)}>
+                    <tr key={row.id} className="rz-stock-row-interactive">
                       <td>
                         <input
                           type="checkbox"

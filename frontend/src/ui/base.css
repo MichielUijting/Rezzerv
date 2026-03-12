@@ -113,9 +113,36 @@ body {
 .rz-inline-cell{
   min-height: 20px;
   width: 100%;
-  cursor: text;
   position: relative;
   z-index: 1;
+}
+
+.rz-inline-link{
+  display:block;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.rz-inline-link:hover,
+.rz-inline-link:focus-visible{
+  text-decoration: underline;
+}
+
+.rz-inline-cell-button{
+  display:block;
+  padding:0;
+  border:0;
+  background:transparent;
+  color: inherit;
+  text-align:left;
+  cursor:text;
+}
+
+.rz-inline-cell-button:disabled{
+  cursor:not-allowed;
+  opacity:1;
 }
 
 .rz-stock-row-interactive td{

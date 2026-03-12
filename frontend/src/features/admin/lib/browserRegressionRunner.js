@@ -146,11 +146,6 @@ function clickElement(element) {
   element.dispatchEvent(new view.MouseEvent('click', { bubbles: true, cancelable: true, view }))
 }
 
-function dblClickElement(element) {
-  const view = element?.ownerDocument?.defaultView || window
-  element.dispatchEvent(new view.MouseEvent('dblclick', { bubbles: true, cancelable: true, view }))
-}
-
 async function runScenario(name, fn, results) {
   try {
     await fn()
@@ -721,12 +716,13 @@ async function setHouseholdAutomation(frame, enabled) {
 
 async function openArticleFromInventory(frame, articleName) {
   await navigateFrame(frame, '/voorraad')
-  const row = await waitForCondition(() => {
+  const detailLink = await waitForCondition(() => {
     const doc = getFrameDocument(frame)
     const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
-    return rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName) || null
-  }, WAIT_TIMEOUT, `Artikel ${articleName} niet gevonden in Voorraad`)
-  dblClickElement(row)
+    const row = rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName) || null
+    return row?.querySelector('td:nth-child(2) a') || null
+  }, WAIT_TIMEOUT, `Artikellink voor ${articleName} niet gevonden in Voorraad`)
+  clickElement(detailLink)
   await waitForCondition(() => {
     const detailDoc = getFrameDocument(frame)
     return frame.contentWindow?.location?.pathname.startsWith('/voorraad/') && queryText(detailDoc, `Artikel details: ${articleName}`)

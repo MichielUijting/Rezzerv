@@ -103,10 +103,6 @@ function clickElement(element) {
   element.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }))
 }
 
-function dblClickElement(element) {
-  element.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, view: window }))
-}
-
 async function runScenario(name, fn, results) {
   try {
     await fn()
@@ -161,15 +157,12 @@ export async function runBrowserSmokeTests() {
 
     await runScenario('Artikeldetail opent vanuit Voorraad', async () => {
       const doc = getFrameDocument(frame)
-      const firstRow = doc?.querySelector('tbody tr')
-      if (!firstRow) {
-        throw new Error('Geen artikelrij beschikbaar in Voorraad')
+      const detailLink = doc?.querySelector('tbody tr td:nth-child(2) a')
+      const articleName = detailLink?.textContent?.trim()
+      if (!detailLink || !articleName) {
+        throw new Error('Artikellink in Voorraad kon niet worden gelezen')
       }
-      const articleName = firstRow.querySelectorAll('td')[1]?.textContent?.trim()
-      if (!articleName) {
-        throw new Error('Artikelnaam in Voorraad kon niet worden gelezen')
-      }
-      dblClickElement(firstRow)
+      clickElement(detailLink)
       await waitForCondition(() => {
         const detailDoc = getFrameDocument(frame)
         return detailDoc && frame.contentWindow?.location?.pathname.startsWith('/voorraad/') && queryText(detailDoc, `Artikel details: ${articleName}`)

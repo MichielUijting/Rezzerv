@@ -1,0 +1,40 @@
+Rezzerv validatierapport
+Versie: 01.07.52
+Onderwerp: Voorraad expliciete detailtrigger en verwijderen dubbelklikgedrag
+
+Doel
+- verwijder dubbelklik-logica uit Voorraad
+- maak artikelnaam de enige expliciete trigger naar artikeldetails
+- laat inline mutatie alleen lopen via de bewerkbare cellen
+- trek de admin smoke/regressietest gelijk met dit interactiemodel
+
+Aangepaste bestanden
+- frontend/src/pages/Voorraad.jsx
+- frontend/src/ui/base.css
+- frontend/src/features/admin/lib/browserSmokeRunner.js
+- frontend/src/features/admin/lib/browserRegressionRunner.js
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/package.json
+- frontend/package-lock.json
+
+Uitgevoerde wijziging
+- rijbrede dubbelklik verwijderd uit Voorraad
+- dubbelklik op cellen verwijderd
+- kolom Artikel rendert nu als expliciete detail-link
+- overige voorraadcellen renderen nu als knopvormige inline edit-trigger
+- styling toegevoegd zodat link en edit-trigger visueel in de tabel blijven passen
+- smoke test opent artikeldetail nu via artikellink
+- regressierunner opent artikeldetail nu via artikellink
+- versie opgehoogd naar 01.07.52
+
+Verwacht resultaat
+- geen dubbelklik meer nodig in Voorraad
+- klik op artikelnaam opent details
+- klik in Aantal/Locatie/Sublocatie start inline mutatie
+- onderste zichtbare rij volgt hetzelfde interactiemodel als alle andere rijen
+- regressietest gebruikt dezelfde nieuwe route als de UI
+
+Opmerking
+- build- en syntaxiscontrole apart uitgevoerd op de uitgepakte releasebron.
