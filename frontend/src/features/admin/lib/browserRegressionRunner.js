@@ -264,7 +264,7 @@ function getActiveBatchId(frame) {
 
 async function fetchBatchById(batchId) {
   if (!batchId) return null
-  return fetchJson(`/api/purchase-import-batches/${batchId}`).catch(() => null)
+  return requestJson(`/api/purchase-import-batches/${batchId}`).catch(() => null)
 }
 
 function getBatchLine(batch, articleName) {
