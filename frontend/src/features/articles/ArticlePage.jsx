@@ -46,7 +46,8 @@ function mergeLiveLocations(baseArticle, liveRows) {
   const fallbackArticle = buildFallbackArticle(baseArticle)
   if (!Array.isArray(liveRows) || !liveRows.length) return fallbackArticle
 
-  const nameKey = normalizeName(baseArticle?.name)
+  const articleName = baseArticle?.name || ''
+  const nameKey = normalizeName(articleName)
   const matchingRows = liveRows.filter((row) => normalizeName(row?.artikel) === nameKey)
   if (!matchingRows.length) return fallbackArticle
 
@@ -61,6 +62,7 @@ function mergeLiveLocations(baseArticle, liveRows) {
 
   return {
     ...fallbackArticle,
+    name: articleName || fallbackArticle.name,
     locations: liveLocations,
     total_quantity: totalQuantity,
     main_location: firstLocation.locatie || '',
@@ -126,6 +128,22 @@ function buildLiveOnlyArticle(articleName, liveRows) {
   }
 }
 
+function buildLiveFirstArticle(articleName, liveRows, fallbackArticle = null) {
+  const liveArticle = buildLiveOnlyArticle(articleName, liveRows)
+  if (!fallbackArticle) return liveArticle
+
+  const fallback = buildFallbackArticle(fallbackArticle)
+  return {
+    ...fallback,
+    id: fallback.id || liveArticle.id,
+    name: liveArticle.name || fallback.name,
+    locations: liveArticle.locations,
+    total_quantity: liveArticle.total_quantity,
+    main_location: liveArticle.main_location,
+    sub_location: liveArticle.sub_location,
+  }
+}
+
 export default function ArticlePage() {
   const { articleId } = useParams()
   const [searchParams] = useSearchParams()
@@ -153,25 +171,20 @@ export default function ArticlePage() {
   const requestedArticleName = useMemo(() => searchParams.get('artikel') || '', [searchParams])
 
   const activeArticle = useMemo(() => {
-    const directMatch = demoData.articles.find((a) => String(a.id) === String(articleId))
-    if (directMatch) return directMatch
-
-    if (requestedArticleName) {
-      const nameMatch = demoData.articles.find((a) => normalizeName(a.name) === normalizeName(requestedArticleName))
-      if (nameMatch) return nameMatch
-      return buildLiveOnlyArticle(requestedArticleName, liveInventoryRows)
-    }
-
     const liveRowMatch = Array.isArray(liveInventoryRows)
       ? liveInventoryRows.find((row) => String(row?.id) === String(articleId))
       : null
-    if (liveRowMatch?.artikel) {
-      const nameMatch = demoData.articles.find((a) => normalizeName(a.name) === normalizeName(liveRowMatch.artikel))
-      if (nameMatch) return nameMatch
-      return buildLiveOnlyArticle(liveRowMatch.artikel, liveInventoryRows)
+    const preferredName = requestedArticleName || liveRowMatch?.artikel || ''
+
+    if (preferredName) {
+      const nameMatch = demoData.articles.find((a) => normalizeName(a.name) === normalizeName(preferredName))
+      return buildLiveFirstArticle(preferredName, liveInventoryRows, nameMatch || null)
     }
 
-    return demoData.articles[0]
+    const directMatch = demoData.articles.find((a) => String(a.id) === String(articleId))
+    if (directMatch) return mergeLiveLocations(directMatch, liveInventoryRows)
+
+    return mergeLiveLocations(demoData.articles[0], liveInventoryRows)
   }, [articleId, requestedArticleName, liveInventoryRows])
 
   useEffect(() => {
@@ -211,29 +224,32 @@ export default function ArticlePage() {
   }, [articleId, activeArticle?.name])
 
   const articleData = useMemo(() => {
-    const merged = mergeLiveLocations(activeArticle, liveInventoryRows)
+    const merged = activeArticle
     const liveHistory = mapLiveHistoryRows(liveHistoryRows)
     return liveHistory.length ? { ...merged, history: liveHistory } : merged
-  }, [activeArticle, automationVersion, liveInventoryRows, liveHistoryRows])
+  }, [activeArticle, automationVersion, liveHistoryRows])
 
   const pageTitle = `Artikel details: ${articleData.name || 'Onbekend artikel'}`
 
+  const tabContent = {
+    Overzicht: <ArticleOverviewTab article={articleData} visibilityMap={visibilityMap} visibilityLoading={visibilityLoading} visibilityError={visibilityError} />, 
+    Voorraad: <ArticleStockTab article={articleData} />,
+    Locaties: <ArticleLocationsTab article={articleData} />, 
+    Historie: <ArticleHistoryTab article={articleData} />, 
+    Analyse: <ArticleAnalyticsTab article={articleData} automationVersion={automationVersion} />,
+  }
+
   return (
-    <AppShell title={pageTitle} showExit={false}>
-      <Card className="rz-card-home">
-        <div style={{ display: 'grid', gap: '18px', width: '100%' }}>
-          {visibilityError ? <div className="rz-inline-feedback rz-inline-feedback--warning">Standaardweergave actief.</div> : null}
-          {inventoryLoadError ? <div className="rz-inline-feedback rz-inline-feedback--warning">{inventoryLoadError}</div> : null}
-          {historyLoadError ? <div className="rz-inline-feedback rz-inline-feedback--warning">{historyLoadError}</div> : null}
-          {visibilityLoading ? <div>Gegevens laden…</div> : (
-            <Tabs tabs={TABS} defaultTab="Overzicht">
-              {(tab) => {
-                if (tab === 'Overzicht') return <ArticleOverviewTab articleData={articleData} visibilityMap={visibilityMap} />
-                if (tab === 'Voorraad') return <ArticleStockTab articleData={articleData} />
-                if (tab === 'Locaties') return <ArticleLocationsTab articleData={articleData} />
-                if (tab === 'Historie') return <ArticleHistoryTab articleData={articleData} />
-                if (tab === 'Analyse') return <ArticleAnalyticsTab articleData={articleData} />
-                return <PlaceholderTab text="Onbekende tab." />
+    <AppShell title={pageTitle}>
+      <Card>
+        <div style={{ display: 'grid', gap: 12 }}>
+          {inventoryLoadError ? <div style={{ color: '#b42318', fontWeight: 700 }}>{inventoryLoadError}</div> : null}
+          {historyLoadError ? <div style={{ color: '#b42318', fontWeight: 700 }}>{historyLoadError}</div> : null}
+          {articleData && (
+            <Tabs tabs={TABS}>
+              {(activeTab) => {
+                const content = tabContent[activeTab]
+                return content || <PlaceholderTab text="Deze tab volgt later." />
               }}
             </Tabs>
           )}

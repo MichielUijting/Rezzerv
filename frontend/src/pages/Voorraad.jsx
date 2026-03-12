@@ -1,32 +1,15 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
-import demoData from "../demo-articles.json";
-
-function buildRowsFromArticles(articles) {
-  return articles.map((article) => {
-    const firstLocation = article.locations?.[0] || {};
-    const totalQuantity = (article.locations || []).reduce(
-      (sum, entry) => sum + (Number(entry.aantal) || 0),
-      0
-    );
-
-    return {
-      id: article.id,
-      artikel: article.name,
-      aantal: totalQuantity,
-      locatie: firstLocation.locatie || "",
-      sublocatie: firstLocation.sublocatie || "",
-      checked: false,
-    };
-  });
-}
-
-const demoRows = buildRowsFromArticles(demoData.articles || []);
-const initialData = [];
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase()
+}
+
+function normalizeNumber(value, fallbackValue) {
+  if (value === "") return "";
+  const parsed = Number(String(value).replace(",", "."));
+  return Number.isFinite(parsed) ? parsed : fallbackValue;
 }
 
 function mergeInventoryRows(liveRows = []) {
@@ -49,29 +32,39 @@ function mergeInventoryRows(liveRows = []) {
         locatie,
         sublocatie,
         checked: false,
-        _locations: new Set([locatie].filter(Boolean)),
-        _sublocations: new Set([`${locatie}__${sublocatie}`].filter(() => Boolean(sublocatie || locatie))),
+        _rawCount: 1,
+        _locationValues: new Set([locatie].filter(Boolean)),
+        _sublocationValues: new Set([`${locatie}__${sublocatie}`].filter(() => Boolean(sublocatie || locatie))),
       })
       return
     }
 
     existing.aantal += aantal
-    if (locatie) existing._locations.add(locatie)
-    if (sublocatie || locatie) existing._sublocations.add(`${locatie}__${sublocatie}`)
+    existing._rawCount += 1
+    if (locatie) existing._locationValues.add(locatie)
+    if (sublocatie || locatie) existing._sublocationValues.add(`${locatie}__${sublocatie}`)
     if (!existing.detailId && row.id) existing.detailId = row.id
   })
 
   const merged = [...grouped.values()].map((row) => {
-    const locations = [...row._locations]
-    const sublocations = [...row._sublocations]
+    const locations = [...row._locationValues]
+    const sublocations = [...row._sublocationValues]
+    const isAggregated = row._rawCount > 1
+    const hasMultipleLocations = locations.length > 1
+    const hasMultipleSublocations = sublocations.length > 1
     return {
       id: row.id,
       detailId: row.detailId,
       artikel: row.artikel,
       aantal: row.aantal,
-      locatie: locations.length <= 1 ? (locations[0] || '') : 'Meerdere locaties',
-      sublocatie: sublocations.length <= 1 ? ((sublocations[0] || '').split('__')[1] || '') : 'Meerdere sublocaties',
+      locatie: hasMultipleLocations ? 'Meerdere locaties' : (locations[0] || ''),
+      sublocatie: hasMultipleSublocations ? 'Meerdere sublocaties' : ((sublocations[0] || '').split('__')[1] || ''),
       checked: false,
+      isAggregated,
+      canEditArtikel: !isAggregated,
+      canEditAantal: !isAggregated,
+      canEditLocatie: !isAggregated && !hasMultipleLocations,
+      canEditSublocatie: !isAggregated && !hasMultipleSublocations,
     }
   })
 
@@ -86,12 +79,56 @@ async function fetchInventoryRows() {
   return mergeInventoryRows(data.rows)
 }
 
+async function saveInventoryRow(row) {
+  const response = await fetch(`/api/dev/inventory/${encodeURIComponent(row.detailId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      naam: row.artikel,
+      aantal: Number(row.aantal) || 0,
+      space_name: row.locatie || null,
+      sublocation_name: row.sublocatie || null,
+    }),
+  })
+
+  if (!response.ok) {
+    let detail = 'Opslaan mislukt'
+    try {
+      const errorData = await response.json()
+      detail = errorData?.detail || detail
+    } catch {
+      // ignore
+    }
+    throw new Error(detail)
+  }
+
+  return response.json()
+}
+
+const initialData = [];
+
 const editableColumns = [
   { key: "artikel", label: "Artikel", type: "text", width: "34%" },
   { key: "aantal", label: "Aantal", type: "number", width: "12%" },
   { key: "locatie", label: "Locatie", type: "text", width: "24%" },
   { key: "sublocatie", label: "Sublocatie", type: "text", width: "24%" }
 ];
+
+function isColumnEditable(row, key) {
+  if (key === 'artikel') return Boolean(row?.canEditArtikel)
+  if (key === 'aantal') return Boolean(row?.canEditAantal)
+  if (key === 'locatie') return Boolean(row?.canEditLocatie)
+  if (key === 'sublocatie') return Boolean(row?.canEditSublocatie)
+  return false
+}
+
+function getColumnLockMessage(row, key) {
+  if (row?.isAggregated) return 'Deze rij bundelt meerdere voorraadregels en is daarom niet inline bewerkbaar.'
+  if ((key === 'locatie' && !row?.canEditLocatie) || (key === 'sublocatie' && !row?.canEditSublocatie)) {
+    return 'Locatievelden met meerdere waarden zijn niet inline bewerkbaar.'
+  }
+  return 'Niet bewerkbaar'
+}
 
 export default function Voorraad() {
   const navigate = useNavigate();
@@ -104,6 +141,7 @@ export default function Voorraad() {
   });
   const [editingCell, setEditingCell] = useState(null);
   const [loadError, setLoadError] = useState("");
+  const [saveState, setSaveState] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -175,19 +213,70 @@ export default function Voorraad() {
     );
   };
 
-  const startEdit = (rowId, key) => {
-    setEditingCell({ rowId, key });
+  const startEdit = (row, key) => {
+    if (!isColumnEditable(row, key)) return;
+    setEditingCell({ rowId: row.id, key, originalRow: { ...row } });
   };
 
   const stopEdit = () => {
     setEditingCell(null);
   };
 
+  const persistEdit = async (row) => {
+    if (!editingCell || editingCell.rowId !== row.id) {
+      stopEdit();
+      return;
+    }
+
+    const originalRow = editingCell.originalRow || row;
+    const changed = ['artikel', 'aantal', 'locatie', 'sublocatie'].some((key) => String(originalRow[key] ?? '') !== String(row[key] ?? ''));
+
+    stopEdit();
+
+    if (!changed) return;
+
+    setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saving', message: 'Opslaan...' } }));
+
+    try {
+      const saved = await saveInventoryRow(row)
+      setRows((prev) => prev.map((entry) => {
+        if (entry.id !== row.id) return entry
+        const merged = {
+          ...entry,
+          artikel: saved?.artikel ?? entry.artikel,
+          aantal: Number(saved?.aantal) || 0,
+          locatie: saved?.locatie ?? entry.locatie,
+          sublocatie: saved?.sublocatie ?? entry.sublocatie,
+        }
+        return {
+          ...merged,
+          canEditArtikel: true,
+          canEditAantal: true,
+          canEditLocatie: true,
+          canEditSublocatie: true,
+          isAggregated: false,
+        }
+      }))
+      setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saved', message: 'Opgeslagen' } }));
+      window.setTimeout(() => {
+        setSaveState((prev) => {
+          const next = { ...prev }
+          if (next[row.id]?.status === 'saved') delete next[row.id]
+          return next
+        })
+      }, 1600)
+    } catch (error) {
+      setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, ...originalRow } : entry))
+      setSaveState((prev) => ({ ...prev, [row.id]: { status: 'error', message: error.message || 'Opslaan mislukt' } }));
+    }
+  }
+
   const renderCell = (row, column) => {
     const isEditing =
       editingCell &&
       editingCell.rowId === row.id &&
       editingCell.key === column.key;
+    const editable = isColumnEditable(row, column.key)
 
     if (isEditing) {
       return (
@@ -197,10 +286,15 @@ export default function Voorraad() {
           value={row[column.key]}
           autoFocus
           onChange={(e) => setRowValue(row.id, column.key, e.target.value)}
-          onBlur={stopEdit}
+          onBlur={() => persistEdit(row)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === "Escape") {
-              stopEdit();
+            if (e.key === "Enter") {
+              e.preventDefault()
+              persistEdit(row)
+            }
+            if (e.key === "Escape") {
+              setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, ...editingCell.originalRow } : entry))
+              stopEdit()
             }
           }}
         />
@@ -209,9 +303,14 @@ export default function Voorraad() {
 
     return (
       <div
-        className={"rz-inline-cell" + (column.key === "aantal" ? " rz-num" : "")}
-        onClick={() => startEdit(row.id, column.key)}
-        title="Klik om te bewerken, dubbelklik voor details"
+        className={
+          "rz-inline-cell" +
+          (column.key === "aantal" ? " rz-num" : "") +
+          (editable ? "" : " rz-inline-cell-disabled")
+        }
+        onClick={() => startEdit(row, column.key)}
+        title={editable ? 'Klik om te bewerken, dubbelklik voor details' : getColumnLockMessage(row, column.key)}
+        aria-disabled={!editable}
       >
         {row[column.key]}
       </div>
@@ -309,6 +408,11 @@ export default function Voorraad() {
                           className={column.key === "aantal" ? "rz-num" : ""}
                         >
                           {renderCell(row, column)}
+                          {column.key === 'artikel' && saveState[row.id]?.message ? (
+                            <div style={{ marginTop: 4, fontSize: 12, fontWeight: 700, color: saveState[row.id]?.status === 'error' ? '#b42318' : '#067647' }}>
+                              {saveState[row.id].message}
+                            </div>
+                          ) : null}
                         </td>
                       ))}
                     </tr>
@@ -327,10 +431,4 @@ export default function Voorraad() {
       </div>
     </div>
   );
-}
-
-function normalizeNumber(value, fallbackValue) {
-  if (value === "") return "";
-  const parsed = Number(String(value).replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : fallbackValue;
 }

@@ -649,10 +649,11 @@ async function setHouseholdAutomation(frame, enabled) {
 
 async function openArticleFromInventory(frame, articleName) {
   await navigateFrame(frame, '/voorraad')
-  const doc = getFrameDocument(frame)
-  const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
-  const row = rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName)
-  if (!row) throw new Error(`Artikel ${articleName} niet gevonden in Voorraad`)
+  const row = await waitForCondition(() => {
+    const doc = getFrameDocument(frame)
+    const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
+    return rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName) || null
+  }, WAIT_TIMEOUT, `Artikel ${articleName} niet gevonden in Voorraad`)
   dblClickElement(row)
   await waitForCondition(() => {
     const detailDoc = getFrameDocument(frame)

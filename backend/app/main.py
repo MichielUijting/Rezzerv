@@ -70,6 +70,15 @@ class InventoryCreate(BaseModel):
     sublocation_id: Optional[str] = None
 
 
+class InventoryUpdate(BaseModel):
+    naam: str
+    aantal: int
+    space_id: Optional[str] = None
+    sublocation_id: Optional[str] = None
+    space_name: Optional[str] = None
+    sublocation_name: Optional[str] = None
+
+
 class DiagnosticRequest(BaseModel):
     household_id: Optional[str] = None
 
@@ -1495,22 +1504,12 @@ def create_sublocation(payload: SublocationCreate):
 @app.post("/api/dev/inventory")
 def create_inventory(payload: InventoryCreate):
     with engine.begin() as conn:
-        if payload.sublocation_id:
-            sub = conn.execute(
-                text("SELECT id, space_id FROM sublocations WHERE id = :id"),
-                {"id": payload.sublocation_id},
-            ).first()
-            if not sub:
-                raise HTTPException(status_code=400, detail="Onbekende sublocation_id")
-            space_id = sub[1]
-        else:
-            space = conn.execute(
-                text("SELECT id FROM spaces WHERE id = :id"),
-                {"id": payload.space_id},
-            ).first()
-            if not space:
-                raise HTTPException(status_code=400, detail="Onbekende space_id")
-            space_id = payload.space_id
+        space_id, sublocation_id = resolve_space_and_sublocation_ids(
+            conn,
+            'demo-household',
+            space_id=payload.space_id,
+            sublocation_id=payload.sublocation_id,
+        )
 
         result = conn.execute(
             text("""
@@ -1522,11 +1521,72 @@ def create_inventory(payload: InventoryCreate):
                 "naam": payload.naam,
                 "aantal": payload.aantal,
                 "space_id": space_id,
-                "sublocation_id": payload.sublocation_id,
+                "sublocation_id": sublocation_id,
             },
         )
         row = result.first()
     return {"status": "ok", "id": row[0] if row else None}
+
+
+@app.put("/api/dev/inventory/{inventory_id}")
+def update_inventory(inventory_id: str, payload: InventoryUpdate):
+    with engine.begin() as conn:
+        existing = conn.execute(
+            text("SELECT id, household_id FROM inventory WHERE id = :id"),
+            {"id": inventory_id},
+        ).mappings().first()
+        if not existing:
+            raise HTTPException(status_code=404, detail="Onbekende inventory-regel")
+
+        household_id = existing.get('household_id') or 'demo-household'
+        space_id, sublocation_id = resolve_space_and_sublocation_ids(
+            conn,
+            household_id,
+            space_id=payload.space_id,
+            sublocation_id=payload.sublocation_id,
+            space_name=payload.space_name,
+            sublocation_name=payload.sublocation_name,
+        )
+
+        conn.execute(
+            text(
+                """
+                UPDATE inventory
+                SET naam = :naam,
+                    aantal = :aantal,
+                    space_id = :space_id,
+                    sublocation_id = :sublocation_id,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {
+                "id": inventory_id,
+                "naam": payload.naam,
+                "aantal": payload.aantal,
+                "space_id": space_id,
+                "sublocation_id": sublocation_id,
+            },
+        )
+
+        updated = conn.execute(
+            text(
+                """
+                SELECT
+                  i.id,
+                  i.naam AS artikel,
+                  i.aantal AS aantal,
+                  COALESCE(s.naam, '') AS locatie,
+                  COALESCE(sl.naam, '') AS sublocatie
+                FROM inventory i
+                LEFT JOIN spaces s ON s.id = i.space_id
+                LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
+                WHERE i.id = :id
+                """
+            ),
+            {"id": inventory_id},
+        ).mappings().first()
+    return dict(updated) if updated else {"id": inventory_id}
 
 @app.get("/api/dev/inventory-preview")
 def inventory_preview():
@@ -2101,7 +2161,7 @@ def get_latest_purchase_import_batch_for_connection(connection_id: str):
             {"connection_id": connection_id},
         ).mappings().first()
     if not batch:
-        raise HTTPException(status_code=404, detail="Nog geen importbatch voor deze winkelkoppeling")
+        return {"batch_id": None, "import_status": None, "created_at": None}
     result = dict(batch)
     result["created_at"] = normalize_datetime(result.get("created_at"))
     return result
