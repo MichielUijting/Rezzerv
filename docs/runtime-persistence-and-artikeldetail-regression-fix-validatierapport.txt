@@ -1,0 +1,14 @@
+Rezzerv validatierapport – runtime persistence and artikeldetail regression fix
+Versie: 01.07.46
+
+Uitgevoerde correcties
+- Hersteld: ontbrekende backend helper resolve_space_and_sublocation_ids voor /api/dev/inventory create/update.
+- Hersteld: artikeldetail Voorraad-tab gebruikte verkeerde propnaam waardoor totale voorraad en locaties op 0/eeg bleven staan.
+
+Verwacht effect
+- Inline wijzigingen in Voorraad kunnen weer worden opgeslagen zonder generieke 500-fout.
+- Regressietest kan de setup met /api/dev/inventory weer uitvoeren.
+- Artikeldetail toont live voorraadlocaties en aantallen uit inventory-preview.
+
+Bekende aandachtspunten
+- Rode XHR-regels voor oude endpoints kunnen nog zichtbaar zijn als lokaal nog een oudere container/build draait. Dan is een schone herstart nodig.

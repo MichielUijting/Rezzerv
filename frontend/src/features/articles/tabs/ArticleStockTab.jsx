@@ -14,8 +14,10 @@ function formatQuantity(value) {
   return String(number)
 }
 
-export default function ArticleStockTab({ articleData = {} }) {
-  const locations = Array.isArray(articleData.locations) ? articleData.locations : []
+export default function ArticleStockTab({ article = {}, articleData }) {
+  const sourceArticle = articleData ?? article
+
+  const locations = Array.isArray(sourceArticle.locations) ? sourceArticle.locations : []
 
   const totalQuantity = useMemo(() => {
     return locations.reduce((sum, entry) => sum + (Number(entry?.aantal) || 0), 0)

@@ -1048,6 +1048,63 @@ def resolve_target_location(conn, target_location_id: str | None):
     return None
 
 
+
+
+def resolve_space_and_sublocation_ids(conn, household_id: str, space_id: str | None = None, sublocation_id: str | None = None, space_name: str | None = None, sublocation_name: str | None = None):
+    household_id = str(household_id or 'demo-household')
+    normalized_space_name = ' '.join(str(space_name or '').strip().split()) or None
+    normalized_sublocation_name = ' '.join(str(sublocation_name or '').strip().split()) or None
+
+    resolved_space_id = space_id
+    resolved_sublocation_id = sublocation_id
+
+    if resolved_space_id:
+        space_row = conn.execute(
+            text("SELECT id FROM spaces WHERE id = :id AND household_id = :household_id"),
+            {"id": resolved_space_id, "household_id": household_id},
+        ).mappings().first()
+        if not space_row:
+            raise HTTPException(status_code=400, detail="Onbekende space_id")
+    elif normalized_space_name:
+        space_row = conn.execute(
+            text("SELECT id FROM spaces WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam)) LIMIT 1"),
+            {"household_id": household_id, "naam": normalized_space_name},
+        ).mappings().first()
+        if space_row:
+            resolved_space_id = space_row['id']
+        else:
+            resolved_space_id = conn.execute(
+                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
+                {"naam": normalized_space_name, "household_id": household_id},
+            ).scalar_one()
+
+    if resolved_sublocation_id:
+        sub_row = conn.execute(
+            text("SELECT id, space_id FROM sublocations WHERE id = :id"),
+            {"id": resolved_sublocation_id},
+        ).mappings().first()
+        if not sub_row:
+            raise HTTPException(status_code=400, detail="Onbekende sublocation_id")
+        if resolved_space_id and str(sub_row['space_id']) != str(resolved_space_id):
+            raise HTTPException(status_code=400, detail="sublocation_id hoort niet bij de gekozen ruimte")
+        resolved_space_id = resolved_space_id or sub_row['space_id']
+    elif normalized_sublocation_name:
+        if not resolved_space_id:
+            raise HTTPException(status_code=400, detail="Ruimte is verplicht voor een sublocatie")
+        sub_row = conn.execute(
+            text("SELECT id FROM sublocations WHERE space_id = :space_id AND lower(trim(naam)) = lower(trim(:naam)) LIMIT 1"),
+            {"space_id": resolved_space_id, "naam": normalized_sublocation_name},
+        ).mappings().first()
+        if sub_row:
+            resolved_sublocation_id = sub_row['id']
+        else:
+            resolved_sublocation_id = conn.execute(
+                text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :space_id) RETURNING id"),
+                {"naam": normalized_sublocation_name, "space_id": resolved_space_id},
+            ).scalar_one()
+
+    return resolved_space_id, resolved_sublocation_id
+
 def normalize_store_import_quantity(quantity_raw, unit_raw):
     try:
         quantity = float(quantity_raw or 0)
