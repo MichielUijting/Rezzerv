@@ -1,0 +1,14 @@
+Rezzerv validatierapport
+Versie: 01.07.48
+Datum: 2026-03-12
+
+Uitgevoerde correcties
+- ArticlePage geeft nu in alle artikeltabs consequent de prop articleData door.
+- VERSION.txt is gelijkgetrokken naar 01.07.48.
+- version.json in root en frontend is gelijkgetrokken naar 01.07.48.
+
+Verwachte validatie
+1. Open Voorraad en kies een artikel.
+2. Pas de voorraad handmatig aan.
+3. Controleer in artikeldetails de tabs Overzicht, Voorraad, Locaties, Historie en Analyse.
+4. Verwacht dat dezelfde live artikeldata in alle tabs zichtbaar is.

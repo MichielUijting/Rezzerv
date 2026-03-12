@@ -252,11 +252,11 @@ export default function ArticlePage() {
   const pageTitle = `Artikel details: ${articleData.name || 'Onbekend artikel'}`
 
   const tabContent = {
-    Overzicht: <ArticleOverviewTab article={articleData} visibilityMap={visibilityMap} visibilityLoading={visibilityLoading} visibilityError={visibilityError} />, 
-    Voorraad: <ArticleStockTab article={articleData} />,
-    Locaties: <ArticleLocationsTab article={articleData} />, 
-    Historie: <ArticleHistoryTab article={articleData} />, 
-    Analyse: <ArticleAnalyticsTab article={articleData} automationVersion={automationVersion} />,
+    Overzicht: <ArticleOverviewTab articleData={articleData} visibilityMap={visibilityMap} visibilityLoading={visibilityLoading} visibilityError={visibilityError} />,
+    Voorraad: <ArticleStockTab articleData={articleData} />,
+    Locaties: <ArticleLocationsTab articleData={articleData} />,
+    Historie: <ArticleHistoryTab articleData={articleData} />,
+    Analyse: <ArticleAnalyticsTab articleData={articleData} automationVersion={automationVersion} />,
   }
 
   return (
