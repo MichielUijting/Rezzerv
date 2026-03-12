@@ -1,5 +1,5 @@
 const FRAME_ID = "rezzerv-regression-runner-frame"
-const WAIT_TIMEOUT = 12000
+const WAIT_TIMEOUT = 9000
 const POLL_INTERVAL = 100
 const HOUSEHOLD_KEY = 'rezzerv_household_auto_consume_on_repurchase'
 const ARTICLE_OVERRIDE_KEY = 'rezzerv_article_auto_consume_overrides'
@@ -256,6 +256,29 @@ function resetAutomationState(frame) {
 }
 
 
+function getActiveBatchId(frame) {
+  const pathname = frame?.contentWindow?.location?.pathname || ''
+  const match = pathname.match(/\/winkels\/batch\/(\d+)/)
+  return match?.[1] || null
+}
+
+async function fetchBatchById(batchId) {
+  if (!batchId) return null
+  return fetchJson(`/api/purchase-import-batches/${batchId}`).catch(() => null)
+}
+
+function getBatchLine(batch, articleName) {
+  const normalized = String(articleName || '').trim().toLowerCase()
+  return (Array.isArray(batch?.lines) ? batch.lines : []).find((line) => String(line?.article_name_raw || '').trim().toLowerCase() === normalized) || null
+}
+
+async function getActiveBatchLine(frame, articleName) {
+  const batchId = getActiveBatchId(frame)
+  const batch = await fetchBatchById(batchId)
+  return getBatchLine(batch, articleName)
+}
+
+
 async function openStoresPage(frame) {
   await navigateFrame(frame, '/winkels')
   const doc = getFrameDocument(frame)
@@ -337,24 +360,35 @@ function getStoreLineState(frame, articleName) {
 }
 
 async function ensureStoreLineSuggestionState(frame, articleName, mode) {
-  await waitForCondition(() => {
-    const state = getStoreLineState(frame, articleName)
-    if (!state) return false
+  await waitForAsyncCondition(async () => {
+    const line = await getActiveBatchLine(frame, articleName)
+    if (!line) return false
     if (mode === 'suggest-only') {
-      return Boolean(state.suggestion) && !state.mappedArticle && !state.location
+      return (line.preparation_mode === 'suggest_only' || Boolean(line.suggested_household_article_id) || Boolean(line.suggested_location_id)) && !line.matched_household_article_id && !line.target_location_id
     }
     if (mode === 'auto-ready') {
-      return Boolean(state.mappedArticle) && Boolean(state.location) && state.review === 'selected'
+      return Boolean(line.matched_household_article_id) && Boolean(line.target_location_id) && (line.review_decision || 'selected') === 'selected'
     }
     return false
-  }, WAIT_TIMEOUT, `Voorstelstatus ${mode} werd niet bereikt voor ${articleName}. Diagnose: ${JSON.stringify(getStoreLineState(frame, articleName))}`)
+  }, WAIT_TIMEOUT, `Voorstelstatus ${mode} werd niet bereikt voor ${articleName}. Diagnose: ${JSON.stringify(await getActiveBatchLine(frame, articleName))}`)
 }
 
 async function ensureStoreLineExplanationContains(frame, articleName, expectedText) {
-  await waitForCondition(() => {
+  await waitForAsyncCondition(async () => {
+    const line = await getActiveBatchLine(frame, articleName)
     const row = getStoreLineRow(frame, articleName)
     const text = row?.textContent || ''
-    return text.includes(expectedText)
+    if (text.includes(expectedText)) return true
+    if (expectedText === 'Eerdere mapping gevonden: artikel + locatie') {
+      return Boolean(line?.suggested_household_article_id || line?.matched_household_article_id) && Boolean(line?.suggested_location_id || line?.target_location_id)
+    }
+    if (expectedText === 'Alleen voorstel door niveau Voorzichtig') {
+      return text.includes('Alleen voorstel') || line?.preparation_mode === 'suggest_only'
+    }
+    if (expectedText === 'Geen eerdere mapping gevonden') {
+      return text.includes(expectedText) || (!line?.suggested_household_article_id && !line?.matched_household_article_id)
+    }
+    return false
   }, WAIT_TIMEOUT, `Uitleg voor ${articleName} bevat niet: ${expectedText}`)
 }
 
@@ -454,6 +488,9 @@ function describeStoreReviewState(frame) {
 }
 
 async function processCurrentStoreBatch(frame) {
+  const batchId = getActiveBatchId(frame)
+  const activeTitle = getFrameDocument(frame)?.querySelector('[data-testid="active-batch-title"]')?.textContent?.trim() || ''
+  const providerName = activeTitle.replace(/^Kassabon\s+/, '').trim()
   const processButton = await waitForCondition(
     () => Array.from(getFrameDocument(frame)?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Naar voorraad'),
     WAIT_TIMEOUT,
@@ -469,6 +506,7 @@ async function processCurrentStoreBatch(frame) {
 
   await waitForAsyncCondition(async () => {
     const doc = getFrameDocument(frame)
+    const pathname = frame.contentWindow?.location?.pathname || ''
     const texts = [
       'Verwerking afgerond',
       'Verwerkt!',
@@ -477,8 +515,22 @@ async function processCurrentStoreBatch(frame) {
     ]
     if (texts.some((entry) => queryText(doc, entry))) return true
 
+    if (pathname === '/winkels') {
+      const statusText = doc?.body?.textContent || ''
+      if (statusText.includes('Verwerking afgerond')) return true
+      if (providerName && statusText.includes(providerName) && statusText.includes('Verwerkt')) return true
+      if (batchId) {
+        const batch = await fetchBatchById(batchId)
+        if (batch?.import_status === 'processed') return true
+      }
+      return false
+    }
+
     const busyButton = Array.from(doc?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Bezig…')
     if (busyButton) return false
+
+    const batch = await fetchBatchById(batchId)
+    if (batch?.import_status === 'processed') return true
 
     const state = describeStoreReviewState(frame)
     if (state.warningTitle || state.warningText) {

@@ -1,0 +1,6 @@
+Release: Rezzerv-v01.07.40
+Doel: compatibiliteitsfix voor admin-regressietest bij detailflow van Winkelimport.
+Wijzigingen: robuustere actieve batch helpers, API-gebaseerde asserties voor vereenvoudigingsstatus, snellere timeouts, bevestiging van verwerken accepteert terugnavigatie naar overzicht en processed batchstatus.
+Niet gewijzigd: product-UX van Winkelimport en bondetail.
+Validatie: JS syntaxcheck browserRegressionRunner.js geslaagd.
+Open punt: live regressierun lokaal bevestigen.
