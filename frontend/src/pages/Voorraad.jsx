@@ -240,7 +240,7 @@ function mergeInventoryRows(liveRows = []) {
 }
 
 async function fetchInventoryRows() {
-  const response = await fetch("/api/dev/inventory-preview")
+  const response = await fetch(`/api/dev/inventory-preview?_ts=${Date.now()}`, { cache: 'no-store' })
   if (!response.ok) throw new Error("Voorraad kon niet worden geladen")
   const data = await response.json()
   if (!Array.isArray(data?.rows)) return []

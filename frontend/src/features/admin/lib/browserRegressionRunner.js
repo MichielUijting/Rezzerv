@@ -325,7 +325,12 @@ function summarizeFailureMatrix(results) {
 }
 
 async function requestJson(path, options = {}) {
-  const response = await fetch(path, {
+  const method = String(options.method || 'GET').toUpperCase()
+  const cacheBustedPath = method === 'GET'
+    ? `${path}${String(path).includes('?') ? '&' : '?'}_ts=${Date.now()}`
+    : path
+  const response = await fetch(cacheBustedPath, {
+    cache: 'no-store',
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     ...options,
   })

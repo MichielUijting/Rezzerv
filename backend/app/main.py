@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header, Query, Request
+from fastapi import FastAPI, HTTPException, Header, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
@@ -1840,7 +1840,10 @@ def update_inventory(inventory_id: str, payload: InventoryUpdate):
     return updated_row
 
 @app.get("/api/dev/inventory-preview")
-def inventory_preview():
+def inventory_preview(response: Response):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     with engine.begin() as conn:
         rows = conn.execute(
             text("""
@@ -1854,7 +1857,7 @@ def inventory_preview():
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
             WHERE COALESCE(i.aantal, 0) > 0
-            ORDER BY i.created_at ASC, i.id ASC
+            ORDER BY i.updated_at DESC, i.created_at ASC, i.id ASC
             """)
         ).mappings().all()
     return {"rows": [dict(r) for r in rows]}

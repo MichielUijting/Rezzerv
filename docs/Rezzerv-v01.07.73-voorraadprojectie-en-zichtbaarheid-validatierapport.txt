@@ -1,0 +1,20 @@
+Rezzerv v01.07.73 — voorraadprojectie en zichtbaarheid validatierapport
+
+Gewijzigd
+- frontend Voorraad haalt inventory-preview nu op met cache-busting (_ts) en cache: no-store
+- Admin regressierunner requestJson gebruikt voor GET-verzoeken nu cache-busting en cache: no-store
+- backend /api/dev/inventory-preview geeft nu expliciete no-cache headers terug
+- backend inventory-preview sorteert bijgewerkte regels eerst op updated_at DESC om verse mutaties prioriteit te geven in de zichtbare projectie
+- versioning verhoogd naar 01.07.73
+
+Niet gewijzigd
+- automatische afboeking in Historie (follow_household / always_on) is buiten scope gebleven
+- resterende winkelimport-restpunten buiten voorraadzichtbaarheid zijn niet verbreed aangepakt
+
+Getest
+- backend main.py syntactische controle: geslaagd
+- frontend build: geslaagd
+- versioningbestanden gecontroleerd en verhoogd
+
+Restrisico
+- dit is een gerichte correctie op projectie/zichtbaarheid en caching; functionele restfouten buiten dit cluster kunnen nog aanwezig zijn
