@@ -470,15 +470,23 @@ async function getActiveBatchLine(frame, articleName) {
 }
 
 
-async function waitForStoreBatchIdle(frame) {
+async function waitForStoreBatchSettled(frame) {
   await waitForAsyncCondition(async () => {
     const doc = getFrameDocument(frame)
     if (!doc) return false
     const busyButton = Array.from(doc.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Bezig…')
-    if (busyButton) return false
+    return !busyButton
+  }, WAIT_TIMEOUT, 'Winkelbatch bleef bezet')
+}
+
+async function waitForStoreBatchIdle(frame) {
+  await waitForStoreBatchSettled(frame)
+  await waitForAsyncCondition(async () => {
+    const doc = getFrameDocument(frame)
+    if (!doc) return false
     const processButton = Array.from(doc.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Naar voorraad')
     return Boolean(processButton) && !processButton.disabled
-  }, WAIT_TIMEOUT, 'Winkelbatch bleef bezet of knop Naar voorraad bleef uitgeschakeld')
+  }, WAIT_TIMEOUT, 'Knop Naar voorraad bleef uitgeschakeld')
 }
 
 
@@ -688,7 +696,7 @@ async function setStoreLineReviewDecision(frame, articleName, decision) {
     const line = await getActiveBatchLine(frame, articleName)
     return (line?.review_decision || 'selected') === decision
   }, WAIT_TIMEOUT, `Reviewbeslissing ${decision} werd niet opgeslagen voor ${articleName}`)
-  await waitForStoreBatchIdle(frame)
+  await waitForStoreBatchSettled(frame)
 }
 
 async function setStoreLineArticle(frame, articleName, mappedArticleId) {
@@ -709,7 +717,7 @@ async function setStoreLineArticle(frame, articleName, mappedArticleId) {
     const options = Array.from(articleSelect?.options || []).map((entry) => `${entry.textContent?.trim() || '?'}=${entry.value}`).join(', ')
     return `Artikelkoppeling werd niet opgeslagen voor ${articleName}. Geprobeerd: ${mappedArticleId}. Beschikbare opties: ${options}`
   })())
-  await waitForStoreBatchIdle(frame)
+  await waitForStoreBatchSettled(frame)
 }
 
 async function setStoreLineLocationByLabel(frame, articleName, expectedLabel) {
@@ -727,7 +735,7 @@ async function setStoreLineLocationByLabel(frame, articleName, expectedLabel) {
     const line = await getActiveBatchLine(frame, articleName)
     return String(line?.target_location_id || '') === String(option.value)
   }, WAIT_TIMEOUT, `Locatie ${expectedLabel} werd niet opgeslagen voor ${articleName}`)
-  await waitForStoreBatchIdle(frame)
+  await waitForStoreBatchSettled(frame)
 }
 
 async function ensureStoreLineReadyForProcessing(frame, articleName, mappedArticleId, expectedLocationLabel) {

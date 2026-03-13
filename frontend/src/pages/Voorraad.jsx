@@ -318,6 +318,11 @@ export default function Voorraad() {
   const navigate = useNavigate();
   const [rows, setRows] = useState(initialData);
   const [localZeroRows, setLocalZeroRows] = useState([]);
+  const rowsRef = useRef(initialData)
+
+  useEffect(() => {
+    rowsRef.current = rows
+  }, [rows])
 
   const reloadInventoryRows = async () => {
     const loadedRows = await fetchInventoryRows()
@@ -421,8 +426,9 @@ export default function Voorraad() {
       return;
     }
 
-    const originalRow = editingCell.originalRow || row;
-    const changed = ['artikel', 'aantal', 'locatie', 'sublocatie'].some((key) => String(originalRow[key] ?? '') !== String(row[key] ?? ''));
+    const latestRow = rowsRef.current.find((entry) => entry.id === row.id) || row
+    const originalRow = editingCell.originalRow || latestRow;
+    const changed = ['artikel', 'aantal', 'locatie', 'sublocatie'].some((key) => String(originalRow[key] ?? '') !== String(latestRow[key] ?? ''));
 
     stopEdit();
 
@@ -431,16 +437,17 @@ export default function Voorraad() {
     setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saving', message: 'Opslaan...' } }));
 
     try {
-      await saveInventoryRow(row)
-      if ((Number(row.aantal) || 0) <= 0) {
+      await saveInventoryRow(latestRow)
+      if ((Number(latestRow.aantal) || 0) <= 0) {
+        setRows((prev) => prev.map((entry) => entry.id === latestRow.id ? { ...entry, aantal: 0, _localZeroVisible: true } : entry))
         setLocalZeroRows((prev) => {
-          const key = buildLocalZeroVisibilityKey(row)
+          const key = buildLocalZeroVisibilityKey(latestRow)
           const next = prev.filter((entry) => buildLocalZeroVisibilityKey(entry) !== key)
-          next.push({ ...row, _localZeroVisible: true })
+          next.push({ ...latestRow, aantal: 0, _localZeroVisible: true })
           return next
         })
       } else {
-        setLocalZeroRows((prev) => prev.filter((entry) => buildLocalZeroVisibilityKey(entry) !== buildLocalZeroVisibilityKey(row)))
+        setLocalZeroRows((prev) => prev.filter((entry) => buildLocalZeroVisibilityKey(entry) !== buildLocalZeroVisibilityKey(latestRow)))
       }
       const refreshedOptions = await fetchLocationOptions().catch(() => locationOptions)
       setLocationOptions(refreshedOptions)

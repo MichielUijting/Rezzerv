@@ -1,0 +1,25 @@
+Release: Rezzerv-v01.07.76
+Thema: Winkelimport voorzichtig/voorstel-pad en nulvoorraadgedrag herstellen
+
+Gewijzigd
+- Admin-regressierunner splitst winkelbatch-wachten nu in twee niveaus:
+  - settled: geen actieve "Bezig…"-knop meer
+  - idle: settled + actieve knop "Naar voorraad"
+- Review-, artikel- en locatie-updates wachten voortaan alleen op een afgeronde batchsave, niet meer onterecht op een al actieve knop "Naar voorraad".
+- Voorraad gebruikt bij inline opslaan voortaan altijd de meest recente rijstaat via rowsRef, zodat nulcorrecties niet met een verouderde rijpayload worden verwerkt.
+- Bij een nulcorrectie blijft de rij expliciet lokaal zichtbaar op het huidige scherm via rows + localZeroRows, tot het scherm opnieuw wordt geopend.
+- Versioning verhoogd naar 01.07.76.
+
+Niet gewijzigd
+- Automatische afboeking zichtbaar in Historie is buiten scope gebleven.
+- Brede winkelimportlogica buiten het voorzichtig/voorstel-pad is niet aangepast.
+
+Getest
+- Frontend build succesvol uitgevoerd.
+- Gericht gevalideerd op:
+  - runner-wachttijden na review/map/location saves
+  - lokale nulvoorraadzichtbaarheid in Voorraad
+
+Restrisico
+- De uiteindelijke regressie-uitkomst blijft afhankelijk van de bestaande fixture- en runtimeketen in Admin.
+- Automatische afboeking in Historie blijft een afzonderlijk rood cluster buiten deze release.
