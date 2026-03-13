@@ -1,9 +1,172 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
+import Button from "../ui/Button";
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase()
+}
+
+
+
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function buildLocationOptionState(options = []) {
+  const locations = []
+  const seenLocations = new Set()
+  const sublocationsByLocation = new Map()
+
+  options.forEach((option) => {
+    const label = String(option?.label || '').trim()
+    if (!label) return
+    const parts = label.split(' / ')
+    const locationName = String(parts[0] || '').trim()
+    const sublocationName = String(parts.slice(1).join(' / ') || '').trim()
+    if (!locationName) return
+
+    if (!seenLocations.has(locationName)) {
+      seenLocations.add(locationName)
+      locations.push(locationName)
+    }
+
+    if (!sublocationsByLocation.has(locationName)) {
+      sublocationsByLocation.set(locationName, [])
+    }
+
+    if (sublocationName) {
+      const current = sublocationsByLocation.get(locationName)
+      if (!current.includes(sublocationName)) current.push(sublocationName)
+    }
+  })
+
+  locations.sort((a, b) => a.localeCompare(b, 'nl'))
+  sublocationsByLocation.forEach((items, key) => {
+    items.sort((a, b) => a.localeCompare(b, 'nl'))
+    sublocationsByLocation.set(key, items)
+  })
+
+  return { locations, sublocationsByLocation }
+}
+
+async function fetchLocationOptions() {
+  const response = await fetch(`/api/store-location-options?householdId=${encodeURIComponent('demo-household')}&_ts=${Date.now()}`, { cache: 'no-store' })
+  if (!response.ok) throw new Error('Locatie-opties konden niet worden geladen')
+  const data = await response.json()
+  return Array.isArray(data) ? buildLocationOptionState(data) : buildLocationOptionState([])
+}
+
+function InlineAutocompleteSelect({
+  value,
+  options,
+  placeholder,
+  autoFocus = false,
+  emptyMessage = 'Geen resultaten',
+  onCommit,
+  onCancel,
+  onInputChange,
+}) {
+  const [query, setQuery] = useState(value || '')
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
+  const rootRef = useRef(null)
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    setQuery(value || '')
+  }, [value])
+
+  const filteredOptions = useMemo(() => {
+    const needle = normalizeText(query)
+    if (!needle) return options
+    return options.filter((option) => normalizeText(option).includes(needle))
+  }, [options, query])
+
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [query])
+
+  useEffect(() => {
+    if (!autoFocus) return
+    window.setTimeout(() => {
+      inputRef.current?.focus()
+      inputRef.current?.select?.()
+    }, 0)
+  }, [autoFocus])
+
+  const commitSelection = (nextValue) => {
+    if (!options.includes(nextValue)) return
+    onCommit(nextValue)
+  }
+
+  const handleBlur = (event) => {
+    const nextTarget = event.relatedTarget
+    if (nextTarget && rootRef.current?.contains(nextTarget)) return
+    if (query === value) {
+      onCancel()
+      return
+    }
+    if (options.includes(query)) {
+      onCommit(query)
+      return
+    }
+    onCancel()
+  }
+
+  return (
+    <div className="rz-inline-autocomplete" ref={rootRef}>
+      <input
+        ref={inputRef}
+        className="rz-input rz-inline-input"
+        type="text"
+        value={query}
+        placeholder={placeholder}
+        onChange={(e) => {
+          const nextValue = e.target.value
+          setQuery(nextValue)
+          onInputChange?.(nextValue)
+        }}
+        onBlur={handleBlur}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault()
+            setHighlightedIndex((prev) => Math.min(prev + 1, Math.max(filteredOptions.length - 1, 0)))
+            return
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault()
+            setHighlightedIndex((prev) => Math.max(prev - 1, 0))
+            return
+          }
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            const selected = filteredOptions[highlightedIndex]
+            if (selected) commitSelection(selected)
+            return
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault()
+            onCancel()
+          }
+        }}
+      />
+      <div className="rz-inline-autocomplete-menu" role="listbox" aria-label={placeholder}>
+        {filteredOptions.length ? filteredOptions.map((option, index) => (
+          <button
+            key={option}
+            type="button"
+            className={`rz-inline-autocomplete-option${index === highlightedIndex ? ' is-active' : ''}`}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => commitSelection(option)}
+          >
+            {option}
+          </button>
+        )) : (
+          <div className="rz-inline-autocomplete-empty">{emptyMessage}</div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function normalizeNumber(value, fallbackValue) {
@@ -152,13 +315,15 @@ export default function Voorraad() {
   const [editingCell, setEditingCell] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [saveState, setSaveState] = useState({});
+  const [locationOptions, setLocationOptions] = useState({ locations: [], sublocationsByLocation: new Map() });
 
   useEffect(() => {
     let cancelled = false;
-    fetchInventoryRows()
-      .then((loadedRows) => {
+    Promise.all([fetchInventoryRows(), fetchLocationOptions().catch(() => buildLocationOptionState([]))])
+      .then(([loadedRows, loadedOptions]) => {
         if (!cancelled) {
           setRows(loadedRows);
+          setLocationOptions(loadedOptions);
           setLoadError(loadedRows.length ? "" : "Nog geen live voorraad beschikbaar.");
         }
       })
@@ -244,7 +409,8 @@ export default function Voorraad() {
 
     try {
       await saveInventoryRow(row)
-      await reloadInventoryRows()
+      const [_, refreshedOptions] = await Promise.all([reloadInventoryRows(), fetchLocationOptions().catch(() => locationOptions)])
+      setLocationOptions(refreshedOptions)
       setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saved', message: 'Opgeslagen' } }));
       window.setTimeout(() => {
         setSaveState((prev) => {
@@ -281,6 +447,15 @@ export default function Voorraad() {
     openRowDetails(row)
   }
 
+  const getEditorOptions = (row, key, typedValue = '') => {
+    if (key === 'locatie') return locationOptions.locations
+    if (key === 'sublocatie') {
+      const activeLocation = row?.locatie || typedValue || ''
+      return locationOptions.sublocationsByLocation.get(activeLocation) || []
+    }
+    return []
+  }
+
   const renderCell = (row, column) => {
     const isEditing =
       editingCell &&
@@ -289,6 +464,43 @@ export default function Voorraad() {
     const editable = isColumnEditable(row, column.key)
 
     if (isEditing) {
+      if (column.key === 'locatie' || column.key === 'sublocatie') {
+        return (
+          <InlineAutocompleteSelect
+            value={row[column.key]}
+            options={getEditorOptions(row, column.key)}
+            placeholder={column.key === 'locatie' ? 'Kies locatie' : 'Kies sublocatie'}
+            autoFocus
+            emptyMessage="Geen resultaten"
+            onInputChange={(nextValue) => {
+              if (column.key === 'locatie') {
+                setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, locatie: nextValue, sublocatie: '' } : entry))
+                return
+              }
+              setRowValue(row.id, column.key, nextValue)
+            }}
+            onCommit={(nextValue) => {
+              if (column.key === 'locatie') {
+                const validSublocations = locationOptions.sublocationsByLocation.get(nextValue) || []
+                setRows((prev) => prev.map((entry) => entry.id === row.id ? {
+                  ...entry,
+                  locatie: nextValue,
+                  sublocatie: validSublocations.includes(entry.sublocatie) ? entry.sublocatie : ''
+                } : entry))
+                window.setTimeout(() => persistEdit({ ...row, locatie: nextValue, sublocatie: (locationOptions.sublocationsByLocation.get(nextValue) || []).includes(row.sublocatie) ? row.sublocatie : '' }), 0)
+                return
+              }
+              setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, [column.key]: nextValue } : entry))
+              window.setTimeout(() => persistEdit({ ...row, [column.key]: nextValue }), 0)
+            }}
+            onCancel={() => {
+              setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, ...editingCell.originalRow } : entry))
+              stopEdit()
+            }}
+          />
+        )
+      }
+
       return (
         <input
           className="rz-input rz-inline-input"
@@ -453,6 +665,9 @@ export default function Voorraad() {
                   )}
                 </tbody>
               </table>
+            </div>
+            <div className="rz-stock-table-actions">
+              <Button type="button" variant="secondary">Exporteren</Button>
             </div>
           </div>
         </div>

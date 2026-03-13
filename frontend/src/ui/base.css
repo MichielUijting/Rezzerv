@@ -1174,3 +1174,50 @@ button.rz-tab.rz-tab-active {
   font-weight: 700;
   white-space: nowrap;
 }
+
+.rz-inline-autocomplete {
+  position: relative;
+  width: 100%;
+}
+
+.rz-inline-autocomplete-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(16, 24, 40, 0.12);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.rz-inline-autocomplete-option {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.rz-inline-autocomplete-option.is-active,
+.rz-inline-autocomplete-option:hover {
+  background: #eef8f1;
+}
+
+.rz-inline-autocomplete-empty {
+  padding: 8px 10px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.rz-stock-table-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}

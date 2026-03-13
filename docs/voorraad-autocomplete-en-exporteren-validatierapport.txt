@@ -1,0 +1,12 @@
+Release 01.07.58
+
+Wijzigingen
+- Inline velden Locatie en Sublocatie in Voorraad omgezet naar autocomplete-keuzevelden op basis van bestaande opties.
+- Tijdens typen wordt de keuzelijst direct gefilterd; bij geen treffers blijft de lijst leeg met melding "Geen resultaten".
+- Vrije tekst voor locatievelden wordt niet meer gecommit vanuit de tabel; alleen selectie uit bestaande opties wordt opgeslagen.
+- Sublocatie is afhankelijk gemaakt van de gekozen locatie.
+- Onder de tabel is een UI-knop Exporteren toegevoegd zonder backendfunctionaliteit.
+
+Aandachtspunten
+- Live buildcontrole via npm run build kon in deze omgeving niet worden uitgevoerd omdat frontend/node_modules ontbreekt in de bronmap.
+- Runtime-validatie in de gebruikersomgeving blijft nodig voor autocomplete-interactie en opslagflow.
