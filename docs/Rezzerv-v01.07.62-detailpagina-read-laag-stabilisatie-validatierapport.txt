@@ -1,0 +1,20 @@
+Rezzerv-v01.07.62 — validatierapport detailpagina read-laag stabilisatie
+
+Gewijzigd
+- Artikeldetail-route resolveert nu expliciet naar live match, demo match, ontbrekende identifier of niet-gevonden artikel in plaats van stil terug te vallen op het eerste demo-artikel.
+- Live voorraad wordt eenmalig geladen; historie wordt alleen opgehaald als een stabiele artikelnaam is vastgesteld.
+- Overzicht-tab toont nu een gecontroleerde melding bij laden of fallback van veldzichtbaarheid.
+- Historie-tab ondersteunt loading, lege toestand en foutmelding zonder runtimebreuk.
+- Detailpagina toont gecontroleerde lege toestanden voor laden, ontbrekende route-identifiers en niet-gevonden artikelen.
+
+Niet gewijzigd
+- Geen nieuwe functionaliteit, mutaties, kassabonlogica of analyse-uitbreiding toegevoegd.
+- Geen backend-endpoints uitgebreid; deze release stabiliseert de bestaande read-kant in de frontend.
+
+Getest
+- Frontend build succesvol uitgevoerd met npm ci + npm run build.
+- Gewijzigde detailpagina-bestanden syntactisch gecontroleerd via succesvolle Vite build.
+
+Restrisico
+- Volledige browserregressie op login, voorraad, detailtabs en kassabonflow is in deze omgeving niet end-to-end uitgevoerd.
+- Dist-build is opnieuw gegenereerd op basis van de huidige broncode; verdere functionele validatie blijft gewenst in de normale testomgeving.

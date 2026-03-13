@@ -95,7 +95,7 @@ function AutomationOverrideCard({ articleData = {} }) {
   )
 }
 
-export default function ArticleOverviewTab({ articleData = {}, visibilityMap = {} }) {
+export default function ArticleOverviewTab({ articleData = {}, visibilityMap = {}, visibilityLoading = false, visibilityError = null }) {
   const groupedFields = useMemo(() => getFieldsByTabAndGroup(ARTICLE_TABS.OVERVIEW), [])
   const overviewVisibility = visibilityMap?.overview || {}
 
@@ -107,12 +107,17 @@ export default function ArticleOverviewTab({ articleData = {}, visibilityMap = {
     }, {})
   }, [groupedFields, overviewVisibility])
 
+  if (visibilityLoading) {
+    return <div className="rz-empty-state">Overzichtsvelden worden geladen.</div>
+  }
+
   if (Object.keys(visibleGroups).length === 0) {
     return <div className="rz-empty-state">Er zijn geen zichtbare velden ingesteld voor Overzicht.</div>
   }
 
   return (
     <div className="rz-overview-tab">
+      {visibilityError ? <div className="rz-article-detail-alert">Veldinstellingen konden niet volledig worden geladen. Standaardvelden worden getoond.</div> : null}
       <AutomationOverrideCard articleData={articleData} />
       {Object.entries(visibleGroups).map(([groupKey, fields]) => (
         <section key={groupKey} className="rz-overview-group rz-article-detail-section">

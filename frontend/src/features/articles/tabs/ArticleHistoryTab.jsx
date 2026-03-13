@@ -41,14 +41,23 @@ function formatNote(entry) {
   return normalize(entry?.note)
 }
 
-export default function ArticleHistoryTab({ articleData = {} }) {
+export default function ArticleHistoryTab({ articleData = {}, isLoading = false, loadError = '' }) {
   const historyEntries = useMemo(() => {
     const items = Array.isArray(articleData.history) ? articleData.history : []
     return [...items].sort((a, b) => new Date(b.datetime || 0) - new Date(a.datetime || 0))
   }, [articleData.history])
 
+  if (isLoading) {
+    return <div className="rz-empty-state">Historie wordt geladen.</div>
+  }
+
   if (!historyEntries.length) {
-    return <div className="rz-empty-state">Er is nog geen historie beschikbaar voor dit artikel.</div>
+    return (
+      <div>
+        {loadError ? <div className="rz-article-detail-alert">{loadError}</div> : null}
+        <div className="rz-empty-state">Er is nog geen historie beschikbaar voor dit artikel.</div>
+      </div>
+    )
   }
 
   return (
