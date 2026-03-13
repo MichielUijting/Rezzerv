@@ -1,0 +1,27 @@
+Rezzerv v01.08.89 - validatierapport
+
+Doel
+- Smalle appfix vanaf v01.07.79 voor de Historie-mapping van purchase-events.
+- Corrigeren dat live aankoop-events de echte oude en nieuwe voorraadwaarden doorgeven aan de Historie-UI.
+
+Uitgevoerde wijziging
+- Bestand: frontend/src/features/articles/ArticlePage.jsx
+- In mapLiveHistoryRows() worden purchase-events nu net als manual_adjustment gemapt met:
+  - old_value = row.old_quantity
+  - new_value = row.new_quantity
+- Hierdoor kan de bestaande logica in autoRepurchaseHistory.js previousStock correct bepalen bij een echte herhaalaankoop.
+
+Niet gewijzigd
+- Geen wijziging aan winkelimport.
+- Geen wijziging aan nulvoorraad.
+- Geen wijziging aan Admin/styleguide.
+- Geen regressies verwijderd of uitgezet.
+
+Versie
+- Versie consequent verhoogd van 01.07.79 naar 01.08.89.
+
+Technische controle
+- Frontend build succesvol uitgevoerd via npm run build.
+
+Restrisico
+- Handmatige validatie met Tomaten in de normale kassabon-/winkelflow blijft vereist om te bevestigen dat nu zowel de Aankoop als Automatisch (herhaalaankoop) zichtbaar zijn.
