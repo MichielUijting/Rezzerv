@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AppShell from "../../app/AppShell";
 import Card from "../../ui/Card";
 import Button from "../../ui/Button";
@@ -16,12 +17,13 @@ import { runBrowserSmokeTests } from "./lib/browserSmokeRunner";
 import { runBrowserRegressionTests } from "./lib/browserRegressionRunner";
 
 export default function AdminPage() {
+  const navigate = useNavigate();
 
   async function handleResetGenerate() {
     setMessage("");
     await fetch("/api/dev/reset-data",{method:"POST"});
     await fetch("/api/dev/generate-demo-data",{method:"POST"});
-    window.location.href="/voorraad";
+    navigate("/voorraad", { replace: false });
   }
 
   const [status, setStatus] = useState({ spaces: 0, sublocations: 0, inventory: 0 });
@@ -305,7 +307,7 @@ export default function AdminPage() {
               <Button variant="primary" onClick={handleGenerateDemo}>Genereer demo data</Button>
               <Button variant="secondary" onClick={handleResetGenerate}>Reset + Demo data</Button>
               <Button variant="secondary" onClick={handleReset}>Reset demo data</Button>
-              <Button variant="secondary" onClick={async ()=>{await fetch("/api/dev/generate-article-testdata",{method:"POST"});window.location.href="/voorraad";}}>Artikel testdata</Button>
+              <Button variant="secondary" onClick={async ()=>{await fetch("/api/dev/generate-article-testdata",{method:"POST"});navigate("/voorraad", { replace: false });}}>Artikel testdata</Button>
             </div>
           </div>
 

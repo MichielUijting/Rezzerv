@@ -787,7 +787,7 @@ function describeStoreReviewState(frame) {
 }
 
 async function processCurrentStoreBatch(frame, options = {}) {
-  const { warningAction = null } = options
+  const { warningAction = null, onWarning = null } = options
   const batchId = getActiveBatchId(frame)
   const activeTitle = getFrameDocument(frame)?.querySelector('[data-testid="active-batch-title"]')?.textContent?.trim() || ''
   const providerName = activeTitle.replace(/^Kassabon\s+/, '').trim()
@@ -805,6 +805,9 @@ async function processCurrentStoreBatch(frame, options = {}) {
 
   const immediateWarning = describeProcessWarning(frame)
   if (immediateWarning) {
+    if (typeof onWarning === 'function') {
+      await onWarning(getProcessWarningModal(frame), immediateWarning)
+    }
     if (!warningAction) {
       throw new Error(`Verwerken geblokkeerd: ${immediateWarning.title || 'waarschuwing'} ${immediateWarning.text}`.trim())
     }
@@ -1397,10 +1400,21 @@ export async function runBrowserRegressionTests() {
       await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       await ensureStoreFieldStyleguide(frame, 'Halfvolle melk')
       await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
-      clickElement(await waitForCondition(() => Array.from(getFrameDocument(frame)?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Naar voorraad'), WAIT_TIMEOUT, 'Knop Naar voorraad niet gevonden voor styleguidecontrole'))
-      const modal = await waitForCondition(() => getProcessWarningModal(frame), WAIT_TIMEOUT, 'Waarschuwing voor styleguidecontrole niet gevonden')
-      if (!borderMatchesBrand(modal)) throw new Error('Process-warning modal heeft geen donkergroene rand')
-      await closeProcessWarning(frame, 'Terug')
+      let warningChecked = false
+      const result = await processCurrentStoreBatch(frame, {
+        warningAction: 'Terug',
+        onWarning: async (modal) => {
+          if (!modal) throw new Error('Waarschuwing voor styleguidecontrole niet gevonden')
+          if (!borderMatchesBrand(modal)) throw new Error('Process-warning modal heeft geen donkergroene rand')
+          warningChecked = true
+        },
+      })
+      if (result.outcome !== 'warning-dismissed') {
+        throw new Error('Styleguidecontrole werd niet via de verwerkingswaarschuwing afgehandeld')
+      }
+      if (!warningChecked) {
+        throw new Error('Waarschuwing voor styleguidecontrole werd niet gecontroleerd')
+      }
     }, results)
 
     await runScenario('Nulvoorraad blijft zichtbaar tot Voorraad opnieuw opent', async () => {

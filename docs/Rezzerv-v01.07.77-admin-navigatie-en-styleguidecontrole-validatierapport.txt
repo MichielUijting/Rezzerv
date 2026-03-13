@@ -1,0 +1,22 @@
+Rezzerv v01.07.77 validatierapport
+
+Doel
+- Admin-navigatie en styleguidecontrole herstellen zonder andere herstelclusters te wijzigen.
+
+Gewijzigd
+- AdminPage gebruikt nu router-navigatie in plaats van window.location.href voor navigatie naar /voorraad vanuit Admin-acties.
+- browserRegressionRunner verwerkt de styleguidecontrole nu via dezelfde verwerkingsflow als de waarschuwingstests, inclusief een expliciete callback op de process-warning modal.
+- De styleguidecontrole valideert de warning-modal nu op een robuustere manier en sluit daarna via het Terug-pad.
+
+Niet gewijzigd
+- automatische afboeking zichtbaar in Historie is niet aangepast.
+- nulvoorraadgedrag is niet aangepast in deze release.
+
+Getest
+- Frontend productiebuild succesvol uitgevoerd.
+- Codepad styleguidecontrole gecontroleerd op warning-detectie en modal-validatie.
+- Admin-navigatie gecontroleerd op vervanging van window.location.href door router-navigatie.
+
+Restrisico
+- Browser-backgedrag kan nog afhankelijk zijn van hoe de gebruiker de /admin-route opent (directe URL versus navigatie vanuit /home).
+- Als de styleguidewaarschuwing inhoudelijk niet meer getriggerd wordt door toekomstige UI-logica, moet de regressietest opnieuw op dat triggerpad worden aangepast.
