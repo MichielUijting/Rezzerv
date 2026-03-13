@@ -1,0 +1,28 @@
+Rezzerv-v01.07.82 validatierapport
+
+Scope
+- Echte appfix voor follow_household automatische afboeking zichtbaar in Historie
+- Verificatie van artikeloverride-UI op consumable artikelen
+
+Gewijzigd
+- frontend/src/features/articles/ArticlePage.jsx
+  * live purchase-events in Historie geven nu old_quantity en new_quantity door aan de UI, niet alleen handmatige correcties
+  * bestaande applyAutoRepurchaseHistory-logica kan daardoor in de normale appflow het item 'Automatisch (herhaalaankoop)' afleiden voor follow_household en always_on
+
+Niet gewijzigd
+- Geen dev-only endpoints toegevoegd
+- Geen regressietests verwijderd of versmald
+- Geen winkelimport-, nulvoorraad- of Admin-cluster aangepast
+- Geen inhoudelijke fix voor always_on apart doorgevoerd buiten dezelfde gedeelde appflow
+
+Verificatie override-UI
+- De dropdown 'Slim afboeken bij herhaalaankoop' is in de UI bewust disabled voor niet-consumable artikelen
+- Consumable wordt in de frontend bepaald via articleData.consumable === true of type/article_type 'Voedsel & drank' of 'Huishoudelijk'
+- Pasta met leeg type/categorie is daarom geen geschikt handmatig testartikel voor always_on
+- Demo-artikelen zoals Mosterd/Tomaten/Spaghetti zijn wel als consumable geclassificeerd in de brondata
+
+Build
+- Frontend build succesvol uitgevoerd
+
+Restrisico
+- Always_on moet nog handmatig of via regressie bevestigd worden op een artikel dat in de runtimebasis echt als consumable binnenkomt
