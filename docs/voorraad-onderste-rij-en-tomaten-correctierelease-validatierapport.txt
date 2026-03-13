@@ -1,0 +1,5 @@
+Correctierelease 01.07.57
+- geaggregeerde rij verplaatst naar Tomaten in middenpositie
+- onderste rij blijft een gewone rij
+- dubbele Samengevoegd-labeling verwijderd
+- voorraadtabel volgt bronvolgorde i.p.v. alfabetische groeperingssortering

@@ -33,6 +33,7 @@ function mergeInventoryRows(liveRows = []) {
         sublocatie,
         checked: false,
         _rawCount: 1,
+        _firstSeenIndex: index,
         _locationValues: new Set([locatie].filter(Boolean)),
         _sublocationValues: new Set([`${locatie}__${sublocatie}`].filter(() => Boolean(sublocatie || locatie))),
       })
@@ -66,10 +67,11 @@ function mergeInventoryRows(liveRows = []) {
       canInlineEditAantal: !isAggregated,
       canInlineEditLocatie: !isAggregated && !hasMultipleLocations,
       canInlineEditSublocatie: !isAggregated && !hasMultipleSublocations,
+      _firstSeenIndex: row._firstSeenIndex,
     }
   })
 
-  return merged.sort((a, b) => String(a.artikel || '').localeCompare(String(b.artikel || ''), 'nl'))
+  return merged.sort((a, b) => (a._firstSeenIndex ?? 0) - (b._firstSeenIndex ?? 0))
 }
 
 async function fetchInventoryRows() {
@@ -313,9 +315,6 @@ export default function Voorraad() {
       return (
         <div className="rz-inline-cell rz-inline-label rz-stock-article-cell" title={row?.canOpenDetails ? 'Dubbelklik op de rij voor details' : undefined}>
           <span>{row?.isAggregated ? `${row[column.key]} (samengevoegd)` : row[column.key]}</span>
-          {row?.isAggregated ? (
-            <span className="rz-stock-row-badge" aria-label="Samengevoegde rij">Samengevoegd</span>
-          ) : null}
         </div>
       );
     }

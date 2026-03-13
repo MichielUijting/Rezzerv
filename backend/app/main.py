@@ -1853,7 +1853,7 @@ def inventory_preview():
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
-            ORDER BY i.naam ASC
+            ORDER BY i.created_at ASC, i.id ASC
             """)
         ).mappings().all()
     return {"rows": [dict(r) for r in rows]}
@@ -1976,13 +1976,13 @@ def generate_demo_data():
         demo_rows = [
             ("Rijst", 2, kitchen_id, kast1_id),
             ("Pasta", 3, pantry_id, voorraadkast_id),
-            ("Tomaten", 6, kitchen_id, koelkast_id),
             ("Koffie", 1, kitchen_id, kast1_id),
             ("Shampoo", 4, bathroom_id, badkamerkast_id),
+            ("Tomaten", 3, kitchen_id, koelkast_id),
+            ("Tomaten", 2, pantry_id, voorraadkast_id),
             ("Erwten", 5, pantry_id, voorraadkast_id),
             ("IJs", 2, pantry_id, diepvries_id),
-            ("Melk", 1, kitchen_id, koelkast_id),
-            ("Melk", 1, pantry_id, voorraadkast_id),
+            ("Melk", 2, kitchen_id, koelkast_id),
             ("Thee", 8, kitchen_id, kast1_id),
             ("Zout", 1, kitchen_id, kast1_id),
         ]
