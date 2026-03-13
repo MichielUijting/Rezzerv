@@ -1194,21 +1194,21 @@ export async function runBrowserRegressionTests() {
     await runScenario('Huishoudinstelling aan + follow_household → automatische afboeking zichtbaar', async () => {
       await prepareRegressionFixture(frame)
       await setHouseholdAutomation(frame, true)
-      await openArticleFromInventory(frame, 'Mosterd')
+      await openArticleFromInventory(frame, 'Tomaten')
       await setArticleOverride(frame, 'follow_household')
-      await createRepeatPurchaseViaApi('Mosterd', 1)
-      await openArticleFromInventory(frame, 'Mosterd')
-      await ensureHistoryAutoState(frame, 'Mosterd', true)
+      await createRepeatPurchaseViaApi('Tomaten', 1)
+      await openArticleFromInventory(frame, 'Tomaten')
+      await ensureHistoryAutoState(frame, 'Tomaten', true)
     }, results)
 
     await runScenario('Artikeloverride always_on → automatische afboeking zichtbaar bij huishoudinstelling uit', async () => {
       await prepareRegressionFixture(frame)
       await setHouseholdAutomation(frame, false)
-      await openArticleFromInventory(frame, 'Mosterd')
+      await openArticleFromInventory(frame, 'Tomaten')
       await setArticleOverride(frame, 'always_on')
-      await createRepeatPurchaseViaApi('Mosterd', 1)
-      await openArticleFromInventory(frame, 'Mosterd')
-      await ensureHistoryAutoState(frame, 'Mosterd', true)
+      await createRepeatPurchaseViaApi('Tomaten', 1)
+      await openArticleFromInventory(frame, 'Tomaten')
+      await ensureHistoryAutoState(frame, 'Tomaten', true)
     }, results)
 
     await runScenario('Artikeloverride always_off → automatische afboeking niet zichtbaar bij huishoudinstelling aan', async () => {
