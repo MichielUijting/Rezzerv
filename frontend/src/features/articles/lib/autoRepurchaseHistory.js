@@ -36,6 +36,13 @@ export function applyAutoRepurchaseHistory(article = {}) {
     return history
   }
 
+  const hasRealAutoRepurchaseEvent = history.some(
+    (entry) => entry?.event_type === 'auto_repurchase' || entry?.source === 'auto_repurchase',
+  )
+  if (hasRealAutoRepurchaseEvent) {
+    return history
+  }
+
   const sorted = [...history].sort((a, b) => new Date(a.datetime || 0) - new Date(b.datetime || 0))
   const enriched = []
 

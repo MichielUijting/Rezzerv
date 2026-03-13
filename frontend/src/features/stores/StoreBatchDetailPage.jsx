@@ -16,6 +16,7 @@ import {
   StoreArticleSelector,
   suggestionLabel,
 } from './storeImportShared'
+import { buildAutoConsumeArticleIds } from './autoConsumeContext'
 
 export default function StoreBatchDetailPage() {
   const navigate = useNavigate()
@@ -218,7 +219,7 @@ export default function StoreBatchDetailPage() {
     try {
       const result = await fetchJson(`/api/purchase-import-batches/${batch.batch_id}/process`, {
         method: 'POST',
-        body: JSON.stringify({ processed_by: 'ui', mode }),
+        body: JSON.stringify({ processed_by: 'ui', mode, auto_consume_article_ids: buildAutoConsumeArticleIds(selectedLines) }),
       })
       await refreshBatch(batch.batch_id)
       await refreshLocationOptions(household?.id)

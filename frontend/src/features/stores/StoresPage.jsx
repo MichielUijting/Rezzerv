@@ -15,6 +15,7 @@ import {
   providerLabel,
   providerStatusLabel,
 } from './storeImportShared'
+import { buildAutoConsumeArticleIds } from './autoConsumeContext'
 
 async function getLatestBatchMeta(connectionId) {
   try {
@@ -215,7 +216,7 @@ export default function StoresPage() {
     try {
       const result = await fetchJson(`/api/purchase-import-batches/${batchToProcess.batch_id}/process`, {
         method: 'POST',
-        body: JSON.stringify({ processed_by: 'ui', mode: 'selected_only' }),
+        body: JSON.stringify({ processed_by: 'ui', mode: 'selected_only', auto_consume_article_ids: buildAutoConsumeArticleIds((batchToProcess?.lines || []).filter((line) => (line.processing_status || 'pending') !== 'processed' && (line.review_decision || 'selected') === 'selected')) }),
       })
       if (result.failed_count > 0) {
         showStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)

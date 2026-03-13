@@ -81,6 +81,7 @@ async function fetchInventoryPreview() {
 function mapEventTypeLabel(eventType) {
   if (eventType === 'purchase') return 'Aankoop'
   if (eventType === 'manual_adjustment') return 'Handmatige voorraadcorrectie'
+  if (eventType === 'auto_repurchase') return 'Automatisch (herhaalaankoop)'
   return eventType || 'Gebeurtenis'
 }
 
@@ -94,21 +95,18 @@ function formatQuantityDelta(value) {
 
 function mapLiveHistoryRows(rows = []) {
   return rows.map((row) => {
-    const eventType = row?.event_type
-    const isManualAdjustment = eventType === 'manual_adjustment'
-    const isPurchase = eventType === 'purchase'
-    const hasTrackedRange = isManualAdjustment || isPurchase
+    const usesInventoryDelta = ['manual_adjustment', 'purchase', 'auto_repurchase'].includes(row?.event_type)
     return {
       id: row?.id || '',
       datetime: row?.created_at || '',
-      type: mapEventTypeLabel(eventType),
-      old_value: hasTrackedRange ? String(row?.old_quantity ?? '—') : '—',
-      new_value: hasTrackedRange ? String(row?.new_quantity ?? '—') : formatQuantityDelta(row?.quantity),
+      type: mapEventTypeLabel(row?.event_type),
+      old_value: usesInventoryDelta ? String(row?.old_quantity ?? '—') : '—',
+      new_value: usesInventoryDelta ? String(row?.new_quantity ?? '—') : formatQuantityDelta(row?.quantity),
       location: row?.location_label || '',
       source: row?.source || '',
       note: row?.note || '',
       quantity_change: Number(row?.quantity) || 0,
-      event_type: eventType || '',
+      event_type: row?.event_type || '',
       old_quantity: row?.old_quantity,
       new_quantity: row?.new_quantity,
     }

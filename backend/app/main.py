@@ -1,10 +1,10 @@
 from fastapi import FastAPI, HTTPException, Header, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 import json
 import uuid
-from typing import Optional
+from typing import List, Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
 from datetime import datetime
@@ -147,6 +147,7 @@ class CreateArticleFromLineRequest(BaseModel):
 class ProcessBatchRequest(BaseModel):
     processed_by: str = "ui"
     mode: str = "selected_only"
+    auto_consume_article_ids: List[str] = Field(default_factory=list)
 
     @field_validator("mode")
     @classmethod
@@ -1374,6 +1375,38 @@ def create_inventory_purchase_event(conn, household_id: str, article_id: str, ar
         new_quantity=projected_new_total,
         source='store_import',
         note=note,
+    )
+
+
+def clear_article_inventory(conn, household_id: str, article_name: str):
+    conn.execute(
+        text(
+            """
+            DELETE FROM inventory
+            WHERE household_id = :household_id
+              AND lower(naam) = lower(:article_name)
+            """
+        ),
+        {"household_id": household_id, "article_name": article_name},
+    )
+
+
+def create_auto_repurchase_event(conn, household_id: str, article_id: str, article_name: str, resolved_location: dict):
+    old_total = get_article_total_quantity(conn, household_id, article_name)
+    if old_total <= 0:
+        return None
+    return create_inventory_event(
+        conn,
+        household_id=household_id,
+        article_id=article_id,
+        article_name=article_name,
+        resolved_location=resolved_location,
+        event_type='auto_repurchase',
+        quantity=old_total,
+        old_quantity=old_total,
+        new_quantity=0,
+        source='auto_repurchase',
+        note='Automatisch afgeboekt bij herhaalaankoop.',
     )
 
 
@@ -2722,6 +2755,12 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
 
             article_name = article["name"]
             note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
+            auto_consume_ids = {str(item) for item in (payload.auto_consume_article_ids or [])}
+            should_auto_consume = str(article_id) in auto_consume_ids and get_article_total_quantity(conn, batch["household_id"], article_name) > 0
+            auto_event_id = None
+            if should_auto_consume:
+                auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location)
+                clear_article_inventory(conn, batch["household_id"], article_name)
             event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
             apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
             conn.execute(
@@ -2745,7 +2784,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 article_id,
                 resolved_location["location_id"],
             )
-            results.append({"line_id": line_id, "status": "processed", "event_id": event_id})
+            results.append({"line_id": line_id, "status": "processed", "event_id": event_id, "auto_event_id": auto_event_id})
             processed_count += 1
 
         batch_status = update_batch_status(conn, batch_id)

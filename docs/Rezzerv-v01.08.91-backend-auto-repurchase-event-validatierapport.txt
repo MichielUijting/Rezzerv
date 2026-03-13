@@ -1,0 +1,42 @@
+Rezzerv v01.08.91 - validatierapport
+
+Doel
+- Structurele appfix vanaf v01.07.79: automatische afboeking als echt backend-event uitvoeren in de normale aankoopflow.
+
+Gewijzigd
+- backend/app/main.py
+  - ProcessBatchRequest uitgebreid met auto_consume_article_ids.
+  - create_auto_repurchase_event() toegevoegd.
+  - clear_article_inventory() toegevoegd.
+  - purchase-import verwerkingsflow schrijft nu bij geselecteerde artikelen met bestaande voorraad eerst een auto_repurchase-event en bouwt daarna de nieuwe purchase op.
+- frontend/src/features/stores/autoConsumeContext.js
+  - bepaalt vanuit huishoudinstelling, artikeloverride en demo-consumable metadata welke gekoppelde artikelen voor auto-afboeking in aanmerking komen.
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+- frontend/src/features/stores/StoresPage.jsx
+  - sturen auto_consume_article_ids mee bij batchverwerking.
+- frontend/src/features/articles/ArticlePage.jsx
+  - live historie herkent auto_repurchase als echt eventtype en toont echte old/new voorraadwaarden.
+- frontend/src/features/articles/lib/autoRepurchaseHistory.js
+  - voegt geen synthetische herhaalaankoopregel meer toe als er al een echt auto_repurchase-event aanwezig is.
+- versie consequent verhoogd naar 01.08.91.
+
+Niet gewijzigd
+- geen nulvoorraad
+- geen Admin/styleguide
+- geen brede winkelimportherbouw buiten de bestaande purchase-flowhaak
+- geen regressies verwijderd of uitgezet
+
+Technische validatie
+- Python compilecheck geslaagd voor backend/app/main.py.
+- Frontend build geslaagd via npm run build.
+
+Handmatige validatie
+- Nog uit te voeren door PO in normale flow met Tomaten:
+  1. huishoudinstelling aan
+  2. artikel op Huishoudinstelling volgen
+  3. herhaalaankoop via Lidl/Jumbo-flow
+  4. controle in Historie op zowel Aankoop als Automatische afboeking
+
+Restrisico
+- De backendbeslissing voor auto-afboeking gebruikt frontend-meegegeven artikelcontext (auto_consume_article_ids), omdat huishoud- en artikelinstellingen in v01.07.79 nog niet backendpersistent zijn.
+- Als een consumable artikel niet via demo-metadata wordt herkend, zal de frontend het niet in auto_consume_article_ids opnemen.
