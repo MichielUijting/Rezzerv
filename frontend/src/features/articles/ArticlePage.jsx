@@ -94,19 +94,21 @@ function formatQuantityDelta(value) {
 
 function mapLiveHistoryRows(rows = []) {
   return rows.map((row) => {
-    const isManualAdjustment = row?.event_type === 'manual_adjustment'
-    const isPurchase = row?.event_type === 'purchase'
+    const eventType = row?.event_type
+    const isManualAdjustment = eventType === 'manual_adjustment'
+    const isPurchase = eventType === 'purchase'
+    const hasTrackedRange = isManualAdjustment || isPurchase
     return {
       id: row?.id || '',
       datetime: row?.created_at || '',
-      type: mapEventTypeLabel(row?.event_type),
-      old_value: isManualAdjustment || isPurchase ? String(row?.old_quantity ?? '—') : '—',
-      new_value: isManualAdjustment || isPurchase ? String(row?.new_quantity ?? '—') : formatQuantityDelta(row?.quantity),
+      type: mapEventTypeLabel(eventType),
+      old_value: hasTrackedRange ? String(row?.old_quantity ?? '—') : '—',
+      new_value: hasTrackedRange ? String(row?.new_quantity ?? '—') : formatQuantityDelta(row?.quantity),
       location: row?.location_label || '',
       source: row?.source || '',
       note: row?.note || '',
       quantity_change: Number(row?.quantity) || 0,
-      event_type: row?.event_type || '',
+      event_type: eventType || '',
       old_quantity: row?.old_quantity,
       new_quantity: row?.new_quantity,
     }

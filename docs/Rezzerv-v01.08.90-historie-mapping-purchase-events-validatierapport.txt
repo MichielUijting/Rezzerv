@@ -1,0 +1,26 @@
+Rezzerv-v01.08.90 – Historie-mapping purchase-events validatierapport
+
+Basis
+- Inhoudelijk gestart vanaf Rezzerv-v01.07.79.
+
+Probleemanalyse
+- In ArticlePage.jsx werden live purchase-events voor Historie gemapt met old_value =  en new_value als alleen de delta.
+- De frontendlogica voor Automatisch (herhaalaankoop) gebruikt entry.old_value als previousStock.
+- Daardoor werd previousStock voor aankopen effectief 0 en kon een echte herhaalaankoop niet als automatisch item worden afgeleid.
+
+Wijziging
+- In mapLiveHistoryRows() geven purchase-events nu net als manual_adjustment de echte old_quantity en new_quantity door aan de Historie-entry.
+- De rest van de Historie- en automatiseringslogica is ongemoeid gelaten.
+
+Niet gewijzigd
+- Geen winkelimportlogica.
+- Geen nulvoorraadlogica.
+- Geen Admin/styleguide.
+- Geen regressietests verwijderd of uitgezet.
+
+Validatie
+- Doelvalidatie is handmatig: consumable artikel met geldige herhaalaankoop, waarna Historie zowel Aankoop als Automatisch (herhaalaankoop) moet tonen.
+- Frontend build is succesvol uitgevoerd.
+
+Restrisico
+- Als automatische afboeking hierna nog niet zichtbaar wordt, ligt de resterende fout waarschijnlijk niet meer in de Historie-mapping van purchase-events maar in de beslislogica of eventafleiding zelf.
