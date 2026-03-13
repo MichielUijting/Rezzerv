@@ -1,0 +1,22 @@
+Rezzerv-v01.08.86 validatierapport
+
+Basis: Rezzerv-v01.07.79
+Scope: uitsluitend de 2 regressietests voor automatische afboeking inhoudelijk valide maken, zonder de rest van de suite aan te raken.
+
+Gewijzigd
+- backend: test-only endpoint POST /api/dev/inventory/purchase toegevoegd om voor een bestaand artikel op bestaande locatie een tweede aankoop vast te leggen
+- admin regressierunner: de 4 automatiseringsscenario's (2 positief, 2 negatief) zetten nu eerst opnieuw de fixture en voeren daarna pas een echte tweede aankoop van Mosterd uit
+- versie doorgetrokken naar 01.08.86
+
+Niet gewijzigd
+- geen brede appfix voor automatische afboeking
+- geen winkelimport-, nulvoorraad-, Admin- of styleguideclusters aangepast
+- geen regressietests verwijderd of uitgezet
+
+Getest
+- syntactische controle op gewijzigde backend- en frontendbestanden uitgevoerd
+- frontend build niet opnieuw gevalideerd in dit rapport
+
+Restrisico
+- als de 2 automatiseringstests hierna nog rood blijven, wijst dat sterker op een echte appbug in automatische afboeking of Historie
+- het nieuwe endpoint is uitsluitend bedoeld voor regressiefixture-opbouw en mag geen normale appflow vervangen

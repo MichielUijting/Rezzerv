@@ -895,6 +895,16 @@ async function setInventoryQuantityViaApi(articleName, quantity) {
   })
 }
 
+async function createRepeatPurchaseViaApi(articleName, quantity = 1) {
+  await requestJson('/api/dev/inventory/purchase', {
+    method: 'POST',
+    body: JSON.stringify({
+      article_name: articleName,
+      quantity,
+    }),
+  })
+}
+
 async function filterInventoryOnArticle(frame, articleName) {
   const doc = getFrameDocument(frame)
   const filterInput = await waitForCondition(() => doc?.querySelector('input[aria-label="Filter op artikel"]'), WAIT_TIMEOUT, 'Artikel-filter niet gevonden in Voorraad')
@@ -1083,14 +1093,6 @@ async function ensureTabContains(frame, tabLabel, expectedText, errorText) {
   await waitForCondition(() => queryText(doc, expectedText), WAIT_TIMEOUT, errorText)
 }
 
-async function createRepeatPurchase(articleName, quantity = 1) {
-  return requestJson('/api/dev/inventory/purchase', {
-    method: 'POST',
-    body: JSON.stringify({ article_name: articleName, quantity }),
-  })
-}
-
-
 async function ensureHistoryAutoState(frame, articleName, expectedVisible) {
   await openArticleTab(frame, 'Historie')
   const doc = getFrameDocument(frame)
@@ -1184,7 +1186,7 @@ export async function runBrowserRegressionTests() {
       await setHouseholdAutomation(frame, false)
       await openArticleFromInventory(frame, 'Mosterd')
       await setArticleOverride(frame, 'follow_household')
-      await createRepeatPurchase('Mosterd', 1)
+      await createRepeatPurchaseViaApi('Mosterd', 1)
       await openArticleFromInventory(frame, 'Mosterd')
       await ensureHistoryAutoState(frame, 'Mosterd', false)
     }, results)
@@ -1194,7 +1196,7 @@ export async function runBrowserRegressionTests() {
       await setHouseholdAutomation(frame, true)
       await openArticleFromInventory(frame, 'Mosterd')
       await setArticleOverride(frame, 'follow_household')
-      await createRepeatPurchase('Mosterd', 1)
+      await createRepeatPurchaseViaApi('Mosterd', 1)
       await openArticleFromInventory(frame, 'Mosterd')
       await ensureHistoryAutoState(frame, 'Mosterd', true)
     }, results)
@@ -1204,7 +1206,7 @@ export async function runBrowserRegressionTests() {
       await setHouseholdAutomation(frame, false)
       await openArticleFromInventory(frame, 'Mosterd')
       await setArticleOverride(frame, 'always_on')
-      await createRepeatPurchase('Mosterd', 1)
+      await createRepeatPurchaseViaApi('Mosterd', 1)
       await openArticleFromInventory(frame, 'Mosterd')
       await ensureHistoryAutoState(frame, 'Mosterd', true)
     }, results)
@@ -1214,7 +1216,7 @@ export async function runBrowserRegressionTests() {
       await setHouseholdAutomation(frame, true)
       await openArticleFromInventory(frame, 'Mosterd')
       await setArticleOverride(frame, 'always_off')
-      await createRepeatPurchase('Mosterd', 1)
+      await createRepeatPurchaseViaApi('Mosterd', 1)
       await openArticleFromInventory(frame, 'Mosterd')
       await ensureHistoryAutoState(frame, 'Mosterd', false)
     }, results)

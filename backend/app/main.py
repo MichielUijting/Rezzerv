@@ -82,11 +82,6 @@ class InventoryUpdate(BaseModel):
     sublocation_name: Optional[str] = None
 
 
-class InventoryPurchaseCreate(BaseModel):
-    article_name: str
-    quantity: int = 1
-
-
 class DiagnosticRequest(BaseModel):
     household_id: Optional[str] = None
 
@@ -1844,6 +1839,13 @@ def update_inventory(inventory_id: str, payload: InventoryUpdate):
         )
     return updated_row
 
+
+
+class InventoryPurchaseCreate(BaseModel):
+    article_name: str
+    quantity: int = 1
+
+
 @app.post("/api/dev/inventory/purchase")
 def create_inventory_purchase(payload: InventoryPurchaseCreate):
     article_name = (payload.article_name or '').strip()
@@ -1859,9 +1861,9 @@ def create_inventory_purchase(payload: InventoryPurchaseCreate):
                 """
                 SELECT
                   i.id,
-                  i.household_id,
                   i.naam,
                   i.aantal,
+                  i.household_id,
                   i.space_id,
                   i.sublocation_id,
                   COALESCE(s.naam, '') AS locatie,
@@ -1878,47 +1880,42 @@ def create_inventory_purchase(payload: InventoryPurchaseCreate):
             {"article_name": article_name},
         ).mappings().first()
         if not existing:
-            raise HTTPException(status_code=404, detail=f"Geen voorraadrij met locatie gevonden voor {article_name}")
+            raise HTTPException(status_code=404, detail=f"Geen voorraadrij met positieve voorraad gevonden voor {article_name}")
 
-        old_quantity = int(existing.get('aantal') or 0)
-        new_quantity = old_quantity + quantity
-        location_label = ' / '.join(part for part in [existing.get('locatie') or '', existing.get('sublocatie') or ''] if part)
-        location_id = existing.get('sublocation_id') or existing.get('space_id') or ''
-
-        conn.execute(
-            text(
-                """
-                UPDATE inventory
-                SET aantal = :new_quantity,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :inventory_id
-                """
-            ),
-            {"inventory_id": existing['id'], "new_quantity": new_quantity},
-        )
-
-        seed_inventory_event(
+        household_id = existing.get('household_id') or 'demo-household'
+        resolved_location = {
+            'space_id': existing.get('space_id'),
+            'sublocation_id': existing.get('sublocation_id'),
+            'location_id': existing.get('sublocation_id') or existing.get('space_id'),
+            'location_label': ' / '.join(part for part in [existing.get('locatie') or '', existing.get('sublocatie') or ''] if part),
+        }
+        article_id = build_live_article_option_id(existing.get('naam') or article_name)
+        note = f"Herhaalaankoop voorbereid voor regressietest: +{quantity}"
+        event_id = create_inventory_purchase_event(
             conn,
+            household_id=household_id,
+            article_id=article_id,
             article_name=existing.get('naam') or article_name,
             quantity=quantity,
-            old_quantity=old_quantity,
-            new_quantity=new_quantity,
-            event_type='purchase',
-            source='manual_repeat_purchase',
-            note='Herhaalaankoop voor regressietest',
-            location_id=location_id,
-            location_label=location_label,
+            resolved_location=resolved_location,
+            note=note,
+        )
+        inventory_id = apply_inventory_purchase(
+            conn,
+            household_id,
+            existing.get('naam') or article_name,
+            quantity,
+            resolved_location,
         )
 
     return {
         "status": "ok",
-        "inventory_id": existing['id'],
+        "inventory_id": inventory_id,
+        "event_id": event_id,
         "article_name": existing.get('naam') or article_name,
-        "old_quantity": old_quantity,
-        "new_quantity": new_quantity,
-        "location_label": location_label,
+        "quantity": quantity,
+        "location": resolved_location['location_label'],
     }
-
 
 @app.get("/api/dev/inventory-preview")
 def inventory_preview(response: Response):
