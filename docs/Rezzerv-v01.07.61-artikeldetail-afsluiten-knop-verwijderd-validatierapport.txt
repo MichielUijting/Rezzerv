@@ -1,0 +1,22 @@
+Rezzerv-v01.07.61 — Artikeldetail Afsluiten-knop verwijderd
+
+Gewijzigd
+- In de artikeldetailpagina is AppShell aangepast naar showExit={false}.
+- Daardoor wordt de knop “Afsluiten” niet meer getoond op /voorraad/:articleId.
+- Versies verhoogd van 01.07.60 naar 01.07.61.
+
+Niet gewijzigd
+- Geen andere schermen aangepast.
+- Geen functionele logica, dataflow of backend gewijzigd.
+- Geen verdere detailpagina-layouts aangepast.
+
+Getest
+- Broncode gecontroleerd op de enige AppShell-aanroep in ArticlePage.
+- Tekstzoekopdracht uitgevoerd op “Afsluiten” om de bronlocatie vast te stellen.
+- Validatie op versie-updates uitgevoerd.
+
+Niet getest
+- Geen volledige frontend build/run in deze omgeving, omdat de zip geen node_modules bevat en vite lokaal niet beschikbaar was.
+
+Restrisico
+- De wijziging is klein en lokaal, maar runtime-visuele bevestiging moet in de gebruikersomgeving plaatsvinden.

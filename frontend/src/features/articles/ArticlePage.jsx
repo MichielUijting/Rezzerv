@@ -290,7 +290,7 @@ export default function ArticlePage() {
   }
 
   return (
-    <AppShell title={pageTitle}>
+    <AppShell title={pageTitle} showExit={false}>
       <ScreenCard fullWidth>
         <div className="rz-article-detail-page">
           {inventoryLoadError ? <div className="rz-article-detail-alert">{inventoryLoadError}</div> : null}
