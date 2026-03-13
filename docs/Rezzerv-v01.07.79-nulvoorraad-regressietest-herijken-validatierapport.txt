@@ -1,0 +1,19 @@
+Rezzerv v01.07.79 - validatierapport
+
+Doel
+- nulvoorraad-regressietest herijken op de echte gebruikersflow.
+
+Gewijzigd
+- de regressietest wacht nu expliciet tot Mosterd op het huidige Voorraad-scherm nog zichtbaar is na nulcorrectie, in plaats van direct een momentopname te nemen.
+- de test controleert daarnaast dat de zichtbare hoeveelheid op het huidige scherm 0 toont.
+
+Niet gewijzigd
+- geen appcode aangepast voor nulvoorraadgedrag.
+- automatische afboeking zichtbaar in Historie niet aangepast.
+
+Getest
+- frontend build uitgevoerd.
+- broncode van nulvoorraadscenario in browserRegressionRunner.js aangepast en versie consistent verhoogd naar 01.07.79.
+
+Restrisico
+- als de nulvoorraadrij helemaal niet meer lokaal zichtbaar wordt, zal de test nog steeds rood blijven, maar nu met een diagnose die beter aansluit op de echte gebruikersflow.

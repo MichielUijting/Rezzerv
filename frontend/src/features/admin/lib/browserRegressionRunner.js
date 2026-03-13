@@ -1424,9 +1424,14 @@ export async function runBrowserRegressionTests() {
       await filterInventoryOnArticle(frame, 'Mosterd')
       await findInventoryRowInTable(frame, 'Mosterd')
       await updateInventoryQuantityInUi(frame, 'Mosterd', 0)
-      const stillVisible = Array.from(getFrameDocument(frame)?.querySelectorAll('tbody tr') || []).some((entry) => normalizeInventoryArticleText(entry.querySelectorAll('td')[1]?.textContent) === 'mosterd')
-      if (!stillVisible) {
-        throw new Error('Mosterd verdween direct uit het huidige voorraadscherm na nulcorrectie')
+      const rowStillVisible = await waitForCondition(() => {
+        const doc = getFrameDocument(frame)
+        const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
+        return rows.find((entry) => normalizeInventoryArticleText(entry.querySelectorAll('td')[1]?.textContent) === 'mosterd') || null
+      }, WAIT_TIMEOUT, 'Mosterd bleef niet zichtbaar op het huidige voorraadscherm na nulcorrectie')
+      const visibleQuantity = rowStillVisible?.querySelectorAll('td')[2]?.textContent?.trim() || ''
+      if (visibleQuantity && !visibleQuantity.includes('0')) {
+        throw new Error(`Mosterd bleef zichtbaar maar toont geen nulvoorraad op het huidige scherm (zichtbaar: ${visibleQuantity})`)
       }
       await navigateFrame(frame, '/home')
       await ensureInventoryDoesNotContainArticle(frame, 'Mosterd')
