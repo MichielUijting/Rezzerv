@@ -319,6 +319,7 @@ export default function Voorraad() {
   const [rows, setRows] = useState(initialData);
   const [localZeroRows, setLocalZeroRows] = useState([]);
   const rowsRef = useRef(initialData)
+  const draftRowsRef = useRef(new Map())
 
   useEffect(() => {
     rowsRef.current = rows
@@ -382,13 +383,16 @@ export default function Voorraad() {
   }, [rows, localZeroRows, filters]);
 
   const setRowValue = (rowId, key, value) => {
-    setRows((prev) =>
-      prev.map((row) =>
+    setRows((prev) => {
+      const nextRows = prev.map((row) =>
         row.id === rowId
           ? { ...row, [key]: key === "aantal" ? normalizeNumber(value, row[key]) : value }
           : row
       )
-    );
+      const latestRow = nextRows.find((entry) => entry.id === rowId)
+      if (latestRow) draftRowsRef.current.set(rowId, { ...latestRow })
+      return nextRows
+    });
   };
 
   const toggleRowChecked = (rowId) => {
@@ -426,13 +430,16 @@ export default function Voorraad() {
       return;
     }
 
-    const latestRow = rowsRef.current.find((entry) => entry.id === row.id) || row
+    const latestRow = draftRowsRef.current.get(row.id) || rowsRef.current.find((entry) => entry.id === row.id) || row
     const originalRow = editingCell.originalRow || latestRow;
     const changed = ['artikel', 'aantal', 'locatie', 'sublocatie'].some((key) => String(originalRow[key] ?? '') !== String(latestRow[key] ?? ''));
 
     stopEdit();
 
-    if (!changed) return;
+    if (!changed) {
+      draftRowsRef.current.delete(row.id)
+      return;
+    }
 
     setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saving', message: 'Opslaan...' } }));
 
@@ -452,6 +459,7 @@ export default function Voorraad() {
       const refreshedOptions = await fetchLocationOptions().catch(() => locationOptions)
       setLocationOptions(refreshedOptions)
       setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saved', message: 'Opgeslagen' } }));
+      draftRowsRef.current.delete(row.id)
       window.setTimeout(() => {
         setSaveState((prev) => {
           const next = { ...prev }
@@ -460,6 +468,7 @@ export default function Voorraad() {
         })
       }, 1600)
     } catch (error) {
+      draftRowsRef.current.delete(row.id)
       setLocalZeroRows((prev) => prev.filter((entry) => buildLocalZeroVisibilityKey(entry) !== buildLocalZeroVisibilityKey(row)))
       setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, ...originalRow } : entry))
       setSaveState((prev) => ({ ...prev, [row.id]: { status: 'error', message: error.message || 'Opslaan mislukt' } }));
@@ -515,7 +524,12 @@ export default function Voorraad() {
             emptyMessage="Geen resultaten"
             onInputChange={(nextValue) => {
               if (column.key === 'locatie') {
-                setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, locatie: nextValue, sublocatie: '' } : entry))
+                setRows((prev) => {
+                  const nextRows = prev.map((entry) => entry.id === row.id ? { ...entry, locatie: nextValue, sublocatie: '' } : entry)
+                  const latestRow = nextRows.find((entry) => entry.id === row.id)
+                  if (latestRow) draftRowsRef.current.set(row.id, { ...latestRow })
+                  return nextRows
+                })
                 return
               }
               setRowValue(row.id, column.key, nextValue)
@@ -523,19 +537,30 @@ export default function Voorraad() {
             onCommit={(nextValue) => {
               if (column.key === 'locatie') {
                 const validSublocations = locationOptions.sublocationsByLocation.get(nextValue) || []
-                setRows((prev) => prev.map((entry) => entry.id === row.id ? {
-                  ...entry,
-                  locatie: nextValue,
-                  sublocatie: validSublocations.includes(entry.sublocatie) ? entry.sublocatie : ''
-                } : entry))
+                setRows((prev) => {
+                  const nextRows = prev.map((entry) => entry.id === row.id ? {
+                    ...entry,
+                    locatie: nextValue,
+                    sublocatie: validSublocations.includes(entry.sublocatie) ? entry.sublocatie : ''
+                  } : entry)
+                  const latestRow = nextRows.find((entry) => entry.id === row.id)
+                  if (latestRow) draftRowsRef.current.set(row.id, { ...latestRow })
+                  return nextRows
+                })
                 window.setTimeout(() => persistEdit({ ...row, locatie: nextValue, sublocatie: (locationOptions.sublocationsByLocation.get(nextValue) || []).includes(row.sublocatie) ? row.sublocatie : '' }), 0)
                 return
               }
-              setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, [column.key]: nextValue } : entry))
+              setRows((prev) => {
+                const nextRows = prev.map((entry) => entry.id === row.id ? { ...entry, [column.key]: nextValue } : entry)
+                const latestRow = nextRows.find((entry) => entry.id === row.id)
+                if (latestRow) draftRowsRef.current.set(row.id, { ...latestRow })
+                return nextRows
+              })
               window.setTimeout(() => persistEdit({ ...row, [column.key]: nextValue }), 0)
             }}
             onCancel={() => {
               setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, ...editingCell.originalRow } : entry))
+              draftRowsRef.current.delete(row.id)
               stopEdit()
             }}
           />
@@ -557,6 +582,7 @@ export default function Voorraad() {
             }
             if (e.key === "Escape") {
               setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, ...editingCell.originalRow } : entry))
+              draftRowsRef.current.delete(row.id)
               stopEdit()
             }
           }}

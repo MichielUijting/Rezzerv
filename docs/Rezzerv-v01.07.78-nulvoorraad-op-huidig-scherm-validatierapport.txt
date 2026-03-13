@@ -1,0 +1,25 @@
+Rezzerv v01.07.78 - validatierapport
+
+Scope
+- Nulvoorraad op huidig scherm zichtbaar houden tot Voorraad opnieuw wordt geopend.
+
+Uitgevoerde wijziging
+- Voorraad inline edit gebruikt nu een synchron bijgehouden draftRowsRef, zodat opslaan na Enter/blur altijd de meest recente bewerkte rij gebruikt.
+- Dit voorkomt dat nulcorrecties op een verouderde rijstaat landen en de lokale nul-rij-preservatie wordt overgeslagen.
+- Escape/cancel ruimt draftstate op.
+
+Gewijzigd
+- frontend/src/pages/Voorraad.jsx
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/package.json
+- frontend/package-lock.json
+
+Niet gewijzigd
+- Automatische afboeking zichtbaar in Historie
+- Overige regressieclusters buiten nulvoorraad
+
+Build
+- Frontend build succesvol uitgevoerd.
