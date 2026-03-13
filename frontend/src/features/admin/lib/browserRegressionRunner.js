@@ -460,6 +460,18 @@ async function getActiveBatchLine(frame, articleName) {
 }
 
 
+async function waitForStoreBatchIdle(frame) {
+  await waitForAsyncCondition(async () => {
+    const doc = getFrameDocument(frame)
+    if (!doc) return false
+    const busyButton = Array.from(doc.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Bezig…')
+    if (busyButton) return false
+    const processButton = Array.from(doc.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Naar voorraad')
+    return Boolean(processButton) && !processButton.disabled
+  }, WAIT_TIMEOUT, 'Winkelbatch bleef bezet of knop Naar voorraad bleef uitgeschakeld')
+}
+
+
 async function openStoresPage(frame) {
   await navigateFrame(frame, '/winkels')
   const doc = getFrameDocument(frame)
@@ -660,10 +672,13 @@ async function setStoreLineReviewDecision(frame, articleName, decision) {
   setSelectValue(reviewSelect, decision)
   await delay(30)
   reviewSelect.dispatchEvent(new Event('change', { bubbles: true }))
-  await waitForCondition(() => {
+  await waitForAsyncCondition(async () => {
     const refreshedRow = getStoreLineRow(frame, articleName)
-    return refreshedRow?.querySelectorAll('select')?.[0]?.value === decision
+    if (refreshedRow?.querySelectorAll('select')?.[0]?.value !== decision) return false
+    const line = await getActiveBatchLine(frame, articleName)
+    return (line?.review_decision || 'selected') === decision
   }, WAIT_TIMEOUT, `Reviewbeslissing ${decision} werd niet opgeslagen voor ${articleName}`)
+  await waitForStoreBatchIdle(frame)
 }
 
 async function setStoreLineArticle(frame, articleName, mappedArticleId) {
@@ -673,15 +688,18 @@ async function setStoreLineArticle(frame, articleName, mappedArticleId) {
   setSelectValue(articleSelect, mappedArticleId)
   await delay(30)
   articleSelect.dispatchEvent(new Event('change', { bubbles: true }))
-  await waitForCondition(() => {
+  await waitForAsyncCondition(async () => {
     const refreshedRow = getStoreLineRow(frame, articleName)
-    return String(refreshedRow?.querySelectorAll('select')?.[1]?.value || '') === String(mappedArticleId)
+    if (String(refreshedRow?.querySelectorAll('select')?.[1]?.value || '') !== String(mappedArticleId)) return false
+    const line = await getActiveBatchLine(frame, articleName)
+    return String(line?.matched_household_article_id || '') === String(mappedArticleId)
   }, WAIT_TIMEOUT, (() => {
     const refreshedRow = getStoreLineRow(frame, articleName)
     const articleSelect = refreshedRow?.querySelectorAll('select')?.[1] || null
     const options = Array.from(articleSelect?.options || []).map((entry) => `${entry.textContent?.trim() || '?'}=${entry.value}`).join(', ')
     return `Artikelkoppeling werd niet opgeslagen voor ${articleName}. Geprobeerd: ${mappedArticleId}. Beschikbare opties: ${options}`
   })())
+  await waitForStoreBatchIdle(frame)
 }
 
 async function setStoreLineLocationByLabel(frame, articleName, expectedLabel) {
@@ -693,10 +711,13 @@ async function setStoreLineLocationByLabel(frame, articleName, expectedLabel) {
   setSelectValue(locationSelect, option.value)
   await delay(30)
   locationSelect.dispatchEvent(new Event('change', { bubbles: true }))
-  await waitForCondition(() => {
+  await waitForAsyncCondition(async () => {
     const refreshedRow = getStoreLineRow(frame, articleName)
-    return refreshedRow?.querySelectorAll('select')?.[2]?.value === option.value
+    if (refreshedRow?.querySelectorAll('select')?.[2]?.value !== option.value) return false
+    const line = await getActiveBatchLine(frame, articleName)
+    return String(line?.target_location_id || '') === String(option.value)
   }, WAIT_TIMEOUT, `Locatie ${expectedLabel} werd niet opgeslagen voor ${articleName}`)
+  await waitForStoreBatchIdle(frame)
 }
 
 async function ensureStoreLineReadyForProcessing(frame, articleName, mappedArticleId, expectedLocationLabel) {
@@ -752,13 +773,17 @@ async function processCurrentStoreBatch(frame, options = {}) {
   const batchId = getActiveBatchId(frame)
   const activeTitle = getFrameDocument(frame)?.querySelector('[data-testid="active-batch-title"]')?.textContent?.trim() || ''
   const providerName = activeTitle.replace(/^Kassabon\s+/, '').trim()
+  await waitForStoreBatchIdle(frame)
   const processButton = await waitForCondition(
-    () => Array.from(getFrameDocument(frame)?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Naar voorraad'),
+    () => {
+      const button = Array.from(getFrameDocument(frame)?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Naar voorraad')
+      return button && !button.disabled ? button : null
+    },
     WAIT_TIMEOUT,
-    'Knop Naar voorraad niet gevonden'
+    'Knop Naar voorraad niet gevonden of nog uitgeschakeld'
   )
   clickElement(processButton)
-  await delay(250)
+  await delay(350)
 
   const immediateWarning = describeProcessWarning(frame)
   if (immediateWarning) {

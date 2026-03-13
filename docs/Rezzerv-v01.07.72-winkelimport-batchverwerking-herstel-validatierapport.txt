@@ -1,0 +1,17 @@
+Rezzerv v01.07.72 — Winkelimport batchverwerking herstel
+
+Gewijzigd
+- Admin-regressierunner wacht nu expliciet tot winkelbatchregels backendmatig zijn opgeslagen na review-, artikel- en locatiekeuze.
+- Verwerking via 'Naar voorraad' wacht nu op een echt actieve knop in plaats van een mogelijk nog uitgeschakelde knop tijdens lopende regelupdates.
+- Hierdoor sluit de testaansturing beter aan op de feitelijke verwerkbaarheid van winkelbatchregels.
+- Versioning verhoogd naar 01.07.72.
+
+Niet gewijzigd
+- Geen brede functionele aanpassingen buiten het winkelimportcluster.
+- Geen wijzigingen aan automatiseringshistorie of losse voorraad/historie-herstelpunten buiten deze keten.
+
+Getest
+- Frontend build uitgevoerd.
+
+Restrisico
+- Deze release richt zich primair op het herstellen van de batchverwerkingsketen in combinatie met de Admin-regressietest. Verdere functionele afwijkingen buiten dit cluster kunnen nog afzonderlijke herstelreleases vereisen.
