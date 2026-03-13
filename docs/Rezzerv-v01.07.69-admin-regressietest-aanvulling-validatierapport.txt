@@ -1,0 +1,21 @@
+Rezzerv v01.07.69 validatierapport
+
+Gewijzigd:
+- Admin-regressierunner uitgebreid met tests voor winkelwaarschuwing Terug/Negeren.
+- Nieuwe regressietest toegevoegd voor partiële batchverwerking naar Voorraad.
+- Nieuwe regressietest toegevoegd voor Rezzerv-modal bij nieuw artikel aanmaken.
+- Styleguide-regressie toegevoegd voor winkelvelden en verwerkingswaarschuwing.
+- Nulvoorraad-heropenlogica toegevoegd aan de Admin-regressietest.
+- Fouttolerantie van ongeldige artikeldetailroute toegevoegd aan de Admin-regressietest.
+- Minimale data-testid hooks toegevoegd voor warning-modal en nieuw-artikelmodal.
+
+Niet gewijzigd:
+- Geen functionele uitbreiding van winkelimport buiten minimale testbaarheid.
+- Geen nieuwe businesslogica buiten bestaande ready_only-verwerking gebruikt door tests.
+
+Getest:
+- Frontend build succesvol uitgevoerd via npm run build.
+- Syntax en bundling van aangepaste Admin-regressierunner succesvol.
+
+Restrisico:
+- De nieuwe regressies zijn in code toegevoegd; volledige end-to-end uitvoering binnen Admin zelf is afhankelijk van de runtime-omgeving waarin de browserregressietest wordt gestart.

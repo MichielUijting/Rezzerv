@@ -181,6 +181,7 @@ export function StoreArticleSelector({
         <button
           type="button"
           className="rz-link-button"
+          data-testid={`store-create-article-trigger-${lineId}`}
           style={createArticleButtonStyle}
           disabled={disabled}
           onClick={openCreateArticleModal}
@@ -190,7 +191,7 @@ export function StoreArticleSelector({
       ) : null}
       {isCreateModalOpen ? (
         <div className="rz-modal-backdrop" role="presentation">
-          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby={`store-create-article-title-${lineId}`}>
+          <div className="rz-modal-card" data-testid={`store-create-article-modal-${lineId}`} role="dialog" aria-modal="true" aria-labelledby={`store-create-article-title-${lineId}`}>
             <h3 id={`store-create-article-title-${lineId}`} className="rz-modal-title">Nieuw artikel aanmaken</h3>
             <p className="rz-modal-text">Maak een nieuw Rezzerv-artikel aan voor deze winkelregel.</p>
             <div className="rz-store-modal-field">
@@ -198,6 +199,7 @@ export function StoreArticleSelector({
               <input
                 id={`store-create-article-input-${lineId}`}
                 className="rz-input"
+                data-testid={`store-create-article-input-${lineId}`}
                 type="text"
                 value={newArticleName}
                 disabled={disabled}
@@ -209,7 +211,7 @@ export function StoreArticleSelector({
             </div>
             {createArticleError ? <div className="rz-inline-feedback rz-store-modal-feedback">{createArticleError}</div> : null}
             <div className="rz-modal-actions">
-              <Button variant="secondary" type="button" onClick={closeCreateArticleModal} disabled={disabled}>Terug</Button>
+              <Button variant="secondary" data-testid={`store-create-article-cancel-${lineId}`} type="button" onClick={closeCreateArticleModal} disabled={disabled}>Terug</Button>
               <Button variant="primary" type="button" onClick={handleCreateArticle} disabled={disabled}>Opslaan</Button>
             </div>
           </div>

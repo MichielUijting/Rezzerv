@@ -405,15 +405,15 @@ export default function StoreBatchDetailPage() {
 
       {processWarning ? (
         <div className="rz-modal-backdrop" role="presentation">
-          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="process-warning-title">
+          <div className="rz-modal-card" data-testid="process-warning-modal" role="dialog" aria-modal="true" aria-labelledby="process-warning-title">
             <h3 id="process-warning-title" className="rz-modal-title">Nog niet alle regels zijn klaar</h3>
             <p className="rz-modal-text">
               {processWarning.missingArticles > 0 ? `${processWarning.missingArticles} regel(s) missen nog een artikelkoppeling. ` : ''}
               {processWarning.missingLocations > 0 ? `${processWarning.missingLocations} regel(s) missen nog een locatie.` : ''}
             </p>
             <div className="rz-modal-actions">
-              <Button variant="secondary" onClick={() => setProcessWarning(null)} disabled={isProcessingBatch}>Terug</Button>
-              <Button variant="primary" onClick={handleProcessReadyOnly} disabled={isProcessingBatch}>
+              <Button variant="secondary" data-testid="process-warning-back" onClick={() => setProcessWarning(null)} disabled={isProcessingBatch}>Terug</Button>
+              <Button variant="primary" data-testid="process-warning-ignore" onClick={handleProcessReadyOnly} disabled={isProcessingBatch}>
                 {isProcessingBatch ? 'Bezig…' : 'Negeren'}
               </Button>
             </div>

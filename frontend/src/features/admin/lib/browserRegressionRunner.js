@@ -295,6 +295,85 @@ async function clickButtonByText(doc, label) {
   return button
 }
 
+
+function getProcessWarningModal(frame) {
+  return getFrameDocument(frame)?.querySelector('[data-testid="process-warning-modal"]') || null
+}
+
+function describeProcessWarning(frame) {
+  const modal = getProcessWarningModal(frame)
+  if (!modal) return null
+  return {
+    title: modal.querySelector('#process-warning-title')?.textContent?.trim() || '',
+    text: modal.querySelector('.rz-modal-text')?.textContent?.trim() || '',
+  }
+}
+
+async function closeProcessWarning(frame, actionLabel = 'Terug') {
+  const modal = await waitForCondition(() => getProcessWarningModal(frame), WAIT_TIMEOUT, 'Waarschuwing voor verwerking niet gevonden')
+  const button = Array.from(modal.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === actionLabel)
+  if (!button) throw new Error(`Knop ${actionLabel} niet gevonden in verwerkingswaarschuwing`)
+  clickElement(button)
+  await waitForCondition(() => !getProcessWarningModal(frame), WAIT_TIMEOUT, `Waarschuwing sloot niet na ${actionLabel}`)
+}
+
+function getStoreLineArticleSearchInput(frame, articleName) {
+  const row = getStoreLineRow(frame, articleName)
+  return row?.querySelector('.rz-store-article-search-input') || null
+}
+
+async function ensureStoreCreateArticleModal(frame, articleName) {
+  const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
+  const trigger = row.querySelector('[data-testid^="store-create-article-trigger-"]')
+  if (!trigger) throw new Error(`Nieuw artikel aanmaken niet beschikbaar voor ${articleName}`)
+  clickElement(trigger)
+  return waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid^="store-create-article-modal-"]') || null, WAIT_TIMEOUT, `Nieuw artikel-modal opende niet voor ${articleName}`)
+}
+
+async function closeStoreCreateArticleModal(frame) {
+  const modal = await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid^="store-create-article-modal-"]') || null, WAIT_TIMEOUT, 'Nieuw artikel-modal niet gevonden')
+  const cancelButton = modal.querySelector('[data-testid^="store-create-article-cancel-"]') || Array.from(modal.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Terug')
+  if (!cancelButton) throw new Error('Terug-knop in nieuw artikel-modal niet gevonden')
+  clickElement(cancelButton)
+  await waitForCondition(() => !getFrameDocument(frame)?.querySelector('[data-testid^="store-create-article-modal-"]'), WAIT_TIMEOUT, 'Nieuw artikel-modal sloot niet')
+}
+
+function getBrandPrimaryRgb(doc) {
+  const color = doc?.defaultView?.getComputedStyle(doc.documentElement).getPropertyValue('--color-brand-primary') || '#1A3E2B'
+  const hex = color.trim().replace('#', '')
+  if (hex.length === 6) {
+    const r = parseInt(hex.slice(0, 2), 16)
+    const g = parseInt(hex.slice(2, 4), 16)
+    const b = parseInt(hex.slice(4, 6), 16)
+    return `rgb(${r}, ${g}, ${b})`
+  }
+  return 'rgb(26, 62, 43)'
+}
+
+function borderMatchesBrand(element) {
+  if (!element) return false
+  const doc = element.ownerDocument
+  const style = doc.defaultView.getComputedStyle(element)
+  const brand = getBrandPrimaryRgb(doc)
+  return style.borderTopColor === brand || style.borderColor === brand
+}
+
+async function ensureStoreFieldStyleguide(frame, articleName) {
+  const row = await waitForCondition(() => getStoreLineRow(frame, articleName), WAIT_TIMEOUT, `Regel ${articleName} niet gevonden`)
+  const doc = getFrameDocument(frame)
+  const reviewSelect = row.querySelector('select')
+  const locationSelect = row.querySelectorAll('select')?.[2] || null
+  if (!reviewSelect || !locationSelect) throw new Error(`Store-velden ontbreken voor ${articleName}`)
+  if (!borderMatchesBrand(reviewSelect)) throw new Error(`Review-select voor ${articleName} heeft geen donkergroene rand`)
+  if (!borderMatchesBrand(locationSelect)) throw new Error(`Locatieselect voor ${articleName} heeft geen donkergroene rand`)
+  reviewSelect.focus()
+  await delay(30)
+  const focusStyle = doc.defaultView.getComputedStyle(reviewSelect)
+  if (focusStyle.borderTopColor !== getBrandPrimaryRgb(doc)) {
+    throw new Error(`Focusstijl voor review-select van ${articleName} valt niet terug op donkergroen`)
+  }
+}
+
 async function ensureProviderConnectionAndBatch(frame, providerName, expectedArticleName) {
   await openStoresPage(frame)
   let doc = getFrameDocument(frame)
@@ -490,7 +569,8 @@ function describeStoreReviewState(frame) {
   }
 }
 
-async function processCurrentStoreBatch(frame) {
+async function processCurrentStoreBatch(frame, options = {}) {
+  const { warningAction = null } = options
   const batchId = getActiveBatchId(frame)
   const activeTitle = getFrameDocument(frame)?.querySelector('[data-testid="active-batch-title"]')?.textContent?.trim() || ''
   const providerName = activeTitle.replace(/^Kassabon\s+/, '').trim()
@@ -502,9 +582,15 @@ async function processCurrentStoreBatch(frame) {
   clickElement(processButton)
   await delay(250)
 
-  const immediateState = describeStoreReviewState(frame)
-  if (immediateState.warningTitle || immediateState.warningText) {
-    throw new Error(`Verwerken geblokkeerd: ${immediateState.warningTitle || 'waarschuwing'} ${immediateState.warningText}`.trim())
+  const immediateWarning = describeProcessWarning(frame)
+  if (immediateWarning) {
+    if (!warningAction) {
+      throw new Error(`Verwerken geblokkeerd: ${immediateWarning.title || 'waarschuwing'} ${immediateWarning.text}`.trim())
+    }
+    await closeProcessWarning(frame, warningAction)
+    if (warningAction === 'Terug') {
+      return { outcome: 'warning-dismissed', warning: immediateWarning }
+    }
   }
 
   await waitForAsyncCondition(async () => {
@@ -524,7 +610,7 @@ async function processCurrentStoreBatch(frame) {
       if (providerName && statusText.includes(providerName) && statusText.includes('Verwerkt')) return true
       if (batchId) {
         const batch = await fetchBatchById(batchId)
-        if (batch?.import_status === 'processed') return true
+        if (batch?.import_status === 'processed' || batch?.import_status === 'partially_processed') return true
       }
       return false
     }
@@ -533,7 +619,7 @@ async function processCurrentStoreBatch(frame) {
     if (busyButton) return false
 
     const batch = await fetchBatchById(batchId)
-    if (batch?.import_status === 'processed') return true
+    if (batch?.import_status === 'processed' || batch?.import_status === 'partially_processed') return true
 
     const state = describeStoreReviewState(frame)
     if (state.warningTitle || state.warningText) {
@@ -542,9 +628,12 @@ async function processCurrentStoreBatch(frame) {
 
     return false
   }, WAIT_TIMEOUT, `Verwerken naar voorraad werd niet bevestigd. Diagnose: ${JSON.stringify(describeStoreReviewState(frame))}`)
+
+  return { outcome: 'processed', warning: immediateWarning || null }
 }
 
 async function getInventoryRows() {
+
   const data = await requestJson('/api/dev/inventory-preview')
   return Array.isArray(data?.rows) ? data.rows : []
 }
@@ -702,6 +791,18 @@ async function ensureInventoryContainsArticle(frame, articleName) {
     const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
     return rows.some((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName)
   }, WAIT_TIMEOUT, `Artikel ${articleName} niet zichtbaar in Voorraad`)
+}
+
+
+async function ensureInventoryDoesNotContainArticle(frame, articleName) {
+  await navigateFrame(frame, '/voorraad')
+  await delay(150)
+  const doc = getFrameDocument(frame)
+  const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
+  const exists = rows.some((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName)
+  if (exists) {
+    throw new Error(`Artikel ${articleName} is nog zichtbaar in actuele Voorraad terwijl het verdwenen moest zijn`)
+  }
 }
 
 async function openSettings(frame) {
@@ -1004,6 +1105,103 @@ export async function runBrowserRegressionTests() {
       await setStoreImportSimplificationLevel(frame, 'gebalanceerd')
       await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       await ensureStoreLineExplanationContains(frame, 'Banaan', 'Geen eerdere mapping gevonden')
+    }, results)
+
+
+    await runScenario('Winkelwaarschuwing Terug annuleert verwerking zonder voorraadeffect', async () => {
+      await prepareRegressionFixture(frame)
+      const melkId = await getStoreReviewArticleOptionId('Melk')
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      const beforeQuantity = await getInventoryQuantity('Melk')
+      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
+      const result = await processCurrentStoreBatch(frame, { warningAction: 'Terug' })
+      if (result.outcome !== 'warning-dismissed') {
+        throw new Error('Verwerkingswaarschuwing werd niet als Terug-pad afgehandeld')
+      }
+      if (!String(frame.contentWindow?.location?.pathname || '').startsWith('/winkels/batch/')) {
+        throw new Error('Batchscherm bleef niet open na Terug in verwerkingswaarschuwing')
+      }
+      const afterQuantity = await getInventoryQuantity('Melk')
+      if (afterQuantity !== beforeQuantity) {
+        throw new Error('Voorraad wijzigde terwijl de gebruiker voor Terug koos')
+      }
+    }, results)
+
+    await runScenario('Winkelwaarschuwing Negeren verwerkt alleen complete regels', async () => {
+      await prepareRegressionFixture(frame)
+      const melkId = await getStoreReviewArticleOptionId('Melk')
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      const beforeMelk = await getInventoryQuantity('Melk')
+      const beforeBanaan = await getInventoryQuantity('Banaan')
+      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
+      const result = await processCurrentStoreBatch(frame, { warningAction: 'Negeren' })
+      if (result.outcome !== 'processed') {
+        throw new Error('Negeren leidde niet tot gecontroleerde verwerking')
+      }
+      await ensureStoreImportPersisted('Melk', beforeMelk, 'lidl')
+      const afterBanaan = await getInventoryQuantity('Banaan')
+      if (afterBanaan !== beforeBanaan) {
+        throw new Error('Onvolledige regel Banaan werd toch verwerkt bij Negeren')
+      }
+      const activeBatch = await fetchBatchById(getActiveBatchId(frame))
+      const melkLine = getBatchLine(activeBatch, 'Halfvolle melk')
+      const banaanLine = getBatchLine(activeBatch, 'Banaan')
+      if ((melkLine?.processing_status || 'pending') !== 'processed') {
+        throw new Error('Volledige regel Halfvolle melk werd niet als verwerkt gemarkeerd')
+      }
+      if ((banaanLine?.processing_status || 'pending') === 'processed') {
+        throw new Error('Onvolledige regel Banaan werd onterecht als verwerkt gemarkeerd')
+      }
+      await ensureInventoryContainsArticle(frame, 'Melk')
+    }, results)
+
+    await runScenario('Nieuw artikel aanmaken opent een Rezzerv-modal zonder browserprompt', async () => {
+      await prepareRegressionFixture(frame)
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      const searchInput = await waitForCondition(() => getStoreLineArticleSearchInput(frame, 'Banaan'), WAIT_TIMEOUT, 'Zoekveld voor Banaan niet gevonden')
+      setInputValue(searchInput, 'Banaan regressietest')
+      const modal = await ensureStoreCreateArticleModal(frame, 'Banaan')
+      const input = modal.querySelector('[data-testid^="store-create-article-input-"]') || modal.querySelector('input')
+      if (!input) throw new Error('Invoerveld in nieuw artikel-modal ontbreekt')
+      if (!borderMatchesBrand(input)) throw new Error('Nieuw artikel-modal gebruikt geen Rezzerv-stijl voor het invoerveld')
+      await closeStoreCreateArticleModal(frame)
+    }, results)
+
+    await runScenario('Winkelvelden en waarschuwingen volgen de styleguide', async () => {
+      await prepareRegressionFixture(frame)
+      const melkId = await getStoreReviewArticleOptionId('Melk')
+      await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
+      await ensureStoreFieldStyleguide(frame, 'Halfvolle melk')
+      await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
+      clickElement(await waitForCondition(() => Array.from(getFrameDocument(frame)?.querySelectorAll('button') || []).find((entry) => entry.textContent?.trim() === 'Naar voorraad'), WAIT_TIMEOUT, 'Knop Naar voorraad niet gevonden voor styleguidecontrole'))
+      const modal = await waitForCondition(() => getProcessWarningModal(frame), WAIT_TIMEOUT, 'Waarschuwing voor styleguidecontrole niet gevonden')
+      if (!borderMatchesBrand(modal)) throw new Error('Process-warning modal heeft geen donkergroene rand')
+      await closeProcessWarning(frame, 'Terug')
+    }, results)
+
+    await runScenario('Nulvoorraad blijft zichtbaar tot Voorraad opnieuw opent', async () => {
+      await prepareRegressionFixture(frame)
+      await setInventoryQuantityViaApi('Tomaten', 1)
+      await navigateFrame(frame, '/voorraad')
+      await filterInventoryOnArticle(frame, 'Tomaten')
+      await findInventoryRowInTable(frame, 'Tomaten')
+      await updateInventoryQuantityInUi(frame, 'Tomaten', 0)
+      const stillVisible = Array.from(getFrameDocument(frame)?.querySelectorAll('tbody tr') || []).some((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === 'Tomaten')
+      if (!stillVisible) {
+        throw new Error('Tomaten verdween direct uit het huidige voorraadscherm na nulcorrectie')
+      }
+      await navigateFrame(frame, '/home')
+      await ensureInventoryDoesNotContainArticle(frame, 'Tomaten')
+    }, results)
+
+    await runScenario('Ongeldige artikeldetailroute toont nette fouttoestand zonder crash', async () => {
+      await prepareRegressionFixture(frame)
+      await navigateFrame(frame, '/voorraad/onbekend-id')
+      const doc = getFrameDocument(frame)
+      await waitForCondition(() => queryText(doc, 'Artikel niet gevonden'), WAIT_TIMEOUT, 'Ongeldige artikeldetailroute toont geen fouttoestand')
+      if (!queryText(doc, 'Controleer de route of open het artikel opnieuw vanuit Voorraad.')) {
+        throw new Error('Ongeldige artikeldetailroute toont niet de verwachte begeleidende fouttekst')
+      }
     }, results)
 
     await runScenario('Lidl-flow kan een regel koppelen en naar voorraad verwerken', async () => {
