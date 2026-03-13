@@ -179,10 +179,12 @@ function mergeInventoryRows(liveRows = []) {
   const grouped = new Map()
 
   liveRows.forEach((row, index) => {
+    const aantal = Number(row?.aantal) || 0
+    if (aantal <= 0) return
+
     const artikel = row?.artikel || ''
     const key = normalizeName(artikel) || `unknown-${index}`
     const existing = grouped.get(key)
-    const aantal = Number(row?.aantal) || 0
     const locatie = row?.locatie || ''
     const sublocatie = row?.sublocatie || ''
 

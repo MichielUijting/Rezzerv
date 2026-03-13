@@ -1853,6 +1853,7 @@ def inventory_preview():
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
+            WHERE COALESCE(i.aantal, 0) > 0
             ORDER BY i.created_at ASC, i.id ASC
             """)
         ).mappings().all()

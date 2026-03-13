@@ -1,0 +1,18 @@
+Rezzerv v01.07.63 validatierapport
+
+Gewijzigd
+- Actuele voorraad-preview filtert backendmatig alle inventory-regels met aantal <= 0 weg.
+- Voorraadscherm filtert defensief ook lokaal alle regels met aantal <= 0 voordat aggregatie plaatsvindt.
+- Versie opgehoogd naar 01.07.63.
+
+Niet gewijzigd
+- Geen nieuwe features of mutaties buiten deze voorraadprojectiecorrectie.
+- Geen wijziging aan artikeldetailtabs of kassabonflow.
+
+Getest
+- Codepad gecontroleerd voor /api/dev/inventory-preview.
+- Frontend-aggregatie gecontroleerd voor uitsluiting van nulvoorraadregels.
+- Frontend build uitgevoerd.
+
+Restrisico
+- Als andere schermen niet via inventory-preview werken, kunnen die afzonderlijk nog eigen nulvoorraadlogica nodig hebben.
