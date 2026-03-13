@@ -32,6 +32,7 @@ export default function StoreBatchDetailPage() {
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
   const [processFeedback, setProcessFeedback] = useState('')
   const [processWarning, setProcessWarning] = useState(null)
+  const [lastProcessResult, setLastProcessResult] = useState(null)
   const processFeedbackTimer = useRef(null)
 
   const providersByCode = useMemo(
@@ -52,7 +53,7 @@ export default function StoreBatchDetailPage() {
   const selectedLines = visibleLines.filter((line) => (line.review_decision || 'selected') === 'selected')
   const linesMissingArticle = selectedLines.filter((line) => !line.matched_household_article_id).length
   const linesMissingLocation = selectedLines.filter((line) => !line.target_location_id || !validLocationIds.has(String(line.target_location_id))).length
-  const canProcessBatch = Boolean(batch && selectedLines.length > 0)
+  const canProcessBatch = Boolean(batch && selectedLines.length > 0 && !busyLineId && !isLoading)
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
   function clearTransientFeedback() {
@@ -212,18 +213,21 @@ export default function StoreBatchDetailPage() {
     setIsProcessingBatch(true)
     setError('')
     setStatus('')
+    setLastProcessResult(null)
     try {
       const result = await fetchJson(`/api/purchase-import-batches/${batch.batch_id}/process`, {
         method: 'POST',
         body: JSON.stringify({ processed_by: 'ui', mode: 'selected_only' }),
       })
+      await refreshBatch(batch.batch_id)
+      await refreshLocationOptions(household?.id)
+      setLastProcessResult(result)
       showProcessFeedback('Verwerkt!')
       if (result.failed_count > 0) {
-        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
+        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt. Controleer de overgebleven regels hieronder of open daarna Voorraad.`)
       } else {
-        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) zijn naar voorraad verwerkt.`)
+        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) zijn naar voorraad verwerkt. Open Voorraad om het resultaat te controleren.`)
       }
-      navigate('/winkels', { replace: true })
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
     } finally {
@@ -283,12 +287,21 @@ export default function StoreBatchDetailPage() {
                   <Button data-testid="process-active-batch" variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
                     {isProcessingBatch ? 'Bezig…' : 'Naar voorraad'}
                   </Button>
+                  <Button variant="secondary" onClick={() => navigate('/voorraad')}>Bekijk voorraad</Button>
                   {processFeedback ? <span className="rz-store-inline-feedback">{processFeedback}</span> : null}
                 </div>
               </div>
 
               <div className="rz-store-review-meta" style={{ marginBottom: '12px' }}>
                 Vereenvoudigingsniveau actief: {simplificationLevelLabel}. Bekende regels worden volgens dit niveau voorgesteld of automatisch voorbereid.
+              </div>
+
+              <div className="rz-store-review-meta" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                <span>Totaal: <strong>{batch.summary?.total || 0}</strong></span>
+                <span>Open: <strong>{visibleLines.length}</strong></span>
+                <span>Verwerkt: <strong>{batch.summary?.processed || 0}</strong></span>
+                <span>Mislukt: <strong>{batch.summary?.failed || 0}</strong></span>
+                {lastProcessResult?.processed_count ? <span>Laatst verwerkt: <strong>{lastProcessResult.processed_count}</strong></span> : null}
               </div>
 
               <div className="rz-table-wrapper">
@@ -326,13 +339,16 @@ export default function StoreBatchDetailPage() {
                                 Status voorbereiding: {line.preparation_mode === 'auto_ready' ? 'Automatisch klaargezet' : line.preparation_mode === 'suggest_only' ? 'Alleen voorstel' : 'Geen voorbereiding'}
                               </div>
                             ) : null}
+                            {line.processing_status === 'failed' && line.processing_error ? (
+                              <div style={{ color: '#b42318', fontWeight: 700, marginTop: '6px' }}>Verwerking mislukt: {line.processing_error}</div>
+                            ) : null}
                           </td>
                           <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                           <td>
                             <select
                               className="rz-input rz-store-select"
                               value={line.review_decision || 'selected'}
-                              disabled={busyLineId === line.id}
+                              disabled={busyLineId === line.id || isProcessingBatch}
                               onChange={(event) => handleReviewDecision(line.id, event.target.value)}
                             >
                               <option value="pending">Nog te beoordelen</option>
@@ -346,7 +362,7 @@ export default function StoreBatchDetailPage() {
                               lineName={line.article_name_raw}
                               selectedArticleId={line.matched_household_article_id || ''}
                               articleOptions={articleOptions}
-                              disabled={busyLineId === line.id}
+                              disabled={busyLineId === line.id || isProcessingBatch}
                               onChange={(nextArticleId) => handleMapLine(line.id, nextArticleId)}
                               onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
                             />
@@ -355,7 +371,7 @@ export default function StoreBatchDetailPage() {
                             <select
                               className="rz-input rz-store-select"
                               value={line.target_location_id || ''}
-                              disabled={busyLineId === line.id}
+                              disabled={busyLineId === line.id || isProcessingBatch}
                               onFocus={() => household?.id && refreshLocationOptions(household.id)}
                               onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
                               onChange={(event) => handleTargetLocation(line.id, event.target.value)}

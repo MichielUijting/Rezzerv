@@ -1,0 +1,25 @@
+Rezzerv v01.07.67 — kassabonbatch naar voorraad stabilisatie
+
+Gewijzigd
+- StoreBatchDetailPage verwerkt een batch nu in-page en blijft op het batchscherm na "Naar voorraad".
+- Na succesvolle verwerking wordt de batch direct opnieuw geladen zodat verwerkte en mislukte regels zichtbaar correct worden bijgewerkt.
+- Knop "Bekijk voorraad" toegevoegd om het voorraadeffect direct te controleren via de bestaande voorraadpagina.
+- Batchsamenvatting toegevoegd met total/open/verwerkt/mislukt en laatst verwerkte aantallen.
+- Mislukte regelverwerking toont nu de backend processing_error direct onder de betreffende regel.
+- Tijdens batchverwerking worden regelcontrols tijdelijk geblokkeerd om half-opgeslagen toestanden te voorkomen.
+- Versie consequent verhoogd naar 01.07.67.
+
+Niet gewijzigd
+- Geen nieuwe OCR of herkenningslogica.
+- Geen nieuwe batchtypes of winkelmodellen.
+- Geen redesign buiten de bestaande batchdetailflow.
+- Geen extra backendfeatures buiten bestaande batchverwerking.
+
+Getest
+- Frontend build succesvol uitgevoerd via npm run build.
+- Handmatige codecontrole op StoreBatchDetailPage voor route-openen, procesflow, foutstates en voorraadcontrolepad.
+- Versiebestanden gecontroleerd op 01.07.67.
+
+Restrisico
+- Echte functionele eindcontrole van batch -> voorraad blijft afhankelijk van gebruikersrun in de doelomgeving met data.
+- Stores-overzicht gebruikt bestaande statusafleiding; deze release hardt primair de batchdetailflow zelf.
