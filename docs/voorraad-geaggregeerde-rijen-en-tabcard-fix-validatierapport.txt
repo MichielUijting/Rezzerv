@@ -1,0 +1,26 @@
+Rezzerv validatierapport
+Versie: 01.07.55
+
+Doel
+- geaggregeerde rijen in Voorraad expliciet read-only inline maken
+- detailnavigatie voor geaggregeerde rijen behouden
+- tab-card-weergave in Artikeldetails visueel gelijk trekken
+
+Uitgevoerde wijzigingen
+- Voorraad.jsx
+  - badge "Samengevoegd" toegevoegd aan geaggregeerde artikelrijen
+  - expliciete row title en aria-label toegevoegd voor detailgedrag
+- Tabs.jsx
+  - centrale tabpanel wrapper toegevoegd voor gelijke content-uitlijning
+- base.css
+  - geaggregeerde rijen subtiel visueel onderscheiden
+  - disabled inline knoppen bewust read-only gestyled
+  - summary/history/location cards gelijkgetrokken in breedte en borderdikte
+
+Validatie
+- geaggregeerde rijen blijven detail-openbaar via dubbelklik
+- inline edit blijft alleen actief op enkelvoudige rijen
+- tabcontent gebruikt nu een gedeelde shell voor consistente positionering
+
+Beperking
+- lokale frontend build kon in deze omgeving niet worden uitgevoerd omdat node_modules/vite ontbrak in de uitgepakte bronmap

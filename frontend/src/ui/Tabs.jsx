@@ -23,7 +23,7 @@ export default function Tabs({ tabs, defaultTab, children }) {
         })}
       </div>
 
-      <div className="rz-tabcontent">{children(active)}</div>
+      <div className="rz-tabcontent"><div className="rz-tabpanel-shell">{children(active)}</div></div>
     </div>
   );
 }

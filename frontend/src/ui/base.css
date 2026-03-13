@@ -272,6 +272,13 @@ button.rz-tab.rz-tab-active {
   padding-top: 8px;
 }
 
+.rz-tabpanel-shell {
+  width: 100%;
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
 .rz-overview-tab {
   display: grid;
   gap: 20px;
@@ -464,7 +471,7 @@ button.rz-tab.rz-tab-active {
   background: #ffffff;
   display: grid;
   gap: 6px;
-  width: min(280px, 100%);
+  width: min(320px, 100%);
 }
 
 .rz-stock-summary-label {
@@ -533,12 +540,13 @@ button.rz-tab.rz-tab-active {
 }
 
 .rz-locations-summary-card {
-  border: 1px solid #dfe4ea;
+  border: 2px solid #dfe7e1;
   border-radius: 14px;
   padding: 16px 18px;
   background: #ffffff;
   display: grid;
   gap: 4px;
+  width: min(320px, 100%);
 }
 
 .rz-locations-summary-label {
@@ -573,7 +581,7 @@ button.rz-tab.rz-tab-active {
   justify-content: space-between;
   gap: 16px;
   align-items: center;
-  border: 1px solid #dfe4ea;
+  border: 2px solid #dfe7e1;
   border-radius: 12px;
   padding: 14px 16px;
   background: #ffffff;
@@ -629,7 +637,7 @@ button.rz-tab.rz-tab-active {
 }
 
 .rz-history-card {
-  border: 1px solid #dfe4ea;
+  border: 2px solid #dfe7e1;
   border-radius: 12px;
   padding: 14px 16px;
   background: #ffffff;
@@ -1128,4 +1136,41 @@ button.rz-tab.rz-tab-active {
 .rz-stock-row-interactive .rz-inline-input{
   position: relative;
   z-index: 1;
+}
+
+.rz-stock-row-aggregated {
+  background: #f8fbf8;
+}
+
+.rz-stock-row-aggregated td {
+  background: #f8fbf8;
+}
+
+.rz-stock-row-aggregated .rz-inline-cell-button.rz-inline-cell-disabled {
+  opacity: 1;
+  color: #475467;
+  background: #f3f6f3;
+  border-color: #d0d9d3;
+  cursor: not-allowed;
+}
+
+.rz-stock-article-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rz-stock-row-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border: 1px solid #bfd7c6;
+  border-radius: 999px;
+  background: #eef8f1;
+  color: var(--color-brand-primary);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }

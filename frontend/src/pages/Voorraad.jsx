@@ -311,12 +311,12 @@ export default function Voorraad() {
 
     if (column.key === "artikel") {
       return (
-        <span
-          className="rz-inline-cell rz-inline-label"
-          title={row?.canOpenDetails ? 'Dubbelklik op de rij voor details' : undefined}
-        >
-          {row[column.key]}
-        </span>
+        <div className="rz-inline-cell rz-inline-label rz-stock-article-cell" title={row?.canOpenDetails ? 'Dubbelklik op de rij voor details' : undefined}>
+          <span>{row[column.key]}</span>
+          {row?.isAggregated ? (
+            <span className="rz-stock-row-badge" aria-label="Samengevoegde rij">Samengevoegd</span>
+          ) : null}
+        </div>
       );
     }
 
@@ -420,7 +420,8 @@ export default function Voorraad() {
                       onDoubleClick={(event) => handleRowDoubleClick(event, row)}
                       onKeyDown={(event) => handleRowKeyDown(event, row)}
                       tabIndex={row.canOpenDetails ? 0 : -1}
-                      aria-label={row.canOpenDetails ? `Open details van ${row.artikel} met dubbelklik` : undefined}
+                      aria-label={row.canOpenDetails ? `Open details van ${row.artikel}${row.isAggregated ? '. Samengevoegde rij, inline aanpassen via details.' : ''}` : undefined}
+                      title={row.isAggregated ? 'Samengevoegde rij — pas verdeling aan in details' : (row.canOpenDetails ? 'Dubbelklik voor details' : undefined)}
                     >
                       <td>
                         <input
