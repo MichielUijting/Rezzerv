@@ -1,0 +1,18 @@
+Rezzerv v01.07.75 validatierapport
+
+Gewijzigd
+- Voorraad bewaart lokaal een net-op-0-gezette rij zichtbaar op het huidige scherm tot het scherm opnieuw wordt geladen.
+- Admin-regressierunner herkent geaggregeerde voorraadrijen met suffix "(samengevoegd)" nu als hetzelfde artikel.
+
+Niet gewijzigd
+- Automatische afboeking in Historie is niet aangepast.
+- Het voorzichtig/alleen voorstel-pad in winkelimport is niet aangepast.
+
+Getest
+- Frontend build succesvol uitgevoerd.
+- Voorraadcomponent syntactisch gevalideerd via productiebuild.
+- Regressierunner helpers bijgewerkt voor geaggregeerde artikelnamen.
+
+Restrisico
+- Zichtbare voorraadhoeveelheden blijven afhankelijk van de backendprojectie /api/dev/inventory-preview.
+- Voorraadscenario's moeten in runtime opnieuw bevestigd worden via Admin-regressietest.

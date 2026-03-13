@@ -1,5 +1,10 @@
 const FRAME_ID = "rezzerv-regression-runner-frame"
 const WAIT_TIMEOUT = 9000
+
+function normalizeInventoryArticleText(value) {
+  return String(value || '').replace(/\s*\(samengevoegd\)\s*$/i, '').trim().toLowerCase()
+}
+
 const POLL_INTERVAL = 100
 const HOUSEHOLD_KEY = 'rezzerv_household_auto_consume_on_repurchase'
 const ARTICLE_OVERRIDE_KEY = 'rezzerv_article_auto_consume_overrides'
@@ -890,7 +895,7 @@ async function findInventoryRowInTable(frame, articleName) {
   return waitForCondition(() => {
     const doc = getFrameDocument(frame)
     const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
-    return rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName) || null
+    return rows.find((entry) => normalizeInventoryArticleText(entry.querySelectorAll('td')[1]?.textContent) === normalizeInventoryArticleText(articleName)) || null
   }, WAIT_TIMEOUT, `Artikel ${articleName} niet gevonden in Voorraad`)
 }
 
@@ -916,7 +921,7 @@ async function ensureInventoryTableQuantity(frame, articleName, expectedQuantity
   await waitForCondition(() => {
     const doc = getFrameDocument(frame)
     const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
-    const row = rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName)
+    const row = rows.find((entry) => normalizeInventoryArticleText(entry.querySelectorAll('td')[1]?.textContent) === normalizeInventoryArticleText(articleName))
     if (!row) return false
     return row.querySelectorAll('td')[2]?.textContent?.includes(String(expectedQuantity))
   }, WAIT_TIMEOUT, `Voorraad toont ${articleName} niet met aantal ${expectedQuantity}`)
@@ -997,7 +1002,7 @@ async function ensureInventoryContainsArticle(frame, articleName) {
   await waitForCondition(() => {
     const doc = getFrameDocument(frame)
     const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
-    return rows.some((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName)
+    return rows.some((entry) => normalizeInventoryArticleText(entry.querySelectorAll('td')[1]?.textContent) === normalizeInventoryArticleText(articleName))
   }, WAIT_TIMEOUT, `Artikel ${articleName} niet zichtbaar in Voorraad`)
 }
 
@@ -1007,7 +1012,7 @@ async function ensureInventoryDoesNotContainArticle(frame, articleName) {
   await delay(150)
   const doc = getFrameDocument(frame)
   const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
-  const exists = rows.some((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName)
+  const exists = rows.some((entry) => normalizeInventoryArticleText(entry.querySelectorAll('td')[1]?.textContent) === normalizeInventoryArticleText(articleName))
   if (exists) {
     throw new Error(`Artikel ${articleName} is nog zichtbaar in actuele Voorraad terwijl het verdwenen moest zijn`)
   }
@@ -1397,7 +1402,7 @@ export async function runBrowserRegressionTests() {
       await filterInventoryOnArticle(frame, 'Mosterd')
       await findInventoryRowInTable(frame, 'Mosterd')
       await updateInventoryQuantityInUi(frame, 'Mosterd', 0)
-      const stillVisible = Array.from(getFrameDocument(frame)?.querySelectorAll('tbody tr') || []).some((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === 'Mosterd')
+      const stillVisible = Array.from(getFrameDocument(frame)?.querySelectorAll('tbody tr') || []).some((entry) => normalizeInventoryArticleText(entry.querySelectorAll('td')[1]?.textContent) === 'mosterd')
       if (!stillVisible) {
         throw new Error('Mosterd verdween direct uit het huidige voorraadscherm na nulcorrectie')
       }

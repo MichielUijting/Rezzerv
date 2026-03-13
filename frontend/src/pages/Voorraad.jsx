@@ -13,6 +13,22 @@ function normalizeText(value) {
   return String(value || '').trim().toLowerCase()
 }
 
+function buildLocalZeroVisibilityKey(row) {
+  return String(row?.detailId || row?.id || row?.artikel || '')
+}
+
+function mergeVisibleZeroRows(rows = [], localZeroRows = []) {
+  const existingKeys = new Set(rows.map((row) => buildLocalZeroVisibilityKey(row)))
+  const appended = [...rows]
+  localZeroRows.forEach((row) => {
+    const key = buildLocalZeroVisibilityKey(row)
+    if (!key || existingKeys.has(key)) return
+    appended.push({ ...row, aantal: 0, _localZeroVisible: true })
+    existingKeys.add(key)
+  })
+  return appended
+}
+
 function buildLocationOptionState(options = []) {
   const locations = []
   const seenLocations = new Set()
@@ -301,9 +317,11 @@ function getColumnLockMessage(row, key) {
 export default function Voorraad() {
   const navigate = useNavigate();
   const [rows, setRows] = useState(initialData);
+  const [localZeroRows, setLocalZeroRows] = useState([]);
 
   const reloadInventoryRows = async () => {
     const loadedRows = await fetchInventoryRows()
+    setLocalZeroRows([])
     setRows(loadedRows)
     setLoadError(loadedRows.length ? '' : 'Nog geen live voorraad beschikbaar.')
     return loadedRows
@@ -324,6 +342,7 @@ export default function Voorraad() {
     Promise.all([fetchInventoryRows(), fetchLocationOptions().catch(() => buildLocationOptionState([]))])
       .then(([loadedRows, loadedOptions]) => {
         if (!cancelled) {
+          setLocalZeroRows([]);
           setRows(loadedRows);
           setLocationOptions(loadedOptions);
           setLoadError(loadedRows.length ? "" : "Nog geen live voorraad beschikbaar.");
@@ -331,6 +350,7 @@ export default function Voorraad() {
       })
       .catch(() => {
         if (!cancelled) {
+          setLocalZeroRows([]);
           setRows([]);
           setLoadError("Live voorraad kon niet worden geladen.");
         }
@@ -346,14 +366,15 @@ export default function Voorraad() {
   };
 
   const filteredRows = useMemo(() => {
-    return rows.filter((row) =>
+    const sourceRows = mergeVisibleZeroRows(rows, localZeroRows)
+    return sourceRows.filter((row) =>
       editableColumns.every((column) => {
         const filterValue = String(filters[column.key] ?? "").trim().toLowerCase();
         if (!filterValue) return true;
         return String(row[column.key] ?? "").toLowerCase().includes(filterValue);
       })
     );
-  }, [rows, filters]);
+  }, [rows, localZeroRows, filters]);
 
   const setRowValue = (rowId, key, value) => {
     setRows((prev) =>
@@ -411,6 +432,16 @@ export default function Voorraad() {
 
     try {
       await saveInventoryRow(row)
+      if ((Number(row.aantal) || 0) <= 0) {
+        setLocalZeroRows((prev) => {
+          const key = buildLocalZeroVisibilityKey(row)
+          const next = prev.filter((entry) => buildLocalZeroVisibilityKey(entry) !== key)
+          next.push({ ...row, _localZeroVisible: true })
+          return next
+        })
+      } else {
+        setLocalZeroRows((prev) => prev.filter((entry) => buildLocalZeroVisibilityKey(entry) !== buildLocalZeroVisibilityKey(row)))
+      }
       const refreshedOptions = await fetchLocationOptions().catch(() => locationOptions)
       setLocationOptions(refreshedOptions)
       setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saved', message: 'Opgeslagen' } }));
@@ -422,6 +453,7 @@ export default function Voorraad() {
         })
       }, 1600)
     } catch (error) {
+      setLocalZeroRows((prev) => prev.filter((entry) => buildLocalZeroVisibilityKey(entry) !== buildLocalZeroVisibilityKey(row)))
       setRows((prev) => prev.map((entry) => entry.id === row.id ? { ...entry, ...originalRow } : entry))
       setSaveState((prev) => ({ ...prev, [row.id]: { status: 'error', message: error.message || 'Opslaan mislukt' } }));
     }
