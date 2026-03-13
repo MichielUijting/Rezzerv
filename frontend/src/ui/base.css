@@ -439,12 +439,23 @@ button.rz-tab.rz-tab-active {
 }
 
 .rz-admin-report-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  gap: 6px;
   border: 1px solid #dfe4ea;
   border-radius: 10px;
   padding: 10px 12px;
+}
+
+.rz-admin-report-main {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rz-admin-report-meta-line {
+  color: #355247;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .rz-admin-report-row--passed {

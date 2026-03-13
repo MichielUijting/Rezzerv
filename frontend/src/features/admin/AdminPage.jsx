@@ -341,8 +341,14 @@ export default function AdminPage() {
                 <div className="rz-admin-report-list">
                   {testReport.results?.length ? testReport.results.map((result) => (
                     <div key={result.name} className={`rz-admin-report-row rz-admin-report-row--${result.status}`}>
-                      <span>{result.name}</span>
-                      <span>{result.status === "passed" ? "Geslaagd" : result.status === "blocked" ? "Geblokkeerd" : result.status === "skipped" ? "Overgeslagen" : "Gefaald"}</span>
+                      <div className="rz-admin-report-main">
+                        <span>{result.name}</span>
+                        <span>{result.status === "passed" ? "Geslaagd" : result.status === "blocked" ? "Geblokkeerd" : result.status === "skipped" ? "Overgeslagen" : "Gefaald"}</span>
+                      </div>
+                      {result.triageCategory ? <div className="rz-admin-report-meta-line">Type: {result.triageCategory}</div> : null}
+                      {result.error ? <div className="rz-admin-report-meta-line">Fout: {result.error}</div> : null}
+                      {result.triageRationale ? <div className="rz-admin-report-meta-line">Analyse: {result.triageRationale}</div> : null}
+                      {result.triageSuggestedAction ? <div className="rz-admin-report-meta-line">Advies: {result.triageSuggestedAction}</div> : null}
                     </div>
                   )) : <div className="rz-admin-muted">Nog geen rapport beschikbaar</div>}
                 </div>

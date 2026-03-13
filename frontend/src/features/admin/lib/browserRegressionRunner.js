@@ -6,6 +6,93 @@ const ARTICLE_OVERRIDE_KEY = 'rezzerv_article_auto_consume_overrides'
 const REGRESSION_PROGRESS_KEY = 'rezzerv_regression_progress'
 const REGRESSION_FIXTURE_KEY = 'rezzerv_regression_fixture'
 
+const FAILURE_TRIAGE = {
+  'Handmatige voorraadcorrectie blijft persistent en zichtbaar in historie': {
+    category: 'test-isolatieprobleem',
+    rationale: 'Scenario combineert exacte voorraadverwachting en historieverificatie na een mutatie; dit blijft gevoelig voor fixture-afwijkingen en tussentijdse projectievertraging.',
+    suggestedAction: 'Isoleer voorraad- en historiecontrole op een eigen schone fixture of valideer via event-id in plaats van alleen zichtbare aantallen.',
+  },
+  'Huishoudinstelling aan + follow_household → automatische afboeking zichtbaar': {
+    category: 'functionele bug',
+    rationale: 'Analyse-status slaagt al, maar het verwachte historie-/eventeffect verschijnt niet stabiel. Dat wijst eerder op write/projectiegedrag dan op alleen testopzet.',
+    suggestedAction: 'Controleer automatische afboeking bij follow_household op eventcreatie, historiebron en projectie.',
+  },
+  'Artikeloverride always_on → automatische afboeking zichtbaar bij huishoudinstelling uit': {
+    category: 'functionele bug',
+    rationale: 'Read-status voor overrides is aantoonbaar zichtbaar, maar het verwachte automatische event wordt niet consequent gevonden.',
+    suggestedAction: 'Controleer override always_on in combinatie met huishoudinstelling uit op daadwerkelijke eventregistratie.',
+  },
+  'Vereenvoudigingsniveau gebalanceerd vult bekende regels automatisch in': {
+    category: 'verouderde of te harde testverwachting',
+    rationale: 'Dit scenario hangt af van een precieze prefill-status in de review-UI. Als wording of tussenstatus is gewijzigd zonder functionele breuk, wordt de test te hard.',
+    suggestedAction: 'Vergelijk de verwachte UI-status met het actuele simplificatieniveau en versoepel selectors/verwachtingen waar nodig.',
+  },
+  'Vereenvoudigingsniveau maximaal gemak bereidt bekende regels automatisch voor maar verwerkt niet stil': {
+    category: 'verouderde of te harde testverwachting',
+    rationale: 'De test leunt sterk op een specifieke suggestiestatus en exact gelijkblijvende voorraad vóór expliciete actie.',
+    suggestedAction: 'Bevestig eerst het actuele gedrag van maximaal gemak en verlaag de afhankelijkheid van exacte labeltekst of tussenstatus.',
+  },
+  'Winkelimport toont uitleg bij bekende regel met alleen voorstel': {
+    category: 'verouderde of te harde testverwachting',
+    rationale: 'Deze check valideert vooral copy/UI-uitleg. Een kleine tekst- of statusverschuiving kan de test breken terwijl de flow functioneel nog klopt.',
+    suggestedAction: 'Maak de uitlegcheck semantischer of update de verwachting naar de actuele uitlegvariant.',
+  },
+  'Winkelwaarschuwing Terug annuleert verwerking zonder voorraadeffect': {
+    category: 'functionele bug',
+    rationale: 'Dit scenario test een bewust geïntroduceerd gebruikerspad. Als Terug geen stabiele annulering zonder voorraadeffect oplevert, is dat functioneel relevant.',
+    suggestedAction: 'Controleer waarschuwing-modal, actiebinding van Terug en eventuele onbedoelde process-triggering.',
+  },
+  'Winkelwaarschuwing Negeren verwerkt alleen complete regels': {
+    category: 'functionele bug',
+    rationale: 'Negeren hoort juist een partiële verwerking te doen. Failure wijst erop dat onvolledige regels nog blokkeren of toch meeliften.',
+    suggestedAction: 'Controleer ready_only-verwerking, frontend-selectie en batchstatus per regel.',
+  },
+  'Winkelvelden en waarschuwingen volgen de styleguide': {
+    category: 'functionele bug',
+    rationale: 'Deze check adresseert een expliciete PO-eis en controleert echte UI-uitvoer, niet alleen testdata.',
+    suggestedAction: 'Controleer store-veldclasses, focusstijl en modal-/feedbackomkadering in regressiemodus.',
+  },
+  'Nulvoorraad blijft zichtbaar tot Voorraad opnieuw opent': {
+    category: 'test-isolatieprobleem',
+    rationale: 'Het scenario combineert inline UI-state en daarna een nieuwe route-open. Dat is gevoelig voor timing en filtering op een al gemuteerde voorraadset.',
+    suggestedAction: 'Houd dit scenario op een volledig eigen voorraadfixture en log het verschil tussen huidig scherm en heropende route expliciet.',
+  },
+  'Lidl-flow kan een regel koppelen en naar voorraad verwerken': {
+    category: 'functionele bug',
+    rationale: 'Dit is een kernflowtest voor batchverwerking. Failure betekent dat bestaande winkelverwerking nog niet reproduceerbaar dicht zit.',
+    suggestedAction: 'Controleer koppeling, locatiekeuze, process-endpoint en zichtbaar voorraadeffect voor Lidl.',
+  },
+  'Jumbo-flow kan een regel koppelen en naar voorraad verwerken': {
+    category: 'functionele bug',
+    rationale: 'Net als bij Lidl betreft dit een kernflow. Failure wijst op echte instabiliteit in verwerkingspad of voorraadlanding.',
+    suggestedAction: 'Controleer Jumbo batchverwerking, rule readiness en projectie naar actuele voorraad.',
+  },
+  'Winkelimport bewaart twee losse events voor hetzelfde artikel en Historie toont beide': {
+    category: 'functionele bug',
+    rationale: 'De verwachting raakt expliciet eventbehoud en historiepresentatie. Als één van beide ontbreekt, is dat een inhoudelijk probleem.',
+    suggestedAction: 'Controleer of twee imports echt twee aparte inventory_events opleveren en of Historie beide bronnen rendert.',
+  },
+}
+
+function classifyFailure(name, errorMessage) {
+  const mapped = FAILURE_TRIAGE[name]
+  if (mapped) return mapped
+  const message = String(errorMessage || '').toLowerCase()
+  if (message.includes('niet gevonden') || message.includes('timeout') || message.includes('zichtbaar')) {
+    return {
+      category: 'test-isolatieprobleem',
+      rationale: 'De fout lijkt afhankelijk van timing, zichtbaarheid of fixture-opbouw in plaats van een harde businessregel.',
+      suggestedAction: 'Controleer scenario-isolatie, selectors en expliciete fixture-opbouw voor dit pad.',
+    }
+  }
+  return {
+    category: 'functionele bug',
+    rationale: 'De resterende fout lijkt niet te herleiden tot een bekende isolatie- of verwachtingmismatch.',
+    suggestedAction: 'Controleer dit scenario functioneel in de applicatie en valideer daarna of de testverwachting nog klopt.',
+  }
+}
+
+
 function delay(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
@@ -31,7 +118,7 @@ function updateRegressionProgress(patch = {}) {
 }
 
 function clearRegressionProgress(finalPatch = {}) {
-  updateRegressionProgress({ status: 'idle', activeScenario: null, activeStep: null, ...finalPatch })
+  updateRegressionProgress({ status: 'idle', activeScenario: null, activeStep: null, failureCategory: null, failureRationale: null, failureSuggestedAction: null, ...finalPatch })
 }
 
 function setRegressionStep(step) {
@@ -191,15 +278,30 @@ function doubleClickElement(element) {
 }
 
 async function runScenario(name, fn, results) {
-  updateRegressionProgress({ activeScenario: name, activeStep: 'start', lastError: null })
+  updateRegressionProgress({ activeScenario: name, activeStep: 'start', lastError: null, failureCategory: null, failureRationale: null, failureSuggestedAction: null })
   try {
     await fn()
-    results.push({ name, status: 'passed', error: null })
+    results.push({ name, status: 'passed', error: null, triageCategory: null, triageRationale: null, triageSuggestedAction: null })
     updateRegressionProgress({ completedScenario: name, activeStep: 'geslaagd' })
   } catch (error) {
     const status = error?.blocked ? 'blocked' : (error?.skipped ? 'skipped' : 'failed')
-    results.push({ name, status, error: error.message || 'Onbekende fout' })
-    updateRegressionProgress({ completedScenario: name, activeStep: status, lastError: error.message || 'Onbekende fout' })
+    const triage = status === 'failed' ? classifyFailure(name, error?.message) : null
+    results.push({
+      name,
+      status,
+      error: error.message || 'Onbekende fout',
+      triageCategory: triage?.category || null,
+      triageRationale: triage?.rationale || null,
+      triageSuggestedAction: triage?.suggestedAction || null,
+    })
+    updateRegressionProgress({
+      completedScenario: name,
+      activeStep: status,
+      lastError: error.message || 'Onbekende fout',
+      failureCategory: triage?.category || null,
+      failureRationale: triage?.rationale || null,
+      failureSuggestedAction: triage?.suggestedAction || null,
+    })
   }
 }
 
@@ -208,6 +310,18 @@ function createBlockedError(message) {
   const error = new Error(message)
   error.blocked = true
   return error
+}
+
+function summarizeFailureMatrix(results) {
+  return results
+    .filter((entry) => entry?.status === 'failed')
+    .map((entry) => ({
+      name: entry.name,
+      category: entry.triageCategory || 'onbekend',
+      error: entry.error || '',
+      rationale: entry.triageRationale || '',
+      suggestedAction: entry.triageSuggestedAction || '',
+    }))
 }
 
 async function requestJson(path, options = {}) {
@@ -1334,5 +1448,10 @@ export async function runBrowserRegressionTests() {
     removeExistingFrame()
   }
 
+  try {
+    window.localStorage.setItem('rezzerv_regression_failure_matrix', JSON.stringify(summarizeFailureMatrix(results)))
+  } catch {
+    // negeer storage-fouten
+  }
   return results
 }

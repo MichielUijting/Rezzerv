@@ -42,6 +42,9 @@ export default function TestStatusCard({ status, progress }) {
         {progress?.activeStep ? <div>Actieve stap: {progress.activeStep}</div> : null}
         {progress?.completedScenario ? <div>Laatst afgerond scenario: {progress.completedScenario}</div> : null}
         {progress?.lastError && !status?.last_error ? <div>Lopende foutcontext: {progress.lastError}</div> : null}
+        {progress?.failureCategory ? <div>Failure-type: {progress.failureCategory}</div> : null}
+        {progress?.failureRationale ? <div>Analyse: {progress.failureRationale}</div> : null}
+        {progress?.failureSuggestedAction ? <div>Advies: {progress.failureSuggestedAction}</div> : null}
       </div>
     </div>
   )

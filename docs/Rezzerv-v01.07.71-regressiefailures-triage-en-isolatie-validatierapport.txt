@@ -1,0 +1,19 @@
+Rezzerv v01.07.71 validatierapport
+
+Gewijzigd
+- Admin-regressierunner classificeert gefaalde scenario's nu met triageCategory, triageRationale en triageSuggestedAction.
+- Teststatuskaart toont tijdens runtime de geclassificeerde failure-context.
+- Admin testrapport toont per gefaalde testcase type, fout, analyse en advies.
+- Versies verhoogd naar 01.07.71.
+- Triage-matrix toegevoegd in docs/Rezzerv-v01.07.71-regressiefailures-triage-matrix.md.
+
+Niet gewijzigd
+- Geen brede functionele herstelwerkzaamheden aan winkelimport, automatisering of voorraadlogica.
+- Geen nieuwe regressiedekking buiten triage/rapportage.
+
+Getest
+- Statische controle op gewijzigde frontendbestanden.
+- Frontend build uitgevoerd.
+
+Restrisico
+- Classificaties zijn bestuurlijke triage-inschattingen op basis van huidige failurepatronen; de functionele herstelreleases moeten dit daarna per cluster bevestigen.
