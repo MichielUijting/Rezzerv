@@ -1,0 +1,29 @@
+Rezzerv-v01.07.74 validatierapport
+
+Doel
+- voorraadregressie-fixtures en testverwachtingen valideren op basis van de echte zip/codebasis
+
+Uitgevoerd
+- actuele bronbasis geopend vanuit Rezzerv-v01.07.73.zip
+- generate_demo_data() en prepareRegressionFixture() gecontroleerd
+- Voorraad.jsx aggregatielogica gecontroleerd
+- regressierunner gecontroleerd op voorraadverwachtingen rond Tomaten, Melk en Mosterd
+
+Bevindingen
+- Tomaten bestaat in de fixture uit meerdere voorraadregels en wordt in Voorraad geaggregeerd weergegeven
+- zichtverwachting "Tomaten = 3" is daarom onjuist als standaardverwachting in Voorraad
+- Melk-bestaan in Voorraad is als regressiecheck te zwak omdat Melk al in de beginfixture bestaat
+
+Doorgevoerd
+- handmatige voorraadcorrectietest verplaatst van Tomaten naar Mosterd
+- nulvoorraadtest verplaatst van Tomaten naar Mosterd
+- winkelimporttests valideren nu zichtbare hoeveelheid in Voorraad in plaats van alleen bestaan van een rij
+- versioning consistent verhoogd naar 01.07.74
+
+Niet gewijzigd
+- geen brede functionele voorraadfixes
+- geen winkelimport-logica
+- geen automatische-afboeking-logica
+
+Restrisico
+- als na deze testcorrecties nog voorraadtests rood blijven, dan zijn dat sterkere kandidaten voor echte appbugs in projectie of zichtlogica

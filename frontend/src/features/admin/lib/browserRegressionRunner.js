@@ -1128,26 +1128,26 @@ export async function runBrowserRegressionTests() {
     }, results)
     await runScenario('Handmatige voorraadcorrectie blijft persistent en zichtbaar in historie', async () => {
       await prepareRegressionFixture(frame)
-      await setInventoryQuantityViaApi('Tomaten', 3)
-      await ensureInventoryTableQuantity(frame, 'Tomaten', 3)
-      await updateInventoryQuantityInUi(frame, 'Tomaten', 5)
-      await openArticleFromInventory(frame, 'Tomaten')
+      await setInventoryQuantityViaApi('Mosterd', 1)
+      await ensureInventoryTableQuantity(frame, 'Mosterd', 1)
+      await updateInventoryQuantityInUi(frame, 'Mosterd', 3)
+      await openArticleFromInventory(frame, 'Mosterd')
       await ensureTabContains(frame, 'Voorraad', 'Totale voorraad', 'Voorraad-tab toont geen inhoud na handmatige correctie')
-      await waitForCondition(() => queryText(getFrameDocument(frame), '5'), WAIT_TIMEOUT, 'Totale voorraad 5 niet zichtbaar in artikeldetail')
-      await ensureManualAdjustmentHistory(frame, 3, 5)
-      await ensureInventoryTableQuantity(frame, 'Tomaten', 5)
+      await waitForCondition(() => queryText(getFrameDocument(frame), '3'), WAIT_TIMEOUT, 'Totale voorraad 3 niet zichtbaar in artikeldetail')
+      await ensureManualAdjustmentHistory(frame, 1, 3)
+      await ensureInventoryTableQuantity(frame, 'Mosterd', 3)
       await frame.contentWindow.location.reload()
       await waitForCondition(() => {
         const doc = getFrameDocument(frame)
         return doc && doc.readyState === 'complete'
       }, WAIT_TIMEOUT, 'Herladen van Voorraad duurde te lang')
-      await filterInventoryOnArticle(frame, 'Tomaten')
+      await filterInventoryOnArticle(frame, 'Mosterd')
       await waitForCondition(() => {
         const doc = getFrameDocument(frame)
         const rows = Array.from(doc?.querySelectorAll('tbody tr') || [])
-        const row = rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === 'Tomaten')
-        return row?.querySelectorAll('td')[2]?.textContent?.includes('5')
-      }, WAIT_TIMEOUT, 'Voorraad 5 bleef niet zichtbaar na herladen')
+        const row = rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === 'Mosterd')
+        return row?.querySelectorAll('td')[2]?.textContent?.includes('3')
+      }, WAIT_TIMEOUT, 'Voorraad 3 bleef niet zichtbaar na herladen')
     }, results)
 
     await runScenario('Artikeldetail Analyse toont inhoud', async () => {
@@ -1349,6 +1349,7 @@ export async function runBrowserRegressionTests() {
         throw new Error('Negeren leidde niet tot gecontroleerde verwerking')
       }
       await ensureStoreImportPersisted('Melk', beforeMelk, 'lidl')
+      const afterMelk = await getInventoryQuantity('Melk')
       const afterBanaan = await getInventoryQuantity('Banaan')
       if (afterBanaan !== beforeBanaan) {
         throw new Error('Onvolledige regel Banaan werd toch verwerkt bij Negeren')
@@ -1362,7 +1363,7 @@ export async function runBrowserRegressionTests() {
       if ((banaanLine?.processing_status || 'pending') === 'processed') {
         throw new Error('Onvolledige regel Banaan werd onterecht als verwerkt gemarkeerd')
       }
-      await ensureInventoryContainsArticle(frame, 'Melk')
+      await ensureInventoryTableQuantity(frame, 'Melk', afterMelk)
     }, results)
 
     await runScenario('Nieuw artikel aanmaken opent een Rezzerv-modal zonder browserprompt', async () => {
@@ -1391,17 +1392,17 @@ export async function runBrowserRegressionTests() {
 
     await runScenario('Nulvoorraad blijft zichtbaar tot Voorraad opnieuw opent', async () => {
       await prepareRegressionFixture(frame)
-      await setInventoryQuantityViaApi('Tomaten', 1)
+      await setInventoryQuantityViaApi('Mosterd', 1)
       await navigateFrame(frame, '/voorraad')
-      await filterInventoryOnArticle(frame, 'Tomaten')
-      await findInventoryRowInTable(frame, 'Tomaten')
-      await updateInventoryQuantityInUi(frame, 'Tomaten', 0)
-      const stillVisible = Array.from(getFrameDocument(frame)?.querySelectorAll('tbody tr') || []).some((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === 'Tomaten')
+      await filterInventoryOnArticle(frame, 'Mosterd')
+      await findInventoryRowInTable(frame, 'Mosterd')
+      await updateInventoryQuantityInUi(frame, 'Mosterd', 0)
+      const stillVisible = Array.from(getFrameDocument(frame)?.querySelectorAll('tbody tr') || []).some((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === 'Mosterd')
       if (!stillVisible) {
-        throw new Error('Tomaten verdween direct uit het huidige voorraadscherm na nulcorrectie')
+        throw new Error('Mosterd verdween direct uit het huidige voorraadscherm na nulcorrectie')
       }
       await navigateFrame(frame, '/home')
-      await ensureInventoryDoesNotContainArticle(frame, 'Tomaten')
+      await ensureInventoryDoesNotContainArticle(frame, 'Mosterd')
     }, results)
 
     await runScenario('Ongeldige artikeldetailroute toont nette fouttoestand zonder crash', async () => {
@@ -1425,7 +1426,8 @@ export async function runBrowserRegressionTests() {
       await ensureStoreLineReadyForProcessing(frame, 'Halfvolle melk', melkId, 'Voorraad test / Plank test')
       await processCurrentStoreBatch(frame)
       await ensureStoreImportPersisted('Melk', beforeQuantity, 'lidl')
-      await ensureInventoryContainsArticle(frame, 'Melk')
+      const afterQuantity = await getInventoryQuantity('Melk')
+      await ensureInventoryTableQuantity(frame, 'Melk', afterQuantity)
     }, results)
 
     await runScenario('Jumbo-flow kan een regel koppelen en naar voorraad verwerken', async () => {
@@ -1439,7 +1441,8 @@ export async function runBrowserRegressionTests() {
       await ensureStoreLineReadyForProcessing(frame, 'Tomaten', tomatenId, 'Voorraad test / Plank test')
       await processCurrentStoreBatch(frame)
       await ensureStoreImportPersisted('Tomaten', beforeQuantity, 'jumbo')
-      await ensureInventoryContainsArticle(frame, 'Tomaten')
+      const afterQuantity = await getInventoryQuantity('Tomaten')
+      await ensureInventoryTableQuantity(frame, 'Tomaten', afterQuantity)
     }, results)
 
     await runScenario('Winkelimport bewaart twee losse events voor hetzelfde artikel en Historie toont beide', async () => {
