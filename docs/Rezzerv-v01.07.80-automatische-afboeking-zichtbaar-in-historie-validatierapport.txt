@@ -1,0 +1,34 @@
+Rezzerv v01.07.80 - validatierapport
+
+Doel
+- Herstellen dat automatische afboeking zichtbaar wordt in Historie voor de regressiescenario's:
+  - Huishoudinstelling aan + follow_household
+  - Artikeloverride always_on bij huishoudinstelling uit
+
+Gewijzigd
+- backend/app/main.py
+  - nieuw dev endpoint toegevoegd: POST /api/dev/inventory/purchase
+  - endpoint maakt een purchase-event aan met correcte old_quantity/new_quantity op basis van bestaande voorraad
+  - endpoint werkt daarna ook de inventory-projectie bij
+- frontend/src/features/admin/lib/browserRegressionRunner.js
+  - prepareRegressionFixture() voegt nu expliciet een testaankoop voor Mosterd toe na het opbouwen van de deterministische fixture
+  - ensureHistoryAutoState() wacht nu bij verwachte zichtbaarheid expliciet tot 'Automatisch (herhaalaankoop)' werkelijk in Historie verschijnt
+- versioning consistent verhoogd naar 01.07.80
+
+Analyse
+- De eerdere fixture bevatte voor Mosterd alleen een initiële seed-/voorraadregel met old_quantity = 0.
+- applyAutoRepurchaseHistory() verrijkt Historie alleen bij aankoopregels met previousStock > 0.
+- Daardoor konden de scenario's follow_household en always_on nooit groen worden, ook al waren de instellingen zelf correct.
+- Door in de fixture een echte herhaalaankoop voor Mosterd toe te voegen ontstaat een aankoop-event met previousStock > 0 en kan de Historie-tab het automatische afboekingseffect tonen.
+
+Niet gewijzigd
+- Geen wijzigingen aan winkelimport, nulvoorraad of andere regressieclusters.
+- Geen wijziging aan handmatige voorraadcorrectie-flow.
+
+Getest
+- Frontend build succesvol uitgevoerd via npm run build.
+- Gerichte codevalidatie op fixture-opbouw en historieverrijking uitgevoerd.
+
+Restrisico
+- Deze release leunt op een regressiefixture met een expliciete testaankoop voor Mosterd.
+- Als handmatige runtime-tests voor automatische afboeking een afwijkend triggerpad tonen, kan aanvullende applicatielogica nog nodig zijn.
