@@ -1,0 +1,19 @@
+Rezzerv-v01.07.83 – validatierapport automatische-afboeking-regressietests herijkt
+
+Gewijzigd
+- Volledige regressiesuite behouden vanaf vertrouwde basis v01.07.79.
+- Nieuwe dev-fixture endpoint POST /api/dev/inventory/purchase toegevoegd, uitsluitend voor regressiefixture-opbouw van een echte herhaalaankoop.
+- Runnerhelpers toegevoegd om een bestaand consumable artikel met bestaande voorraad een tweede aankoop te laten krijgen.
+- De 4 automatiseringsscenario's bouwen nu expliciet een tweede aankoop op voordat Historie op automatische afboeking wordt gecontroleerd.
+
+Niet gewijzigd
+- Geen appfixes voor automatische afboeking in de normale flow.
+- Geen wijzigingen aan winkelimport, nulvoorraad, Admin-navigatie of overige groene scenario's.
+
+Getest
+- Frontend build succesvol uitgevoerd.
+- Codeanalyse bevestigt dat de eerdere tests geen echte herhaalaankoop uitvoerden.
+- Nieuwe tests veroorzaken nu expliciet een purchase-event met old_quantity > 0 voor hetzelfde artikel.
+
+Restrisico
+- Als de 2 tests na deze herijking nog rood blijven, is dat een sterkere aanwijzing voor een echte appbug in automatische afboeking of Historie.

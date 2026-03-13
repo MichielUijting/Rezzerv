@@ -82,6 +82,14 @@ class InventoryUpdate(BaseModel):
     sublocation_name: Optional[str] = None
 
 
+class InventoryPurchaseCreate(BaseModel):
+    naam: str
+    aantal: int
+    space_id: str
+    sublocation_id: Optional[str] = None
+    note: Optional[str] = None
+
+
 class DiagnosticRequest(BaseModel):
     household_id: Optional[str] = None
 
@@ -1778,6 +1786,40 @@ def create_inventory(payload: InventoryCreate):
                 location_label=location_label,
             )
     return {"status": "ok", "id": new_id if row else None}
+
+
+@app.post("/api/dev/inventory/purchase")
+def create_inventory_purchase(payload: InventoryPurchaseCreate):
+    with engine.begin() as conn:
+        space_id, sublocation_id = resolve_space_and_sublocation_ids(
+            conn,
+            'demo-household',
+            space_id=payload.space_id,
+            sublocation_id=payload.sublocation_id,
+        )
+
+        resolved_location = {
+            "space_id": space_id,
+            "sublocation_id": sublocation_id,
+        }
+        inventory_id = apply_inventory_purchase(
+            conn,
+            'demo-household',
+            payload.naam,
+            payload.aantal,
+            resolved_location,
+        )
+        create_inventory_purchase_event(
+            conn,
+            'demo-household',
+            inventory_id,
+            payload.naam,
+            payload.aantal,
+            resolved_location,
+            payload.note or 'Regressie herhaalaankoop',
+        )
+
+    return {"status": "ok", "id": inventory_id}
 
 
 @app.put("/api/dev/inventory/{inventory_id}")

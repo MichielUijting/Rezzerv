@@ -965,9 +965,40 @@ async function getStoreReviewArticleOptionId(articleName) {
   return String(match.id)
 }
 
-async function getArticleHistoryRows(articleName) {
-  const data = await requestJson(`/api/dev/article-history?article_name=${encodeURIComponent(articleName)}`)
-  return Array.isArray(data?.rows) ? data.rows : []
+async function getArticleInventoryRow(articleName) {
+  const rows = await getInventoryRows()
+  const normalized = normalizeInventoryArticleText(articleName)
+  return rows.find((row) => normalizeInventoryArticleText(row?.artikel) === normalized) || null
+}
+
+async function createRepeatPurchaseForArticle(articleName, quantity = 1, note = 'Regressie herhaalaankoop') {
+  const row = await getArticleInventoryRow(articleName)
+  if (!row?.ruimte_id) {
+    throw new Error(`Herhaalaankoop kan niet worden voorbereid: geen voorraadrij met locatie gevonden voor ${articleName}`)
+  }
+  await requestJson('/api/dev/inventory/purchase', {
+    method: 'POST',
+    body: JSON.stringify({
+      naam: articleName,
+      aantal: quantity,
+      space_id: row.ruimte_id,
+      sublocation_id: row.sublocatie_id || null,
+      note,
+    }),
+  })
+}
+
+async function ensureRepeatPurchaseHistoryReady(articleName, quantity = 1) {
+  const row = await getArticleInventoryRow(articleName)
+  const previousQuantity = Number(row?.aantal || 0)
+  if (!(previousQuantity > 0)) {
+    throw new Error(`Herhaalaankoop vereist bestaande voorraad > 0 voor ${articleName}, maar kreeg ${previousQuantity}`)
+  }
+  await createRepeatPurchaseForArticle(articleName, quantity)
+  await waitForAsyncCondition(async () => {
+    const rows = await getArticleHistoryRows(articleName)
+    return rows.some((entry) => entry?.event_type === 'purchase' && Number(entry?.old_quantity) >= previousQuantity)
+  }, WAIT_TIMEOUT, `Herhaalaankoop werd niet zichtbaar in historiebron voor ${articleName}`)
 }
 
 
@@ -1172,30 +1203,38 @@ export async function runBrowserRegressionTests() {
     }, results)
 
     await runScenario('Huishoudinstelling uit → geen automatische afboeking in Historie', async () => {
+      await prepareRegressionFixture(frame)
       await setHouseholdAutomation(frame, false)
       await openArticleFromInventory(frame, 'Mosterd')
       await setArticleOverride(frame, 'follow_household')
+      await ensureRepeatPurchaseHistoryReady('Mosterd', 1)
       await ensureHistoryAutoState(frame, 'Mosterd', false)
     }, results)
 
     await runScenario('Huishoudinstelling aan + follow_household → automatische afboeking zichtbaar', async () => {
+      await prepareRegressionFixture(frame)
       await setHouseholdAutomation(frame, true)
       await openArticleFromInventory(frame, 'Mosterd')
       await setArticleOverride(frame, 'follow_household')
+      await ensureRepeatPurchaseHistoryReady('Mosterd', 1)
       await ensureHistoryAutoState(frame, 'Mosterd', true)
     }, results)
 
     await runScenario('Artikeloverride always_on → automatische afboeking zichtbaar bij huishoudinstelling uit', async () => {
+      await prepareRegressionFixture(frame)
       await setHouseholdAutomation(frame, false)
       await openArticleFromInventory(frame, 'Mosterd')
       await setArticleOverride(frame, 'always_on')
+      await ensureRepeatPurchaseHistoryReady('Mosterd', 1)
       await ensureHistoryAutoState(frame, 'Mosterd', true)
     }, results)
 
     await runScenario('Artikeloverride always_off → automatische afboeking niet zichtbaar bij huishoudinstelling aan', async () => {
+      await prepareRegressionFixture(frame)
       await setHouseholdAutomation(frame, true)
       await openArticleFromInventory(frame, 'Mosterd')
       await setArticleOverride(frame, 'always_off')
+      await ensureRepeatPurchaseHistoryReady('Mosterd', 1)
       await ensureHistoryAutoState(frame, 'Mosterd', false)
     }, results)
 
