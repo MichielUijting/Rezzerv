@@ -32,6 +32,7 @@ export default function StoreBatchDetailPage() {
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
   const [processFeedback, setProcessFeedback] = useState('')
   const [processWarning, setProcessWarning] = useState(null)
+  const [processMode, setProcessMode] = useState('selected_only')
   const [lastProcessResult, setLastProcessResult] = useState(null)
   const processFeedbackTimer = useRef(null)
 
@@ -208,7 +209,7 @@ export default function StoreBatchDetailPage() {
     }
   }
 
-  async function processBatchNow() {
+  async function processBatchNow(mode = processMode) {
     if (!batch) return
     setIsProcessingBatch(true)
     setError('')
@@ -217,11 +218,12 @@ export default function StoreBatchDetailPage() {
     try {
       const result = await fetchJson(`/api/purchase-import-batches/${batch.batch_id}/process`, {
         method: 'POST',
-        body: JSON.stringify({ processed_by: 'ui', mode: 'selected_only' }),
+        body: JSON.stringify({ processed_by: 'ui', mode }),
       })
       await refreshBatch(batch.batch_id)
       await refreshLocationOptions(household?.id)
       setLastProcessResult(result)
+      setProcessWarning(null)
       showProcessFeedback('Verwerkt!')
       if (result.failed_count > 0) {
         setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt. Controleer de overgebleven regels hieronder of open daarna Voorraad.`)
@@ -237,6 +239,7 @@ export default function StoreBatchDetailPage() {
 
   async function handleProcessBatch() {
     if (!batch) return
+    setProcessMode('selected_only')
     if (linesMissingLocation > 0 || linesMissingArticle > 0) {
       setError('')
       setProcessWarning({
@@ -245,7 +248,12 @@ export default function StoreBatchDetailPage() {
       })
       return
     }
-    await processBatchNow()
+    await processBatchNow('selected_only')
+  }
+
+  async function handleProcessReadyOnly() {
+    setProcessMode('ready_only')
+    await processBatchNow('ready_only')
   }
 
   return (
@@ -265,10 +273,10 @@ export default function StoreBatchDetailPage() {
         </Card>
 
         {error ? (
-          <Card><div style={{ color: '#b42318', fontWeight: 700 }}>{error}</div></Card>
+          <Card><div className="rz-inline-feedback rz-inline-feedback--error">{error}</div></Card>
         ) : null}
         {status ? (
-          <Card><div style={{ color: '#0f5132', fontWeight: 700 }}>{status}</div></Card>
+          <Card><div className="rz-inline-feedback rz-inline-feedback--success">{status}</div></Card>
         ) : null}
 
         {isLoading ? (
@@ -340,7 +348,7 @@ export default function StoreBatchDetailPage() {
                               </div>
                             ) : null}
                             {line.processing_status === 'failed' && line.processing_error ? (
-                              <div style={{ color: '#b42318', fontWeight: 700, marginTop: '6px' }}>Verwerking mislukt: {line.processing_error}</div>
+                              <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginTop: '6px' }}>Verwerking mislukt: {line.processing_error}</div>
                             ) : null}
                           </td>
                           <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
@@ -404,7 +412,10 @@ export default function StoreBatchDetailPage() {
               {processWarning.missingLocations > 0 ? `${processWarning.missingLocations} regel(s) missen nog een locatie.` : ''}
             </p>
             <div className="rz-modal-actions">
-              <Button variant="secondary" onClick={() => setProcessWarning(null)}>Terug</Button>
+              <Button variant="secondary" onClick={() => setProcessWarning(null)} disabled={isProcessingBatch}>Terug</Button>
+              <Button variant="primary" onClick={handleProcessReadyOnly} disabled={isProcessingBatch}>
+                {isProcessingBatch ? 'Bezig…' : 'Negeren'}
+              </Button>
             </div>
           </div>
         </div>

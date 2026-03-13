@@ -225,21 +225,21 @@ body {
 }
 
 .rz-inline-feedback--warning {
-  color: #8a4b0f;
-  background: #fff4e5;
-  border: 1px solid #f0d7b8;
+  color: var(--color-brand-primary);
+  background: #f4fbf6;
+  border: 2px solid var(--color-brand-primary);
 }
 
 .rz-inline-feedback--success {
   color: var(--color-brand-primary);
   background: #eef8f1;
-  border: 1px solid var(--color-border-default);
+  border: 2px solid var(--color-brand-primary);
 }
 
 .rz-inline-feedback--error {
-  color: #9c4221;
-  background: #fff1ed;
-  border: 1px solid #f3c7bb;
+  color: var(--color-brand-primary);
+  background: #f8f5ef;
+  border: 2px solid var(--color-brand-primary);
 }
 
 .rz-tabbar {
@@ -1349,4 +1349,21 @@ button.rz-tab.rz-tab-active {
 .rz-location-row,
 .rz-history-card {
   border-width: 2px;
+}
+
+
+.rz-store-modal-field {
+  display: grid;
+  gap: 8px;
+}
+
+.rz-store-modal-label {
+  font-weight: 700;
+  color: var(--color-brand-primary);
+}
+
+.rz-store-modal-feedback {
+  color: var(--color-brand-primary);
+  background: #f4fbf6;
+  border: 2px solid var(--color-brand-primary);
 }

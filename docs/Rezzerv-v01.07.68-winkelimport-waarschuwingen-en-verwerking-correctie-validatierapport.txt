@@ -1,0 +1,17 @@
+Rezzerv v01.07.68 validatierapport
+
+Gewijzigd
+- Winkelimportvelden en meldingen gebruiken nu donkergroene omkadering en expliciete focusstijl.
+- Native browserprompt voor artikel aanmaken vervangen door Rezzerv-modal.
+- Waarschuwing bij onvolledige winkelregels ondersteunt nu Negeren / Terug.
+- Negeren verwerkt alleen volledig gekoppelde geselecteerde regels via ready_only mode.
+
+Niet gewijzigd
+- Geen nieuwe winkelimportfeatures, OCR of analysefunctionaliteit toegevoegd.
+
+Getest
+- Frontend build
+- Syntactische controle van StoreBatchDetailPage en storeImportShared
+
+Restrisico
+- Functionele eindvalidatie van batchverwerking en zichtbaarheid in Voorraad vereist handmatige gebruikerscontrole.

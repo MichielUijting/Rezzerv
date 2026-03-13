@@ -192,7 +192,13 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 
 .rz-store-inline-feedback {
   font-weight: 700;
-  color: #0f5132;
+  color: var(--color-brand-primary);
+  border: 2px solid var(--color-brand-primary);
+  border-radius: 10px;
+  background: #f4fbf6;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .rz-store-suggestion {

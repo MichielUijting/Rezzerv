@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import Button from '../../ui/Button'
 import demoData from '../../demo-articles.json'
 
 export function normalizeErrorMessage(value) {
@@ -85,6 +86,9 @@ export function StoreArticleSelector({
     return new Map(entries)
   }, [articleOptions])
   const [query, setQuery] = useState(selectedArticleId ? (labelById.get(String(selectedArticleId)) || '') : '')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [newArticleName, setNewArticleName] = useState('')
+  const [createArticleError, setCreateArticleError] = useState('')
 
   useEffect(() => {
     const nextValue = selectedArticleId ? (labelById.get(String(selectedArticleId)) || '') : ''
@@ -95,14 +99,31 @@ export function StoreArticleSelector({
   const hasExactMatch = Boolean(normalizedQuery && Array.from(optionsByLabel.keys()).some((label) => label.trim().toLowerCase() === normalizedQuery))
   const canCreateArticle = Boolean(normalizedQuery) && !hasExactMatch && !selectedArticleId
 
-  async function handleCreateArticle() {
+  function openCreateArticleModal() {
     const baseName = query.trim() || lineName || ''
-    const nextName = window.prompt('Nieuw artikel aanmaken', baseName)
-    if (!nextName) return
+    setNewArticleName(baseName)
+    setCreateArticleError('')
+    setIsCreateModalOpen(true)
+  }
+
+  function closeCreateArticleModal() {
+    setIsCreateModalOpen(false)
+    setCreateArticleError('')
+  }
+
+  async function handleCreateArticle() {
+    const nextName = newArticleName.trim() || lineName || ''
+    if (!nextName) {
+      setCreateArticleError('Vul eerst een artikelnaam in.')
+      return
+    }
     const created = await onCreateArticle(nextName)
     if (created?.name) {
       setQuery(articleLabel(created))
+      closeCreateArticleModal()
+      return
     }
+    setCreateArticleError('Het artikel kon niet worden aangemaakt.')
   }
 
   function handleInputChange(event) {
@@ -162,10 +183,37 @@ export function StoreArticleSelector({
           className="rz-link-button"
           style={createArticleButtonStyle}
           disabled={disabled}
-          onClick={handleCreateArticle}
+          onClick={openCreateArticleModal}
         >
           Nieuw artikel aanmaken
         </button>
+      ) : null}
+      {isCreateModalOpen ? (
+        <div className="rz-modal-backdrop" role="presentation">
+          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby={`store-create-article-title-${lineId}`}>
+            <h3 id={`store-create-article-title-${lineId}`} className="rz-modal-title">Nieuw artikel aanmaken</h3>
+            <p className="rz-modal-text">Maak een nieuw Rezzerv-artikel aan voor deze winkelregel.</p>
+            <div className="rz-store-modal-field">
+              <label className="rz-store-modal-label" htmlFor={`store-create-article-input-${lineId}`}>Artikelnaam</label>
+              <input
+                id={`store-create-article-input-${lineId}`}
+                className="rz-input"
+                type="text"
+                value={newArticleName}
+                disabled={disabled}
+                onChange={(event) => {
+                  setNewArticleName(event.target.value)
+                  if (createArticleError) setCreateArticleError('')
+                }}
+              />
+            </div>
+            {createArticleError ? <div className="rz-inline-feedback rz-store-modal-feedback">{createArticleError}</div> : null}
+            <div className="rz-modal-actions">
+              <Button variant="secondary" type="button" onClick={closeCreateArticleModal} disabled={disabled}>Terug</Button>
+              <Button variant="primary" type="button" onClick={handleCreateArticle} disabled={disabled}>Opslaan</Button>
+            </div>
+          </div>
+        </div>
       ) : null}
     </div>
   )

@@ -151,8 +151,8 @@ class ProcessBatchRequest(BaseModel):
     @field_validator("mode")
     @classmethod
     def validate_mode(cls, value):
-        if value != "selected_only":
-            raise ValueError("Alleen selected_only wordt ondersteund")
+        if value not in {"selected_only", "ready_only"}:
+            raise ValueError("Alleen selected_only of ready_only wordt ondersteund")
         return value
 
 
@@ -2671,7 +2671,14 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
         ).mappings().all()
 
         selected_lines = [line for line in lines if (line["review_decision"] or "pending") == "selected"]
+        if payload.mode == "ready_only":
+            selected_lines = [
+                line for line in selected_lines
+                if line["matched_household_article_id"] and line["target_location_id"]
+            ]
         if not selected_lines:
+            if payload.mode == "ready_only":
+                raise HTTPException(status_code=400, detail="Er zijn geen volledig gekoppelde regels om te verwerken")
             raise HTTPException(status_code=400, detail="Er zijn geen geselecteerde regels om te verwerken")
 
         results = []
