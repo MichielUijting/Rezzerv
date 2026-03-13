@@ -83,11 +83,8 @@ class InventoryUpdate(BaseModel):
 
 
 class InventoryPurchaseCreate(BaseModel):
-    naam: str
-    aantal: int
-    space_id: str
-    sublocation_id: Optional[str] = None
-    note: Optional[str] = None
+    article_name: str
+    quantity: int = 1
 
 
 class DiagnosticRequest(BaseModel):
@@ -1788,40 +1785,6 @@ def create_inventory(payload: InventoryCreate):
     return {"status": "ok", "id": new_id if row else None}
 
 
-@app.post("/api/dev/inventory/purchase")
-def create_inventory_purchase(payload: InventoryPurchaseCreate):
-    with engine.begin() as conn:
-        space_id, sublocation_id = resolve_space_and_sublocation_ids(
-            conn,
-            'demo-household',
-            space_id=payload.space_id,
-            sublocation_id=payload.sublocation_id,
-        )
-
-        resolved_location = {
-            "space_id": space_id,
-            "sublocation_id": sublocation_id,
-        }
-        inventory_id = apply_inventory_purchase(
-            conn,
-            'demo-household',
-            payload.naam,
-            payload.aantal,
-            resolved_location,
-        )
-        create_inventory_purchase_event(
-            conn,
-            'demo-household',
-            inventory_id,
-            payload.naam,
-            payload.aantal,
-            resolved_location,
-            payload.note or 'Regressie herhaalaankoop',
-        )
-
-    return {"status": "ok", "id": inventory_id}
-
-
 @app.put("/api/dev/inventory/{inventory_id}")
 def update_inventory(inventory_id: str, payload: InventoryUpdate):
     with engine.begin() as conn:
@@ -1880,6 +1843,82 @@ def update_inventory(inventory_id: str, payload: InventoryUpdate):
             },
         )
     return updated_row
+
+@app.post("/api/dev/inventory/purchase")
+def create_inventory_purchase(payload: InventoryPurchaseCreate):
+    article_name = (payload.article_name or '').strip()
+    quantity = int(payload.quantity or 0)
+    if not article_name:
+        raise HTTPException(status_code=400, detail="article_name is verplicht")
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="quantity moet groter zijn dan 0")
+
+    with engine.begin() as conn:
+        existing = conn.execute(
+            text(
+                """
+                SELECT
+                  i.id,
+                  i.household_id,
+                  i.naam,
+                  i.aantal,
+                  i.space_id,
+                  i.sublocation_id,
+                  COALESCE(s.naam, '') AS locatie,
+                  COALESCE(sl.naam, '') AS sublocatie
+                FROM inventory i
+                LEFT JOIN spaces s ON s.id = i.space_id
+                LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
+                WHERE lower(i.naam) = lower(:article_name)
+                  AND COALESCE(i.aantal, 0) > 0
+                ORDER BY i.updated_at DESC, i.created_at ASC, i.id ASC
+                LIMIT 1
+                """
+            ),
+            {"article_name": article_name},
+        ).mappings().first()
+        if not existing:
+            raise HTTPException(status_code=404, detail=f"Geen voorraadrij met locatie gevonden voor {article_name}")
+
+        old_quantity = int(existing.get('aantal') or 0)
+        new_quantity = old_quantity + quantity
+        location_label = ' / '.join(part for part in [existing.get('locatie') or '', existing.get('sublocatie') or ''] if part)
+        location_id = existing.get('sublocation_id') or existing.get('space_id') or ''
+
+        conn.execute(
+            text(
+                """
+                UPDATE inventory
+                SET aantal = :new_quantity,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :inventory_id
+                """
+            ),
+            {"inventory_id": existing['id'], "new_quantity": new_quantity},
+        )
+
+        seed_inventory_event(
+            conn,
+            article_name=existing.get('naam') or article_name,
+            quantity=quantity,
+            old_quantity=old_quantity,
+            new_quantity=new_quantity,
+            event_type='purchase',
+            source='manual_repeat_purchase',
+            note='Herhaalaankoop voor regressietest',
+            location_id=location_id,
+            location_label=location_label,
+        )
+
+    return {
+        "status": "ok",
+        "inventory_id": existing['id'],
+        "article_name": existing.get('naam') or article_name,
+        "old_quantity": old_quantity,
+        "new_quantity": new_quantity,
+        "location_label": location_label,
+    }
+
 
 @app.get("/api/dev/inventory-preview")
 def inventory_preview(response: Response):

@@ -1,0 +1,24 @@
+Rezzerv-v01.08.84 validatierapport
+
+Basis: inhoudelijk verder gewerkt vanaf Rezzerv-v01.07.79.
+
+Doel van deze release:
+- de 2 resterende regressietests voor automatische afboeking inhoudelijk valide maken
+- volledige regressiesuite intact laten
+
+Uitgevoerde wijzigingen:
+1. backend dev-endpoint toegevoegd: POST /api/dev/inventory/purchase
+   - verhoogt de bestaande voorraad van een bestaand artikel op bestaande locatie
+   - schrijft daarbij een purchase-event met old_quantity en new_quantity
+2. regressierunner gebruikt voor de 4 automatiseringsscenario's nu expliciet een tweede aankoop van Mosterd
+3. voor elk automatiseringsscenario wordt prepareRegressionFixture(frame) opnieuw uitgevoerd om state-overdracht tussen scenario's te voorkomen
+
+Niet gewijzigd:
+- geen appfix in de normale applicatieflow
+- geen winkelimport-, nulvoorraad- of Admin-clusters aangepast
+- geen regressietests verwijderd of uitgezet
+
+Te verifiëren met volledige regressierun:
+- suite blijft intact
+- automatische-afboeking-tests voeren nu een echte herhaalaankoop uit
+- bij resterend falen is dat een veel sterkere aanwijzing voor een echte appbug
