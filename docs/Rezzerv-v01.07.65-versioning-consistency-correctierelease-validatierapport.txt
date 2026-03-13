@@ -1,0 +1,28 @@
+Rezzerv v01.07.65 validatierapport
+
+Doel
+- Versioning door de hele applicatie en in de release-zip consistent maken.
+- Versie met 1 verhogen vanaf v01.07.64 naar v01.07.65.
+
+Gewijzigd
+- VERSION.txt gelijkgezet naar 01.07.65.
+- root/version.json gelijkgezet naar 01.07.65.
+- frontend/version.json gelijkgezet naar 01.07.65.
+- frontend/public/version.json toegevoegd en gelijkgezet naar 01.07.65, zodat de versie ook als statisch buildbestand beschikbaar is.
+- frontend/package.json gelijkgezet naar 01.07.65.
+- frontend/package-lock.json gelijkgezet naar 01.07.65, inclusief packages[""].version.
+- Frontend build opnieuw uitgevoerd met VITE_REZZERV_VERSION=01.07.65.
+- Nieuwe release-zip opgebouwd met top-level mapnaam Rezzerv-v01.07.65.
+
+Getest
+- Controle op alle versiebestanden in root en frontend.
+- Frontend build succesvol uitgevoerd.
+- Gecontroleerd dat frontend/dist/version.json aanwezig is na build.
+- Gecontroleerd dat de release-zip intern de mapnaam Rezzerv-v01.07.65 gebruikt.
+
+Niet gewijzigd
+- Geen functionele UI- of backendlogica aangepast.
+- Historische validatierapporten met oude versieverwijzingen zijn niet herschreven.
+
+Restrisico
+- index.html bevat nog steeds zowel buildversie-injectie als fetch naar /version.json. Beide wijzen nu naar 01.07.65, dus het gedrag is consistent, maar het zijn nog wel twee paden.

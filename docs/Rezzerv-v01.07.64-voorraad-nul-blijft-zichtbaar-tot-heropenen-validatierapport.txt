@@ -1,0 +1,20 @@
+Rezzerv v01.07.64 validatierapport
+
+Doel
+- Artikel met voorraad 0 blijft zichtbaar in de actuele Voorraadlijst tijdens het huidige schermbezoek, en verdwijnt pas na het verlaten en opnieuw openen van scherm Voorraad.
+
+Gewijzigd
+- Voorraadpagina herlaadt de inventarislijst niet meer direct na een succesvolle inline opslag.
+- De lokale rij blijft daardoor zichtbaar in de huidige sessie, ook wanneer aantal op 0 is gezet.
+- Bij opnieuw openen van scherm Voorraad wordt de lijst opnieuw geladen via inventory-preview, die nulvoorraadregels niet teruggeeft.
+
+Niet gewijzigd
+- Backend inventory-preview blijft filteren op aantal > 0 voor een nieuwe schermopening.
+- Inline opslag, foutafhandeling en locatie-opties blijven verder ongewijzigd.
+
+Getest
+- Syntactische controle gewijzigde frontendbron.
+- Frontend build succesvol uitgevoerd.
+
+Restrisico
+- Tijdens het huidige schermbezoek blijft de lokale lijst leidend; andere parallelle voorraadwijzigingen elders worden pas zichtbaar na herladen of opnieuw openen van het scherm.

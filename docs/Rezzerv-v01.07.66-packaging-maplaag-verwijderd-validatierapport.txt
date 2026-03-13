@@ -1,0 +1,24 @@
+Rezzerv v01.07.66
+
+Doel van deze correctierelease
+- Onterechte extra bovenliggende maplaag verwijderen uit de release-zip.
+- Versioning consistent verhogen van 01.07.65 naar 01.07.66.
+
+Uitgevoerde wijzigingen
+- Zip opnieuw verpakt zonder extra top-level maplaag.
+- VERSION.txt bijgewerkt naar 01.07.66.
+- version.json in root bijgewerkt naar 01.07.66.
+- frontend/version.json bijgewerkt naar 01.07.66.
+- frontend/public/version.json bijgewerkt naar 01.07.66.
+- frontend/package.json bijgewerkt naar 01.07.66.
+- frontend/package-lock.json bijgewerkt naar 01.07.66.
+- frontend/dist/version.json bijgewerkt naar 01.07.66.
+
+Niet gewijzigd
+- Geen functionele codewijzigingen.
+- Geen layout-, backend- of datamodelwijzigingen.
+- Geen wijziging aan beoogde uitpakstructuur behalve het verwijderen van de extra maplaag.
+
+Controle
+- Gecontroleerd dat de zip direct projecteigen rootbestanden bevat (zoals VERSION.txt, docker-compose.yml, frontend/, backend/).
+- Gecontroleerd dat er geen extra maplaag meer boven de projectbestanden staat.

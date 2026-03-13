@@ -411,7 +411,7 @@ export default function Voorraad() {
 
     try {
       await saveInventoryRow(row)
-      const [_, refreshedOptions] = await Promise.all([reloadInventoryRows(), fetchLocationOptions().catch(() => locationOptions)])
+      const refreshedOptions = await fetchLocationOptions().catch(() => locationOptions)
       setLocationOptions(refreshedOptions)
       setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saved', message: 'Opgeslagen' } }));
       window.setTimeout(() => {
