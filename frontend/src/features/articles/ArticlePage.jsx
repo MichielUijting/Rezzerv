@@ -94,13 +94,14 @@ function formatQuantityDelta(value) {
 
 function mapLiveHistoryRows(rows = []) {
   return rows.map((row) => {
-    const isManualAdjustment = row?.event_type === 'manual_adjustment'
+    const hasOldQuantity = row?.old_quantity != null && row?.old_quantity !== ''
+    const hasNewQuantity = row?.new_quantity != null && row?.new_quantity !== ''
     return {
       id: row?.id || '',
       datetime: row?.created_at || '',
       type: mapEventTypeLabel(row?.event_type),
-      old_value: isManualAdjustment ? String(row?.old_quantity ?? '—') : '—',
-      new_value: isManualAdjustment ? String(row?.new_quantity ?? '—') : formatQuantityDelta(row?.quantity),
+      old_value: hasOldQuantity ? String(row?.old_quantity) : '—',
+      new_value: hasNewQuantity ? String(row?.new_quantity) : formatQuantityDelta(row?.quantity),
       location: row?.location_label || '',
       source: row?.source || '',
       note: row?.note || '',

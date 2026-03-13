@@ -1780,36 +1780,6 @@ def create_inventory(payload: InventoryCreate):
     return {"status": "ok", "id": new_id if row else None}
 
 
-
-
-@app.post("/api/dev/inventory/purchase")
-def create_dev_inventory_purchase(payload: InventoryCreate):
-    with engine.begin() as conn:
-        resolved = resolve_inventory_location(
-            conn,
-            'demo-household',
-            space_id=payload.space_id,
-            sublocation_id=payload.sublocation_id,
-        )
-
-        quantity = int(payload.aantal or 0)
-        if quantity <= 0:
-            raise HTTPException(status_code=400, detail="aantal moet groter dan 0 zijn")
-
-        article_id = build_live_article_option_id(payload.naam)
-        note = 'Testaankoop voor regressiefixture'
-        event_id = create_inventory_purchase_event(
-            conn,
-            household_id='demo-household',
-            article_id=article_id,
-            article_name=payload.naam,
-            quantity=quantity,
-            resolved_location=resolved,
-            note=note,
-        )
-        apply_inventory_purchase(conn, 'demo-household', payload.naam, quantity, resolved)
-
-    return {"status": "ok", "event_id": event_id}
 @app.put("/api/dev/inventory/{inventory_id}")
 def update_inventory(inventory_id: str, payload: InventoryUpdate):
     with engine.begin() as conn:

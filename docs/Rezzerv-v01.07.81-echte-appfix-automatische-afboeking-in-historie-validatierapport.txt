@@ -1,0 +1,33 @@
+Rezzerv v01.07.81 — Validatierapport automatische afboeking zichtbaar in Historie
+
+Scope
+- Werkbasis: v01.07.79
+- Doel: echte appfix voor automatische afboeking zichtbaar in Historie, zonder regressiesuite te versmallen.
+
+Aangepast
+- frontend/src/features/articles/ArticlePage.jsx
+  - mapLiveHistoryRows() geeft nu voor live history events met old_quantity/new_quantity ook voor purchase-events de echte oude en nieuwe voorraadwaarden door.
+  - Daardoor kan applyAutoRepurchaseHistory() in de normale appflow een auto_repurchase historie-item afleiden voor follow_household en always_on.
+
+Niet gewijzigd
+- Geen dev-only endpoint toegevoegd.
+- Geen regressietests verwijderd of uitgezet.
+- Geen wijzigingen buiten het automatische-afboeking-historiecluster.
+
+Technische onderbouwing
+- /api/dev/article-history levert voor inventory_events al old_quantity en new_quantity terug.
+- In v01.07.79 werden die waarden in de frontend alleen gebruikt voor manual_adjustment.
+- Purchase-events kregen daardoor old_value='—' en new_value gebaseerd op quantity_change.
+- applyAutoRepurchaseHistory() vereist voor auto-afboeking een purchase-event met previousStock > 0, gebaseerd op old_value.
+- Daardoor kon de Historie-tab het auto_repurchase-item in de live flow niet opbouwen, terwijl de automatiseringsstatus wel correct werd getoond.
+
+Verwacht effect
+- follow_household met huishoudinstelling aan toont nu een zichtbaar historie-item 'Automatisch (herhaalaankoop)'.
+- always_on met huishoudinstelling uit toont nu hetzelfde historie-item.
+- always_off en niet-consumable blijven groen omdat de auto-afleiding alleen wordt toegepast als shouldApplyAutoRepurchase() true teruggeeft.
+
+Build
+- Frontend build succesvol uitgevoerd met npm run build.
+
+Versie
+- Versioning verhoogd naar 01.07.81.

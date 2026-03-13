@@ -389,11 +389,6 @@ async function prepareRegressionFixture(frame, options = {}) {
     })
   }
 
-  await requestJson('/api/dev/inventory/purchase', {
-    method: 'POST',
-    body: JSON.stringify({ naam: 'Mosterd', aantal: 1, space_id: pantry.id, sublocation_id: shelf.id }),
-  })
-
   const fixture = {
     pantryId: pantry.id,
     shelfId: shelf.id,
@@ -1092,12 +1087,11 @@ async function ensureHistoryAutoState(frame, articleName, expectedVisible) {
   await openArticleTab(frame, 'Historie')
   const doc = getFrameDocument(frame)
   await waitForCondition(() => queryText(doc, 'Voorraadhistorie'), WAIT_TIMEOUT, 'Historie-tab is niet zichtbaar')
-  if (expectedVisible) {
-    await waitForCondition(() => queryText(getFrameDocument(frame), 'Automatisch (herhaalaankoop)'), WAIT_TIMEOUT, `Automatische afboeking niet zichtbaar in Historie voor ${articleName}`)
-    return
-  }
   const hasAuto = queryText(doc, 'Automatisch (herhaalaankoop)')
-  if (hasAuto) {
+  if (expectedVisible && !hasAuto) {
+    throw new Error(`Automatische afboeking niet zichtbaar in Historie voor ${articleName}`)
+  }
+  if (!expectedVisible && hasAuto) {
     throw new Error(`Automatische afboeking is zichtbaar in Historie voor ${articleName}, maar dat hoort niet`)
   }
 }
