@@ -115,9 +115,9 @@ export default function ArticleOverviewTab({ articleData = {}, visibilityMap = {
     <div className="rz-overview-tab">
       <AutomationOverrideCard articleData={articleData} />
       {Object.entries(visibleGroups).map(([groupKey, fields]) => (
-        <section key={groupKey} className="rz-overview-group">
-          <h3 className="rz-overview-group-title">{GROUP_LABELS[groupKey] || groupKey}</h3>
-          <div className="rz-overview-group-body">
+        <section key={groupKey} className="rz-overview-group rz-article-detail-section">
+          <h3 className="rz-overview-group-title rz-article-detail-section-title">{GROUP_LABELS[groupKey] || groupKey}</h3>
+          <div className="rz-overview-group-body rz-article-detail-section-body">
             {fields.map((field) => (
               <FieldRow key={field.key} label={field.label} value={resolveArticleFieldValue(field.key, articleData)} />
             ))}

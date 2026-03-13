@@ -53,9 +53,9 @@ export default function ArticleHistoryTab({ articleData = {} }) {
 
   return (
     <div className="rz-history-tab">
-      <section className="rz-history-group">
-        <h3 className="rz-history-group-title">Voorraadhistorie</h3>
-        <div className="rz-history-group-body">
+      <section className="rz-history-group rz-article-detail-section">
+        <h3 className="rz-history-group-title rz-article-detail-section-title">Voorraadhistorie</h3>
+        <div className="rz-history-group-body rz-article-detail-section-body">
           {historyEntries.map((entry, index) => (
             <article key={entry.id || `${entry.datetime || "moment"}-${entry.type || "event"}-${index}`} className="rz-history-card">
               <div className="rz-history-card-top">

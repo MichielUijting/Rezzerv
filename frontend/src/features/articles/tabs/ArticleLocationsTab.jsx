@@ -39,15 +39,15 @@ export default function ArticleLocationsTab({ articleData = {} }) {
 
   return (
     <div className="rz-locations-tab">
-      <section className="rz-locations-summary-card">
+      <section className="rz-locations-summary-card rz-article-detail-section rz-article-detail-section--summary">
         <div className="rz-locations-summary-label">Primaire locatie</div>
         <div className="rz-locations-summary-value">{normalizeLocationName(primaryLocation?.locatie)}</div>
         <div className="rz-locations-summary-subvalue">{normalizeSubLocationName(primaryLocation?.sublocatie)}</div>
       </section>
 
-      <section className="rz-locations-group">
-        <h3 className="rz-locations-group-title">Alle locaties</h3>
-        <div className="rz-locations-group-body">
+      <section className="rz-locations-group rz-article-detail-section">
+        <h3 className="rz-locations-group-title rz-article-detail-section-title">Alle locaties</h3>
+        <div className="rz-locations-group-body rz-article-detail-section-body">
           {locationRows.map((row) => (
             <div key={row.key} className="rz-location-row">
               <div className="rz-location-row-main">

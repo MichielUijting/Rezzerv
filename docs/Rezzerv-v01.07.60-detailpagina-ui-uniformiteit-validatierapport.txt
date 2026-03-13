@@ -1,0 +1,30 @@
+Rezzerv-v01.07.60 — validatierapport detailpagina UI uniformiteit
+
+Gewijzigd
+- Artikeldetailpagina omgezet van Card naar ScreenCard fullWidth.
+- Detailpagina-alerts verplaatst naar vaste detailpage-structuur.
+- Alle artikeltabs aangesloten op gedeelde section-structuur met uniforme classes.
+- Voorraad-, Locaties-, Historie- en Analyse-secties uitgelijnd op één cardpatroon.
+- Overzicht-groepen gekoppeld aan dezelfde section-title/body-structuur.
+- Gedeelde CSS toegevoegd voor detailpagina-uniformiteit, lege staten en section-layout.
+- Versienummers verhoogd naar 01.07.60.
+
+Niet gewijzigd
+- Geen nieuwe features toegevoegd.
+- Geen backend-endpoints aangepast.
+- Geen write- of mutatielogica aangepast.
+- Geen kassabon-, barcode- of search-flow gewijzigd.
+- Geen functionele tabinhoud uitgebreid buiten structurele UI-opmaak.
+
+Getest
+- Statische codecontrole op gewijzigde React-bestanden.
+- Controle op versiebestanden en aanwezigheid van gewijzigde classes.
+- Buildpoging gestart via npm run build.
+
+Niet getest / beperking
+- Frontend build kon niet volledig worden uitgevoerd omdat node_modules ontbreken in de aangeleverde zip; daardoor ontbreekt lokaal de Vite binary.
+- Geen runtime browserregressie uitgevoerd in deze container.
+
+Restrisico
+- Zonder geinstalleerde frontend dependencies is geen harde buildvalidatie of visuele browsercontrole mogelijk.
+- Analyse-tab gebruikt bestaande interne componenten; uniformiteit is structureel aangepast, maar visuele fine-tuning kan pas na runtimecontrole worden bevestigd.

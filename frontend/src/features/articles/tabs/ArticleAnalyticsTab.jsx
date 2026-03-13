@@ -172,14 +172,14 @@ function buildChartBuckets(history, period = 'month') {
 
 function AnalyticsAccordion({ title, rows = [], children = null, defaultOpen = false, variant = '' }) {
   return (
-    <details className={`rz-analytics-accordion ${variant ? `rz-analytics-accordion--${variant}` : ''}`} open={defaultOpen}>
+    <details className={`rz-analytics-accordion rz-article-detail-section ${variant ? `rz-analytics-accordion--${variant}` : ''}`} open={defaultOpen}>
       <summary className="rz-analytics-accordion-summary">
-        <span className="rz-analytics-card-title">{title}</span>
+        <span className="rz-analytics-card-title rz-article-detail-section-title">{title}</span>
         <span className="rz-analytics-accordion-indicator" aria-hidden="true">▾</span>
       </summary>
       <div className="rz-analytics-accordion-content">
         {rows.length > 0 ? (
-          <div className="rz-analytics-card-body">
+          <div className="rz-analytics-card-body rz-article-detail-section-body">
             {rows.map((row) => (
               <div key={row.label} className="rz-analytics-row">
                 <div className="rz-analytics-row-label">{row.label}</div>
@@ -202,9 +202,9 @@ function AnalyticsChart({ buckets, period, onPeriodChange }) {
   const maxValue = Math.max(1, ...buckets.flatMap((bucket) => [bucket.purchases, bucket.consumes]))
 
   return (
-    <section className="rz-analytics-card">
+    <section className="rz-analytics-card rz-article-detail-section">
       <div className="rz-analytics-chart-header">
-        <h3 className="rz-analytics-card-title">Aankoop en verbruik in de tijd</h3>
+        <h3 className="rz-analytics-card-title rz-article-detail-section-title">Aankoop en verbruik in de tijd</h3>
         <div className="rz-analytics-period-switch" role="tablist" aria-label="Periodekeuze grafiek">
           {[
             { key: 'week', label: 'Week' },

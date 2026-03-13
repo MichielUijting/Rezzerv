@@ -39,7 +39,7 @@ export default function ArticleStockTab({ article = {}, articleData }) {
 
   return (
     <div className="rz-stock-tab">
-      <section className="rz-stock-summary-card">
+      <section className="rz-stock-summary-card rz-article-detail-section rz-article-detail-section--summary">
         <div className="rz-stock-summary-label">Totale voorraad</div>
         <div className="rz-stock-summary-value">{totalQuantity}</div>
       </section>
@@ -49,9 +49,9 @@ export default function ArticleStockTab({ article = {}, articleData }) {
       ) : (
         <div className="rz-stock-blocks">
           {Object.entries(groupedLocations).map(([locationName, entries]) => (
-            <section key={locationName} className="rz-stock-block">
-              <h3 className="rz-stock-block-title">{locationName}</h3>
-              <div className="rz-stock-block-body">
+            <section key={locationName} className="rz-stock-block rz-article-detail-section">
+              <h3 className="rz-stock-block-title rz-article-detail-section-title">{locationName}</h3>
+              <div className="rz-stock-block-body rz-article-detail-section-body">
                 {entries.map((entry, index) => (
                   <div key={`${locationName}-${entry.sublocatie}-${index}`} className="rz-stock-row">
                     <div className="rz-stock-row-location">{entry.sublocatie}</div>

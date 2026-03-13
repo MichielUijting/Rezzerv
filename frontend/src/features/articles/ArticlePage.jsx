@@ -1,7 +1,7 @@
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
-import Card from '../../ui/Card'
+import ScreenCard from '../../ui/ScreenCard'
 import Tabs from '../../ui/Tabs'
 import demoData from '../../demo-articles.json'
 import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility'
@@ -291,10 +291,10 @@ export default function ArticlePage() {
 
   return (
     <AppShell title={pageTitle}>
-      <Card>
-        <div style={{ display: 'grid', gap: 12 }}>
-          {inventoryLoadError ? <div style={{ color: '#b42318', fontWeight: 700 }}>{inventoryLoadError}</div> : null}
-          {historyLoadError ? <div style={{ color: '#b42318', fontWeight: 700 }}>{historyLoadError}</div> : null}
+      <ScreenCard fullWidth>
+        <div className="rz-article-detail-page">
+          {inventoryLoadError ? <div className="rz-article-detail-alert">{inventoryLoadError}</div> : null}
+          {historyLoadError ? <div className="rz-article-detail-alert">{historyLoadError}</div> : null}
           {articleData && (
             <Tabs tabs={TABS}>
               {(activeTab) => {
@@ -304,7 +304,7 @@ export default function ArticlePage() {
             </Tabs>
           )}
         </div>
-      </Card>
+      </ScreenCard>
     </AppShell>
   )
 }

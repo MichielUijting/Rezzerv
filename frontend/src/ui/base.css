@@ -1221,3 +1221,132 @@ button.rz-tab.rz-tab-active {
   justify-content: flex-end;
   margin-top: 12px;
 }
+
+
+/* Rezzerv v01.07.60 detailpagina UI uniformiteit */
+.rz-article-detail-page {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+
+.rz-article-detail-alert {
+  color: #b42318;
+  font-weight: 700;
+}
+
+.rz-tabs {
+  width: 100%;
+  display: grid;
+  gap: 0;
+}
+
+.rz-tabcontent {
+  width: 100%;
+  padding-top: 8px;
+}
+
+.rz-tabpanel-shell {
+  width: 100%;
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
+.rz-empty-state {
+  border: 2px solid #dfe7e1;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 16px 18px;
+  color: #667085;
+}
+
+.rz-article-detail-section {
+  width: 100%;
+  border: 2px solid #dfe7e1;
+  border-radius: 14px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.rz-article-detail-section--summary {
+  width: 100%;
+}
+
+.rz-article-detail-section-title {
+  margin: 0;
+  padding: 14px 16px;
+  color: var(--color-brand-primary);
+  font-size: 16px;
+  font-weight: 600;
+  border-bottom: 2px solid #dfe7e1;
+}
+
+.rz-article-detail-section-body {
+  display: grid;
+  gap: 0;
+  padding: 0;
+}
+
+.rz-overview-group-body {
+  display: grid;
+  padding: 0 16px;
+}
+
+.rz-stock-summary-card,
+.rz-locations-summary-card {
+  gap: 6px;
+  padding: 16px 18px;
+}
+
+.rz-stock-block,
+.rz-history-card,
+.rz-analytics-card,
+.rz-location-row {
+  border-radius: 14px;
+}
+
+.rz-locations-group-body,
+.rz-history-group-body,
+.rz-stock-blocks,
+.rz-analytics-tab,
+.rz-overview-tab,
+.rz-stock-tab,
+.rz-locations-tab,
+.rz-history-tab {
+  width: 100%;
+}
+
+.rz-analytics-card {
+  border: 2px solid #dfe7e1;
+  border-radius: 14px;
+}
+
+.rz-analytics-card-body {
+  padding: 0 16px 16px;
+}
+
+.rz-analytics-chart-header {
+  padding: 14px 16px 0;
+}
+
+.rz-analytics-chart,
+.rz-analytics-chart-legend,
+.rz-analytics-advice-text,
+.rz-analytics-accordion-content {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.rz-analytics-accordion-content {
+  padding-bottom: 16px;
+}
+
+.rz-analytics-chart-legend {
+  padding-bottom: 16px;
+}
+
+.rz-location-row,
+.rz-history-card {
+  border-width: 2px;
+}
