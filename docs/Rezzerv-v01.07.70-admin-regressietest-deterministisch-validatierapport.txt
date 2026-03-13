@@ -1,0 +1,23 @@
+Rezzerv-v01.07.70 — Admin-regressietest deterministisch validatierapport
+
+Gewijzigd
+- browserRegressionRunner maakt nu deterministische fixturedata expliciet aan, inclusief testartikel Tomaten.
+- regressierunner opent artikeldetail nu via een expliciet live inventory-id in plaats van via een broze tabelrij-klik als primair anker.
+- regressierunner schrijft voortgang naar localStorage met actief scenario, actieve stap, laatst afgerond scenario en foutcontext.
+- Admin toont tijdens runtime nu regressievoortgang in de teststatuskaart.
+- rapportweergave ondersteunt nu ook statussen Geblokkeerd en Overgeslagen.
+- regressiemodus onderdrukt externe Google Fonts-loads via regression_mode=1 om netwerkruis te beperken.
+
+Niet gewijzigd
+- geen nieuwe functionele appfeatures toegevoegd.
+- geen businesslogica buiten regressietest en bijbehorende runtime-weergave aangepast.
+- geen timeouts blind verhoogd.
+
+Getest
+- frontend build succesvol uitgevoerd met npm run build.
+- versie doorgetrokken naar 01.07.70 in VERSION.txt, version.json, frontend/package.json, frontend/package-lock.json, frontend/version.json, frontend/public/version.json en frontend/dist/version.json.
+- syntactische validatie impliciet bevestigd via succesvolle Vite-build.
+
+Restrisico
+- niet alle scenario's zijn volledig hergegroepeerd; een deel van de suite gebruikt nog steeds volledige fixture-reset voor isolatie.
+- backend teststatus telt alleen passed/failed; blocked/skipped zijn nu wel zichtbaar in het rapport, maar niet in de samenvattende telling.

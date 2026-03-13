@@ -49,6 +49,7 @@ export default function AdminPage() {
   const [testMessage, setTestMessage] = useState("");
   const [showReport, setShowReport] = useState(false);
   const [diagnostics, setDiagnostics] = useState({ location: null, process: null });
+  const [regressionProgress, setRegressionProgress] = useState({ status: 'idle', activeScenario: null, activeStep: null, completedScenario: null, lastError: null, updatedAt: null });
   const [diagnosticMessage, setDiagnosticMessage] = useState("");
   const [isRunningLocationDiagnostic, setIsRunningLocationDiagnostic] = useState(false);
   const [isRunningProcessDiagnostic, setIsRunningProcessDiagnostic] = useState(false);
@@ -97,6 +98,21 @@ export default function AdminPage() {
 
     return () => window.clearInterval(timer);
   }, [testStatus.status]);
+
+  useEffect(() => {
+    function syncRegressionProgress() {
+      try {
+        const raw = localStorage.getItem('rezzerv_regression_progress')
+        if (!raw) return
+        const parsed = JSON.parse(raw)
+        setRegressionProgress((current) => ({ ...current, ...(parsed || {}) }))
+      } catch {}
+    }
+
+    syncRegressionProgress()
+    const timer = window.setInterval(syncRegressionProgress, 500)
+    return () => window.clearInterval(timer)
+  }, []);
 
   async function postJson(url, payload, successMessage) {
     setMessage("");
@@ -314,7 +330,7 @@ export default function AdminPage() {
               onViewReport={handleViewReport}
             />
             {testMessage ? <div className="rz-admin-message">{testMessage}</div> : null}
-            <TestStatusCard status={testStatus} />
+            <TestStatusCard status={testStatus} progress={regressionProgress} />
             {showReport && testReport ? (
               <div className="rz-admin-report">
                 <h4 className="rz-admin-status-title">Laatste testrapport</h4>
@@ -326,7 +342,7 @@ export default function AdminPage() {
                   {testReport.results?.length ? testReport.results.map((result) => (
                     <div key={result.name} className={`rz-admin-report-row rz-admin-report-row--${result.status}`}>
                       <span>{result.name}</span>
-                      <span>{result.status === "passed" ? "Geslaagd" : "Gefaald"}</span>
+                      <span>{result.status === "passed" ? "Geslaagd" : result.status === "blocked" ? "Geblokkeerd" : result.status === "skipped" ? "Overgeslagen" : "Gefaald"}</span>
                     </div>
                   )) : <div className="rz-admin-muted">Nog geen rapport beschikbaar</div>}
                 </div>

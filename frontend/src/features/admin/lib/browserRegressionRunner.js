@@ -3,9 +3,45 @@ const WAIT_TIMEOUT = 9000
 const POLL_INTERVAL = 100
 const HOUSEHOLD_KEY = 'rezzerv_household_auto_consume_on_repurchase'
 const ARTICLE_OVERRIDE_KEY = 'rezzerv_article_auto_consume_overrides'
+const REGRESSION_PROGRESS_KEY = 'rezzerv_regression_progress'
+const REGRESSION_FIXTURE_KEY = 'rezzerv_regression_fixture'
 
 function delay(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+
+function updateRegressionProgress(patch = {}) {
+  try {
+    const current = JSON.parse(window.localStorage.getItem(REGRESSION_PROGRESS_KEY) || '{}')
+    const next = {
+      status: 'running',
+      activeScenario: null,
+      activeStep: null,
+      completedScenario: null,
+      lastError: null,
+      updatedAt: new Date().toISOString(),
+      ...current,
+      ...patch,
+    }
+    window.localStorage.setItem(REGRESSION_PROGRESS_KEY, JSON.stringify(next))
+  } catch {
+    // negeer storage-fouten
+  }
+}
+
+function clearRegressionProgress(finalPatch = {}) {
+  updateRegressionProgress({ status: 'idle', activeScenario: null, activeStep: null, ...finalPatch })
+}
+
+function setRegressionStep(step) {
+  updateRegressionProgress({ activeStep: step })
+}
+
+function buildRegressionUrl(path) {
+  const base = String(path || '/').trim() || '/'
+  const separator = base.includes('?') ? '&' : '?'
+  return `${base}${separator}regression_mode=1`
 }
 
 function waitForCondition(check, timeout = WAIT_TIMEOUT, errorMessage = 'Timeout') {
@@ -108,7 +144,7 @@ async function navigateFrame(frame, path) {
     }
 
     frame.addEventListener('load', handleLoad, { once: true })
-    frame.src = path
+    frame.src = buildRegressionUrl(path)
   })
 
   await waitForCondition(() => {
@@ -155,14 +191,24 @@ function doubleClickElement(element) {
 }
 
 async function runScenario(name, fn, results) {
+  updateRegressionProgress({ activeScenario: name, activeStep: 'start', lastError: null })
   try {
     await fn()
     results.push({ name, status: 'passed', error: null })
+    updateRegressionProgress({ completedScenario: name, activeStep: 'geslaagd' })
   } catch (error) {
-    results.push({ name, status: 'failed', error: error.message || 'Onbekende fout' })
+    const status = error?.blocked ? 'blocked' : (error?.skipped ? 'skipped' : 'failed')
+    results.push({ name, status, error: error.message || 'Onbekende fout' })
+    updateRegressionProgress({ completedScenario: name, activeStep: status, lastError: error.message || 'Onbekende fout' })
   }
 }
 
+
+function createBlockedError(message) {
+  const error = new Error(message)
+  error.blocked = true
+  return error
+}
 
 async function requestJson(path, options = {}) {
   const response = await fetch(path, {
@@ -177,10 +223,15 @@ async function requestJson(path, options = {}) {
   return data
 }
 
-async function prepareRegressionFixture(frame) {
-  await requestJson('/api/dev/reset-data', { method: 'POST', body: '{}' })
-  await requestJson('/api/dev/generate-demo-data', { method: 'POST', body: '{}' })
+async function prepareRegressionFixture(frame, options = {}) {
+  const { forceReset = true } = options
+  setRegressionStep(forceReset ? 'Fixture resetten' : 'Fixture controleren')
+  if (forceReset) {
+    await requestJson('/api/dev/reset-data', { method: 'POST', body: '{}' })
+    await requestJson('/api/dev/generate-demo-data', { method: 'POST', body: '{}' })
+  }
 
+  setRegressionStep('Deterministische fixture aanvullen')
   const kitchen = await requestJson('/api/dev/spaces', {
     method: 'POST',
     body: JSON.stringify({ naam: 'Schuur' }),
@@ -201,27 +252,40 @@ async function prepareRegressionFixture(frame) {
     body: JSON.stringify({ naam: 'Plank test', space_id: pantry.id }),
   })
 
-  await requestJson('/api/dev/inventory', {
-    method: 'POST',
-    body: JSON.stringify({
-      naam: 'Mosterd',
-      aantal: 1,
-      space_id: pantry.id,
-      sublocation_id: shelf.id,
-    }),
-  })
+  const deterministicArticles = [
+    { naam: 'Mosterd', aantal: 1, space_id: pantry.id, sublocation_id: shelf.id },
+    { naam: 'Boormachine', aantal: 1, space_id: kitchen.id, sublocation_id: workbench.id },
+    { naam: 'Tomaten', aantal: 3, space_id: pantry.id, sublocation_id: shelf.id },
+  ]
 
-  await requestJson('/api/dev/inventory', {
-    method: 'POST',
-    body: JSON.stringify({
-      naam: 'Boormachine',
-      aantal: 1,
-      space_id: kitchen.id,
-      sublocation_id: workbench.id,
-    }),
-  })
+  for (const item of deterministicArticles) {
+    await requestJson('/api/dev/inventory', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    })
+  }
+
+  const fixture = {
+    pantryId: pantry.id,
+    shelfId: shelf.id,
+    kitchenId: kitchen.id,
+    workbenchId: workbench.id,
+    deterministicArticles: deterministicArticles.map((item) => item.naam),
+  }
+
+  try {
+    frame?.contentWindow?.localStorage?.setItem(REGRESSION_FIXTURE_KEY, JSON.stringify(fixture))
+  } catch {
+    // negeer storage-fouten
+  }
+
+  await waitForAsyncCondition(async () => {
+    const names = await getInventoryRows().then((rows) => rows.map((row) => String(row?.artikel || '').trim().toLowerCase()))
+    return deterministicArticles.every((item) => names.includes(item.naam.toLowerCase()))
+  }, WAIT_TIMEOUT, 'Deterministische regressiefixture werd niet volledig opgebouwd')
 
   resetAutomationState(frame)
+  return fixture
 }
 
 async function getRegressionHouseholdId(frame) {
@@ -824,13 +888,12 @@ async function setHouseholdAutomation(frame, enabled) {
 }
 
 async function openArticleFromInventory(frame, articleName) {
-  await navigateFrame(frame, '/voorraad')
-  const detailRow = await waitForCondition(() => {
-    const doc = getFrameDocument(frame)
-    const rows = Array.from(doc?.querySelectorAll('tbody tr.rz-stock-row-interactive') || [])
-    return rows.find((entry) => entry.querySelectorAll('td')[1]?.textContent?.trim() === articleName) || null
-  }, WAIT_TIMEOUT, `Voorraadrij voor ${articleName} niet gevonden`)
-  doubleClickElement(detailRow)
+  setRegressionStep(`Artikel openen: ${articleName}`)
+  const articleId = await getInventoryArticleId(articleName).catch(() => null)
+  if (!articleId) {
+    throw createBlockedError(`Deterministisch testartikel ${articleName} niet gevonden in live voorraad-preview`)
+  }
+  await navigateFrame(frame, `/voorraad/${encodeURIComponent(articleId)}`)
   await waitForCondition(() => {
     const detailDoc = getFrameDocument(frame)
     return frame.contentWindow?.location?.pathname.startsWith('/voorraad/') && queryText(detailDoc, `Artikel details: ${articleName}`)
@@ -893,7 +956,10 @@ export async function runBrowserRegressionTests() {
   const results = []
   const frame = createHiddenFrame()
 
+  updateRegressionProgress({ status: 'running', activeScenario: null, activeStep: 'Login voorbereiden', completedScenario: null, lastError: null })
+
   try {
+    setRegressionStep('Inloggen in regressieframe')
     await ensureLoggedIn(frame)
     await prepareRegressionFixture(frame)
 
@@ -1264,6 +1330,7 @@ export async function runBrowserRegressionTests() {
       }, WAIT_TIMEOUT, 'Historie toont niet beide Jumbo-opboekingen voor Tomaten')
     }, results)
   } finally {
+    clearRegressionProgress({ activeStep: 'afgerond' })
     removeExistingFrame()
   }
 

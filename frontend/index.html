@@ -17,9 +17,31 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Rezzerv</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">
+    <script>
+      (function () {
+        try {
+          const params = new URLSearchParams(window.location.search)
+          const isRegressionMode = params.get('regression_mode') === '1'
+          if (isRegressionMode) {
+            document.documentElement.setAttribute('data-regression-mode', '1')
+            return
+          }
+          const preconnectFonts = document.createElement('link')
+          preconnectFonts.rel = 'preconnect'
+          preconnectFonts.href = 'https://fonts.googleapis.com'
+          document.head.appendChild(preconnectFonts)
+          const preconnectStatic = document.createElement('link')
+          preconnectStatic.rel = 'preconnect'
+          preconnectStatic.href = 'https://fonts.gstatic.com'
+          preconnectStatic.crossOrigin = 'anonymous'
+          document.head.appendChild(preconnectStatic)
+          const fontStylesheet = document.createElement('link')
+          fontStylesheet.rel = 'stylesheet'
+          fontStylesheet.href = 'https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap'
+          document.head.appendChild(fontStylesheet)
+        } catch (e) {}
+      })();
+    </script>
     <style id="rezzerv-rowheight-fix">
       table td{
         padding-top:10px !important;
