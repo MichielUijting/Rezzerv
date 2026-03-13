@@ -1,0 +1,31 @@
+Rezzerv validatierapport
+Versie: 01.07.54
+Onderwerp: voorraad componentmatige rijinteractie fix
+
+Uitgevoerd
+- Voorraad-tabel omgezet naar centrale rij-interactie met expliciete flags:
+  - canOpenDetails
+  - canInlineEditArtikel
+  - canInlineEditAantal
+  - canInlineEditLocatie
+  - canInlineEditSublocatie
+  - isAggregated
+- Detailopening verplaatst van losse artikellink naar het rijniveau via onDoubleClick.
+- Geaggregeerde rijen blijven read-only voor inline mutatie.
+- Normale rijen blijven inline muteerbaar.
+- Eerdere CSS-workarounds voor onderste rijen verwijderd.
+- Regressierunner aangepast zodat artikeldetail vanuit Voorraad via dubbelklik op de rij opent.
+- Versionering opgehoogd naar 01.07.54 in:
+  - VERSION.txt
+  - version.json
+  - frontend/version.json
+  - frontend/package.json
+  - frontend/package-lock.json
+
+Validatie
+- Frontend dependencies geïnstalleerd.
+- Productiebouw uitgevoerd met succes via Vite.
+
+Bekende scope
+- Deze release herstelt de componentmatige interactiestructuur van de Voorraad-tabel.
+- Runtime-validatie in de gebruikersomgeving blijft nodig voor expliciete bevestiging van de onderste zichtbare rij.

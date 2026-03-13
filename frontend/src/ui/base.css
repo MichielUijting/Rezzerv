@@ -117,19 +117,6 @@ body {
   z-index: 1;
 }
 
-.rz-inline-link{
-  display:block;
-  color: inherit;
-  text-decoration: none;
-  cursor: pointer;
-  font-weight: 700;
-}
-
-.rz-inline-link:hover,
-.rz-inline-link:focus-visible{
-  text-decoration: underline;
-}
-
 .rz-inline-cell-button{
   display:block;
   padding:0;
@@ -149,17 +136,6 @@ body {
   position: relative;
 }
 
-.rz-stock-row-interactive:last-child td{
-  padding-bottom: 8px;
-}
-
-.rz-stock-table tbody tr:last-child .rz-inline-cell{
-  padding-bottom: 6px;
-}
-
-.rz-table-wrapper{
-  padding-bottom: 10px;
-}
 
 .rz-inline-input{
   width: 100%;
@@ -177,23 +153,6 @@ body {
 .rz-table-wrapper{
   width: 100%;
   overflow-x: auto;
-}
-
-
-.rz-stock-table-wrapper{
-  padding-bottom: 64px;
-}
-
-.rz-stock-table tbody tr:last-child td,
-.rz-stock-table tbody tr:nth-last-child(2) td{
-  padding-bottom: 14px !important;
-}
-
-.rz-stock-table tbody tr:last-child .rz-inline-cell,
-.rz-stock-table tbody tr:nth-last-child(2) .rz-inline-cell{
-  position: relative;
-  z-index: 2;
-  min-height: 28px;
 }
 
 
@@ -1143,4 +1102,30 @@ button.rz-tab.rz-tab-active {
   color: #b54708;
   font-size: 14px;
   font-weight: 700;
+}
+
+
+.rz-inline-label{
+  display:block;
+  width:100%;
+  font-weight:700;
+}
+
+.rz-stock-row-interactive{
+  cursor: default;
+}
+
+.rz-stock-row-interactive:focus-visible{
+  outline: 2px solid #1f7a3f;
+  outline-offset: -2px;
+}
+
+.rz-stock-row-interactive td{
+  position: relative;
+}
+
+.rz-stock-row-interactive .rz-inline-cell-button,
+.rz-stock-row-interactive .rz-inline-input{
+  position: relative;
+  z-index: 1;
 }

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
 
 function normalizeName(value) {
@@ -61,10 +61,11 @@ function mergeInventoryRows(liveRows = []) {
       sublocatie: hasMultipleSublocations ? 'Meerdere sublocaties' : ((sublocations[0] || '').split('__')[1] || ''),
       checked: false,
       isAggregated,
-      canEditArtikel: !isAggregated,
-      canEditAantal: !isAggregated,
-      canEditLocatie: !isAggregated && !hasMultipleLocations,
-      canEditSublocatie: !isAggregated && !hasMultipleSublocations,
+      canOpenDetails: true,
+      canInlineEditArtikel: !isAggregated,
+      canInlineEditAantal: !isAggregated,
+      canInlineEditLocatie: !isAggregated && !hasMultipleLocations,
+      canInlineEditSublocatie: !isAggregated && !hasMultipleSublocations,
     }
   })
 
@@ -115,22 +116,23 @@ const editableColumns = [
 ];
 
 function isColumnEditable(row, key) {
-  if (key === 'artikel') return Boolean(row?.canEditArtikel)
-  if (key === 'aantal') return Boolean(row?.canEditAantal)
-  if (key === 'locatie') return Boolean(row?.canEditLocatie)
-  if (key === 'sublocatie') return Boolean(row?.canEditSublocatie)
+  if (key === 'artikel') return Boolean(row?.canInlineEditArtikel)
+  if (key === 'aantal') return Boolean(row?.canInlineEditAantal)
+  if (key === 'locatie') return Boolean(row?.canInlineEditLocatie)
+  if (key === 'sublocatie') return Boolean(row?.canInlineEditSublocatie)
   return false
 }
 
 function getColumnLockMessage(row, key) {
   if (row?.isAggregated) return 'Deze rij bundelt meerdere voorraadregels en is daarom niet inline bewerkbaar.'
-  if ((key === 'locatie' && !row?.canEditLocatie) || (key === 'sublocatie' && !row?.canEditSublocatie)) {
+  if ((key === 'locatie' && !row?.canInlineEditLocatie) || (key === 'sublocatie' && !row?.canInlineEditSublocatie)) {
     return 'Locatievelden met meerdere waarden zijn niet inline bewerkbaar.'
   }
   return 'Niet bewerkbaar'
 }
 
 export default function Voorraad() {
+  const navigate = useNavigate();
   const [rows, setRows] = useState(initialData);
 
   const reloadInventoryRows = async () => {
@@ -255,6 +257,28 @@ export default function Voorraad() {
     }
   }
 
+
+  const openRowDetails = (row) => {
+    if (!row?.canOpenDetails) return
+    const detailId = row?.detailId || row?.id
+    const artikel = encodeURIComponent(row?.artikel || '')
+    navigate(`/voorraad/${detailId}?artikel=${artikel}`)
+  }
+
+  const handleRowDoubleClick = (event, row) => {
+    const interactiveAncestor = event.target.closest('button, input, select, textarea, a, label')
+    if (interactiveAncestor) return
+    openRowDetails(row)
+  }
+
+  const handleRowKeyDown = (event, row) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return
+    const interactiveAncestor = event.target.closest('button, input, select, textarea, a, label')
+    if (interactiveAncestor) return
+    event.preventDefault()
+    openRowDetails(row)
+  }
+
   const renderCell = (row, column) => {
     const isEditing =
       editingCell &&
@@ -286,19 +310,13 @@ export default function Voorraad() {
     }
 
     if (column.key === "artikel") {
-      const detailId = row?.detailId || row?.id
-      const artikel = encodeURIComponent(row?.artikel || '')
-      const detailHref = `/voorraad/${detailId}?artikel=${artikel}`
-
       return (
-        <Link
-          className="rz-inline-cell rz-inline-link"
-          to={detailHref}
-          title="Open details"
-          aria-label={`Open details van ${row.artikel || 'artikel'}`}
+        <span
+          className="rz-inline-cell rz-inline-label"
+          title={row?.canOpenDetails ? 'Dubbelklik op de rij voor details' : undefined}
         >
           {row[column.key]}
-        </Link>
+        </span>
       );
     }
 
@@ -396,7 +414,14 @@ export default function Voorraad() {
 
                 <tbody>
                   {filteredRows.map((row) => (
-                    <tr key={row.id} className="rz-stock-row-interactive">
+                    <tr
+                      key={row.id}
+                      className={`rz-stock-row-interactive${row.isAggregated ? " rz-stock-row-aggregated" : ""}`}
+                      onDoubleClick={(event) => handleRowDoubleClick(event, row)}
+                      onKeyDown={(event) => handleRowKeyDown(event, row)}
+                      tabIndex={row.canOpenDetails ? 0 : -1}
+                      aria-label={row.canOpenDetails ? `Open details van ${row.artikel} met dubbelklik` : undefined}
+                    >
                       <td>
                         <input
                           type="checkbox"
