@@ -312,7 +312,7 @@ export default function Voorraad() {
     if (column.key === "artikel") {
       return (
         <div className="rz-inline-cell rz-inline-label rz-stock-article-cell" title={row?.canOpenDetails ? 'Dubbelklik op de rij voor details' : undefined}>
-          <span>{row[column.key]}</span>
+          <span>{row?.isAggregated ? `${row[column.key]} (samengevoegd)` : row[column.key]}</span>
           {row?.isAggregated ? (
             <span className="rz-stock-row-badge" aria-label="Samengevoegde rij">Samengevoegd</span>
           ) : null}

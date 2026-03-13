@@ -1,0 +1,13 @@
+Rezzerv validatierapport
+Versie: 01.07.56
+
+Wijziging
+- demo-/samengevoegde voorraadrij verplaatst weg van de onderste zichtbare positie
+- geaggregeerde rij toont expliciet "(samengevoegd)" in de artikelnaam
+- onderste zichtbare rij kan daardoor weer als normale enkelvoudige test-rij worden gebruikt
+- meegeleverde demo-database aangepast: Melk is de samengevoegde demo-rij in middenpositie, Zout is toegevoegd als normale onderste rij
+
+Verwacht testresultaat
+- in Voorraad staat de samengevoegde demo-rij niet meer onderaan in beeld
+- de geaggregeerde rij blijft niet inline bewerkbaar en opent via dubbelklik nog wel details
+- de onderste zichtbare rij is een normale rij zonder badge en zonder blokkadeboodschap

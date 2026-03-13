@@ -1981,8 +1981,10 @@ def generate_demo_data():
             ("Shampoo", 4, bathroom_id, badkamerkast_id),
             ("Erwten", 5, pantry_id, voorraadkast_id),
             ("IJs", 2, pantry_id, diepvries_id),
-            ("Melk", 2, kitchen_id, koelkast_id),
+            ("Melk", 1, kitchen_id, koelkast_id),
+            ("Melk", 1, pantry_id, voorraadkast_id),
             ("Thee", 8, kitchen_id, kast1_id),
+            ("Zout", 1, kitchen_id, kast1_id),
         ]
 
         space_lookup = {
