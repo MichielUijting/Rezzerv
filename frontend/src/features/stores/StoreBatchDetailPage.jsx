@@ -35,6 +35,7 @@ export default function StoreBatchDetailPage() {
   const [processWarning, setProcessWarning] = useState(null)
   const [processMode, setProcessMode] = useState('selected_only')
   const [lastProcessResult, setLastProcessResult] = useState(null)
+  const [batchDiagnostics, setBatchDiagnostics] = useState(null)
   const processFeedbackTimer = useRef(null)
 
   const providersByCode = useMemo(
@@ -77,6 +78,13 @@ export default function StoreBatchDetailPage() {
     return nextBatch
   }
 
+  async function refreshBatchDiagnostics(nextBatchId = batchId) {
+    if (!nextBatchId) return null
+    const diagnostics = await fetchJson(`/api/dev/purchase-import-batches/${nextBatchId}/diagnostics`).catch(() => null)
+    setBatchDiagnostics(diagnostics)
+    return diagnostics
+  }
+
   async function refreshLocationOptions(householdId) {
     if (!householdId) return []
     const backendLocations = await fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdId)}&_ts=${Date.now()}`, { cache: 'no-store' }).catch(() => [])
@@ -106,6 +114,8 @@ export default function StoreBatchDetailPage() {
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? backendArticles : articleFallbackOptions)
       setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
       setBatch(loadedBatch)
+      const diagnostics = await fetchJson(`/api/dev/purchase-import-batches/${batchId}/diagnostics`).catch(() => null)
+      setBatchDiagnostics(diagnostics)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
     } finally {
@@ -224,6 +234,7 @@ export default function StoreBatchDetailPage() {
       await refreshBatch(batch.batch_id)
       await refreshLocationOptions(household?.id)
       setLastProcessResult(result)
+      setBatchDiagnostics(result?.diagnostics || null)
       setProcessWarning(null)
       showProcessFeedback('Verwerkt!')
       if (result.failed_count > 0) {
@@ -397,6 +408,27 @@ export default function StoreBatchDetailPage() {
                   </tbody>
                 </table>
               </div>
+
+              {batchDiagnostics?.line_diagnostics?.length ? (
+                <div style={{ marginTop: '16px', display: 'grid', gap: '12px' }}>
+                  <div className="rz-store-review-meta"><strong>Diagnose laatste verwerking</strong> — bewijs per kassabonregel waar verwerking, historie of automatisch afboeken wel of niet slaagt.</div>
+                  {batchDiagnostics.line_diagnostics.map((diag) => (
+                    <div key={diag.line_id} style={{ border: '1px solid #D0D5DD', borderRadius: '12px', padding: '12px', background: '#F8FAFC', display: 'grid', gap: '6px' }}>
+                      <div><strong>Bonregel:</strong> {diag.receipt_line_text || 'Onbekend'}</div>
+                      <div><strong>Gekoppeld artikel:</strong> {diag.resolved_article_name || '(geen)'} {diag.resolution_reason ? `· ${diag.resolution_reason}` : ''}</div>
+                      <div><strong>Aankoop-event:</strong> {diag.purchase_event_created ? 'ja' : 'nee'} · <strong>Historie ziet aankoop:</strong> {diag.history_contains_purchase_event ? 'ja' : 'nee'}</div>
+                      <div><strong>Voorraad:</strong> {diag.inventory_before_total} → {diag.inventory_after_purchase_total}{diag.auto_consume_event_created || diag.auto_consume_should_apply ? ` → ${diag.inventory_after_auto_consume_total}` : ''}</div>
+                      <div><strong>Automatisch afboeken:</strong> {diag.auto_consume_event_created ? 'ja' : 'nee'} · <strong>Modus:</strong> {diag.auto_consume_effective_mode || 'none'}</div>
+                      <div><strong>Gekocht:</strong> {diag.purchase_quantity} · <strong>Aangevraagd af te boeken:</strong> {diag.auto_consume_requested_deduction_quantity} · <strong>Werkelijk afgeboekt:</strong> {diag.auto_consume_applied_deduction_quantity}</div>
+                      <div><strong>Beslisreden:</strong> {diag.auto_consume_decision_reason || 'Geen'}</div>
+                      {diag.failure_stage && diag.failure_stage !== 'none' ? (
+                        <div className="rz-inline-feedback rz-inline-feedback--error">Foutstap: {diag.failure_stage} — {diag.failure_message || 'Onbekende fout'}</div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
             </div>
           </Card>
         ) : (

@@ -1,0 +1,90 @@
+Rezzerv v01.08.03 — kassabon → voorraad → historie → auto-consume diagnose-release
+
+Basisversie
+- Gebouwd op Rezzerv-v01.08.02 als volledige basis.
+
+Doel van deze release
+- Geen nieuwe businesslogica toevoegen.
+- Wel expliciete diagnose toevoegen op het actieve pad:
+  kassabonregel -> artikelresolutie -> purchase-event -> voorraadprojectie -> historie-opvraag -> automatisch afboeken.
+
+Aangepaste bestanden
+- backend/app/main.py
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/package.json
+
+Toegevoegde backend-diagnose
+- Nieuw schema-onderdeel: purchase_import_lines.processing_diagnostics
+- Nieuw endpoint:
+  GET /api/dev/purchase-import-batches/{batch_id}/diagnostics
+- Process-response van:
+  POST /api/purchase-import-batches/{batch_id}/process
+  bevat nu ook diagnostics
+
+Per kassabonregel vastgelegd
+- receipt_line_text
+- selected_article_input
+- resolved_article_id
+- resolved_article_name
+- resolution_reason
+- purchase_quantity
+- target_space_id / target_space_name
+- target_sublocation_id / target_sublocation_name
+- purchase_event_created / purchase_event_id
+- inventory_before_total
+- inventory_after_purchase_total
+- history_contains_purchase_event
+- history_lookup_article_id
+- history_lookup_result_count
+- auto_consume_household_mode
+- auto_consume_article_override
+- auto_consume_effective_mode
+- auto_consume_should_apply
+- auto_consume_decision_reason
+- auto_consume_requested_deduction_quantity
+- auto_consume_applied_deduction_quantity
+- auto_consume_event_created / auto_consume_event_id
+- inventory_after_auto_consume_total
+- failure_stage
+- failure_message
+
+Toegevoegde UI-diagnose
+- Op de batchdetailpagina wordt nu voor de laatste verwerkte batch een diagnoseblok getoond per regel.
+- In gewone taal zichtbaar:
+  - bonregel
+  - gekoppeld artikel + resolutiereden
+  - aankoop-event ja/nee
+  - historie ziet aankoop ja/nee
+  - voorraad voor/na verwerking
+  - automatisch afboeken ja/nee
+  - gekozen/effectieve modus
+  - gekocht / gevraagd af te boeken / werkelijk afgeboekt
+  - beslisreden
+  - foutstap indien aanwezig
+
+Technisch gevalideerd
+- backend syntaxis gecontroleerd met py_compile
+- frontend productiebuild geslaagd
+- volledige packaging opnieuw opgebouwd vanaf volledige basis
+
+Niet hard runtime-gevalideerd in deze omgeving
+- Geen volledige kliktest in browser op een echte kassabonflow uitgevoerd
+- Geen live Docker-run met gebruikersinteractie bevestigd
+
+PO-teststappen
+1. Verwerk een kassabonregel voor Pasta of een ander verbruiksartikel.
+2. Open de batchdetailpagina van die bon.
+3. Controleer in het diagnoseblok:
+   - welk artikel uiteindelijk is gebruikt
+   - of aankoop-event = ja
+   - of historie ziet aankoop = ja/nee
+   - of automatische afboeking is overwogen en waarom
+   - op welke stap het fout loopt als iets ontbreekt
+4. Controleer daarna in Voorraad en in Artikeldetail -> Historie of dit overeenkomt met de diagnose.
+
+Verwachte opbrengst
+- Deze release moet niet bewijzen dat alle logica al goed is.
+- Deze release moet wel ondubbelzinnig bewijzen op welke stap het fout loopt als kassabonartikelen niet goed zichtbaar of niet automatisch afgeboekt worden.
