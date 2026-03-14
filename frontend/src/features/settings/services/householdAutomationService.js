@@ -8,9 +8,24 @@ function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+export const HOUSEHOLD_AUTO_CONSUME_MODES = {
+  NONE: 'none',
+  CONSUME_PURCHASED_QUANTITY: 'consume_purchased_quantity',
+  CONSUME_ALL_EXISTING: 'consume_all_existing_before_purchase',
+}
+
+function normalizeMode(value) {
+  if (value === HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY) return HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY
+  if (value === HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING) return HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING
+  if (value === true) return HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY
+  return HOUSEHOLD_AUTO_CONSUME_MODES.NONE
+}
+
 function normalizeSettings(value) {
+  const mode = normalizeMode(value?.mode ?? value?.autoConsumeMode ?? value?.auto_consume_on_repurchase ?? value?.autoConsumeOnRepurchase)
   return {
-    autoConsumeOnRepurchase: Boolean(value?.autoConsumeOnRepurchase ?? value?.auto_consume_on_repurchase),
+    mode,
+    autoConsumeOnRepurchase: mode !== HOUSEHOLD_AUTO_CONSUME_MODES.NONE,
     hasExplicitValue: Boolean(value?.hasExplicitValue ?? value?.has_explicit_value),
   }
 }
@@ -78,7 +93,7 @@ export async function saveHouseholdAutomationSettings(settings = {}) {
       ...getAuthHeaders(),
     },
     credentials: 'include',
-    body: JSON.stringify({ auto_consume_on_repurchase: normalized.autoConsumeOnRepurchase }),
+    body: JSON.stringify({ mode: normalized.mode }),
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {

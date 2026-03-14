@@ -313,12 +313,17 @@ MOCK_ARTICLE_LOOKUP = {item["id"]: item for item in MOCK_ARTICLE_OPTIONS}
 STORE_IMPORT_SIMPLIFICATION_KEY = "store_import_simplification_level"
 STORE_IMPORT_SIMPLIFICATION_ALLOWED = {"voorzichtig", "gebalanceerd", "maximaal_gemak"}
 STORE_IMPORT_SIMPLIFICATION_DEFAULT = "gebalanceerd"
-HOUSEHOLD_AUTO_CONSUME_KEY = "auto_consume_on_repurchase"
+HOUSEHOLD_AUTO_CONSUME_KEY = "consumable_auto_deduction_mode"
+HOUSEHOLD_AUTO_CONSUME_LEGACY_KEY = "auto_consume_on_repurchase"
 ARTICLE_AUTO_CONSUME_OVERRIDES_KEY = "article_auto_consume_overrides"
 ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD = "follow_household"
+ARTICLE_AUTO_CONSUME_NONE = "none"
+ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY = "consume_purchased_quantity"
+ARTICLE_AUTO_CONSUME_ALL_EXISTING = "consume_all_existing_before_purchase"
 ARTICLE_AUTO_CONSUME_ALWAYS_ON = "always_on"
 ARTICLE_AUTO_CONSUME_ALWAYS_OFF = "always_off"
-ARTICLE_AUTO_CONSUME_ALLOWED = {ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD, ARTICLE_AUTO_CONSUME_ALWAYS_ON, ARTICLE_AUTO_CONSUME_ALWAYS_OFF}
+ARTICLE_AUTO_CONSUME_ALLOWED = {ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD, ARTICLE_AUTO_CONSUME_NONE, ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY, ARTICLE_AUTO_CONSUME_ALL_EXISTING, ARTICLE_AUTO_CONSUME_ALWAYS_ON, ARTICLE_AUTO_CONSUME_ALWAYS_OFF}
+HOUSEHOLD_AUTO_CONSUME_ALLOWED = {ARTICLE_AUTO_CONSUME_NONE, ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY, ARTICLE_AUTO_CONSUME_ALL_EXISTING}
 ARTICLE_FIELD_VISIBILITY_KEY = "article_field_visibility"
 ARTICLE_FIELD_VISIBILITY_DEFAULT = {
     "overview": {},
@@ -380,12 +385,25 @@ def normalize_bool_setting(value) -> bool:
     return normalized in {"1", "true", "yes", "on", "aan", "waar"}
 
 
+def normalize_household_auto_consume_mode(value) -> str:
+    if isinstance(value, bool):
+        return ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY if value else ARTICLE_AUTO_CONSUME_NONE
+    normalized = str(value or "").strip().lower()
+    if normalized in {"true", "1", "yes", "on", "aan", "waar"}:
+        return ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY
+    if normalized in HOUSEHOLD_AUTO_CONSUME_ALLOWED:
+        return normalized
+    return ARTICLE_AUTO_CONSUME_NONE
+
+
 def normalize_article_auto_consume_mode(value: str | None) -> str:
     normalized = str(value or "").strip().lower()
     if normalized == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
-        return ARTICLE_AUTO_CONSUME_ALWAYS_ON
+        return ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY
     if normalized == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
-        return ARTICLE_AUTO_CONSUME_ALWAYS_OFF
+        return ARTICLE_AUTO_CONSUME_NONE
+    if normalized in {ARTICLE_AUTO_CONSUME_NONE, ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY, ARTICLE_AUTO_CONSUME_ALL_EXISTING}:
+        return normalized
     return ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD
 
 
@@ -422,17 +440,39 @@ def get_household_auto_consume_setting_row(conn, household_id: str):
     ).mappings().first()
 
 
-def get_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+def get_household_auto_consume_legacy_setting_row(conn, household_id: str):
+    return conn.execute(
+        text(
+            "SELECT setting_value FROM household_settings WHERE household_id = :household_id AND setting_key = :setting_key"
+        ),
+        {"household_id": str(household_id), "setting_key": HOUSEHOLD_AUTO_CONSUME_LEGACY_KEY},
+    ).mappings().first()
+
+
+def get_household_auto_consume_mode(conn, household_id: str) -> str:
     row = get_household_auto_consume_setting_row(conn, household_id)
-    return normalize_bool_setting(row["setting_value"] if row else False)
+    if row:
+        return normalize_household_auto_consume_mode(row["setting_value"])
+    legacy_row = get_household_auto_consume_legacy_setting_row(conn, household_id)
+    if legacy_row:
+        return normalize_household_auto_consume_mode(legacy_row["setting_value"])
+    return ARTICLE_AUTO_CONSUME_NONE
 
 
-def has_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+def has_household_auto_consume_mode(conn, household_id: str) -> bool:
     return get_household_auto_consume_setting_row(conn, household_id) is not None
 
 
-def set_household_auto_consume_on_repurchase(conn, household_id: str, enabled: bool) -> bool:
-    normalized = normalize_bool_setting(enabled)
+def get_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+    return get_household_auto_consume_mode(conn, household_id) != ARTICLE_AUTO_CONSUME_NONE
+
+
+def has_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+    return has_household_auto_consume_mode(conn, household_id) or get_household_auto_consume_legacy_setting_row(conn, household_id) is not None
+
+
+def set_household_auto_consume_mode(conn, household_id: str, mode: str) -> str:
+    normalized = normalize_household_auto_consume_mode(mode)
     conn.execute(
         text(
             """
@@ -450,6 +490,11 @@ def set_household_auto_consume_on_repurchase(conn, household_id: str, enabled: b
         },
     )
     return normalized
+
+
+def set_household_auto_consume_on_repurchase(conn, household_id: str, enabled: bool) -> bool:
+    mode = set_household_auto_consume_mode(conn, household_id, ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY if normalize_bool_setting(enabled) else ARTICLE_AUTO_CONSUME_NONE)
+    return mode != ARTICLE_AUTO_CONSUME_NONE
 
 
 def get_household_article_auto_consume_overrides(conn, household_id: str) -> dict:
@@ -728,7 +773,23 @@ def get_household_payload_for_user(user: dict):
 
 
 class HouseholdAutomationSettingsUpdateRequest(BaseModel):
-    auto_consume_on_repurchase: bool = False
+    mode: str | None = None
+    auto_consume_on_repurchase: bool | None = None
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value):
+        if value is None:
+            return value
+        normalized = normalize_household_auto_consume_mode(value)
+        if normalized not in HOUSEHOLD_AUTO_CONSUME_ALLOWED:
+            raise ValueError("Ongeldige automatiseringsmodus")
+        return normalized
+
+    def resolved_mode(self) -> str:
+        if self.mode is not None:
+            return normalize_household_auto_consume_mode(self.mode)
+        return normalize_household_auto_consume_mode(self.auto_consume_on_repurchase)
 
 
 class ArticleAutomationOverrideUpdateRequest(BaseModel):
@@ -1602,6 +1663,116 @@ def create_inventory_purchase_event(conn, household_id: str, article_id: str, ar
     )
 
 
+def resolve_effective_auto_consume_mode(conn, household_id: str, article_id: str, article_name: str) -> str:
+    consumable = get_article_consumable_state(conn, household_id, article_id, article_name)
+    if not consumable:
+        return ARTICLE_AUTO_CONSUME_NONE
+    mode = get_household_article_auto_consume_override(conn, household_id, article_id)
+    if mode != ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD:
+        return mode
+    return get_household_auto_consume_mode(conn, household_id)
+
+
+def compute_auto_deduction_quantity(mode: str, pre_purchase_total: float, purchased_quantity: float) -> int:
+    if mode == ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY:
+        return max(0, int(purchased_quantity))
+    if mode == ARTICLE_AUTO_CONSUME_ALL_EXISTING:
+        return max(0, int(pre_purchase_total))
+    return 0
+
+
+def get_article_inventory_rows(conn, household_id: str, article_name: str):
+    return conn.execute(
+        text(
+            """
+            SELECT id, naam, aantal, space_id, sublocation_id
+            FROM inventory
+            WHERE household_id = :household_id AND naam = :naam AND aantal > 0
+            """
+        ),
+        {"household_id": household_id, "naam": article_name},
+    ).mappings().all()
+
+
+def allocate_auto_deduction_across_locations(conn, household_id: str, article_name: str, preferred_location: dict, deduct_quantity: int):
+    safe = require_resolved_location(preferred_location)
+    preferred_space = safe["space_id"] or ''
+    preferred_sub = safe["sublocation_id"] or ''
+    rows = list(get_article_inventory_rows(conn, household_id, article_name))
+    def key(row):
+        row_space = row.get("space_id") or ''
+        row_sub = row.get("sublocation_id") or ''
+        preferred = 0 if (row_space == preferred_space and row_sub == preferred_sub) else 1
+        return (preferred, row_space, row_sub, row.get('id') or '')
+    rows.sort(key=key)
+    remaining = max(0, int(deduct_quantity))
+    allocations = []
+    for row in rows:
+        if remaining <= 0:
+            break
+        available = int(row.get('aantal') or 0)
+        if available <= 0:
+            continue
+        take = min(available, remaining)
+        allocations.append({
+            'inventory_id': row['id'],
+            'space_id': row.get('space_id'),
+            'sublocation_id': row.get('sublocation_id'),
+            'quantity': take,
+        })
+        remaining -= take
+    return allocations
+
+
+def apply_inventory_consumption_allocations(conn, household_id: str, article_name: str, allocations: list[dict]):
+    for allocation in allocations:
+        qty = int(allocation.get('quantity') or 0)
+        if qty <= 0:
+            continue
+        row = conn.execute(text("SELECT id, aantal FROM inventory WHERE id = :id"), {"id": allocation['inventory_id']}).mappings().first()
+        if not row:
+            continue
+        new_qty = max(0, int(row['aantal'] or 0) - qty)
+        if new_qty > 0:
+            conn.execute(text("UPDATE inventory SET aantal = :aantal, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"aantal": new_qty, "id": row['id']})
+        else:
+            conn.execute(text("DELETE FROM inventory WHERE id = :id"), {"id": row['id']})
+
+
+def build_auto_consume_note(mode: str, applied_quantity: int) -> str:
+    if mode == ARTICLE_AUTO_CONSUME_ALL_EXISTING:
+        return f'Automatisch bestaande voorraad afgeboekt tot 0 bij aankoop ({applied_quantity} eenheden).'
+    return f'Automatisch hetzelfde aantal afgeboekt als gekocht ({applied_quantity} eenheden).'
+
+
+def create_auto_consume_event(conn, household_id: str, article_id: str, article_name: str, resolved_location: dict, mode: str, purchased_quantity: int, requested_quantity: int, applied_quantity: int, allocations: list[dict]):
+    if applied_quantity <= 0:
+        return None
+    old_total = get_article_total_quantity(conn, household_id, article_name)
+    new_total = max(0, old_total - applied_quantity)
+    return create_inventory_event(
+        conn,
+        household_id=household_id,
+        article_id=article_id,
+        article_name=article_name,
+        resolved_location=resolved_location,
+        event_type='auto_consume',
+        quantity=-applied_quantity,
+        old_quantity=old_total,
+        new_quantity=new_total,
+        source='auto_consume',
+        note=build_auto_consume_note(mode, applied_quantity),
+        metadata={
+            'strategy': mode,
+            'purchase_quantity': int(purchased_quantity),
+            'requested_deduction_quantity': int(requested_quantity),
+            'applied_deduction_quantity': int(applied_quantity),
+            'preferred_location_id': safe.get('location_id') if (safe := require_resolved_location(resolved_location)) else None,
+            'deduction_breakdown': allocations,
+        },
+    )
+
+
 def apply_inventory_consumption(conn, household_id: str, article_name: str, quantity: float, resolved_location: dict):
     safe_location = require_resolved_location(resolved_location)
     space_id = safe_location["space_id"]
@@ -1650,40 +1821,17 @@ def apply_inventory_consumption(conn, household_id: str, article_name: str, quan
 
 
 def create_auto_repurchase_event(conn, household_id: str, article_id: str, article_name: str, resolved_location: dict, quantity: float = 1):
-    quantity_int = int(quantity)
-    if quantity_int <= 0:
-        return None
-    old_total = get_article_total_quantity(conn, household_id, article_name)
-    if old_total <= 0:
-        return None
-    new_total = max(0, old_total - quantity_int)
-    return create_inventory_event(
-        conn,
-        household_id=household_id,
-        article_id=article_id,
-        article_name=article_name,
-        resolved_location=resolved_location,
-        event_type='auto_repurchase',
-        quantity=-quantity_int,
-        old_quantity=old_total,
-        new_quantity=new_total,
-        source='auto_repurchase',
-        note='Automatisch 1 eenheid afgeboekt bij herhaalaankoop.',
+    quantity_int = max(0, int(quantity))
+    allocations = allocate_auto_deduction_across_locations(conn, household_id, article_name, resolved_location, quantity_int)
+    applied = sum(int(item.get("quantity") or 0) for item in allocations)
+    return create_auto_consume_event(
+        conn, household_id, article_id, article_name, resolved_location,
+        ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY, quantity_int, quantity_int, applied, allocations
     )
 
 
 def should_auto_consume_on_repurchase(conn, household_id: str, article_id: str, article_name: str, pre_purchase_total: float) -> bool:
-    if pre_purchase_total <= 0:
-        return False
-    consumable = get_article_consumable_state(conn, household_id, article_id, article_name)
-    if not consumable:
-        return False
-    mode = get_household_article_auto_consume_override(conn, household_id, article_id)
-    if mode == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
-        return True
-    if mode == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
-        return False
-    return get_household_auto_consume_on_repurchase(conn, household_id)
+    return resolve_effective_auto_consume_mode(conn, household_id, article_id, article_name) != ARTICLE_AUTO_CONSUME_NONE and pre_purchase_total > 0
 
 
 def ensure_store_provider(provider_code: str):
@@ -1757,11 +1905,12 @@ def get_household_automation_settings(authorization: Optional[str] = Header(None
     user = get_current_user_from_authorization(authorization)
     household = get_household_payload_for_user(user)
     with engine.begin() as conn:
-        enabled = get_household_auto_consume_on_repurchase(conn, household["id"])
-        has_explicit_value = has_household_auto_consume_on_repurchase(conn, household["id"])
+        mode = get_household_auto_consume_mode(conn, household["id"])
+        has_explicit_value = has_household_auto_consume_mode(conn, household["id"])
     return {
         "household_id": household["id"],
-        "auto_consume_on_repurchase": enabled,
+        "mode": mode,
+        "auto_consume_on_repurchase": mode != ARTICLE_AUTO_CONSUME_NONE,
         "has_explicit_value": has_explicit_value,
         "is_household_admin": household["is_household_admin"],
     }
@@ -1774,10 +1923,11 @@ def update_household_automation_settings(payload: HouseholdAutomationSettingsUpd
     if not household["is_household_admin"]:
         raise HTTPException(status_code=403, detail="Alleen de beheerder van het huishouden mag dit wijzigen")
     with engine.begin() as conn:
-        enabled = set_household_auto_consume_on_repurchase(conn, household["id"], payload.auto_consume_on_repurchase)
+        mode = set_household_auto_consume_mode(conn, household["id"], payload.resolved_mode())
     return {
         "household_id": household["id"],
-        "auto_consume_on_repurchase": enabled,
+        "mode": mode,
+        "auto_consume_on_repurchase": mode != ARTICLE_AUTO_CONSUME_NONE,
         "has_explicit_value": True,
         "is_household_admin": household["is_household_admin"],
     }
@@ -1887,10 +2037,11 @@ def update_dev_store_import_settings(payload: StoreImportSimplificationUpdateReq
 def update_dev_household_automation_settings(payload: HouseholdAutomationSettingsUpdateRequest, household_id: str = Query("demo-household")):
     effective_household_id = (household_id or "demo-household").strip() or "demo-household"
     with engine.begin() as conn:
-        enabled = set_household_auto_consume_on_repurchase(conn, effective_household_id, payload.auto_consume_on_repurchase)
+        mode = set_household_auto_consume_mode(conn, effective_household_id, payload.resolved_mode())
     return {
         "household_id": effective_household_id,
-        "auto_consume_on_repurchase": enabled,
+        "mode": mode,
+        "auto_consume_on_repurchase": mode != ARTICLE_AUTO_CONSUME_NONE,
         "is_household_admin": True,
     }
 
@@ -3129,13 +3280,16 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
             article_name = article["name"]
             note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
             pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
-            should_auto_consume = should_auto_consume_on_repurchase(conn, str(batch["household_id"]), str(article_id), article_name, pre_purchase_total)
+            effective_mode = resolve_effective_auto_consume_mode(conn, str(batch["household_id"]), str(article_id), article_name)
+            requested_auto_deduction_quantity = compute_auto_deduction_quantity(effective_mode, pre_purchase_total, quantity) if pre_purchase_total > 0 else 0
             event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
             apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
             auto_event_id = None
-            if should_auto_consume:
-                auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=1)
-                apply_inventory_consumption(conn, batch["household_id"], article_name, 1, resolved_location)
+            if requested_auto_deduction_quantity > 0:
+                allocations = allocate_auto_deduction_across_locations(conn, batch["household_id"], article_name, resolved_location, requested_auto_deduction_quantity)
+                applied_auto_deduction_quantity = sum(int(item.get("quantity") or 0) for item in allocations)
+                auto_event_id = create_auto_consume_event(conn, batch["household_id"], article_id, article_name, resolved_location, effective_mode, int(quantity), requested_auto_deduction_quantity, applied_auto_deduction_quantity, allocations)
+                apply_inventory_consumption_allocations(conn, batch["household_id"], article_name, allocations)
             conn.execute(
                 text(
                     """

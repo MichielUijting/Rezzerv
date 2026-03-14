@@ -1036,11 +1036,10 @@ async function openSettings(frame) {
 async function setHouseholdAutomation(frame, enabled) {
   await navigateFrame(frame, '/instellingen/huishoudautomatisering')
   const doc = getFrameDocument(frame)
-  const checkbox = await waitForCondition(() => doc?.querySelector('input[type="checkbox"]'), WAIT_TIMEOUT, 'Checkbox voor huishoudautomatisering niet gevonden')
-  if (checkbox.checked !== enabled) {
-    clickElement(checkbox)
-    await delay(100)
-  }
+  const select = await waitForCondition(() => doc?.querySelector('select'), WAIT_TIMEOUT, 'Keuzeveld voor huishoudautomatisering niet gevonden')
+  select.value = enabled ? 'consume_purchased_quantity' : 'none'
+  select.dispatchEvent(new Event('change', { bubbles: true }))
+  await delay(100)
   const saveButton = Array.from(doc.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Opslaan')
   if (!saveButton) throw new Error('Opslaan-knop in Huishoudautomatisering niet gevonden')
   clickElement(saveButton)

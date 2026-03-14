@@ -1,0 +1,65 @@
+Rezzerv v01.08.96 — strategiegestuurde automatische afboeking — validatierapport
+
+Basis
+- Uitgangspunt: Rezzerv-v01.08.95
+- Doel: vaste -1-logica vervangen door strategiegestuurde automatische afboeking voor verbruiksartikelen.
+
+Aangebrachte wijzigingen
+1. Backend huishoudinstelling omgezet naar modusgestuurd model:
+   - none
+   - consume_purchased_quantity
+   - consume_all_existing_before_purchase
+   Oude boolean payload blijft compatibel en wordt gemapt.
+
+2. Backend artikeloverride omgezet naar nieuw model:
+   - follow_household
+   - none
+   - consume_purchased_quantity
+   - consume_all_existing_before_purchase
+   Legacy always_on/off wordt gemapt naar consume_purchased_quantity / none.
+
+3. Backend auto-afboeking verwerkt nu aantallen:
+   - requested_deduction_quantity wordt berekend uit strategie
+   - vaste businessconstante 1 is verwijderd uit batchverwerking
+
+4. Locatie-onafhankelijke deductie toegevoegd:
+   - eerst aankooplocatie
+   - daarna andere locaties met voorraad
+   - deductiebreakdown wordt als metadata op event vastgelegd
+
+5. Nieuw eventtype toegevoegd voor nieuwe logica:
+   - auto_consume
+   UI toont dit als automatisch verbruik.
+
+6. Frontend huishoudinstelling aangepast van checkbox naar keuzelijst met drie modi.
+
+7. Frontend artikeloverride aangepast naar keuzelijst met nieuwe strategieën.
+
+8. Frontend historie/analyselabels aangepast naar automatische verbruiksemantiek.
+
+9. Admin-regressierunner bijgewerkt voor huishoudinstelling met select in plaats van checkbox.
+
+Technische validatie
+- Backend compileert met: python -m py_compile backend/app/main.py
+- Frontend productiebuild slaagt met: npm run build
+
+Niet volledig gevalideerd in deze omgeving
+- Ik heb in deze omgeving geen volledige Docker runtime en geen volledige end-to-end browserdoorloop met echte kassabonflow gedraaid.
+- Daardoor is runtimegedrag in de volledige app nog niet hard bevestigd.
+
+Belangrijkste resterende risico's
+- Regressies buiten de aangepaste settings- en artikelautomation-paden zijn niet opnieuw volledig doorlopen.
+- Historiepresentatie gebruikt nu auto_consume, maar bestaande testverwachtingen kunnen nog oude labels bevatten.
+- Omdat de app eerder meerdere tussenreleases met deels overlappende fixes had, blijft integratierisico aanwezig totdat de gebruiker de kernscenario's in runtime bevestigt.
+
+Aanbevolen PO-checks
+1. Huishoudinstelling: geen automatische afboeking
+2. Huishoudinstelling: boek gekocht aantal af
+3. Huishoudinstelling: boek bestaande voorraad eerst af tot 0
+4. Artikeloverride none
+5. Artikeloverride consume_purchased_quantity
+6. Multi-location scenario met aankooplocatievoorkeur
+7. Niet-consumable scenario
+
+Bestandsdoel
+- Oplevering als Rezzerv-v01.08.96.zip
