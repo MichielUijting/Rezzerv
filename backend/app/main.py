@@ -857,6 +857,69 @@ def get_store_review_article_options(conn):
     return items
 
 
+def find_generic_existing_article_match(conn, household_id: str | None, article_name: str | None) -> str | None:
+    normalized_name = normalize_household_article_name(article_name)
+    if not normalized_name:
+        return None
+
+    tokens = [part for part in normalized_name.lower().split() if part]
+    if len(tokens) < 2:
+        return None
+
+    generic_candidate = tokens[-1]
+    if len(generic_candidate) < 4:
+        return None
+
+    row = conn.execute(
+        text(
+            """
+            SELECT article_name
+            FROM (
+                SELECT naam AS article_name FROM household_articles WHERE household_id = :household_id
+                UNION
+                SELECT naam AS article_name FROM inventory WHERE household_id = :household_id
+            ) src
+            WHERE lower(trim(article_name)) = lower(trim(:article_name))
+            LIMIT 1
+            """
+        ),
+        {"household_id": str(household_id or '1'), "article_name": generic_candidate},
+    ).mappings().first()
+
+    if row and row.get("article_name"):
+        return str(row["article_name"]).strip()
+    return None
+
+
+def resolve_processing_article(conn, household_id: str | None, article: dict | None) -> dict | None:
+    if not article:
+        return article
+
+    article_id = str(article.get('id') or '')
+    article_name = str(article.get('name') or '').strip()
+    if not article_name:
+        return article
+
+    # Wanneer een winkelregel aan een mock-artikel als 'Volkoren pasta' is gekoppeld,
+    # maar het huishouden al een generiek bestaand artikel 'Pasta' heeft, willen we de
+    # voorraadmutatie en historie aan dat bestaande artikel hangen. Dat voorkomt dat de
+    # aankoop buiten beeld landt op een nieuw/quasi-los artikel.
+    if article_id.startswith('live::'):
+        return article
+
+    generic_match = find_generic_existing_article_match(conn, household_id, article_name)
+    if generic_match and generic_match.lower() != article_name.lower():
+        consumable = get_article_consumable_state(conn, household_id or '1', build_live_article_option_id(generic_match), generic_match)
+        return {
+            'id': build_live_article_option_id(generic_match),
+            'name': generic_match,
+            'brand': article.get('brand') or '',
+            'consumable': consumable,
+        }
+
+    return article
+
+
 def resolve_review_article_option(conn, article_id: str | None, household_id: str | None = None):
     if not article_id:
         return None
@@ -3157,6 +3220,9 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
 
             article_id = line["matched_household_article_id"]
             article = resolve_review_article_option(conn, article_id, str(batch["household_id"]))
+            article = resolve_processing_article(conn, str(batch["household_id"]), article)
+            if article:
+                article_id = article["id"]
             if not article:
                 error = "Geen geldige artikelkoppeling gekozen"
                 conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})

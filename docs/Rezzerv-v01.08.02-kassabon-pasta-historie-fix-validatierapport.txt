@@ -1,0 +1,41 @@
+Rezzerv v01.08.02 — kassabon → voorraadmutatie → historie fix (Pasta)
+
+Basisversie
+- Gebouwd op Rezzerv-v01.08.01 als volledige basis.
+
+Onderzochte klacht
+- Een artikel dat vanuit de kassabon in de voorraad werd opgevoerd, zoals Pasta, liet in Voorraad en in artikeldetail Historie geen nieuwe aankoopmutatie zien; alleen de initiële voorraad bleef zichtbaar.
+
+Waarschijnlijke root cause in de code
+- Het actieve winkelimportpad hing voorraadmutaties en historie direct aan de naam van het gekozen artikeloption-item.
+- Bij winkelregels zoals 'Volkoren pasta' kon de verwerking daardoor aan het mock/geselecteerde artikel 'Volkoren pasta' blijven hangen, terwijl het huishouden al een bestaand live artikel 'Pasta' heeft.
+- Gevolg: de mutatie landde niet op het canonieke bestaande huishoudartikel dat de gebruiker in Voorraad en Artikeldetail opent.
+
+Aangebrachte fix
+- Nieuwe helper toegevoegd: find_generic_existing_article_match(...)
+- Nieuwe helper toegevoegd: resolve_processing_article(...)
+- In process_purchase_import_batch(...) wordt het gekozen review-artikel nu vlak voor verwerking gecanonicaliseerd naar een bestaand live huishoudartikel als er een generieke bestaande match is.
+- Voorbeeld: 'Volkoren pasta' -> bestaand artikel 'Pasta' (indien aanwezig in household_articles of inventory voor hetzelfde huishouden).
+
+Verwacht effect
+- De aankoopmutatie wordt aan het bestaande artikel 'Pasta' gehangen.
+- Daardoor moet de nieuwe mutatie zichtbaar worden in:
+  - Voorraad
+  - Artikeldetail Historie van Pasta
+
+Wat expliciet niet is gewijzigd
+- Geen brede wijziging aan auto-afboekstrategie.
+- Geen wijziging aan de 3-keuze-instelling.
+- Geen nieuwe UI-aanpassingen buiten dit verwerkingspad.
+
+Technische validatie
+- backend/app/main.py compileert met py_compile zonder syntaxfouten.
+
+PO-teststappen
+1. Verwerk opnieuw een kassabonregel voor pasta.
+2. Controleer in Voorraad of de hoeveelheid van Pasta is verhoogd.
+3. Open Artikeldetail van Pasta.
+4. Controleer in Historie of een nieuwe aankoopmutatie zichtbaar is.
+
+Beperking
+- Deze fix is statisch op codepad gevalideerd; ik heb in deze omgeving geen volledige runtime-kliktest met de echte kassabonflow uitgevoerd.
