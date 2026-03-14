@@ -1044,7 +1044,13 @@ async function setHouseholdAutomation(frame, enabled) {
   const saveButton = Array.from(doc.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Opslaan')
   if (!saveButton) throw new Error('Opslaan-knop in Huishoudautomatisering niet gevonden')
   clickElement(saveButton)
-  await waitForCondition(() => queryText(doc, 'Opgeslagen'), WAIT_TIMEOUT, 'Opslaan van huishoudautomatisering werd niet bevestigd')
+  await waitForCondition(() => {
+    const liveDoc = getFrameDocument(frame)
+    if (!liveDoc) return false
+    const successNode = liveDoc.querySelector('[data-save-status="saved"]')
+    if (successNode && queryText(successNode, 'Opgeslagen')) return true
+    return queryText(liveDoc, 'Opgeslagen')
+  }, WAIT_TIMEOUT, 'Opslaan van huishoudautomatisering werd niet bevestigd')
 }
 
 async function openArticleFromInventory(frame, articleName) {

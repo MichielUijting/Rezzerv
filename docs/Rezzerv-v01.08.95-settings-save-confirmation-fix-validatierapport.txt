@@ -1,0 +1,49 @@
+Rezzerv v01.08.95 — settings save confirmation fix validatierapport
+
+Doel
+- Herstellen van het fundament van huishoudautomatisering: opslaan moet zichtbaar bevestigd worden en regressietest moet die bevestiging betrouwbaar kunnen detecteren.
+
+Root cause
+- In SettingsHouseholdAutomationPage werd na save `lastSavedSnapshot` gevuld met de volledige API-respons.
+- Die respons bevat extra velden zoals `has_explicit_value`.
+- `currentSnapshot` bevat alleen `{ autoConsumeOnRepurchase }`.
+- Daardoor bleef `isDirty` direct na een succesvolle save onterecht `true`.
+- De effect-hook `if (saveMessage && isDirty) setSaveMessage('')` verwijderde de succesmelding meteen weer.
+- Gevolg: opslaan kon inhoudelijk slagen, maar UI en regressietest zagen geen stabiele bevestiging “Opgeslagen”.
+
+Uitgevoerde wijziging
+1. SettingsHouseholdAutomationPage
+- Na save wordt nu een genormaliseerde snapshot opgeslagen met alleen:
+  - `autoConsumeOnRepurchase`
+- De lokale state wordt na save ook expliciet gesynchroniseerd met de opgeslagen backendwaarde.
+- De succes/foutmelding kreeg een stabiel statusanker:
+  - `role="status"`
+  - `aria-live="polite"`
+  - `data-save-status="saved"` of `data-save-status="error"`
+
+2. browserRegressionRunner
+- De wachtstap voor huishoudautomatisering accepteert nu:
+  - expliciete statusnode `[data-save-status="saved"]`
+  - of de zichtbare tekst `Opgeslagen`
+- Daarmee is de test minder gevoelig voor timing en overlay-rendering.
+
+Gewijzigde bestanden
+- frontend/src/features/settings/SettingsHouseholdAutomationPage.jsx
+- frontend/src/features/admin/lib/browserRegressionRunner.js
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/package.json
+
+Validatie
+- `python -m py_compile backend/app/main.py` slaagt
+- `npm run build` in frontend slaagt
+- De logische save-flow is gecorrigeerd op het exacte punt waar de regressie op faalde: save-confirmatie van huishoudautomatisering
+
+Verwachte uitkomst
+- Instellingenpagina toont na opslaan weer stabiel `Opgeslagen`
+- Refresh-persistentie kan nu betrouwbaar doorgetest worden
+- Regressietest valt niet meer vals-negatief op “Opslaan van huishoudautomatisering werd niet bevestigd” puur door direct verdwijnende UI-feedback
+
+Release
+- Rezzerv-v01.08.95

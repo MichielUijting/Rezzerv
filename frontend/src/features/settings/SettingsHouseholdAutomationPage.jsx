@@ -100,7 +100,11 @@ export default function SettingsHouseholdAutomationPage() {
 
     try {
       const saved = await saveHouseholdAutomationSettings({ autoConsumeOnRepurchase })
-      setLastSavedSnapshot(stableStringify(saved || currentSettings))
+      const savedSettings = {
+        autoConsumeOnRepurchase: Boolean(saved?.autoConsumeOnRepurchase ?? saved?.auto_consume_on_repurchase ?? autoConsumeOnRepurchase),
+      }
+      setAutoConsumeOnRepurchase(savedSettings.autoConsumeOnRepurchase)
+      setLastSavedSnapshot(stableStringify(savedSettings))
       queueSuccessMessage('Opgeslagen')
       return true
     } catch (error) {
@@ -169,7 +173,12 @@ export default function SettingsHouseholdAutomationPage() {
             <div />
             <div className="rz-save-cluster">
               {(saveMessage || saveError) ? (
-                <div className={saveError ? 'rz-inline-feedback rz-inline-feedback--error rz-save-feedback rz-save-feedback-overlay' : 'rz-inline-feedback rz-inline-feedback--success rz-save-feedback rz-save-feedback-overlay'}>
+                <div
+                  role="status"
+                  aria-live="polite"
+                  data-save-status={saveError ? 'error' : 'saved'}
+                  className={saveError ? 'rz-inline-feedback rz-inline-feedback--error rz-save-feedback rz-save-feedback-overlay' : 'rz-inline-feedback rz-inline-feedback--success rz-save-feedback rz-save-feedback-overlay'}
+                >
                   {saveError || saveMessage}
                 </div>
               ) : null}
