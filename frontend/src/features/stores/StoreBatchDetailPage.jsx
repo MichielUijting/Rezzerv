@@ -535,7 +535,7 @@ export default function StoreBatchDetailPage() {
                               onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
                               onChange={(event) => persistLineDraft(line, { locationId: event.target.value || '' })}
                             >
-                              <option value="">Geen voorkeurslocatie</option>
+                              <option value="">Kies locatie</option>
                               {locationOptions.map((location) => (
                                 <option key={location.id} value={location.id}>{location.label}</option>
                               ))}

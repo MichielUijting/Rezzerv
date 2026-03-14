@@ -74,34 +74,17 @@ export function StoreArticleSelector({
   articleOptions,
   disabled,
   onChange,
-  onCreateArticle,
   onClearArticle,
+  onCreateArticle,
 }) {
-  const datalistId = `store-article-options-${lineId}`
-  const optionsByLabel = useMemo(() => {
-    const entries = articleOptions.map((article) => [articleLabel(article), String(article.id)])
-    return new Map(entries)
-  }, [articleOptions])
-  const labelById = useMemo(() => {
-    const entries = articleOptions.map((article) => [String(article.id), articleLabel(article)])
-    return new Map(entries)
-  }, [articleOptions])
-  const [query, setQuery] = useState(selectedArticleId ? (labelById.get(String(selectedArticleId)) || '') : '')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newArticleName, setNewArticleName] = useState('')
   const [createArticleError, setCreateArticleError] = useState('')
 
-  useEffect(() => {
-    const nextValue = selectedArticleId ? (labelById.get(String(selectedArticleId)) || '') : ''
-    setQuery(nextValue)
-  }, [selectedArticleId, labelById])
-
-  const normalizedQuery = query.trim().toLowerCase()
-  const hasExactMatch = Boolean(normalizedQuery && Array.from(optionsByLabel.keys()).some((label) => label.trim().toLowerCase() === normalizedQuery))
-  const canCreateArticle = Boolean(normalizedQuery) && !hasExactMatch && !selectedArticleId
+  const canCreateArticle = typeof onCreateArticle === 'function'
 
   function openCreateArticleModal() {
-    const baseName = query.trim() || lineName || ''
+    const baseName = lineName || ''
     setNewArticleName(baseName)
     setCreateArticleError('')
     setIsCreateModalOpen(true)
@@ -119,59 +102,31 @@ export function StoreArticleSelector({
       return
     }
     const created = await onCreateArticle(nextName)
-    if (created?.name) {
-      setQuery(articleLabel(created))
+    if (created?.id) {
+      onChange(String(created.id))
       closeCreateArticleModal()
       return
     }
     setCreateArticleError('Het artikel kon niet worden aangemaakt.')
   }
 
-  function handleInputChange(event) {
-    const nextQuery = event.target.value
-    setQuery(nextQuery)
-    if (!nextQuery) {
-      onChange('')
-      return
-    }
-    const matchedId = optionsByLabel.get(nextQuery)
-    if (matchedId) {
-      onChange(matchedId)
-    }
-  }
-
   function handleSelectChange(event) {
     const nextId = String(event.target.value || '')
-    const nextLabel = nextId ? (labelById.get(nextId) || '') : ''
-    setQuery(nextLabel)
+    if (!nextId) {
+      onClearArticle?.()
+      return
+    }
     onChange(nextId)
   }
 
   return (
     <div className="rz-store-article-search" style={articleSearchStyle}>
-      <input
-        className="rz-input rz-store-article-search-input" style={articleSearchInputStyle}
-        type="text"
-        list={datalistId}
-        value={query}
-        placeholder="Kies artikel"
-        disabled={disabled}
-        onChange={handleInputChange}
-      />
-      <datalist id={datalistId}>
-        {articleOptions.map((article) => (
-          <option key={article.id} value={articleLabel(article)} />
-        ))}
-      </datalist>
       <select
-        className="rz-input rz-store-select rz-store-select--hidden"
-        style={{ display: 'none' }}
+        className="rz-input rz-store-select"
         data-store-article-select="true"
         value={selectedArticleId || ''}
         disabled={disabled}
         onChange={handleSelectChange}
-        aria-hidden="true"
-        tabIndex={-1}
       >
         <option value="">Kies artikel</option>
         {articleOptions.map((article) => (
@@ -179,21 +134,6 @@ export function StoreArticleSelector({
         ))}
       </select>
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-        {selectedArticleId ? (
-          <button
-            type="button"
-            className="rz-link-button"
-            data-testid={`store-clear-article-${lineId}`}
-            style={createArticleButtonStyle}
-            disabled={disabled}
-            onClick={() => {
-              setQuery('')
-              onClearArticle?.()
-            }}
-          >
-            Ontkoppelen
-          </button>
-        ) : null}
         {canCreateArticle ? (
           <button
             type="button"

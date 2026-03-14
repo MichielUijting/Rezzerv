@@ -1,0 +1,35 @@
+Rezzerv v01.08.14 — validatierapport
+
+Basisversie
+- Rezzerv-v01.08.13 (functionele basis)
+
+Doel van deze versie
+- Ontkoppelen en leegmaken van artikel/locatie via de normale selecties zelf laten verlopen.
+- Geen aparte link 'Ontkoppelen' meer.
+- Gebruiker moet artikel kunnen leegmaken door 'Kies artikel' te selecteren.
+- Gebruiker moet locatie kunnen leegmaken door 'Kies locatie' te selecteren.
+
+Uitgevoerde wijziging
+- StoreArticleSelector omgezet van datalist+ontkoppellink naar zichtbare select.
+- Eerste optie van artikelselector is nu 'Kies artikel' met lege waarde.
+- Eerste optie van locatiedropdown is nu 'Kies locatie' met lege waarde.
+- Selecteren van lege artikelwaarde roept onClearArticle() aan.
+- Selecteren van lege locatie blijft persistLineDraft(... locationId: '') gebruiken.
+- Ontkoppellink verwijderd uit normale UI.
+- Versie opgehoogd naar 01.08.14.
+
+Technische controle
+- Frontend productiebuild geslaagd.
+- Volledige zip opnieuw opgebouwd.
+
+Wat de PO moet toetsen
+1. Open Lidl-bon.
+2. Kies bij een voorbereide regel 'Kies artikel'.
+3. Verlaat het scherm en open de bon opnieuw.
+4. Controleer dat artikel leeg blijft.
+5. Kies daarna 'Kies locatie'.
+6. Verlaat het scherm en open de bon opnieuw.
+7. Controleer dat locatie leeg blijft.
+
+Open risico
+- Deze versie corrigeert alleen de bediening in de UI. De functionele persistentie moet nog door de PO in runtime bevestigd worden.
