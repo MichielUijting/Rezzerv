@@ -1,0 +1,44 @@
+Rezzerv v01.08.97 — auto-consume diagnose validatierapport
+
+Doel
+- Geen nieuwe businessregelpatch, maar diagnostiek toevoegen aan het actieve winkelimportpad.
+- Zichtbaar maken waarom een regel wel of niet automatische afboeking krijgt.
+
+Bevinding root cause in de codebasis v01.08.95
+- Het actieve backend-pad gebruikte nog steeds de oude logica:
+  - create_auto_repurchase_event(... quantity=1)
+  - apply_inventory_consumption(..., 1, ...)
+  - note='Automatisch 1 eenheid afgeboekt bij herhaalaankoop.'
+- De strategiemodi uit de eerdere ontwerpkeuze waren in deze echte codebasis nog niet aanwezig in het actieve process-pad.
+- Daardoor is het bestaande gedrag in de werkende release nog legacy-minus-one.
+
+Aangebrachte diagnose-aanpassingen
+1. Nieuwe helper resolve_auto_consume_diagnosis(...)
+   Geeft per regel terug:
+   - household_mode
+   - article_override
+   - effective_mode
+   - consumable
+   - pre_purchase_total
+   - purchased_quantity
+   - requested_deduction_quantity
+   - applied_deduction_quantity
+   - should_auto_consume
+   - decision_reason
+
+2. Uitbreiding process-response
+   - POST /api/purchase-import-batches/{batch_id}/process
+   - per processed line wordt nu diagnostics toegevoegd aan results[]
+
+3. Nieuw diagnose-endpoint
+   - GET /api/dev/purchase-import-batches/{batch_id}/diagnostics
+   - geeft batch- en line-diagnostiek terug voor analyse achteraf
+
+Validatie uitgevoerd
+- python -m py_compile backend/app/main.py: geslaagd
+- Geen volledige Docker-runtime of browserflow gevalideerd in deze omgeving.
+
+Eerlijke conclusie
+- Deze release maakt de oorzaak zichtbaar in runtime.
+- Deze release lost de businessregel nog niet op.
+- Op basis van de echte code is legacy minus one nog steeds actief in v01.08.95.

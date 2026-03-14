@@ -22,8 +22,8 @@ function shouldApplyAutoRepurchase(article = {}, settings = {}) {
   if (!isConsumable(article)) return false
 
   const overrideMode = getArticleAutoConsumeMode(article.id)
-  if (overrideMode === AUTO_CONSUME_MODES.NONE) return false
-  if (overrideMode === AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY || overrideMode === AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING) return true
+  if (overrideMode === AUTO_CONSUME_MODES.ALWAYS_ON) return true
+  if (overrideMode === AUTO_CONSUME_MODES.ALWAYS_OFF) return false
 
   return Boolean(settings.autoConsumeOnRepurchase)
 }
@@ -37,7 +37,7 @@ export function applyAutoRepurchaseHistory(article = {}) {
   }
 
   const hasRealAutoRepurchaseEvent = history.some(
-    (entry) => ['auto_repurchase','auto_consume'].includes(entry?.event_type) || ['auto_repurchase','auto_consume'].includes(entry?.source),
+    (entry) => entry?.event_type === 'auto_repurchase' || entry?.source === 'auto_repurchase',
   )
   if (hasRealAutoRepurchaseEvent) {
     return history
@@ -49,7 +49,7 @@ export function applyAutoRepurchaseHistory(article = {}) {
   sorted.forEach((entry) => {
     const isPurchase = entry?.type === 'Aankoop'
     const previousStock = toNumber(entry?.old_value)
-    const alreadyAutoRepurchase = ['auto_repurchase','auto_consume'].includes(entry?.source) || entry?.auto_generated === true
+    const alreadyAutoRepurchase = entry?.source === 'auto_repurchase' || entry?.auto_generated === true
     const purchaseQuantity = toNumber(entry?.quantity_change || Math.max(0, toNumber(entry?.new_value) - previousStock))
     const qualifies = isPurchase && !alreadyAutoRepurchase && previousStock > 0 && purchaseQuantity > 0
 
@@ -64,8 +64,8 @@ export function applyAutoRepurchaseHistory(article = {}) {
       old_value: String(previousStock),
       new_value: '0',
       location: entry.location || 'Onbekende locatie',
-      source: 'auto_consume',
-      note: 'Automatisch verbruik toegepast volgens ingestelde strategie.',
+      source: 'auto_repurchase',
+      note: 'Automatisch afgeboekt bij herhaalaankoop volgens huishoudinstelling.',
       quantity_change: previousStock,
       auto_generated: true,
     })

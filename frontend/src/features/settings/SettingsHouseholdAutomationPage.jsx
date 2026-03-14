@@ -6,7 +6,6 @@ import Button from '../../ui/Button'
 import {
   fetchHouseholdAutomationSettings,
   saveHouseholdAutomationSettings,
-  HOUSEHOLD_AUTO_CONSUME_MODES,
 } from './services/householdAutomationService'
 
 function stableStringify(value) {
@@ -22,7 +21,7 @@ function stableStringify(value) {
 }
 
 export default function SettingsHouseholdAutomationPage() {
-  const [mode, setMode] = useState(HOUSEHOLD_AUTO_CONSUME_MODES.NONE)
+  const [autoConsumeOnRepurchase, setAutoConsumeOnRepurchase] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
@@ -36,7 +35,7 @@ export default function SettingsHouseholdAutomationPage() {
     fetchHouseholdAutomationSettings()
       .then((settings) => {
         if (cancelled) return
-        setMode(settings.mode || HOUSEHOLD_AUTO_CONSUME_MODES.NONE)
+        setAutoConsumeOnRepurchase(Boolean(settings.autoConsumeOnRepurchase))
       })
       .finally(() => {
         if (!cancelled) setIsLoading(false)
@@ -46,7 +45,7 @@ export default function SettingsHouseholdAutomationPage() {
     }
   }, [])
 
-  const currentSettings = useMemo(() => ({ mode }), [mode])
+  const currentSettings = useMemo(() => ({ autoConsumeOnRepurchase }), [autoConsumeOnRepurchase])
   const currentSnapshot = useMemo(() => stableStringify(currentSettings), [currentSettings])
   const isDirty = !isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot
   const blocker = useBlocker(isDirty)
@@ -100,11 +99,11 @@ export default function SettingsHouseholdAutomationPage() {
     setSaveError('')
 
     try {
-      const saved = await saveHouseholdAutomationSettings({ mode })
+      const saved = await saveHouseholdAutomationSettings({ autoConsumeOnRepurchase })
       const savedSettings = {
-        mode: saved?.mode || mode,
+        autoConsumeOnRepurchase: Boolean(saved?.autoConsumeOnRepurchase ?? saved?.auto_consume_on_repurchase ?? autoConsumeOnRepurchase),
       }
-      setMode(savedSettings.mode)
+      setAutoConsumeOnRepurchase(savedSettings.autoConsumeOnRepurchase)
       setLastSavedSnapshot(stableStringify(savedSettings))
       queueSuccessMessage('Opgeslagen')
       return true
@@ -146,30 +145,27 @@ export default function SettingsHouseholdAutomationPage() {
           <div>
             <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Huishoudautomatisering</h2>
             <p style={{ margin: 0, color: '#667085' }}>
-              Deze instelling geldt voor het hele huishouden. Kies hoe Rezzerv verbruiksartikelen automatisch moet afboeken bij een nieuwe aankoop.
+              Deze instelling geldt voor het hele huishouden. Wanneer de instelling aan staat, kan Rezzerv bij een herhaalaankoop van een verbruiksartikel automatisch een verbruikevent toevoegen.
             </p>
           </div>
 
           <div className="rz-automation-setting-card">
             <div className="rz-automation-setting-copy">
-              <div className="rz-automation-setting-title">Automatische afboeking verbruiksartikelen</div>
-              <div className="rz-automation-setting-text">Alleen voor verbruiksartikelen. De gekozen strategie wordt zichtbaar vastgelegd in Historie en Analyse.</div>
+              <div className="rz-automation-setting-title">Slim afboeken bij herhaalaankoop</div>
+              <div className="rz-automation-setting-text">Alleen voor verbruiksartikelen. Automatische afboekingen worden zichtbaar vastgelegd in Historie.</div>
             </div>
-            <label className="rz-article-automation-field" style={{ minWidth: '340px' }}>
-              <span className="rz-article-automation-label">Strategie</span>
-              <select
-                className="rz-article-automation-select"
-                value={mode}
+            <label className="rz-toggle-row">
+              <span className="sr-only">Slim afboeken bij herhaalaankoop</span>
+              <input
+                type="checkbox"
+                checked={autoConsumeOnRepurchase}
                 onChange={(event) => {
                   setSaveMessage('')
                   setSaveError('')
-                  setMode(event.target.value)
+                  setAutoConsumeOnRepurchase(event.target.checked)
                 }}
-              >
-                <option value={HOUSEHOLD_AUTO_CONSUME_MODES.NONE}>Geen automatische afboeking</option>
-                <option value={HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY}>Boek hetzelfde aantal af als gekocht</option>
-                <option value={HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING}>Boek bestaande voorraad eerst volledig af tot 0</option>
-              </select>
+                className="rz-toggle-row-input"
+              />
             </label>
           </div>
 
