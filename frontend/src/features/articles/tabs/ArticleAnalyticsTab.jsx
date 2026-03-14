@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AUTO_CONSUME_MODES, getArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
-import { getHouseholdAutomationSettings } from '../../settings/services/householdAutomationService'
+import { AUTO_CONSUME_MODES, fetchArticleAutoConsumeMode, getArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
+import { fetchHouseholdAutomationSettings, getHouseholdAutomationSettings } from '../../settings/services/householdAutomationService'
 
 function formatCurrency(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) return '—'
@@ -269,9 +269,16 @@ export default function ArticleAnalyticsTab({ articleData = {} }) {
   const history = Array.isArray(articleData.history) ? getSortedHistory(articleData.history) : []
 
   useEffect(() => {
-    function syncAutomationState() {
-      setHouseholdSettings(getHouseholdAutomationSettings())
-      setArticleMode(getArticleAutoConsumeMode(articleData?.id))
+    let cancelled = false
+
+    async function syncAutomationState() {
+      const [nextHousehold, nextMode] = await Promise.all([
+        fetchHouseholdAutomationSettings(),
+        fetchArticleAutoConsumeMode(articleData?.id),
+      ])
+      if (cancelled) return
+      setHouseholdSettings(nextHousehold || getHouseholdAutomationSettings())
+      setArticleMode(nextMode || getArticleAutoConsumeMode(articleData?.id))
     }
 
     syncAutomationState()
@@ -279,6 +286,7 @@ export default function ArticleAnalyticsTab({ articleData = {} }) {
     window.addEventListener('rezzerv-article-auto-consume-overrides-updated', syncAutomationState)
 
     return () => {
+      cancelled = true
       window.removeEventListener('rezzerv-household-automation-updated', syncAutomationState)
       window.removeEventListener('rezzerv-article-auto-consume-overrides-updated', syncAutomationState)
     }

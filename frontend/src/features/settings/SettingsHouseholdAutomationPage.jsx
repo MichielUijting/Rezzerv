@@ -4,7 +4,7 @@ import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import {
-  getHouseholdAutomationSettings,
+  fetchHouseholdAutomationSettings,
   saveHouseholdAutomationSettings,
 } from './services/householdAutomationService'
 
@@ -31,9 +31,18 @@ export default function SettingsHouseholdAutomationPage() {
   const dismissTimerRef = useRef(null)
 
   useEffect(() => {
-    const settings = getHouseholdAutomationSettings()
-    setAutoConsumeOnRepurchase(Boolean(settings.autoConsumeOnRepurchase))
-    setIsLoading(false)
+    let cancelled = false
+    fetchHouseholdAutomationSettings()
+      .then((settings) => {
+        if (cancelled) return
+        setAutoConsumeOnRepurchase(Boolean(settings.autoConsumeOnRepurchase))
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const currentSettings = useMemo(() => ({ autoConsumeOnRepurchase }), [autoConsumeOnRepurchase])
@@ -90,7 +99,7 @@ export default function SettingsHouseholdAutomationPage() {
     setSaveError('')
 
     try {
-      const saved = saveHouseholdAutomationSettings({ autoConsumeOnRepurchase })
+      const saved = await saveHouseholdAutomationSettings({ autoConsumeOnRepurchase })
       setLastSavedSnapshot(stableStringify(saved || currentSettings))
       queueSuccessMessage('Opgeslagen')
       return true

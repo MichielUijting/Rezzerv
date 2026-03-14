@@ -283,13 +283,28 @@ MOCK_BATCH_METADATA_BY_PROVIDER = {
 
 
 MOCK_ARTICLE_OPTIONS = [
-    {"id": "1", "name": "Tomaten", "brand": "Mutti"},
-    {"id": "2", "name": "Spaghetti", "brand": "Barilla"},
-    {"id": "3", "name": "Koffie", "brand": "Douwe Egberts"},
-    {"id": "4", "name": "Melk", "brand": "Campina"},
-    {"id": "5", "name": "Banaan", "brand": "Huismerk"},
-    {"id": "6", "name": "Volkoren pasta", "brand": "Barilla"},
+    {"id": "1", "name": "Tomaten", "brand": "Mutti", "consumable": True},
+    {"id": "2", "name": "Spaghetti", "brand": "Barilla", "consumable": True},
+    {"id": "3", "name": "Koffie", "brand": "Douwe Egberts", "consumable": True},
+    {"id": "4", "name": "Melk", "brand": "Campina", "consumable": True},
+    {"id": "5", "name": "Banaan", "brand": "Huismerk", "consumable": True},
+    {"id": "6", "name": "Volkoren pasta", "brand": "Barilla", "consumable": True},
 ]
+
+KNOWN_CONSUMABLE_ARTICLE_NAMES = {
+    "tomaten",
+    "spaghetti",
+    "koffie",
+    "melk",
+    "banaan",
+    "volkoren pasta",
+    "mosterd",
+    "halfvolle melk",
+    "appelsap",
+    "pindakaas",
+    "tomatenblokjes",
+    "pasta",
+}
 
 
 MOCK_ARTICLE_LOOKUP = {item["id"]: item for item in MOCK_ARTICLE_OPTIONS}
@@ -298,6 +313,12 @@ MOCK_ARTICLE_LOOKUP = {item["id"]: item for item in MOCK_ARTICLE_OPTIONS}
 STORE_IMPORT_SIMPLIFICATION_KEY = "store_import_simplification_level"
 STORE_IMPORT_SIMPLIFICATION_ALLOWED = {"voorzichtig", "gebalanceerd", "maximaal_gemak"}
 STORE_IMPORT_SIMPLIFICATION_DEFAULT = "gebalanceerd"
+HOUSEHOLD_AUTO_CONSUME_KEY = "auto_consume_on_repurchase"
+ARTICLE_AUTO_CONSUME_OVERRIDES_KEY = "article_auto_consume_overrides"
+ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD = "follow_household"
+ARTICLE_AUTO_CONSUME_ALWAYS_ON = "always_on"
+ARTICLE_AUTO_CONSUME_ALWAYS_OFF = "always_off"
+ARTICLE_AUTO_CONSUME_ALLOWED = {ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD, ARTICLE_AUTO_CONSUME_ALWAYS_ON, ARTICLE_AUTO_CONSUME_ALWAYS_OFF}
 ARTICLE_FIELD_VISIBILITY_KEY = "article_field_visibility"
 ARTICLE_FIELD_VISIBILITY_DEFAULT = {
     "overview": {},
@@ -334,16 +355,170 @@ def ensure_household_articles_schema():
                 id TEXT PRIMARY KEY,
                 household_id TEXT NOT NULL,
                 naam TEXT NOT NULL,
+                consumable INTEGER,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT
             )
             """
         ))
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(household_articles)")).fetchall()}
+        if "consumable" not in columns:
+            conn.execute(text("ALTER TABLE household_articles ADD COLUMN consumable INTEGER"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_household_articles_household_name ON household_articles (household_id, naam)"))
 
 
 def normalize_household_article_name(value: str | None) -> str:
     return " ".join(str(value or "").strip().split())
+
+
+def normalize_bool_setting(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = str(value or "").strip().lower()
+    return normalized in {"1", "true", "yes", "on", "aan", "waar"}
+
+
+def normalize_article_auto_consume_mode(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
+        return ARTICLE_AUTO_CONSUME_ALWAYS_ON
+    if normalized == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
+        return ARTICLE_AUTO_CONSUME_ALWAYS_OFF
+    return ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD
+
+
+def normalize_article_auto_consume_overrides_map(value) -> dict:
+    if not isinstance(value, dict):
+        return {}
+    normalized = {}
+    for article_id, mode in value.items():
+        if not isinstance(article_id, str) or not article_id.strip():
+            continue
+        normalized[article_id.strip()] = normalize_article_auto_consume_mode(mode)
+    return normalized
+
+
+def infer_consumable_from_name(article_name: str | None) -> bool:
+    normalized = normalize_household_article_name(article_name).lower()
+    if not normalized:
+        return False
+    if normalized in KNOWN_CONSUMABLE_ARTICLE_NAMES:
+        return True
+    keywords = [
+        "melk", "pasta", "koffie", "mosterd", "sap", "saus", "soep", "rijst", "banaan", "tomaat", "brood",
+        "kaas", "yoghurt", "thee", "pindakaas", "jam", "suiker", "zout", "bloem", "eieren", "water",
+    ]
+    return any(keyword in normalized for keyword in keywords)
+
+
+def get_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+    row = conn.execute(
+        text(
+            "SELECT setting_value FROM household_settings WHERE household_id = :household_id AND setting_key = :setting_key"
+        ),
+        {"household_id": str(household_id), "setting_key": HOUSEHOLD_AUTO_CONSUME_KEY},
+    ).mappings().first()
+    return normalize_bool_setting(row["setting_value"] if row else False)
+
+
+def set_household_auto_consume_on_repurchase(conn, household_id: str, enabled: bool) -> bool:
+    normalized = normalize_bool_setting(enabled)
+    conn.execute(
+        text(
+            """
+            INSERT INTO household_settings (id, household_id, setting_key, setting_value, updated_at)
+            VALUES (:id, :household_id, :setting_key, :setting_value, CURRENT_TIMESTAMP)
+            ON CONFLICT(household_id, setting_key)
+            DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP
+            """
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "household_id": str(household_id),
+            "setting_key": HOUSEHOLD_AUTO_CONSUME_KEY,
+            "setting_value": json.dumps(normalized),
+        },
+    )
+    return normalized
+
+
+def get_household_article_auto_consume_overrides(conn, household_id: str) -> dict:
+    row = conn.execute(
+        text(
+            "SELECT setting_value FROM household_settings WHERE household_id = :household_id AND setting_key = :setting_key"
+        ),
+        {"household_id": str(household_id), "setting_key": ARTICLE_AUTO_CONSUME_OVERRIDES_KEY},
+    ).mappings().first()
+    if not row or not row.get("setting_value"):
+        return {}
+    try:
+        parsed = json.loads(row["setting_value"])
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
+    return normalize_article_auto_consume_overrides_map(parsed)
+
+
+def set_household_article_auto_consume_override(conn, household_id: str, article_id: str, mode: str) -> str:
+    overrides = get_household_article_auto_consume_overrides(conn, household_id)
+    normalized_mode = normalize_article_auto_consume_mode(mode)
+    overrides[str(article_id)] = normalized_mode
+    conn.execute(
+        text(
+            """
+            INSERT INTO household_settings (id, household_id, setting_key, setting_value, updated_at)
+            VALUES (:id, :household_id, :setting_key, :setting_value, CURRENT_TIMESTAMP)
+            ON CONFLICT(household_id, setting_key)
+            DO UPDATE SET setting_value = excluded.setting_value, updated_at = CURRENT_TIMESTAMP
+            """
+        ),
+        {
+            "id": str(uuid.uuid4()),
+            "household_id": str(household_id),
+            "setting_key": ARTICLE_AUTO_CONSUME_OVERRIDES_KEY,
+            "setting_value": json.dumps(overrides),
+        },
+    )
+    return normalized_mode
+
+
+def get_household_article_auto_consume_override(conn, household_id: str, article_id: str) -> str:
+    overrides = get_household_article_auto_consume_overrides(conn, household_id)
+    return normalize_article_auto_consume_mode(overrides.get(str(article_id)))
+
+
+def get_article_consumable_state(conn, household_id: str, article_id: str | None, article_name: str | None = None):
+    normalized_article_id = str(article_id or "").strip()
+    normalized_name = normalize_household_article_name(article_name)
+    if normalized_article_id in MOCK_ARTICLE_LOOKUP:
+        return bool(MOCK_ARTICLE_LOOKUP[normalized_article_id].get("consumable"))
+    if normalized_article_id.startswith("live::"):
+        normalized_name = normalize_household_article_name(normalized_article_id.split("::", 1)[1])
+    row = None
+    if normalized_name:
+        row = conn.execute(
+            text(
+                """
+                SELECT consumable, naam
+                FROM household_articles
+                WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))
+                LIMIT 1
+                """
+            ),
+            {"household_id": str(household_id), "naam": normalized_name},
+        ).mappings().first()
+    if row and row.get("consumable") is not None:
+        return bool(row["consumable"])
+    inferred = infer_consumable_from_name(normalized_name)
+    if row and row.get("naam"):
+        conn.execute(
+            text(
+                "UPDATE household_articles SET consumable = :consumable, updated_at = CURRENT_TIMESTAMP WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))"
+            ),
+            {"consumable": 1 if inferred else 0, "household_id": str(household_id), "naam": row["naam"]},
+        )
+    return inferred
 
 
 def find_existing_household_article_name(conn, household_id: str, article_name: str) -> str | None:
@@ -379,22 +554,34 @@ def find_existing_household_article_name(conn, household_id: str, article_name: 
     return None
 
 
-def ensure_household_article(conn, household_id: str, article_name: str) -> str:
+def ensure_household_article(conn, household_id: str, article_name: str, consumable: bool | None = None) -> str:
     normalized = normalize_household_article_name(article_name)
     if not normalized:
         raise HTTPException(status_code=400, detail="Artikelnaam is verplicht")
 
     existing_name = find_existing_household_article_name(conn, household_id, normalized)
     final_name = existing_name or normalized
+    resolved_consumable = infer_consumable_from_name(final_name) if consumable is None else bool(consumable)
     if not existing_name:
         conn.execute(
             text(
                 """
-                INSERT INTO household_articles (id, household_id, naam, updated_at)
-                VALUES (:id, :household_id, :naam, CURRENT_TIMESTAMP)
+                INSERT INTO household_articles (id, household_id, naam, consumable, updated_at)
+                VALUES (:id, :household_id, :naam, :consumable, CURRENT_TIMESTAMP)
                 """
             ),
-            {"id": str(uuid.uuid4()), "household_id": str(household_id), "naam": normalized},
+            {"id": str(uuid.uuid4()), "household_id": str(household_id), "naam": normalized, "consumable": 1 if resolved_consumable else 0},
+        )
+    else:
+        conn.execute(
+            text(
+                """
+                UPDATE household_articles
+                SET consumable = COALESCE(consumable, :consumable), updated_at = CURRENT_TIMESTAMP
+                WHERE household_id = :household_id AND lower(trim(naam)) = lower(trim(:naam))
+                """
+            ),
+            {"household_id": str(household_id), "naam": final_name, "consumable": 1 if resolved_consumable else 0},
         )
     return build_live_article_option_id(final_name)
 
@@ -527,6 +714,22 @@ def get_household_payload_for_user(user: dict):
     }
 
 
+class HouseholdAutomationSettingsUpdateRequest(BaseModel):
+    auto_consume_on_repurchase: bool = False
+
+
+class ArticleAutomationOverrideUpdateRequest(BaseModel):
+    mode: str = ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value):
+        normalized = normalize_article_auto_consume_mode(value)
+        if normalized not in ARTICLE_AUTO_CONSUME_ALLOWED:
+            raise ValueError("Ongeldige override-modus")
+        return normalized
+
+
 class StoreImportSimplificationUpdateRequest(BaseModel):
     store_import_simplification_level: str
 
@@ -561,11 +764,11 @@ def get_store_review_article_options(conn):
     live_names = conn.execute(
         text(
             """
-            SELECT DISTINCT article_name
+            SELECT DISTINCT article_name, consumable
             FROM (
-                SELECT naam AS article_name FROM inventory WHERE trim(COALESCE(naam, '')) <> ''
+                SELECT naam AS article_name, consumable FROM household_articles WHERE trim(COALESCE(naam, '')) <> ''
                 UNION
-                SELECT naam AS article_name FROM household_articles WHERE trim(COALESCE(naam, '')) <> ''
+                SELECT naam AS article_name, NULL AS consumable FROM inventory WHERE trim(COALESCE(naam, '')) <> ''
             ) src
             ORDER BY lower(article_name) ASC
             """
@@ -579,13 +782,18 @@ def get_store_review_article_options(conn):
         normalized = article_name.lower()
         if normalized in seen_names:
             continue
-        items.append({"id": build_live_article_option_id(article_name), "name": article_name, "brand": ""})
+        items.append({
+            "id": build_live_article_option_id(article_name),
+            "name": article_name,
+            "brand": "",
+            "consumable": bool(row["consumable"]) if row.get("consumable") is not None else infer_consumable_from_name(article_name),
+        })
         seen_names.add(normalized)
 
     return items
 
 
-def resolve_review_article_option(conn, article_id: str | None):
+def resolve_review_article_option(conn, article_id: str | None, household_id: str | None = None):
     if not article_id:
         return None
     article_id = str(article_id)
@@ -594,17 +802,18 @@ def resolve_review_article_option(conn, article_id: str | None):
     if article_id.startswith("live::"):
         article_name = article_id.split("::", 1)[1].strip()
         if article_name:
-            return {"id": article_id, "name": article_name, "brand": ""}
+            consumable = get_article_consumable_state(conn, household_id or '1', article_id, article_name)
+            return {"id": article_id, "name": article_name, "brand": "", "consumable": consumable}
         return None
 
     inventory_match = conn.execute(
         text(
             """
-            SELECT article_name AS naam
+            SELECT article_name AS naam, consumable
             FROM (
-                SELECT naam AS article_name FROM inventory
+                SELECT naam AS article_name, consumable FROM household_articles
                 UNION
-                SELECT naam AS article_name FROM household_articles
+                SELECT naam AS article_name, NULL AS consumable FROM inventory
             ) src
             WHERE lower(article_name) = lower(:article_name)
             LIMIT 1
@@ -614,10 +823,12 @@ def resolve_review_article_option(conn, article_id: str | None):
     ).mappings().first()
     if inventory_match and inventory_match.get("naam"):
         article_name = inventory_match["naam"].strip()
-        return {"id": build_live_article_option_id(article_name), "name": article_name, "brand": ""}
+        consumable = inventory_match.get("consumable")
+        if consumable is None:
+            consumable = get_article_consumable_state(conn, household_id or '1', build_live_article_option_id(article_name), article_name)
+        return {"id": build_live_article_option_id(article_name), "name": article_name, "brand": "", "consumable": bool(consumable)}
 
     return None
-
 
 def utc_now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
@@ -1448,6 +1659,20 @@ def create_auto_repurchase_event(conn, household_id: str, article_id: str, artic
     )
 
 
+def should_auto_consume_on_repurchase(conn, household_id: str, article_id: str, article_name: str, pre_purchase_total: float) -> bool:
+    if pre_purchase_total <= 0:
+        return False
+    consumable = get_article_consumable_state(conn, household_id, article_id, article_name)
+    if not consumable:
+        return False
+    mode = get_household_article_auto_consume_override(conn, household_id, article_id)
+    if mode == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
+        return True
+    if mode == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
+        return False
+    return get_household_auto_consume_on_repurchase(conn, household_id)
+
+
 def ensure_store_provider(provider_code: str):
     with engine.begin() as conn:
         provider = conn.execute(
@@ -1514,6 +1739,34 @@ def get_household(authorization: Optional[str] = Header(None)):
     return household
 
 
+@app.get("/api/household/automation-settings")
+def get_household_automation_settings(authorization: Optional[str] = Header(None)):
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    with engine.begin() as conn:
+        enabled = get_household_auto_consume_on_repurchase(conn, household["id"])
+    return {
+        "household_id": household["id"],
+        "auto_consume_on_repurchase": enabled,
+        "is_household_admin": household["is_household_admin"],
+    }
+
+
+@app.put("/api/household/automation-settings")
+def update_household_automation_settings(payload: HouseholdAutomationSettingsUpdateRequest, authorization: Optional[str] = Header(None)):
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    if not household["is_household_admin"]:
+        raise HTTPException(status_code=403, detail="Alleen de beheerder van het huishouden mag dit wijzigen")
+    with engine.begin() as conn:
+        enabled = set_household_auto_consume_on_repurchase(conn, household["id"], payload.auto_consume_on_repurchase)
+    return {
+        "household_id": household["id"],
+        "auto_consume_on_repurchase": enabled,
+        "is_household_admin": household["is_household_admin"],
+    }
+
+
 @app.get("/api/household/store-import-settings")
 def get_store_import_settings(authorization: Optional[str] = Header(None)):
     user = get_current_user_from_authorization(authorization)
@@ -1562,6 +1815,42 @@ def update_article_field_visibility(payload: dict, authorization: Optional[str] 
     return visibility
 
 
+@app.get("/api/articles/{article_id}/automation-override")
+def get_article_automation_override(article_id: str, authorization: Optional[str] = Header(None)):
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    with engine.begin() as conn:
+        article = resolve_review_article_option(conn, article_id, household["id"])
+        if not article:
+            raise HTTPException(status_code=404, detail="Onbekend artikel")
+        mode = get_household_article_auto_consume_override(conn, household["id"], article["id"])
+        consumable = get_article_consumable_state(conn, household["id"], article["id"], article.get("name"))
+    return {
+        "article_id": article["id"],
+        "mode": mode,
+        "consumable": consumable,
+        "article_name": article.get("name") or "",
+    }
+
+
+@app.put("/api/articles/{article_id}/automation-override")
+def update_article_automation_override(article_id: str, payload: ArticleAutomationOverrideUpdateRequest, authorization: Optional[str] = Header(None)):
+    user = get_current_user_from_authorization(authorization)
+    household = get_household_payload_for_user(user)
+    with engine.begin() as conn:
+        article = resolve_review_article_option(conn, article_id, household["id"])
+        if not article:
+            raise HTTPException(status_code=404, detail="Onbekend artikel")
+        mode = set_household_article_auto_consume_override(conn, household["id"], article["id"], payload.mode)
+        consumable = get_article_consumable_state(conn, household["id"], article["id"], article.get("name"))
+    return {
+        "article_id": article["id"],
+        "mode": mode,
+        "consumable": consumable,
+        "article_name": article.get("name") or "",
+    }
+
+
 @app.put("/api/dev/household/store-import-settings")
 def update_dev_store_import_settings(payload: StoreImportSimplificationUpdateRequest, household_id: str = Query("demo-household")):
     effective_household_id = (household_id or "demo-household").strip() or "demo-household"
@@ -1572,6 +1861,33 @@ def update_dev_store_import_settings(payload: StoreImportSimplificationUpdateReq
         "store_import_simplification_level": level,
         "can_edit_store_import_simplification_level": True,
         "is_household_admin": True,
+    }
+
+
+@app.put("/api/dev/household/automation-settings")
+def update_dev_household_automation_settings(payload: HouseholdAutomationSettingsUpdateRequest, household_id: str = Query("demo-household")):
+    effective_household_id = (household_id or "demo-household").strip() or "demo-household"
+    with engine.begin() as conn:
+        enabled = set_household_auto_consume_on_repurchase(conn, effective_household_id, payload.auto_consume_on_repurchase)
+    return {
+        "household_id": effective_household_id,
+        "auto_consume_on_repurchase": enabled,
+        "is_household_admin": True,
+    }
+
+
+@app.put("/api/dev/articles/{article_id}/automation-override")
+def update_dev_article_automation_override(article_id: str, payload: ArticleAutomationOverrideUpdateRequest, household_id: str = Query("demo-household")):
+    effective_household_id = (household_id or "demo-household").strip() or "demo-household"
+    with engine.begin() as conn:
+        article = resolve_review_article_option(conn, article_id, effective_household_id)
+        if not article:
+            raise HTTPException(status_code=404, detail="Onbekend artikel")
+        mode = set_household_article_auto_consume_override(conn, effective_household_id, article["id"], payload.mode)
+    return {
+        "household_id": effective_household_id,
+        "article_id": article["id"],
+        "mode": mode,
     }
 
 
@@ -2640,7 +2956,7 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
         if not line:
             raise HTTPException(status_code=404, detail="Onbekende importregel")
 
-        article_option_id = ensure_household_article(conn, str(line["household_id"]), payload.article_name)
+        article_option_id = ensure_household_article(conn, str(line["household_id"]), payload.article_name, consumable=infer_consumable_from_name(payload.article_name))
         conn.execute(
             text(
                 """
@@ -2652,7 +2968,7 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
             {"article_id": article_option_id, "id": line_id},
         )
         status = update_batch_status(conn, line["batch_id"])
-        article = resolve_review_article_option(conn, article_option_id)
+        article = resolve_review_article_option(conn, article_option_id, str(line["household_id"]))
 
     return {
         "line_id": line_id,
@@ -2767,7 +3083,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 continue
 
             article_id = line["matched_household_article_id"]
-            article = resolve_review_article_option(conn, article_id)
+            article = resolve_review_article_option(conn, article_id, str(batch["household_id"]))
             if not article:
                 error = "Geen geldige artikelkoppeling gekozen"
                 conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
@@ -2793,9 +3109,8 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
 
             article_name = article["name"]
             note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
-            auto_consume_ids = {str(item) for item in (payload.auto_consume_article_ids or [])}
             pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
-            should_auto_consume = str(article_id) in auto_consume_ids and pre_purchase_total > 0
+            should_auto_consume = should_auto_consume_on_repurchase(conn, str(batch["household_id"]), str(article_id), article_name, pre_purchase_total)
             event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
             apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
             auto_event_id = None

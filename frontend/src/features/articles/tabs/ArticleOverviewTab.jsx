@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { getFieldsByTabAndGroup } from '../config/articleFieldHelpers'
 import { ARTICLE_TABS } from '../config/articleFieldConstants'
 import { resolveArticleFieldValue, EMPTY_VALUE } from '../lib/articleFieldValueResolver'
-import { AUTO_CONSUME_MODES, getArticleAutoConsumeMode, saveArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
+import { AUTO_CONSUME_MODES, fetchArticleAutoConsumeMode, getArticleAutoConsumeMode, saveArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
 
 const GROUP_LABELS = {
   basic: 'Basis',
@@ -34,8 +34,15 @@ function AutomationOverrideCard({ articleData = {} }) {
   const dismissTimerRef = useRef(null)
 
   useEffect(() => {
+    let cancelled = false
     setMode(getArticleAutoConsumeMode(articleId))
     setSaveMessage('')
+    fetchArticleAutoConsumeMode(articleId).then((nextMode) => {
+      if (!cancelled) setMode(nextMode)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [articleId])
 
   useEffect(() => {
@@ -46,8 +53,8 @@ function AutomationOverrideCard({ articleData = {} }) {
     }
   }, [])
 
-  function handleChange(event) {
-    const nextMode = saveArticleAutoConsumeMode(articleId, event.target.value)
+  async function handleChange(event) {
+    const nextMode = await saveArticleAutoConsumeMode(articleId, event.target.value)
     setMode(nextMode)
     setSaveMessage('Opgeslagen')
     if (dismissTimerRef.current) {

@@ -1,0 +1,94 @@
+Release Protocol v1.0 – Compliance Check:
+
+Release: Rezzerv-v01.08.93
+Categorie: Backend-release
+Doelwijziging: automatische afboeking bij herhaalaankoop persistent en backend-gedreven maken.
+
+Wat is gewijzigd
+- Backend beslist nu zelf over auto-afboeking bij herhaalaankoop tijdens winkelbatchverwerking.
+- Nieuwe persistente huishoudinstelling via household_settings: auto_consume_on_repurchase.
+- Nieuwe persistente artikeloverride via household_settings: article_auto_consume_overrides.
+- Household_articles-schema uitgebreid met consumable-kolom, inclusief automatische aanvulling bij bestaande databases.
+- Review-opties en artikelresolutie geven nu consumable-status terug voor live artikelen.
+- Frontend instellingenpagina en artikeloverride gebruiken nu backend-API in plaats van alleen localStorage.
+- Store process payload is niet langer bron van waarheid voor auto-afboeking; frontend stuurt nog wel compatibel een leeg veld mee.
+- Artikeldetail Historie voor live data gebruikt alleen echte backend-events en voegt geen synthetische auto_repurchase-regels meer toe.
+
+Wat niet is gewijzigd
+- Geen styleguidewijzigingen.
+- Geen UX-herontwerp buiten de noodzakelijke API-koppeling van bestaande schermen.
+- Geen extra winkelproviders.
+- Geen wijziging aan de basissemantiek van purchase gevolgd door auto_repurchase zoals in v01.08.92.
+
+Impact
+- Doorbreekt de afhankelijkheid van browserstate/localStorage voor een kernflow van mijlpaal 1.
+- Maakt live artikel-id’s (live::<naam>) gelijkwaardig aan demo-artikel-id’s in de auto-afboeklogica.
+- Verwijdert het risico dat Historie een backend-gat maskeert met synthetische regels.
+
+Database-impact
+- household_articles krijgt kolom consumable INTEGER indien afwezig.
+- household_settings krijgt nieuwe keys:
+  - auto_consume_on_repurchase
+  - article_auto_consume_overrides
+
+Uitgevoerde validatie
+1. python -m py_compile backend/app/main.py
+   Resultaat: geslaagd.
+
+2. npm run build (frontend)
+   Resultaat: geslaagd.
+   Opmerking: standaard chunk-size warning van Vite bleef aanwezig, geen buildfout.
+
+3. Gerichte runtime-validatie op tijdelijke SQLite-kopie via FastAPI TestClient
+   Scenario A - huishoudinstelling aan + demo-artikel Melk:
+   - auto_repurchase-event aangemaakt
+   - eindvoorraad Melk bleef 2 na purchase + auto-afboeking
+
+   Scenario B - huishoudinstelling aan + live artikel Mosterd:
+   - auto_repurchase-event aangemaakt
+   - eindvoorraad Mosterd bleef 1 na purchase + auto-afboeking
+
+   Scenario C - artikeloverride always_off op Melk:
+   - geen nieuw auto_repurchase-event toegevoegd
+   - eindvoorraad Melk werd 3, dus alleen purchase-effect bleef over
+
+Samenvatting van de gemeten waarden
+- melk_auto_events: 1
+- melk_quantity_after_household_on: 2
+- mosterd_auto_events: 1
+- mosterd_quantity_after_live_flow: 1
+- melk_auto_events_after_always_off: 1
+- melk_quantity_after_always_off: 3
+
+Getest
+- Persistente huishoudinstelling backend
+- Persistente artikeloverride backend
+- Demo-artikelpad
+- Live-artikelpad
+- always_off blokkering
+- Historie op echte backend-events
+
+Niet getest
+- Volledige Docker compose run in deze omgeving
+- Volledige browser-regressiesuite end-to-end in UI
+- always_on scenario in browserflow
+- Niet-consumable browserflow met apart regressiescenario
+
+Risiconiveau
+- Middel.
+- De kernflow is functioneel gevalideerd op backend/runtime-niveau.
+- Grootste resterende risico zit in bredere regressie rond bestaande admin/browser-regressietests en niet in de auto-afboekbeslissing zelf.
+
+Bestanden met hoofdimpact
+- backend/app/main.py
+- frontend/src/features/settings/services/householdAutomationService.js
+- frontend/src/features/articles/services/articleAutomationOverrideService.js
+- frontend/src/features/stores/autoConsumeContext.js
+- frontend/src/features/settings/SettingsHouseholdAutomationPage.jsx
+- frontend/src/features/articles/tabs/ArticleOverviewTab.jsx
+- frontend/src/features/articles/tabs/ArticleAnalyticsTab.jsx
+- frontend/src/features/articles/ArticlePage.jsx
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/package.json

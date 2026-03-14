@@ -10,7 +10,6 @@ import ArticleStockTab from './tabs/ArticleStockTab'
 import ArticleLocationsTab from './tabs/ArticleLocationsTab'
 import ArticleHistoryTab from './tabs/ArticleHistoryTab'
 import ArticleAnalyticsTab from './tabs/ArticleAnalyticsTab'
-import { applyAutoRepurchaseHistory } from './lib/autoRepurchaseHistory'
 
 const TABS = ['Overzicht', 'Voorraad', 'Locaties', 'Historie', 'Analyse']
 
@@ -26,7 +25,7 @@ function buildFallbackArticle(article) {
   const safeArticle = article || {}
   const firstLocation = safeArticle.locations?.[0] || {}
   const totalQuantity = (safeArticle.locations || []).reduce((sum, entry) => sum + (Number(entry.aantal) || 0), 0)
-  const history = applyAutoRepurchaseHistory(safeArticle)
+  const history = Array.isArray(safeArticle.history) ? safeArticle.history : []
   return {
     ...safeArticle,
     history,
@@ -346,7 +345,7 @@ export default function ArticlePage() {
     const liveHistory = mapLiveHistoryRows(liveHistoryRows)
 
     if (hasLiveInventoryMatch) {
-      return { ...merged, history: applyAutoRepurchaseHistory({ ...merged, history: liveHistory }) }
+      return { ...merged, history: liveHistory }
     }
 
     if (isPureDemoArticle) {
