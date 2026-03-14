@@ -476,10 +476,13 @@ export default function StoreBatchDetailPage() {
                     {visibleLines.length === 0 ? (
                       <tr><td colSpan={6}>Er staan geen open regels meer in deze kassabon.</td></tr>
                     ) : visibleLines.map((line) => {
-                      const hasValidArticle = Boolean(line.matched_household_article_id) && validArticleIds.has(String(line.matched_household_article_id))
-                      const isReadyForProcessing = (line.review_decision || 'selected') === 'selected' && hasValidArticle && line.target_location_id && validLocationIds.has(String(line.target_location_id))
                       const draft = lineDrafts[line.id] || { articleId: line.matched_household_article_id || '', locationId: line.target_location_id || '' }
                       const saveState = lineSaveState[line.id] || {}
+                      const effectiveArticleId = String(draft.articleId || line.matched_household_article_id || '')
+                      const effectiveLocationId = String(draft.locationId || line.target_location_id || '')
+                      const hasValidArticle = Boolean(effectiveArticleId) && validArticleIds.has(effectiveArticleId)
+                      const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
+                      const isReadyForProcessing = (line.review_decision || 'selected') === 'selected' && hasValidArticle && hasValidLocation && !saveState.dirty
                       const lineBusy = busyLineId === line.id
                       return (
                         <tr key={line.id} className={isReadyForProcessing ? 'rz-store-row--linked' : ''}>
@@ -523,7 +526,7 @@ export default function StoreBatchDetailPage() {
                           <td>
                             <select
                               className="rz-input rz-store-select"
-                              value={line.target_location_id || ''}
+                              value={draft.locationId || ''}
                               disabled={lineBusy || isProcessingBatch}
                               onFocus={() => household?.id && refreshLocationOptions(household.id)}
                               onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
@@ -534,6 +537,26 @@ export default function StoreBatchDetailPage() {
                                 <option key={location.id} value={location.id}>{location.label}</option>
                               ))}
                             </select>
+                          </td>
+                          <td>
+                            <div style={{ display: 'grid', gap: '6px', justifyItems: 'start' }}>
+                              <Button
+                                variant={saveState.dirty ? 'primary' : 'secondary'}
+                                type="button"
+                                onClick={() => handleSaveLine(line)}
+                                disabled={lineBusy || isProcessingBatch || !saveState.dirty}
+                              >
+                                Opslaan
+                              </Button>
+                              {saveState.dirty ? (
+                                <div className="rz-store-review-meta" style={{ color: '#b54708' }}>Niet opgeslagen wijziging</div>
+                              ) : saveState.saveSucceeded ? (
+                                <div className="rz-store-review-meta" style={{ color: '#067647' }}>
+                                  Opgeslagen{saveState.savedAt ? ` · ${new Date(saveState.savedAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
+                                </div>
+                              ) : null}
+                              {saveState.error ? <div className="rz-inline-feedback rz-inline-feedback--error">{saveState.error}</div> : null}
+                            </div>
                           </td>
                         </tr>
                       )

@@ -1,0 +1,21 @@
+Rezzerv v01.08.10 – validatierapport ontkoppel- en overschrijfrelease bonregels
+
+Basisversie
+- Gebouwd op Rezzerv-v01.08.09
+
+Gerichte wijzigingen
+- Bonregels gebruiken nu conceptwaarden (drafts) voor zowel artikel als locatie bij de zichtbare velden.
+- Locatieselect gebruikt nu de actuele draftwaarde in plaats van de eerder opgeslagen batchwaarde.
+- Per open bonregel is een expliciete knop 'Opslaan' toegevoegd.
+- Een gewijzigde regel toont 'Niet opgeslagen wijziging' totdat de gebruiker opslaat.
+- Na succesvolle save toont de regel 'Opgeslagen' met tijdstip.
+- De gereed/voorbereid-weergave van een regel volgt nu de actuele draftwaarden; een ontkoppelde of onvolledige regel blijft niet langer onterecht klaar/groen.
+
+Technische controles
+- Frontend productiebuild geslaagd.
+- Backend syntaxiscontrole geslaagd.
+- Volledige zip opnieuw opgebouwd.
+
+Niet hard geclaimd
+- Geen volledige runtime-kliktest in deze omgeving.
+- Geen nieuwe businesslogica voor auto-afboeking of purchase-events toegevoegd.
