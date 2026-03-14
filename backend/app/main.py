@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 import json
+import traceback
 import uuid
 from typing import List, Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
@@ -3494,15 +3495,55 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 decision_reason = f'effective mode {effective_mode}'
             should_auto_consume = should_auto_consume_on_repurchase(conn, str(batch["household_id"]), str(article_id), article_name, pre_purchase_total)
             requested_deduction_quantity = 1 if should_auto_consume else 0
-            event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
-            apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
-            inventory_after_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
-            history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(article_id), article_name, event_id)
+            current_stage = 'purchase_event_write'
+            event_id = None
             auto_event_id = None
-            if should_auto_consume:
-                auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=1)
-                apply_inventory_consumption(conn, batch["household_id"], article_name, 1, resolved_location)
-            inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)
+            inventory_after_purchase_total = pre_purchase_total
+            inventory_after_auto_consume_total = pre_purchase_total
+            history_lookup_result_count = 0
+            history_contains_purchase_event = False
+            try:
+                event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
+                apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
+                inventory_after_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
+                current_stage = 'history_lookup'
+                history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(article_id), article_name, event_id)
+                current_stage = 'auto_consume_decision'
+                if should_auto_consume:
+                    current_stage = 'auto_consume_write'
+                    auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=1)
+                    apply_inventory_consumption(conn, batch["household_id"], article_name, 1, resolved_location)
+                inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)
+            except Exception as exc:
+                detail_parts = [
+                    f'exception_type={exc.__class__.__name__}',
+                    f'exception_message={str(exc) or exc.__class__.__name__}',
+                    f'article_id={article_id}',
+                    f'article_name={article_name}',
+                    f'quantity={quantity}',
+                    f'location_id={resolved_location.get("location_id") if resolved_location else None}',
+                    f'location_label={resolved_location.get("location_label") if resolved_location else None}',
+                ]
+                error = ' | '.join(detail_parts)
+                diagnostic = build_purchase_import_line_diagnostic(
+                    line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=article,
+                    resolved_location=resolved_location, purchase_quantity=int(quantity), pre_purchase_total=int(pre_purchase_total),
+                    purchase_event_created=bool(event_id), purchase_event_id=event_id, history_contains_purchase_event=history_contains_purchase_event,
+                    history_lookup_article_id=str(article_id), history_lookup_result_count=history_lookup_result_count,
+                    auto_consume_household_mode=household_mode, auto_consume_article_override=article_override, auto_consume_effective_mode=effective_mode,
+                    auto_consume_should_apply=should_auto_consume, auto_consume_decision_reason=decision_reason,
+                    auto_consume_requested_deduction_quantity=requested_deduction_quantity,
+                    auto_consume_applied_deduction_quantity=1 if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
+                    auto_consume_event_id=auto_event_id, inventory_after_purchase_total=int(inventory_after_purchase_total),
+                    inventory_after_auto_consume_total=int(inventory_after_auto_consume_total),
+                    failure_stage=current_stage, failure_message=error,
+                )
+                diagnostic['backend_trace_excerpt'] = traceback.format_exc(limit=2)
+                store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
+                conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
+                results.append({"line_id": line_id, "status": "failed", "error": error, "diagnostic": diagnostic})
+                failed_count += 1
+                continue
             diagnostic = build_purchase_import_line_diagnostic(
                 line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=article,
                 resolved_location=resolved_location, purchase_quantity=int(quantity), pre_purchase_total=int(pre_purchase_total),
