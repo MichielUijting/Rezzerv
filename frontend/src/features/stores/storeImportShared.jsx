@@ -75,6 +75,7 @@ export function StoreArticleSelector({
   disabled,
   onChange,
   onCreateArticle,
+  onClearArticle,
 }) {
   const datalistId = `store-article-options-${lineId}`
   const optionsByLabel = useMemo(() => {
@@ -177,18 +178,35 @@ export function StoreArticleSelector({
           <option key={article.id} value={article.id}>{articleLabel(article)}</option>
         ))}
       </select>
-      {canCreateArticle ? (
-        <button
-          type="button"
-          className="rz-link-button"
-          data-testid={`store-create-article-trigger-${lineId}`}
-          style={createArticleButtonStyle}
-          disabled={disabled}
-          onClick={openCreateArticleModal}
-        >
-          Nieuw artikel aanmaken
-        </button>
-      ) : null}
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+        {selectedArticleId ? (
+          <button
+            type="button"
+            className="rz-link-button"
+            data-testid={`store-clear-article-${lineId}`}
+            style={createArticleButtonStyle}
+            disabled={disabled}
+            onClick={() => {
+              setQuery('')
+              onClearArticle?.()
+            }}
+          >
+            Ontkoppelen
+          </button>
+        ) : null}
+        {canCreateArticle ? (
+          <button
+            type="button"
+            className="rz-link-button"
+            data-testid={`store-create-article-trigger-${lineId}`}
+            style={createArticleButtonStyle}
+            disabled={disabled}
+            onClick={openCreateArticleModal}
+          >
+            Nieuw artikel aanmaken
+          </button>
+        ) : null}
+      </div>
       {isCreateModalOpen ? (
         <div className="rz-modal-backdrop" role="presentation">
           <div className="rz-modal-card" data-testid={`store-create-article-modal-${lineId}`} role="dialog" aria-modal="true" aria-labelledby={`store-create-article-title-${lineId}`}>

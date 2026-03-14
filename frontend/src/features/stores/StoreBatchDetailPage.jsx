@@ -61,6 +61,19 @@ export default function StoreBatchDetailPage() {
   const canProcessBatch = Boolean(batch && selectedLines.length > 0 && !busyLineId && !isLoading)
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
+  function getDraftValues(line) {
+    const draft = Object.prototype.hasOwnProperty.call(lineDrafts, line.id)
+      ? lineDrafts[line.id]
+      : {
+          articleId: line.matched_household_article_id || '',
+          locationId: line.target_location_id || '',
+        }
+    return {
+      articleId: String((draft?.articleId ?? line.matched_household_article_id) ?? ''),
+      locationId: String((draft?.locationId ?? line.target_location_id) ?? ''),
+    }
+  }
+
 
   useEffect(() => {
     const nextDrafts = {}
@@ -95,12 +108,9 @@ export default function StoreBatchDetailPage() {
 
   async function persistLineDraft(line, patch = {}) {
     if (!batch) return
-    const currentDraft = lineDrafts[line.id] || {
-      articleId: line.matched_household_article_id || '',
-      locationId: line.target_location_id || '',
-    }
-    const nextArticleId = String(patch.articleId !== undefined ? patch.articleId || '' : currentDraft.articleId || line.matched_household_article_id || '')
-    const nextLocationId = String(patch.locationId !== undefined ? patch.locationId || '' : currentDraft.locationId || line.target_location_id || '')
+    const draftValues = getDraftValues(line)
+    const nextArticleId = String(patch.articleId !== undefined ? (patch.articleId ?? '') : draftValues.articleId)
+    const nextLocationId = String(patch.locationId !== undefined ? (patch.locationId ?? '') : draftValues.locationId)
     const originalArticleId = String(line.matched_household_article_id || '')
     const originalLocationId = String(line.target_location_id || '')
     const articleChanged = nextArticleId !== originalArticleId
@@ -453,8 +463,7 @@ export default function StoreBatchDetailPage() {
                     <col style={{ width: '11%' }} />
                     <col style={{ width: '18%' }} />
                     <col style={{ width: '20%' }} />
-                    <col style={{ width: '20%' }} />
-                    <col style={{ width: '17%' }} />
+                    <col style={{ width: '24%' }} />
                   </colgroup>
                   <thead>
                     <tr className="rz-table-header">
@@ -463,17 +472,16 @@ export default function StoreBatchDetailPage() {
                       <th>Beoordeling</th>
                       <th>Koppelen aan</th>
                       <th>Locatie</th>
-                      <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
                     {visibleLines.length === 0 ? (
-                      <tr><td colSpan={6}>Er staan geen open regels meer in deze kassabon.</td></tr>
+                      <tr><td colSpan={5}>Er staan geen open regels meer in deze kassabon.</td></tr>
                     ) : visibleLines.map((line) => {
-                      const draft = lineDrafts[line.id] || { articleId: line.matched_household_article_id || '', locationId: line.target_location_id || '' }
+                      const draft = getDraftValues(line)
                       const saveState = lineSaveState[line.id] || {}
-                      const effectiveArticleId = String(draft.articleId || line.matched_household_article_id || '')
-                      const effectiveLocationId = String(draft.locationId || line.target_location_id || '')
+                      const effectiveArticleId = draft.articleId
+                      const effectiveLocationId = draft.locationId
                       const hasValidArticle = Boolean(effectiveArticleId) && validArticleIds.has(effectiveArticleId)
                       const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
                       const isReadyForProcessing = (line.review_decision || 'selected') === 'selected' && hasValidArticle && hasValidLocation && !saveState.dirty
@@ -513,7 +521,8 @@ export default function StoreBatchDetailPage() {
                               selectedArticleId={draft.articleId || ''}
                               articleOptions={articleOptions}
                               disabled={lineBusy || isProcessingBatch}
-                              onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId || '' })}
+                              onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
+                              onClearArticle={() => persistLineDraft(line, { articleId: '' })}
                               onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
                             />
                           </td>
@@ -531,20 +540,6 @@ export default function StoreBatchDetailPage() {
                                 <option key={location.id} value={location.id}>{location.label}</option>
                               ))}
                             </select>
-                          </td>
-                          <td>
-                            <div style={{ display: 'grid', gap: '6px', justifyItems: 'start' }}>
-                              {saveState.status === 'saving' ? (
-                                <div className="rz-store-review-meta" style={{ color: '#b54708' }}>Opslaan…</div>
-                              ) : saveState.status === 'saved' ? (
-                                <div className="rz-store-review-meta" style={{ color: '#067647' }}>
-                                  Opgeslagen{saveState.savedAt ? ` · ${new Date(saveState.savedAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
-                                </div>
-                              ) : saveState.status === 'error' ? (
-                                <div className="rz-store-review-meta" style={{ color: '#b42318' }}>Opslaan mislukt</div>
-                              ) : null}
-                              {saveState.error ? <div className="rz-inline-feedback rz-inline-feedback--error">{saveState.error}</div> : null}
-                            </div>
                           </td>
                         </tr>
                       )
