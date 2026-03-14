@@ -262,22 +262,34 @@ export function formatQuantity(value, unit) {
 
 export function deriveBatchUiState(batch) {
   const lines = Array.isArray(batch?.lines) ? batch.lines : []
+  const summary = batch?.summary || {}
+  const totalLines = Number(summary.total || lines.length || 0)
+  const processedCount = Number(summary.processed || lines.filter((line) => (line.processing_status || 'pending') === 'processed').length || 0)
+  const failedCount = Number(summary.failed || lines.filter((line) => (line.processing_status || 'pending') === 'failed').length || 0)
   const visibleLines = lines.filter((line) => (line.processing_status || 'pending') !== 'processed')
   const selectedLines = visibleLines.filter((line) => (line.review_decision || 'pending') === 'selected')
   const readyLines = selectedLines.filter((line) => line.matched_household_article_id && line.target_location_id)
   const blockedLines = selectedLines.length - readyLines.length
   const pendingReviewCount = visibleLines.filter((line) => (line.review_decision || 'pending') === 'pending').length
-  const summary = batch?.summary || {}
-  const totalLines = summary.total || lines.length
+  const openCount = Math.max(visibleLines.length - readyLines.length, 0)
+  const isProcessed = (batch?.import_status || '') === 'processed'
+  const canResume = !isProcessed
+  const countsReason = `${readyLines.length} klaar · ${openCount} open · ${blockedLines} geblokkeerd · ${processedCount} verwerkt`
 
-  if ((batch?.import_status || '') === 'processed') {
+  if (isProcessed) {
     return {
       statusKey: 'processed',
       label: 'Verwerkt',
       actionLabel: 'Openen',
       actionType: 'open',
       rank: 99,
-      progressText: totalLines > 0 ? `${summary.processed || 0} verwerkt` : 'Afgerond',
+      progressText: totalLines > 0 ? `${processedCount} verwerkt` : 'Afgerond',
+      statusReason: failedCount > 0
+        ? `Batch is afgerond met ${processedCount} verwerkte en ${failedCount} mislukte regel(s).`
+        : `Batch is afgerond. ${processedCount} regel(s) zijn verwerkt.`,
+      primaryActionReason: 'De batch is al afgerond; je kunt de resultaten openen.',
+      canResume,
+      countsReason,
     }
   }
 
@@ -289,6 +301,10 @@ export function deriveBatchUiState(batch) {
       actionType: 'resume',
       rank: 0,
       progressText: `${readyLines.length} klaar / ${blockedLines} geblokkeerd`,
+      statusReason: `${blockedLines} regel(s) missen nog een artikel of locatie en vragen gebruikersactie.`,
+      primaryActionReason: 'Kies Hervatten om de openstaande of geblokkeerde regels in de bon af te maken.',
+      canResume,
+      countsReason,
     }
   }
 
@@ -300,6 +316,10 @@ export function deriveBatchUiState(batch) {
       actionType: 'process',
       rank: 1,
       progressText: `${readyLines.length} klaar om te verwerken`,
+      statusReason: `${readyLines.length} regel(s) zijn volledig voorbereid en kunnen nu naar de voorraad worden verwerkt.`,
+      primaryActionReason: 'De primaire actie is Naar voorraad omdat alle geselecteerde regels klaarstaan. De bon blijft wel hervatbaar zolang de batch niet is afgerond.',
+      canResume,
+      countsReason,
     }
   }
 
@@ -310,7 +330,13 @@ export function deriveBatchUiState(batch) {
       actionLabel: 'Hervatten',
       actionType: 'resume',
       rank: 2,
-      progressText: visibleLines.length > 0 ? `${readyLines.length} klaar / ${Math.max(visibleLines.length - readyLines.length, 0)} open` : 'Beoordeling loopt',
+      progressText: visibleLines.length > 0 ? `${readyLines.length} klaar / ${openCount} open` : 'Beoordeling loopt',
+      statusReason: visibleLines.length > 0
+        ? `De bon is nog niet afgerond. ${countsReason}.`
+        : 'De bon wordt nog beoordeeld of opnieuw geladen.',
+      primaryActionReason: 'Kies Hervatten om de bon verder te beoordelen voordat deze naar voorraad gaat.',
+      canResume,
+      countsReason,
     }
   }
 
@@ -321,6 +347,12 @@ export function deriveBatchUiState(batch) {
     actionType: 'open',
     rank: 3,
     progressText: totalLines > 0 ? `${totalLines} regel(s) wachten op beoordeling` : 'Nog te beoordelen',
+    statusReason: totalLines > 0
+      ? `${totalLines} regel(s) wachten nog op beoordeling of koppeling.`
+      : 'Nog te beoordelen.',
+    primaryActionReason: 'Kies Openen om de bon te starten of verder te beoordelen.',
+    canResume,
+    countsReason,
   }
 }
 

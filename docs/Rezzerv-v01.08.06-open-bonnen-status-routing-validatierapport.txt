@@ -1,0 +1,45 @@
+Rezzerv v01.08.06 — open bonnen status/routing validatierapport
+
+Basisversie
+- Gebouwd op Rezzerv-v01.08.05
+
+Wijzigingsdoel
+- Uitsluitend workflow-/statusrelease voor open bonnen in Winkelimport
+- Geen wijzigingen aan purchase-events, historie of automatisch afboeken
+
+Aangepast
+- frontend/src/features/stores/storeImportShared.jsx
+- frontend/src/features/stores/StoresPage.jsx
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/package.json
+- frontend/dist (opnieuw opgebouwd)
+
+Inhoudelijke wijziging
+- deriveBatchUiState verrijkt met:
+  - statusReason
+  - primaryActionReason
+  - canResume
+  - stabielere telwaarden voor klaar/open/geblokkeerd/verwerkt
+- Open-bonnenkaart toont nu expliciet:
+  - Statusreden
+  - Primaire actie + reden
+- Als primaire actie 'Naar voorraad' is maar de batch nog niet verwerkt is, blijft een aparte knop 'Hervatten' zichtbaar
+- Hierdoor blijft een nog niet afgeronde bon altijd hervatbaar vanaf Winkelimport
+
+Technische validatie
+- Frontend build geslaagd met npm run build
+- Volledige packaging behouden
+
+PO-test in gewone taal
+1. Start de app opnieuw
+2. Ga naar Winkelimport
+3. Kijk per open bon naar badge, primaire knop en de nieuwe statusreden
+4. Controleer dat een bon met knop 'Naar voorraad' ook nog via 'Hervatten' geopend kan worden zolang deze niet afgerond is
+5. Controleer dat Jumbo/Lidl-verschil nu uitlegbaar is via de statusreden
+
+Bewust niet gewijzigd
+- Geen backend- of database-logica voor verwerking
+- Geen purchase-event write fixes
+- Geen historie- of auto-afboekfixes

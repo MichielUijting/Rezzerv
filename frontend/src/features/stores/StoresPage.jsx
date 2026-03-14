@@ -323,13 +323,29 @@ export default function StoresPage() {
                         >
                           {busyBatchId === batch.batch_id ? 'Bezig…' : batch.uiState.actionLabel}
                         </Button>
+                        {batch.uiState.canResume && batch.uiState.actionType === 'process' ? (
+                          <Button
+                            data-testid={`batch-resume-action-${batch.batch_id}`}
+                            variant="secondary"
+                            onClick={() => navigate(`/winkels/batch/${batch.batch_id}`)}
+                            disabled={busyBatchId === batch.batch_id || isProcessingBatch}
+                          >
+                            Hervatten
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', color: '#667085', fontSize: '14px' }}>
-                      <div>Aantal regels: <strong>{batch.summary?.total || batch.lines?.length || 0}</strong></div>
-                      <div>{batch.uiState.progressText}</div>
-                      <div>Laatste wijziging: {formatBatchLastChange(batch)}</div>
+                    <div style={{ display: 'grid', gap: '8px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', color: '#667085', fontSize: '14px' }}>
+                        <div>Aantal regels: <strong>{batch.summary?.total || batch.lines?.length || 0}</strong></div>
+                        <div>{batch.uiState.progressText}</div>
+                        <div>Laatste wijziging: {formatBatchLastChange(batch)}</div>
+                      </div>
+                      <div data-testid={`batch-status-reason-${batch.batch_id}`} className="rz-inline-feedback rz-inline-feedback--warning" style={{ padding: '8px 10px' }}>
+                        <strong>Statusreden:</strong> {batch.uiState.statusReason}<br />
+                        <strong>Primaire actie:</strong> {batch.uiState.actionLabel} — {batch.uiState.primaryActionReason}
+                      </div>
                     </div>
                   </div>
                 ))}
