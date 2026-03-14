@@ -439,6 +439,7 @@ export default function StoreBatchDetailPage() {
                       <div><strong>Bonregel:</strong> {diag.receipt_line_text || 'Onbekend'}</div>
                       <div><strong>Status:</strong> {diag.processing_status === 'processed' ? 'verwerkt' : diag.processing_status === 'failed' ? 'mislukt' : 'nog niet verwerkt'}</div>
                       <div><strong>Gekoppeld artikel:</strong> {diag.resolved_article_name || '(geen)'} {diag.resolution_reason ? `· ${diag.resolution_reason}` : ''}</div>
+                      <div><strong>Opgeslagen batchdata:</strong> artikel-id {diag.stored_matched_article_id || '(geen)'} · locatie-id {diag.stored_target_location_id || '(geen)'} · bron {diag.processed_from_saved_batch_data ? 'opgeslagen batchdata' : 'onbekend'}</div>
                       <div><strong>Aankoop-event:</strong> {diag.purchase_event_created ? 'ja' : 'nee'} · <strong>Historie ziet aankoop:</strong> {diag.history_contains_purchase_event ? 'ja' : 'nee'}</div>
                       <div><strong>Voorraad:</strong> {diag.inventory_before_total} → {diag.inventory_after_purchase_total}{diag.auto_consume_event_created || diag.auto_consume_should_apply ? ` → ${diag.inventory_after_auto_consume_total}` : ''}</div>
                       <div><strong>Automatisch afboeken:</strong> {diag.auto_consume_event_created ? 'ja' : 'nee'} · <strong>Modus:</strong> {diag.auto_consume_effective_mode || 'none'}</div>

@@ -1,0 +1,25 @@
+Rezzerv v01.08.08 — statuswaarheid diagnose fix
+Basisversie: v01.08.07
+Doel: diagnosekaart dezelfde verwerkingsstatus laten tonen als de backendprocesuitkomst van 'Naar voorraad'.
+
+Aangepast:
+- backend/app/main.py
+  - processing_status wordt nu opgenomen in opgeslagen processing_diagnostics
+  - diagnosefallback injecteert processing_status uit purchase_import_lines wanneer oudere diagnostics dit veld missen
+  - diagnose bevat nu ook stored_matched_article_id, stored_target_location_id en processed_from_saved_batch_data
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+  - diagnosekaart toont opgeslagen batchdata (artikel-id, locatie-id, bron)
+- versie bijgewerkt naar 01.08.08 in VERSION.txt, version.json, frontend/version.json en frontend/package.json
+
+Technisch gevalideerd:
+- Python syntaxiscontrole backend geslaagd
+- Frontend productiebuild geslaagd
+
+Wat deze versie wel oplost:
+- status-tegenspraak tussen samenvatting 'verwerkt' en diagnosekaart 'nog niet verwerkt'
+- zichtbaarheid van welke opgeslagen batchdata door 'Naar voorraad' is gebruikt
+
+Wat deze versie bewust niet wijzigt:
+- geen auto-afboeklogica
+- geen extra routingwijzigingen
+- geen nieuwe purchase-event businesslogica

@@ -3236,6 +3236,8 @@ def build_purchase_import_line_diagnostic(
     auto_consume_event_id: str | None,
     inventory_after_purchase_total: int,
     inventory_after_auto_consume_total: int,
+    processing_status: str = 'pending',
+    processed_from_saved_batch_data: bool = True,
     failure_stage: str = 'none',
     failure_message: str = '',
 ) -> dict:
@@ -3272,6 +3274,10 @@ def build_purchase_import_line_diagnostic(
         'auto_consume_event_created': bool(auto_consume_event_created),
         'auto_consume_event_id': auto_consume_event_id,
         'inventory_after_auto_consume_total': int(inventory_after_auto_consume_total or 0),
+        'processing_status': processing_status or 'pending',
+        'stored_matched_article_id': str(line.get('matched_household_article_id') or ''),
+        'stored_target_location_id': str(line.get('target_location_id') or ''),
+        'processed_from_saved_batch_data': bool(processed_from_saved_batch_data),
         'failure_stage': failure_stage or 'none',
         'failure_message': failure_message or '',
     }
@@ -3303,8 +3309,14 @@ def build_purchase_import_batch_diagnostics(conn, batch_id: str):
         raw = row.get('processing_diagnostics')
         if raw:
             try:
-                diagnostics.append(json.loads(raw))
-                continue
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    parsed.setdefault('processing_status', (row.get('processing_status') or 'pending'))
+                    parsed.setdefault('stored_matched_article_id', str(row.get('matched_household_article_id') or ''))
+                    parsed.setdefault('stored_target_location_id', '')
+                    parsed.setdefault('processed_from_saved_batch_data', True)
+                    diagnostics.append(parsed)
+                    continue
             except (TypeError, ValueError, json.JSONDecodeError):
                 pass
         processing_status = (row.get('processing_status') or 'pending').strip() if isinstance(row.get('processing_status'), str) else (row.get('processing_status') or 'pending')
@@ -3457,7 +3469,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                         auto_consume_effective_mode=ARTICLE_AUTO_CONSUME_NONE, auto_consume_should_apply=False,
                         auto_consume_decision_reason='Geen geldige artikelkoppeling gekozen', auto_consume_requested_deduction_quantity=0,
                         auto_consume_applied_deduction_quantity=0, auto_consume_event_created=False, auto_consume_event_id=None,
-                        inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, failure_stage='article_resolution', failure_message=error,
+                        inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, processing_status='failed', failure_stage='article_resolution', failure_message=error,
                     )
                     store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
                     conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
@@ -3477,7 +3489,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                         auto_consume_effective_mode=ARTICLE_AUTO_CONSUME_NONE, auto_consume_should_apply=False,
                         auto_consume_decision_reason='Geen geldige locatie gekozen', auto_consume_requested_deduction_quantity=0,
                         auto_consume_applied_deduction_quantity=0, auto_consume_event_created=False, auto_consume_event_id=None,
-                        inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, failure_stage='purchase_event_write', failure_message=error,
+                        inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, processing_status='failed', failure_stage='purchase_event_write', failure_message=error,
                     )
                     store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
                     conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
@@ -3497,7 +3509,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                         auto_consume_effective_mode=ARTICLE_AUTO_CONSUME_NONE, auto_consume_should_apply=False,
                         auto_consume_decision_reason='Ongeldige hoeveelheid', auto_consume_requested_deduction_quantity=0,
                         auto_consume_applied_deduction_quantity=0, auto_consume_event_created=False, auto_consume_event_id=None,
-                        inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, failure_stage='purchase_event_write', failure_message=error,
+                        inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, processing_status='failed', failure_stage='purchase_event_write', failure_message=error,
                     )
                     store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
                     conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
@@ -3571,7 +3583,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                         auto_consume_applied_deduction_quantity=1 if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
                         auto_consume_event_id=auto_event_id, inventory_after_purchase_total=int(inventory_after_purchase_total),
                         inventory_after_auto_consume_total=int(inventory_after_auto_consume_total),
-                        failure_stage=current_stage, failure_message=error,
+                        processing_status='failed', failure_stage=current_stage, failure_message=error,
                     )
                     diagnostic['backend_trace_excerpt'] = traceback.format_exc(limit=2)
                     store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
@@ -3590,7 +3602,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                     auto_consume_applied_deduction_quantity=1 if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
                     auto_consume_event_id=auto_event_id, inventory_after_purchase_total=int(inventory_after_purchase_total),
                     inventory_after_auto_consume_total=int(inventory_after_auto_consume_total),
-                    failure_stage='none', failure_message='',
+                    processing_status='processed', failure_stage='none', failure_message='',
                 )
                 store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
                 conn.execute(
