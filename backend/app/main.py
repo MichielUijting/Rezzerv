@@ -3359,176 +3359,226 @@ def get_purchase_import_batch_diagnostics(batch_id: str):
 
 @app.post("/api/purchase-import-batches/{batch_id}/process")
 def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
-    with engine.begin() as conn:
-        batch = conn.execute(
-            text(
-                """
-                SELECT pib.id, pib.household_id, pib.import_status, sp.code AS store_provider_code
-                FROM purchase_import_batches pib
-                JOIN store_providers sp ON sp.id = pib.store_provider_id
-                WHERE pib.id = :id
-                """
-            ),
-            {"id": batch_id},
-        ).mappings().first()
-        if not batch:
-            raise HTTPException(status_code=404, detail="Onbekende purchase import batch")
+    current_line_id = None
+    current_line_name = None
+    current_stage = 'batch_start'
+    try:
+        with engine.begin() as conn:
+            batch = conn.execute(
+                text(
+                    """
+                    SELECT pib.id, pib.household_id, pib.import_status, sp.code AS store_provider_code
+                    FROM purchase_import_batches pib
+                    JOIN store_providers sp ON sp.id = pib.store_provider_id
+                    WHERE pib.id = :id
+                    """
+                ),
+                {"id": batch_id},
+            ).mappings().first()
+            if not batch:
+                raise HTTPException(status_code=404, detail="Onbekende purchase import batch")
 
-        lines = conn.execute(
-            text(
-                """
-                SELECT id, article_name_raw, brand_raw, quantity_raw, unit_raw, review_decision, matched_household_article_id,
-                       target_location_id, processing_status, processed_event_id
-                FROM purchase_import_lines
-                WHERE batch_id = :batch_id
-                ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
-                """
-            ),
-            {"batch_id": batch_id},
-        ).mappings().all()
+            lines = conn.execute(
+                text(
+                    """
+                    SELECT id, article_name_raw, brand_raw, quantity_raw, unit_raw, review_decision, matched_household_article_id,
+                           target_location_id, processing_status, processed_event_id
+                    FROM purchase_import_lines
+                    WHERE batch_id = :batch_id
+                    ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
+                    """
+                ),
+                {"batch_id": batch_id},
+            ).mappings().all()
 
-        selected_lines = [line for line in lines if (line["review_decision"] or "pending") == "selected"]
-        if payload.mode == "ready_only":
-            selected_lines = [
-                line for line in selected_lines
-                if line["matched_household_article_id"] and line["target_location_id"]
-            ]
-        if not selected_lines:
-            if payload.mode == "ready_only":
-                raise HTTPException(status_code=400, detail="Er zijn geen volledig gekoppelde regels om te verwerken")
-            raise HTTPException(status_code=400, detail="Er zijn geen geselecteerde regels om te verwerken")
+            selected_lines = [line for line in lines if (line["review_decision"] or "pending") == "selected"]
+            results = []
+            processable_lines = []
+            skipped_count = 0
 
-        results = []
-        processed_count = 0
-        failed_count = 0
+            for line in selected_lines:
+                line_id = line["id"]
+                current_line_id = line_id
+                current_line_name = line.get("article_name_raw") or ''
+                if payload.mode == "ready_only":
+                    article_id = line.get("matched_household_article_id")
+                    location_id = line.get("target_location_id")
+                    if not article_id:
+                        results.append({
+                            "line_id": line_id,
+                            "status": "skipped",
+                            "reason": "Nog geen artikel gekoppeld",
+                            "failure_stage": "article_resolution",
+                        })
+                        skipped_count += 1
+                        continue
+                    if not location_id:
+                        results.append({
+                            "line_id": line_id,
+                            "status": "skipped",
+                            "reason": "Nog geen locatie gekozen",
+                            "failure_stage": "purchase_event_write",
+                        })
+                        skipped_count += 1
+                        continue
+                processable_lines.append(line)
 
-        for line in selected_lines:
-            line_id = line["id"]
-            if line["processing_status"] == "processed" and line["processed_event_id"]:
-                results.append({"line_id": line_id, "status": "processed", "event_id": line["processed_event_id"], "message": "Al eerder verwerkt"})
-                processed_count += 1
-                continue
+            if not processable_lines:
+                if payload.mode == "ready_only":
+                    raise HTTPException(status_code=400, detail="Geen klaarstaande regels om naar voorraad te verwerken")
+                raise HTTPException(status_code=400, detail="Er zijn geen geselecteerde regels om te verwerken")
 
-            article_id = line["matched_household_article_id"]
-            selected_article_input = str(article_id or '')
-            original_article = resolve_review_article_option(conn, article_id, str(batch["household_id"]))
-            article = resolve_processing_article(conn, str(batch["household_id"]), original_article)
-            if article:
-                article_id = article["id"]
-            if not article:
-                error = "Geen geldige artikelkoppeling gekozen"
-                diagnostic = build_purchase_import_line_diagnostic(
-                    line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=None,
-                    resolved_location=None, purchase_quantity=0, pre_purchase_total=0, purchase_event_created=False, purchase_event_id=None,
-                    history_contains_purchase_event=False, history_lookup_article_id=selected_article_input, history_lookup_result_count=0,
-                    auto_consume_household_mode=get_household_auto_consume_mode(conn, str(batch["household_id"])),
-                    auto_consume_article_override=ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD,
-                    auto_consume_effective_mode=ARTICLE_AUTO_CONSUME_NONE, auto_consume_should_apply=False,
-                    auto_consume_decision_reason='Geen geldige artikelkoppeling gekozen', auto_consume_requested_deduction_quantity=0,
-                    auto_consume_applied_deduction_quantity=0, auto_consume_event_created=False, auto_consume_event_id=None,
-                    inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, failure_stage='article_resolution', failure_message=error,
-                )
-                store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
-                conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
-                results.append({"line_id": line_id, "status": "failed", "error": error, "diagnostic": diagnostic})
-                failed_count += 1
-                continue
+            processed_count = 0
+            failed_count = 0
 
-            resolved_location = resolve_target_location(conn, line["target_location_id"])
-            if not resolved_location:
-                error = "Geen geldige locatie gekozen"
-                diagnostic = build_purchase_import_line_diagnostic(
-                    line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=article,
-                    resolved_location=None, purchase_quantity=0, pre_purchase_total=0, purchase_event_created=False, purchase_event_id=None,
-                    history_contains_purchase_event=False, history_lookup_article_id=str(article_id), history_lookup_result_count=0,
-                    auto_consume_household_mode=get_household_auto_consume_mode(conn, str(batch["household_id"])),
-                    auto_consume_article_override=get_household_article_auto_consume_override(conn, str(batch["household_id"]), str(article_id)),
-                    auto_consume_effective_mode=ARTICLE_AUTO_CONSUME_NONE, auto_consume_should_apply=False,
-                    auto_consume_decision_reason='Geen geldige locatie gekozen', auto_consume_requested_deduction_quantity=0,
-                    auto_consume_applied_deduction_quantity=0, auto_consume_event_created=False, auto_consume_event_id=None,
-                    inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, failure_stage='purchase_event_write', failure_message=error,
-                )
-                store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
-                conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
-                results.append({"line_id": line_id, "status": "failed", "error": error, "diagnostic": diagnostic})
-                failed_count += 1
-                continue
+            for line in processable_lines:
+                line_id = line["id"]
+                current_line_id = line_id
+                current_line_name = line.get("article_name_raw") or ''
+                if line["processing_status"] == "processed" and line["processed_event_id"]:
+                    results.append({"line_id": line_id, "status": "processed", "event_id": line["processed_event_id"], "message": "Al eerder verwerkt"})
+                    processed_count += 1
+                    continue
 
-            quantity = normalize_store_import_quantity(line.get("quantity_raw"), line.get("unit_raw"))
-            if quantity <= 0:
-                error = "Ongeldige hoeveelheid"
-                diagnostic = build_purchase_import_line_diagnostic(
-                    line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=article,
-                    resolved_location=resolved_location, purchase_quantity=0, pre_purchase_total=0, purchase_event_created=False, purchase_event_id=None,
-                    history_contains_purchase_event=False, history_lookup_article_id=str(article_id), history_lookup_result_count=0,
-                    auto_consume_household_mode=get_household_auto_consume_mode(conn, str(batch["household_id"])),
-                    auto_consume_article_override=get_household_article_auto_consume_override(conn, str(batch["household_id"]), str(article_id)),
-                    auto_consume_effective_mode=ARTICLE_AUTO_CONSUME_NONE, auto_consume_should_apply=False,
-                    auto_consume_decision_reason='Ongeldige hoeveelheid', auto_consume_requested_deduction_quantity=0,
-                    auto_consume_applied_deduction_quantity=0, auto_consume_event_created=False, auto_consume_event_id=None,
-                    inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, failure_stage='purchase_event_write', failure_message=error,
-                )
-                store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
-                conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
-                results.append({"line_id": line_id, "status": "failed", "error": error, "diagnostic": diagnostic})
-                failed_count += 1
-                continue
+                article_id = line["matched_household_article_id"]
+                selected_article_input = str(article_id or '')
+                original_article = resolve_review_article_option(conn, article_id, str(batch["household_id"]))
+                article = resolve_processing_article(conn, str(batch["household_id"]), original_article)
+                if article:
+                    article_id = article["id"]
+                if not article:
+                    error = "Geen geldige artikelkoppeling gekozen"
+                    diagnostic = build_purchase_import_line_diagnostic(
+                        line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=None,
+                        resolved_location=None, purchase_quantity=0, pre_purchase_total=0, purchase_event_created=False, purchase_event_id=None,
+                        history_contains_purchase_event=False, history_lookup_article_id=selected_article_input, history_lookup_result_count=0,
+                        auto_consume_household_mode=get_household_auto_consume_mode(conn, str(batch["household_id"])),
+                        auto_consume_article_override=ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD,
+                        auto_consume_effective_mode=ARTICLE_AUTO_CONSUME_NONE, auto_consume_should_apply=False,
+                        auto_consume_decision_reason='Geen geldige artikelkoppeling gekozen', auto_consume_requested_deduction_quantity=0,
+                        auto_consume_applied_deduction_quantity=0, auto_consume_event_created=False, auto_consume_event_id=None,
+                        inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, failure_stage='article_resolution', failure_message=error,
+                    )
+                    store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
+                    conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
+                    results.append({"line_id": line_id, "status": "failed", "error": error, "diagnostic": diagnostic})
+                    failed_count += 1
+                    continue
 
-            article_name = article["name"]
-            note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
-            pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
-            household_mode = get_household_auto_consume_mode(conn, str(batch["household_id"]))
-            article_override = get_household_article_auto_consume_override(conn, str(batch["household_id"]), str(article_id))
-            effective_mode = household_mode
-            if article_override == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
-                effective_mode = ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY
-            elif article_override == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
-                effective_mode = ARTICLE_AUTO_CONSUME_NONE
-            if not get_article_consumable_state(conn, str(batch["household_id"]), str(article_id), article_name):
-                effective_mode = ARTICLE_AUTO_CONSUME_NONE
-                decision_reason = 'article not consumable'
-            elif pre_purchase_total <= 0:
-                decision_reason = 'existing stock missing'
-            elif article_override == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
-                decision_reason = 'article override none'
-            elif article_override == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
-                decision_reason = 'article override consume_purchased_quantity'
-            elif household_mode == ARTICLE_AUTO_CONSUME_NONE:
-                decision_reason = 'household mode none'
-            else:
-                decision_reason = f'effective mode {effective_mode}'
-            should_auto_consume = should_auto_consume_on_repurchase(conn, str(batch["household_id"]), str(article_id), article_name, pre_purchase_total)
-            requested_deduction_quantity = 1 if should_auto_consume else 0
-            current_stage = 'purchase_event_write'
-            event_id = None
-            auto_event_id = None
-            inventory_after_purchase_total = pre_purchase_total
-            inventory_after_auto_consume_total = pre_purchase_total
-            history_lookup_result_count = 0
-            history_contains_purchase_event = False
-            try:
-                event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
-                apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
-                inventory_after_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
-                current_stage = 'history_lookup'
-                history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(article_id), article_name, event_id)
-                current_stage = 'auto_consume_decision'
-                if should_auto_consume:
-                    current_stage = 'auto_consume_write'
-                    auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=1)
-                    apply_inventory_consumption(conn, batch["household_id"], article_name, 1, resolved_location)
-                inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)
-            except Exception as exc:
-                detail_parts = [
-                    f'exception_type={exc.__class__.__name__}',
-                    f'exception_message={str(exc) or exc.__class__.__name__}',
-                    f'article_id={article_id}',
-                    f'article_name={article_name}',
-                    f'quantity={quantity}',
-                    f'location_id={resolved_location.get("location_id") if resolved_location else None}',
-                    f'location_label={resolved_location.get("location_label") if resolved_location else None}',
-                ]
-                error = ' | '.join(detail_parts)
+                resolved_location = resolve_target_location(conn, line["target_location_id"])
+                if not resolved_location:
+                    error = "Geen geldige locatie gekozen"
+                    diagnostic = build_purchase_import_line_diagnostic(
+                        line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=article,
+                        resolved_location=None, purchase_quantity=0, pre_purchase_total=0, purchase_event_created=False, purchase_event_id=None,
+                        history_contains_purchase_event=False, history_lookup_article_id=str(article_id), history_lookup_result_count=0,
+                        auto_consume_household_mode=get_household_auto_consume_mode(conn, str(batch["household_id"])),
+                        auto_consume_article_override=get_household_article_auto_consume_override(conn, str(batch["household_id"]), str(article_id)),
+                        auto_consume_effective_mode=ARTICLE_AUTO_CONSUME_NONE, auto_consume_should_apply=False,
+                        auto_consume_decision_reason='Geen geldige locatie gekozen', auto_consume_requested_deduction_quantity=0,
+                        auto_consume_applied_deduction_quantity=0, auto_consume_event_created=False, auto_consume_event_id=None,
+                        inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, failure_stage='purchase_event_write', failure_message=error,
+                    )
+                    store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
+                    conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
+                    results.append({"line_id": line_id, "status": "failed", "error": error, "diagnostic": diagnostic})
+                    failed_count += 1
+                    continue
+
+                quantity = normalize_store_import_quantity(line.get("quantity_raw"), line.get("unit_raw"))
+                if quantity <= 0:
+                    error = "Ongeldige hoeveelheid"
+                    diagnostic = build_purchase_import_line_diagnostic(
+                        line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=article,
+                        resolved_location=resolved_location, purchase_quantity=0, pre_purchase_total=0, purchase_event_created=False, purchase_event_id=None,
+                        history_contains_purchase_event=False, history_lookup_article_id=str(article_id), history_lookup_result_count=0,
+                        auto_consume_household_mode=get_household_auto_consume_mode(conn, str(batch["household_id"])),
+                        auto_consume_article_override=get_household_article_auto_consume_override(conn, str(batch["household_id"]), str(article_id)),
+                        auto_consume_effective_mode=ARTICLE_AUTO_CONSUME_NONE, auto_consume_should_apply=False,
+                        auto_consume_decision_reason='Ongeldige hoeveelheid', auto_consume_requested_deduction_quantity=0,
+                        auto_consume_applied_deduction_quantity=0, auto_consume_event_created=False, auto_consume_event_id=None,
+                        inventory_after_purchase_total=0, inventory_after_auto_consume_total=0, failure_stage='purchase_event_write', failure_message=error,
+                    )
+                    store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
+                    conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
+                    results.append({"line_id": line_id, "status": "failed", "error": error, "diagnostic": diagnostic})
+                    failed_count += 1
+                    continue
+
+                article_name = article["name"]
+                note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
+                pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
+                household_mode = get_household_auto_consume_mode(conn, str(batch["household_id"]))
+                article_override = get_household_article_auto_consume_override(conn, str(batch["household_id"]), str(article_id))
+                effective_mode = household_mode
+                if article_override == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
+                    effective_mode = ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY
+                elif article_override == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
+                    effective_mode = ARTICLE_AUTO_CONSUME_NONE
+                if not get_article_consumable_state(conn, str(batch["household_id"]), str(article_id), article_name):
+                    effective_mode = ARTICLE_AUTO_CONSUME_NONE
+                    decision_reason = 'article not consumable'
+                elif pre_purchase_total <= 0:
+                    decision_reason = 'existing stock missing'
+                elif article_override == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
+                    decision_reason = 'article override none'
+                elif article_override == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
+                    decision_reason = 'article override consume_purchased_quantity'
+                elif household_mode == ARTICLE_AUTO_CONSUME_NONE:
+                    decision_reason = 'household mode none'
+                else:
+                    decision_reason = f'effective mode {effective_mode}'
+                should_auto_consume = should_auto_consume_on_repurchase(conn, str(batch["household_id"]), str(article_id), article_name, pre_purchase_total)
+                requested_deduction_quantity = 1 if should_auto_consume else 0
+                current_stage = 'purchase_event_write'
+                event_id = None
+                auto_event_id = None
+                inventory_after_purchase_total = pre_purchase_total
+                inventory_after_auto_consume_total = pre_purchase_total
+                history_lookup_result_count = 0
+                history_contains_purchase_event = False
+                try:
+                    event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
+                    apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
+                    inventory_after_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
+                    current_stage = 'history_lookup'
+                    history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(article_id), article_name, event_id)
+                    current_stage = 'auto_consume_decision'
+                    if should_auto_consume:
+                        current_stage = 'auto_consume_write'
+                        auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=1)
+                        apply_inventory_consumption(conn, batch["household_id"], article_name, 1, resolved_location)
+                    inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)
+                except Exception as exc:
+                    detail_parts = [
+                        f'exception_type={exc.__class__.__name__}',
+                        f'exception_message={str(exc) or exc.__class__.__name__}',
+                        f'article_id={article_id}',
+                        f'article_name={article_name}',
+                        f'quantity={quantity}',
+                        f'location_id={resolved_location.get("location_id") if resolved_location else None}',
+                        f'location_label={resolved_location.get("location_label") if resolved_location else None}',
+                    ]
+                    error = ' | '.join(detail_parts)
+                    diagnostic = build_purchase_import_line_diagnostic(
+                        line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=article,
+                        resolved_location=resolved_location, purchase_quantity=int(quantity), pre_purchase_total=int(pre_purchase_total),
+                        purchase_event_created=bool(event_id), purchase_event_id=event_id, history_contains_purchase_event=history_contains_purchase_event,
+                        history_lookup_article_id=str(article_id), history_lookup_result_count=history_lookup_result_count,
+                        auto_consume_household_mode=household_mode, auto_consume_article_override=article_override, auto_consume_effective_mode=effective_mode,
+                        auto_consume_should_apply=should_auto_consume, auto_consume_decision_reason=decision_reason,
+                        auto_consume_requested_deduction_quantity=requested_deduction_quantity,
+                        auto_consume_applied_deduction_quantity=1 if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
+                        auto_consume_event_id=auto_event_id, inventory_after_purchase_total=int(inventory_after_purchase_total),
+                        inventory_after_auto_consume_total=int(inventory_after_auto_consume_total),
+                        failure_stage=current_stage, failure_message=error,
+                    )
+                    diagnostic['backend_trace_excerpt'] = traceback.format_exc(limit=2)
+                    store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
+                    conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
+                    results.append({"line_id": line_id, "status": "failed", "error": error, "diagnostic": diagnostic})
+                    failed_count += 1
+                    continue
                 diagnostic = build_purchase_import_line_diagnostic(
                     line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=article,
                     resolved_location=resolved_location, purchase_quantity=int(quantity), pre_purchase_total=int(pre_purchase_total),
@@ -3540,64 +3590,54 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                     auto_consume_applied_deduction_quantity=1 if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
                     auto_consume_event_id=auto_event_id, inventory_after_purchase_total=int(inventory_after_purchase_total),
                     inventory_after_auto_consume_total=int(inventory_after_auto_consume_total),
-                    failure_stage=current_stage, failure_message=error,
+                    failure_stage='none', failure_message='',
                 )
-                diagnostic['backend_trace_excerpt'] = traceback.format_exc(limit=2)
                 store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
-                conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
-                results.append({"line_id": line_id, "status": "failed", "error": error, "diagnostic": diagnostic})
-                failed_count += 1
-                continue
-            diagnostic = build_purchase_import_line_diagnostic(
-                line=line, batch=batch, selected_article_input=selected_article_input, original_article=original_article, resolved_article=article,
-                resolved_location=resolved_location, purchase_quantity=int(quantity), pre_purchase_total=int(pre_purchase_total),
-                purchase_event_created=bool(event_id), purchase_event_id=event_id, history_contains_purchase_event=history_contains_purchase_event,
-                history_lookup_article_id=str(article_id), history_lookup_result_count=history_lookup_result_count,
-                auto_consume_household_mode=household_mode, auto_consume_article_override=article_override, auto_consume_effective_mode=effective_mode,
-                auto_consume_should_apply=should_auto_consume, auto_consume_decision_reason=decision_reason,
-                auto_consume_requested_deduction_quantity=requested_deduction_quantity,
-                auto_consume_applied_deduction_quantity=1 if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
-                auto_consume_event_id=auto_event_id, inventory_after_purchase_total=int(inventory_after_purchase_total),
-                inventory_after_auto_consume_total=int(inventory_after_auto_consume_total),
-                failure_stage='none', failure_message='',
-            )
-            store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
-            conn.execute(
-                text(
-                    """
-                    UPDATE purchase_import_lines
-                    SET processing_status = 'processed', processed_at = CURRENT_TIMESTAMP,
-                        processed_event_id = :event_id, processing_error = NULL,
-                        final_location_id = :final_location_id, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :id
-                    """
-                ),
-                {"event_id": event_id, "final_location_id": resolved_location["location_id"], "id": line_id},
-            )
-            remember_store_import_choice(
-                conn,
-                str(batch["household_id"]),
-                batch["store_provider_code"],
-                line["article_name_raw"],
-                line.get("brand_raw"),
-                article_id,
-                resolved_location["location_id"],
-            )
-            results.append({"line_id": line_id, "status": "processed", "event_id": event_id, "auto_event_id": auto_event_id, "diagnostic": diagnostic})
-            processed_count += 1
+                conn.execute(
+                    text(
+                        """
+                        UPDATE purchase_import_lines
+                        SET processing_status = 'processed', processed_at = CURRENT_TIMESTAMP,
+                            processed_event_id = :event_id, processing_error = NULL,
+                            final_location_id = :final_location_id, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = :id
+                        """
+                    ),
+                    {"event_id": event_id, "final_location_id": resolved_location["location_id"], "id": line_id},
+                )
+                remember_store_import_choice(
+                    conn,
+                    str(batch["household_id"]),
+                    batch["store_provider_code"],
+                    line["article_name_raw"],
+                    line.get("brand_raw"),
+                    article_id,
+                    resolved_location["location_id"],
+                )
+                results.append({"line_id": line_id, "status": "processed", "event_id": event_id, "auto_event_id": auto_event_id, "diagnostic": diagnostic})
+                processed_count += 1
 
-        batch_status = update_batch_status(conn, batch_id)
-        if batch_status in {"processed", "partially_processed"}:
-            conn.execute(text("UPDATE purchase_import_batches SET processed_at = CURRENT_TIMESTAMP WHERE id = :id"), {"id": batch_id})
+            batch_status = update_batch_status(conn, batch_id)
+            if batch_status in {"processed", "partially_processed"}:
+                conn.execute(text("UPDATE purchase_import_batches SET processed_at = CURRENT_TIMESTAMP WHERE id = :id"), {"id": batch_id})
 
-    return {
-        "batch_id": batch_id,
-        "status": batch_status,
-        "processed_count": processed_count,
-        "failed_count": failed_count,
-        "results": results,
-        "diagnostics": build_purchase_import_batch_diagnostics(conn, batch_id),
-    }
+            diagnostics = build_purchase_import_batch_diagnostics(conn, batch_id)
+
+        return {
+            "batch_id": batch_id,
+            "status": batch_status,
+            "processed_count": processed_count,
+            "failed_count": failed_count,
+            "skipped_count": skipped_count,
+            "results": results,
+            "diagnostics": diagnostics,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        detail = f"Verwerking naar voorraad mislukt bij regel '{current_line_name or current_line_id or '?'}' op stap {current_stage}: {exc.__class__.__name__}: {str(exc) or exc.__class__.__name__}"
+        logger.exception('Procesfout batch %s regel %s', batch_id, current_line_id)
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @app.post("/api/dev/run-smoke-tests", response_model=TestStartResponse)

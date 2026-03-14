@@ -249,10 +249,12 @@ export default function StoreBatchDetailPage() {
     }
   }
 
+  const processActionMode = batch?.import_status === 'reviewed' ? 'ready_only' : 'selected_only'
+
   async function handleProcessBatch() {
     if (!batch) return
-    setProcessMode('selected_only')
-    if (linesMissingLocation > 0 || linesMissingArticle > 0) {
+    setProcessMode(processActionMode)
+    if (processActionMode === 'selected_only' && (linesMissingLocation > 0 || linesMissingArticle > 0)) {
       setError('')
       setProcessWarning({
         missingLocations: linesMissingLocation,
@@ -260,12 +262,7 @@ export default function StoreBatchDetailPage() {
       })
       return
     }
-    await processBatchNow('selected_only')
-  }
-
-  async function handleProcessReadyOnly() {
-    setProcessMode('ready_only')
-    await processBatchNow('ready_only')
+    await processBatchNow(processActionMode)
   }
 
   return (
@@ -323,6 +320,12 @@ export default function StoreBatchDetailPage() {
                 <span>Mislukt: <strong>{batch.summary?.failed || 0}</strong></span>
                 {lastProcessResult?.processed_count ? <span>Laatst verwerkt: <strong>{lastProcessResult.processed_count}</strong></span> : null}
               </div>
+
+              {lastProcessResult ? (
+                <div className="rz-inline-feedback rz-inline-feedback--success" style={{ marginBottom: '12px' }}>
+                  Laatste verwerking — verwerkt: <strong>{lastProcessResult.processed_count || 0}</strong>, overgeslagen: <strong>{lastProcessResult.skipped_count || 0}</strong>, mislukt: <strong>{lastProcessResult.failed_count || 0}</strong>.
+                </div>
+              ) : null}
 
               <div className="rz-table-wrapper">
                 <table className="rz-table rz-store-review-table">
@@ -408,6 +411,25 @@ export default function StoreBatchDetailPage() {
                   </tbody>
                 </table>
               </div>
+
+              {lastProcessResult?.results?.length ? (
+                <div style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
+                  <div className="rz-store-review-meta" style={{ fontWeight: 700 }}>
+                    Resultaat van Naar voorraad — per regel
+                  </div>
+                  {lastProcessResult.results.map((result) => {
+                    const line = batch?.lines?.find((entry) => entry.id === result.line_id)
+                    const label = line?.article_name_raw || result.line_id
+                    const statusLabel = result.status === 'processed' ? 'Verwerkt' : result.status === 'skipped' ? 'Overgeslagen' : 'Mislukt'
+                    const reason = result.reason || result.error || result.message || result.diagnostic?.failure_message || ''
+                    return (
+                      <div key={result.line_id} className="rz-inline-feedback" style={{ borderColor: result.status === 'failed' ? '#b42318' : '#1d2939' }}>
+                        <strong>{label}</strong>: {statusLabel}{reason ? ` — ${reason}` : ''}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
 
               {batchDiagnostics?.line_diagnostics?.length ? (
                 <div style={{ marginTop: '16px', display: 'grid', gap: '12px' }}>
