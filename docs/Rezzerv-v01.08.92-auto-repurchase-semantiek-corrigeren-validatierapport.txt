@@ -1,0 +1,24 @@
+Rezzerv-v01.08.92 validatierapport
+
+Basis
+- Inhoudelijk verder gewerkt vanaf v01.07.79, met alleen de backend auto_repurchase-fix uit de huidige werkbasis aangepast.
+
+Gewijzigd
+- clear_article_inventory verwijderd uit het auto_repurchase-pad.
+- Nieuwe helper apply_inventory_consumption toegevoegd om een beperkte verbruiksmutatie op de aankooplocatie toe te passen.
+- create_auto_repurchase_event schrijft nu een begrensd event:
+  - quantity = -1
+  - old_quantity = totaal na purchase
+  - new_quantity = totaal na auto-afboeking
+- store-import verwerking schrijft nu eerst purchase, past daarna purchase toe, en voert alleen dan auto_repurchase + consumptie uit als de voorwaarden gelden.
+
+Niet gewijzigd
+- Geen aanpassingen aan nulvoorraad, Admin/styleguide of winkelimport buiten de purchase-flowhaak.
+- Geen regressies verwijderd of uitgezet.
+
+Getest
+- Python compilecheck backend geslaagd.
+
+Restrisico
+- Bij meerdere voorraadregels voor hetzelfde artikel is nu gekozen om de automatische afboeking op de aankooplocatie toe te passen.
+- Handmatige validatie met Tomaten blijft nodig om te bevestigen dat Voorraad en Historie nu semantisch overeenkomen.

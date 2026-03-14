@@ -1378,23 +1378,61 @@ def create_inventory_purchase_event(conn, household_id: str, article_id: str, ar
     )
 
 
-def clear_article_inventory(conn, household_id: str, article_name: str):
-    conn.execute(
+def apply_inventory_consumption(conn, household_id: str, article_name: str, quantity: float, resolved_location: dict):
+    safe_location = require_resolved_location(resolved_location)
+    space_id = safe_location["space_id"]
+    sublocation_id = safe_location["sublocation_id"]
+    quantity_int = int(quantity)
+    if quantity_int <= 0:
+        return None
+
+    existing = conn.execute(
         text(
             """
-            DELETE FROM inventory
+            SELECT id, aantal
+            FROM inventory
             WHERE household_id = :household_id
-              AND lower(naam) = lower(:article_name)
+              AND naam = :naam
+              AND COALESCE(space_id, '') = COALESCE(:space_id, '')
+              AND COALESCE(sublocation_id, '') = COALESCE(:sublocation_id, '')
             """
         ),
-        {"household_id": household_id, "article_name": article_name},
-    )
+        {
+            "household_id": household_id,
+            "naam": article_name,
+            "space_id": space_id,
+            "sublocation_id": sublocation_id,
+        },
+    ).mappings().first()
+
+    if not existing:
+        return None
+
+    new_row_quantity = max(0, int(existing["aantal"] or 0) - quantity_int)
+    if new_row_quantity > 0:
+        conn.execute(
+            text(
+                """
+                UPDATE inventory
+                SET aantal = :aantal, updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {"aantal": new_row_quantity, "id": existing["id"]},
+        )
+    else:
+        conn.execute(text("DELETE FROM inventory WHERE id = :id"), {"id": existing["id"]})
+    return existing["id"]
 
 
-def create_auto_repurchase_event(conn, household_id: str, article_id: str, article_name: str, resolved_location: dict):
+def create_auto_repurchase_event(conn, household_id: str, article_id: str, article_name: str, resolved_location: dict, quantity: float = 1):
+    quantity_int = int(quantity)
+    if quantity_int <= 0:
+        return None
     old_total = get_article_total_quantity(conn, household_id, article_name)
     if old_total <= 0:
         return None
+    new_total = max(0, old_total - quantity_int)
     return create_inventory_event(
         conn,
         household_id=household_id,
@@ -1402,11 +1440,11 @@ def create_auto_repurchase_event(conn, household_id: str, article_id: str, artic
         article_name=article_name,
         resolved_location=resolved_location,
         event_type='auto_repurchase',
-        quantity=old_total,
+        quantity=-quantity_int,
         old_quantity=old_total,
-        new_quantity=0,
+        new_quantity=new_total,
         source='auto_repurchase',
-        note='Automatisch afgeboekt bij herhaalaankoop.',
+        note='Automatisch 1 eenheid afgeboekt bij herhaalaankoop.',
     )
 
 
@@ -2756,13 +2794,14 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
             article_name = article["name"]
             note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
             auto_consume_ids = {str(item) for item in (payload.auto_consume_article_ids or [])}
-            should_auto_consume = str(article_id) in auto_consume_ids and get_article_total_quantity(conn, batch["household_id"], article_name) > 0
-            auto_event_id = None
-            if should_auto_consume:
-                auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location)
-                clear_article_inventory(conn, batch["household_id"], article_name)
+            pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
+            should_auto_consume = str(article_id) in auto_consume_ids and pre_purchase_total > 0
             event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
             apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
+            auto_event_id = None
+            if should_auto_consume:
+                auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=1)
+                apply_inventory_consumption(conn, batch["household_id"], article_name, 1, resolved_location)
             conn.execute(
                 text(
                     """
