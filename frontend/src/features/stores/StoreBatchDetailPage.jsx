@@ -36,6 +36,8 @@ export default function StoreBatchDetailPage() {
   const [processMode, setProcessMode] = useState('selected_only')
   const [lastProcessResult, setLastProcessResult] = useState(null)
   const [batchDiagnostics, setBatchDiagnostics] = useState(null)
+  const [lineDrafts, setLineDrafts] = useState({})
+  const [lineSaveState, setLineSaveState] = useState({})
   const processFeedbackTimer = useRef(null)
 
   const providersByCode = useMemo(
@@ -58,6 +60,51 @@ export default function StoreBatchDetailPage() {
   const linesMissingLocation = selectedLines.filter((line) => !line.target_location_id || !validLocationIds.has(String(line.target_location_id))).length
   const canProcessBatch = Boolean(batch && selectedLines.length > 0 && !busyLineId && !isLoading)
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
+
+
+  useEffect(() => {
+    const nextDrafts = {}
+    const nextSaveState = {}
+    ;(batch?.lines || []).forEach((line) => {
+      nextDrafts[line.id] = {
+        articleId: line.matched_household_article_id || '',
+        locationId: line.target_location_id || '',
+      }
+      const existing = lineSaveState[line.id] || {}
+      nextSaveState[line.id] = {
+        ...existing,
+        dirty: false,
+      }
+    })
+    setLineDrafts(nextDrafts)
+    setLineSaveState(nextSaveState)
+  }, [batch?.batch_id, batch?.lines])
+
+  function markLineDraft(lineId, patch) {
+    const originalLine = batch?.lines?.find((entry) => entry.id === lineId)
+    setLineDrafts((current) => {
+      const prev = current[lineId] || { articleId: '', locationId: '' }
+      const next = { ...prev, ...patch }
+      const originalArticleId = String(originalLine?.matched_household_article_id || '')
+      const originalLocationId = String(originalLine?.target_location_id || '')
+      const dirty = String(next.articleId || '') !== originalArticleId || String(next.locationId || '') !== originalLocationId
+      setLineSaveState((saveCurrent) => ({
+        ...saveCurrent,
+        [lineId]: {
+          ...(saveCurrent[lineId] || {}),
+          dirty,
+          saveStarted: false,
+          saveSucceeded: false,
+          error: '',
+          originalArticleId,
+          originalLocationId,
+          pendingArticleId: String(next.articleId || ''),
+          pendingLocationId: String(next.locationId || ''),
+        },
+      }))
+      return { ...current, [lineId]: next }
+    })
+  }
 
   function clearTransientFeedback() {
     if (processFeedbackTimer.current) {
@@ -152,22 +199,10 @@ export default function StoreBatchDetailPage() {
     }
   }
 
-  async function handleMapLine(lineId, articleId) {
-    setBusyLineId(lineId)
+  function handleMapLine(lineId, articleId) {
+    markLineDraft(lineId, { articleId: articleId || '' })
     setError('')
     setStatus('')
-    try {
-      await fetchJson(`/api/purchase-import-lines/${lineId}/map`, {
-        method: 'POST',
-        body: JSON.stringify({ household_article_id: articleId }),
-      })
-      await refreshBatch(batch.batch_id)
-      setStatus('De artikelkoppeling is opgeslagen.')
-    } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'De artikelkoppeling kon niet worden opgeslagen.')
-    } finally {
-      setBusyLineId('')
-    }
   }
 
   async function handleCreateArticleFromLine(lineId, articleName) {
@@ -201,20 +236,110 @@ export default function StoreBatchDetailPage() {
     }
   }
 
-  async function handleTargetLocation(lineId, targetLocationId) {
-    setBusyLineId(lineId)
+  function handleTargetLocation(lineId, targetLocationId) {
+    markLineDraft(lineId, { locationId: targetLocationId || '' })
     setError('')
     setStatus('')
+  }
+
+  async function handleSaveLine(line) {
+    if (!batch) return
+    const draft = lineDrafts[line.id] || {
+      articleId: line.matched_household_article_id || '',
+      locationId: line.target_location_id || '',
+    }
+    const originalArticleId = String(line.matched_household_article_id || '')
+    const originalLocationId = String(line.target_location_id || '')
+    const nextArticleId = String(draft.articleId || '')
+    const nextLocationId = String(draft.locationId || '')
+    const articleChanged = nextArticleId !== originalArticleId
+    const locationChanged = nextLocationId !== originalLocationId
+    if (!articleChanged && !locationChanged) {
+      setLineSaveState((current) => ({
+        ...current,
+        [line.id]: {
+          ...(current[line.id] || {}),
+          dirty: false,
+          saveStarted: false,
+          saveSucceeded: true,
+          savedAt: new Date().toISOString(),
+          error: '',
+          originalArticleId,
+          originalLocationId,
+          pendingArticleId: nextArticleId,
+          pendingLocationId: nextLocationId,
+        },
+      }))
+      setStatus('Er waren geen wijzigingen om op te slaan.')
+      return
+    }
+
+    setBusyLineId(line.id)
+    setError('')
+    setStatus('')
+    setLineSaveState((current) => ({
+      ...current,
+      [line.id]: {
+        ...(current[line.id] || {}),
+        dirty: true,
+        saveStarted: true,
+        saveSucceeded: false,
+        error: '',
+        originalArticleId,
+        originalLocationId,
+        pendingArticleId: nextArticleId,
+        pendingLocationId: nextLocationId,
+      },
+    }))
     try {
-      await fetchJson(`/api/purchase-import-lines/${lineId}/target-location`, {
-        method: 'POST',
-        body: JSON.stringify({ target_location_id: targetLocationId || null }),
-      })
+      if (articleChanged) {
+        await fetchJson(`/api/purchase-import-lines/${line.id}/map`, {
+          method: 'POST',
+          body: JSON.stringify({ household_article_id: nextArticleId || null }),
+        })
+      }
+      if (locationChanged) {
+        await fetchJson(`/api/purchase-import-lines/${line.id}/target-location`, {
+          method: 'POST',
+          body: JSON.stringify({ target_location_id: nextLocationId || null }),
+        })
+      }
       await refreshBatch(batch.batch_id)
       await refreshLocationOptions(household?.id)
-      setStatus('De voorkeurslocatie is opgeslagen.')
+      const savedAt = new Date().toISOString()
+      setLineSaveState((current) => ({
+        ...current,
+        [line.id]: {
+          ...(current[line.id] || {}),
+          dirty: false,
+          saveStarted: false,
+          saveSucceeded: true,
+          savedAt,
+          error: '',
+          originalArticleId: nextArticleId,
+          originalLocationId: nextLocationId,
+          pendingArticleId: nextArticleId,
+          pendingLocationId: nextLocationId,
+        },
+      }))
+      setStatus('De bonregel is opgeslagen.')
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'De voorkeurslocatie kon niet worden opgeslagen.')
+      const message = normalizeErrorMessage(err?.message) || 'De bonregel kon niet worden opgeslagen.'
+      setError(message)
+      setLineSaveState((current) => ({
+        ...current,
+        [line.id]: {
+          ...(current[line.id] || {}),
+          dirty: true,
+          saveStarted: false,
+          saveSucceeded: false,
+          error: message,
+          originalArticleId,
+          originalLocationId,
+          pendingArticleId: nextArticleId,
+          pendingLocationId: nextLocationId,
+        },
+      }))
     } finally {
       setBusyLineId('')
     }
@@ -335,6 +460,7 @@ export default function StoreBatchDetailPage() {
                     <col style={{ width: '18%' }} />
                     <col style={{ width: '20%' }} />
                     <col style={{ width: '18%' }} />
+                    <col style={{ width: '12%' }} />
                   </colgroup>
                   <thead>
                     <tr className="rz-table-header">
@@ -343,14 +469,18 @@ export default function StoreBatchDetailPage() {
                       <th>Beoordeling</th>
                       <th>Koppelen aan</th>
                       <th>Locatie</th>
+                      <th>Opslaan</th>
                     </tr>
                   </thead>
                   <tbody>
                     {visibleLines.length === 0 ? (
-                      <tr><td colSpan={5}>Er staan geen open regels meer in deze kassabon.</td></tr>
+                      <tr><td colSpan={6}>Er staan geen open regels meer in deze kassabon.</td></tr>
                     ) : visibleLines.map((line) => {
                       const hasValidArticle = Boolean(line.matched_household_article_id) && validArticleIds.has(String(line.matched_household_article_id))
                       const isReadyForProcessing = (line.review_decision || 'selected') === 'selected' && hasValidArticle && line.target_location_id && validLocationIds.has(String(line.target_location_id))
+                      const draft = lineDrafts[line.id] || { articleId: line.matched_household_article_id || '', locationId: line.target_location_id || '' }
+                      const saveState = lineSaveState[line.id] || {}
+                      const lineBusy = busyLineId === line.id
                       return (
                         <tr key={line.id} className={isReadyForProcessing ? 'rz-store-row--linked' : ''}>
                           <td>
@@ -371,7 +501,7 @@ export default function StoreBatchDetailPage() {
                             <select
                               className="rz-input rz-store-select"
                               value={line.review_decision || 'selected'}
-                              disabled={busyLineId === line.id || isProcessingBatch}
+                              disabled={lineBusy || isProcessingBatch}
                               onChange={(event) => handleReviewDecision(line.id, event.target.value)}
                             >
                               <option value="pending">Nog te beoordelen</option>
@@ -383,9 +513,9 @@ export default function StoreBatchDetailPage() {
                             <StoreArticleSelector
                               lineId={line.id}
                               lineName={line.article_name_raw}
-                              selectedArticleId={line.matched_household_article_id || ''}
+                              selectedArticleId={draft.articleId || ''}
                               articleOptions={articleOptions}
-                              disabled={busyLineId === line.id || isProcessingBatch}
+                              disabled={lineBusy || isProcessingBatch}
                               onChange={(nextArticleId) => handleMapLine(line.id, nextArticleId)}
                               onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
                             />
@@ -394,7 +524,7 @@ export default function StoreBatchDetailPage() {
                             <select
                               className="rz-input rz-store-select"
                               value={line.target_location_id || ''}
-                              disabled={busyLineId === line.id || isProcessingBatch}
+                              disabled={lineBusy || isProcessingBatch}
                               onFocus={() => household?.id && refreshLocationOptions(household.id)}
                               onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
                               onChange={(event) => handleTargetLocation(line.id, event.target.value)}
@@ -411,6 +541,33 @@ export default function StoreBatchDetailPage() {
                   </tbody>
                 </table>
               </div>
+
+
+
+              {(batch?.lines || []).some((line) => lineSaveState[line.id]?.saveStarted || lineSaveState[line.id]?.saveSucceeded || lineSaveState[line.id]?.error || lineSaveState[line.id]?.dirty) ? (
+                <div style={{ marginTop: '16px', display: 'grid', gap: '12px' }}>
+                  <div className="rz-store-review-meta"><strong>Opslaan bonregels</strong> — bewijs welke artikel- en locatiekeuzes zijn opgeslagen.</div>
+                  {(batch?.lines || []).filter((line) => lineSaveState[line.id]?.saveStarted || lineSaveState[line.id]?.saveSucceeded || lineSaveState[line.id]?.error || lineSaveState[line.id]?.dirty).map((line) => {
+                    const saveState = lineSaveState[line.id] || {}
+                    const originalArticle = articleOptions.find((item) => String(item.id) === String(saveState.originalArticleId || line.matched_household_article_id || ''))
+                    const pendingArticle = articleOptions.find((item) => String(item.id) === String(saveState.pendingArticleId || lineDrafts[line.id]?.articleId || ''))
+                    const originalLocation = locationOptions.find((item) => String(item.id) === String(saveState.originalLocationId || line.target_location_id || ''))
+                    const pendingLocation = locationOptions.find((item) => String(item.id) === String(saveState.pendingLocationId || lineDrafts[line.id]?.locationId || ''))
+                    return (
+                      <div key={`save-${line.id}`} style={{ border: '1px solid #D0D5DD', borderRadius: '12px', padding: '12px', background: '#F8FAFC', display: 'grid', gap: '6px' }}>
+                        <div><strong>Bonregel:</strong> {line.article_name_raw}</div>
+                        <div><strong>Oud artikel:</strong> {originalArticle ? articleLabel(originalArticle) : '(geen)'}</div>
+                        <div><strong>Nieuw artikel:</strong> {pendingArticle ? articleLabel(pendingArticle) : '(geen)'}</div>
+                        <div><strong>Oude locatie:</strong> {originalLocation?.label || '(geen)'}</div>
+                        <div><strong>Nieuwe locatie:</strong> {pendingLocation?.label || '(geen)'}</div>
+                        <div><strong>Save gestart:</strong> {saveState.saveStarted ? 'ja' : 'nee'} · <strong>Save gelukt:</strong> {saveState.saveSucceeded ? 'ja' : 'nee'}</div>
+                        <div><strong>Save timestamp:</strong> {saveState.savedAt ? new Date(saveState.savedAt).toLocaleString('nl-NL') : '(geen)'}</div>
+                        {saveState.error ? <div className="rz-inline-feedback rz-inline-feedback--error">{saveState.error}</div> : null}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : null}
 
               {lastProcessResult?.results?.length ? (
                 <div style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>

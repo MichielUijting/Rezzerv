@@ -1,0 +1,40 @@
+Rezzerv v01.08.09 — validatierapport bonregel-opslag
+
+Basisversie:
+- Rezzerv-v01.08.08
+
+Doel van deze release:
+- Wijzigingen aan artikelkoppeling en locatie op de bonpagina expliciet en zichtbaar opslaan.
+- Gebruiker laten zien wanneer een regel gewijzigde maar nog niet opgeslagen waarden bevat.
+- Na opslaan de batch opnieuw laden zodat de opgeslagen waarden na heropenen terugkomen.
+
+Aangebrachte wijzigingen:
+- Frontend bonpagina werkt nu met conceptwaarden (drafts) per regel voor artikel en locatie.
+- Wijzigingen worden niet meer impliciet verondersteld opgeslagen; een per-regel knop "Opslaan" is toegevoegd.
+- Per regel is save-status zichtbaar:
+  - Niet opgeslagen wijziging
+  - Opgeslagen + tijdstip
+  - Foutmelding indien save mislukt
+- Opslaan van een regel roept de bestaande backend-endpoints aan voor:
+  - artikelkoppeling
+  - locatie
+- Na opslaan wordt de batch opnieuw geladen en worden locatie-opties ververst.
+- Extra bewijsblok toegevoegd: "Opslaan bonregels" met oud/nieuw artikel, oud/nieuwe locatie, save gestart, save gelukt, save timestamp.
+
+Technisch gecontroleerd:
+- Frontend productiebuild geslaagd.
+- Geen backendwijzigingen in deze release.
+
+Niet hard bevestigd in deze omgeving:
+- Geen volledige browserkliktest in runtime uitgevoerd.
+- Geen end-to-end bevestiging dat elke gebruikersroute in Docker al groen is.
+
+Beoogde PO-test:
+1. Open Lidl-bon.
+2. Wijzig bij één regel artikel en locatie.
+3. Controleer dat de regel "Niet opgeslagen wijziging" toont.
+4. Klik op Opslaan.
+5. Controleer dat "Opgeslagen" verschijnt.
+6. Verlaat het scherm en open dezelfde bon opnieuw.
+7. Controleer dat artikel en locatie nog steeds de gewijzigde waarden tonen.
+8. Klik daarna op Naar voorraad en controleer of de diagnose dezelfde opgeslagen waarden gebruikt.
