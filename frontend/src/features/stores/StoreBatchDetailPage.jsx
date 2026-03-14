@@ -74,38 +74,144 @@ export default function StoreBatchDetailPage() {
       nextSaveState[line.id] = {
         ...existing,
         dirty: false,
+        status: existing.status === 'error' ? 'error' : existing.status === 'saved' ? 'saved' : 'idle',
+        currentArticleId: String(line.matched_household_article_id || ''),
+        currentLocationId: String(line.target_location_id || ''),
       }
     })
     setLineDrafts(nextDrafts)
     setLineSaveState(nextSaveState)
   }, [batch?.batch_id, batch?.lines])
 
-  function markLineDraft(lineId, patch) {
-    const originalLine = batch?.lines?.find((entry) => entry.id === lineId)
-    setLineDrafts((current) => {
-      const prev = current[lineId] || { articleId: '', locationId: '' }
-      const next = { ...prev, ...patch }
-      const originalArticleId = String(originalLine?.matched_household_article_id || '')
-      const originalLocationId = String(originalLine?.target_location_id || '')
-      const dirty = String(next.articleId || '') !== originalArticleId || String(next.locationId || '') !== originalLocationId
-      setLineSaveState((saveCurrent) => ({
-        ...saveCurrent,
-        [lineId]: {
-          ...(saveCurrent[lineId] || {}),
-          dirty,
-          saveStarted: false,
-          saveSucceeded: false,
-          error: '',
-          originalArticleId,
-          originalLocationId,
-          pendingArticleId: String(next.articleId || ''),
-          pendingLocationId: String(next.locationId || ''),
-        },
-      }))
-      return { ...current, [lineId]: next }
-    })
+  function setLineDraftValue(lineId, patch) {
+    setLineDrafts((current) => ({
+      ...current,
+      [lineId]: {
+        ...(current[lineId] || { articleId: '', locationId: '' }),
+        ...patch,
+      },
+    }))
   }
 
+  async function persistLineDraft(line, patch = {}) {
+    if (!batch) return
+    const currentDraft = lineDrafts[line.id] || {
+      articleId: line.matched_household_article_id || '',
+      locationId: line.target_location_id || '',
+    }
+    const nextArticleId = String(patch.articleId !== undefined ? patch.articleId || '' : currentDraft.articleId || line.matched_household_article_id || '')
+    const nextLocationId = String(patch.locationId !== undefined ? patch.locationId || '' : currentDraft.locationId || line.target_location_id || '')
+    const originalArticleId = String(line.matched_household_article_id || '')
+    const originalLocationId = String(line.target_location_id || '')
+    const articleChanged = nextArticleId !== originalArticleId
+    const locationChanged = nextLocationId !== originalLocationId
+
+    setLineDraftValue(line.id, { articleId: nextArticleId, locationId: nextLocationId })
+
+    if (!articleChanged && !locationChanged) {
+      setLineSaveState((current) => ({
+        ...current,
+        [line.id]: {
+          ...(current[line.id] || {}),
+          dirty: false,
+          status: 'saved',
+          message: 'Opgeslagen',
+          savedAt: new Date().toISOString(),
+          error: '',
+          oldArticleId: originalArticleId,
+          oldLocationId: originalLocationId,
+          newArticleId: nextArticleId,
+          newLocationId: nextLocationId,
+          preparedBefore: Boolean(originalArticleId && originalLocationId),
+          preparedAfter: Boolean(nextArticleId && nextLocationId),
+        },
+      }))
+      return
+    }
+
+    setBusyLineId(line.id)
+    setError('')
+    setStatus('')
+    setLineSaveState((current) => ({
+      ...current,
+      [line.id]: {
+        ...(current[line.id] || {}),
+        dirty: true,
+        status: 'saving',
+        message: 'Opslaan…',
+        saveStarted: true,
+        saveSucceeded: false,
+        error: '',
+        oldArticleId: originalArticleId,
+        oldLocationId: originalLocationId,
+        newArticleId: nextArticleId,
+        newLocationId: nextLocationId,
+        preparedBefore: Boolean(originalArticleId && originalLocationId),
+        preparedAfter: Boolean(nextArticleId && nextLocationId),
+      },
+    }))
+    try {
+      if (articleChanged) {
+        await fetchJson(`/api/purchase-import-lines/${line.id}/map`, {
+          method: 'POST',
+          body: JSON.stringify({ household_article_id: nextArticleId || null }),
+        })
+      }
+      if (locationChanged) {
+        await fetchJson(`/api/purchase-import-lines/${line.id}/target-location`, {
+          method: 'POST',
+          body: JSON.stringify({ target_location_id: nextLocationId || null }),
+        })
+      }
+      await refreshBatch(batch.batch_id)
+      await refreshLocationOptions(household?.id)
+      const savedAt = new Date().toISOString()
+      setLineSaveState((current) => ({
+        ...current,
+        [line.id]: {
+          ...(current[line.id] || {}),
+          dirty: false,
+          status: 'saved',
+          message: 'Opgeslagen',
+          saveStarted: false,
+          saveSucceeded: true,
+          savedAt,
+          error: '',
+          currentArticleId: nextArticleId,
+          currentLocationId: nextLocationId,
+          oldArticleId: originalArticleId,
+          oldLocationId: originalLocationId,
+          newArticleId: nextArticleId,
+          newLocationId: nextLocationId,
+          preparedBefore: Boolean(originalArticleId && originalLocationId),
+          preparedAfter: Boolean(nextArticleId && nextLocationId),
+        },
+      }))
+    } catch (err) {
+      const message = normalizeErrorMessage(err?.message) || 'Opslaan mislukt'
+      setError(message)
+      setLineSaveState((current) => ({
+        ...current,
+        [line.id]: {
+          ...(current[line.id] || {}),
+          dirty: true,
+          status: 'error',
+          message: 'Opslaan mislukt',
+          saveStarted: false,
+          saveSucceeded: false,
+          error: message,
+          oldArticleId: originalArticleId,
+          oldLocationId: originalLocationId,
+          newArticleId: nextArticleId,
+          newLocationId: nextLocationId,
+          preparedBefore: Boolean(originalArticleId && originalLocationId),
+          preparedAfter: Boolean(nextArticleId && nextLocationId),
+        },
+      }))
+    } finally {
+      setBusyLineId('')
+    }
+  }
   function clearTransientFeedback() {
     if (processFeedbackTimer.current) {
       window.clearTimeout(processFeedbackTimer.current)
@@ -199,11 +305,6 @@ export default function StoreBatchDetailPage() {
     }
   }
 
-  function handleMapLine(lineId, articleId) {
-    markLineDraft(lineId, { articleId: articleId || '' })
-    setError('')
-    setStatus('')
-  }
 
   async function handleCreateArticleFromLine(lineId, articleName) {
     setBusyLineId(lineId)
@@ -236,114 +337,7 @@ export default function StoreBatchDetailPage() {
     }
   }
 
-  function handleTargetLocation(lineId, targetLocationId) {
-    markLineDraft(lineId, { locationId: targetLocationId || '' })
-    setError('')
-    setStatus('')
-  }
 
-  async function handleSaveLine(line) {
-    if (!batch) return
-    const draft = lineDrafts[line.id] || {
-      articleId: line.matched_household_article_id || '',
-      locationId: line.target_location_id || '',
-    }
-    const originalArticleId = String(line.matched_household_article_id || '')
-    const originalLocationId = String(line.target_location_id || '')
-    const nextArticleId = String(draft.articleId || '')
-    const nextLocationId = String(draft.locationId || '')
-    const articleChanged = nextArticleId !== originalArticleId
-    const locationChanged = nextLocationId !== originalLocationId
-    if (!articleChanged && !locationChanged) {
-      setLineSaveState((current) => ({
-        ...current,
-        [line.id]: {
-          ...(current[line.id] || {}),
-          dirty: false,
-          saveStarted: false,
-          saveSucceeded: true,
-          savedAt: new Date().toISOString(),
-          error: '',
-          originalArticleId,
-          originalLocationId,
-          pendingArticleId: nextArticleId,
-          pendingLocationId: nextLocationId,
-        },
-      }))
-      setStatus('Er waren geen wijzigingen om op te slaan.')
-      return
-    }
-
-    setBusyLineId(line.id)
-    setError('')
-    setStatus('')
-    setLineSaveState((current) => ({
-      ...current,
-      [line.id]: {
-        ...(current[line.id] || {}),
-        dirty: true,
-        saveStarted: true,
-        saveSucceeded: false,
-        error: '',
-        originalArticleId,
-        originalLocationId,
-        pendingArticleId: nextArticleId,
-        pendingLocationId: nextLocationId,
-      },
-    }))
-    try {
-      if (articleChanged) {
-        await fetchJson(`/api/purchase-import-lines/${line.id}/map`, {
-          method: 'POST',
-          body: JSON.stringify({ household_article_id: nextArticleId || null }),
-        })
-      }
-      if (locationChanged) {
-        await fetchJson(`/api/purchase-import-lines/${line.id}/target-location`, {
-          method: 'POST',
-          body: JSON.stringify({ target_location_id: nextLocationId || null }),
-        })
-      }
-      await refreshBatch(batch.batch_id)
-      await refreshLocationOptions(household?.id)
-      const savedAt = new Date().toISOString()
-      setLineSaveState((current) => ({
-        ...current,
-        [line.id]: {
-          ...(current[line.id] || {}),
-          dirty: false,
-          saveStarted: false,
-          saveSucceeded: true,
-          savedAt,
-          error: '',
-          originalArticleId: nextArticleId,
-          originalLocationId: nextLocationId,
-          pendingArticleId: nextArticleId,
-          pendingLocationId: nextLocationId,
-        },
-      }))
-      setStatus('De bonregel is opgeslagen.')
-    } catch (err) {
-      const message = normalizeErrorMessage(err?.message) || 'De bonregel kon niet worden opgeslagen.'
-      setError(message)
-      setLineSaveState((current) => ({
-        ...current,
-        [line.id]: {
-          ...(current[line.id] || {}),
-          dirty: true,
-          saveStarted: false,
-          saveSucceeded: false,
-          error: message,
-          originalArticleId,
-          originalLocationId,
-          pendingArticleId: nextArticleId,
-          pendingLocationId: nextLocationId,
-        },
-      }))
-    } finally {
-      setBusyLineId('')
-    }
-  }
 
   async function processBatchNow(mode = processMode) {
     if (!batch) return
@@ -459,8 +453,8 @@ export default function StoreBatchDetailPage() {
                     <col style={{ width: '11%' }} />
                     <col style={{ width: '18%' }} />
                     <col style={{ width: '20%' }} />
-                    <col style={{ width: '18%' }} />
-                    <col style={{ width: '12%' }} />
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '17%' }} />
                   </colgroup>
                   <thead>
                     <tr className="rz-table-header">
@@ -469,7 +463,7 @@ export default function StoreBatchDetailPage() {
                       <th>Beoordeling</th>
                       <th>Koppelen aan</th>
                       <th>Locatie</th>
-                      <th>Opslaan</th>
+                      <th>Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -519,7 +513,7 @@ export default function StoreBatchDetailPage() {
                               selectedArticleId={draft.articleId || ''}
                               articleOptions={articleOptions}
                               disabled={lineBusy || isProcessingBatch}
-                              onChange={(nextArticleId) => handleMapLine(line.id, nextArticleId)}
+                              onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId || '' })}
                               onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
                             />
                           </td>
@@ -530,7 +524,7 @@ export default function StoreBatchDetailPage() {
                               disabled={lineBusy || isProcessingBatch}
                               onFocus={() => household?.id && refreshLocationOptions(household.id)}
                               onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
-                              onChange={(event) => handleTargetLocation(line.id, event.target.value)}
+                              onChange={(event) => persistLineDraft(line, { locationId: event.target.value || '' })}
                             >
                               <option value="">Geen voorkeurslocatie</option>
                               {locationOptions.map((location) => (
@@ -540,20 +534,14 @@ export default function StoreBatchDetailPage() {
                           </td>
                           <td>
                             <div style={{ display: 'grid', gap: '6px', justifyItems: 'start' }}>
-                              <Button
-                                variant={saveState.dirty ? 'primary' : 'secondary'}
-                                type="button"
-                                onClick={() => handleSaveLine(line)}
-                                disabled={lineBusy || isProcessingBatch || !saveState.dirty}
-                              >
-                                Opslaan
-                              </Button>
-                              {saveState.dirty ? (
-                                <div className="rz-store-review-meta" style={{ color: '#b54708' }}>Niet opgeslagen wijziging</div>
-                              ) : saveState.saveSucceeded ? (
+                              {saveState.status === 'saving' ? (
+                                <div className="rz-store-review-meta" style={{ color: '#b54708' }}>Opslaan…</div>
+                              ) : saveState.status === 'saved' ? (
                                 <div className="rz-store-review-meta" style={{ color: '#067647' }}>
                                   Opgeslagen{saveState.savedAt ? ` · ${new Date(saveState.savedAt).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : ''}
                                 </div>
+                              ) : saveState.status === 'error' ? (
+                                <div className="rz-store-review-meta" style={{ color: '#b42318' }}>Opslaan mislukt</div>
                               ) : null}
                               {saveState.error ? <div className="rz-inline-feedback rz-inline-feedback--error">{saveState.error}</div> : null}
                             </div>
@@ -567,10 +555,10 @@ export default function StoreBatchDetailPage() {
 
 
 
-              {(batch?.lines || []).some((line) => lineSaveState[line.id]?.saveStarted || lineSaveState[line.id]?.saveSucceeded || lineSaveState[line.id]?.error || lineSaveState[line.id]?.dirty) ? (
+              {(batch?.lines || []).some((line) => lineSaveState[line.id]?.status && lineSaveState[line.id]?.status !== 'idle') ? (
                 <div style={{ marginTop: '16px', display: 'grid', gap: '12px' }}>
                   <div className="rz-store-review-meta"><strong>Opslaan bonregels</strong> — bewijs welke artikel- en locatiekeuzes zijn opgeslagen.</div>
-                  {(batch?.lines || []).filter((line) => lineSaveState[line.id]?.saveStarted || lineSaveState[line.id]?.saveSucceeded || lineSaveState[line.id]?.error || lineSaveState[line.id]?.dirty).map((line) => {
+                  {(batch?.lines || []).filter((line) => lineSaveState[line.id]?.status && lineSaveState[line.id]?.status !== 'idle').map((line) => {
                     const saveState = lineSaveState[line.id] || {}
                     const originalArticle = articleOptions.find((item) => String(item.id) === String(saveState.originalArticleId || line.matched_household_article_id || ''))
                     const pendingArticle = articleOptions.find((item) => String(item.id) === String(saveState.pendingArticleId || lineDrafts[line.id]?.articleId || ''))
@@ -583,6 +571,7 @@ export default function StoreBatchDetailPage() {
                         <div><strong>Nieuw artikel:</strong> {pendingArticle ? articleLabel(pendingArticle) : '(geen)'}</div>
                         <div><strong>Oude locatie:</strong> {originalLocation?.label || '(geen)'}</div>
                         <div><strong>Nieuwe locatie:</strong> {pendingLocation?.label || '(geen)'}</div>
+                        <div><strong>Voorbereid vóór wijziging:</strong> {saveState.preparedBefore ? 'ja' : 'nee'} · <strong>Voorbereid na wijziging:</strong> {saveState.preparedAfter ? 'ja' : 'nee'}</div>
                         <div><strong>Save gestart:</strong> {saveState.saveStarted ? 'ja' : 'nee'} · <strong>Save gelukt:</strong> {saveState.saveSucceeded ? 'ja' : 'nee'}</div>
                         <div><strong>Save timestamp:</strong> {saveState.savedAt ? new Date(saveState.savedAt).toLocaleString('nl-NL') : '(geen)'}</div>
                         {saveState.error ? <div className="rz-inline-feedback rz-inline-feedback--error">{saveState.error}</div> : null}

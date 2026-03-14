@@ -1,0 +1,35 @@
+Rezzerv v01.08.11 — validatierapport
+
+Basisversie
+- Rezzerv-v01.08.10
+
+Doel
+- Automatisch voorbereide bonregels inline kunnen overschrijven of ontkoppelen zonder aparte opslaankolom.
+- Wijzigingen aan artikel of locatie direct opslaan bij selectie.
+- Regelstatus eerlijker laten meebewegen met de opgeslagen werkelijkheid.
+
+Aangepast
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/package.json
+
+Uitgevoerde technische controles
+- Frontend productiebuild geslaagd.
+- Inline save-status toegevoegd: Opslaan…, Opgeslagen, Opslaan mislukt.
+- Aparte kolom met knop Opslaan verwijderd en vervangen door statuskolom.
+- Diagnoseblok Opslaan bonregels uitgebreid met voorbereid vóór/na wijziging.
+
+Niet hard gevalideerd in deze omgeving
+- Geen volledige kliktest in de gebruikersruntime.
+- Geen backend functionele regressietest op het daadwerkelijke Lidl-bonscherm.
+
+PO-testfocus
+1. Open Lidl-bon.
+2. Kies één automatisch voorbereide regel.
+3. Verwijder artikel of kies geen voorkeurslocatie / andere locatie.
+4. Controleer inline status Opslaan… gevolgd door Opgeslagen.
+5. Verlaat het scherm en open dezelfde bon opnieuw.
+6. Controleer dat de nieuwe toestand bewaard is.
+7. Klik daarna pas op Naar voorraad en controleer dat de diagnose de laatst opgeslagen waarden toont.
