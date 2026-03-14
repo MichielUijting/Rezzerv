@@ -11,6 +11,7 @@ function getAuthHeaders() {
 function normalizeSettings(value) {
   return {
     autoConsumeOnRepurchase: Boolean(value?.autoConsumeOnRepurchase ?? value?.auto_consume_on_repurchase),
+    hasExplicitValue: Boolean(value?.hasExplicitValue ?? value?.has_explicit_value),
   }
 }
 
@@ -28,6 +29,21 @@ export function getHouseholdAutomationSettings() {
   }
 }
 
+function readLegacyLocalValue() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}')
+    if (Object.prototype.hasOwnProperty.call(parsed || {}, 'autoConsumeOnRepurchase')) {
+      return Boolean(parsed.autoConsumeOnRepurchase)
+    }
+    if (Object.prototype.hasOwnProperty.call(parsed || {}, 'auto_consume_on_repurchase')) {
+      return Boolean(parsed.auto_consume_on_repurchase)
+    }
+  } catch {
+    // ignore legacy parse errors
+  }
+  return null
+}
+
 export async function fetchHouseholdAutomationSettings() {
   try {
     const response = await fetch(`${API_BASE_URL}/api/household/automation-settings`, {
@@ -39,7 +55,14 @@ export async function fetchHouseholdAutomationSettings() {
     if (!response.ok) {
       throw new Error(data?.detail || 'Instellingen konden niet worden geladen.')
     }
-    return saveLocal(data)
+    const normalized = normalizeSettings(data)
+    if (!normalized.hasExplicitValue) {
+      const legacyValue = readLegacyLocalValue()
+      if (legacyValue !== null) {
+        return saveHouseholdAutomationSettings({ autoConsumeOnRepurchase: legacyValue })
+      }
+    }
+    return saveLocal(normalized)
   } catch {
     return getHouseholdAutomationSettings()
   }
@@ -61,7 +84,7 @@ export async function saveHouseholdAutomationSettings(settings = {}) {
   if (!response.ok) {
     throw new Error(data?.detail || 'Opslaan is niet gelukt.')
   }
-  const saved = saveLocal(data)
+  const saved = saveLocal({ ...data, has_explicit_value: true })
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: saved }))
   return saved
 }

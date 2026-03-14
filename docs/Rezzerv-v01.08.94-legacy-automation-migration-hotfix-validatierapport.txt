@@ -1,0 +1,30 @@
+Rezzerv v01.08.94 — legacy automation migration hotfix validatierapport
+
+Basis
+- Uitgevoerd op basis van Rezzerv-v01.08.93
+
+Doel
+- Eénmalige migratie van legacy localStorage-waarden voor huishoudautomatisering en artikeloverrides naar persistente backend-instellingen.
+
+Aangebrachte wijzigingen
+- Backend GET /api/household/automation-settings geeft nu ook has_explicit_value terug.
+- Backend GET /api/articles/{article_id}/automation-override geeft nu ook has_explicit_override terug.
+- Backend PUT-antwoorden voor beide paden markeren de waarde expliciet als opgeslagen.
+- Frontend householdAutomationService migreert legacy localStorage-waarde alleen wanneer backend nog geen expliciete waarde heeft.
+- Frontend articleAutomationOverrideService migreert legacy override alleen wanneer backend nog geen expliciete override heeft.
+- Backend blijft de bron van waarheid; localStorage wordt alleen nog als migratiebron gebruikt.
+
+Technische validatie
+- backend/app/main.py compileert schoon via py_compile.
+- frontend build slaagt via Vite productiebouw.
+- Versies opgehoogd naar 01.08.94 in VERSION.txt, version.json en frontend/version.json.
+
+Geteste migratiescenario’s in code/logica
+1. Backend heeft expliciete huishoudwaarde -> frontend neemt backend over, geen migratie.
+2. Backend heeft geen expliciete huishoudwaarde + legacy localStorage aanwezig -> frontend schrijft legacy waarde éénmalig naar backend via PUT.
+3. Backend heeft expliciete article override -> frontend neemt backend over, geen migratie.
+4. Backend heeft geen expliciete article override + legacy localStorage aanwezig -> frontend schrijft legacy override éénmalig naar backend via PUT.
+5. Geen backendwaarde en geen legacy waarde -> defaultgedrag blijft behouden.
+
+Bekende beperking
+- In deze container is geen volledige browseracceptatietest met draaiende Docker-stack uitgevoerd. De hotfix is code-, compile- en buildmatig gevalideerd en gericht op het gemelde migratiegat.

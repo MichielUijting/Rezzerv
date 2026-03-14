@@ -31,6 +31,14 @@ function readAllOverrides() {
   }
 }
 
+function readLegacyOverride(articleId) {
+  const overrides = readAllOverrides()
+  if (!Object.prototype.hasOwnProperty.call(overrides, String(articleId))) {
+    return null
+  }
+  return normalizeMode(overrides[String(articleId)])
+}
+
 function writeAllOverrides(overrides) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(overrides))
   window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: overrides }))
@@ -52,6 +60,13 @@ export async function fetchArticleAutoConsumeMode(articleId) {
     const data = await response.json().catch(() => ({}))
     if (!response.ok) {
       throw new Error(data?.detail || 'Override kon niet worden geladen.')
+    }
+    const explicit = Boolean(data?.has_explicit_override ?? data?.hasExplicitOverride)
+    if (!explicit) {
+      const legacyMode = readLegacyOverride(articleId)
+      if (legacyMode !== null) {
+        return saveArticleAutoConsumeMode(articleId, legacyMode)
+      }
     }
     const overrides = readAllOverrides()
     overrides[String(data?.article_id || articleId)] = normalizeMode(data?.mode)

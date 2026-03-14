@@ -413,14 +413,22 @@ def infer_consumable_from_name(article_name: str | None) -> bool:
     return any(keyword in normalized for keyword in keywords)
 
 
-def get_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
-    row = conn.execute(
+def get_household_auto_consume_setting_row(conn, household_id: str):
+    return conn.execute(
         text(
             "SELECT setting_value FROM household_settings WHERE household_id = :household_id AND setting_key = :setting_key"
         ),
         {"household_id": str(household_id), "setting_key": HOUSEHOLD_AUTO_CONSUME_KEY},
     ).mappings().first()
+
+
+def get_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+    row = get_household_auto_consume_setting_row(conn, household_id)
     return normalize_bool_setting(row["setting_value"] if row else False)
+
+
+def has_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+    return get_household_auto_consume_setting_row(conn, household_id) is not None
 
 
 def set_household_auto_consume_on_repurchase(conn, household_id: str, enabled: bool) -> bool:
@@ -481,6 +489,11 @@ def set_household_article_auto_consume_override(conn, household_id: str, article
         },
     )
     return normalized_mode
+
+
+def has_household_article_auto_consume_override(conn, household_id: str, article_id: str) -> bool:
+    overrides = get_household_article_auto_consume_overrides(conn, household_id)
+    return str(article_id) in overrides
 
 
 def get_household_article_auto_consume_override(conn, household_id: str, article_id: str) -> str:
@@ -1745,9 +1758,11 @@ def get_household_automation_settings(authorization: Optional[str] = Header(None
     household = get_household_payload_for_user(user)
     with engine.begin() as conn:
         enabled = get_household_auto_consume_on_repurchase(conn, household["id"])
+        has_explicit_value = has_household_auto_consume_on_repurchase(conn, household["id"])
     return {
         "household_id": household["id"],
         "auto_consume_on_repurchase": enabled,
+        "has_explicit_value": has_explicit_value,
         "is_household_admin": household["is_household_admin"],
     }
 
@@ -1763,6 +1778,7 @@ def update_household_automation_settings(payload: HouseholdAutomationSettingsUpd
     return {
         "household_id": household["id"],
         "auto_consume_on_repurchase": enabled,
+        "has_explicit_value": True,
         "is_household_admin": household["is_household_admin"],
     }
 
@@ -1824,10 +1840,12 @@ def get_article_automation_override(article_id: str, authorization: Optional[str
         if not article:
             raise HTTPException(status_code=404, detail="Onbekend artikel")
         mode = get_household_article_auto_consume_override(conn, household["id"], article["id"])
+        has_explicit_override = has_household_article_auto_consume_override(conn, household["id"], article["id"])
         consumable = get_article_consumable_state(conn, household["id"], article["id"], article.get("name"))
     return {
         "article_id": article["id"],
         "mode": mode,
+        "has_explicit_override": has_explicit_override,
         "consumable": consumable,
         "article_name": article.get("name") or "",
     }
@@ -1846,6 +1864,7 @@ def update_article_automation_override(article_id: str, payload: ArticleAutomati
     return {
         "article_id": article["id"],
         "mode": mode,
+        "has_explicit_override": True,
         "consumable": consumable,
         "article_name": article.get("name") or "",
     }
