@@ -85,16 +85,21 @@ export async function fetchHouseholdAutomationSettings() {
 
 export async function saveHouseholdAutomationSettings(settings = {}) {
   const normalized = normalizeSettings(settings)
-  const response = await fetch(`${API_BASE_URL}/api/household/automation-settings`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      ...getAuthHeaders(),
-    },
-    credentials: 'include',
-    body: JSON.stringify({ mode: normalized.mode }),
-  })
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}/api/household/automation-settings`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ mode: normalized.mode }),
+    })
+  } catch {
+    throw new Error('Opslaan lukt nu niet. Controleer of de server actief is en probeer opnieuw.')
+  }
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
     throw new Error(data?.detail || 'Opslaan is niet gelukt.')

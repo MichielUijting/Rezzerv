@@ -448,17 +448,17 @@ def get_household_auto_consume_setting_row(conn, household_id: str):
     ).mappings().first()
 
 
-def get_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+def get_household_auto_consume_mode(conn, household_id: str) -> str:
     row = get_household_auto_consume_setting_row(conn, household_id)
-    return normalize_bool_setting(row["setting_value"] if row else False)
+    return normalize_household_auto_consume_mode(row["setting_value"] if row else ARTICLE_AUTO_CONSUME_NONE)
 
 
-def has_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+def has_household_auto_consume_mode(conn, household_id: str) -> bool:
     return get_household_auto_consume_setting_row(conn, household_id) is not None
 
 
-def set_household_auto_consume_on_repurchase(conn, household_id: str, enabled: bool) -> bool:
-    normalized = normalize_bool_setting(enabled)
+def set_household_auto_consume_mode(conn, household_id: str, mode: str) -> str:
+    normalized = normalize_household_auto_consume_mode(mode)
     conn.execute(
         text(
             """
@@ -472,10 +472,23 @@ def set_household_auto_consume_on_repurchase(conn, household_id: str, enabled: b
             "id": str(uuid.uuid4()),
             "household_id": str(household_id),
             "setting_key": HOUSEHOLD_AUTO_CONSUME_KEY,
-            "setting_value": json.dumps(normalized),
+            "setting_value": normalized,
         },
     )
     return normalized
+
+
+def get_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+    return get_household_auto_consume_mode(conn, household_id) != ARTICLE_AUTO_CONSUME_NONE
+
+
+def has_household_auto_consume_on_repurchase(conn, household_id: str) -> bool:
+    return has_household_auto_consume_mode(conn, household_id)
+
+
+def set_household_auto_consume_on_repurchase(conn, household_id: str, enabled: bool) -> bool:
+    mode = ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY if normalize_bool_setting(enabled) else ARTICLE_AUTO_CONSUME_NONE
+    return set_household_auto_consume_mode(conn, household_id, mode) != ARTICLE_AUTO_CONSUME_NONE
 
 
 def get_household_article_auto_consume_overrides(conn, household_id: str) -> dict:
