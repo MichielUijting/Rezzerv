@@ -80,7 +80,7 @@ async function fetchInventoryPreview() {
 function mapEventTypeLabel(eventType) {
   if (eventType === 'purchase') return 'Aankoop'
   if (eventType === 'manual_adjustment') return 'Handmatige voorraadcorrectie'
-  if (eventType === 'auto_repurchase' || eventType === 'auto_consume') return 'Automatisch verbruik'
+  if (eventType === 'auto_repurchase') return 'Automatisch (herhaalaankoop)'
   return eventType || 'Gebeurtenis'
 }
 
@@ -94,7 +94,7 @@ function formatQuantityDelta(value) {
 
 function mapLiveHistoryRows(rows = []) {
   return rows.map((row) => {
-    const usesInventoryDelta = ['manual_adjustment', 'purchase', 'auto_repurchase', 'auto_consume'].includes(row?.event_type)
+    const usesInventoryDelta = ['manual_adjustment', 'purchase', 'auto_repurchase'].includes(row?.event_type)
     return {
       id: row?.id || '',
       datetime: row?.created_at || '',

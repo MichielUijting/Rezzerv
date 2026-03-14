@@ -256,9 +256,8 @@ function isConsumable(articleData = {}) {
 }
 
 function getAutoConsumeModeLabel(mode) {
-  if (mode === AUTO_CONSUME_MODES.NONE) return 'Geen automatische afboeking'
-  if (mode === AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY) return 'Boek hetzelfde aantal af als gekocht'
-  if (mode === AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING) return 'Boek bestaande voorraad eerst volledig af tot 0'
+  if (mode === AUTO_CONSUME_MODES.ALWAYS_ON) return 'Altijd automatisch afboeken'
+  if (mode === AUTO_CONSUME_MODES.ALWAYS_OFF) return 'Nooit automatisch afboeken'
   return 'Huishoudinstelling volgen'
 }
 
@@ -305,22 +304,18 @@ export default function ArticleAnalyticsTab({ articleData = {} }) {
     const consumable = isConsumable(articleData)
     const effectiveAutomation = !consumable
       ? 'Niet van toepassing'
-      : articleMode === AUTO_CONSUME_MODES.NONE
-        ? 'Geen automatische afboeking via artikeloverride'
-        : articleMode === AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY
-          ? 'Boek gekocht aantal af via artikeloverride'
-          : articleMode === AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING
-            ? 'Boek bestaande voorraad af tot 0 via artikeloverride'
-            : householdSettings.mode === AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY
-              ? 'Boek gekocht aantal af via huishoudinstelling'
-              : householdSettings.mode === AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING
-                ? 'Boek bestaande voorraad af tot 0 via huishoudinstelling'
-                : 'Uit via huishoudinstelling'
+      : articleMode === AUTO_CONSUME_MODES.ALWAYS_ON
+        ? 'Actief via artikeloverride'
+        : articleMode === AUTO_CONSUME_MODES.ALWAYS_OFF
+          ? 'Geblokkeerd via artikeloverride'
+          : householdSettings.autoConsumeOnRepurchase
+            ? 'Actief via huishoudinstelling'
+            : 'Uit via huishoudinstelling'
 
     return {
       automation: [
         { label: 'Artikeloverride', value: getAutoConsumeModeLabel(articleMode) },
-        { label: 'Huishoudinstelling', value: getAutoConsumeModeLabel(householdSettings.mode) },
+        { label: 'Huishoudinstelling', value: householdSettings.autoConsumeOnRepurchase ? 'Aan' : 'Uit' },
         { label: 'Effectieve automatische afboeking', value: effectiveAutomation },
       ],
       price: [

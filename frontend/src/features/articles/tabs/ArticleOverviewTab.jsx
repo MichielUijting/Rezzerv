@@ -69,13 +69,13 @@ function AutomationOverrideCard({ articleData = {} }) {
         <div className="rz-article-automation-copy">
           <h3 className="rz-overview-group-title rz-article-automation-title">Automatisering</h3>
           <p className="rz-article-automation-text">
-            Bepaal per artikel welke automatische afboekstrategie geldt bij een nieuwe aankoop van een verbruiksartikel.
+            Bepaal per artikel hoe slim afboeken bij herhaalaankoop zich moet gedragen.
           </p>
         </div>
 
         <div className="rz-article-automation-controls">
           <label className="rz-article-automation-field">
-            <span className="rz-article-automation-label">Automatische afboeking bij aankoop</span>
+            <span className="rz-article-automation-label">Slim afboeken bij herhaalaankoop</span>
             <select
               className="rz-article-automation-select"
               value={mode}
@@ -83,15 +83,14 @@ function AutomationOverrideCard({ articleData = {} }) {
               disabled={!consumable}
             >
               <option value={AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD}>Huishoudinstelling volgen</option>
-              <option value={AUTO_CONSUME_MODES.NONE}>Geen automatische afboeking</option>
-              <option value={AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY}>Boek hetzelfde aantal af als gekocht</option>
-              <option value={AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING}>Boek bestaande voorraad eerst volledig af tot 0</option>
+              <option value={AUTO_CONSUME_MODES.ALWAYS_ON}>Altijd automatisch afboeken</option>
+              <option value={AUTO_CONSUME_MODES.ALWAYS_OFF}>Nooit automatisch afboeken</option>
             </select>
           </label>
 
           <div className="rz-article-automation-helper-row">
             <span className="rz-article-automation-helper">
-              {consumable ? 'Alleen van toepassing op verbruiksartikelen.' : 'Alleen relevant voor verbruiksartikelen.'}
+              {consumable ? 'Alleen van toepassing op automatische afboeking bij herhaalaankoop.' : 'Alleen relevant voor verbruiksartikelen.'}
             </span>
             {saveMessage ? (
               <span className="rz-inline-feedback rz-inline-feedback--success rz-article-automation-feedback">{saveMessage}</span>

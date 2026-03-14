@@ -5,17 +5,13 @@ const EVENT_NAME = 'rezzerv-article-auto-consume-overrides-updated'
 
 export const AUTO_CONSUME_MODES = {
   FOLLOW_HOUSEHOLD: 'follow_household',
-  NONE: 'none',
-  CONSUME_PURCHASED_QUANTITY: 'consume_purchased_quantity',
-  CONSUME_ALL_EXISTING: 'consume_all_existing_before_purchase',
+  ALWAYS_ON: 'always_on',
+  ALWAYS_OFF: 'always_off',
 }
 
 function normalizeMode(value) {
-  if (value === 'always_on') return AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY
-  if (value === 'always_off') return AUTO_CONSUME_MODES.NONE
-  if (value === AUTO_CONSUME_MODES.NONE) return AUTO_CONSUME_MODES.NONE
-  if (value === AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY) return AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY
-  if (value === AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING) return AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING
+  if (value === AUTO_CONSUME_MODES.ALWAYS_ON) return AUTO_CONSUME_MODES.ALWAYS_ON
+  if (value === AUTO_CONSUME_MODES.ALWAYS_OFF) return AUTO_CONSUME_MODES.ALWAYS_OFF
   return AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD
 }
 

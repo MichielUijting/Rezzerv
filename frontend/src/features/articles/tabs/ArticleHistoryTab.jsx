@@ -18,7 +18,7 @@ function normalize(value, fallback = "—") {
 }
 
 function formatSource(value) {
-  if (value === 'auto_repurchase' || value === 'auto_consume') return 'Automatisch verbruik'
+  if (value === 'auto_repurchase') return 'Automatisch (herhaalaankoop)'
   if (value === 'store_import') return 'Winkelimport'
   if (value === 'manual_inventory') return 'Handmatige voorraadcorrectie'
   return normalize(value)
@@ -86,7 +86,7 @@ export default function ArticleHistoryTab({ articleData = {}, isLoading = false,
                 </div>
                 <div className="rz-history-meta-row">
                   <span className="rz-history-meta-label">Bron</span>
-                  <span className={`rz-history-meta-value ${(entry.source === 'auto_repurchase' || entry.source === 'auto_consume') ? 'rz-history-meta-value--auto' : ''}`}>{formatSource(entry.source)}</span>
+                  <span className={`rz-history-meta-value ${entry.source === 'auto_repurchase' ? 'rz-history-meta-value--auto' : ''}`}>{formatSource(entry.source)}</span>
                 </div>
                 <div className="rz-history-meta-row">
                   <span className="rz-history-meta-label">Opmerking</span>
