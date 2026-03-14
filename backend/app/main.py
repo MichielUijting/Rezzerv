@@ -3307,13 +3307,16 @@ def build_purchase_import_batch_diagnostics(conn, batch_id: str):
                 continue
             except (TypeError, ValueError, json.JSONDecodeError):
                 pass
+        processing_status = (row.get('processing_status') or 'pending').strip() if isinstance(row.get('processing_status'), str) else (row.get('processing_status') or 'pending')
+        is_processed = processing_status == 'processed'
+        is_failed = processing_status == 'failed'
         diagnostics.append({
             'line_id': row['id'],
             'receipt_line_text': row.get('article_name_raw') or '',
             'selected_article_input': row.get('matched_household_article_id') or '',
             'resolved_article_id': row.get('matched_household_article_id') or '',
             'resolved_article_name': '',
-            'resolution_reason': 'geen diagnose beschikbaar',
+            'resolution_reason': 'nog niet verwerkt' if not is_processed and not is_failed else 'geen diagnose beschikbaar',
             'purchase_quantity': 0,
             'target_space_id': None,
             'target_space_name': None,
@@ -3330,13 +3333,14 @@ def build_purchase_import_batch_diagnostics(conn, batch_id: str):
             'auto_consume_article_override': ARTICLE_AUTO_CONSUME_FOLLOW_HOUSEHOLD,
             'auto_consume_effective_mode': ARTICLE_AUTO_CONSUME_NONE,
             'auto_consume_should_apply': False,
-            'auto_consume_decision_reason': row.get('processing_error') or 'geen diagnose beschikbaar',
+            'auto_consume_decision_reason': row.get('processing_error') or ('nog niet verwerkt' if not is_processed and not is_failed else 'geen diagnose beschikbaar'),
             'auto_consume_requested_deduction_quantity': 0,
             'auto_consume_applied_deduction_quantity': 0,
             'auto_consume_event_created': False,
             'auto_consume_event_id': None,
             'inventory_after_auto_consume_total': 0,
-            'failure_stage': 'none' if row.get('processing_status') == 'processed' else 'purchase_event_write',
+            'processing_status': processing_status,
+            'failure_stage': 'none' if not is_failed else 'purchase_event_write',
             'failure_message': row.get('processing_error') or '',
         })
     return {'batch_id': batch_id, 'line_diagnostics': diagnostics}
