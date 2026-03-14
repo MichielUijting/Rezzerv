@@ -1144,6 +1144,17 @@ def ensure_release_803_schema():
             conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN processing_diagnostics TEXT"))
 
 
+def ensure_release_813_schema():
+    with engine.begin() as conn:
+        line_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(purchase_import_lines)")).fetchall()}
+        if "article_override_mode" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN article_override_mode TEXT DEFAULT 'auto'"))
+        if "location_override_mode" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN location_override_mode TEXT DEFAULT 'auto'"))
+        conn.execute(text("UPDATE purchase_import_lines SET article_override_mode = COALESCE(article_override_mode, 'auto')"))
+        conn.execute(text("UPDATE purchase_import_lines SET location_override_mode = COALESCE(location_override_mode, 'auto')"))
+
+
 def normalize_store_memory_key(article_name: str | None, brand: str | None):
     name = (article_name or "").strip().lower()
     brand_value = (brand or "").strip().lower()
@@ -1217,11 +1228,26 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
                     suggested_location_id = :suggested_location_id,
                     suggestion_confidence = :suggestion_confidence,
                     suggestion_reason = :suggestion_reason,
-                    is_auto_prefilled = :is_auto_prefilled,
-                    matched_household_article_id = CASE WHEN :can_auto_fill = 1 THEN :matched_household_article_id ELSE NULL END,
-                    target_location_id = CASE WHEN :can_auto_fill = 1 THEN :target_location_id ELSE NULL END,
-                    match_status = CASE WHEN :can_auto_fill = 1 AND :matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END,
-                    review_decision = CASE WHEN :can_auto_fill = 1 THEN 'selected' ELSE 'pending' END,
+                    is_auto_prefilled = CASE WHEN :can_auto_fill = 1 AND COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN 1 ELSE 0 END,
+                    matched_household_article_id = CASE
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :can_auto_fill = 1 THEN :matched_household_article_id
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN NULL
+                        ELSE matched_household_article_id
+                    END,
+                    target_location_id = CASE
+                        WHEN COALESCE(location_override_mode, 'auto') = 'auto' AND :can_auto_fill = 1 THEN :target_location_id
+                        WHEN COALESCE(location_override_mode, 'auto') = 'auto' THEN NULL
+                        ELSE target_location_id
+                    END,
+                    match_status = CASE
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill = 1 AND :matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END
+                        ELSE CASE WHEN matched_household_article_id IS NOT NULL THEN 'matched' ELSE 'unmatched' END
+                    END,
+                    review_decision = CASE
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND COALESCE(location_override_mode, 'auto') = 'auto' THEN CASE WHEN :can_auto_fill = 1 THEN 'selected' ELSE 'pending' END
+                        WHEN matched_household_article_id IS NULL OR target_location_id IS NULL THEN 'pending'
+                        ELSE review_decision
+                    END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
@@ -2046,6 +2072,7 @@ ensure_release_2_schema()
 ensure_release_3_schema()
 ensure_release_4_schema()
 ensure_release_803_schema()
+ensure_release_813_schema()
 seed_store_providers()
 
 def reset_dev_tables():
@@ -2812,13 +2839,10 @@ def get_purchase_import_batch(batch_id: str):
         if not batch:
             raise HTTPException(status_code=404, detail="Onbekende purchase import batch")
 
+        batch = dict(batch)
         if batch["import_status"] != "processed":
-            apply_prefill_to_batch(conn, batch_id, str(batch["household_id"]), batch["store_provider_code"])
             refresh_batch_status = update_batch_status(conn, batch_id)
-            batch = dict(batch)
             batch["import_status"] = refresh_batch_status
-        else:
-            batch = dict(batch)
 
         batch["store_import_simplification_level"] = get_household_store_import_simplification_level(conn, str(batch["household_id"]))
 
@@ -2830,6 +2854,7 @@ def get_purchase_import_batch(batch_id: str):
                     line_price_raw, currency_code, match_status, review_decision,
                     matched_household_article_id, target_location_id,
                     suggested_household_article_id, suggested_location_id, suggestion_confidence, suggestion_reason, is_auto_prefilled,
+                    article_override_mode, location_override_mode,
                     processing_status, processed_at, processed_event_id, processing_error, final_location_id
                 FROM purchase_import_lines
                 WHERE batch_id = :batch_id
@@ -2863,7 +2888,7 @@ def get_purchase_import_batch(batch_id: str):
 
         if line.get("is_auto_prefilled") and line.get("matched_household_article_id") and line.get("target_location_id"):
             preparation_mode = "auto_ready"
-        elif memory_found:
+        elif memory_found and (line.get('article_override_mode') or 'auto') == 'auto' and (line.get('location_override_mode') or 'auto') == 'auto':
             preparation_mode = "suggest_only"
         else:
             preparation_mode = "none"
@@ -2906,6 +2931,8 @@ def get_purchase_import_batch(batch_id: str):
             "line_price_raw": float(line["line_price_raw"]) if line["line_price_raw"] is not None else None,
             "processed_at": normalize_datetime(line["processed_at"]),
             "is_auto_prefilled": bool(line["is_auto_prefilled"]),
+            "article_override_mode": line.get("article_override_mode") or 'auto',
+            "location_override_mode": line.get("location_override_mode") or 'auto',
         }
         for line in lines
     ]
@@ -3036,7 +3063,7 @@ def review_purchase_import_line(line_id: str, payload: ReviewLineRequest):
         updated = conn.execute(
             text(
                 """
-                SELECT id, batch_id, review_decision, matched_household_article_id, target_location_id, match_status
+                SELECT id, batch_id, review_decision, matched_household_article_id, target_location_id, match_status, article_override_mode, location_override_mode
                 FROM purchase_import_lines WHERE id = :id
                 """
             ),
@@ -3059,21 +3086,32 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
 
         article_id = payload.household_article_id
         match_status = 'matched' if article_id else 'unmatched'
+        next_review_decision = 'pending' if not article_id else None
         conn.execute(
             text(
                 """
                 UPDATE purchase_import_lines
-                SET matched_household_article_id = :article_id, match_status = :match_status, updated_at = CURRENT_TIMESTAMP
+                SET matched_household_article_id = :article_id,
+                    match_status = :match_status,
+                    article_override_mode = :article_override_mode,
+                    review_decision = CASE WHEN :next_review_decision IS NOT NULL THEN :next_review_decision ELSE review_decision END,
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
             ),
-            {"article_id": article_id, "match_status": match_status, "id": line_id},
+            {
+                "article_id": article_id,
+                "match_status": match_status,
+                "article_override_mode": 'manual' if article_id else 'cleared',
+                "next_review_decision": next_review_decision,
+                "id": line_id,
+            },
         )
         status = update_batch_status(conn, line["batch_id"])
         updated = conn.execute(
             text(
                 """
-                SELECT id, batch_id, review_decision, matched_household_article_id, target_location_id, match_status
+                SELECT id, batch_id, review_decision, matched_household_article_id, target_location_id, match_status, article_override_mode, location_override_mode
                 FROM purchase_import_lines WHERE id = :id
                 """
             ),
@@ -3106,7 +3144,7 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
             text(
                 """
                 UPDATE purchase_import_lines
-                SET matched_household_article_id = :article_id, match_status = 'matched', updated_at = CURRENT_TIMESTAMP
+                SET matched_household_article_id = :article_id, match_status = 'matched', article_override_mode = 'manual', updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
             ),
@@ -3134,21 +3172,30 @@ def set_purchase_import_line_target_location(line_id: str, payload: TargetLocati
         if not line:
             raise HTTPException(status_code=404, detail="Onbekende importregel")
 
+        next_review_decision = 'pending' if not payload.target_location_id else None
         conn.execute(
             text(
                 """
                 UPDATE purchase_import_lines
-                SET target_location_id = :target_location_id, updated_at = CURRENT_TIMESTAMP
+                SET target_location_id = :target_location_id,
+                    location_override_mode = :location_override_mode,
+                    review_decision = CASE WHEN :next_review_decision IS NOT NULL THEN :next_review_decision ELSE review_decision END,
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
             ),
-            {"target_location_id": payload.target_location_id, "id": line_id},
+            {
+                "target_location_id": payload.target_location_id,
+                "location_override_mode": 'manual' if payload.target_location_id else 'cleared',
+                "next_review_decision": next_review_decision,
+                "id": line_id,
+            },
         )
         status = update_batch_status(conn, line["batch_id"])
         updated = conn.execute(
             text(
                 """
-                SELECT id, batch_id, review_decision, matched_household_article_id, target_location_id, match_status
+                SELECT id, batch_id, review_decision, matched_household_article_id, target_location_id, match_status, article_override_mode, location_override_mode
                 FROM purchase_import_lines WHERE id = :id
                 """
             ),
@@ -3296,7 +3343,7 @@ def build_purchase_import_batch_diagnostics(conn, batch_id: str):
     rows = conn.execute(
         text(
             """
-            SELECT id, article_name_raw, matched_household_article_id, processing_status, processing_error, processing_diagnostics
+            SELECT id, article_name_raw, matched_household_article_id, target_location_id, article_override_mode, location_override_mode, processing_status, processing_error, processing_diagnostics
             FROM purchase_import_lines
             WHERE batch_id = :batch_id
             ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
@@ -3313,7 +3360,9 @@ def build_purchase_import_batch_diagnostics(conn, batch_id: str):
                 if isinstance(parsed, dict):
                     parsed.setdefault('processing_status', (row.get('processing_status') or 'pending'))
                     parsed.setdefault('stored_matched_article_id', str(row.get('matched_household_article_id') or ''))
-                    parsed.setdefault('stored_target_location_id', '')
+                    parsed.setdefault('stored_target_location_id', str(row.get('target_location_id') or ''))
+                    parsed.setdefault('article_override_mode', row.get('article_override_mode') or 'auto')
+                    parsed.setdefault('location_override_mode', row.get('location_override_mode') or 'auto')
                     parsed.setdefault('processed_from_saved_batch_data', True)
                     diagnostics.append(parsed)
                     continue
@@ -3352,6 +3401,11 @@ def build_purchase_import_batch_diagnostics(conn, batch_id: str):
             'auto_consume_event_id': None,
             'inventory_after_auto_consume_total': 0,
             'processing_status': processing_status,
+            'stored_matched_article_id': str(row.get('matched_household_article_id') or ''),
+            'stored_target_location_id': str(row.get('target_location_id') or ''),
+            'article_override_mode': row.get('article_override_mode') or 'auto',
+            'location_override_mode': row.get('location_override_mode') or 'auto',
+            'processed_from_saved_batch_data': True,
             'failure_stage': 'none' if not is_failed else 'purchase_event_write',
             'failure_message': row.get('processing_error') or '',
         })

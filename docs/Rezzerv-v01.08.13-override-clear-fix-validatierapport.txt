@@ -1,0 +1,31 @@
+Rezzerv v01.08.13 — override/clear-fix validatierapport
+
+Basisversie
+- Gebouwd op Rezzerv-v01.08.12 als volledige basis.
+
+Aangebrachte structurele fix
+- Nieuwe persistente velden op purchase_import_lines:
+  - article_override_mode
+  - location_override_mode
+- Toegestane waarden:
+  - auto
+  - manual
+  - cleared
+- Handmatige clears worden nu opgeslagen als null + override_mode=cleared.
+- Handmatige keuzes worden nu opgeslagen met override_mode=manual.
+- apply_prefill_to_batch(...) respecteert override-modes en vult actieve waarden alleen nog in als override_mode=auto.
+- GET /api/purchase-import-batches/{id} past niet langer opnieuw prefill toe bij openen van de batch.
+- Batchresponse geeft override-modes nu expliciet mee.
+- De tijdelijke save-statuskolom/-sectie is verwijderd uit de normale UI.
+
+Technisch gecontroleerd
+- Python-syntaxiscontrole backend/app/main.py: geslaagd.
+- Volledige zip opnieuw opgebouwd.
+
+Nog niet hard claimen
+- Geen end-to-end runtimekliktest in deze omgeving uitgevoerd.
+
+PO-testfocus
+1. Artikel ontkoppelen -> scherm verlaten -> heropenen -> blijft leeg.
+2. Geen voorkeurslocatie kiezen -> scherm verlaten -> heropenen -> blijft leeg.
+3. Daarna Naar voorraad -> diagnose gebruikt de echt opgeslagen actieve waarden.

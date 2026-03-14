@@ -550,31 +550,7 @@ export default function StoreBatchDetailPage() {
 
 
 
-              {(batch?.lines || []).some((line) => lineSaveState[line.id]?.status && lineSaveState[line.id]?.status !== 'idle') ? (
-                <div style={{ marginTop: '16px', display: 'grid', gap: '12px' }}>
-                  <div className="rz-store-review-meta"><strong>Opslaan bonregels</strong> — bewijs welke artikel- en locatiekeuzes zijn opgeslagen.</div>
-                  {(batch?.lines || []).filter((line) => lineSaveState[line.id]?.status && lineSaveState[line.id]?.status !== 'idle').map((line) => {
-                    const saveState = lineSaveState[line.id] || {}
-                    const originalArticle = articleOptions.find((item) => String(item.id) === String(saveState.originalArticleId || line.matched_household_article_id || ''))
-                    const pendingArticle = articleOptions.find((item) => String(item.id) === String(saveState.pendingArticleId || lineDrafts[line.id]?.articleId || ''))
-                    const originalLocation = locationOptions.find((item) => String(item.id) === String(saveState.originalLocationId || line.target_location_id || ''))
-                    const pendingLocation = locationOptions.find((item) => String(item.id) === String(saveState.pendingLocationId || lineDrafts[line.id]?.locationId || ''))
-                    return (
-                      <div key={`save-${line.id}`} style={{ border: '1px solid #D0D5DD', borderRadius: '12px', padding: '12px', background: '#F8FAFC', display: 'grid', gap: '6px' }}>
-                        <div><strong>Bonregel:</strong> {line.article_name_raw}</div>
-                        <div><strong>Oud artikel:</strong> {originalArticle ? articleLabel(originalArticle) : '(geen)'}</div>
-                        <div><strong>Nieuw artikel:</strong> {pendingArticle ? articleLabel(pendingArticle) : '(geen)'}</div>
-                        <div><strong>Oude locatie:</strong> {originalLocation?.label || '(geen)'}</div>
-                        <div><strong>Nieuwe locatie:</strong> {pendingLocation?.label || '(geen)'}</div>
-                        <div><strong>Voorbereid vóór wijziging:</strong> {saveState.preparedBefore ? 'ja' : 'nee'} · <strong>Voorbereid na wijziging:</strong> {saveState.preparedAfter ? 'ja' : 'nee'}</div>
-                        <div><strong>Save gestart:</strong> {saveState.saveStarted ? 'ja' : 'nee'} · <strong>Save gelukt:</strong> {saveState.saveSucceeded ? 'ja' : 'nee'}</div>
-                        <div><strong>Save timestamp:</strong> {saveState.savedAt ? new Date(saveState.savedAt).toLocaleString('nl-NL') : '(geen)'}</div>
-                        {saveState.error ? <div className="rz-inline-feedback rz-inline-feedback--error">{saveState.error}</div> : null}
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : null}
+
 
               {lastProcessResult?.results?.length ? (
                 <div style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
