@@ -1,0 +1,39 @@
+Rezzerv-v01.08.19 — spoor A validatierapport releasezip-sanering
+
+Basis
+- Rezzerv-v01.08.18.zip
+
+Doel
+- De releasezip ontdoen van meegeleverde frontend-devtooling die een los lokaal devpad kan faciliteren.
+- Het 5173-risico uit de releaseverpakking minimaliseren.
+
+Uitgevoerde analyse
+- start.bat opent expliciet http://localhost:5174.
+- docker-compose.yml publiceert frontend alleen op 5174:80.
+- frontend/node_modules bevatte eerder de volledige Vite-runtime/tooling.
+- frontend/tests en frontend/playwright.config.js waren alleen voor ontwikkel/testdoeleinden.
+- In de releasebestanden zelf is geen verwijzing naar versie 01.06.46 gevonden.
+
+Uitgevoerde sanering
+- Verwijderd: frontend/node_modules/
+- Verwijderd: frontend/tests/
+- Verwijderd: frontend/playwright.config.js
+- Versie uniform opgehoogd naar 01.08.19 in:
+  - VERSION.txt
+  - version.json
+  - frontend/version.json
+  - frontend/public/version.json
+  - frontend/dist/version.json
+  - frontend/package.json
+
+Resultaat
+- De normale releaseflow blijft ongewijzigd op 5174.
+- De zip levert geen meegebundelde Vite-binaries/devserver meer mee.
+- Het expliciete releasepad claimt geen 5173.
+- De zip bevat geen string 01.06.46.
+
+QA/QC-oordeel spoor A
+- Versioning: groen
+- Packaging: groen
+- Devtooling-sanering: groen
+- Bekende beperking: een gebruiker kan buiten deze zip nog steeds zelf elders een oude lokale Vite-omgeving starten; dat valt buiten de release-inhoud.

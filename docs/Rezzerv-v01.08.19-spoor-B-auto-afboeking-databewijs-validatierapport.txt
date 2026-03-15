@@ -1,0 +1,57 @@
+Rezzerv-v01.08.19 — spoor B validatierapport automatische afboeking met databewijs
+
+Basis
+- Rezzerv-v01.08.18.zip
+
+Root cause
+- Bij consume_all_existing_before_purchase werd de bescherming van de nieuw gekochte hoeveelheid niet aan het exacte aangekochte inventory-record gekoppeld.
+- De oude implementatie markeerde alle inventory-records op dezelfde locatie als purchase_row.
+- Als een artikel al meerdere inventory-records op dezelfde locatie had, kreeg elk van die regels dezelfde protected quantity.
+- Gevolg: onder-afboeking. Historie kon 18 -> 2 tonen, terwijl voorraadregels samen hoger bleven.
+
+Codewijziging
+- backend/app/main.py
+  - apply_inventory_consumption(...)
+    - nieuw argument: protected_purchase_inventory_id
+    - purchase_row wordt nu uitsluitend bepaald met id = protected_purchase_inventory_id
+  - store-batch verwerking
+    - purchase_inventory_id van apply_inventory_purchase(...) wordt nu vastgelegd
+    - apply_inventory_consumption(...) ontvangt dat specifieke inventory-id
+
+Databewijs op inventory-recordniveau (synthetische reproductietest)
+Testopzet vóór aankoop (artikel Tomaten, household hh):
+- r1  Keuken/Koelkast     3
+- r2  Keuken/Koelkast     3
+- r3  Voorraad test       3
+- r4  Berging             2
+- r5  Overig              5
+Totaal vóór aankoop = 16
+
+Aankoop
+- aankoophoeveelheid = 2 op Keuken/Koelkast
+- apply_inventory_purchase verhoogt exact één inventory-record
+- purchase_inventory_id = r1
+- Totaal na aankoop = 18
+
+Auto-afboeking
+- mode = consume_all_existing_before_purchase
+- requested_deduction_quantity = 16
+- protected_quantity_on_purchase_row = 2
+- protected_purchase_inventory_id = r1
+
+Werkelijke uitkomst na patch
+- applied_quantity = 16
+- inventory totaal na auto-afboeking = 2
+- resterende inventory-records:
+  - r1 Keuken/Koelkast 2
+- alle overige inventory-records zijn volledig afgebouwd
+
+Regressiecheck tweede modus
+- consume_purchased_quantity blijft locatiegebonden werken en gebruikt geen artikelbrede purchase-row bescherming.
+- Geen codepadwijziging in die logica behalve signatuurextensie.
+
+QA/QC-oordeel spoor B
+- Root cause gereproduceerd: groen
+- Fix logisch sluitend: groen
+- Databewijs op inventory-recordniveau: groen
+- Bekende beperking: volledige browser-e2e in de lokale gebruikersomgeving is niet in de container uitgevoerd; PO-test blijft vereist.

@@ -1759,6 +1759,7 @@ def apply_inventory_consumption(
     *,
     mode: str = ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY,
     protected_quantity_on_purchase_row: int = 0,
+    protected_purchase_inventory_id: str | None = None,
 ):
     safe_location = require_resolved_location(resolved_location)
     space_id = safe_location["space_id"]
@@ -1776,8 +1777,8 @@ def apply_inventory_consumption(
                 """
                 SELECT id, aantal,
                        CASE
-                         WHEN COALESCE(space_id, '') = COALESCE(:space_id, '')
-                          AND COALESCE(sublocation_id, '') = COALESCE(:sublocation_id, '')
+                         WHEN :protected_purchase_inventory_id IS NOT NULL
+                          AND id = :protected_purchase_inventory_id
                          THEN 1 ELSE 0
                        END AS is_purchase_row
                 FROM inventory
@@ -1791,6 +1792,7 @@ def apply_inventory_consumption(
                 "naam": article_name,
                 "space_id": space_id,
                 "sublocation_id": sublocation_id,
+                "protected_purchase_inventory_id": str(protected_purchase_inventory_id) if protected_purchase_inventory_id else None,
             },
         ).mappings().all()
 
@@ -3721,7 +3723,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 applied_deduction_quantity = 0
                 try:
                     event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
-                    apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
+                    purchase_inventory_id = apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
                     inventory_after_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
                     current_stage = 'history_lookup'
                     history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(article_id), article_name, event_id)
@@ -3738,6 +3740,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                             resolved_location,
                             mode=effective_mode,
                             protected_quantity_on_purchase_row=int(quantity),
+                            protected_purchase_inventory_id=purchase_inventory_id,
                         )
                         applied_deduction_quantity = int(consumption_result.get("applied_quantity") or 0)
                     inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)
