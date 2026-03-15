@@ -11,7 +11,6 @@ import {
   fetchJson,
   formatBatchLastChange,
   normalizeErrorMessage,
-  providerStatusLabel,
 } from './storeImportShared'
 import { buildAutoConsumeArticleIds } from './autoConsumeContext'
 
@@ -24,12 +23,32 @@ async function getLatestBatchMeta(connectionId) {
   }
 }
 
+function sourceTypeLabel(item) {
+  if (!item) return 'Onbekend'
+  if (item.staticType) return item.staticType
+  if (item.connection) return 'Klantkaart'
+  return 'Nog niet gekoppeld'
+}
+
+function sourceStatusLabel(item) {
+  if (!item) return 'Onbekend'
+  if (item.staticStatus) return item.staticStatus
+  return item.connection ? 'Actief' : 'Aandacht nodig'
+}
+
+function sourceActionLabel(item) {
+  if (!item) return 'Open'
+  if (item.staticAction) return item.staticAction
+  return item.connection ? 'Inlezen' : 'Koppelen'
+}
+
 export default function StoresPage() {
   const navigate = useNavigate()
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [connections, setConnections] = useState([])
   const [openBatches, setOpenBatches] = useState([])
+  const [latestImports, setLatestImports] = useState([])
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -49,7 +68,7 @@ export default function StoresPage() {
     [connections],
   )
 
-  const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
+  const importLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
   const batchItems = useMemo(() => {
     return (openBatches || []).map((batch) => ({
@@ -91,6 +110,41 @@ export default function StoresPage() {
     return Array.from(itemsByCode.values()).sort((a, b) => a.name.localeCompare(b.name, 'nl'))
   }, [connections, connectionsByProviderCode, providers, providersByCode])
 
+  const sourceItems = useMemo(() => {
+    const base = connectedStoreItems.map((item) => ({
+      ...item,
+      staticType: null,
+      staticStatus: null,
+      staticAction: null,
+    }))
+    return [
+      ...base,
+      { code: 'photo-import', name: 'Foto-import', staticType: 'Foto', staticStatus: 'Beschikbaar', staticAction: 'Foto toevoegen' },
+      { code: 'barcode-import', name: 'Barcode-import', staticType: 'Barcode', staticStatus: 'Beschikbaar', staticAction: 'Scan product' },
+    ]
+  }, [connectedStoreItems])
+
+  const newPurchaseItems = useMemo(() => {
+    const merged = latestImports.map((item) => {
+      const openBatch = batchItems.find((batch) => batch.batch_id === item.batch_id) || null
+      const typeLabel = openBatch ? 'Kassabon' : 'Import'
+      const contentLabel = openBatch
+        ? `${openBatch.summary?.total || openBatch.lines?.length || 0} regels`
+        : (item.item_count ? `${item.item_count} regels` : 'Nieuwe aankoop')
+      const statusLabel = openBatch ? 'Open werkblad beschikbaar' : 'Recent ingelezen'
+      return {
+        key: item.batch_id || `${item.connection_id}-${item.created_at || ''}`,
+        sourceName: item.store_provider_name || item.store_name || 'Bron',
+        dateLabel: item.purchase_date || item.created_at || 'Onbekend',
+        typeLabel,
+        contentLabel,
+        statusLabel,
+        batchId: item.batch_id || null,
+      }
+    })
+    return merged.sort((a, b) => String(b.dateLabel || '').localeCompare(String(a.dateLabel || ''))).slice(0, 5)
+  }, [latestImports, batchItems])
+
   function clearTransientFeedback() {
     if (processFeedbackTimer.current) {
       window.clearTimeout(processFeedbackTimer.current)
@@ -119,6 +173,20 @@ export default function StoresPage() {
     return loadedBatches
   }
 
+  async function loadLatestImports(connectionsToCheck) {
+    const latestCandidates = (await Promise.all((connectionsToCheck || []).map(async (connection) => {
+      const latest = await getLatestBatchMeta(connection.id)
+      if (!latest) return null
+      return {
+        ...latest,
+        connection_id: connection.id,
+        store_provider_name: connection.store_provider_name || latest.store_provider_name || connection.store_provider_code,
+      }
+    }))).filter(Boolean)
+    setLatestImports(latestCandidates)
+    return latestCandidates
+  }
+
   async function loadPageData() {
     setIsLoading(true)
     setError('')
@@ -136,9 +204,12 @@ export default function StoresPage() {
 
       setProviders(providerData)
       setConnections(connectionData)
-      await loadOpenBatches(connectionData)
+      await Promise.all([
+        loadOpenBatches(connectionData),
+        loadLatestImports(connectionData),
+      ])
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'Winkelgegevens konden niet worden geladen.')
+      setError(normalizeErrorMessage(err?.message) || 'Aankoopgegevens konden niet worden geladen.')
     } finally {
       setIsLoading(false)
     }
@@ -161,8 +232,8 @@ export default function StoresPage() {
       })
       const nextConnections = [...connections.filter((item) => item.id !== connection.id), connection]
       setConnections(nextConnections)
-      await loadOpenBatches(nextConnections)
-      showStatus(`${providerName || providerCode} is gekoppeld aan dit huishouden.`)
+      await Promise.all([loadOpenBatches(nextConnections), loadLatestImports(nextConnections)])
+      showStatus(`${providerName || providerCode} is gekoppeld als bron voor aankopen.`)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || `${providerName || providerCode} kon niet worden gekoppeld.`)
     } finally {
@@ -178,8 +249,8 @@ export default function StoresPage() {
     try {
       const existingBatchMeta = await getLatestBatchMeta(connection.id)
       if (existingBatchMeta?.batch_id && existingBatchMeta.import_status !== 'processed') {
-        await loadOpenBatches(connections)
-        showStatus(`De laatste open bon van ${providerName || 'de winkel'} is opnieuw geladen.`)
+        await Promise.all([loadOpenBatches(connections), loadLatestImports(connections)])
+        showStatus(`De laatste open aankoop van ${providerName || 'de bron'} is opnieuw geladen.`)
         return
       }
 
@@ -191,13 +262,13 @@ export default function StoresPage() {
       const fullyPrefilled = p.fully_prefilled || 0
       const articlePrefills = p.article_prefills || 0
       if (fullyPrefilled > 0 || articlePrefills > 0) {
-        showStatus(`Nieuwe mockaankopen van ${providerName || 'de winkel'} zijn opgehaald. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een voorstel.`)
+        showStatus(`Nieuwe aankopen van ${providerName || 'de bron'} zijn binnen. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een voorstel.`)
       } else {
-        showStatus(`Nieuwe mockaankopen van ${providerName || 'de winkel'} zijn opgehaald.`)
+        showStatus(`Nieuwe aankopen van ${providerName || 'de bron'} zijn binnengekomen.`)
       }
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
-      await loadOpenBatches(refreshedConnections)
+      await Promise.all([loadOpenBatches(refreshedConnections), loadLatestImports(refreshedConnections)])
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Aankopen konden niet worden opgehaald.')
     } finally {
@@ -205,36 +276,21 @@ export default function StoresPage() {
     }
   }
 
-  async function processBatchNow(batchToProcess) {
-    if (!batchToProcess) return
-    setIsProcessingBatch(true)
-    setBusyBatchId(batchToProcess.batch_id)
-    setError('')
-    setStatus('')
-    try {
-      const result = await fetchJson(`/api/purchase-import-batches/${batchToProcess.batch_id}/process`, {
-        method: 'POST',
-        body: JSON.stringify({
-          processed_by: 'ui',
-          mode: 'selected_only',
-          auto_consume_article_ids: buildAutoConsumeArticleIds((batchToProcess?.lines || []).filter((line) => (line.processing_status || 'pending') !== 'processed' && (line.review_decision || 'selected') === 'selected')),
-        }),
-      })
-      if (result.failed_count > 0) {
-        showStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
-      } else {
-        showStatus(`Verwerking afgerond: ${result.processed_count} regel(s) zijn naar voorraad verwerkt.`)
-      }
-      const refreshedConnections = household?.id
-        ? await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`).catch(() => connections)
-        : connections
-      setConnections(refreshedConnections)
-      await loadOpenBatches(refreshedConnections)
-    } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
-    } finally {
-      setIsProcessingBatch(false)
-      setBusyBatchId('')
+  function handleSourceAction(item) {
+    if (item.code === 'photo-import') {
+      showStatus('Foto-import is voorzien in de module Aankopen, maar nog niet actief in deze ontwikkelstap.')
+      return
+    }
+    if (item.code === 'barcode-import') {
+      showStatus('Barcode-import is voorzien in de module Aankopen, maar nog niet actief in deze ontwikkelstap.')
+      return
+    }
+    if (!item.connection && item.provider) {
+      handleConnect(item.code, item.name)
+      return
+    }
+    if (item.connection) {
+      handlePullPurchases(item.connection, item.name)
     }
   }
 
@@ -244,7 +300,7 @@ export default function StoresPage() {
   }
 
   return (
-    <AppShell title="Kassabon" showExit={false}>
+    <AppShell title="Aankopen" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }}>
         {error ? (
           <Card>
@@ -259,23 +315,118 @@ export default function StoresPage() {
         ) : null}
 
         <Card>
-          <div style={{ display: 'grid', gap: '16px' }}>
+          <div style={{ display: 'grid', gap: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
               <div style={{ display: 'grid', gap: '6px' }}>
-                <h2 style={{ margin: 0, fontSize: '20px' }}>Importniveau kassabonnen</h2>
-                <div style={{ color: '#667085', fontSize: '14px' }}>Huidige importstand voor dit huishouden.</div>
+                <h2 style={{ margin: 0, fontSize: '20px' }}>Bronnen</h2>
+                <div style={{ color: '#667085', fontSize: '14px' }}>Beheer hier hoe aankopen in Rezzerv binnenkomen.</div>
               </div>
               <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 <Button variant="secondary" onClick={() => navigate('/home')}>Terug naar start</Button>
                 <Button variant="secondary" onClick={() => navigate('/instellingen/winkelimport')}>Instellingen</Button>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 240px) 1fr', gap: '12px', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700 }}>Huidige importstand</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 280px) 1fr', gap: '12px', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700 }}>Importniveau aankopen</div>
               <div className="rz-inline-feedback rz-inline-feedback--warning" style={{ padding: '10px 12px' }}>
-                <strong>{simplificationLevelLabel}</strong>
+                <strong>{importLevelLabel}</strong>
               </div>
             </div>
+            {isLoading ? (
+              <div>Bronnen laden…</div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #d0d5dd' }}>
+                      <th style={{ padding: '10px 8px' }}>Bron</th>
+                      <th style={{ padding: '10px 8px' }}>Type</th>
+                      <th style={{ padding: '10px 8px' }}>Status</th>
+                      <th style={{ padding: '10px 8px' }}>Laatste synchronisatie</th>
+                      <th style={{ padding: '10px 8px' }}>Importstand</th>
+                      <th style={{ padding: '10px 8px' }}>Actie</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sourceItems.map((item) => {
+                      const providerOpenBatch = batchItems.find((batch) => batch.store_provider_code === item.code) || null
+                      const syncLabel = item.staticType ? '-' : (providerOpenBatch ? formatBatchLastChange(providerOpenBatch) : 'Nog nooit')
+                      const importLabel = item.staticType ? 'Handmatig' : (item.connection ? importLevelLabel : 'Handmatig')
+                      return (
+                        <tr key={item.code} style={{ borderBottom: '1px solid #eaecf0' }}>
+                          <td style={{ padding: '12px 8px', fontWeight: 700 }}>{item.name}</td>
+                          <td style={{ padding: '12px 8px' }}>{sourceTypeLabel(item)}</td>
+                          <td style={{ padding: '12px 8px' }}>{sourceStatusLabel(item)}</td>
+                          <td style={{ padding: '12px 8px' }}>{syncLabel}</td>
+                          <td style={{ padding: '12px 8px' }}>{importLabel}</td>
+                          <td style={{ padding: '12px 8px' }}>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              <Button variant={item.connection || item.staticType ? 'secondary' : 'primary'} onClick={() => handleSourceAction(item)} disabled={isConnecting || isPulling}>
+                                {isConnecting || isPulling ? 'Bezig…' : sourceActionLabel(item)}
+                              </Button>
+                              {!item.staticType ? <Button variant="secondary" onClick={() => navigate('/instellingen/winkelimport')}>Instellingen</Button> : null}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <div style={{ display: 'grid', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Nieuwe aankopen</h3>
+                <div style={{ color: '#667085', fontSize: '14px' }}>Nieuwe imports en aankopen die net zijn binnengekomen.</div>
+              </div>
+              <Button variant="secondary" onClick={loadPageData} disabled={isLoading}>Vernieuwen</Button>
+            </div>
+            {isLoading ? (
+              <div>Nieuwe aankopen laden…</div>
+            ) : newPurchaseItems.length === 0 ? (
+              <div style={{ display: 'grid', gap: '12px', color: '#667085' }}>
+                <div>Er zijn nu geen nieuwe aankopen.</div>
+                <div>Kies hieronder een bron en lees nieuwe aankopen in.</div>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #d0d5dd' }}>
+                      <th style={{ padding: '10px 8px' }}>Bron</th>
+                      <th style={{ padding: '10px 8px' }}>Datum</th>
+                      <th style={{ padding: '10px 8px' }}>Type</th>
+                      <th style={{ padding: '10px 8px' }}>Inhoud</th>
+                      <th style={{ padding: '10px 8px' }}>Status</th>
+                      <th style={{ padding: '10px 8px' }}>Actie</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {newPurchaseItems.map((item) => (
+                      <tr key={item.key} style={{ borderBottom: '1px solid #eaecf0' }}>
+                        <td style={{ padding: '12px 8px', fontWeight: 700 }}>{item.sourceName}</td>
+                        <td style={{ padding: '12px 8px' }}>{item.dateLabel}</td>
+                        <td style={{ padding: '12px 8px' }}>{item.typeLabel}</td>
+                        <td style={{ padding: '12px 8px' }}>{item.contentLabel}</td>
+                        <td style={{ padding: '12px 8px' }}>{item.statusLabel}</td>
+                        <td style={{ padding: '12px 8px' }}>
+                          {item.batchId ? (
+                            <Button variant="secondary" onClick={() => navigate(`/winkels/batch/${item.batchId}`)}>Open</Button>
+                          ) : (
+                            <Button variant="secondary" disabled>Beoordeel</Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -283,33 +434,27 @@ export default function StoresPage() {
           <div data-testid="open-batches-section" style={{ display: 'grid', gap: '12px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
               <div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Open en verwerk bonnen</h3>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Open en verwerk</h3>
+                <div style={{ color: '#667085', fontSize: '14px' }}>Werkbladen die nog naar voorraad moeten worden verwerkt.</div>
               </div>
               <Button variant="secondary" onClick={loadPageData} disabled={isLoading}>Vernieuwen</Button>
             </div>
 
             {isLoading ? (
-              <div>Winkelgegevens laden…</div>
+              <div>Werkbladen laden…</div>
             ) : batchItems.length === 0 ? (
               <div data-testid="open-batches-empty" style={{ display: 'grid', gap: '12px', color: '#667085' }}>
-                <div>Er zijn nu geen open bonnen.</div>
-                <div>
-                  <Button
-                    variant="secondary"
-                    onClick={() => document.getElementById('stores-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                  >
-                    Lees bonnen in bij winkels
-                  </Button>
-                </div>
+                <div>Er zijn nu geen open werkbladen.</div>
+                <div>Lees eerst aankopen in bij een bron of bekijk nieuwe aankopen hierboven.</div>
               </div>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ textAlign: 'left', borderBottom: '1px solid #d0d5dd' }}>
-                      <th style={{ padding: '10px 8px' }}>Winkel</th>
+                      <th style={{ padding: '10px 8px' }}>Bron</th>
                       <th style={{ padding: '10px 8px' }}>Datum</th>
-                      <th style={{ padding: '10px 8px' }}>Aantal regels</th>
+                      <th style={{ padding: '10px 8px' }}>Regels</th>
                       <th style={{ padding: '10px 8px' }}>Klaar</th>
                       <th style={{ padding: '10px 8px' }}>Actie nodig</th>
                       <th style={{ padding: '10px 8px' }}>Status</th>
@@ -340,66 +485,6 @@ export default function StoresPage() {
                             >
                               {busyBatchId === batch.batch_id ? 'Bezig…' : 'Open werkblad'}
                             </Button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <div id="stores-table" data-testid="connected-stores-section" style={{ display: 'grid', gap: '12px' }}>
-            <div>
-              <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Winkels</h3>
-            </div>
-            {isLoading ? (
-              <div>Winkelgegevens laden…</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #d0d5dd' }}>
-                      <th style={{ padding: '10px 8px' }}>Winkel</th>
-                      <th style={{ padding: '10px 8px' }}>Koppeling</th>
-                      <th style={{ padding: '10px 8px' }}>Laatste import</th>
-                      <th style={{ padding: '10px 8px' }}>Importstand</th>
-                      <th style={{ padding: '10px 8px' }}>Status</th>
-                      <th style={{ padding: '10px 8px' }}>Actie</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {connectedStoreItems.map((item) => {
-                      const provider = item.provider
-                      const connection = item.connection
-                      const providerOpenBatch = batchItems.find((batch) => batch.store_provider_code === item.code) || null
-                      const providerName = item.name
-                      const connectionTypeLabel = connection ? 'Klantkaart' : (provider ? providerStatusLabel(provider) : 'Nog niet gekoppeld')
-                      const importLevelLabel = connection ? simplificationLevelLabel : 'Handmatig'
-                      const statusLabel = connection ? 'Actief' : 'Aandacht nodig'
-                      return (
-                        <tr key={item.code} data-testid={`store-provider-${item.code}`} style={{ borderBottom: '1px solid #eaecf0' }}>
-                          <td style={{ padding: '12px 8px', fontWeight: 700 }}>{providerName}</td>
-                          <td style={{ padding: '12px 8px' }}>{connectionTypeLabel}</td>
-                          <td style={{ padding: '12px 8px' }}>{providerOpenBatch ? formatBatchLastChange(providerOpenBatch) : 'Nog nooit'}</td>
-                          <td style={{ padding: '12px 8px' }}>{importLevelLabel}</td>
-                          <td style={{ padding: '12px 8px' }}>{statusLabel}</td>
-                          <td style={{ padding: '12px 8px' }}>
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                              {!connection && provider ? (
-                                <Button data-testid={`connect-store-${item.code}`} variant="primary" onClick={() => handleConnect(item.code, providerName)} disabled={isConnecting}>
-                                  {isConnecting ? 'Koppelen…' : 'Koppelen'}
-                                </Button>
-                              ) : connection ? (
-                                <Button data-testid={`pull-purchases-${item.code}`} variant="secondary" onClick={() => handlePullPurchases(connection, providerName)} disabled={isPulling}>
-                                  {isPulling ? 'Inlezen…' : 'Bonnen inlezen'}
-                                </Button>
-                              ) : null}
-                              <Button variant="secondary" onClick={() => navigate('/instellingen/winkelimport')}>Instellingen</Button>
-                            </div>
                           </td>
                         </tr>
                       )

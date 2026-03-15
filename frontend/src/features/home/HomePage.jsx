@@ -10,7 +10,7 @@ const tiles = [
   { key: 'uitlenen', label: 'Uitlenen', icon: '🔁' },
   { key: 'voorraad', label: 'Voorraad', icon: '📦' },
   { key: 'winkels', label: 'Winkels', icon: '🏬' },
-  { key: 'kassabon', label: 'Kassabon', icon: '🧾' },
+  { key: 'aankopen', label: 'Aankopen', icon: '🧾' },
   { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳' },
   { key: 'recepten', label: 'Recepten', icon: '🍳' },
   { key: 'bestellen', label: 'Bestellen', icon: '📋' },
@@ -42,7 +42,7 @@ export default function HomePage() {
   function openTile(key) {
     if (key === 'voorraad') navigate('/voorraad')
     if (key === 'winkels') navigate('/winkels')
-    if (key === 'kassabon') navigate('/kassabon')
+    if (key === 'aankopen') navigate('/aankopen')
     if (key === 'instellingen') navigate('/instellingen')
     if (key === 'admin') navigate('/admin')
   }
@@ -55,7 +55,7 @@ export default function HomePage() {
           <Card className="rz-card-home">
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
               {tiles.map((t) => {
-                const clickable = ['voorraad', 'winkels', 'kassabon', 'instellingen', 'admin'].includes(t.key)
+                const clickable = ['voorraad', 'winkels', 'aankopen', 'instellingen', 'admin'].includes(t.key)
                 return (
                   <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
                     <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>

@@ -619,7 +619,7 @@ export default function StoreBatchDetailPage() {
               <div className="rz-store-workbench-meta">Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div className="rz-store-workbench-actions">
-              <Button variant="secondary" onClick={() => navigate('/winkels')}>Terug naar bonnen</Button>
+              <Button variant="secondary" onClick={() => navigate('/aankopen')}>Terug naar aankopen</Button>
               <Button variant="secondary" onClick={() => navigate('/voorraad')}>Bekijk voorraad</Button>
               <Button variant="primary" onClick={() => processBatchNow('ready_only')} disabled={isProcessingBatch || !canProcessBatch}>
                 {isProcessingBatch ? 'Bezig…' : 'Verwerk alles wat klaar is'}

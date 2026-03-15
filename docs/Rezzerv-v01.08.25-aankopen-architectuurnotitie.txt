@@ -1,0 +1,61 @@
+Rezzerv v01.08.25 — Architectuurnotitie module Aankopen
+
+Doel
+De bestaande kassabonmodule is conceptueel verbreed naar de overkoepelende module Aankopen.
+De gebruikerslogica verschuift van "kassabon verwerken" naar "aankopen binnenhalen, beoordelen en verwerken naar voorraad".
+
+Hoofdbegrippen
+1. Bron
+   Een herkomstkanaal waar aankopen uit binnenkomen, zoals klantkaart, winkelaccount, app-delen, API, e-mail, foto of barcode.
+2. Nieuwe aankoop
+   Een recent binnengekomen import of aankooprecord dat nog niet volledig is opgepakt als werkblad.
+3. Werkblad
+   Een verwerkbaar detailscherm waarin regels worden gekoppeld, beoordeeld en voorbereid voor verwerking naar voorraad.
+4. Verwerkt naar voorraad
+   De toestand waarin een werkblad of batch volledig of gedeeltelijk in de voorraadmutaties is doorgezet.
+
+Ketenmodel
+Bron -> Nieuwe aankoop -> Werkblad -> Voorraadmutatie
+
+Uitwerking in deze ontwikkelstap
+- Starttegel Kassabon is hernoemd naar Aankopen.
+- Nieuwe route /aankopen is toegevoegd.
+- De bestaande route /kassabon blijft tijdelijk bestaan maar stuurt door naar /aankopen.
+- Het huidige hoofscherm is herstructureerd naar drie kaarten:
+  1. Bronnen
+  2. Nieuwe aankopen
+  3. Open en verwerk
+- Het bestaande werkblad blijft technisch gebaseerd op de bestaande batchdetailflow.
+
+Bronsoorten in deze stap
+- Winkelbron via klantkaart / store connection
+- Foto-import (placeholder in UI)
+- Barcode-import (placeholder in UI)
+
+Statusmodel op hoofdlijnen
+Bronstatus:
+- Actief
+- Aandacht nodig
+- Beschikbaar
+
+Nieuwe aankoopstatus:
+- Recent ingelezen
+- Open werkblad beschikbaar
+
+Werkbladstatus:
+- Afgeleid uit bestaande batchstatuslogica, zoals Actie nodig, Klaar voor verwerking, Verwerkt
+
+Migratie van bestaande begrippen
+- Kassabonmodule -> Aankopen
+- Winkelimport -> Broninname
+- Open bon / batch -> Open werkblad
+- Bondetail -> Werkblad
+
+Open keuzes voor latere stap
+- Echte backend-queue voor Nieuwe aankopen, los van open werkbladen
+- API- en app-share-specifieke broninstellingen
+- Specifieke flow voor foto- en barcode-import
+- Verdere terminologische opschoning in detailschermen en regressieroutines
+
+Bewuste beperking
+In deze versie is Nieuwe aankopen nog een eerste zichtbare frontendstap en nog geen volledig nieuwe backendlaag. De bestaande werkbladflow is behouden als stabiele verwerkingsbasis.

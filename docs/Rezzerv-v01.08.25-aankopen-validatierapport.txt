@@ -1,0 +1,42 @@
+Rezzerv v01.08.25 — Validatierapport module Aankopen
+
+Scope
+- Hernoeming starttegel Kassabon -> Aankopen
+- Nieuwe route /aankopen
+- Herschikking hoofscherm naar Bronnen / Nieuwe aankopen / Open en verwerk
+- Behoud bestaande werkbladroute
+
+Aangepaste bestanden
+- frontend/src/features/home/HomePage.jsx
+- frontend/src/app/router/AppRouter.jsx
+- frontend/src/features/stores/StoresPage.jsx
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+- VERSION.txt
+- version.json
+- frontend/package.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+- frontend/dist/assets/* (na nieuwe build)
+
+Uitgevoerde checks
+1. Frontend-build uitgevoerd met npm run build -> geslaagd.
+2. Starttegel toont nu Aankopen.
+3. Route /aankopen toegevoegd; /kassabon redirect naar /aankopen.
+4. Hoofdschermtitel aangepast naar Aankopen.
+5. Kaarten zichtbaar als:
+   - Bronnen
+   - Nieuwe aankopen
+   - Open en verwerk
+6. Open werkblad-route behouden via bestaande batchdetailroute.
+7. Terugknop vanuit werkblad wijst nu naar /aankopen.
+
+Bekende beperkingen
+- Nieuwe aankopen is in deze ontwikkelstap nog deels afgeleid van bestaande batchmetadata en nog geen aparte backend-queue.
+- Foto-import en barcode-import zijn zichtbaar als toekomstvaste broningangen, maar nog niet functioneel uitgewerkt.
+- Bestaande admin/regressiescripts zijn in deze stap niet volledig herijkt op de nieuwe terminologie.
+
+QA/QC-oordeel voor deze ontwikkelstap
+- Architectuur-/UX-richting: groen
+- Zichtbare frontend-implementatie: groen
+- Productierijpheid voor alle toekomstige bronsoorten: nog niet van toepassing
