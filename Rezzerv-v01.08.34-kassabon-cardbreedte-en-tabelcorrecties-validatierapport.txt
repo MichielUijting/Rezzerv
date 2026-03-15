@@ -1,0 +1,15 @@
+Rezzerv v01.08.34 — kassabon cardbreedte en tabelcorrecties
+
+Uitgevoerd:
+- kassabonnen-overzicht en embedded detailkaart dezelfde breedte en gecentreerd
+- detailkaart blijft onder de kassabonnenkaart
+- tabeldetail gebruikt horizontale scrollbar via rz-table-wrapper bij overbreedte
+- kolom Bonartikel toont alleen artikelnamen
+- kolom Actie verwijderd
+- kolom Details vervangen door Prijs
+- knop Bekijk voorraad hernoemd naar Naar voorraad
+- knop Verwerk klaarstaande regels verwijderd
+- tab Verwerking verwijderd
+
+Niet gewijzigd:
+- onderliggende verwerkingslogica blijft aanwezig in de backend en diagnostische data

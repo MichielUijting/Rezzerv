@@ -15,9 +15,7 @@ import {
   normalizeErrorMessage,
   providerLabel,
   StoreArticleSelector,
-  suggestionLabel,
 } from './storeImportShared'
-import { buildAutoConsumeArticleIds } from './autoConsumeContext'
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'Alles' },
@@ -27,12 +25,6 @@ const STATUS_FILTERS = [
   { key: 'processed', label: 'Verwerkt' },
 ]
 
-const REVIEW_FILTERS = [
-  { key: 'all', label: 'Alles' },
-  { key: 'selected', label: 'Verwerken' },
-  { key: 'ignored', label: 'Negeren' },
-  { key: 'pending', label: 'Nog te beoordelen' },
-]
 
 const MAPPING_FILTERS = [
   { key: 'all', label: 'Alles' },
@@ -82,15 +74,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [lineDrafts, setLineDrafts] = useState({})
   const [lineSaveState, setLineSaveState] = useState({})
   const [selectedLineIds, setSelectedLineIds] = useState([])
-  const [expandedLineIds, setExpandedLineIds] = useState([])
   const [activeSummaryFilter, setActiveSummaryFilter] = useState('all')
   const [searchValue, setSearchValue] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [reviewFilter, setReviewFilter] = useState('all')
   const [mappingFilter, setMappingFilter] = useState('all')
   const [locationFilter, setLocationFilter] = useState('all')
-  const [bulkLocationId, setBulkLocationId] = useState('')
-  const [bulkArticleId, setBulkArticleId] = useState('')
   const processFeedbackTimer = useRef(null)
 
   const providersByCode = useMemo(
@@ -308,23 +296,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }, [household?.id, batch?.batch_id])
 
-  async function handleReviewDecision(lineId, reviewDecision) {
-    setBusyLineId(lineId)
-    setError('')
-    setStatus('')
-    try {
-      await fetchJson(`/api/purchase-import-lines/${lineId}/review`, {
-        method: 'POST',
-        body: JSON.stringify({ review_decision: reviewDecision }),
-      })
-      await refreshBatch(batch.batch_id)
-      setStatus('De beoordeling is opgeslagen.')
-    } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'De beoordeling kon niet worden opgeslagen.')
-    } finally {
-      setBusyLineId('')
-    }
-  }
 
   async function handleCreateArticleFromLine(lineId, articleName) {
     setBusyLineId(lineId)
@@ -371,7 +342,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     try {
       const result = await fetchJson(`/api/purchase-import-batches/${batch.batch_id}/process`, {
         method: 'POST',
-        body: JSON.stringify({ processed_by: 'ui', mode, auto_consume_article_ids: buildAutoConsumeArticleIds(autoConsumeLines) }),
+        body: JSON.stringify({ processed_by: 'ui', mode }),
       })
       await refreshBatch(batch.batch_id)
       await refreshLocationOptions(household?.id)
@@ -392,9 +363,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }
 
-  function toggleExpanded(lineId) {
-    setExpandedLineIds((current) => current.includes(lineId) ? current.filter((value) => value !== lineId) : [...current, lineId])
-  }
 
   const diagByLineId = useMemo(() => {
     const entries = batchDiagnostics?.line_diagnostics || []
@@ -469,7 +437,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         statusReason,
         mappingState,
         isReadyForProcessing: statusKey === 'ready',
-        searchText: [line.article_name_raw, line.brand_raw, line.resolved_household_article_name, suggestionLabel(line)]
+        searchText: [line.article_name_raw, line.brand_raw, line.resolved_household_article_name]
           .filter(Boolean)
           .join(' ')
           .toLowerCase(),
@@ -497,22 +465,18 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         if (activeSummaryFilter !== 'new_mapping' && entry.statusKey !== activeSummaryFilter) return false
       }
       if (statusFilter !== 'all' && entry.statusKey !== statusFilter) return false
-      if (reviewFilter !== 'all' && entry.reviewDecision !== reviewFilter) return false
       if (mappingFilter !== 'all' && entry.mappingState !== mappingFilter) return false
       if (locationFilter === 'filled' && !entry.hasValidLocation) return false
       if (locationFilter === 'missing' && entry.hasValidLocation) return false
       if (searchNeedle && !entry.searchText.includes(searchNeedle)) return false
       return true
     })
-  }, [lineUiStates, activeSummaryFilter, statusFilter, reviewFilter, mappingFilter, locationFilter, searchValue])
+  }, [lineUiStates, activeSummaryFilter, statusFilter, mappingFilter, locationFilter, searchValue])
   const selectedLineStates = useMemo(() => {
     const selectedSet = new Set(selectedLineIds)
     return lineUiStates.filter((entry) => selectedSet.has(entry.line.id))
   }, [lineUiStates, selectedLineIds])
 
-  const canProcessBatch = useMemo(() => {
-    return !isLoading && !busyLineId && lineUiStates.some((entry) => entry.isReadyForProcessing)
-  }, [isLoading, busyLineId, lineUiStates])
 
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
@@ -524,7 +488,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   function resetFilters() {
     setActiveSummaryFilter('all')
     setStatusFilter('all')
-    setReviewFilter('all')
     setMappingFilter('all')
     setLocationFilter('all')
     setSearchValue('')
@@ -534,7 +497,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setActiveSummaryFilter('all')
     setStatusFilter('action_needed')
     setLocationFilter('missing')
-    setReviewFilter('all')
     setMappingFilter('all')
   }
 
@@ -552,60 +514,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     })
   }
 
-  function selectEverythingInFilter() {
-    const visibleIds = filteredLineUiStates.map((entry) => entry.line.id)
-    setSelectedLineIds((current) => Array.from(new Set([...current, ...visibleIds])))
-  }
 
-  async function handleBulkReviewDecision(nextDecision) {
-    const targets = selectedLineStates.filter((entry) => entry.reviewDecision !== nextDecision)
-    if (!targets.length) return
-    setBusyLineId('bulk-review')
-    setError('')
-    setStatus('')
-    try {
-      for (const entry of targets) {
-        await fetchJson(`/api/purchase-import-lines/${entry.line.id}/review`, {
-          method: 'POST',
-          body: JSON.stringify({ review_decision: nextDecision }),
-        })
-      }
-      await refreshBatch(batch.batch_id)
-      setStatus(`${targets.length} regel(s) zijn bijgewerkt naar ${nextDecision === 'selected' ? 'Verwerken' : 'Negeren'}.`)
-    } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'De bulkactie kon niet worden opgeslagen.')
-    } finally {
-      setBusyLineId('')
-    }
-  }
 
-  async function handleBulkLocationApply() {
-    if (!bulkLocationId) {
-      setError('Kies eerst een locatie voor de geselecteerde regels.')
-      return
-    }
-    const targets = selectedLineStates.filter((entry) => String(entry.draft.locationId || '') !== String(bulkLocationId))
-    if (!targets.length) return
-    for (const entry of targets) {
-      // eslint-disable-next-line no-await-in-loop
-      await persistLineDraft(entry.line, { locationId: bulkLocationId })
-    }
-    setStatus(`${targets.length} regel(s) hebben een nieuwe locatie gekregen.`)
-  }
 
-  async function handleBulkArticleApply() {
-    if (!bulkArticleId) {
-      setError('Kies eerst een artikel voor de geselecteerde regels.')
-      return
-    }
-    const targets = selectedLineStates.filter((entry) => String(entry.draft.articleId || '') !== String(bulkArticleId))
-    if (!targets.length) return
-    for (const entry of targets) {
-      // eslint-disable-next-line no-await-in-loop
-      await persistLineDraft(entry.line, { articleId: bulkArticleId })
-    }
-    setStatus(`${targets.length} regel(s) zijn gekoppeld aan hetzelfde artikel.`)
-  }
 
   const allVisibleSelected = filteredLineUiStates.length > 0 && filteredLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
 
@@ -620,10 +531,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               <div style={{ color: '#667085' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Button variant="secondary" onClick={() => navigate('/voorraad')}>Bekijk voorraad</Button>
-              <Button variant="primary" onClick={() => processBatchNow('ready_only')} disabled={isProcessingBatch || !canProcessBatch}>
-                {isProcessingBatch ? 'Bezig…' : 'Verwerk klaarstaande regels'}
-              </Button>
+              <Button variant="secondary" onClick={() => navigate('/voorraad')}>Naar voorraad</Button>
             </div>
           </div>
 
@@ -638,7 +546,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           ) : null}
 
           <div className="rz-table-wrapper">
-            <table className="rz-table rz-store-workbench-table">
+            <table className="rz-table rz-store-workbench-table" style={{ minWidth: '980px' }}>
               <thead>
                 <tr className="rz-table-header">
                   <th style={{ width: '44px' }}>
@@ -649,8 +557,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <th>Gekoppeld artikel</th>
                   <th>Locatie</th>
                   <th>Status</th>
-                  <th>Actie</th>
-                  <th>Details</th>
+                  <th className="rz-num">Prijs</th>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
@@ -673,103 +580,57 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       {STATUS_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
                     </select>
                   </th>
-                  <th>
-                    <select className="rz-input rz-inline-input" value={reviewFilter} onChange={(event) => setReviewFilter(event.target.value)}>
-                      {REVIEW_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
-                    </select>
-                  </th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {filteredLineUiStates.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>Geen regels in deze selectie.</td>
+                    <td colSpan={7}>Geen regels in deze selectie.</td>
                   </tr>
                 ) : filteredLineUiStates.map((entry) => {
-                  const { line, draft, saveState, statusLabel: currentStatusLabel, statusReason } = entry
-                  const lineBusy = busyLineId === line.id || busyLineId === 'bulk-review'
-                  const isExpanded = expandedLineIds.includes(line.id)
-                  const diag = diagByLineId[line.id] || null
+                  const { line, draft, statusLabel: currentStatusLabel } = entry
+                  const lineBusy = busyLineId === line.id || isProcessingBatch
+                  const selected = selectedLineIds.includes(line.id)
                   return (
-                    <Fragment key={line.id}>
-                      <tr className={`rz-store-workbench-row ${entry.statusKey === 'ready' ? 'is-ready' : entry.statusKey === 'action_needed' ? 'is-action-needed' : entry.statusKey === 'ignored' ? 'is-ignored' : ''}`}>
-                        <td>
-                          <input type="checkbox" checked={selectedLineIds.includes(line.id)} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} />
-                        </td>
-                        <td>
-                          <div className="rz-store-primary">{line.article_name_raw}</div>
-                          <div className="rz-store-secondary">{providerLabel(activeProvider)} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
-                          {suggestionLabel(line) ? <div className={`rz-store-suggestion ${line.is_auto_prefilled ? 'rz-store-suggestion--auto' : 'rz-store-suggestion--check'}`}>{suggestionLabel(line)}</div> : null}
-                        </td>
-                        <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
-                        <td>
-                          <StoreArticleSelector
-                            lineId={line.id}
-                            lineName={line.article_name_raw}
-                            selectedArticleId={draft.articleId || ''}
-                            articleOptions={articleOptions}
-                            disabled={lineBusy || isProcessingBatch}
-                            onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
-                            onClearArticle={() => persistLineDraft(line, { articleId: '' })}
-                            onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
-                          />
-                        </td>
-                        <td>
-                          <select
-                            className="rz-input rz-store-select"
-                            value={draft.locationId || ''}
-                            disabled={lineBusy || isProcessingBatch}
-                            onFocus={() => household?.id && refreshLocationOptions(household.id)}
-                            onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
-                            onChange={(event) => persistLineDraft(line, { locationId: event.target.value || '' })}
-                          >
-                            <option value="">Kies locatie</option>
-                            {locationOptions.map((location) => (
-                              <option key={location.id} value={location.id}>{location.label}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td><span className={`rz-store-status-badge rz-store-status-badge--${entry.statusKey}`}>{currentStatusLabel}</span></td>
-                        <td>
-                          <select
-                            className="rz-input rz-store-select"
-                            value={line.review_decision || 'pending'}
-                            disabled={lineBusy || isProcessingBatch}
-                            onChange={(event) => handleReviewDecision(line.id, event.target.value)}
-                          >
-                            <option value="pending">Nog te beoordelen</option>
-                            <option value="selected">Verwerken</option>
-                            <option value="ignored">Negeren</option>
-                          </select>
-                        </td>
-                        <td>
-                          <Button variant="secondary" onClick={() => toggleExpanded(line.id)}>{isExpanded ? 'Sluit' : 'Details'}</Button>
-                        </td>
-                      </tr>
-                      {isExpanded ? (
-                        <tr>
-                          <td colSpan={8}>
-                            <div className="rz-store-detail-grid">
-                              <div className="rz-store-detail-panel">
-                                <div className="rz-store-detail-title">Automatische afboeking</div>
-                                <div><strong>Huishoudinstelling:</strong> {detailValue(diag?.household_consume_mode || diag?.household_mode || household?.default_consume_mode || household?.consume_mode || 'Uit')}</div>
-                                <div><strong>Artikeloverride:</strong> {detailValue(diag?.article_consume_override || diag?.article_override || 'Huishoudinstelling volgen')}</div>
-                                <div><strong>Effectieve automatische afboeking:</strong> {detailValue(diag?.auto_consume_effective_mode || diag?.effective_mode || 'Niet van toepassing')}</div>
-                                <div><strong>Beslisreden:</strong> {detailValue(diag?.auto_consume_decision_reason || diag?.decision_reason || statusReason)}</div>
-                              </div>
-                              <div className="rz-store-detail-panel">
-                                <div className="rz-store-detail-title">Verwerkingsuitkomst</div>
-                                <div><strong>Aangevraagd af te boeken:</strong> {detailValue(diag?.auto_consume_requested_deduction_quantity, '0')}</div>
-                                <div><strong>Werkelijk afgeboekt:</strong> {detailValue(diag?.auto_consume_applied_deduction_quantity, '0')}</div>
-                                <div><strong>Laatste verwerking:</strong> {detailValue(line.processed_at || diag?.processed_at || 'Nog niet verwerkt')}</div>
-                                <div><strong>Laatste resultaat:</strong> {detailValue(diag?.processing_status || line.processing_status || 'Nog niet verwerkt')}</div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : null}
-                    </Fragment>
+                    <tr key={line.id} className={`rz-store-workbench-row ${selected ? 'rz-row-selected' : ''} ${entry.statusKey === 'ready' ? 'is-ready' : entry.statusKey === 'action_needed' ? 'is-action-needed' : entry.statusKey === 'ignored' ? 'is-ignored' : ''}`}>
+                      <td>
+                        <input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} />
+                      </td>
+                      <td>
+                        <div className="rz-store-primary">{line.article_name_raw}</div>
+                      </td>
+                      <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
+                      <td>
+                        <StoreArticleSelector
+                          lineId={line.id}
+                          lineName={line.article_name_raw}
+                          selectedArticleId={draft.articleId || ''}
+                          articleOptions={articleOptions}
+                          disabled={lineBusy}
+                          onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
+                          onClearArticle={() => persistLineDraft(line, { articleId: '' })}
+                          onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className="rz-input rz-store-select"
+                          value={draft.locationId || ''}
+                          disabled={lineBusy}
+                          onFocus={() => household?.id && refreshLocationOptions(household.id)}
+                          onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
+                          onChange={(event) => persistLineDraft(line, { locationId: event.target.value || '' })}
+                        >
+                          <option value="">Kies locatie</option>
+                          {locationOptions.map((location) => (
+                            <option key={location.id} value={location.id}>{location.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td><span className={`rz-store-status-badge rz-store-status-badge--${entry.statusKey}`}>{currentStatusLabel}</span></td>
+                      <td className="rz-num">{line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : '-'}</td>
+                    </tr>
                   )
                 })}
               </tbody>
@@ -778,37 +639,22 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         </div>
       </>
     ),
-    Verwerking: (
-      <div style={{ display: 'grid', gap: '16px' }}>
-        <div><strong>Aankoopdatum:</strong> {batch?.purchase_date || '-'}</div>
-        <div><strong>Winkel:</strong> {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
-        <div><strong>Status:</strong> {batch ? batchStatusLabel(batch.import_status) : '-'}</div>
-        <div><strong>Regels:</strong> {summaryCounts.total}</div>
-        <div><strong>Klaar:</strong> {summaryCounts.ready} · <strong>Actie nodig:</strong> {summaryCounts.action_needed} · <strong>Genegeerd:</strong> {summaryCounts.ignored} · <strong>Verwerkt:</strong> {summaryCounts.processed}</div>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <Button variant="primary" onClick={() => processBatchNow('ready_only')} disabled={isProcessingBatch || !canProcessBatch}>{isProcessingBatch ? 'Bezig…' : 'Verwerk klaarstaande regels'}</Button>
-          <Button variant="secondary" onClick={() => navigate('/voorraad')}>Bekijk voorraad</Button>
-        </div>
-      </div>
-    ),
     Diagnose: (
       <div style={{ display: 'grid', gap: '12px' }}>
         <div><strong>Vereenvoudigingsniveau:</strong> {simplificationLevelLabel}</div>
         <div><strong>Huishoudinstelling:</strong> {detailValue(household?.default_consume_mode || household?.consume_mode || 'Uit')}</div>
         <div><strong>Batchstatus:</strong> {batch ? batchStatusLabel(batch.import_status) : '-'}</div>
         <div><strong>Laatst resultaat:</strong> {lastProcessResult ? `Verwerkt ${lastProcessResult.processed_count || 0} · Overgeslagen ${lastProcessResult.skipped_count || 0} · Mislukt ${lastProcessResult.failed_count || 0}` : 'Nog geen verwerking in deze sessie'}</div>
-        <div><strong>Regels met detaildiagnose:</strong> {Object.keys(diagByLineId).length}</div>
-        <div style={{ color: '#667085' }}>Gebruik in Bonregels de knop Details om de diagnose per regel te openen.</div>
       </div>
     ),
   }
 
   const content = (
-    <ScreenCard fullWidth>
+    <ScreenCard>
       {isLoading ? (
         <div>Bongegevens laden…</div>
       ) : batch ? (
-        <Tabs tabs={['Bonregels', 'Verwerking', 'Diagnose']}>
+        <Tabs tabs={['Bonregels', 'Diagnose']}>
           {(activeTab) => tabContent[activeTab]}
         </Tabs>
       ) : (
