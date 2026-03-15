@@ -1,0 +1,28 @@
+Rezzerv v01.08.23 - validatierapport Kassabon-route
+
+Doel
+De tegel Kassabon vanaf de startpagina actief maken, zodat de PO het Kassabon werkblad via een normale gebruikersroute kan openen.
+
+Uitgevoerde aanpassing
+- Startpagina: tegel Kassabon klikbaar gemaakt
+- Router: nieuwe route /kassabon toegevoegd als alias naar het kassabonscherm
+
+Aangepaste bestanden
+- frontend/src/features/home/HomePage.jsx
+- frontend/src/app/router/AppRouter.jsx
+- VERSION.txt
+- version.json
+- frontend/package.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+
+Validatie
+- Kassabon-tegel staat nog op de startpagina
+- Kassabon-tegel is nu klikbaar
+- Klik op Kassabon navigeert naar /kassabon
+- Route /kassabon opent hetzelfde kassabonscherm als de bestaande winkelimport/kassabonflow
+- Versioning uniform opgehoogd naar 01.08.23
+
+Beperking
+- Dit is een gerichte routecorrectie; er is geen brede regressietest op andere home-tegels uitgevoerd.

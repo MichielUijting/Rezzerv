@@ -47,6 +47,7 @@ const router = createBrowserRouter([
   { path: '/home', element: <Protected><HomePage /></Protected> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/winkels', element: <Protected><StoresPage /></Protected> },
+  { path: '/kassabon', element: <Protected><StoresPage /></Protected> },
   { path: '/winkels/batch/:batchId', element: <Protected><StoreBatchDetailPage /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <Protected><SettingsPage /></Protected> },
