@@ -1,0 +1,80 @@
+Release Protocol v1.0 – Compliance Check:
+
+Basisversie
+- Rezzerv-v01.08.14
+
+Nieuw versienummer
+- Rezzerv-v01.08.15
+
+Releasecategorie
+- Backend-release
+
+Hoofddoel
+- Herstel van de rule-engine voor automatische afboeking zodat de aftrekhoeveelheid volledig wordt bepaald door de effectieve ingestelde modus.
+
+Wat is gewijzigd
+- Centrale berekeningsfunctie toegevoegd: compute_auto_deduction_quantity(mode, pre_purchase_total, purchased_quantity)
+- Centrale resolutie van effectieve modus toegevoegd, inclusief artikeloverride en consumable-check
+- Verwerkingsflow voor winkelbatch omgezet van vaste aftrek van 1 naar berekende requested_deduction_quantity
+- Auto-event creatie aangepast zodat de eventhoeveelheid en inventarisafboeking de berekende aftrekhoeveelheid volgen
+- Diagnose-output aangepast zodat applied_deduction_quantity niet langer hard op 1 staat, maar de werkelijk toegepaste berekende hoeveelheid weerspiegelt
+- Auto-event note generiek gemaakt voor 1 of meerdere eenheden
+
+Wat expliciet niet is gewijzigd
+- Geen UI-wijzigingen
+- Geen routering gewijzigd
+- Geen nieuwe ontkoppellogica
+- Geen redesign
+- Geen nieuwe feature-uitbreiding buiten automatische afboeking
+
+Aangepaste bestanden
+- backend/app/main.py
+- VERSION.txt
+- version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+- docs/Rezzerv-v01.08.15-auto-afboeking-rule-engine-validatierapport.txt
+
+Legacy-paden verwijderd of geneutraliseerd
+- requested_deduction_quantity = 1 if should_auto_consume else 0  → vervangen door centrale berekening
+- create_auto_repurchase_event(... quantity=1) → vervangen door quantity=requested_deduction_quantity
+- apply_inventory_consumption(..., 1, ...) → vervangen door requested_deduction_quantity
+- auto_consume_applied_deduction_quantity=1 if auto_event_id else 0 → vervangen door requested_deduction_quantity if auto_event_id else 0
+
+Validatie uitgevoerd
+1. Python syntax check
+- python -m py_compile backend/app/main.py
+- Resultaat: geslaagd
+
+2. Gerichte rule-engine validatie
+- none, voorraad 22, gekocht 2 → requested_deduction_quantity = 0
+- consume_purchased_quantity, voorraad 1, gekocht 2 → requested_deduction_quantity = 2
+- consume_all_existing_before_purchase, voorraad 22, gekocht 2 → requested_deduction_quantity = 22
+- extra randcontrole: voorraad 0, gekocht 2 bij consume_purchased_quantity → requested_deduction_quantity = 0
+- overridecontrole: artikeloverride consume_all_existing_before_purchase overschrijft household none correct in effectieve modusresolutie
+
+Niet uitgevoerd in deze validatie
+- Volledige docker compose build --no-cache
+- End-to-end browserflow lokaal in frontend
+- Handmatige PO-flowtest in UI
+
+Risico-inschatting
+- Laag tot middel: backendregel is nu eenduidig gecentraliseerd
+- Open resterend risico: end-to-end UI/diagnoseweergave moet nog op echte batchdata worden bevestigd in de lokale testomgeving van de PO
+
+PO-teststappen in gewone taal
+1. Open een huishouden met bestaande voorraad van een consumabel artikel.
+2. Zet huishoudmodus op 'Geen automatische afboeking'.
+3. Verwerk een bonregel voor dat artikel.
+4. Controleer in de diagnose dat 'Aangevraagd af te boeken' en 'Werkelijk afgeboekt' beide 0 zijn.
+5. Zet huishoudmodus op 'Boek hetzelfde aantal af als gekocht'.
+6. Zorg dat voorraad vóór aankoop 1 is en koop 2.
+7. Controleer dat diagnose 2 en 2 toont.
+8. Zet huishoudmodus op 'Boek bestaande voorraad eerst volledig af'.
+9. Zorg dat voorraad vóór aankoop 22 is en koop 2.
+10. Controleer dat diagnose 22 en 22 toont.
+11. Controleer in historie dat de automatische afboeking logisch aansluit op de gekozen modus.
+
+Conclusie
+- De resterende legacy 1-afboeking bepaalt de businessuitkomst niet meer.
+- De backend rule-engine volgt nu de effectieve modus als leidende bron voor requested en applied deduction.

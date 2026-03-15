@@ -1804,7 +1804,11 @@ def create_auto_repurchase_event(conn, household_id: str, article_id: str, artic
     old_total = get_article_total_quantity(conn, household_id, article_name)
     if old_total <= 0:
         return None
-    new_total = max(0, old_total - quantity_int)
+    applied_quantity = min(old_total, quantity_int)
+    if applied_quantity <= 0:
+        return None
+    new_total = max(0, old_total - applied_quantity)
+    quantity_label = '1 eenheid' if applied_quantity == 1 else f'{applied_quantity} eenheden'
     return create_inventory_event(
         conn,
         household_id=household_id,
@@ -1812,26 +1816,72 @@ def create_auto_repurchase_event(conn, household_id: str, article_id: str, artic
         article_name=article_name,
         resolved_location=resolved_location,
         event_type='auto_repurchase',
-        quantity=-quantity_int,
+        quantity=-applied_quantity,
         old_quantity=old_total,
         new_quantity=new_total,
         source='auto_repurchase',
-        note='Automatisch 1 eenheid afgeboekt bij herhaalaankoop.',
+        note=f'Automatisch {quantity_label} afgeboekt bij herhaalaankoop.',
     )
 
 
-def should_auto_consume_on_repurchase(conn, household_id: str, article_id: str, article_name: str, pre_purchase_total: float) -> bool:
-    if pre_purchase_total <= 0:
-        return False
-    consumable = get_article_consumable_state(conn, household_id, article_id, article_name)
+def resolve_auto_consume_effective_mode(household_mode: str, article_override: str, consumable: bool) -> str:
+    effective_mode = household_mode
+    if article_override == ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY:
+        effective_mode = ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY
+    elif article_override == ARTICLE_AUTO_CONSUME_ALL_EXISTING:
+        effective_mode = ARTICLE_AUTO_CONSUME_ALL_EXISTING
+    elif article_override == ARTICLE_AUTO_CONSUME_NONE:
+        effective_mode = ARTICLE_AUTO_CONSUME_NONE
     if not consumable:
-        return False
-    mode = get_household_article_auto_consume_override(conn, household_id, article_id)
-    if mode == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
-        return True
-    if mode == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
-        return False
-    return get_household_auto_consume_on_repurchase(conn, household_id)
+        return ARTICLE_AUTO_CONSUME_NONE
+    return effective_mode if effective_mode in HOUSEHOLD_AUTO_CONSUME_ALLOWED else ARTICLE_AUTO_CONSUME_NONE
+
+
+def compute_auto_deduction_quantity(mode: str, pre_purchase_total: float, purchased_quantity: float) -> int:
+    normalized_mode = normalize_household_auto_consume_mode(mode)
+    pre_purchase_total_int = max(0, int(pre_purchase_total or 0))
+    purchased_quantity_int = max(0, int(purchased_quantity or 0))
+    if pre_purchase_total_int <= 0:
+        return 0
+    if normalized_mode == ARTICLE_AUTO_CONSUME_NONE:
+        return 0
+    if normalized_mode == ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY:
+        return purchased_quantity_int
+    if normalized_mode == ARTICLE_AUTO_CONSUME_ALL_EXISTING:
+        return pre_purchase_total_int
+    return 0
+
+
+def determine_auto_consume_decision(conn, household_id: str, article_id: str, article_name: str, pre_purchase_total: float, purchased_quantity: float):
+    consumable = get_article_consumable_state(conn, household_id, article_id, article_name)
+    household_mode = get_household_auto_consume_mode(conn, household_id)
+    article_override = get_household_article_auto_consume_override(conn, household_id, article_id)
+    effective_mode = resolve_auto_consume_effective_mode(household_mode, article_override, consumable)
+    requested_deduction_quantity = compute_auto_deduction_quantity(effective_mode, pre_purchase_total, purchased_quantity)
+    should_auto_consume = requested_deduction_quantity > 0
+    if not consumable:
+        decision_reason = 'article not consumable'
+    elif pre_purchase_total <= 0:
+        decision_reason = 'existing stock missing'
+    elif article_override == ARTICLE_AUTO_CONSUME_NONE:
+        decision_reason = 'article override none'
+    elif article_override == ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY:
+        decision_reason = 'article override consume_purchased_quantity'
+    elif article_override == ARTICLE_AUTO_CONSUME_ALL_EXISTING:
+        decision_reason = 'article override consume_all_existing_before_purchase'
+    elif household_mode == ARTICLE_AUTO_CONSUME_NONE:
+        decision_reason = 'household mode none'
+    else:
+        decision_reason = f'effective mode {effective_mode}'
+    return {
+        'consumable': consumable,
+        'household_mode': household_mode,
+        'article_override': article_override,
+        'effective_mode': effective_mode,
+        'requested_deduction_quantity': requested_deduction_quantity,
+        'should_auto_consume': should_auto_consume,
+        'decision_reason': decision_reason,
+    }
 
 
 def ensure_store_provider(provider_code: str):
@@ -3574,28 +3624,20 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 article_name = article["name"]
                 note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
                 pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
-                household_mode = get_household_auto_consume_mode(conn, str(batch["household_id"]))
-                article_override = get_household_article_auto_consume_override(conn, str(batch["household_id"]), str(article_id))
-                effective_mode = household_mode
-                if article_override == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
-                    effective_mode = ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY
-                elif article_override == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
-                    effective_mode = ARTICLE_AUTO_CONSUME_NONE
-                if not get_article_consumable_state(conn, str(batch["household_id"]), str(article_id), article_name):
-                    effective_mode = ARTICLE_AUTO_CONSUME_NONE
-                    decision_reason = 'article not consumable'
-                elif pre_purchase_total <= 0:
-                    decision_reason = 'existing stock missing'
-                elif article_override == ARTICLE_AUTO_CONSUME_ALWAYS_OFF:
-                    decision_reason = 'article override none'
-                elif article_override == ARTICLE_AUTO_CONSUME_ALWAYS_ON:
-                    decision_reason = 'article override consume_purchased_quantity'
-                elif household_mode == ARTICLE_AUTO_CONSUME_NONE:
-                    decision_reason = 'household mode none'
-                else:
-                    decision_reason = f'effective mode {effective_mode}'
-                should_auto_consume = should_auto_consume_on_repurchase(conn, str(batch["household_id"]), str(article_id), article_name, pre_purchase_total)
-                requested_deduction_quantity = 1 if should_auto_consume else 0
+                auto_consume_decision = determine_auto_consume_decision(
+                    conn,
+                    str(batch["household_id"]),
+                    str(article_id),
+                    article_name,
+                    pre_purchase_total,
+                    quantity,
+                )
+                household_mode = auto_consume_decision["household_mode"]
+                article_override = auto_consume_decision["article_override"]
+                effective_mode = auto_consume_decision["effective_mode"]
+                decision_reason = auto_consume_decision["decision_reason"]
+                should_auto_consume = auto_consume_decision["should_auto_consume"]
+                requested_deduction_quantity = auto_consume_decision["requested_deduction_quantity"]
                 current_stage = 'purchase_event_write'
                 event_id = None
                 auto_event_id = None
@@ -3612,8 +3654,8 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                     current_stage = 'auto_consume_decision'
                     if should_auto_consume:
                         current_stage = 'auto_consume_write'
-                        auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=1)
-                        apply_inventory_consumption(conn, batch["household_id"], article_name, 1, resolved_location)
+                        auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=requested_deduction_quantity)
+                        apply_inventory_consumption(conn, batch["household_id"], article_name, requested_deduction_quantity, resolved_location)
                     inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)
                 except Exception as exc:
                     detail_parts = [
@@ -3634,7 +3676,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                         auto_consume_household_mode=household_mode, auto_consume_article_override=article_override, auto_consume_effective_mode=effective_mode,
                         auto_consume_should_apply=should_auto_consume, auto_consume_decision_reason=decision_reason,
                         auto_consume_requested_deduction_quantity=requested_deduction_quantity,
-                        auto_consume_applied_deduction_quantity=1 if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
+                        auto_consume_applied_deduction_quantity=requested_deduction_quantity if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
                         auto_consume_event_id=auto_event_id, inventory_after_purchase_total=int(inventory_after_purchase_total),
                         inventory_after_auto_consume_total=int(inventory_after_auto_consume_total),
                         processing_status='failed', failure_stage=current_stage, failure_message=error,
@@ -3653,7 +3695,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                     auto_consume_household_mode=household_mode, auto_consume_article_override=article_override, auto_consume_effective_mode=effective_mode,
                     auto_consume_should_apply=should_auto_consume, auto_consume_decision_reason=decision_reason,
                     auto_consume_requested_deduction_quantity=requested_deduction_quantity,
-                    auto_consume_applied_deduction_quantity=1 if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
+                    auto_consume_applied_deduction_quantity=requested_deduction_quantity if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
                     auto_consume_event_id=auto_event_id, inventory_after_purchase_total=int(inventory_after_purchase_total),
                     inventory_after_auto_consume_total=int(inventory_after_auto_consume_total),
                     processing_status='processed', failure_stage='none', failure_message='',
