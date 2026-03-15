@@ -1,0 +1,47 @@
+Rezzerv v01.08.21 - store warning overlay en diagnose-validatierapport
+
+Scope
+- Fix frontend runtime error in winkelbatch-waarschuwingsoverlay.
+- Maak diagnose in batchdetail explicieter voor none/override-onderzoek.
+- Geen wijziging aangebracht aan backend decision-engine voor automatische afboeking.
+
+Aangepaste bestanden
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+- frontend/package.json
+
+Analyse
+1. De foutmelding "handleProcessReadyOnly is not defined" kwam uit StoreBatchDetailPage.jsx.
+   In de waarschuwingsoverlay verwees de knop "Negeren" naar een niet-bestaande functie.
+2. Daardoor crashte de batchdetailpagina zodra de gebruiker koos voor het pad
+   "verwerk alleen complete regels".
+3. Voor het vraagstuk rond huishoudmodus none was in de backenddiagnose al data aanwezig,
+   maar de UI toonde alleen effective_mode en decision_reason. Daardoor bleef onduidelijk
+   of het gedrag werd veroorzaakt door household_mode of article_override.
+
+Implementatie
+- Nieuwe functie handleProcessReadyOnly() toegevoegd.
+  Gedrag:
+  * sluit waarschuwingsoverlay
+  * zet processMode op ready_only
+  * roept processBatchNow('ready_only') aan
+- Diagnoseblok in StoreBatchDetailPage toont nu ook:
+  * auto_consume_household_mode
+  * auto_consume_article_override
+
+Verwacht effect
+- De waarschuwingsoverlay crasht niet meer wanneer de gebruiker op "Negeren" klikt.
+- Het ready_only-pad verwerkt alleen complete regels en laat onvolledige regels in de batch staan.
+- Bij onverwachte automatische afboeking wordt in de UI zichtbaar of de oorzaak zit in:
+  * huishoudmodus
+  * artikeloverride
+  * of de effective_mode-beslissing.
+
+Bekende beperking
+- Deze release corrigeert niet zelfstandig een mogelijk inhoudelijk probleem in de decision-engine.
+  Als bij huishoudmodus none toch auto-afboeking optreedt, moet de diagnosekaart nu gebruikt worden
+  om household_mode, article_override, effective_mode en decision_reason te vergelijken.

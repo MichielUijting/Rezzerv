@@ -394,6 +394,13 @@ export default function StoreBatchDetailPage() {
     await processBatchNow(processActionMode)
   }
 
+  async function handleProcessReadyOnly() {
+    if (!batch) return
+    setProcessMode('ready_only')
+    setProcessWarning(null)
+    await processBatchNow('ready_only')
+  }
+
   return (
     <AppShell title={batch ? buildBatchTitle(batch) : 'Bondetail'} showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }}>
@@ -583,6 +590,7 @@ export default function StoreBatchDetailPage() {
                       <div><strong>Aankoop-event:</strong> {diag.purchase_event_created ? 'ja' : 'nee'} · <strong>Historie ziet aankoop:</strong> {diag.history_contains_purchase_event ? 'ja' : 'nee'}</div>
                       <div><strong>Voorraad:</strong> {diag.inventory_before_total} → {diag.inventory_after_purchase_total}{diag.auto_consume_event_created || diag.auto_consume_should_apply ? ` → ${diag.inventory_after_auto_consume_total}` : ''}</div>
                       <div><strong>Automatisch afboeken:</strong> {diag.auto_consume_event_created ? 'ja' : 'nee'} · <strong>Modus:</strong> {diag.auto_consume_effective_mode || 'none'}</div>
+                      <div><strong>Huishoudmodus:</strong> {diag.auto_consume_household_mode || 'none'} · <strong>Artikeloverride:</strong> {diag.auto_consume_article_override || 'follow_household'}</div>
                       <div><strong>Gekocht:</strong> {diag.purchase_quantity} · <strong>Aangevraagd af te boeken:</strong> {diag.auto_consume_requested_deduction_quantity} · <strong>Werkelijk afgeboekt:</strong> {diag.auto_consume_applied_deduction_quantity}</div>
                       <div><strong>Beslisreden:</strong> {diag.auto_consume_decision_reason || 'Geen'}</div>
                       {diag.processing_status !== 'processed' && (!diag.failure_stage || diag.failure_stage === 'none') ? (
