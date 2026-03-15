@@ -767,6 +767,17 @@ def get_household_payload_for_user(user: dict):
     }
 
 
+def get_request_household_id(authorization: str | None, fallback: str = "demo-household") -> str:
+    if authorization:
+        try:
+            user = get_current_user_from_authorization(authorization)
+            household = get_household_payload_for_user(user)
+            return str(household.get("id") or fallback)
+        except HTTPException:
+            pass
+    return str(fallback)
+
+
 class HouseholdAutomationSettingsUpdateRequest(BaseModel):
     mode: str = ARTICLE_AUTO_CONSUME_NONE
 
@@ -2524,10 +2535,11 @@ def update_inventory(inventory_id: str, payload: InventoryUpdate):
     return updated_row
 
 @app.get("/api/dev/inventory-preview")
-def inventory_preview(response: Response):
+def inventory_preview(response: Response, authorization: Optional[str] = Header(None)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
+    effective_household_id = get_request_household_id(authorization)
     with engine.begin() as conn:
         rows = conn.execute(
             text("""
@@ -2540,20 +2552,23 @@ def inventory_preview(response: Response):
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
-            WHERE COALESCE(i.aantal, 0) > 0
+            WHERE i.household_id = :household_id
+              AND COALESCE(i.aantal, 0) > 0
             ORDER BY i.updated_at DESC, i.created_at ASC, i.id ASC
             """)
+            ,{"household_id": effective_household_id}
         ).mappings().all()
     return {"rows": [dict(r) for r in rows]}
 
 
 
 @app.get("/api/dev/article-history")
-def article_history(article_name: str):
+def article_history(article_name: str, authorization: Optional[str] = Header(None)):
     article_name = (article_name or "").strip()
     if not article_name:
         raise HTTPException(status_code=400, detail="article_name is verplicht")
 
+    effective_household_id = get_request_household_id(authorization)
     with engine.begin() as conn:
         rows = conn.execute(
             text(
@@ -2572,11 +2587,12 @@ def article_history(article_name: str):
                   note,
                   created_at
                 FROM inventory_events
-                WHERE lower(article_name) = lower(:article_name)
+                WHERE household_id = :household_id
+                  AND lower(article_name) = lower(:article_name)
                 ORDER BY datetime(created_at) DESC, id DESC
                 """
             ),
-            {"article_name": article_name},
+            {"article_name": article_name, "household_id": effective_household_id},
         ).mappings().all()
 
     return {"rows": [

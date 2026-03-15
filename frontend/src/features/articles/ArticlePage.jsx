@@ -21,6 +21,11 @@ function normalizeName(value) {
   return String(value || '').trim().toLowerCase()
 }
 
+function getAuthHeaders() {
+  const token = window.localStorage.getItem('rezzerv_token') || ''
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 function buildFallbackArticle(article) {
   const safeArticle = article || {}
   const firstLocation = safeArticle.locations?.[0] || {}
@@ -71,7 +76,7 @@ function mergeLiveLocations(baseArticle, liveRows) {
 }
 
 async function fetchInventoryPreview() {
-  const response = await fetch('/api/dev/inventory-preview')
+  const response = await fetch('/api/dev/inventory-preview', { headers: getAuthHeaders() })
   if (!response.ok) throw new Error('Live artikelvoorraad kon niet worden geladen')
   const data = await response.json()
   return Array.isArray(data?.rows) ? data.rows : []
@@ -113,7 +118,7 @@ function mapLiveHistoryRows(rows = []) {
 }
 
 async function fetchArticleHistory(articleName) {
-  const response = await fetch(`/api/dev/article-history?article_name=${encodeURIComponent(articleName)}`)
+  const response = await fetch(`/api/dev/article-history?article_name=${encodeURIComponent(articleName)}`, { headers: getAuthHeaders() })
   if (!response.ok) throw new Error('Live artikelhistorie kon niet worden geladen')
   const data = await response.json()
   return Array.isArray(data?.rows) ? data.rows : []

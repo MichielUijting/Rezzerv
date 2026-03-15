@@ -255,8 +255,13 @@ function mergeInventoryRows(liveRows = []) {
   return merged.sort((a, b) => (a._firstSeenIndex ?? 0) - (b._firstSeenIndex ?? 0))
 }
 
+function getAuthHeaders() {
+  const token = window.localStorage.getItem('rezzerv_token') || ''
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
 async function fetchInventoryRows() {
-  const response = await fetch(`/api/dev/inventory-preview?_ts=${Date.now()}`, { cache: 'no-store' })
+  const response = await fetch(`/api/dev/inventory-preview?_ts=${Date.now()}`, { cache: 'no-store', headers: getAuthHeaders() })
   if (!response.ok) throw new Error("Voorraad kon niet worden geladen")
   const data = await response.json()
   if (!Array.isArray(data?.rows)) return []
@@ -266,7 +271,7 @@ async function fetchInventoryRows() {
 async function saveInventoryRow(row) {
   const response = await fetch(`/api/dev/inventory/${encodeURIComponent(row.detailId)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify({
       naam: row.artikel,
       aantal: Number(row.aantal) || 0,

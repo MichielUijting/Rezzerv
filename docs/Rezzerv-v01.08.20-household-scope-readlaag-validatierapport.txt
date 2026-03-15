@@ -1,0 +1,49 @@
+Rezzerv-v01.08.20 — household-scope readlaag validatierapport
+
+Basis:
+- Rezzerv-v01.08.19.zip
+
+Aanleiding:
+- PO-test liet zien dat Historie en Voorraad voor Tomaten niet overeenkwamen.
+- Waarschijnlijke oorzaak: readlaag van artikeldetail en voorraadtab laadde niet huishouden-gescope data.
+
+Root cause:
+- /api/dev/inventory-preview filterde inventory niet op household_id.
+- /api/dev/article-history filterde inventory_events niet op household_id.
+- Frontend fetches voor artikeldetail en voorraadtab stuurden geen Authorization-header mee.
+- Daardoor konden voorraadregels en historie van andere huishoudens of seed/demo-data zichtbaar worden in de actieve sessie.
+
+Aangepaste bestanden:
+- backend/app/main.py
+- frontend/src/features/articles/ArticlePage.jsx
+- frontend/src/pages/Voorraad.jsx
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+- frontend/package.json
+
+Wijziging backend:
+- Nieuw helperpad: get_request_household_id(authorization, fallback='demo-household').
+- /api/dev/inventory-preview gebruikt nu household-scope op basis van Authorization.
+- /api/dev/article-history gebruikt nu household-scope op basis van Authorization.
+
+Wijziging frontend:
+- Artikeldetail haalt voorraad en historie nu op met Bearer-token uit localStorage.
+- Voorraadpagina haalt inventory-preview nu op met Bearer-token uit localStorage.
+- Inline save op voorraadpagina stuurt ook Authorization mee.
+
+Interne validatie:
+- Codecontrole bevestigt dat de twee read-endpoints eerder huishouden-onafhankelijk waren.
+- Codecontrole bevestigt dat beide endpoints nu household_id filteren.
+- Codecontrole bevestigt dat de relevante frontendschermen nu Authorization meesturen.
+
+Functioneel verwacht effect:
+- Artikeldetail en voorraadtab tonen alleen data van het ingelogde huishouden.
+- Historie, voorraadtab en totaalvoorraad kunnen daardoor niet meer vervuild raken door andere huishoudens.
+
+Open eerlijke noot:
+- Deze validatie is code- en oorzaakanalyse gebaseerd.
+- Er is in deze omgeving geen volledige browser end-to-end run tegen de lokale userdatabase uitgevoerd.
+- Definitieve acceptatie vereist daarom opnieuw PO-test op Tomaten en Melk.
