@@ -1,0 +1,66 @@
+Rezzerv v01.08.26 — validatierapport kassabonnenflow
+
+Doel van deze ontwikkelstap
+- Vervang de brede Aankopen-opzet door een rustigere kassabonnenflow.
+- Maak op de startpagina twee actieve tegels: Kassabonnen en Import kassabon.
+- Bouw een overzichtsscherm Kassabonnen en houd het detailscherm van één kassabon bereikbaar via Open.
+- Behoud de bestaande verwerkingslogica als onderlaag.
+
+Technische basis
+- Gebaseerd op de laatst lokaal beschikbare codebasis in de container: Rezzerv-v01.08.23.
+- Latere zips uit de conversatie (01.08.24 / 01.08.25) waren niet als bestand aanwezig in /mnt/data en konden daarom niet letterlijk als technische basis worden geopend.
+
+Aangepaste bestanden
+- frontend/src/features/home/HomePage.jsx
+- frontend/src/app/router/AppRouter.jsx
+- frontend/src/features/stores/StoresPage.jsx
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+- frontend/src/features/stores/ReceiptsPage.jsx (nieuw)
+- VERSION.txt
+- version.json
+- frontend/package.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+- frontend/dist/* (opnieuw opgebouwd)
+
+Wat is functioneel aangepast
+1. Startpagina
+- Tegel Kassabon vervangen door Kassabonnen.
+- Nieuwe tegel Import kassabon toegevoegd.
+- Beide tegels zijn klikbaar.
+
+2. Routing
+- /kassabonnen opent het nieuwe overzichtsscherm.
+- /import-kassabon opent de bestaande importflow.
+- /kassabon stuurt nu door naar /import-kassabon.
+
+3. Overzichtsscherm Kassabonnen
+- Rustige lijst met kolommen: Winkel, Datum, Regels, Status, Actie.
+- Eenvoudige filters: Zoek winkel + statusfilter.
+- Knop Open per kassabon.
+- Lege toestand verwijst naar Import kassabon.
+
+4. Detailscherm van één kassabon
+- Titel en navigatie aangepast naar kassabonnenflow.
+- Terugknop gaat terug naar /kassabonnen.
+- Primaire knop heet nu Verwerk klaarstaande regels.
+- Onderliggende werkbladlogica is behouden.
+
+Lokale validatie
+- Frontend-build lokaal opnieuw uitgevoerd met npm install + npm run build.
+- Nieuwe routecomponent ReceiptsPage compileert mee in de build.
+- Versioning uniform opgehoogd naar 01.08.26.
+
+Eerlijke kanttekening
+- Het detailscherm is in deze stap niet volledig opnieuw ontworpen; de bestaande werkbladlogica is behouden en tekstueel/route-matig op de nieuwe flow aangesloten.
+- Deze release is bedoeld als ontwikkelstap om de rustigere structuur testbaar te maken voor de PO.
+
+Korte PO-testroute
+1. Start Rezzerv.
+2. Controleer op de startpagina de tegels Kassabonnen en Import kassabon.
+3. Klik op Kassabonnen.
+4. Controleer of een rustige lijst van kassabonnen verschijnt.
+5. Klik op Open bij een kassabon.
+6. Controleer of het detailscherm opent en de terugknop teruggaat naar Kassabonnen.
+7. Controleer of de primaire knop Verwerk klaarstaande regels heet.

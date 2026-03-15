@@ -5,6 +5,7 @@ import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
 import StoresPage from '../../features/stores/StoresPage'
+import ReceiptsPage from '../../features/stores/ReceiptsPage'
 import StoreBatchDetailPage from '../../features/stores/StoreBatchDetailPage'
 import SettingsPage from '../../features/settings/SettingsPage'
 import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFieldsPage'
@@ -47,8 +48,9 @@ const router = createBrowserRouter([
   { path: '/home', element: <Protected><HomePage /></Protected> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/winkels', element: <Protected><StoresPage /></Protected> },
-  { path: '/kassabon', element: <Protected><Navigate to="/aankopen" replace /></Protected> },
-  { path: '/aankopen', element: <Protected><StoresPage /></Protected> },
+  { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
+  { path: '/kassabon', element: <Protected><Navigate to="/import-kassabon" replace /></Protected> },
+  { path: '/import-kassabon', element: <Protected><StoresPage /></Protected> },
   { path: '/winkels/batch/:batchId', element: <Protected><StoreBatchDetailPage /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <Protected><SettingsPage /></Protected> },

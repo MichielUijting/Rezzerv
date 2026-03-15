@@ -7,10 +7,13 @@ import { getStoreImportSimplificationLabel } from '../settings/services/storeImp
 import {
   batchStatusPillStyle,
   batchStatusToneStyles,
+  connectedStoreRowStyle,
   deriveBatchUiState,
   fetchJson,
   formatBatchLastChange,
   normalizeErrorMessage,
+  providerLabel,
+  providerStatusLabel,
 } from './storeImportShared'
 import { buildAutoConsumeArticleIds } from './autoConsumeContext'
 
@@ -23,32 +26,12 @@ async function getLatestBatchMeta(connectionId) {
   }
 }
 
-function sourceTypeLabel(item) {
-  if (!item) return 'Onbekend'
-  if (item.staticType) return item.staticType
-  if (item.connection) return 'Klantkaart'
-  return 'Nog niet gekoppeld'
-}
-
-function sourceStatusLabel(item) {
-  if (!item) return 'Onbekend'
-  if (item.staticStatus) return item.staticStatus
-  return item.connection ? 'Actief' : 'Aandacht nodig'
-}
-
-function sourceActionLabel(item) {
-  if (!item) return 'Open'
-  if (item.staticAction) return item.staticAction
-  return item.connection ? 'Inlezen' : 'Koppelen'
-}
-
 export default function StoresPage() {
   const navigate = useNavigate()
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [connections, setConnections] = useState([])
   const [openBatches, setOpenBatches] = useState([])
-  const [latestImports, setLatestImports] = useState([])
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -68,7 +51,7 @@ export default function StoresPage() {
     [connections],
   )
 
-  const importLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
+  const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
   const batchItems = useMemo(() => {
     return (openBatches || []).map((batch) => ({
@@ -110,41 +93,6 @@ export default function StoresPage() {
     return Array.from(itemsByCode.values()).sort((a, b) => a.name.localeCompare(b.name, 'nl'))
   }, [connections, connectionsByProviderCode, providers, providersByCode])
 
-  const sourceItems = useMemo(() => {
-    const base = connectedStoreItems.map((item) => ({
-      ...item,
-      staticType: null,
-      staticStatus: null,
-      staticAction: null,
-    }))
-    return [
-      ...base,
-      { code: 'photo-import', name: 'Foto-import', staticType: 'Foto', staticStatus: 'Beschikbaar', staticAction: 'Foto toevoegen' },
-      { code: 'barcode-import', name: 'Barcode-import', staticType: 'Barcode', staticStatus: 'Beschikbaar', staticAction: 'Scan product' },
-    ]
-  }, [connectedStoreItems])
-
-  const newPurchaseItems = useMemo(() => {
-    const merged = latestImports.map((item) => {
-      const openBatch = batchItems.find((batch) => batch.batch_id === item.batch_id) || null
-      const typeLabel = openBatch ? 'Kassabon' : 'Import'
-      const contentLabel = openBatch
-        ? `${openBatch.summary?.total || openBatch.lines?.length || 0} regels`
-        : (item.item_count ? `${item.item_count} regels` : 'Nieuwe aankoop')
-      const statusLabel = openBatch ? 'Open werkblad beschikbaar' : 'Recent ingelezen'
-      return {
-        key: item.batch_id || `${item.connection_id}-${item.created_at || ''}`,
-        sourceName: item.store_provider_name || item.store_name || 'Bron',
-        dateLabel: item.purchase_date || item.created_at || 'Onbekend',
-        typeLabel,
-        contentLabel,
-        statusLabel,
-        batchId: item.batch_id || null,
-      }
-    })
-    return merged.sort((a, b) => String(b.dateLabel || '').localeCompare(String(a.dateLabel || ''))).slice(0, 5)
-  }, [latestImports, batchItems])
-
   function clearTransientFeedback() {
     if (processFeedbackTimer.current) {
       window.clearTimeout(processFeedbackTimer.current)
@@ -173,20 +121,6 @@ export default function StoresPage() {
     return loadedBatches
   }
 
-  async function loadLatestImports(connectionsToCheck) {
-    const latestCandidates = (await Promise.all((connectionsToCheck || []).map(async (connection) => {
-      const latest = await getLatestBatchMeta(connection.id)
-      if (!latest) return null
-      return {
-        ...latest,
-        connection_id: connection.id,
-        store_provider_name: connection.store_provider_name || latest.store_provider_name || connection.store_provider_code,
-      }
-    }))).filter(Boolean)
-    setLatestImports(latestCandidates)
-    return latestCandidates
-  }
-
   async function loadPageData() {
     setIsLoading(true)
     setError('')
@@ -204,12 +138,9 @@ export default function StoresPage() {
 
       setProviders(providerData)
       setConnections(connectionData)
-      await Promise.all([
-        loadOpenBatches(connectionData),
-        loadLatestImports(connectionData),
-      ])
+      await loadOpenBatches(connectionData)
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'Aankoopgegevens konden niet worden geladen.')
+      setError(normalizeErrorMessage(err?.message) || 'Winkelgegevens konden niet worden geladen.')
     } finally {
       setIsLoading(false)
     }
@@ -232,8 +163,8 @@ export default function StoresPage() {
       })
       const nextConnections = [...connections.filter((item) => item.id !== connection.id), connection]
       setConnections(nextConnections)
-      await Promise.all([loadOpenBatches(nextConnections), loadLatestImports(nextConnections)])
-      showStatus(`${providerName || providerCode} is gekoppeld als bron voor aankopen.`)
+      await loadOpenBatches(nextConnections)
+      showStatus(`${providerName || providerCode} is gekoppeld aan dit huishouden.`)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || `${providerName || providerCode} kon niet worden gekoppeld.`)
     } finally {
@@ -249,8 +180,8 @@ export default function StoresPage() {
     try {
       const existingBatchMeta = await getLatestBatchMeta(connection.id)
       if (existingBatchMeta?.batch_id && existingBatchMeta.import_status !== 'processed') {
-        await Promise.all([loadOpenBatches(connections), loadLatestImports(connections)])
-        showStatus(`De laatste open aankoop van ${providerName || 'de bron'} is opnieuw geladen.`)
+        await loadOpenBatches(connections)
+        showStatus(`De laatste open bon van ${providerName || 'de winkel'} is opnieuw geladen.`)
         return
       }
 
@@ -262,13 +193,13 @@ export default function StoresPage() {
       const fullyPrefilled = p.fully_prefilled || 0
       const articlePrefills = p.article_prefills || 0
       if (fullyPrefilled > 0 || articlePrefills > 0) {
-        showStatus(`Nieuwe aankopen van ${providerName || 'de bron'} zijn binnen. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een voorstel.`)
+        showStatus(`Nieuwe mockaankopen van ${providerName || 'de winkel'} zijn opgehaald. ${fullyPrefilled} regel(s) staan al klaar; ${articlePrefills} regel(s) hebben een voorstel.`)
       } else {
-        showStatus(`Nieuwe aankopen van ${providerName || 'de bron'} zijn binnengekomen.`)
+        showStatus(`Nieuwe mockaankopen van ${providerName || 'de winkel'} zijn opgehaald.`)
       }
       const refreshedConnections = await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`)
       setConnections(refreshedConnections)
-      await Promise.all([loadOpenBatches(refreshedConnections), loadLatestImports(refreshedConnections)])
+      await loadOpenBatches(refreshedConnections)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Aankopen konden niet worden opgehaald.')
     } finally {
@@ -276,32 +207,67 @@ export default function StoresPage() {
     }
   }
 
-  function handleSourceAction(item) {
-    if (item.code === 'photo-import') {
-      showStatus('Foto-import is voorzien in de module Aankopen, maar nog niet actief in deze ontwikkelstap.')
-      return
-    }
-    if (item.code === 'barcode-import') {
-      showStatus('Barcode-import is voorzien in de module Aankopen, maar nog niet actief in deze ontwikkelstap.')
-      return
-    }
-    if (!item.connection && item.provider) {
-      handleConnect(item.code, item.name)
-      return
-    }
-    if (item.connection) {
-      handlePullPurchases(item.connection, item.name)
+  async function processBatchNow(batchToProcess) {
+    if (!batchToProcess) return
+    setIsProcessingBatch(true)
+    setBusyBatchId(batchToProcess.batch_id)
+    setError('')
+    setStatus('')
+    try {
+      const result = await fetchJson(`/api/purchase-import-batches/${batchToProcess.batch_id}/process`, {
+        method: 'POST',
+        body: JSON.stringify({ processed_by: 'ui', mode: 'selected_only', auto_consume_article_ids: buildAutoConsumeArticleIds((batchToProcess?.lines || []).filter((line) => (line.processing_status || 'pending') !== 'processed' && (line.review_decision || 'selected') === 'selected')) }),
+      })
+      if (result.failed_count > 0) {
+        showStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
+      } else {
+        showStatus(`Verwerking afgerond: ${result.processed_count} regel(s) zijn naar voorraad verwerkt.`)
+      }
+      const refreshedConnections = household?.id
+        ? await fetchJson(`/api/store-connections?householdId=${encodeURIComponent(household.id)}`).catch(() => connections)
+        : connections
+      setConnections(refreshedConnections)
+      await loadOpenBatches(refreshedConnections)
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
+    } finally {
+      setIsProcessingBatch(false)
+      setBusyBatchId('')
     }
   }
 
-  function handlePrimaryBatchAction(batch) {
+  async function handlePrimaryBatchAction(batch) {
     if (!batch) return
+    const uiState = deriveBatchUiState(batch)
+    if (uiState.actionType === 'process') {
+      await processBatchNow(batch)
+      return
+    }
     navigate(`/winkels/batch/${batch.batch_id}`)
   }
 
   return (
-    <AppShell title="Aankopen" showExit={false}>
+    <AppShell title="Import kassabon" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }}>
+        <Card>
+          <div data-testid="stores-page-intro" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'grid', gap: '8px' }}>
+              <h2 style={{ margin: 0, fontSize: '20px' }}>Import kassabon</h2>
+              <p style={{ margin: 0, color: '#667085' }}>
+                Lees nieuwe kassabonnen in en hervat open bonnen als dat nodig is.
+              </p>
+            </div>
+            <Button variant="secondary" onClick={() => navigate('/home')}>Terug naar start</Button>
+          </div>
+        </Card>
+
+        <Card>
+          <div data-testid="store-import-simplification-banner" className="rz-inline-feedback rz-inline-feedback--warning" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', padding: '4px 0' }}>
+            <span>Vereenvoudigingsniveau winkelimport: <strong>{simplificationLevelLabel}</strong></span>
+            <span>{batchItems.length > 0 ? `${batchItems.length} open bon(nen)` : 'Geen open bonnen'} in deze huishoudcontext.</span>
+          </div>
+        </Card>
+
         {error ? (
           <Card>
             <div style={{ color: '#b42318', fontWeight: 700 }}>{error}</div>
@@ -315,182 +281,118 @@ export default function StoresPage() {
         ) : null}
 
         <Card>
-          <div style={{ display: 'grid', gap: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ display: 'grid', gap: '6px' }}>
-                <h2 style={{ margin: 0, fontSize: '20px' }}>Bronnen</h2>
-                <div style={{ color: '#667085', fontSize: '14px' }}>Beheer hier hoe aankopen in Rezzerv binnenkomen.</div>
-              </div>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <Button variant="secondary" onClick={() => navigate('/home')}>Terug naar start</Button>
-                <Button variant="secondary" onClick={() => navigate('/instellingen/winkelimport')}>Instellingen</Button>
-              </div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 280px) 1fr', gap: '12px', alignItems: 'center' }}>
-              <div style={{ fontWeight: 700 }}>Importniveau aankopen</div>
-              <div className="rz-inline-feedback rz-inline-feedback--warning" style={{ padding: '10px 12px' }}>
-                <strong>{importLevelLabel}</strong>
-              </div>
-            </div>
-            {isLoading ? (
-              <div>Bronnen laden…</div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #d0d5dd' }}>
-                      <th style={{ padding: '10px 8px' }}>Bron</th>
-                      <th style={{ padding: '10px 8px' }}>Type</th>
-                      <th style={{ padding: '10px 8px' }}>Status</th>
-                      <th style={{ padding: '10px 8px' }}>Laatste synchronisatie</th>
-                      <th style={{ padding: '10px 8px' }}>Importstand</th>
-                      <th style={{ padding: '10px 8px' }}>Actie</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sourceItems.map((item) => {
-                      const providerOpenBatch = batchItems.find((batch) => batch.store_provider_code === item.code) || null
-                      const syncLabel = item.staticType ? '-' : (providerOpenBatch ? formatBatchLastChange(providerOpenBatch) : 'Nog nooit')
-                      const importLabel = item.staticType ? 'Handmatig' : (item.connection ? importLevelLabel : 'Handmatig')
-                      return (
-                        <tr key={item.code} style={{ borderBottom: '1px solid #eaecf0' }}>
-                          <td style={{ padding: '12px 8px', fontWeight: 700 }}>{item.name}</td>
-                          <td style={{ padding: '12px 8px' }}>{sourceTypeLabel(item)}</td>
-                          <td style={{ padding: '12px 8px' }}>{sourceStatusLabel(item)}</td>
-                          <td style={{ padding: '12px 8px' }}>{syncLabel}</td>
-                          <td style={{ padding: '12px 8px' }}>{importLabel}</td>
-                          <td style={{ padding: '12px 8px' }}>
-                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                              <Button variant={item.connection || item.staticType ? 'secondary' : 'primary'} onClick={() => handleSourceAction(item)} disabled={isConnecting || isPulling}>
-                                {isConnecting || isPulling ? 'Bezig…' : sourceActionLabel(item)}
-                              </Button>
-                              {!item.staticType ? <Button variant="secondary" onClick={() => navigate('/instellingen/winkelimport')}>Instellingen</Button> : null}
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card>
-          <div style={{ display: 'grid', gap: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Nieuwe aankopen</h3>
-                <div style={{ color: '#667085', fontSize: '14px' }}>Nieuwe imports en aankopen die net zijn binnengekomen.</div>
-              </div>
-              <Button variant="secondary" onClick={loadPageData} disabled={isLoading}>Vernieuwen</Button>
-            </div>
-            {isLoading ? (
-              <div>Nieuwe aankopen laden…</div>
-            ) : newPurchaseItems.length === 0 ? (
-              <div style={{ display: 'grid', gap: '12px', color: '#667085' }}>
-                <div>Er zijn nu geen nieuwe aankopen.</div>
-                <div>Kies hieronder een bron en lees nieuwe aankopen in.</div>
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #d0d5dd' }}>
-                      <th style={{ padding: '10px 8px' }}>Bron</th>
-                      <th style={{ padding: '10px 8px' }}>Datum</th>
-                      <th style={{ padding: '10px 8px' }}>Type</th>
-                      <th style={{ padding: '10px 8px' }}>Inhoud</th>
-                      <th style={{ padding: '10px 8px' }}>Status</th>
-                      <th style={{ padding: '10px 8px' }}>Actie</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {newPurchaseItems.map((item) => (
-                      <tr key={item.key} style={{ borderBottom: '1px solid #eaecf0' }}>
-                        <td style={{ padding: '12px 8px', fontWeight: 700 }}>{item.sourceName}</td>
-                        <td style={{ padding: '12px 8px' }}>{item.dateLabel}</td>
-                        <td style={{ padding: '12px 8px' }}>{item.typeLabel}</td>
-                        <td style={{ padding: '12px 8px' }}>{item.contentLabel}</td>
-                        <td style={{ padding: '12px 8px' }}>{item.statusLabel}</td>
-                        <td style={{ padding: '12px 8px' }}>
-                          {item.batchId ? (
-                            <Button variant="secondary" onClick={() => navigate(`/winkels/batch/${item.batchId}`)}>Open</Button>
-                          ) : (
-                            <Button variant="secondary" disabled>Beoordeel</Button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </Card>
-
-        <Card>
           <div data-testid="open-batches-section" style={{ display: 'grid', gap: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Open en verwerk</h3>
-                <div style={{ color: '#667085', fontSize: '14px' }}>Werkbladen die nog naar voorraad moeten worden verwerkt.</div>
-              </div>
-              <Button variant="secondary" onClick={loadPageData} disabled={isLoading}>Vernieuwen</Button>
+            <div>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Open bonnen</h3>
+              <div style={{ color: '#667085', fontSize: '14px' }}>Open, hervat en verwerk hier je bonnen.</div>
             </div>
 
             {isLoading ? (
-              <div>Werkbladen laden…</div>
+              <div>Winkelgegevens laden…</div>
             ) : batchItems.length === 0 ? (
-              <div data-testid="open-batches-empty" style={{ display: 'grid', gap: '12px', color: '#667085' }}>
-                <div>Er zijn nu geen open werkbladen.</div>
-                <div>Lees eerst aankopen in bij een bron of bekijk nieuwe aankopen hierboven.</div>
-              </div>
+              <div data-testid="open-batches-empty" style={{ color: '#667085' }}>Geen open bonnen</div>
             ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #d0d5dd' }}>
-                      <th style={{ padding: '10px 8px' }}>Bron</th>
-                      <th style={{ padding: '10px 8px' }}>Datum</th>
-                      <th style={{ padding: '10px 8px' }}>Regels</th>
-                      <th style={{ padding: '10px 8px' }}>Klaar</th>
-                      <th style={{ padding: '10px 8px' }}>Actie nodig</th>
-                      <th style={{ padding: '10px 8px' }}>Status</th>
-                      <th style={{ padding: '10px 8px' }}>Actie</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {batchItems.map((batch) => {
-                      const totalLines = batch.summary?.total || batch.lines?.length || 0
-                      const readyCount = batch.summary?.ready || batch.summary?.ready_to_process || 0
-                      const actionNeeded = batch.summary?.action_needed || Math.max(0, totalLines - readyCount - (batch.summary?.ignored || 0) - (batch.summary?.processed || 0))
-                      return (
-                        <tr key={batch.batch_id} data-testid={`open-batch-${batch.batch_id}`} style={{ borderBottom: '1px solid #eaecf0' }}>
-                          <td style={{ padding: '12px 8px', fontWeight: 700 }}>{batch.store_provider_name || batch.store_name}</td>
-                          <td style={{ padding: '12px 8px' }}>{batch.purchase_date || 'Onbekend'}</td>
-                          <td style={{ padding: '12px 8px' }}>{totalLines}</td>
-                          <td style={{ padding: '12px 8px' }}>{readyCount}</td>
-                          <td style={{ padding: '12px 8px' }}>{actionNeeded}</td>
-                          <td style={{ padding: '12px 8px' }}>
-                            <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[batch.uiState.statusKey] || batchStatusToneStyles.open) }}>{batch.uiState.label}</span>
-                          </td>
-                          <td style={{ padding: '12px 8px' }}>
-                            <Button
-                              data-testid={`batch-primary-action-${batch.batch_id}`}
-                              variant={batch.uiState.actionType === 'process' ? 'primary' : 'secondary'}
-                              onClick={() => handlePrimaryBatchAction(batch)}
-                              disabled={busyBatchId === batch.batch_id || isProcessingBatch}
-                            >
-                              {busyBatchId === batch.batch_id ? 'Bezig…' : 'Open werkblad'}
-                            </Button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {batchItems.map((batch) => (
+                  <div
+                    key={batch.batch_id}
+                    data-testid={`open-batch-${batch.batch_id}`}
+                    style={{
+                      border: '1px solid #d0d5dd',
+                      borderRadius: '12px',
+                      padding: '14px 16px',
+                      display: 'grid',
+                      gap: '10px',
+                      background: '#ffffff',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'grid', gap: '6px' }}>
+                        <div style={{ fontWeight: 700, fontSize: '18px' }}>{batch.store_provider_name || batch.store_name}</div>
+                        <div style={{ color: '#667085', fontSize: '14px' }}>
+                          {batch.purchase_date || 'Onbekend'} · {batch.store_label || batch.store_name || providerLabel(providersByCode[batch.store_provider_code])}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                        <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[batch.uiState.statusKey] || batchStatusToneStyles.open) }}>{batch.uiState.label}</span>
+                        <Button
+                          data-testid={`batch-primary-action-${batch.batch_id}`}
+                          variant={batch.uiState.actionType === 'process' ? 'primary' : 'secondary'}
+                          onClick={() => handlePrimaryBatchAction(batch)}
+                          disabled={busyBatchId === batch.batch_id || isProcessingBatch}
+                        >
+                          {busyBatchId === batch.batch_id ? 'Bezig…' : batch.uiState.actionLabel}
+                        </Button>
+                        {batch.uiState.canResume && batch.uiState.actionType === 'process' ? (
+                          <Button
+                            data-testid={`batch-resume-action-${batch.batch_id}`}
+                            variant="secondary"
+                            onClick={() => navigate(`/winkels/batch/${batch.batch_id}`)}
+                            disabled={busyBatchId === batch.batch_id || isProcessingBatch}
+                          >
+                            Hervatten
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gap: '8px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', color: '#667085', fontSize: '14px' }}>
+                        <div>Aantal regels: <strong>{batch.summary?.total || batch.lines?.length || 0}</strong></div>
+                        <div>{batch.uiState.progressText}</div>
+                        <div>Laatste wijziging: {formatBatchLastChange(batch)}</div>
+                      </div>
+                      <div data-testid={`batch-status-reason-${batch.batch_id}`} className="rz-inline-feedback rz-inline-feedback--warning" style={{ padding: '8px 10px' }}>
+                        <strong>Statusreden:</strong> {batch.uiState.statusReason}<br />
+                        <strong>Primaire actie:</strong> {batch.uiState.actionLabel} — {batch.uiState.primaryActionReason}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <div data-testid="connected-stores-section">
+            {isLoading ? (
+              <div>Winkelgegevens laden…</div>
+            ) : (
+              <div style={{ display: 'grid', gap: '14px' }}>
+                <div>
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Verbonden winkels</h3>
+                  <div style={{ color: '#667085', fontSize: '14px' }}>Beheer hier je gekoppelde winkels en haal nieuwe aankopen op.</div>
+                </div>
+                {connectedStoreItems.map((item) => {
+                  const provider = item.provider
+                  const connection = item.connection
+                  const providerOpenBatch = batchItems.find((batch) => batch.store_provider_code === item.code) || null
+                  const providerName = item.name
+                  return (
+                    <div key={item.code} data-testid={`store-provider-${item.code}`} style={connectedStoreRowStyle}>
+                      <div style={{ display: 'grid', gap: '2px' }}>
+                        <div style={{ fontWeight: 700 }}>{providerName}</div>
+                        <div style={{ color: '#667085', fontSize: '14px' }}>Status: {connection ? 'gekoppeld / actief' : providerStatusLabel(provider)}</div>
+                        <div style={{ color: '#667085', fontSize: '14px' }}>Laatste activiteit: {providerOpenBatch ? formatBatchLastChange(providerOpenBatch) : 'Nog geen open bon'}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        {providerOpenBatch ? (
+                          <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[providerOpenBatch.uiState.statusKey] || batchStatusToneStyles.open) }}>{providerOpenBatch.uiState.label}</span>
+                        ) : null}
+                        {!connection && provider ? (
+                          <Button data-testid={`connect-store-${item.code}`} variant="primary" onClick={() => handleConnect(item.code, providerName)} disabled={isConnecting}>
+                            {isConnecting ? 'Koppelen…' : `${providerName} koppelen`}
+                          </Button>
+                        ) : connection ? (
+                          <Button data-testid={`pull-purchases-${item.code}`} variant="secondary" onClick={() => handlePullPurchases(connection, providerName)} disabled={isPulling}>
+                            {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

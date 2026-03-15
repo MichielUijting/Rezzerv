@@ -608,21 +608,21 @@ export default function StoreBatchDetailPage() {
   const allVisibleSelected = filteredLineUiStates.length > 0 && filteredLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
 
   return (
-    <AppShell title="Kassabon werkblad" showExit={false}>
+    <AppShell title={batch ? buildBatchTitle(batch) : 'Kassabon'} showExit={false}>
       <div style={{ display: 'grid', gap: '16px', width: '100%' }}>
         <Card>
           <div className="rz-store-workbench-header">
             <div className="rz-store-workbench-heading">
-              <div className="rz-store-workbench-eyebrow">Kassabon werkblad</div>
-              <h2 style={{ margin: 0, fontSize: '24px' }}>{batch ? buildBatchTitle(batch) : 'Kassabon werkblad'}</h2>
+              <div className="rz-store-workbench-eyebrow">Kassabon</div>
+              <h2 style={{ margin: 0, fontSize: '24px' }}>{batch ? buildBatchTitle(batch) : 'Kassabon'}</h2>
               <div className="rz-store-workbench-meta">{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
               <div className="rz-store-workbench-meta">Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div className="rz-store-workbench-actions">
-              <Button variant="secondary" onClick={() => navigate('/aankopen')}>Terug naar aankopen</Button>
+              <Button variant="secondary" onClick={() => navigate('/kassabonnen')}>Terug naar kassabonnen</Button>
               <Button variant="secondary" onClick={() => navigate('/voorraad')}>Bekijk voorraad</Button>
               <Button variant="primary" onClick={() => processBatchNow('ready_only')} disabled={isProcessingBatch || !canProcessBatch}>
-                {isProcessingBatch ? 'Bezig…' : 'Verwerk alles wat klaar is'}
+                {isProcessingBatch ? 'Bezig…' : 'Verwerk klaarstaande regels'}
               </Button>
               {processFeedback ? <span className="rz-store-inline-feedback">{processFeedback}</span> : null}
             </div>
