@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
-import Button from '../../ui/Button'
+import { StoreBatchDetailContent } from './StoreBatchDetailPage'
 import {
   batchStatusLabel,
   deriveBatchUiState,
@@ -31,12 +30,13 @@ function batchRowSubline(item) {
 }
 
 export default function ReceiptsPage() {
-  const navigate = useNavigate()
   const [providers, setProviders] = useState([])
   const [batches, setBatches] = useState([])
   const [filters, setFilters] = useState({ winkel: '', datum: '', regels: '', status: '' })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
+  const [selectedBatchId, setSelectedBatchId] = useState('')
+  const [openedBatchId, setOpenedBatchId] = useState('')
 
   const providersByCode = useMemo(
     () => Object.fromEntries(providers.map((provider) => [provider.code, provider])),
@@ -103,6 +103,20 @@ export default function ReceiptsPage() {
       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
   }, [batches, providersByCode, filters])
 
+  useEffect(() => {
+    if (!listItems.length) {
+      setSelectedBatchId('')
+      setOpenedBatchId('')
+      return
+    }
+    if (!selectedBatchId || !listItems.some((item) => item.batch_id === selectedBatchId)) {
+      setSelectedBatchId(listItems[0].batch_id)
+    }
+    if (openedBatchId && !listItems.some((item) => item.batch_id === openedBatchId)) {
+      setOpenedBatchId('')
+    }
+  }, [listItems, selectedBatchId, openedBatchId])
+
   function handleFilterChange(key, value) {
     setFilters((current) => ({ ...current, [key]: value }))
   }
@@ -115,13 +129,14 @@ export default function ReceiptsPage() {
           <table className="rz-table">
             <thead>
               <tr className="rz-table-header">
-                <th>Winkel</th>
-                <th>Datum</th>
-                <th className="rz-num">Regels</th>
-                <th>Status</th>
-                <th>Actie</th>
+                <th style={{ width: '44px' }} />
+                <th style={{ width: '34%' }}>Winkel</th>
+                <th style={{ width: '20%' }}>Datum</th>
+                <th className="rz-num" style={{ width: '12%' }}>Regels</th>
+                <th style={{ width: '22%' }}>Status</th>
               </tr>
               <tr className="rz-table-filters">
+                <th />
                 <th>
                   <input
                     className="rz-input rz-inline-input"
@@ -158,7 +173,6 @@ export default function ReceiptsPage() {
                     aria-label="Filter op status"
                   />
                 </th>
-                <th />
               </tr>
             </thead>
             <tbody>
@@ -166,28 +180,47 @@ export default function ReceiptsPage() {
                 <tr><td colSpan={5}>Bonnen laden…</td></tr>
               ) : listItems.length === 0 ? (
                 <tr><td colSpan={5}>Er zijn nog geen kassabonnen.</td></tr>
-              ) : listItems.map((item) => (
-                <tr key={item.batch_id}>
-                  <td>
-                    <div style={{ fontWeight: 700 }}>{item.providerName}</div>
-                    <div style={{ color: '#667085', marginTop: '4px' }}>{batchRowSubline(item)}</div>
-                  </td>
-                  <td>{item.dateLabel}</td>
-                  <td className="rz-num">{item.totalLines}</td>
-                  <td>
-                    <span className={`rz-store-status-badge rz-store-status-badge--${item.uiState?.statusKey || 'new'}`}>
-                      {item.statusLabel}
-                    </span>
-                  </td>
-                  <td>
-                    <Button variant="secondary" onClick={() => navigate(`/winkels/batch/${item.batch_id}`)}>Open</Button>
-                  </td>
-                </tr>
-              ))}
+              ) : listItems.map((item) => {
+                const selected = item.batch_id === selectedBatchId
+                return (
+                  <tr
+                    key={item.batch_id}
+                    className={selected ? 'rz-row-selected' : ''}
+                    onClick={() => setSelectedBatchId(item.batch_id)}
+                    onDoubleClick={() => {
+                      setSelectedBatchId(item.batch_id)
+                      setOpenedBatchId(item.batch_id)
+                    }}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        readOnly
+                        checked={selected}
+                        aria-label={`Selecteer ${item.providerName} van ${item.dateLabel}`}
+                      />
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 700 }}>{item.providerName}</div>
+                      <div style={{ color: '#667085', marginTop: '4px' }}>{batchRowSubline(item)}</div>
+                    </td>
+                    <td>{item.dateLabel}</td>
+                    <td className="rz-num">{item.totalLines}</td>
+                    <td>
+                      <span className={`rz-store-status-badge rz-store-status-badge--${item.uiState?.statusKey || 'new'}`}>
+                        {item.statusLabel}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
       </ScreenCard>
+
+      {openedBatchId ? <StoreBatchDetailContent batchIdOverride={openedBatchId} embedded /> : null}
     </AppShell>
   )
 }

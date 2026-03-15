@@ -62,9 +62,10 @@ function detailValue(value, fallback = 'Niet van toepassing') {
   return String(value)
 }
 
-export default function StoreBatchDetailPage() {
+export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false }) {
   const navigate = useNavigate()
-  const { batchId } = useParams()
+  const params = useParams()
+  const batchId = batchIdOverride || params.batchId || ''
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [batch, setBatch] = useState(null)
@@ -802,19 +803,29 @@ export default function StoreBatchDetailPage() {
     ),
   }
 
+  const content = (
+    <ScreenCard fullWidth>
+      {isLoading ? (
+        <div>Bongegevens laden…</div>
+      ) : batch ? (
+        <Tabs tabs={['Bonregels', 'Verwerking', 'Diagnose']}>
+          {(activeTab) => tabContent[activeTab]}
+        </Tabs>
+      ) : (
+        <div>Geen kassabon beschikbaar.</div>
+      )}
+    </ScreenCard>
+  )
+
+  if (embedded) return content
+
   return (
     <AppShell title={batch ? buildBatchTitle(batch) : 'Kassabon'} showExit={false}>
-      <ScreenCard fullWidth>
-        {isLoading ? (
-          <div>Bongegevens laden…</div>
-        ) : batch ? (
-          <Tabs tabs={['Bonregels', 'Verwerking', 'Diagnose']}>
-            {(activeTab) => tabContent[activeTab]}
-          </Tabs>
-        ) : (
-          <div>Geen kassabon beschikbaar.</div>
-        )}
-      </ScreenCard>
+      {content}
     </AppShell>
   )
+}
+
+export default function StoreBatchDetailPage() {
+  return <StoreBatchDetailContent />
 }

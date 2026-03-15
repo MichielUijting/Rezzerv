@@ -1,0 +1,54 @@
+Rezzerv v01.08.28 — Kassabonnen dubbelklik + inline detail UI-release
+
+Basis
+- Gebaseerd op de laatst lokaal beschikbare codebasis in de container: Rezzerv-v01.08.27.
+
+Doel
+- Verwijder de actiekolom uit Kassabonnen.
+- Open een kassabon uitsluitend via dubbelklik op een regel.
+- Toon het detail van de geselecteerde kassabon onder dezelfde tabel op dezelfde pagina.
+
+Aangepaste bestanden
+- frontend/src/features/stores/ReceiptsPage.jsx
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+- frontend/src/ui/components/table.css
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+- frontend/package.json
+- frontend/package-lock.json
+
+Wat is gewijzigd
+- Kassabonnen-overzicht gebruikt nu kolommen: selectie, Winkel, Datum, Regels, Status.
+- De kolom Actie is verwijderd.
+- Enkelklik selecteert een rij.
+- Dubbelklik op een rij opent het detail inline onder de tabel.
+- De detailweergave gebruikt de bestaande StoreBatchDetail-content embedded in dezelfde pagina.
+- Geselecteerde rij krijgt een subtiele highlight.
+
+Wat expliciet niet is gewijzigd
+- Backend-endpoints voor batchverwerking.
+- Bestaande verwerkingslogica van kassabonregels.
+- Route /winkels/batch/:batchId voor directe detailtoegang.
+
+Getest
+- Broncodecontrole op verwijdering van actiekolom.
+- Broncodecontrole op dubbelklik-gedrag.
+- Broncodecontrole op inline renderen van detail onder het overzicht.
+
+Niet getest
+- Geen lokale frontend-build uitgevoerd in deze container, omdat de gesaneerde ontwikkelzip geen geinstalleerde node_modules bevat.
+- Geen browserrun in Docker-omgeving uitgevoerd.
+
+Risico
+- Laag tot middel: de wijziging zit volledig in de frontend-UI, maar de uiteindelijke visuele output is nog niet lokaal in een verse dist gecontroleerd.
+
+PO-teststappen
+1. Open Startpagina > Kassabonnen.
+2. Controleer dat de tabel geen actiekolom meer heeft.
+3. Klik eenmaal op een rij en controleer dat de rij geselecteerd wordt.
+4. Dubbelklik op dezelfde rij en controleer dat het detail onder de tabel verschijnt.
+5. Controleer dat er geen extra knop Openen zichtbaar is.
+6. Controleer dat de detailweergave niet als los scherm opent, maar onder het overzicht blijft staan.

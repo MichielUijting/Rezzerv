@@ -116,3 +116,12 @@ table.rz-table{
   font-size: 16px;
   line-height: 1.2 !important;
 }
+
+
+.rz-table tbody tr.rz-row-selected{
+  background: #eef6f0;
+}
+
+.rz-table tbody tr.rz-row-selected:hover{
+  background: #e6f1e8;
+}
