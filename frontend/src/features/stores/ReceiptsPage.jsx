@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
+import Button from '../../ui/Button'
 import { StoreBatchDetailContent } from './StoreBatchDetailPage'
 import {
   batchStatusLabel,
@@ -35,7 +36,7 @@ export default function ReceiptsPage() {
   const [filters, setFilters] = useState({ winkel: '', datum: '', regels: '', status: '' })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
-  const [selectedBatchId, setSelectedBatchId] = useState('')
+  const [selectedBatchIds, setSelectedBatchIds] = useState([])
   const [openedBatchId, setOpenedBatchId] = useState('')
 
   const providersByCode = useMemo(
@@ -105,21 +106,56 @@ export default function ReceiptsPage() {
 
   useEffect(() => {
     if (!listItems.length) {
-      setSelectedBatchId('')
+      setSelectedBatchIds([])
       setOpenedBatchId('')
       return
     }
-    if (!selectedBatchId || !listItems.some((item) => item.batch_id === selectedBatchId)) {
-      setSelectedBatchId(listItems[0].batch_id)
-    }
-    if (openedBatchId && !listItems.some((item) => item.batch_id === openedBatchId)) {
+    const visibleIds = new Set(listItems.map((item) => item.batch_id))
+    setSelectedBatchIds((current) => current.filter((id) => visibleIds.has(id)))
+    if (openedBatchId && !visibleIds.has(openedBatchId)) {
       setOpenedBatchId('')
     }
-  }, [listItems, selectedBatchId, openedBatchId])
+  }, [listItems, openedBatchId])
 
   function handleFilterChange(key, value) {
     setFilters((current) => ({ ...current, [key]: value }))
   }
+
+  function toggleSelectedBatch(batchId) {
+    setSelectedBatchIds((current) => (
+      current.includes(batchId)
+        ? current.filter((id) => id !== batchId)
+        : [...current, batchId]
+    ))
+  }
+
+  function toggleSelectAllVisible() {
+    if (!listItems.length) return
+    const visibleIds = listItems.map((item) => item.batch_id)
+    const allVisibleSelected = visibleIds.every((id) => selectedBatchIds.includes(id))
+    setSelectedBatchIds(allVisibleSelected ? [] : visibleIds)
+  }
+
+  function handleExport() {
+    const selectedIds = selectedBatchIds.length ? new Set(selectedBatchIds) : null
+    const rows = listItems.filter((item) => !selectedIds || selectedIds.has(item.batch_id))
+    const header = ['Winkel', 'Datum', 'Regels', 'Status']
+    const csvRows = rows.map((item) => [item.providerName, item.dateLabel, String(item.totalLines), item.statusLabel])
+    const csv = [header, ...csvRows]
+      .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'rezzerv-kassabonnen.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  }
+
+  const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedBatchIds.includes(item.batch_id))
 
   return (
     <AppShell title="Kassabonnen" showExit={false}>
@@ -129,11 +165,18 @@ export default function ReceiptsPage() {
           <table className="rz-table">
             <thead>
               <tr className="rz-table-header">
-                <th style={{ width: '44px' }} />
-                <th style={{ width: '34%' }}>Winkel</th>
-                <th style={{ width: '20%' }}>Datum</th>
+                <th style={{ width: '44px' }}>
+                  <input
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={toggleSelectAllVisible}
+                    aria-label="Selecteer alle zichtbare kassabonnen"
+                  />
+                </th>
+                <th style={{ width: '38%' }}>Winkel</th>
+                <th style={{ width: '22%' }}>Datum</th>
                 <th className="rz-num" style={{ width: '12%' }}>Regels</th>
-                <th style={{ width: '22%' }}>Status</th>
+                <th style={{ width: '20%' }}>Status</th>
               </tr>
               <tr className="rz-table-filters">
                 <th />
@@ -181,23 +224,23 @@ export default function ReceiptsPage() {
               ) : listItems.length === 0 ? (
                 <tr><td colSpan={5}>Er zijn nog geen kassabonnen.</td></tr>
               ) : listItems.map((item) => {
-                const selected = item.batch_id === selectedBatchId
+                const selected = selectedBatchIds.includes(item.batch_id)
                 return (
                   <tr
                     key={item.batch_id}
                     className={selected ? 'rz-row-selected' : ''}
-                    onClick={() => setSelectedBatchId(item.batch_id)}
+                    onClick={() => toggleSelectedBatch(item.batch_id)}
                     onDoubleClick={() => {
-                      setSelectedBatchId(item.batch_id)
+                      if (!selected) toggleSelectedBatch(item.batch_id)
                       setOpenedBatchId(item.batch_id)
                     }}
                     style={{ cursor: 'pointer' }}
                   >
-                    <td>
+                    <td onClick={(event) => event.stopPropagation()}>
                       <input
                         type="checkbox"
-                        readOnly
                         checked={selected}
+                        onChange={() => toggleSelectedBatch(item.batch_id)}
                         aria-label={`Selecteer ${item.providerName} van ${item.dateLabel}`}
                       />
                     </td>
@@ -217,6 +260,9 @@ export default function ReceiptsPage() {
               })}
             </tbody>
           </table>
+        </div>
+        <div className="rz-stock-table-actions">
+          <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || listItems.length === 0}>Exporteren</Button>
         </div>
       </ScreenCard>
 

@@ -2210,6 +2210,251 @@ ensure_release_4_schema()
 ensure_release_803_schema()
 ensure_release_813_schema()
 seed_store_providers()
+ensure_ui_test_seed_data()
+
+
+
+def ensure_ui_test_seed_data():
+    household = ensure_household("admin@rezzerv.local")
+    household_id = str(household.get("id") or "1")
+
+    with engine.begin() as conn:
+        inventory_count = conn.execute(
+            text("SELECT COUNT(*) FROM inventory WHERE household_id = :household_id"),
+            {"household_id": household_id},
+        ).scalar() or 0
+
+        if int(inventory_count) == 0:
+            def ensure_space(name: str):
+                row = conn.execute(
+                    text("SELECT id FROM spaces WHERE household_id = :household_id AND lower(naam) = lower(:naam) LIMIT 1"),
+                    {"household_id": household_id, "naam": name},
+                ).mappings().first()
+                if row:
+                    return row["id"]
+                return conn.execute(
+                    text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, :household_id) RETURNING id"),
+                    {"naam": name, "household_id": household_id},
+                ).scalar_one()
+
+            def ensure_sublocation(space_id: str, name: str):
+                row = conn.execute(
+                    text("SELECT id FROM sublocations WHERE space_id = :space_id AND lower(naam) = lower(:naam) LIMIT 1"),
+                    {"space_id": space_id, "naam": name},
+                ).mappings().first()
+                if row:
+                    return row["id"]
+                return conn.execute(
+                    text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :space_id) RETURNING id"),
+                    {"naam": name, "space_id": space_id},
+                ).scalar_one()
+
+            keuken_id = ensure_space('Keuken')
+            berging_id = ensure_space('Berging')
+            badkamer_id = ensure_space('Badkamer')
+            kast1_id = ensure_sublocation(keuken_id, 'Kast 1')
+            koelkast_id = ensure_sublocation(keuken_id, 'Koelkast')
+            voorraadkast_id = ensure_sublocation(berging_id, 'Voorraadkast')
+            boven_id = ensure_sublocation(berging_id, 'Boven')
+            badkamerkast_id = ensure_sublocation(badkamer_id, 'Kast')
+
+            demo_rows = [
+                ('Melk', 1, keuken_id, kast1_id),
+                ('Tuna', 1, berging_id, boven_id),
+                ('Tomaten', 2, keuken_id, koelkast_id),
+                ('Pasta', 3, berging_id, voorraadkast_id),
+                ('Shampoo', 1, badkamer_id, badkamerkast_id),
+            ]
+            space_lookup = {keuken_id: 'Keuken', berging_id: 'Berging', badkamer_id: 'Badkamer'}
+            sub_lookup = {kast1_id: 'Kast 1', koelkast_id: 'Koelkast', voorraadkast_id: 'Voorraadkast', boven_id: 'Boven', badkamerkast_id: 'Kast'}
+
+            for naam, aantal, space_id, sublocation_id in demo_rows:
+                conn.execute(
+                    text("INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id) VALUES (lower(hex(randomblob(16))), :naam, :aantal, :household_id, :space_id, :sublocation_id)"),
+                    {"naam": naam, "aantal": aantal, "household_id": household_id, "space_id": space_id, "sublocation_id": sublocation_id},
+                )
+                create_inventory_event(
+                    conn,
+                    household_id=household_id,
+                    article_id=build_live_article_option_id(naam),
+                    article_name=naam,
+                    resolved_location={
+                        'space_id': space_id,
+                        'sublocation_id': sublocation_id,
+                        'label': ' / '.join(part for part in [space_lookup.get(space_id, ''), sub_lookup.get(sublocation_id, '')] if part),
+                    },
+                    event_type='purchase',
+                    quantity=int(aantal),
+                    source='seed_ui_demo',
+                    note='Initiële testvoorraad',
+                    old_quantity=0,
+                    new_quantity=int(aantal),
+                )
+
+        batch_count = conn.execute(
+            text("SELECT COUNT(*) FROM purchase_import_batches WHERE household_id = :household_id"),
+            {"household_id": household_id},
+        ).scalar() or 0
+
+        if int(batch_count) == 0:
+            provider_rows = conn.execute(
+                text("SELECT id, code, name FROM store_providers WHERE code IN ('jumbo', 'lidl') ORDER BY code"),
+            ).mappings().all()
+            providers = {row['code']: dict(row) for row in provider_rows}
+
+            def ensure_connection(provider_code: str, external_ref: str):
+                provider = providers.get(provider_code)
+                if not provider:
+                    return None
+                existing = conn.execute(
+                    text("SELECT id FROM household_store_connections WHERE household_id = :household_id AND store_provider_id = :store_provider_id LIMIT 1"),
+                    {"household_id": household_id, "store_provider_id": provider['id']},
+                ).mappings().first()
+                if existing:
+                    return existing['id']
+                return conn.execute(
+                    text("""
+                    INSERT INTO household_store_connections (
+                        id, household_id, store_provider_id, connection_status, external_account_ref, linked_at, created_at, updated_at
+                    ) VALUES (
+                        lower(hex(randomblob(16))), :household_id, :store_provider_id, 'active', :external_account_ref, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    ) RETURNING id
+                    """),
+                    {"household_id": household_id, "store_provider_id": provider['id'], "external_account_ref": external_ref},
+                ).scalar_one()
+
+            def insert_batch(provider_code: str, connection_id: str, source_reference: str, import_status: str, batch_metadata: dict, lines: list[dict]):
+                provider = providers.get(provider_code)
+                if not provider or not connection_id:
+                    return None
+                batch_id = str(uuid.uuid4())
+                raw_payload = json.dumps({
+                    'mock_profile': 'seed',
+                    'provider_code': provider_code,
+                    'batch_metadata': batch_metadata,
+                    'lines': [
+                        {
+                            'external_line_ref': line['external_line_ref'],
+                            'external_article_code': line['external_article_code'],
+                            'article_name_raw': line['article_name_raw'],
+                            'brand_raw': line.get('brand_raw') or '',
+                            'quantity_raw': line['quantity_raw'],
+                            'unit_raw': line['unit_raw'],
+                            'line_price_raw': line['line_price_raw'],
+                            'currency_code': line.get('currency_code') or 'EUR',
+                        } for line in lines
+                    ],
+                })
+                conn.execute(
+                    text("""
+                    INSERT INTO purchase_import_batches (id, household_id, store_provider_id, connection_id, source_type, source_reference, import_status, raw_payload, created_at)
+                    VALUES (:id, :household_id, :store_provider_id, :connection_id, 'mock', :source_reference, :import_status, :raw_payload, CURRENT_TIMESTAMP)
+                    """),
+                    {
+                        'id': batch_id,
+                        'household_id': household_id,
+                        'store_provider_id': provider['id'],
+                        'connection_id': connection_id,
+                        'source_reference': source_reference,
+                        'import_status': import_status,
+                        'raw_payload': raw_payload,
+                    },
+                )
+                for index, line in enumerate(lines, start=1):
+                    conn.execute(
+                        text("""
+                        INSERT INTO purchase_import_lines (
+                            id, batch_id, external_line_ref, external_article_code, article_name_raw, brand_raw, quantity_raw, unit_raw, line_price_raw, currency_code,
+                            match_status, review_decision, ui_sort_order, matched_household_article_id, target_location_id, processing_status, suggested_household_article_id, suggested_location_id, suggestion_confidence, suggestion_reason, is_auto_prefilled, article_override_mode, location_override_mode, created_at
+                        ) VALUES (
+                            lower(hex(randomblob(16))), :batch_id, :external_line_ref, :external_article_code, :article_name_raw, :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
+                            :match_status, :review_decision, :ui_sort_order, :matched_household_article_id, :target_location_id, :processing_status, :suggested_household_article_id, :suggested_location_id, :suggestion_confidence, :suggestion_reason, :is_auto_prefilled, :article_override_mode, :location_override_mode, CURRENT_TIMESTAMP
+                        )
+                        """),
+                        {
+                            'batch_id': batch_id,
+                            'ui_sort_order': index,
+                            'external_line_ref': line['external_line_ref'],
+                            'external_article_code': line['external_article_code'],
+                            'article_name_raw': line['article_name_raw'],
+                            'brand_raw': line.get('brand_raw') or '',
+                            'quantity_raw': line['quantity_raw'],
+                            'unit_raw': line['unit_raw'],
+                            'line_price_raw': line['line_price_raw'],
+                            'currency_code': line.get('currency_code') or 'EUR',
+                            'match_status': line.get('match_status') or 'unmatched',
+                            'review_decision': line.get('review_decision') or 'pending',
+                            'matched_household_article_id': line.get('matched_household_article_id'),
+                            'target_location_id': line.get('target_location_id'),
+                            'processing_status': line.get('processing_status') or 'pending',
+                            'suggested_household_article_id': line.get('suggested_household_article_id'),
+                            'suggested_location_id': line.get('suggested_location_id'),
+                            'suggestion_confidence': line.get('suggestion_confidence'),
+                            'suggestion_reason': line.get('suggestion_reason'),
+                            'is_auto_prefilled': line.get('is_auto_prefilled', 0),
+                            'article_override_mode': line.get('article_override_mode', 'auto'),
+                            'location_override_mode': line.get('location_override_mode', 'auto'),
+                        },
+                    )
+                return batch_id
+
+            kitchen_kast1 = conn.execute(text("SELECT sl.id FROM sublocations sl JOIN spaces s ON s.id = sl.space_id WHERE s.household_id = :household_id AND lower(s.naam) = 'keuken' AND lower(sl.naam) = 'kast 1' LIMIT 1"), {'household_id': household_id}).scalar()
+            kitchen_koelkast = conn.execute(text("SELECT sl.id FROM sublocations sl JOIN spaces s ON s.id = sl.space_id WHERE s.household_id = :household_id AND lower(s.naam) = 'keuken' AND lower(sl.naam) = 'koelkast' LIMIT 1"), {'household_id': household_id}).scalar()
+            berging_boven = conn.execute(text("SELECT sl.id FROM sublocations sl JOIN spaces s ON s.id = sl.space_id WHERE s.household_id = :household_id AND lower(s.naam) = 'berging' AND lower(sl.naam) = 'boven' LIMIT 1"), {'household_id': household_id}).scalar()
+
+            jumbo_connection_id = ensure_connection('jumbo', 'jumbo-klantkaart')
+            lidl_connection_id = ensure_connection('lidl', 'lidl-klantkaart')
+
+            insert_batch(
+                'jumbo',
+                jumbo_connection_id,
+                'mock:seed-jumbo-open',
+                'in_review',
+                {'purchase_date': '15-03-2026', 'store_name': 'Jumbo', 'store_label': 'Jumbo, Marktplein 8, Utrecht'},
+                [
+                    {
+                        'external_line_ref': 'seed-jumbo-1', 'external_article_code': 'JUMBO-SEED-1', 'article_name_raw': 'Magere yoghurt', 'brand_raw': 'Jumbo',
+                        'quantity_raw': 1, 'unit_raw': 'liter', 'line_price_raw': 1.59, 'currency_code': 'EUR',
+                        'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': build_live_article_option_id('Melk'),
+                        'target_location_id': kitchen_kast1, 'processing_status': 'pending', 'suggested_household_article_id': build_live_article_option_id('Melk'),
+                        'suggested_location_id': kitchen_kast1, 'suggestion_confidence': 'high', 'suggestion_reason': 'Automatisch voorbereid — niveau Gebalanceerd', 'is_auto_prefilled': 1,
+                    },
+                    {
+                        'external_line_ref': 'seed-jumbo-2', 'external_article_code': 'JUMBO-SEED-2', 'article_name_raw': 'Appelsap', 'brand_raw': 'Jumbo',
+                        'quantity_raw': 1, 'unit_raw': 'liter', 'line_price_raw': 1.99, 'currency_code': 'EUR',
+                        'match_status': 'unmatched', 'review_decision': 'selected', 'processing_status': 'pending',
+                    },
+                    {
+                        'external_line_ref': 'seed-jumbo-3', 'external_article_code': 'JUMBO-SEED-3', 'article_name_raw': 'Pindakaas', 'brand_raw': 'Calvé',
+                        'quantity_raw': 1, 'unit_raw': 'pot', 'line_price_raw': 3.49, 'currency_code': 'EUR',
+                        'match_status': 'unmatched', 'review_decision': 'ignored', 'processing_status': 'pending',
+                    },
+                    {
+                        'external_line_ref': 'seed-jumbo-4', 'external_article_code': 'JUMBO-SEED-4', 'article_name_raw': 'Tomaten', 'brand_raw': 'Jumbo',
+                        'quantity_raw': 6, 'unit_raw': 'stuks', 'line_price_raw': 2.19, 'currency_code': 'EUR',
+                        'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': build_live_article_option_id('Tomaten'),
+                        'target_location_id': None, 'processing_status': 'pending', 'suggested_household_article_id': build_live_article_option_id('Tomaten'),
+                        'suggested_location_id': kitchen_koelkast, 'suggestion_confidence': 'medium', 'suggestion_reason': 'Controleer voorstel — niveau Gebalanceerd', 'is_auto_prefilled': 0,
+                    },
+                ],
+            )
+
+            insert_batch(
+                'lidl',
+                lidl_connection_id,
+                'mock:seed-lidl-processed',
+                'processed',
+                {'purchase_date': '14-03-2026', 'store_name': 'Lidl', 'store_label': 'Lidl, Hoofdstraat 12, Utrecht'},
+                [
+                    {
+                        'external_line_ref': 'seed-lidl-1', 'external_article_code': 'LIDL-SEED-1', 'article_name_raw': 'Tuna', 'brand_raw': 'Lidl',
+                        'quantity_raw': 1, 'unit_raw': 'blik', 'line_price_raw': 1.89, 'currency_code': 'EUR',
+                        'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': build_live_article_option_id('Tuna'),
+                        'target_location_id': berging_boven, 'processing_status': 'processed', 'processed_event_id': None if False else None,
+                    },
+                ],
+            )
+
 
 def reset_dev_tables():
     with engine.begin() as conn:

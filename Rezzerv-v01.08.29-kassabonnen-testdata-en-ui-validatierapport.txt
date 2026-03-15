@@ -1,0 +1,64 @@
+Rezzerv v01.08.29 — kassabonnen testdata en UI-correctie
+
+Basis:
+- Rezzerv-v01.08.28.zip
+
+Doel van deze correctiestap:
+- testdata zichtbaar maken in Voorraad en Kassabonnen
+- uitlijning van de kassabonnentabel herstellen
+- selectiekolom met checkboxen expliciet aanwezig maken
+- knop Exporteren rechtsonder toevoegen
+- geen extra functionele uitbreiding buiten deze scope
+
+Uitgevoerde wijzigingen:
+1. Backend
+- automatische seedfunctie toegevoegd voor visuele/functionele testdata wanneer de actieve huishoudcontext nog geen voorraad heeft
+- automatische seedfunctie toegevoegd voor kassabonnen wanneer nog geen purchase import batches voor de huishoudcontext bestaan
+- seed bevat testvoorraad voor o.a. Melk, Tuna, Tomaten, Pasta en Shampoo
+- seed bevat kassabonnen voor Jumbo (open/in review) en Lidl (verwerkt)
+- seed bevat locaties zoals Keuken / Kast 1, Keuken / Koelkast, Berging / Voorraadkast en Berging / Boven
+
+2. Frontend — Kassabonnen
+- tabelkolommen behouden als:
+  selectie | Winkel | Datum | Regels | Status
+- selectiekolom met checkboxen expliciet aanwezig gemaakt
+- headercheckbox toegevoegd voor selecteer/deselecteer zichtbare rijen
+- numerieke kolom Regels rechts uitgelijnd
+- overige tekstkolommen links uitgelijnd in lijn met rz-table / Voorraad
+- dubbelklik op een rij blijft de openactie
+- Exporteren-knop toegevoegd rechtsonder onder de tabel
+- export maakt CSV van geselecteerde kassabonnen of, als niets geselecteerd is, van alle zichtbare rijen
+
+Versioning:
+- VERSION.txt -> 01.08.29
+- version.json -> 01.08.29
+- frontend/package.json -> 01.08.29
+- frontend/version.json -> 01.08.29
+- frontend/public/version.json -> 01.08.29
+- frontend/dist/version.json -> 01.08.29
+
+Aangepaste bestanden:
+- backend/app/main.py
+- frontend/src/features/stores/ReceiptsPage.jsx
+- VERSION.txt
+- version.json
+- frontend/package.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+
+Eerlijke kanttekening:
+- deze omgeving bevatte geen lokale npm/node_modules voor een volledige frontend herbuild
+- de ZIP is daarom op broncodeniveau aangepast
+- de Docker-build van de gebruiker hoort de frontend opnieuw op te bouwen vanuit package.json
+- de backend-seeding is logisch en deterministisch opgezet, maar is in deze container niet end-to-end gestart met alle runtime dependencies
+
+PO-check:
+1. Start Rezzerv schoon of met lege testdata-context.
+2. Controleer in Voorraad dat er testdata zichtbaar is.
+3. Open Kassabonnen en controleer dat er testbonnen zichtbaar zijn.
+4. Controleer de kolommen selectie | Winkel | Datum | Regels | Status.
+5. Controleer dat checkboxen zichtbaar zijn in de selectiekolom.
+6. Controleer dat Regels rechts staat uitgelijnd.
+7. Dubbelklik op een bon en controleer dat detail onder de tabel opent.
+8. Controleer dat rechtsonder de knop Exporteren staat.
