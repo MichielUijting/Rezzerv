@@ -322,9 +322,6 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
   background:#ecfdf3;
 }
 
-.rz-store-workbench-row.is-action-needed td{
-  background:#fff8eb;
-}
 
 .rz-store-workbench-row.is-ignored td{
   background:#f8fafc;
@@ -374,8 +371,8 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-store-status-badge--processed{
-  background:#eef4ff;
-  color:#1d4ed8;
+  background:#eef8f1;
+  color:#154734;
 }
 
 .rz-store-status-badge--new{
@@ -435,4 +432,21 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
   .rz-store-bulk-actions .btn{
     width:auto;
   }
+}
+
+.rz-store-workbench-row.is-selected-incomplete td{
+  background:#fff8eb;
+}
+
+.rz-store-primary{
+  color:#154734;
+  font-weight:700;
+}
+
+.rz-table-wrapper{
+  overflow-x:auto;
+}
+
+.rz-store-article-search select option{
+  color:#154734;
 }

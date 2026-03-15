@@ -1,0 +1,30 @@
+Rezzerv v01.08.35 validatierapport
+
+Doel van deze release
+- Geen blauwe teksten meer in de kassabonflow; alleen groen/wit/zwart/neutraal.
+- Nieuw artikel aanmaken als optie onderaan de artikellijst, alleen zichtbaar voor admin binnen huishouden.
+- Statuskolom verwijderd uit het kassabondetailscherm.
+- Rij-arcering aangepast:
+  - lichtgroen wanneer de regel klaar is voor verwerking
+  - lichtoranje wanneer de checkbox aan staat maar de regel nog niet aan alle voorwaarden voldoet
+
+Aangepaste bestanden
+- frontend/src/features/stores/storeImportShared.jsx
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+- frontend/src/features/stores/ReceiptsPage.jsx
+- frontend/src/styles.css
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+- frontend/package.json
+
+Controlepunten
+- Dropdown voor artikel bevat onderaan "Nieuw artikel aanmaken" alleen als household admin.
+- Niet-admin ziet deze optie niet.
+- Bonartikelcel toont alleen de artikelnaam.
+- Statuskolom ontbreekt in de detailtabel.
+- Tabel gebruikt horizontale scrollbar bij beperkte breedte.
+- Ready-regels kleuren lichtgroen.
+- Geselecteerde, nog onvolledige regels kleuren lichtoranje.

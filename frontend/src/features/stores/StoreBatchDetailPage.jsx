@@ -527,15 +527,15 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'start' }}>
             <div style={{ display: 'grid', gap: '4px' }}>
               <div style={{ fontWeight: 700, fontSize: '24px' }}>{batch ? buildBatchTitle(batch) : 'Kassabon'}</div>
-              <div style={{ color: '#667085' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
-              <div style={{ color: '#667085' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
+              <div style={{ color: '#2e7d4d' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
+              <div style={{ color: '#2e7d4d' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <Button variant="secondary" onClick={() => navigate('/voorraad')}>Naar voorraad</Button>
             </div>
           </div>
 
-          <div style={{ color: '#667085' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Verwerkt: {summaryCounts.processed}</div>
+          <div style={{ color: '#2e7d4d' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Verwerkt: {summaryCounts.processed}</div>
 
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
@@ -556,7 +556,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <th className="rz-num">Aantal</th>
                   <th>Gekoppeld artikel</th>
                   <th>Locatie</th>
-                  <th>Status</th>
                   <th className="rz-num">Prijs</th>
                 </tr>
                 <tr className="rz-table-filters">
@@ -575,31 +574,24 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       {LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
                     </select>
                   </th>
-                  <th>
-                    <select className="rz-input rz-inline-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                      {STATUS_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
-                    </select>
-                  </th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {filteredLineUiStates.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>Geen regels in deze selectie.</td>
+                    <td colSpan={6}>Geen regels in deze selectie.</td>
                   </tr>
                 ) : filteredLineUiStates.map((entry) => {
                   const { line, draft, statusLabel: currentStatusLabel } = entry
                   const lineBusy = busyLineId === line.id || isProcessingBatch
                   const selected = selectedLineIds.includes(line.id)
                   return (
-                    <tr key={line.id} className={`rz-store-workbench-row ${selected ? 'rz-row-selected' : ''} ${entry.statusKey === 'ready' ? 'is-ready' : entry.statusKey === 'action_needed' ? 'is-action-needed' : entry.statusKey === 'ignored' ? 'is-ignored' : ''}`}>
+                    <tr key={line.id} className={`rz-store-workbench-row ${selected ? 'rz-row-selected' : ''} ${entry.statusKey === 'ready' ? 'is-ready' : ''} ${selected && entry.statusKey !== 'ready' ? 'is-selected-incomplete' : ''} ${entry.statusKey === 'ignored' ? 'is-ignored' : ''}`}>
                       <td>
                         <input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} />
                       </td>
-                      <td>
-                        <div className="rz-store-primary">{line.article_name_raw}</div>
-                      </td>
+                      <td><div className="rz-store-primary">{line.article_name_raw}</div></td>
                       <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td>
                         <StoreArticleSelector
@@ -611,6 +603,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
                           onClearArticle={() => persistLineDraft(line, { articleId: '' })}
                           onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
+                          canCreateArticle={Boolean(household?.is_household_admin)}
                         />
                       </td>
                       <td>
@@ -628,7 +621,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           ))}
                         </select>
                       </td>
-                      <td><span className={`rz-store-status-badge rz-store-status-badge--${entry.statusKey}`}>{currentStatusLabel}</span></td>
                       <td className="rz-num">{line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : '-'}</td>
                     </tr>
                   )

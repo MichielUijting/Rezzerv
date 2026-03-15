@@ -76,12 +76,13 @@ export function StoreArticleSelector({
   onChange,
   onClearArticle,
   onCreateArticle,
+  canCreateArticle = false,
 }) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [newArticleName, setNewArticleName] = useState('')
   const [createArticleError, setCreateArticleError] = useState('')
 
-  const canCreateArticle = typeof onCreateArticle === 'function'
+  const showCreateArticleOption = canCreateArticle && typeof onCreateArticle === 'function'
 
   function openCreateArticleModal() {
     const baseName = lineName || ''
@@ -116,6 +117,10 @@ export function StoreArticleSelector({
       onClearArticle?.()
       return
     }
+    if (nextId === '__create__') {
+      openCreateArticleModal()
+      return
+    }
     onChange(nextId)
   }
 
@@ -132,21 +137,8 @@ export function StoreArticleSelector({
         {articleOptions.map((article) => (
           <option key={article.id} value={article.id}>{articleLabel(article)}</option>
         ))}
+        {showCreateArticleOption ? <option value="__create__">Nieuw artikel aanmaken</option> : null}
       </select>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-        {canCreateArticle ? (
-          <button
-            type="button"
-            className="rz-link-button"
-            data-testid={`store-create-article-trigger-${lineId}`}
-            style={createArticleButtonStyle}
-            disabled={disabled}
-            onClick={openCreateArticleModal}
-          >
-            Nieuw artikel aanmaken
-          </button>
-        ) : null}
-      </div>
       {isCreateModalOpen ? (
         <div className="rz-modal-backdrop" role="presentation">
           <div className="rz-modal-card" data-testid={`store-create-article-modal-${lineId}`} role="dialog" aria-modal="true" aria-labelledby={`store-create-article-title-${lineId}`}>

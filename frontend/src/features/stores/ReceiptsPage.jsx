@@ -244,7 +244,7 @@ export default function ReceiptsPage() {
                       <span className={`rz-store-status-badge rz-store-status-badge--${item.uiState?.statusKey || 'new'}`}>
                         {item.statusLabel}
                       </span>
-                      <div style={{ color: '#667085', marginTop: '4px' }}>
+                      <div style={{ color: '#2e7d4d', marginTop: '4px' }}>
                         {(() => {
                           const summary = item?.summary || {}
                           const klaar = Number(summary.ready || item.uiState?.readyCount || 0)
