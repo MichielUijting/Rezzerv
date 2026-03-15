@@ -20,16 +20,6 @@ async function getLatestBatchMeta(connectionId) {
   }
 }
 
-function batchRowSubline(item) {
-  const summary = item?.summary || {}
-  const klaar = Number(summary.ready || item.uiState?.readyCount || 0)
-  const actie = Number(summary.open || item.uiState?.openCount || 0)
-  const verwerkt = Number(summary.processed || 0)
-  if (verwerkt > 0 && actie === 0 && klaar === 0) return 'Volledig verwerkt'
-  if (actie > 0 || klaar > 0) return `${klaar} klaar · ${actie} actie nodig`
-  return 'Nog niet beoordeeld'
-}
-
 export default function ReceiptsPage() {
   const [providers, setProviders] = useState([])
   const [batches, setBatches] = useState([])
@@ -175,7 +165,7 @@ export default function ReceiptsPage() {
                 </th>
                 <th style={{ width: '38%' }}>Winkel</th>
                 <th style={{ width: '22%' }}>Datum</th>
-                <th className="rz-num" style={{ width: '12%' }}>Regels</th>
+                <th className="rz-num" style={{ width: '12%' }}>Artikelen</th>
                 <th style={{ width: '20%' }}>Status</th>
               </tr>
               <tr className="rz-table-filters">
@@ -204,7 +194,7 @@ export default function ReceiptsPage() {
                     value={filters.regels}
                     onChange={(event) => handleFilterChange('regels', event.target.value)}
                     placeholder="Filter"
-                    aria-label="Filter op regels"
+                    aria-label="Filter op artikelen"
                   />
                 </th>
                 <th>
@@ -246,7 +236,6 @@ export default function ReceiptsPage() {
                     </td>
                     <td>
                       <div style={{ fontWeight: 700 }}>{item.providerName}</div>
-                      <div style={{ color: '#667085', marginTop: '4px' }}>{batchRowSubline(item)}</div>
                     </td>
                     <td>{item.dateLabel}</td>
                     <td className="rz-num">{item.totalLines}</td>
@@ -254,6 +243,17 @@ export default function ReceiptsPage() {
                       <span className={`rz-store-status-badge rz-store-status-badge--${item.uiState?.statusKey || 'new'}`}>
                         {item.statusLabel}
                       </span>
+                      <div style={{ color: '#667085', marginTop: '4px' }}>
+                        {(() => {
+                          const summary = item?.summary || {}
+                          const klaar = Number(summary.ready || item.uiState?.readyCount || 0)
+                          const actie = Number(summary.open || item.uiState?.openCount || 0)
+                          const verwerkt = Number(summary.processed || 0)
+                          if (verwerkt > 0 && actie === 0 && klaar === 0) return 'Volledig verwerkt'
+                          if (actie > 0 || klaar > 0) return `${klaar} klaar · ${actie} actie nodig`
+                          return 'Nog niet beoordeeld'
+                        })()}
+                      </div>
                     </td>
                   </tr>
                 )
