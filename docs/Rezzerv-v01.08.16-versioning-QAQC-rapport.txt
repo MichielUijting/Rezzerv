@@ -1,0 +1,20 @@
+Rezzerv v01.08.16 - Versioning QA/QC rapport
+
+Doel
+Deze release corrigeert uitsluitend de versioning-consistentie van de laatst beschikbare ZIP-basis (v01.08.15).
+
+Aangepast
+- VERSION.txt -> 01.08.16
+- version.json (root) -> 01.08.16
+- frontend/version.json -> 01.08.16
+- frontend/public/version.json -> 01.08.16
+- frontend/dist/version.json -> 01.08.16
+- frontend/package.json version -> 01.08.16
+
+Niet aangepast
+- Geen functionele codewijzigingen
+- Geen UI-wijzigingen
+- Geen backendwijzigingen
+
+QA/QC oordeel
+Groen voor versioning-consistentie. Deze release is alleen bedoeld om de release-metadata uniform te maken.
