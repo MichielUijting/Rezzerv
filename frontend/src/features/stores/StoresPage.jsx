@@ -7,12 +7,10 @@ import { getStoreImportSimplificationLabel } from '../settings/services/storeImp
 import {
   batchStatusPillStyle,
   batchStatusToneStyles,
-  connectedStoreRowStyle,
   deriveBatchUiState,
   fetchJson,
   formatBatchLastChange,
   normalizeErrorMessage,
-  providerLabel,
   providerStatusLabel,
 } from './storeImportShared'
 import { buildAutoConsumeArticleIds } from './autoConsumeContext'
@@ -216,7 +214,11 @@ export default function StoresPage() {
     try {
       const result = await fetchJson(`/api/purchase-import-batches/${batchToProcess.batch_id}/process`, {
         method: 'POST',
-        body: JSON.stringify({ processed_by: 'ui', mode: 'selected_only', auto_consume_article_ids: buildAutoConsumeArticleIds((batchToProcess?.lines || []).filter((line) => (line.processing_status || 'pending') !== 'processed' && (line.review_decision || 'selected') === 'selected')) }),
+        body: JSON.stringify({
+          processed_by: 'ui',
+          mode: 'selected_only',
+          auto_consume_article_ids: buildAutoConsumeArticleIds((batchToProcess?.lines || []).filter((line) => (line.processing_status || 'pending') !== 'processed' && (line.review_decision || 'selected') === 'selected')),
+        }),
       })
       if (result.failed_count > 0) {
         showStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
@@ -236,38 +238,14 @@ export default function StoresPage() {
     }
   }
 
-  async function handlePrimaryBatchAction(batch) {
+  function handlePrimaryBatchAction(batch) {
     if (!batch) return
-    const uiState = deriveBatchUiState(batch)
-    if (uiState.actionType === 'process') {
-      await processBatchNow(batch)
-      return
-    }
     navigate(`/winkels/batch/${batch.batch_id}`)
   }
 
   return (
-    <AppShell title="Winkelimport" showExit={false}>
+    <AppShell title="Kassabon" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }}>
-        <Card>
-          <div data-testid="stores-page-intro" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ display: 'grid', gap: '8px' }}>
-              <h2 style={{ margin: 0, fontSize: '20px' }}>Winkelimport</h2>
-              <p style={{ margin: 0, color: '#667085' }}>
-                Werk eerst je open bonnen af. Verbonden winkels beheer je hieronder.
-              </p>
-            </div>
-            <Button variant="secondary" onClick={() => navigate('/home')}>Terug naar start</Button>
-          </div>
-        </Card>
-
-        <Card>
-          <div data-testid="store-import-simplification-banner" className="rz-inline-feedback rz-inline-feedback--warning" style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', padding: '4px 0' }}>
-            <span>Vereenvoudigingsniveau winkelimport: <strong>{simplificationLevelLabel}</strong></span>
-            <span>{batchItems.length > 0 ? `${batchItems.length} open bon(nen)` : 'Geen open bonnen'} in deze huishoudcontext.</span>
-          </div>
-        </Card>
-
         {error ? (
           <Card>
             <div style={{ color: '#b42318', fontWeight: 700 }}>{error}</div>
@@ -281,118 +259,153 @@ export default function StoresPage() {
         ) : null}
 
         <Card>
+          <div style={{ display: 'grid', gap: '16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div style={{ display: 'grid', gap: '6px' }}>
+                <h2 style={{ margin: 0, fontSize: '20px' }}>Importniveau kassabonnen</h2>
+                <div style={{ color: '#667085', fontSize: '14px' }}>Huidige importstand voor dit huishouden.</div>
+              </div>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <Button variant="secondary" onClick={() => navigate('/home')}>Terug naar start</Button>
+                <Button variant="secondary" onClick={() => navigate('/instellingen/winkelimport')}>Instellingen</Button>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 240px) 1fr', gap: '12px', alignItems: 'center' }}>
+              <div style={{ fontWeight: 700 }}>Huidige importstand</div>
+              <div className="rz-inline-feedback rz-inline-feedback--warning" style={{ padding: '10px 12px' }}>
+                <strong>{simplificationLevelLabel}</strong>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
           <div data-testid="open-batches-section" style={{ display: 'grid', gap: '12px' }}>
-            <div>
-              <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Open bonnen</h3>
-              <div style={{ color: '#667085', fontSize: '14px' }}>Open, hervat en verwerk hier je bonnen.</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Open en verwerk bonnen</h3>
+              </div>
+              <Button variant="secondary" onClick={loadPageData} disabled={isLoading}>Vernieuwen</Button>
             </div>
 
             {isLoading ? (
               <div>Winkelgegevens laden…</div>
             ) : batchItems.length === 0 ? (
-              <div data-testid="open-batches-empty" style={{ color: '#667085' }}>Geen open bonnen</div>
-            ) : (
-              <div style={{ display: 'grid', gap: '12px' }}>
-                {batchItems.map((batch) => (
-                  <div
-                    key={batch.batch_id}
-                    data-testid={`open-batch-${batch.batch_id}`}
-                    style={{
-                      border: '1px solid #d0d5dd',
-                      borderRadius: '12px',
-                      padding: '14px 16px',
-                      display: 'grid',
-                      gap: '10px',
-                      background: '#ffffff',
-                    }}
+              <div data-testid="open-batches-empty" style={{ display: 'grid', gap: '12px', color: '#667085' }}>
+                <div>Er zijn nu geen open bonnen.</div>
+                <div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => document.getElementById('stores-table')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-                      <div style={{ display: 'grid', gap: '6px' }}>
-                        <div style={{ fontWeight: 700, fontSize: '18px' }}>{batch.store_provider_name || batch.store_name}</div>
-                        <div style={{ color: '#667085', fontSize: '14px' }}>
-                          {batch.purchase_date || 'Onbekend'} · {batch.store_label || batch.store_name || providerLabel(providersByCode[batch.store_provider_code])}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                        <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[batch.uiState.statusKey] || batchStatusToneStyles.open) }}>{batch.uiState.label}</span>
-                        <Button
-                          data-testid={`batch-primary-action-${batch.batch_id}`}
-                          variant={batch.uiState.actionType === 'process' ? 'primary' : 'secondary'}
-                          onClick={() => handlePrimaryBatchAction(batch)}
-                          disabled={busyBatchId === batch.batch_id || isProcessingBatch}
-                        >
-                          {busyBatchId === batch.batch_id ? 'Bezig…' : batch.uiState.actionLabel}
-                        </Button>
-                        {batch.uiState.canResume && batch.uiState.actionType === 'process' ? (
-                          <Button
-                            data-testid={`batch-resume-action-${batch.batch_id}`}
-                            variant="secondary"
-                            onClick={() => navigate(`/winkels/batch/${batch.batch_id}`)}
-                            disabled={busyBatchId === batch.batch_id || isProcessingBatch}
-                          >
-                            Hervatten
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'grid', gap: '8px' }}>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '10px', color: '#667085', fontSize: '14px' }}>
-                        <div>Aantal regels: <strong>{batch.summary?.total || batch.lines?.length || 0}</strong></div>
-                        <div>{batch.uiState.progressText}</div>
-                        <div>Laatste wijziging: {formatBatchLastChange(batch)}</div>
-                      </div>
-                      <div data-testid={`batch-status-reason-${batch.batch_id}`} className="rz-inline-feedback rz-inline-feedback--warning" style={{ padding: '8px 10px' }}>
-                        <strong>Statusreden:</strong> {batch.uiState.statusReason}<br />
-                        <strong>Primaire actie:</strong> {batch.uiState.actionLabel} — {batch.uiState.primaryActionReason}
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    Lees bonnen in bij winkels
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #d0d5dd' }}>
+                      <th style={{ padding: '10px 8px' }}>Winkel</th>
+                      <th style={{ padding: '10px 8px' }}>Datum</th>
+                      <th style={{ padding: '10px 8px' }}>Aantal regels</th>
+                      <th style={{ padding: '10px 8px' }}>Klaar</th>
+                      <th style={{ padding: '10px 8px' }}>Actie nodig</th>
+                      <th style={{ padding: '10px 8px' }}>Status</th>
+                      <th style={{ padding: '10px 8px' }}>Actie</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {batchItems.map((batch) => {
+                      const totalLines = batch.summary?.total || batch.lines?.length || 0
+                      const readyCount = batch.summary?.ready || batch.summary?.ready_to_process || 0
+                      const actionNeeded = batch.summary?.action_needed || Math.max(0, totalLines - readyCount - (batch.summary?.ignored || 0) - (batch.summary?.processed || 0))
+                      return (
+                        <tr key={batch.batch_id} data-testid={`open-batch-${batch.batch_id}`} style={{ borderBottom: '1px solid #eaecf0' }}>
+                          <td style={{ padding: '12px 8px', fontWeight: 700 }}>{batch.store_provider_name || batch.store_name}</td>
+                          <td style={{ padding: '12px 8px' }}>{batch.purchase_date || 'Onbekend'}</td>
+                          <td style={{ padding: '12px 8px' }}>{totalLines}</td>
+                          <td style={{ padding: '12px 8px' }}>{readyCount}</td>
+                          <td style={{ padding: '12px 8px' }}>{actionNeeded}</td>
+                          <td style={{ padding: '12px 8px' }}>
+                            <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[batch.uiState.statusKey] || batchStatusToneStyles.open) }}>{batch.uiState.label}</span>
+                          </td>
+                          <td style={{ padding: '12px 8px' }}>
+                            <Button
+                              data-testid={`batch-primary-action-${batch.batch_id}`}
+                              variant={batch.uiState.actionType === 'process' ? 'primary' : 'secondary'}
+                              onClick={() => handlePrimaryBatchAction(batch)}
+                              disabled={busyBatchId === batch.batch_id || isProcessingBatch}
+                            >
+                              {busyBatchId === batch.batch_id ? 'Bezig…' : 'Open werkblad'}
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
         </Card>
 
         <Card>
-          <div data-testid="connected-stores-section">
+          <div id="stores-table" data-testid="connected-stores-section" style={{ display: 'grid', gap: '12px' }}>
+            <div>
+              <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Winkels</h3>
+            </div>
             {isLoading ? (
               <div>Winkelgegevens laden…</div>
             ) : (
-              <div style={{ display: 'grid', gap: '14px' }}>
-                <div>
-                  <h3 style={{ margin: '0 0 4px 0', fontSize: '18px' }}>Verbonden winkels</h3>
-                  <div style={{ color: '#667085', fontSize: '14px' }}>Beheer hier je gekoppelde winkels en haal nieuwe aankopen op.</div>
-                </div>
-                {connectedStoreItems.map((item) => {
-                  const provider = item.provider
-                  const connection = item.connection
-                  const providerOpenBatch = batchItems.find((batch) => batch.store_provider_code === item.code) || null
-                  const providerName = item.name
-                  return (
-                    <div key={item.code} data-testid={`store-provider-${item.code}`} style={connectedStoreRowStyle}>
-                      <div style={{ display: 'grid', gap: '2px' }}>
-                        <div style={{ fontWeight: 700 }}>{providerName}</div>
-                        <div style={{ color: '#667085', fontSize: '14px' }}>Status: {connection ? 'gekoppeld / actief' : providerStatusLabel(provider)}</div>
-                        <div style={{ color: '#667085', fontSize: '14px' }}>Laatste activiteit: {providerOpenBatch ? formatBatchLastChange(providerOpenBatch) : 'Nog geen open bon'}</div>
-                      </div>
-                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                        {providerOpenBatch ? (
-                          <span style={{ ...batchStatusPillStyle, ...(batchStatusToneStyles[providerOpenBatch.uiState.statusKey] || batchStatusToneStyles.open) }}>{providerOpenBatch.uiState.label}</span>
-                        ) : null}
-                        {!connection && provider ? (
-                          <Button data-testid={`connect-store-${item.code}`} variant="primary" onClick={() => handleConnect(item.code, providerName)} disabled={isConnecting}>
-                            {isConnecting ? 'Koppelen…' : `${providerName} koppelen`}
-                          </Button>
-                        ) : connection ? (
-                          <Button data-testid={`pull-purchases-${item.code}`} variant="secondary" onClick={() => handlePullPurchases(connection, providerName)} disabled={isPulling}>
-                            {isPulling ? 'Ophalen…' : 'Aankopen ophalen'}
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  )
-                })}
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '1px solid #d0d5dd' }}>
+                      <th style={{ padding: '10px 8px' }}>Winkel</th>
+                      <th style={{ padding: '10px 8px' }}>Koppeling</th>
+                      <th style={{ padding: '10px 8px' }}>Laatste import</th>
+                      <th style={{ padding: '10px 8px' }}>Importstand</th>
+                      <th style={{ padding: '10px 8px' }}>Status</th>
+                      <th style={{ padding: '10px 8px' }}>Actie</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {connectedStoreItems.map((item) => {
+                      const provider = item.provider
+                      const connection = item.connection
+                      const providerOpenBatch = batchItems.find((batch) => batch.store_provider_code === item.code) || null
+                      const providerName = item.name
+                      const connectionTypeLabel = connection ? 'Klantkaart' : (provider ? providerStatusLabel(provider) : 'Nog niet gekoppeld')
+                      const importLevelLabel = connection ? simplificationLevelLabel : 'Handmatig'
+                      const statusLabel = connection ? 'Actief' : 'Aandacht nodig'
+                      return (
+                        <tr key={item.code} data-testid={`store-provider-${item.code}`} style={{ borderBottom: '1px solid #eaecf0' }}>
+                          <td style={{ padding: '12px 8px', fontWeight: 700 }}>{providerName}</td>
+                          <td style={{ padding: '12px 8px' }}>{connectionTypeLabel}</td>
+                          <td style={{ padding: '12px 8px' }}>{providerOpenBatch ? formatBatchLastChange(providerOpenBatch) : 'Nog nooit'}</td>
+                          <td style={{ padding: '12px 8px' }}>{importLevelLabel}</td>
+                          <td style={{ padding: '12px 8px' }}>{statusLabel}</td>
+                          <td style={{ padding: '12px 8px' }}>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              {!connection && provider ? (
+                                <Button data-testid={`connect-store-${item.code}`} variant="primary" onClick={() => handleConnect(item.code, providerName)} disabled={isConnecting}>
+                                  {isConnecting ? 'Koppelen…' : 'Koppelen'}
+                                </Button>
+                              ) : connection ? (
+                                <Button data-testid={`pull-purchases-${item.code}`} variant="secondary" onClick={() => handlePullPurchases(connection, providerName)} disabled={isPulling}>
+                                  {isPulling ? 'Inlezen…' : 'Bonnen inlezen'}
+                                </Button>
+                              ) : null}
+                              <Button variant="secondary" onClick={() => navigate('/instellingen/winkelimport')}>Instellingen</Button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>
