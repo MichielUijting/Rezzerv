@@ -1,0 +1,83 @@
+Rezzerv v01.08.22 — Kassabon werkblad ontwikkelstap
+
+Basis
+- Technische basis in container: Rezzerv-v01.08.20.zip
+- Let op: de eerder besproken 01.08.21-zip was niet als bestand beschikbaar in de container. Deze ontwikkelstap is daarom aangebracht op de laatst beschikbare werkende basis, met behoud van de recente gebruikersflow als ontwerpdoel.
+
+Doel van deze stap
+- Het bondetail omzetten van een eenvoudige reviewtabel naar een schaalbaar werkblad voor veel regels.
+- Focus op UX/architectuur in de frontend, zonder de bestaande backend-verwerkingsroute fundamenteel te wijzigen.
+
+Aangepaste bestanden
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+- frontend/src/styles.css
+- VERSION.txt
+- version.json
+- frontend/package.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+
+Ingebouwd in deze stap
+1. Nieuwe header voor het werkblad
+- Titel, contextregel, statusregel
+- Knoppen: Terug naar bonnen, Bekijk voorraad, Verwerk alles wat klaar is
+
+2. Samenvattingsbalk
+- Tegels voor Totaal, Klaar, Actie nodig, Genegeerd, Verwerkt, Nieuw gekoppeld
+- Klik op tegel activeert filter
+
+3. Filter- en zoekblok
+- Vrij zoeken op bonartikel of gekoppeld artikel
+- Filters voor status, beoordeling, mapping en locatie
+- Snelle actie: Toon alleen uitzonderingen
+
+4. Bulkactiebalk
+- Selecteer alles in huidige filter
+- Zet op Verwerken / Negeren
+- Bulk-koppeling naar hetzelfde artikel
+- Bulk-locatie voor geselecteerde regels
+- Opslaan-melding zonder extra verwerking
+
+5. Nieuwe regeltabel
+- Gescheiden kolommen voor Gekoppeld artikel, Beoordeling, Locatie, Status en Reden
+- Status en reden worden expliciet getoond
+- Details per regel kunnen worden uitgeklapt
+
+6. Detaildiagnose
+- Huishoudinstelling
+- Artikeloverride
+- Effectieve automatische afboeking
+- Beslisreden
+- Aangevraagd af te boeken
+- Werkelijk afgeboekt
+- Laatste verwerking / resultaat
+
+7. Primaire verwerkingsactie
+- Knop verwerkt via ready_only-pad
+- UX-doel: alleen complete regels verwerken, onvolledige regels laten staan
+
+Wat bewust nog niet in deze stap zit
+- Nieuw bonnenoverzicht
+- Apart mappingbeheerscherm
+- Brede regressietestautomatisering
+- Backendherontwerp van statusmodellering
+
+Validatie in deze omgeving
+- Code-inhoud gecontroleerd op samenhang en versieconsistentie
+- Release-metadata uniform opgehoogd naar 01.08.22
+- Geen volledige frontend build uitgevoerd in de container, omdat de gesaneerde releasebasis geen lokale node_modules bevat en deze stap bedoeld is als ontwikkelrelease die via de normale Docker-build op de gebruikersmachine opnieuw wordt opgebouwd
+
+Risico / aandachtspunt
+- Deze stap verandert vooral de frontendpresentatie van bondetail en introduceert nieuwe bulk-UI. Functionele regressietest op de bestaande kassabonflow blijft nodig op:
+  - geen automatische afboeking
+  - volledige afboeking bestaand artikel
+  - gemengde batch met complete en incomplete regels
+
+PO-testfocus
+1. Open een bon met meerdere regels
+2. Controleer de samenvattingskaarten en filters
+3. Selecteer meerdere regels en test bulkacties
+4. Verwerk alles wat klaar is
+5. Controleer dat onvolledige regels blijven staan en complete regels worden verwerkt
+6. Open Details op minstens één regel en controleer de diagnosewaarden

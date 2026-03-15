@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
@@ -18,6 +18,49 @@ import {
 } from './storeImportShared'
 import { buildAutoConsumeArticleIds } from './autoConsumeContext'
 
+const STATUS_FILTERS = [
+  { key: 'all', label: 'Alles' },
+  { key: 'ready', label: 'Klaar' },
+  { key: 'action_needed', label: 'Actie nodig' },
+  { key: 'ignored', label: 'Genegeerd' },
+  { key: 'processed', label: 'Verwerkt' },
+]
+
+const REVIEW_FILTERS = [
+  { key: 'all', label: 'Alles' },
+  { key: 'selected', label: 'Verwerken' },
+  { key: 'ignored', label: 'Negeren' },
+  { key: 'pending', label: 'Nog te beoordelen' },
+]
+
+const MAPPING_FILTERS = [
+  { key: 'all', label: 'Alles' },
+  { key: 'known', label: 'Bekende mapping' },
+  { key: 'new', label: 'Nieuwe mapping' },
+  { key: 'unknown', label: 'Onbekend artikel' },
+]
+
+const LOCATION_FILTERS = [
+  { key: 'all', label: 'Alles' },
+  { key: 'filled', label: 'Locatie ingevuld' },
+  { key: 'missing', label: 'Locatie ontbreekt' },
+]
+
+function countUniqueNewMappings(lines) {
+  const ids = new Set()
+  lines.forEach((line) => {
+    if (line?.matched_household_article_id && !line?.suggested_household_article_id) {
+      ids.add(String(line.id))
+    }
+  })
+  return ids.size
+}
+
+function detailValue(value, fallback = 'Niet van toepassing') {
+  if (value === undefined || value === null || value === '') return fallback
+  return String(value)
+}
+
 export default function StoreBatchDetailPage() {
   const navigate = useNavigate()
   const { batchId } = useParams()
@@ -32,12 +75,20 @@ export default function StoreBatchDetailPage() {
   const [busyLineId, setBusyLineId] = useState('')
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
   const [processFeedback, setProcessFeedback] = useState('')
-  const [processWarning, setProcessWarning] = useState(null)
-  const [processMode, setProcessMode] = useState('selected_only')
   const [lastProcessResult, setLastProcessResult] = useState(null)
   const [batchDiagnostics, setBatchDiagnostics] = useState(null)
   const [lineDrafts, setLineDrafts] = useState({})
   const [lineSaveState, setLineSaveState] = useState({})
+  const [selectedLineIds, setSelectedLineIds] = useState([])
+  const [expandedLineIds, setExpandedLineIds] = useState([])
+  const [activeSummaryFilter, setActiveSummaryFilter] = useState('all')
+  const [searchValue, setSearchValue] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [reviewFilter, setReviewFilter] = useState('all')
+  const [mappingFilter, setMappingFilter] = useState('all')
+  const [locationFilter, setLocationFilter] = useState('all')
+  const [bulkLocationId, setBulkLocationId] = useState('')
+  const [bulkArticleId, setBulkArticleId] = useState('')
   const processFeedbackTimer = useRef(null)
 
   const providersByCode = useMemo(
@@ -47,19 +98,7 @@ export default function StoreBatchDetailPage() {
 
   const activeProviderCode = batch?.store_provider_code || null
   const activeProvider = activeProviderCode ? providersByCode[activeProviderCode] || null : null
-  const validArticleIds = useMemo(() => new Set(articleOptions.map((article) => String(article.id))), [articleOptions])
   const validLocationIds = useMemo(() => new Set(locationOptions.map((location) => String(location.id))), [locationOptions])
-
-  const visibleLines = useMemo(
-    () => batch?.lines?.filter((line) => (line.processing_status || 'pending') !== 'processed') || [],
-    [batch],
-  )
-
-  const selectedLines = visibleLines.filter((line) => (line.review_decision || 'selected') === 'selected')
-  const linesMissingArticle = selectedLines.filter((line) => !line.matched_household_article_id).length
-  const linesMissingLocation = selectedLines.filter((line) => !line.target_location_id || !validLocationIds.has(String(line.target_location_id))).length
-  const canProcessBatch = Boolean(batch && selectedLines.length > 0 && !busyLineId && !isLoading)
-  const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
   function getDraftValues(line) {
     const draft = Object.prototype.hasOwnProperty.call(lineDrafts, line.id)
@@ -73,7 +112,6 @@ export default function StoreBatchDetailPage() {
       locationId: String((draft?.locationId ?? line.target_location_id) ?? ''),
     }
   }
-
 
   useEffect(() => {
     const nextDrafts = {}
@@ -94,6 +132,7 @@ export default function StoreBatchDetailPage() {
     })
     setLineDrafts(nextDrafts)
     setLineSaveState(nextSaveState)
+    setSelectedLineIds([])
   }, [batch?.batch_id, batch?.lines])
 
   function setLineDraftValue(lineId, patch) {
@@ -104,6 +143,27 @@ export default function StoreBatchDetailPage() {
         ...patch,
       },
     }))
+  }
+
+  async function refreshBatch(nextBatchId = batchId) {
+    const nextBatch = await fetchJson(`/api/purchase-import-batches/${nextBatchId}`)
+    setBatch(nextBatch)
+    return nextBatch
+  }
+
+  async function refreshBatchDiagnostics(nextBatchId = batchId) {
+    if (!nextBatchId) return null
+    const diagnostics = await fetchJson(`/api/dev/purchase-import-batches/${nextBatchId}/diagnostics`).catch(() => null)
+    setBatchDiagnostics(diagnostics)
+    return diagnostics
+  }
+
+  async function refreshLocationOptions(householdId) {
+    if (!householdId) return []
+    const backendLocations = await fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdId)}&_ts=${Date.now()}`, { cache: 'no-store' }).catch(() => [])
+    const nextLocations = Array.isArray(backendLocations) ? backendLocations : []
+    setLocationOptions(nextLocations)
+    return nextLocations
   }
 
   async function persistLineDraft(line, patch = {}) {
@@ -128,12 +188,6 @@ export default function StoreBatchDetailPage() {
           message: 'Opgeslagen',
           savedAt: new Date().toISOString(),
           error: '',
-          oldArticleId: originalArticleId,
-          oldLocationId: originalLocationId,
-          newArticleId: nextArticleId,
-          newLocationId: nextLocationId,
-          preparedBefore: Boolean(originalArticleId && originalLocationId),
-          preparedAfter: Boolean(nextArticleId && nextLocationId),
         },
       }))
       return
@@ -149,15 +203,7 @@ export default function StoreBatchDetailPage() {
         dirty: true,
         status: 'saving',
         message: 'Opslaan…',
-        saveStarted: true,
-        saveSucceeded: false,
         error: '',
-        oldArticleId: originalArticleId,
-        oldLocationId: originalLocationId,
-        newArticleId: nextArticleId,
-        newLocationId: nextLocationId,
-        preparedBefore: Boolean(originalArticleId && originalLocationId),
-        preparedAfter: Boolean(nextArticleId && nextLocationId),
       },
     }))
     try {
@@ -175,7 +221,6 @@ export default function StoreBatchDetailPage() {
       }
       await refreshBatch(batch.batch_id)
       await refreshLocationOptions(household?.id)
-      const savedAt = new Date().toISOString()
       setLineSaveState((current) => ({
         ...current,
         [line.id]: {
@@ -183,18 +228,10 @@ export default function StoreBatchDetailPage() {
           dirty: false,
           status: 'saved',
           message: 'Opgeslagen',
-          saveStarted: false,
-          saveSucceeded: true,
-          savedAt,
+          savedAt: new Date().toISOString(),
           error: '',
           currentArticleId: nextArticleId,
           currentLocationId: nextLocationId,
-          oldArticleId: originalArticleId,
-          oldLocationId: originalLocationId,
-          newArticleId: nextArticleId,
-          newLocationId: nextLocationId,
-          preparedBefore: Boolean(originalArticleId && originalLocationId),
-          preparedAfter: Boolean(nextArticleId && nextLocationId),
         },
       }))
     } catch (err) {
@@ -207,21 +244,14 @@ export default function StoreBatchDetailPage() {
           dirty: true,
           status: 'error',
           message: 'Opslaan mislukt',
-          saveStarted: false,
-          saveSucceeded: false,
           error: message,
-          oldArticleId: originalArticleId,
-          oldLocationId: originalLocationId,
-          newArticleId: nextArticleId,
-          newLocationId: nextLocationId,
-          preparedBefore: Boolean(originalArticleId && originalLocationId),
-          preparedAfter: Boolean(nextArticleId && nextLocationId),
         },
       }))
     } finally {
       setBusyLineId('')
     }
   }
+
   function clearTransientFeedback() {
     if (processFeedbackTimer.current) {
       window.clearTimeout(processFeedbackTimer.current)
@@ -233,27 +263,6 @@ export default function StoreBatchDetailPage() {
     clearTransientFeedback()
     setProcessFeedback(message)
     processFeedbackTimer.current = window.setTimeout(() => setProcessFeedback(''), 2200)
-  }
-
-  async function refreshBatch(nextBatchId = batchId) {
-    const nextBatch = await fetchJson(`/api/purchase-import-batches/${nextBatchId}`)
-    setBatch(nextBatch)
-    return nextBatch
-  }
-
-  async function refreshBatchDiagnostics(nextBatchId = batchId) {
-    if (!nextBatchId) return null
-    const diagnostics = await fetchJson(`/api/dev/purchase-import-batches/${nextBatchId}/diagnostics`).catch(() => null)
-    setBatchDiagnostics(diagnostics)
-    return diagnostics
-  }
-
-  async function refreshLocationOptions(householdId) {
-    if (!householdId) return []
-    const backendLocations = await fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdId)}&_ts=${Date.now()}`, { cache: 'no-store' }).catch(() => [])
-    const nextLocations = Array.isArray(backendLocations) ? backendLocations : []
-    setLocationOptions(nextLocations)
-    return nextLocations
   }
 
   async function loadPageData() {
@@ -315,7 +324,6 @@ export default function StoreBatchDetailPage() {
     }
   }
 
-
   async function handleCreateArticleFromLine(lineId, articleName) {
     setBusyLineId(lineId)
     setError('')
@@ -347,10 +355,13 @@ export default function StoreBatchDetailPage() {
     }
   }
 
-
-
-  async function processBatchNow(mode = processMode) {
+  async function processBatchNow(mode = 'ready_only') {
     if (!batch) return
+    const lineStateMap = new Map(lineUiStates.map((entry) => [entry.line.id, entry]))
+    const autoConsumeLines = Array.from(lineStateMap.values())
+      .filter((entry) => entry.isReadyForProcessing)
+      .map((entry) => entry.line)
+
     setIsProcessingBatch(true)
     setError('')
     setStatus('')
@@ -358,19 +369,20 @@ export default function StoreBatchDetailPage() {
     try {
       const result = await fetchJson(`/api/purchase-import-batches/${batch.batch_id}/process`, {
         method: 'POST',
-        body: JSON.stringify({ processed_by: 'ui', mode, auto_consume_article_ids: buildAutoConsumeArticleIds(selectedLines) }),
+        body: JSON.stringify({ processed_by: 'ui', mode, auto_consume_article_ids: buildAutoConsumeArticleIds(autoConsumeLines) }),
       })
       await refreshBatch(batch.batch_id)
       await refreshLocationOptions(household?.id)
       setLastProcessResult(result)
       setBatchDiagnostics(result?.diagnostics || null)
-      setProcessWarning(null)
       showProcessFeedback('Verwerkt!')
       if (result.failed_count > 0) {
-        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt. Controleer de overgebleven regels hieronder of open daarna Voorraad.`)
+        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
       } else {
-        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) zijn naar voorraad verwerkt. Open Voorraad om het resultaat te controleren.`)
+        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.skipped_count || 0} regel(s) overgeslagen.`)
       }
+      setActiveSummaryFilter('action_needed')
+      setStatusFilter('action_needed')
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
     } finally {
@@ -378,41 +390,241 @@ export default function StoreBatchDetailPage() {
     }
   }
 
-  const processActionMode = batch?.import_status === 'reviewed' ? 'ready_only' : 'selected_only'
+  function toggleExpanded(lineId) {
+    setExpandedLineIds((current) => current.includes(lineId) ? current.filter((value) => value !== lineId) : [...current, lineId])
+  }
 
-  async function handleProcessBatch() {
-    if (!batch) return
-    setProcessMode(processActionMode)
-    if (processActionMode === 'selected_only' && (linesMissingLocation > 0 || linesMissingArticle > 0)) {
-      setError('')
-      setProcessWarning({
-        missingLocations: linesMissingLocation,
-        missingArticles: linesMissingArticle,
-      })
+  const diagByLineId = useMemo(() => {
+    const entries = batchDiagnostics?.line_diagnostics || []
+    return Object.fromEntries(entries.map((entry) => [entry.line_id, entry]))
+  }, [batchDiagnostics])
+
+  const lineUiStates = useMemo(() => {
+    const lines = batch?.lines || []
+    return lines.map((line) => {
+      const draft = getDraftValues(line)
+      const saveState = lineSaveState[line.id] || { dirty: false, status: 'idle', message: '', error: '' }
+      const effectiveArticleId = String(draft.articleId || '')
+      const effectiveLocationId = String(draft.locationId || '')
+      const hasValidArticle = Boolean(effectiveArticleId)
+      const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
+      const reviewDecision = line.review_decision || 'pending'
+      const processingStatus = line.processing_status || 'pending'
+
+      let statusKey = 'new'
+      let statusLabel = 'Nieuw'
+      let statusReason = 'Regel wacht nog op beoordeling.'
+
+      if (processingStatus === 'processed') {
+        statusKey = 'processed'
+        statusLabel = 'Verwerkt'
+        statusReason = 'Regel is al naar voorraad verwerkt.'
+      } else if (processingStatus === 'failed') {
+        statusKey = 'action_needed'
+        statusLabel = 'Actie nodig'
+        statusReason = line.processing_error || 'Vorige verwerking mislukte; controleer deze regel.'
+      } else if (reviewDecision === 'ignored') {
+        statusKey = 'ignored'
+        statusLabel = 'Genegeerd'
+        statusReason = 'Door gebruiker overgeslagen.'
+      } else if (reviewDecision === 'selected') {
+        if (saveState.dirty) {
+          statusKey = 'action_needed'
+          statusLabel = 'Actie nodig'
+          statusReason = 'Wijzigingen zijn nog niet opgeslagen.'
+        } else if (!hasValidArticle) {
+          statusKey = 'action_needed'
+          statusLabel = 'Actie nodig'
+          statusReason = 'Artikel onbekend of nog niet gekoppeld.'
+        } else if (!hasValidLocation) {
+          statusKey = 'action_needed'
+          statusLabel = 'Actie nodig'
+          statusReason = 'Locatie ontbreekt.'
+        } else {
+          statusKey = 'ready'
+          statusLabel = 'Klaar'
+          statusReason = 'Regel is compleet en klaar voor verwerking.'
+        }
+      }
+
+      let mappingState = 'unknown'
+      if (hasValidArticle && line.suggested_household_article_id && String(line.suggested_household_article_id) === effectiveArticleId) {
+        mappingState = 'known'
+      } else if (hasValidArticle) {
+        mappingState = 'new'
+      }
+
+      return {
+        line,
+        draft,
+        saveState,
+        reviewDecision,
+        processingStatus,
+        hasValidArticle,
+        hasValidLocation,
+        statusKey,
+        statusLabel,
+        statusReason,
+        mappingState,
+        isReadyForProcessing: statusKey === 'ready',
+        searchText: [line.article_name_raw, line.brand_raw, line.resolved_household_article_name, suggestionLabel(line)]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase(),
+      }
+    })
+  }, [batch?.lines, lineSaveState, lineDrafts, validLocationIds])
+
+  const summaryCounts = useMemo(() => {
+    const counts = {
+      total: lineUiStates.length,
+      ready: lineUiStates.filter((entry) => entry.statusKey === 'ready').length,
+      action_needed: lineUiStates.filter((entry) => entry.statusKey === 'action_needed').length,
+      ignored: lineUiStates.filter((entry) => entry.statusKey === 'ignored').length,
+      processed: lineUiStates.filter((entry) => entry.statusKey === 'processed').length,
+      new_mapping: countUniqueNewMappings(lineUiStates.map((entry) => entry.line)),
+    }
+    return counts
+  }, [lineUiStates])
+
+  const filteredLineUiStates = useMemo(() => {
+    const searchNeedle = searchValue.trim().toLowerCase()
+    return lineUiStates.filter((entry) => {
+      if (activeSummaryFilter !== 'all') {
+        if (activeSummaryFilter === 'new_mapping' && entry.mappingState !== 'new') return false
+        if (activeSummaryFilter !== 'new_mapping' && entry.statusKey !== activeSummaryFilter) return false
+      }
+      if (statusFilter !== 'all' && entry.statusKey !== statusFilter) return false
+      if (reviewFilter !== 'all' && entry.reviewDecision !== reviewFilter) return false
+      if (mappingFilter !== 'all' && entry.mappingState !== mappingFilter) return false
+      if (locationFilter === 'filled' && !entry.hasValidLocation) return false
+      if (locationFilter === 'missing' && entry.hasValidLocation) return false
+      if (searchNeedle && !entry.searchText.includes(searchNeedle)) return false
+      return true
+    })
+  }, [lineUiStates, activeSummaryFilter, statusFilter, reviewFilter, mappingFilter, locationFilter, searchValue])
+  const selectedLineStates = useMemo(() => {
+    const selectedSet = new Set(selectedLineIds)
+    return lineUiStates.filter((entry) => selectedSet.has(entry.line.id))
+  }, [lineUiStates, selectedLineIds])
+
+  const canProcessBatch = useMemo(() => {
+    return !isLoading && !busyLineId && lineUiStates.some((entry) => entry.isReadyForProcessing)
+  }, [isLoading, busyLineId, lineUiStates])
+
+  const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
+
+  function handleSummaryTileClick(nextKey) {
+    setActiveSummaryFilter(nextKey)
+    setStatusFilter(nextKey === 'new_mapping' ? 'all' : nextKey)
+  }
+
+  function resetFilters() {
+    setActiveSummaryFilter('all')
+    setStatusFilter('all')
+    setReviewFilter('all')
+    setMappingFilter('all')
+    setLocationFilter('all')
+    setSearchValue('')
+  }
+
+  function showExceptionsOnly() {
+    setActiveSummaryFilter('all')
+    setStatusFilter('action_needed')
+    setLocationFilter('missing')
+    setReviewFilter('all')
+    setMappingFilter('all')
+  }
+
+  function toggleLineSelection(lineId) {
+    setSelectedLineIds((current) => current.includes(lineId) ? current.filter((value) => value !== lineId) : [...current, lineId])
+  }
+
+  function toggleSelectAllVisible() {
+    const visibleIds = filteredLineUiStates.map((entry) => entry.line.id)
+    const visibleIdSet = new Set(visibleIds)
+    const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedLineIds.includes(id))
+    setSelectedLineIds((current) => {
+      const retained = current.filter((id) => !visibleIdSet.has(id))
+      return allSelected ? retained : [...retained, ...visibleIds]
+    })
+  }
+
+  function selectEverythingInFilter() {
+    const visibleIds = filteredLineUiStates.map((entry) => entry.line.id)
+    setSelectedLineIds((current) => Array.from(new Set([...current, ...visibleIds])))
+  }
+
+  async function handleBulkReviewDecision(nextDecision) {
+    const targets = selectedLineStates.filter((entry) => entry.reviewDecision !== nextDecision)
+    if (!targets.length) return
+    setBusyLineId('bulk-review')
+    setError('')
+    setStatus('')
+    try {
+      for (const entry of targets) {
+        await fetchJson(`/api/purchase-import-lines/${entry.line.id}/review`, {
+          method: 'POST',
+          body: JSON.stringify({ review_decision: nextDecision }),
+        })
+      }
+      await refreshBatch(batch.batch_id)
+      setStatus(`${targets.length} regel(s) zijn bijgewerkt naar ${nextDecision === 'selected' ? 'Verwerken' : 'Negeren'}.`)
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'De bulkactie kon niet worden opgeslagen.')
+    } finally {
+      setBusyLineId('')
+    }
+  }
+
+  async function handleBulkLocationApply() {
+    if (!bulkLocationId) {
+      setError('Kies eerst een locatie voor de geselecteerde regels.')
       return
     }
-    await processBatchNow(processActionMode)
+    const targets = selectedLineStates.filter((entry) => String(entry.draft.locationId || '') !== String(bulkLocationId))
+    if (!targets.length) return
+    for (const entry of targets) {
+      // eslint-disable-next-line no-await-in-loop
+      await persistLineDraft(entry.line, { locationId: bulkLocationId })
+    }
+    setStatus(`${targets.length} regel(s) hebben een nieuwe locatie gekregen.`)
   }
 
-  async function handleProcessReadyOnly() {
-    if (!batch) return
-    setProcessMode('ready_only')
-    setProcessWarning(null)
-    await processBatchNow('ready_only')
+  async function handleBulkArticleApply() {
+    if (!bulkArticleId) {
+      setError('Kies eerst een artikel voor de geselecteerde regels.')
+      return
+    }
+    const targets = selectedLineStates.filter((entry) => String(entry.draft.articleId || '') !== String(bulkArticleId))
+    if (!targets.length) return
+    for (const entry of targets) {
+      // eslint-disable-next-line no-await-in-loop
+      await persistLineDraft(entry.line, { articleId: bulkArticleId })
+    }
+    setStatus(`${targets.length} regel(s) zijn gekoppeld aan hetzelfde artikel.`)
   }
+
+  const allVisibleSelected = filteredLineUiStates.length > 0 && filteredLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
 
   return (
-    <AppShell title={batch ? buildBatchTitle(batch) : 'Bondetail'} showExit={false}>
-      <div style={{ display: 'grid', gap: '16px' }}>
+    <AppShell title="Kassabon werkblad" showExit={false}>
+      <div style={{ display: 'grid', gap: '16px', width: '100%' }}>
         <Card>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-            <div style={{ display: 'grid', gap: '6px' }}>
-              <h2 style={{ margin: 0, fontSize: '20px' }}>{batch ? buildBatchTitle(batch) : 'Bondetail'}</h2>
-              <div style={{ color: '#667085' }}>Werk deze bon af en ga daarna terug naar het overzicht of direct naar de startpagina.</div>
+          <div className="rz-store-workbench-header">
+            <div className="rz-store-workbench-heading">
+              <div className="rz-store-workbench-eyebrow">Kassabon werkblad</div>
+              <h2 style={{ margin: 0, fontSize: '24px' }}>{batch ? buildBatchTitle(batch) : 'Kassabon werkblad'}</h2>
+              <div className="rz-store-workbench-meta">{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
+              <div className="rz-store-workbench-meta">Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <Button variant="secondary" onClick={() => navigate('/winkels')}>Terug naar overzicht</Button>
-              <Button variant="secondary" onClick={() => navigate('/home')}>Terug naar start</Button>
+            <div className="rz-store-workbench-actions">
+              <Button variant="secondary" onClick={() => navigate('/winkels')}>Terug naar bonnen</Button>
+              <Button variant="secondary" onClick={() => navigate('/voorraad')}>Bekijk voorraad</Button>
+              <Button variant="primary" onClick={() => processBatchNow('ready_only')} disabled={isProcessingBatch || !canProcessBatch}>
+                {isProcessingBatch ? 'Bezig…' : 'Verwerk alles wat klaar is'}
+              </Button>
+              {processFeedback ? <span className="rz-store-inline-feedback">{processFeedback}</span> : null}
             </div>
           </div>
         </Card>
@@ -427,207 +639,229 @@ export default function StoreBatchDetailPage() {
         {isLoading ? (
           <Card><div>Bongegevens laden…</div></Card>
         ) : batch ? (
-          <Card>
-            <div data-testid="batch-detail-page" className="rz-store-review">
-              <div className="rz-store-review-summary">
-                <div>
-                  <h3 data-testid="active-batch-title" className="rz-store-review-title">{buildBatchTitle(batch)}</h3>
-                  <div className="rz-store-review-meta">Aankoopdatum: {batch.purchase_date || 'Onbekend'}</div>
-                  <div className="rz-store-review-meta">Winkel: {batch.store_label || batch.store_name || providerLabel(activeProvider)}</div>
-                  <div className="rz-store-review-meta">Status: {batchStatusLabel(batch.import_status)}</div>
-                </div>
-                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <Button data-testid="process-active-batch" variant="primary" onClick={handleProcessBatch} disabled={isProcessingBatch || !canProcessBatch}>
-                    {isProcessingBatch ? 'Bezig…' : 'Naar voorraad'}
-                  </Button>
-                  <Button variant="secondary" onClick={() => navigate('/voorraad')}>Bekijk voorraad</Button>
-                  {processFeedback ? <span className="rz-store-inline-feedback">{processFeedback}</span> : null}
+          <>
+            <Card>
+              <div className="rz-store-summary-grid">
+                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'all' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('all')}>
+                  <span className="rz-store-summary-label">Totaal</span>
+                  <strong>{summaryCounts.total}</strong>
+                </button>
+                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'ready' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('ready')}>
+                  <span className="rz-store-summary-label">Klaar</span>
+                  <strong>{summaryCounts.ready}</strong>
+                </button>
+                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'action_needed' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('action_needed')}>
+                  <span className="rz-store-summary-label">Actie nodig</span>
+                  <strong>{summaryCounts.action_needed}</strong>
+                </button>
+                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'ignored' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('ignored')}>
+                  <span className="rz-store-summary-label">Genegeerd</span>
+                  <strong>{summaryCounts.ignored}</strong>
+                </button>
+                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'processed' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('processed')}>
+                  <span className="rz-store-summary-label">Verwerkt</span>
+                  <strong>{summaryCounts.processed}</strong>
+                </button>
+                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'new_mapping' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('new_mapping')}>
+                  <span className="rz-store-summary-label">Nieuw gekoppeld</span>
+                  <strong>{summaryCounts.new_mapping}</strong>
+                </button>
+              </div>
+            </Card>
+
+            <Card>
+              <div className="rz-store-filters-grid">
+                <input
+                  className="rz-input"
+                  type="text"
+                  placeholder="Zoek op bonartikel of gekoppeld artikel"
+                  value={searchValue}
+                  onChange={(event) => setSearchValue(event.target.value)}
+                />
+                <select className="rz-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  {STATUS_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
+                </select>
+                <select className="rz-input" value={reviewFilter} onChange={(event) => setReviewFilter(event.target.value)}>
+                  {REVIEW_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
+                </select>
+                <select className="rz-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
+                  {MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
+                </select>
+                <select className="rz-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
+                  {LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
+                </select>
+                <div className="rz-store-filter-actions">
+                  <Button variant="secondary" onClick={resetFilters}>Filters wissen</Button>
+                  <Button variant="secondary" onClick={showExceptionsOnly}>Toon alleen uitzonderingen</Button>
                 </div>
               </div>
+            </Card>
 
-              <div className="rz-store-review-meta" style={{ marginBottom: '12px' }}>
-                Vereenvoudigingsniveau actief: {simplificationLevelLabel}. Bekende regels worden volgens dit niveau voorgesteld of automatisch voorbereid.
-              </div>
-
-              <div className="rz-store-review-meta" style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
-                <span>Totaal: <strong>{batch.summary?.total || 0}</strong></span>
-                <span>Open: <strong>{visibleLines.length}</strong></span>
-                <span>Verwerkt: <strong>{batch.summary?.processed || 0}</strong></span>
-                <span>Mislukt: <strong>{batch.summary?.failed || 0}</strong></span>
-                {lastProcessResult?.processed_count ? <span>Laatst verwerkt: <strong>{lastProcessResult.processed_count}</strong></span> : null}
-              </div>
-
-              {lastProcessResult ? (
-                <div className="rz-inline-feedback rz-inline-feedback--success" style={{ marginBottom: '12px' }}>
-                  Laatste verwerking — verwerkt: <strong>{lastProcessResult.processed_count || 0}</strong>, overgeslagen: <strong>{lastProcessResult.skipped_count || 0}</strong>, mislukt: <strong>{lastProcessResult.failed_count || 0}</strong>.
+            {selectedLineIds.length ? (
+              <Card>
+                <div className="rz-store-bulkbar">
+                  <div><strong>{selectedLineIds.length}</strong> regel(s) geselecteerd</div>
+                  <div className="rz-store-bulk-actions">
+                    <Button variant="secondary" onClick={selectEverythingInFilter}>Selecteer alles in filter</Button>
+                    <Button variant="secondary" onClick={() => handleBulkReviewDecision('selected')} disabled={Boolean(busyLineId)}>Zet op Verwerken</Button>
+                    <Button variant="secondary" onClick={() => handleBulkReviewDecision('ignored')} disabled={Boolean(busyLineId)}>Zet op Negeren</Button>
+                    <select className="rz-input" value={bulkArticleId} onChange={(event) => setBulkArticleId(event.target.value)}>
+                      <option value="">Koppel geselecteerde regels</option>
+                      {articleOptions.map((article) => <option key={article.id} value={article.id}>{articleLabel(article)}</option>)}
+                    </select>
+                    <Button variant="secondary" onClick={handleBulkArticleApply} disabled={Boolean(busyLineId)}>Koppel geselecteerde regels</Button>
+                    <select className="rz-input" value={bulkLocationId} onChange={(event) => setBulkLocationId(event.target.value)}>
+                      <option value="">Kies locatie</option>
+                      {locationOptions.map((location) => <option key={location.id} value={location.id}>{location.label}</option>)}
+                    </select>
+                    <Button variant="secondary" onClick={handleBulkLocationApply} disabled={Boolean(busyLineId)}>Kies locatie</Button>
+                    <Button variant="secondary" onClick={() => setStatus('Werkblad is bijgewerkt. De wijzigingen zijn direct opgeslagen per regel.')}>Opslaan</Button>
+                  </div>
                 </div>
-              ) : null}
+              </Card>
+            ) : null}
 
+            {lastProcessResult ? (
+              <Card>
+                <div className="rz-store-result-card">
+                  <div>
+                    <div className="rz-store-workbench-eyebrow">Verwerking afgerond</div>
+                    <div>Verwerkt: <strong>{lastProcessResult.processed_count || 0}</strong> · Overgeslagen: <strong>{lastProcessResult.skipped_count || 0}</strong> · Mislukt: <strong>{lastProcessResult.failed_count || 0}</strong></div>
+                  </div>
+                  <div className="rz-store-result-actions">
+                    <Button variant="secondary" onClick={() => setStatusFilter('processed')}>Toon verwerkte regels</Button>
+                    <Button variant="secondary" onClick={() => setStatusFilter('action_needed')}>Toon overgeslagen regels</Button>
+                    <Button variant="secondary" onClick={() => navigate('/voorraad')}>Ga naar voorraad</Button>
+                  </div>
+                </div>
+              </Card>
+            ) : null}
+
+            <Card>
               <div className="rz-table-wrapper">
-                <table className="rz-table rz-store-review-table">
-                  <colgroup>
-                    <col style={{ width: '27%' }} />
-                    <col style={{ width: '11%' }} />
-                    <col style={{ width: '18%' }} />
-                    <col style={{ width: '20%' }} />
-                    <col style={{ width: '24%' }} />
-                  </colgroup>
+                <table className="rz-table rz-store-workbench-table">
                   <thead>
                     <tr className="rz-table-header">
-                      <th>Artikel</th>
+                      <th style={{ width: '44px' }}>
+                        <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
+                      </th>
+                      <th>Bonartikel</th>
                       <th className="rz-num">Aantal</th>
+                      <th>Gekoppeld artikel</th>
                       <th>Beoordeling</th>
-                      <th>Koppelen aan</th>
                       <th>Locatie</th>
+                      <th>Status</th>
+                      <th>Reden</th>
+                      <th>Details</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleLines.length === 0 ? (
-                      <tr><td colSpan={5}>Er staan geen open regels meer in deze kassabon.</td></tr>
-                    ) : visibleLines.map((line) => {
-                      const draft = getDraftValues(line)
-                      const saveState = lineSaveState[line.id] || {}
-                      const effectiveArticleId = draft.articleId
-                      const effectiveLocationId = draft.locationId
-                      const hasValidArticle = Boolean(effectiveArticleId) && validArticleIds.has(effectiveArticleId)
-                      const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
-                      const isReadyForProcessing = (line.review_decision || 'selected') === 'selected' && hasValidArticle && hasValidLocation && !saveState.dirty
-                      const lineBusy = busyLineId === line.id
+                    {filteredLineUiStates.length === 0 ? (
+                      <tr>
+                        <td colSpan={9}>Geen regels in deze selectie.</td>
+                      </tr>
+                    ) : filteredLineUiStates.map((entry) => {
+                      const { line, draft, saveState, statusLabel: currentStatusLabel, statusReason } = entry
+                      const lineBusy = busyLineId === line.id || busyLineId === 'bulk-review'
+                      const isExpanded = expandedLineIds.includes(line.id)
+                      const diag = diagByLineId[line.id] || null
                       return (
-                        <tr key={line.id} className={isReadyForProcessing ? 'rz-store-row--linked' : ''}>
-                          <td>
-                            <div className="rz-store-primary">{line.article_name_raw}</div>
-                            <div className="rz-store-secondary">{line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
-                            {suggestionLabel(line) ? <div className={`rz-store-suggestion ${line.is_auto_prefilled ? 'rz-store-suggestion--auto' : 'rz-store-suggestion--check'}`}>{suggestionLabel(line)}</div> : null}
-                            {line?.preparation_mode ? (
-                              <div className="rz-store-secondary">
-                                Status voorbereiding: {line.preparation_mode === 'auto_ready' ? 'Automatisch klaargezet' : line.preparation_mode === 'suggest_only' ? 'Alleen voorstel' : 'Geen voorbereiding'}
-                              </div>
-                            ) : null}
-                            {line.processing_status === 'failed' && line.processing_error ? (
-                              <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginTop: '6px' }}>Verwerking mislukt: {line.processing_error}</div>
-                            ) : null}
-                          </td>
-                          <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
-                          <td>
-                            <select
-                              className="rz-input rz-store-select"
-                              value={line.review_decision || 'selected'}
-                              disabled={lineBusy || isProcessingBatch}
-                              onChange={(event) => handleReviewDecision(line.id, event.target.value)}
-                            >
-                              <option value="pending">Nog te beoordelen</option>
-                              <option value="selected">Verwerken</option>
-                              <option value="ignored">Negeren</option>
-                            </select>
-                          </td>
-                          <td>
-                            <StoreArticleSelector
-                              lineId={line.id}
-                              lineName={line.article_name_raw}
-                              selectedArticleId={draft.articleId || ''}
-                              articleOptions={articleOptions}
-                              disabled={lineBusy || isProcessingBatch}
-                              onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
-                              onClearArticle={() => persistLineDraft(line, { articleId: '' })}
-                              onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
-                            />
-                          </td>
-                          <td>
-                            <select
-                              className="rz-input rz-store-select"
-                              value={draft.locationId || ''}
-                              disabled={lineBusy || isProcessingBatch}
-                              onFocus={() => household?.id && refreshLocationOptions(household.id)}
-                              onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
-                              onChange={(event) => persistLineDraft(line, { locationId: event.target.value || '' })}
-                            >
-                              <option value="">Kies locatie</option>
-                              {locationOptions.map((location) => (
-                                <option key={location.id} value={location.id}>{location.label}</option>
-                              ))}
-                            </select>
-                          </td>
-                        </tr>
+                        <Fragment key={line.id}>
+                          <tr key={line.id} className={`rz-store-workbench-row ${entry.statusKey === 'ready' ? 'is-ready' : entry.statusKey === 'action_needed' ? 'is-action-needed' : entry.statusKey === 'ignored' ? 'is-ignored' : ''}`}>
+                            <td>
+                              <input type="checkbox" checked={selectedLineIds.includes(line.id)} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} />
+                            </td>
+                            <td>
+                              <div className="rz-store-primary">{line.article_name_raw}</div>
+                              <div className="rz-store-secondary">{providerLabel(activeProvider)} · {line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
+                              {suggestionLabel(line) ? <div className={`rz-store-suggestion ${line.is_auto_prefilled ? 'rz-store-suggestion--auto' : 'rz-store-suggestion--check'}`}>{suggestionLabel(line)}</div> : null}
+                              {entry.mappingState === 'new' ? <div className="rz-store-badge rz-store-badge--new">Nieuwe mapping</div> : null}
+                              {entry.mappingState === 'known' ? <div className="rz-store-badge rz-store-badge--known">Bekende mapping</div> : null}
+                            </td>
+                            <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
+                            <td>
+                              <StoreArticleSelector
+                                lineId={line.id}
+                                lineName={line.article_name_raw}
+                                selectedArticleId={draft.articleId || ''}
+                                articleOptions={articleOptions}
+                                disabled={lineBusy || isProcessingBatch}
+                                onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
+                                onClearArticle={() => persistLineDraft(line, { articleId: '' })}
+                                onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
+                              />
+                            </td>
+                            <td>
+                              <select
+                                className="rz-input rz-store-select"
+                                value={line.review_decision || 'pending'}
+                                disabled={lineBusy || isProcessingBatch}
+                                onChange={(event) => handleReviewDecision(line.id, event.target.value)}
+                              >
+                                <option value="pending">Nog te beoordelen</option>
+                                <option value="selected">Verwerken</option>
+                                <option value="ignored">Negeren</option>
+                              </select>
+                            </td>
+                            <td>
+                              <select
+                                className="rz-input rz-store-select"
+                                value={draft.locationId || ''}
+                                disabled={lineBusy || isProcessingBatch}
+                                onFocus={() => household?.id && refreshLocationOptions(household.id)}
+                                onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
+                                onChange={(event) => persistLineDraft(line, { locationId: event.target.value || '' })}
+                              >
+                                <option value="">Kies locatie</option>
+                                {locationOptions.map((location) => (
+                                  <option key={location.id} value={location.id}>{location.label}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td><span className={`rz-store-status-badge rz-store-status-badge--${entry.statusKey}`}>{currentStatusLabel}</span></td>
+                            <td>
+                              <div>{statusReason}</div>
+                              {saveState?.message ? <div className="rz-store-secondary">{saveState.message}</div> : null}
+                              {saveState?.error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginTop: '6px' }}>{saveState.error}</div> : null}
+                            </td>
+                            <td>
+                              <Button variant="secondary" onClick={() => toggleExpanded(line.id)}>{isExpanded ? 'Sluit' : 'Details'}</Button>
+                            </td>
+                          </tr>
+                          {isExpanded ? (
+                            <tr key={`${line.id}-details`}>
+                              <td colSpan={9}>
+                                <div className="rz-store-detail-grid">
+                                  <div className="rz-store-detail-panel">
+                                    <div className="rz-store-detail-title">Automatische afboeking</div>
+                                    <div><strong>Huishoudinstelling:</strong> {detailValue(diag?.household_consume_mode || diag?.household_mode || household?.default_consume_mode || household?.consume_mode || 'Uit')}</div>
+                                    <div><strong>Artikeloverride:</strong> {detailValue(diag?.article_consume_override || diag?.article_override || 'Huishoudinstelling volgen')}</div>
+                                    <div><strong>Effectieve automatische afboeking:</strong> {detailValue(diag?.auto_consume_effective_mode || diag?.effective_mode || 'Niet van toepassing')}</div>
+                                    <div><strong>Beslisreden:</strong> {detailValue(diag?.auto_consume_decision_reason || diag?.decision_reason || statusReason)}</div>
+                                  </div>
+                                  <div className="rz-store-detail-panel">
+                                    <div className="rz-store-detail-title">Verwerkingsuitkomst</div>
+                                    <div><strong>Aangevraagd af te boeken:</strong> {detailValue(diag?.auto_consume_requested_deduction_quantity, '0')}</div>
+                                    <div><strong>Werkelijk afgeboekt:</strong> {detailValue(diag?.auto_consume_applied_deduction_quantity, '0')}</div>
+                                    <div><strong>Laatste verwerking:</strong> {detailValue(line.processed_at || diag?.processed_at || 'Nog niet verwerkt')}</div>
+                                    <div><strong>Laatste resultaat:</strong> {detailValue(diag?.processing_status || line.processing_status || 'Nog niet verwerkt')}</div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          ) : null}
+                        </Fragment>
                       )
                     })}
                   </tbody>
                 </table>
               </div>
-
-
-
-
-
-              {lastProcessResult?.results?.length ? (
-                <div style={{ display: 'grid', gap: '12px', marginTop: '16px' }}>
-                  <div className="rz-store-review-meta" style={{ fontWeight: 700 }}>
-                    Resultaat van Naar voorraad — per regel
-                  </div>
-                  {lastProcessResult.results.map((result) => {
-                    const line = batch?.lines?.find((entry) => entry.id === result.line_id)
-                    const label = line?.article_name_raw || result.line_id
-                    const statusLabel = result.status === 'processed' ? 'Verwerkt' : result.status === 'skipped' ? 'Overgeslagen' : 'Mislukt'
-                    const reason = result.reason || result.error || result.message || result.diagnostic?.failure_message || ''
-                    return (
-                      <div key={result.line_id} className="rz-inline-feedback" style={{ borderColor: result.status === 'failed' ? '#b42318' : '#1d2939' }}>
-                        <strong>{label}</strong>: {statusLabel}{reason ? ` — ${reason}` : ''}
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : null}
-
-              {batchDiagnostics?.line_diagnostics?.length ? (
-                <div style={{ marginTop: '16px', display: 'grid', gap: '12px' }}>
-                  <div className="rz-store-review-meta"><strong>Diagnose laatste verwerking</strong> — bewijs per kassabonregel waar verwerking, historie of automatisch afboeken wel of niet slaagt.</div>
-                  {batchDiagnostics.line_diagnostics.map((diag) => (
-                    <div key={diag.line_id} style={{ border: '1px solid #D0D5DD', borderRadius: '12px', padding: '12px', background: '#F8FAFC', display: 'grid', gap: '6px' }}>
-                      <div><strong>Bonregel:</strong> {diag.receipt_line_text || 'Onbekend'}</div>
-                      <div><strong>Status:</strong> {diag.processing_status === 'processed' ? 'verwerkt' : diag.processing_status === 'failed' ? 'mislukt' : 'nog niet verwerkt'}</div>
-                      <div><strong>Gekoppeld artikel:</strong> {diag.resolved_article_name || '(geen)'} {diag.resolution_reason ? `· ${diag.resolution_reason}` : ''}</div>
-                      <div><strong>Opgeslagen batchdata:</strong> artikel-id {diag.stored_matched_article_id || '(geen)'} · locatie-id {diag.stored_target_location_id || '(geen)'} · bron {diag.processed_from_saved_batch_data ? 'opgeslagen batchdata' : 'onbekend'}</div>
-                      <div><strong>Aankoop-event:</strong> {diag.purchase_event_created ? 'ja' : 'nee'} · <strong>Historie ziet aankoop:</strong> {diag.history_contains_purchase_event ? 'ja' : 'nee'}</div>
-                      <div><strong>Voorraad:</strong> {diag.inventory_before_total} → {diag.inventory_after_purchase_total}{diag.auto_consume_event_created || diag.auto_consume_should_apply ? ` → ${diag.inventory_after_auto_consume_total}` : ''}</div>
-                      <div><strong>Automatisch afboeken:</strong> {diag.auto_consume_event_created ? 'ja' : 'nee'} · <strong>Modus:</strong> {diag.auto_consume_effective_mode || 'none'}</div>
-                      <div><strong>Huishoudmodus:</strong> {diag.auto_consume_household_mode || 'none'} · <strong>Artikeloverride:</strong> {diag.auto_consume_article_override || 'follow_household'}</div>
-                      <div><strong>Gekocht:</strong> {diag.purchase_quantity} · <strong>Aangevraagd af te boeken:</strong> {diag.auto_consume_requested_deduction_quantity} · <strong>Werkelijk afgeboekt:</strong> {diag.auto_consume_applied_deduction_quantity}</div>
-                      <div><strong>Beslisreden:</strong> {diag.auto_consume_decision_reason || 'Geen'}</div>
-                      {diag.processing_status !== 'processed' && (!diag.failure_stage || diag.failure_stage === 'none') ? (
-                        <div className="rz-store-review-meta">Deze regel is nog niet verwerkt. Koppel eerst een artikel en kies daarna verwerken.</div>
-                      ) : null}
-                      {diag.processing_status === 'failed' && diag.failure_stage && diag.failure_stage !== 'none' ? (
-                        <div className="rz-inline-feedback rz-inline-feedback--error">Foutstap: {diag.failure_stage} — {diag.failure_message || 'Onbekende fout'}</div>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
-            </div>
-          </Card>
+            </Card>
+          </>
         ) : (
           <Card><div>Deze bon kon niet worden gevonden.</div></Card>
         )}
       </div>
-
-      {processWarning ? (
-        <div className="rz-modal-backdrop" role="presentation">
-          <div className="rz-modal-card" data-testid="process-warning-modal" role="dialog" aria-modal="true" aria-labelledby="process-warning-title">
-            <h3 id="process-warning-title" className="rz-modal-title">Nog niet alle regels zijn klaar</h3>
-            <p className="rz-modal-text">
-              {processWarning.missingArticles > 0 ? `${processWarning.missingArticles} regel(s) missen nog een artikelkoppeling. ` : ''}
-              {processWarning.missingLocations > 0 ? `${processWarning.missingLocations} regel(s) missen nog een locatie.` : ''}
-            </p>
-            <div className="rz-modal-actions">
-              <Button variant="secondary" data-testid="process-warning-back" onClick={() => setProcessWarning(null)} disabled={isProcessingBatch}>Terug</Button>
-              <Button variant="primary" data-testid="process-warning-ignore" onClick={handleProcessReadyOnly} disabled={isProcessingBatch}>
-                {isProcessingBatch ? 'Bezig…' : 'Negeren'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </AppShell>
   )
 }
