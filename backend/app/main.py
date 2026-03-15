@@ -2280,7 +2280,8 @@ def ensure_ui_test_seed_data():
                     resolved_location={
                         'space_id': space_id,
                         'sublocation_id': sublocation_id,
-                        'label': ' / '.join(part for part in [space_lookup.get(space_id, ''), sub_lookup.get(sublocation_id, '')] if part),
+                        'location_id': sublocation_id or space_id,
+                        'location_label': ' / '.join(part for part in [space_lookup.get(space_id, ''), sub_lookup.get(sublocation_id, '')] if part),
                     },
                     event_type='purchase',
                     quantity=int(aantal),
