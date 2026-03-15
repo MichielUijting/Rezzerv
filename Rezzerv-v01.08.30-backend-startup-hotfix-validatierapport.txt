@@ -1,0 +1,30 @@
+Rezzerv v01.08.30 — backend startup hotfix
+
+Aanleiding
+- In v01.08.29 gaf het login-scherm een NetworkError omdat de backend API niet bereikbaar was.
+
+Root cause
+- In backend/app/main.py werd ensure_ui_test_seed_data() aangeroepen voordat de functie was gedefinieerd.
+- Daardoor crashte de backend al tijdens import/startup, nog voordat uvicorn de API kon serveren.
+
+Uitgevoerde correctie
+- De vroegtijdige aanroep is verwijderd uit de initialisatievolgorde.
+- ensure_ui_test_seed_data() wordt nu pas aangeroepen nadat de functie is gedefinieerd.
+- Versioning uniform opgehoogd naar 01.08.30.
+
+Aangepaste bestanden
+- backend/app/main.py
+- VERSION.txt
+- version.json
+- frontend/package.json
+- frontend/package-lock.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+
+Validatie
+- Python compile-check op backend/app/main.py geslaagd.
+- De backend-importvolgorde bevat geen NameError meer voor ensure_ui_test_seed_data.
+
+Beperking
+- Dit is een gerichte backend hotfix. De frontend is hier niet opnieuw gebouwd in de container. De Docker-build van de gebruiker hoort dat lokaal opnieuw op te bouwen.

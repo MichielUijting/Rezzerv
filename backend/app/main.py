@@ -2210,7 +2210,6 @@ ensure_release_4_schema()
 ensure_release_803_schema()
 ensure_release_813_schema()
 seed_store_providers()
-ensure_ui_test_seed_data()
 
 
 
@@ -2454,6 +2453,8 @@ def ensure_ui_test_seed_data():
                     },
                 ],
             )
+
+ensure_ui_test_seed_data()
 
 
 def reset_dev_tables():
