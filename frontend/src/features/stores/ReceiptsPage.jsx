@@ -149,7 +149,8 @@ export default function ReceiptsPage() {
 
   return (
     <AppShell title="Kassabonnen" showExit={false}>
-      <ScreenCard>
+      <div style={{ display: 'grid', gap: '16px' }}>
+        <ScreenCard>
         {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
         <div className="rz-table-wrapper">
           <table className="rz-table">
@@ -163,10 +164,10 @@ export default function ReceiptsPage() {
                     aria-label="Selecteer alle zichtbare kassabonnen"
                   />
                 </th>
-                <th style={{ width: '38%' }}>Winkel</th>
+                <th style={{ width: '26.6%' }}>Winkel</th>
                 <th style={{ width: '22%' }}>Datum</th>
                 <th className="rz-num" style={{ width: '12%' }}>Artikelen</th>
-                <th style={{ width: '20%' }}>Status</th>
+                <th style={{ width: '39.4%' }}>Status</th>
               </tr>
               <tr className="rz-table-filters">
                 <th />
@@ -264,9 +265,10 @@ export default function ReceiptsPage() {
         <div className="rz-stock-table-actions">
           <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || listItems.length === 0}>Exporteren</Button>
         </div>
-      </ScreenCard>
+        </ScreenCard>
 
-      {openedBatchId ? <StoreBatchDetailContent batchIdOverride={openedBatchId} embedded /> : null}
+        {openedBatchId ? <StoreBatchDetailContent batchIdOverride={openedBatchId} embedded /> : null}
+      </div>
     </AppShell>
   )
 }
