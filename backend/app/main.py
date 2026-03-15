@@ -1750,13 +1750,86 @@ def create_inventory_purchase_event(conn, household_id: str, article_id: str, ar
     )
 
 
-def apply_inventory_consumption(conn, household_id: str, article_name: str, quantity: float, resolved_location: dict):
+def apply_inventory_consumption(
+    conn,
+    household_id: str,
+    article_name: str,
+    quantity: float,
+    resolved_location: dict,
+    *,
+    mode: str = ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY,
+    protected_quantity_on_purchase_row: int = 0,
+):
     safe_location = require_resolved_location(resolved_location)
     space_id = safe_location["space_id"]
     sublocation_id = safe_location["sublocation_id"]
     quantity_int = int(quantity)
     if quantity_int <= 0:
-        return None
+        return {"applied_quantity": 0, "affected_inventory_ids": []}
+
+    normalized_mode = normalize_household_auto_consume_mode(mode)
+    protected_quantity_int = max(0, int(protected_quantity_on_purchase_row or 0))
+
+    if normalized_mode == ARTICLE_AUTO_CONSUME_ALL_EXISTING:
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, aantal,
+                       CASE
+                         WHEN COALESCE(space_id, '') = COALESCE(:space_id, '')
+                          AND COALESCE(sublocation_id, '') = COALESCE(:sublocation_id, '')
+                         THEN 1 ELSE 0
+                       END AS is_purchase_row
+                FROM inventory
+                WHERE household_id = :household_id
+                  AND lower(trim(naam)) = lower(trim(:naam))
+                ORDER BY is_purchase_row ASC, aantal ASC, id ASC
+                """
+            ),
+            {
+                "household_id": household_id,
+                "naam": article_name,
+                "space_id": space_id,
+                "sublocation_id": sublocation_id,
+            },
+        ).mappings().all()
+
+        remaining_to_consume = quantity_int
+        affected_ids = []
+
+        for row in rows:
+            if remaining_to_consume <= 0:
+                break
+            current_quantity = int(row["aantal"] or 0)
+            if current_quantity <= 0:
+                continue
+            is_purchase_row = bool(row["is_purchase_row"])
+            protected_for_row = protected_quantity_int if is_purchase_row else 0
+            available_to_consume = max(0, current_quantity - protected_for_row)
+            if available_to_consume <= 0:
+                continue
+            consume_here = min(available_to_consume, remaining_to_consume)
+            new_row_quantity = current_quantity - consume_here
+            if new_row_quantity > 0:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE inventory
+                        SET aantal = :aantal, updated_at = CURRENT_TIMESTAMP
+                        WHERE id = :id
+                        """
+                    ),
+                    {"aantal": new_row_quantity, "id": row["id"]},
+                )
+            else:
+                conn.execute(text("DELETE FROM inventory WHERE id = :id"), {"id": row["id"]})
+            remaining_to_consume -= consume_here
+            affected_ids.append(row["id"])
+
+        return {
+            "applied_quantity": quantity_int - remaining_to_consume,
+            "affected_inventory_ids": affected_ids,
+        }
 
     existing = conn.execute(
         text(
@@ -1778,7 +1851,7 @@ def apply_inventory_consumption(conn, household_id: str, article_name: str, quan
     ).mappings().first()
 
     if not existing:
-        return None
+        return {"applied_quantity": 0, "affected_inventory_ids": []}
 
     new_row_quantity = max(0, int(existing["aantal"] or 0) - quantity_int)
     if new_row_quantity > 0:
@@ -1794,7 +1867,7 @@ def apply_inventory_consumption(conn, household_id: str, article_name: str, quan
         )
     else:
         conn.execute(text("DELETE FROM inventory WHERE id = :id"), {"id": existing["id"]})
-    return existing["id"]
+    return {"applied_quantity": quantity_int, "affected_inventory_ids": [existing["id"]]}
 
 
 def create_auto_repurchase_event(conn, household_id: str, article_id: str, article_name: str, resolved_location: dict, quantity: float = 1):
@@ -3645,6 +3718,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                 inventory_after_auto_consume_total = pre_purchase_total
                 history_lookup_result_count = 0
                 history_contains_purchase_event = False
+                applied_deduction_quantity = 0
                 try:
                     event_id = create_inventory_purchase_event(conn, batch["household_id"], article_id, article_name, quantity, resolved_location, note)
                     apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
@@ -3652,10 +3726,20 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                     current_stage = 'history_lookup'
                     history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(article_id), article_name, event_id)
                     current_stage = 'auto_consume_decision'
+                    applied_deduction_quantity = 0
                     if should_auto_consume:
                         current_stage = 'auto_consume_write'
                         auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=requested_deduction_quantity)
-                        apply_inventory_consumption(conn, batch["household_id"], article_name, requested_deduction_quantity, resolved_location)
+                        consumption_result = apply_inventory_consumption(
+                            conn,
+                            batch["household_id"],
+                            article_name,
+                            requested_deduction_quantity,
+                            resolved_location,
+                            mode=effective_mode,
+                            protected_quantity_on_purchase_row=int(quantity),
+                        )
+                        applied_deduction_quantity = int(consumption_result.get("applied_quantity") or 0)
                     inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)
                 except Exception as exc:
                     detail_parts = [
@@ -3676,7 +3760,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                         auto_consume_household_mode=household_mode, auto_consume_article_override=article_override, auto_consume_effective_mode=effective_mode,
                         auto_consume_should_apply=should_auto_consume, auto_consume_decision_reason=decision_reason,
                         auto_consume_requested_deduction_quantity=requested_deduction_quantity,
-                        auto_consume_applied_deduction_quantity=requested_deduction_quantity if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
+                        auto_consume_applied_deduction_quantity=applied_deduction_quantity if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
                         auto_consume_event_id=auto_event_id, inventory_after_purchase_total=int(inventory_after_purchase_total),
                         inventory_after_auto_consume_total=int(inventory_after_auto_consume_total),
                         processing_status='failed', failure_stage=current_stage, failure_message=error,
@@ -3695,7 +3779,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
                     auto_consume_household_mode=household_mode, auto_consume_article_override=article_override, auto_consume_effective_mode=effective_mode,
                     auto_consume_should_apply=should_auto_consume, auto_consume_decision_reason=decision_reason,
                     auto_consume_requested_deduction_quantity=requested_deduction_quantity,
-                    auto_consume_applied_deduction_quantity=requested_deduction_quantity if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
+                    auto_consume_applied_deduction_quantity=applied_deduction_quantity if auto_event_id else 0, auto_consume_event_created=bool(auto_event_id),
                     auto_consume_event_id=auto_event_id, inventory_after_purchase_total=int(inventory_after_purchase_total),
                     inventory_after_auto_consume_total=int(inventory_after_auto_consume_total),
                     processing_status='processed', failure_stage='none', failure_message='',

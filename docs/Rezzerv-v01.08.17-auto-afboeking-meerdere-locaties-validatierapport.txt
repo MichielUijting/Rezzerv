@@ -1,0 +1,78 @@
+Rezzerv v01.08.17 - validatierapport automatische afboeking over meerdere locaties
+
+Basisrelease
+- Rezzerv-v01.08.16.zip
+
+Doel van deze release
+- Herstel van de resterende functionele kernbug waarbij historie en diagnose wel de juiste automatische afboeking toonden, maar de feitelijke voorraadregels over meerdere locaties niet overeenkomstig werden afgebouwd.
+
+Probleemoorzaak
+- De backend paste automatische afboeking nog alleen toe op de aankooplocatie.
+- Daardoor kon de historie een artikelbrede afboeking tonen, terwijl andere inventory-records van hetzelfde artikel bleven bestaan.
+- Gevolg: inconsistentie tussen historie, voorraadtab, analyse en totaalvoorraad.
+
+Aangepaste bestanden
+- backend/app/main.py
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+- frontend/package.json
+
+Inhoudelijke fix
+- apply_inventory_consumption(...) ondersteunt nu expliciet artikelbrede consumptie voor modus consume_all_existing_before_purchase.
+- De afboeking wordt nu verdeeld over alle inventory-records van hetzelfde artikel binnen hetzelfde huishouden.
+- Op de aankoopregel blijft de nieuw gekochte hoeveelheid beschermd, zodat alleen de bestaande voorraad wordt afgebouwd.
+- De toegepaste aftrek wordt nu als applied_deduction_quantity teruggegeven en door de diagnose gebruikt.
+
+Gerichte validatie
+1. Scenario Tomaten - volledige afboeking over meerdere locaties
+   Beginvoorraad:
+   - Voorraad test / Plank A = 16
+   - Voorraad test / Plank B = 3
+   - Keuken / Koelkast = 2
+   - Berging / Voorraadkast = 2
+   Totaal voor aankoop = 23
+   Aankoop = 2
+   Modus = consume_all_existing_before_purchase
+
+   Resultaat na patch:
+   - requested_deduction_quantity = 23
+   - applied_deduction_quantity = 23
+   - totale voorraad na auto-afboeking = 2
+   - resterende inventory-regels samen = 2
+   - geen verborgen restvoorraad op andere locaties
+
+2. Scenario Melk - bestaande werkende modus blijft intact
+   Beginvoorraad:
+   - Badkamer / Kast = 1
+   - Keuken / Koelkast = 2
+   Totaal voor aankoop = 3
+   Aankoop = 1
+   Modus = consume_purchased_quantity
+
+   Resultaat na patch:
+   - requested_deduction_quantity = 1
+   - applied_deduction_quantity = 1
+   - totale voorraad na auto-afboeking = 3
+   - voorraadverdeling blijft logisch: 1 + 2
+
+QA/QC-oordeel
+- Functionele kernbug: groen
+- Versioning-consistentie: groen
+- Packaging: groen
+
+Open transparantie
+- Gerichte backendvalidatie is uitgevoerd op een kopie van de meegeleverde SQLite-database.
+- Geen volledige browserregressiesuite uitgevoerd.
+- Geen Docker no-cache build uitgevoerd binnen deze validatiestap.
+- Deze release is vrijgeefbaar voor gerichte PO-test van het Tomaten-scenario en regressiecheck op het Melk-scenario.
+
+Korte PO-test
+1. Neem een artikel met bestaande voorraad op meerdere locaties.
+2. Zet huishoudautomatisering op 'consume_all_existing_before_purchase'.
+3. Verwerk een aankoop van dat artikel.
+4. Controleer Historie: aankoop omhoog, daarna automatische afboeking terug naar exact de aankoophoeveelheid.
+5. Controleer tab Voorraad: som van alle voorraadregels is exact gelijk aan de aankoophoeveelheid.
+6. Controleer Analyse en totaalvoorraad: deze sluiten exact aan op Historie en Voorraad.
