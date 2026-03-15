@@ -1,0 +1,49 @@
+Rezzerv-v01.08.18 — poortsanering 5173 validatierapport
+
+Doel
+- Onderzoeken of de releasezip zelf een tweede frontend op poort 5173 start.
+- Alle expliciete 5173-frontendverwijzingen uit de codebasis verwijderen om verstoringsrisico uit te sluiten.
+
+Bevinding
+- start.bat start de applicatie via docker compose en opent expliciet http://localhost:5174
+- docker-compose.yml publiceert frontend alleen op 5174:80
+- Er is geen script gevonden in de normale startflow dat automatisch npm/vite dev op 5173 start.
+- De zip bevatte wel een los Vite-devpad op 5173:
+  - frontend/vite.config.js -> port 5173
+  - backend/app/main.py -> CORS allowlist voor localhost:5173
+
+Interpretatie
+- Geen hard bewijs dat de standaard release-start zelf 5173 actief lanceert.
+- Wel bevatte de zip expliciete 5173-configuratie die buiten de normale Docker-start alsnog een dev-serverpad kon activeren of faciliteren.
+- Om elk risico op interferentie te minimaliseren is 5173 uit de codebasis verwijderd.
+
+Aangepaste bestanden
+- backend/app/main.py
+- frontend/vite.config.js
+- VERSION.txt
+- version.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+- frontend/package.json
+
+Wijzigingen
+- frontend/vite.config.js:
+  - port gewijzigd van 5173 naar 5180
+  - strictPort toegevoegd
+- backend/app/main.py:
+  - CORS allowlist 5173 verwijderd
+  - 5180 toegevoegd als eventuele expliciete dev-poort
+- releaseversioning uniform opgehoogd naar 01.08.18
+
+QA/QC oordeel
+- Versioning: groen
+- Packaging: groen
+- Poortsanering 5173: groen
+- Functionele app-logica: ongewijzigd bedoeld; deze release corrigeert alleen configuratie rondom frontend-poorten en release-metadata.
+
+PO-test in gewone taal
+1. Start de release via start.bat.
+2. Controleer dat de app op localhost:5174 opent.
+3. Controleer met netstat dat deze zip niet meer expliciet 5173 claimt via de meegeleverde frontendconfiguratie.
+4. Controleer dat de applicatie verder normaal opent en functioneert.
