@@ -1,0 +1,53 @@
+Rezzerv v01.08.27 — Kassabonnen UI styleguide-correctierelease
+
+Doel
+- UI-correctie zonder functionele uitbreiding.
+- Kassabonnen-overzicht en Kassabon-detail opnieuw uitgelijnd op de bestaande Rezzerv-stijl.
+
+Aangepast
+- frontend/src/features/stores/ReceiptsPage.jsx
+- frontend/src/features/stores/StoreBatchDetailPage.jsx
+- VERSION.txt
+- version.json
+- frontend/package.json
+- frontend/version.json
+- frontend/public/version.json
+- frontend/dist/version.json
+
+Uitgevoerde correcties
+1. Kassabonnen-overzicht
+- Eerste card verwijderd.
+- Terug-knoppen verwijderd.
+- Overzicht teruggebracht naar één ScreenCard met rustige tabel.
+- Tabel visueel aangesloten op Voorraad-patroon:
+  - donkere header
+  - filterregel onder de header
+  - rustige kolomopbouw
+
+2. Kassabon-detail
+- Eerste card verwijderd.
+- Alle "Terug ..." knoppen verwijderd.
+- Pagina herbouwd naar Header + ScreenCard fullWidth + Tabs.
+- Tabs ingesteld op:
+  - Bonregels
+  - Verwerking
+  - Diagnose
+- Bonregels-tab versimpeld en teruggebracht naar tabelstructuur in Voorraad-stijl.
+- Grote losse filtercard verwijderd; filters zitten nu in de tabelheader.
+- Primaire actie behouden als: Verwerk klaarstaande regels.
+
+Versioning
+- Uniform opgehoogd naar 01.08.27.
+
+Eerlijke kanttekening
+- Deze zip is een pure UI-correctierelease op broncodeniveau.
+- Lokale frontend-build kon in deze omgeving niet opnieuw worden uitgevoerd, omdat deze gesaneerde ontwikkelzip geen node_modules bevat. De Docker-build in de gebruikersomgeving installeert dependencies opnieuw vanuit package.json en bouwt daarna de frontend.
+
+PO-check
+1. Startpagina -> Kassabonnen.
+2. Controleer dat het overzichtsscherm geen bovenste extra card en geen terugknoppen meer heeft.
+3. Controleer dat de lijst als rustige tabel oogt, in lijn met Voorraad.
+4. Open een kassabon.
+5. Controleer dat het detailscherm geen bovenste extra card en geen terugknoppen meer heeft.
+6. Controleer dat het detailscherm tabs gebruikt.
+7. Controleer dat Bonregels de primaire tabeltab is en Verwerk klaarstaande regels als hoofdactie zichtbaar blijft.

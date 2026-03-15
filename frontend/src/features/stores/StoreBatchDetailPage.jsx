@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
-import Card from '../../ui/Card'
+import ScreenCard from '../../ui/ScreenCard'
+import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import {
@@ -607,261 +608,213 @@ export default function StoreBatchDetailPage() {
 
   const allVisibleSelected = filteredLineUiStates.length > 0 && filteredLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
 
-  return (
-    <AppShell title={batch ? buildBatchTitle(batch) : 'Kassabon'} showExit={false}>
-      <div style={{ display: 'grid', gap: '16px', width: '100%' }}>
-        <Card>
-          <div className="rz-store-workbench-header">
-            <div className="rz-store-workbench-heading">
-              <div className="rz-store-workbench-eyebrow">Kassabon</div>
-              <h2 style={{ margin: 0, fontSize: '24px' }}>{batch ? buildBatchTitle(batch) : 'Kassabon'}</h2>
-              <div className="rz-store-workbench-meta">{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
-              <div className="rz-store-workbench-meta">Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
+  const tabContent = {
+    Bonregels: (
+      <>
+        <div style={{ display: 'grid', gap: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'start' }}>
+            <div style={{ display: 'grid', gap: '4px' }}>
+              <div style={{ fontWeight: 700, fontSize: '24px' }}>{batch ? buildBatchTitle(batch) : 'Kassabon'}</div>
+              <div style={{ color: '#667085' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
+              <div style={{ color: '#667085' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
-            <div className="rz-store-workbench-actions">
-              <Button variant="secondary" onClick={() => navigate('/kassabonnen')}>Terug naar kassabonnen</Button>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <Button variant="secondary" onClick={() => navigate('/voorraad')}>Bekijk voorraad</Button>
               <Button variant="primary" onClick={() => processBatchNow('ready_only')} disabled={isProcessingBatch || !canProcessBatch}>
                 {isProcessingBatch ? 'Bezig…' : 'Verwerk klaarstaande regels'}
               </Button>
-              {processFeedback ? <span className="rz-store-inline-feedback">{processFeedback}</span> : null}
             </div>
           </div>
-        </Card>
 
-        {error ? (
-          <Card><div className="rz-inline-feedback rz-inline-feedback--error">{error}</div></Card>
-        ) : null}
-        {status ? (
-          <Card><div className="rz-inline-feedback rz-inline-feedback--success">{status}</div></Card>
-        ) : null}
+          <div style={{ color: '#667085' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Verwerkt: {summaryCounts.processed}</div>
 
-        {isLoading ? (
-          <Card><div>Bongegevens laden…</div></Card>
-        ) : batch ? (
-          <>
-            <Card>
-              <div className="rz-store-summary-grid">
-                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'all' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('all')}>
-                  <span className="rz-store-summary-label">Totaal</span>
-                  <strong>{summaryCounts.total}</strong>
-                </button>
-                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'ready' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('ready')}>
-                  <span className="rz-store-summary-label">Klaar</span>
-                  <strong>{summaryCounts.ready}</strong>
-                </button>
-                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'action_needed' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('action_needed')}>
-                  <span className="rz-store-summary-label">Actie nodig</span>
-                  <strong>{summaryCounts.action_needed}</strong>
-                </button>
-                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'ignored' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('ignored')}>
-                  <span className="rz-store-summary-label">Genegeerd</span>
-                  <strong>{summaryCounts.ignored}</strong>
-                </button>
-                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'processed' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('processed')}>
-                  <span className="rz-store-summary-label">Verwerkt</span>
-                  <strong>{summaryCounts.processed}</strong>
-                </button>
-                <button type="button" className={`rz-store-summary-tile ${activeSummaryFilter === 'new_mapping' ? 'is-active' : ''}`} onClick={() => handleSummaryTileClick('new_mapping')}>
-                  <span className="rz-store-summary-label">Nieuw gekoppeld</span>
-                  <strong>{summaryCounts.new_mapping}</strong>
-                </button>
-              </div>
-            </Card>
+          {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
+          {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
+          {lastProcessResult ? (
+            <div className="rz-inline-feedback rz-inline-feedback--success">
+              Verwerkt: <strong>{lastProcessResult.processed_count || 0}</strong> · Overgeslagen: <strong>{lastProcessResult.skipped_count || 0}</strong> · Mislukt: <strong>{lastProcessResult.failed_count || 0}</strong>
+            </div>
+          ) : null}
 
-            <Card>
-              <div className="rz-store-filters-grid">
-                <input
-                  className="rz-input"
-                  type="text"
-                  placeholder="Zoek op bonartikel of gekoppeld artikel"
-                  value={searchValue}
-                  onChange={(event) => setSearchValue(event.target.value)}
-                />
-                <select className="rz-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-                  {STATUS_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
-                </select>
-                <select className="rz-input" value={reviewFilter} onChange={(event) => setReviewFilter(event.target.value)}>
-                  {REVIEW_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
-                </select>
-                <select className="rz-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
-                  {MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
-                </select>
-                <select className="rz-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
-                  {LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
-                </select>
-                <div className="rz-store-filter-actions">
-                  <Button variant="secondary" onClick={resetFilters}>Filters wissen</Button>
-                  <Button variant="secondary" onClick={showExceptionsOnly}>Toon alleen uitzonderingen</Button>
-                </div>
-              </div>
-            </Card>
-
-            {selectedLineIds.length ? (
-              <Card>
-                <div className="rz-store-bulkbar">
-                  <div><strong>{selectedLineIds.length}</strong> regel(s) geselecteerd</div>
-                  <div className="rz-store-bulk-actions">
-                    <Button variant="secondary" onClick={selectEverythingInFilter}>Selecteer alles in filter</Button>
-                    <Button variant="secondary" onClick={() => handleBulkReviewDecision('selected')} disabled={Boolean(busyLineId)}>Zet op Verwerken</Button>
-                    <Button variant="secondary" onClick={() => handleBulkReviewDecision('ignored')} disabled={Boolean(busyLineId)}>Zet op Negeren</Button>
-                    <select className="rz-input" value={bulkArticleId} onChange={(event) => setBulkArticleId(event.target.value)}>
-                      <option value="">Koppel geselecteerde regels</option>
-                      {articleOptions.map((article) => <option key={article.id} value={article.id}>{articleLabel(article)}</option>)}
+          <div className="rz-table-wrapper">
+            <table className="rz-table rz-store-workbench-table">
+              <thead>
+                <tr className="rz-table-header">
+                  <th style={{ width: '44px' }}>
+                    <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
+                  </th>
+                  <th>Bonartikel</th>
+                  <th className="rz-num">Aantal</th>
+                  <th>Gekoppeld artikel</th>
+                  <th>Locatie</th>
+                  <th>Status</th>
+                  <th>Actie</th>
+                  <th>Details</th>
+                </tr>
+                <tr className="rz-table-filters">
+                  <th />
+                  <th>
+                    <input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of gekoppeld artikel" />
+                  </th>
+                  <th />
+                  <th>
+                    <select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
+                      {MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
                     </select>
-                    <Button variant="secondary" onClick={handleBulkArticleApply} disabled={Boolean(busyLineId)}>Koppel geselecteerde regels</Button>
-                    <select className="rz-input" value={bulkLocationId} onChange={(event) => setBulkLocationId(event.target.value)}>
-                      <option value="">Kies locatie</option>
-                      {locationOptions.map((location) => <option key={location.id} value={location.id}>{location.label}</option>)}
+                  </th>
+                  <th>
+                    <select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
+                      {LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
                     </select>
-                    <Button variant="secondary" onClick={handleBulkLocationApply} disabled={Boolean(busyLineId)}>Kies locatie</Button>
-                    <Button variant="secondary" onClick={() => setStatus('Werkblad is bijgewerkt. De wijzigingen zijn direct opgeslagen per regel.')}>Opslaan</Button>
-                  </div>
-                </div>
-              </Card>
-            ) : null}
-
-            {lastProcessResult ? (
-              <Card>
-                <div className="rz-store-result-card">
-                  <div>
-                    <div className="rz-store-workbench-eyebrow">Verwerking afgerond</div>
-                    <div>Verwerkt: <strong>{lastProcessResult.processed_count || 0}</strong> · Overgeslagen: <strong>{lastProcessResult.skipped_count || 0}</strong> · Mislukt: <strong>{lastProcessResult.failed_count || 0}</strong></div>
-                  </div>
-                  <div className="rz-store-result-actions">
-                    <Button variant="secondary" onClick={() => setStatusFilter('processed')}>Toon verwerkte regels</Button>
-                    <Button variant="secondary" onClick={() => setStatusFilter('action_needed')}>Toon overgeslagen regels</Button>
-                    <Button variant="secondary" onClick={() => navigate('/voorraad')}>Ga naar voorraad</Button>
-                  </div>
-                </div>
-              </Card>
-            ) : null}
-
-            <Card>
-              <div className="rz-table-wrapper">
-                <table className="rz-table rz-store-workbench-table">
-                  <thead>
-                    <tr className="rz-table-header">
-                      <th style={{ width: '44px' }}>
-                        <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
-                      </th>
-                      <th>Bonartikel</th>
-                      <th className="rz-num">Aantal</th>
-                      <th>Gekoppeld artikel</th>
-                      <th>Beoordeling</th>
-                      <th>Locatie</th>
-                      <th>Status</th>
-                      <th>Reden</th>
-                      <th>Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredLineUiStates.length === 0 ? (
-                      <tr>
-                        <td colSpan={9}>Geen regels in deze selectie.</td>
+                  </th>
+                  <th>
+                    <select className="rz-input rz-inline-input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                      {STATUS_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
+                    </select>
+                  </th>
+                  <th>
+                    <select className="rz-input rz-inline-input" value={reviewFilter} onChange={(event) => setReviewFilter(event.target.value)}>
+                      {REVIEW_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
+                    </select>
+                  </th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {filteredLineUiStates.length === 0 ? (
+                  <tr>
+                    <td colSpan={8}>Geen regels in deze selectie.</td>
+                  </tr>
+                ) : filteredLineUiStates.map((entry) => {
+                  const { line, draft, saveState, statusLabel: currentStatusLabel, statusReason } = entry
+                  const lineBusy = busyLineId === line.id || busyLineId === 'bulk-review'
+                  const isExpanded = expandedLineIds.includes(line.id)
+                  const diag = diagByLineId[line.id] || null
+                  return (
+                    <Fragment key={line.id}>
+                      <tr className={`rz-store-workbench-row ${entry.statusKey === 'ready' ? 'is-ready' : entry.statusKey === 'action_needed' ? 'is-action-needed' : entry.statusKey === 'ignored' ? 'is-ignored' : ''}`}>
+                        <td>
+                          <input type="checkbox" checked={selectedLineIds.includes(line.id)} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} />
+                        </td>
+                        <td>
+                          <div className="rz-store-primary">{line.article_name_raw}</div>
+                          <div className="rz-store-secondary">{providerLabel(activeProvider)} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
+                          {suggestionLabel(line) ? <div className={`rz-store-suggestion ${line.is_auto_prefilled ? 'rz-store-suggestion--auto' : 'rz-store-suggestion--check'}`}>{suggestionLabel(line)}</div> : null}
+                        </td>
+                        <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
+                        <td>
+                          <StoreArticleSelector
+                            lineId={line.id}
+                            lineName={line.article_name_raw}
+                            selectedArticleId={draft.articleId || ''}
+                            articleOptions={articleOptions}
+                            disabled={lineBusy || isProcessingBatch}
+                            onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
+                            onClearArticle={() => persistLineDraft(line, { articleId: '' })}
+                            onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
+                          />
+                        </td>
+                        <td>
+                          <select
+                            className="rz-input rz-store-select"
+                            value={draft.locationId || ''}
+                            disabled={lineBusy || isProcessingBatch}
+                            onFocus={() => household?.id && refreshLocationOptions(household.id)}
+                            onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
+                            onChange={(event) => persistLineDraft(line, { locationId: event.target.value || '' })}
+                          >
+                            <option value="">Kies locatie</option>
+                            {locationOptions.map((location) => (
+                              <option key={location.id} value={location.id}>{location.label}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td><span className={`rz-store-status-badge rz-store-status-badge--${entry.statusKey}`}>{currentStatusLabel}</span></td>
+                        <td>
+                          <select
+                            className="rz-input rz-store-select"
+                            value={line.review_decision || 'pending'}
+                            disabled={lineBusy || isProcessingBatch}
+                            onChange={(event) => handleReviewDecision(line.id, event.target.value)}
+                          >
+                            <option value="pending">Nog te beoordelen</option>
+                            <option value="selected">Verwerken</option>
+                            <option value="ignored">Negeren</option>
+                          </select>
+                        </td>
+                        <td>
+                          <Button variant="secondary" onClick={() => toggleExpanded(line.id)}>{isExpanded ? 'Sluit' : 'Details'}</Button>
+                        </td>
                       </tr>
-                    ) : filteredLineUiStates.map((entry) => {
-                      const { line, draft, saveState, statusLabel: currentStatusLabel, statusReason } = entry
-                      const lineBusy = busyLineId === line.id || busyLineId === 'bulk-review'
-                      const isExpanded = expandedLineIds.includes(line.id)
-                      const diag = diagByLineId[line.id] || null
-                      return (
-                        <Fragment key={line.id}>
-                          <tr key={line.id} className={`rz-store-workbench-row ${entry.statusKey === 'ready' ? 'is-ready' : entry.statusKey === 'action_needed' ? 'is-action-needed' : entry.statusKey === 'ignored' ? 'is-ignored' : ''}`}>
-                            <td>
-                              <input type="checkbox" checked={selectedLineIds.includes(line.id)} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} />
-                            </td>
-                            <td>
-                              <div className="rz-store-primary">{line.article_name_raw}</div>
-                              <div className="rz-store-secondary">{providerLabel(activeProvider)} · {line.brand_raw || 'Geen merk'} · {line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : 'Geen prijs'}</div>
-                              {suggestionLabel(line) ? <div className={`rz-store-suggestion ${line.is_auto_prefilled ? 'rz-store-suggestion--auto' : 'rz-store-suggestion--check'}`}>{suggestionLabel(line)}</div> : null}
-                              {entry.mappingState === 'new' ? <div className="rz-store-badge rz-store-badge--new">Nieuwe mapping</div> : null}
-                              {entry.mappingState === 'known' ? <div className="rz-store-badge rz-store-badge--known">Bekende mapping</div> : null}
-                            </td>
-                            <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
-                            <td>
-                              <StoreArticleSelector
-                                lineId={line.id}
-                                lineName={line.article_name_raw}
-                                selectedArticleId={draft.articleId || ''}
-                                articleOptions={articleOptions}
-                                disabled={lineBusy || isProcessingBatch}
-                                onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
-                                onClearArticle={() => persistLineDraft(line, { articleId: '' })}
-                                onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
-                              />
-                            </td>
-                            <td>
-                              <select
-                                className="rz-input rz-store-select"
-                                value={line.review_decision || 'pending'}
-                                disabled={lineBusy || isProcessingBatch}
-                                onChange={(event) => handleReviewDecision(line.id, event.target.value)}
-                              >
-                                <option value="pending">Nog te beoordelen</option>
-                                <option value="selected">Verwerken</option>
-                                <option value="ignored">Negeren</option>
-                              </select>
-                            </td>
-                            <td>
-                              <select
-                                className="rz-input rz-store-select"
-                                value={draft.locationId || ''}
-                                disabled={lineBusy || isProcessingBatch}
-                                onFocus={() => household?.id && refreshLocationOptions(household.id)}
-                                onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
-                                onChange={(event) => persistLineDraft(line, { locationId: event.target.value || '' })}
-                              >
-                                <option value="">Kies locatie</option>
-                                {locationOptions.map((location) => (
-                                  <option key={location.id} value={location.id}>{location.label}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td><span className={`rz-store-status-badge rz-store-status-badge--${entry.statusKey}`}>{currentStatusLabel}</span></td>
-                            <td>
-                              <div>{statusReason}</div>
-                              {saveState?.message ? <div className="rz-store-secondary">{saveState.message}</div> : null}
-                              {saveState?.error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginTop: '6px' }}>{saveState.error}</div> : null}
-                            </td>
-                            <td>
-                              <Button variant="secondary" onClick={() => toggleExpanded(line.id)}>{isExpanded ? 'Sluit' : 'Details'}</Button>
-                            </td>
-                          </tr>
-                          {isExpanded ? (
-                            <tr key={`${line.id}-details`}>
-                              <td colSpan={9}>
-                                <div className="rz-store-detail-grid">
-                                  <div className="rz-store-detail-panel">
-                                    <div className="rz-store-detail-title">Automatische afboeking</div>
-                                    <div><strong>Huishoudinstelling:</strong> {detailValue(diag?.household_consume_mode || diag?.household_mode || household?.default_consume_mode || household?.consume_mode || 'Uit')}</div>
-                                    <div><strong>Artikeloverride:</strong> {detailValue(diag?.article_consume_override || diag?.article_override || 'Huishoudinstelling volgen')}</div>
-                                    <div><strong>Effectieve automatische afboeking:</strong> {detailValue(diag?.auto_consume_effective_mode || diag?.effective_mode || 'Niet van toepassing')}</div>
-                                    <div><strong>Beslisreden:</strong> {detailValue(diag?.auto_consume_decision_reason || diag?.decision_reason || statusReason)}</div>
-                                  </div>
-                                  <div className="rz-store-detail-panel">
-                                    <div className="rz-store-detail-title">Verwerkingsuitkomst</div>
-                                    <div><strong>Aangevraagd af te boeken:</strong> {detailValue(diag?.auto_consume_requested_deduction_quantity, '0')}</div>
-                                    <div><strong>Werkelijk afgeboekt:</strong> {detailValue(diag?.auto_consume_applied_deduction_quantity, '0')}</div>
-                                    <div><strong>Laatste verwerking:</strong> {detailValue(line.processed_at || diag?.processed_at || 'Nog niet verwerkt')}</div>
-                                    <div><strong>Laatste resultaat:</strong> {detailValue(diag?.processing_status || line.processing_status || 'Nog niet verwerkt')}</div>
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
-                          ) : null}
-                        </Fragment>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          </>
-        ) : (
-          <Card><div>Deze bon kon niet worden gevonden.</div></Card>
-        )}
+                      {isExpanded ? (
+                        <tr>
+                          <td colSpan={8}>
+                            <div className="rz-store-detail-grid">
+                              <div className="rz-store-detail-panel">
+                                <div className="rz-store-detail-title">Automatische afboeking</div>
+                                <div><strong>Huishoudinstelling:</strong> {detailValue(diag?.household_consume_mode || diag?.household_mode || household?.default_consume_mode || household?.consume_mode || 'Uit')}</div>
+                                <div><strong>Artikeloverride:</strong> {detailValue(diag?.article_consume_override || diag?.article_override || 'Huishoudinstelling volgen')}</div>
+                                <div><strong>Effectieve automatische afboeking:</strong> {detailValue(diag?.auto_consume_effective_mode || diag?.effective_mode || 'Niet van toepassing')}</div>
+                                <div><strong>Beslisreden:</strong> {detailValue(diag?.auto_consume_decision_reason || diag?.decision_reason || statusReason)}</div>
+                              </div>
+                              <div className="rz-store-detail-panel">
+                                <div className="rz-store-detail-title">Verwerkingsuitkomst</div>
+                                <div><strong>Aangevraagd af te boeken:</strong> {detailValue(diag?.auto_consume_requested_deduction_quantity, '0')}</div>
+                                <div><strong>Werkelijk afgeboekt:</strong> {detailValue(diag?.auto_consume_applied_deduction_quantity, '0')}</div>
+                                <div><strong>Laatste verwerking:</strong> {detailValue(line.processed_at || diag?.processed_at || 'Nog niet verwerkt')}</div>
+                                <div><strong>Laatste resultaat:</strong> {detailValue(diag?.processing_status || line.processing_status || 'Nog niet verwerkt')}</div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </>
+    ),
+    Verwerking: (
+      <div style={{ display: 'grid', gap: '16px' }}>
+        <div><strong>Aankoopdatum:</strong> {batch?.purchase_date || '-'}</div>
+        <div><strong>Winkel:</strong> {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
+        <div><strong>Status:</strong> {batch ? batchStatusLabel(batch.import_status) : '-'}</div>
+        <div><strong>Regels:</strong> {summaryCounts.total}</div>
+        <div><strong>Klaar:</strong> {summaryCounts.ready} · <strong>Actie nodig:</strong> {summaryCounts.action_needed} · <strong>Genegeerd:</strong> {summaryCounts.ignored} · <strong>Verwerkt:</strong> {summaryCounts.processed}</div>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <Button variant="primary" onClick={() => processBatchNow('ready_only')} disabled={isProcessingBatch || !canProcessBatch}>{isProcessingBatch ? 'Bezig…' : 'Verwerk klaarstaande regels'}</Button>
+          <Button variant="secondary" onClick={() => navigate('/voorraad')}>Bekijk voorraad</Button>
+        </div>
       </div>
+    ),
+    Diagnose: (
+      <div style={{ display: 'grid', gap: '12px' }}>
+        <div><strong>Vereenvoudigingsniveau:</strong> {simplificationLevelLabel}</div>
+        <div><strong>Huishoudinstelling:</strong> {detailValue(household?.default_consume_mode || household?.consume_mode || 'Uit')}</div>
+        <div><strong>Batchstatus:</strong> {batch ? batchStatusLabel(batch.import_status) : '-'}</div>
+        <div><strong>Laatst resultaat:</strong> {lastProcessResult ? `Verwerkt ${lastProcessResult.processed_count || 0} · Overgeslagen ${lastProcessResult.skipped_count || 0} · Mislukt ${lastProcessResult.failed_count || 0}` : 'Nog geen verwerking in deze sessie'}</div>
+        <div><strong>Regels met detaildiagnose:</strong> {Object.keys(diagByLineId).length}</div>
+        <div style={{ color: '#667085' }}>Gebruik in Bonregels de knop Details om de diagnose per regel te openen.</div>
+      </div>
+    ),
+  }
+
+  return (
+    <AppShell title={batch ? buildBatchTitle(batch) : 'Kassabon'} showExit={false}>
+      <ScreenCard fullWidth>
+        {isLoading ? (
+          <div>Bongegevens laden…</div>
+        ) : batch ? (
+          <Tabs tabs={['Bonregels', 'Verwerking', 'Diagnose']}>
+            {(activeTab) => tabContent[activeTab]}
+          </Tabs>
+        ) : (
+          <div>Geen kassabon beschikbaar.</div>
+        )}
+      </ScreenCard>
     </AppShell>
   )
 }
