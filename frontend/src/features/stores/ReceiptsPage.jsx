@@ -83,7 +83,16 @@ export default function ReceiptsPage() {
       providerName: providerLabel(providersByCode[batch?.store_provider_code] || batch),
       dateLabel: batch.purchase_date || batch.created_at?.slice(0, 10) || '-',
       totalLines: Number(batch.summary?.total || batch.lines?.length || 0),
-      statusLabel: batch.import_status === 'processed' ? 'Verwerkt' : batchStatusLabel(batch.import_status),
+      statusLabel: (() => {
+        const summary = batch.summary || {}
+        const openCount = Number(summary.open || 0)
+        const readyCount = Number(summary.ready || 0)
+        const processedCount = Number(summary.processed || 0)
+        const totalCount = Number(summary.total || batch.lines?.length || 0)
+        if (processedCount > 0 && processedCount >= totalCount && openCount === 0 && readyCount === 0) return 'Verwerkt'
+        if (processedCount > 0 && (openCount > 0 || readyCount > 0)) return 'Gedeeltelijk verwerkt'
+        return batch.import_status === 'processed' ? 'Verwerkt' : batchStatusLabel(batch.import_status)
+      })(),
     }))
 
     return enriched
@@ -250,7 +259,9 @@ export default function ReceiptsPage() {
                           const klaar = Number(summary.ready || item.uiState?.readyCount || 0)
                           const actie = Number(summary.open || item.uiState?.openCount || 0)
                           const verwerkt = Number(summary.processed || 0)
-                          if (verwerkt > 0 && actie === 0 && klaar === 0) return 'Volledig verwerkt'
+                          const totaal = Number(summary.total || item.totalLines || 0)
+                          if (verwerkt > 0 && verwerkt >= totaal && actie === 0 && klaar === 0) return 'Volledig verwerkt'
+                          if (verwerkt > 0 && (actie > 0 || klaar > 0)) return `${verwerkt} verwerkt · ${actie} actie nodig`
                           if (actie > 0 || klaar > 0) return `${klaar} klaar · ${actie} actie nodig`
                           return 'Nog niet beoordeeld'
                         })()}

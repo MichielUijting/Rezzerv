@@ -436,6 +436,13 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 
 .rz-store-workbench-row.is-selected-incomplete td{
   background:#fff4e5 !important;
+  box-shadow: inset 0 0 0 1px #f79009;
+}
+
+.rz-store-workbench-row.is-selected-incomplete td input,
+.rz-store-workbench-row.is-selected-incomplete td select,
+.rz-store-workbench-row.is-selected-incomplete td button{
+  border-color:#f79009;
 }
 
 .rz-store-workbench-row.is-selected-incomplete:hover td{

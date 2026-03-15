@@ -109,7 +109,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     const nextSaveState = {}
     const nextLineIds = []
     ;(batch?.lines || []).forEach((line) => {
-      nextLineIds.push(line.id)
+      if ((line.processing_status || 'pending') !== 'processed') nextLineIds.push(line.id)
       nextDrafts[line.id] = {
         articleId: line.matched_household_article_id || '',
         locationId: line.target_location_id || '',
@@ -381,6 +381,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setStatus('')
     setLastProcessResult(null)
     try {
+      const lineNameById = Object.fromEntries((batch.lines || []).map((line) => [line.id, line.article_name_raw]))
       const result = await fetchJson(`/api/purchase-import-batches/${batch.batch_id}/process`, {
         method: 'POST',
         body: JSON.stringify({ processed_by: 'ui', mode }),
@@ -390,10 +391,26 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       setLastProcessResult(result)
       setBatchDiagnostics(result?.diagnostics || null)
       showProcessFeedback('Verwerkt!')
-      const processedCount = result.processed_count || 0
-      const skippedCount = result.skipped_count || 0
-      const failedCount = result.failed_count || 0
-      setStatus(`Verwerking afgerond: ${processedCount} regel(s) verwerkt · ${skippedCount} regel(s) overgeslagen · ${failedCount} regel(s) mislukt.`)
+      const processed = (result.results || []).filter((item) => item.status === 'processed').map((item) => lineNameById[item.line_id]).filter(Boolean)
+      const skipped = (result.results || []).filter((item) => item.status === 'skipped').map((item) => lineNameById[item.line_id]).filter(Boolean)
+      const failed = (result.results || []).filter((item) => item.status === 'failed').map((item) => lineNameById[item.line_id]).filter(Boolean)
+      const parts = []
+      if (processed.length) parts.push(`Verwerkt: ${processed.join(', ')}`)
+      if (skipped.length) parts.push(`Overgeslagen: ${skipped.join(', ')}`)
+      if (failed.length) parts.push(`Mislukt: ${failed.join(', ')}`)
+      if (!parts.length) {
+        const processedCount = result.processed_count || 0
+        const skippedCount = result.skipped_count || 0
+        const failedCount = result.failed_count || 0
+        parts.push(`Verwerkt: ${processedCount}`)
+        parts.push(`Overgeslagen: ${skippedCount}`)
+        parts.push(`Mislukt: ${failedCount}`)
+      }
+      setStatus(parts.join(' · '))
+      setSelectedLineIds((current) => current.filter((id) => {
+        const outcome = (result.results || []).find((item) => item.line_id === id)
+        return !(outcome && outcome.status === 'processed')
+      }))
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
     } finally {
@@ -515,6 +532,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     return lineUiStates.filter((entry) => selectedSet.has(entry.line.id))
   }, [lineUiStates, selectedLineIds])
 
+  const visibleLineUiStates = useMemo(() => (
+    filteredLineUiStates.filter((entry) => entry.processingStatus !== 'processed')
+  ), [filteredLineUiStates])
 
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
@@ -543,7 +563,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   }
 
   function toggleSelectAllVisible() {
-    const visibleIds = filteredLineUiStates.map((entry) => entry.line.id)
+    const visibleIds = visibleLineUiStates.map((entry) => entry.line.id)
     const visibleIdSet = new Set(visibleIds)
     const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedLineIds.includes(id))
     setSelectedLineIds((current) => {
@@ -556,7 +576,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
 
 
-  const allVisibleSelected = filteredLineUiStates.length > 0 && filteredLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
+  const allVisibleSelected = visibleLineUiStates.length > 0 && visibleLineUiStates.every((entry) => selectedLineIds.includes(entry.line.id))
 
   const tabContent = {
     Bonregels: (
@@ -610,11 +630,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 </tr>
               </thead>
               <tbody>
-                {filteredLineUiStates.length === 0 ? (
+                {visibleLineUiStates.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>Geen regels in deze selectie.</td>
+                    <td colSpan={6}>Geen open bonregels in deze selectie.</td>
                   </tr>
-                ) : filteredLineUiStates.map((entry) => {
+                ) : visibleLineUiStates.map((entry) => {
                   const { line, draft, statusLabel: currentStatusLabel } = entry
                   const lineBusy = busyLineId === line.id || isProcessingBatch
                   const selected = selectedLineIds.includes(line.id)
