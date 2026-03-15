@@ -79,6 +79,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [statusFilter, setStatusFilter] = useState('all')
   const [mappingFilter, setMappingFilter] = useState('all')
   const [locationFilter, setLocationFilter] = useState('all')
+  const [processConfirm, setProcessConfirm] = useState(null)
   const processFeedbackTimer = useRef(null)
 
   const providersByCode = useMemo(
@@ -106,7 +107,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   useEffect(() => {
     const nextDrafts = {}
     const nextSaveState = {}
+    const nextLineIds = []
     ;(batch?.lines || []).forEach((line) => {
+      nextLineIds.push(line.id)
       nextDrafts[line.id] = {
         articleId: line.matched_household_article_id || '',
         locationId: line.target_location_id || '',
@@ -122,7 +125,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     })
     setLineDrafts(nextDrafts)
     setLineSaveState(nextSaveState)
-    setSelectedLineIds([])
+    setSelectedLineIds((current) => current.filter((id) => nextLineIds.includes(id)))
   }, [batch?.batch_id, batch?.lines])
 
   function setLineDraftValue(lineId, patch) {
@@ -328,13 +331,51 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }
 
+  async function syncSelectedReviewDecisions() {
+    if (!batch) return
+    const selectedSet = new Set(selectedLineIds)
+    const lines = batch?.lines || []
+    await Promise.all(lines.map((line) => {
+      const nextDecision = selectedSet.has(line.id) ? 'selected' : 'ignored'
+      if ((line.review_decision || 'pending') === nextDecision) return Promise.resolve()
+      return fetchJson(`/api/purchase-import-lines/${line.id}/review`, {
+        method: 'POST',
+        body: JSON.stringify({ review_decision: nextDecision }),
+      })
+    }))
+    await refreshBatch(batch.batch_id)
+  }
+
+  async function handleProcessSelected(mode = 'selected_only') {
+    if (!batch) return
+    if (selectedLineIds.length === 0) {
+      setError('Selecteer eerst minstens één bonregel.')
+      return
+    }
+    await syncSelectedReviewDecisions()
+    await processBatchNow(mode)
+    setProcessConfirm(null)
+  }
+
+  function handlePrimaryProcessClick() {
+    if (!batch) return
+    if (selectedLineIds.length === 0) {
+      setError('Selecteer eerst minstens één bonregel.')
+      return
+    }
+    const selectedSet = new Set(selectedLineIds)
+    const selectedEntries = lineUiStates.filter((entry) => selectedSet.has(entry.line.id))
+    const readyEntries = selectedEntries.filter((entry) => entry.hasValidArticle && entry.hasValidLocation)
+    const incompleteEntries = selectedEntries.filter((entry) => !(entry.hasValidArticle && entry.hasValidLocation))
+    if (incompleteEntries.length > 0) {
+      setProcessConfirm({ readyCount: readyEntries.length, incompleteCount: incompleteEntries.length })
+      return
+    }
+    handleProcessSelected('selected_only')
+  }
+
   async function processBatchNow(mode = 'ready_only') {
     if (!batch) return
-    const lineStateMap = new Map(lineUiStates.map((entry) => [entry.line.id, entry]))
-    const autoConsumeLines = Array.from(lineStateMap.values())
-      .filter((entry) => entry.isReadyForProcessing)
-      .map((entry) => entry.line)
-
     setIsProcessingBatch(true)
     setError('')
     setStatus('')
@@ -531,7 +572,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               <div style={{ color: '#2e7d4d' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Button variant="secondary" onClick={() => navigate('/voorraad')}>Naar voorraad</Button>
+              <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch}>Naar voorraad</Button>
             </div>
           </div>
 
@@ -628,6 +669,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               </tbody>
             </table>
           </div>
+
+          {processConfirm ? (
+            <div className="rz-modal-backdrop" role="presentation">
+              <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="process-selected-title">
+                <h3 id="process-selected-title" className="rz-modal-title">Niet alle geselecteerde regels zijn compleet</h3>
+                <p className="rz-modal-text">{processConfirm.readyCount} geselecteerde regel(s) zijn klaar voor verwerking en {processConfirm.incompleteCount} regel(s) missen nog artikel of locatie.</p>
+                <div className="rz-modal-actions">
+                  <Button variant="secondary" type="button" onClick={() => setProcessConfirm(null)} disabled={isProcessingBatch}>Annuleren</Button>
+                  <Button variant="primary" type="button" onClick={() => handleProcessSelected('ready_only')} disabled={isProcessingBatch || processConfirm.readyCount === 0}>Verwerk alleen complete regels</Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </>
     ),
