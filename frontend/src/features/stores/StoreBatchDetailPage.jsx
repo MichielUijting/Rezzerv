@@ -390,13 +390,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       setLastProcessResult(result)
       setBatchDiagnostics(result?.diagnostics || null)
       showProcessFeedback('Verwerkt!')
-      if (result.failed_count > 0) {
-        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.failed_count} regel(s) mislukt.`)
-      } else {
-        setStatus(`Verwerking afgerond: ${result.processed_count} regel(s) verwerkt, ${result.skipped_count || 0} regel(s) overgeslagen.`)
-      }
-      setActiveSummaryFilter('action_needed')
-      setStatusFilter('action_needed')
+      const processedCount = result.processed_count || 0
+      const skippedCount = result.skipped_count || 0
+      const failedCount = result.failed_count || 0
+      setStatus(`Verwerking afgerond: ${processedCount} regel(s) verwerkt · ${skippedCount} regel(s) overgeslagen · ${failedCount} regel(s) mislukt.`)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
     } finally {
@@ -580,12 +577,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
-          {lastProcessResult ? (
-            <div className="rz-inline-feedback rz-inline-feedback--success">
-              Verwerkt: <strong>{lastProcessResult.processed_count || 0}</strong> · Overgeslagen: <strong>{lastProcessResult.skipped_count || 0}</strong> · Mislukt: <strong>{lastProcessResult.failed_count || 0}</strong>
-            </div>
-          ) : null}
-
           <div className="rz-table-wrapper">
             <table className="rz-table rz-store-workbench-table" style={{ minWidth: '980px' }}>
               <thead>
@@ -627,8 +618,15 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   const { line, draft, statusLabel: currentStatusLabel } = entry
                   const lineBusy = busyLineId === line.id || isProcessingBatch
                   const selected = selectedLineIds.includes(line.id)
+                  const rowClassName = [
+                    'rz-store-workbench-row',
+                    entry.statusKey === 'ready' ? 'is-ready' : '',
+                    entry.statusKey === 'ignored' ? 'is-ignored' : '',
+                    selected && entry.isReadyForProcessing ? 'rz-row-selected' : '',
+                    selected && !entry.isReadyForProcessing && entry.statusKey !== 'processed' ? 'is-selected-incomplete' : '',
+                  ].filter(Boolean).join(' ')
                   return (
-                    <tr key={line.id} className={`rz-store-workbench-row ${selected ? 'rz-row-selected' : ''} ${entry.statusKey === 'ready' ? 'is-ready' : ''} ${selected && entry.statusKey !== 'ready' ? 'is-selected-incomplete' : ''} ${entry.statusKey === 'ignored' ? 'is-ignored' : ''}`}>
+                    <tr key={line.id} className={rowClassName}>
                       <td>
                         <input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} />
                       </td>

@@ -435,7 +435,11 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-store-workbench-row.is-selected-incomplete td{
-  background:#fff8eb;
+  background:#fff4e5 !important;
+}
+
+.rz-store-workbench-row.is-selected-incomplete:hover td{
+  background:#fff0db !important;
 }
 
 .rz-store-primary{
