@@ -165,21 +165,49 @@ async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = nul
   if (!detailDoc) {
     detailDoc = await openReceiptDetail(frame, preferredBatchId)
   }
-  let lineSelect = preferredBatchId ? pickByTestIdPrefix(detailDoc, 'receipt-line-select-', null) : detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
+  let lineSelect = detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
   if (lineSelect) {
     return { detailDoc, lineSelect }
   }
 
   await navigateFrame(frame, '/kassabonnen')
-  const doc = getFrameDocument(frame)
-  const candidates = []
-  if (preferredBatchId) {
-    const preferred = doc.querySelector(`[data-testid="receipt-batch-open-${preferredBatchId}"]`)
-    if (preferred) candidates.push(preferred)
+
+  const candidateIds = []
+  const seen = new Set()
+
+  function collectCandidateIds(doc) {
+    if (!doc) return
+    if (preferredBatchId && !seen.has(String(preferredBatchId))) {
+      const preferred = doc.querySelector(`[data-testid="receipt-batch-open-${preferredBatchId}"]`)
+      if (preferred) {
+        candidateIds.push(String(preferredBatchId))
+        seen.add(String(preferredBatchId))
+      }
+    }
+    for (const element of [...doc.querySelectorAll('[data-testid^="receipt-batch-open-"]')]) {
+      const batchId = extractIdFromTestId(element, 'receipt-batch-open-')
+      if (!batchId || seen.has(batchId)) continue
+      candidateIds.push(batchId)
+      seen.add(batchId)
+    }
   }
-  candidates.push(...[...doc.querySelectorAll('[data-testid^="receipt-batch-open-"]')].filter((el) => !candidates.includes(el)))
-  for (const openButton of candidates) {
-    clickElement(openButton)
+
+  collectCandidateIds(getFrameDocument(frame))
+
+  for (const batchId of candidateIds) {
+    const currentDoc = getFrameDocument(frame)
+    const openButton = currentDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
+    if (!openButton) {
+      await navigateFrame(frame, '/kassabonnen')
+      const refreshedDoc = getFrameDocument(frame)
+      const refreshedButton = refreshedDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
+      if (!refreshedButton) {
+        continue
+      }
+      clickElement(refreshedButton)
+    } else {
+      clickElement(openButton)
+    }
     await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
     detailDoc = getFrameDocument(frame)
     lineSelect = detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
