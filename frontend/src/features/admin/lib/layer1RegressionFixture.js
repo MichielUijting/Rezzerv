@@ -3,6 +3,9 @@ export const DEFAULT_LAYER1_FIXTURE = {
   batchId: null,
   completeLineId: null,
   incompleteLineId: null,
+  batchMatchText: 'Jumbo',
+  completeLineLabel: 'Magere yoghurt',
+  incompleteLineLabel: 'Appelsap',
   historyId: null,
   analysisId: null,
 }

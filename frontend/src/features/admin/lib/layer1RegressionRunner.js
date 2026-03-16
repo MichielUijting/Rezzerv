@@ -125,6 +125,74 @@ async function runScenario(name, fn, results) {
   }
 }
 
+
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+async function waitForReceiptLines(detailDocProvider) {
+  return waitForCondition(() => {
+    const doc = typeof detailDocProvider === 'function' ? detailDocProvider() : detailDocProvider
+    if (!doc) return null
+    const rows = [...doc.querySelectorAll('[data-testid^="receipt-line-"]')]
+      .filter((element) => !String(element.getAttribute('data-testid') || '').startsWith('receipt-line-status-'))
+    return rows.length ? rows : null
+  }, WAIT_TIMEOUT, 'Geen receipt-line-* gevonden in kassabondetail')
+}
+
+function getReceiptLineRow(detailDoc, lineId) {
+  return detailDoc.querySelector(`[data-testid="receipt-line-${lineId}"]`)
+}
+
+function findReceiptLineIdByLabel(detailDoc, label) {
+  const normalizedLabel = normalizeText(label)
+  if (!normalizedLabel) return null
+  const rows = [...detailDoc.querySelectorAll('[data-testid^="receipt-line-"]')]
+    .filter((element) => !String(element.getAttribute('data-testid') || '').startsWith('receipt-line-status-'))
+  for (const row of rows) {
+    if (!normalizeText(row.textContent).includes(normalizedLabel)) continue
+    const rowId = extractIdFromTestId(row, 'receipt-line-')
+    if (rowId) return rowId
+  }
+  return null
+}
+
+async function resolveReceiptScenarioByLabels(frame, fixture) {
+  await navigateFrame(frame, '/kassabonnen')
+  const receiptsDoc = getFrameDocument(frame)
+  const rows = [...receiptsDoc.querySelectorAll('[data-testid^="receipt-batch-row-"]')]
+  if (!rows.length) throw new Error('Geen receipt-batch-row-* gevonden')
+
+  const preferredRows = [...rows].sort((a, b) => {
+    const aText = normalizeText(a.textContent)
+    const bText = normalizeText(b.textContent)
+    const aScore = (fixture.batchMatchText && aText.includes(normalizeText(fixture.batchMatchText)) ? 0 : 1) + (aText.includes('volledig verwerkt') ? 10 : 0)
+    const bScore = (fixture.batchMatchText && bText.includes(normalizeText(fixture.batchMatchText)) ? 0 : 1) + (bText.includes('volledig verwerkt') ? 10 : 0)
+    return aScore - bScore
+  })
+
+  for (const row of preferredRows) {
+    const batchId = extractIdFromTestId(row, 'receipt-batch-row-')
+    if (!batchId) continue
+    await navigateFrame(frame, '/kassabonnen')
+    const currentDoc = getFrameDocument(frame)
+    const openButton = currentDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
+    if (!openButton) continue
+    clickElement(openButton)
+    await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
+    const detailDoc = getFrameDocument(frame)
+    await waitForReceiptLines(() => getFrameDocument(frame))
+    const completeLineId = fixture.completeLineId ? String(fixture.completeLineId) : findReceiptLineIdByLabel(detailDoc, fixture.completeLineLabel)
+    const incompleteLineId = fixture.incompleteLineId ? String(fixture.incompleteLineId) : findReceiptLineIdByLabel(detailDoc, fixture.incompleteLineLabel)
+    if (!completeLineId || !incompleteLineId) continue
+    const completeSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${completeLineId}"]`)
+    const incompleteSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${incompleteLineId}"]`)
+    if (!completeSelect || !incompleteSelect) continue
+    return { batchId, completeLineId, incompleteLineId }
+  }
+  throw new Error('Layer1 receipt fixture ontbreekt of is incompleet')
+}
+
 function pickByTestIdPrefix(doc, prefix, preferredId = null) {
   if (preferredId) {
     const exact = doc.querySelector(`[data-testid="${prefix}${preferredId}"]`)
@@ -265,28 +333,20 @@ async function resolveReceiptFixture(frame, fixture) {
     return frame.__rezzervLayer1ReceiptFixture
   }
 
-  await navigateFrame(frame, '/kassabonnen')
-  const opened = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
-  const detailDoc = opened.detailDoc
-  const selectableLineIds = getReceiptSelectableLineIds(detailDoc)
-  if (!selectableLineIds.length) {
-    throw new Error('Geen selecteerbare bonregels gevonden in fixturebatch')
+  const hasExplicitFixtureIds = Boolean(fixture.batchId && fixture.completeLineId && fixture.incompleteLineId)
+  let resolved
+  if (hasExplicitFixtureIds) {
+    resolved = {
+      batchId: String(fixture.batchId),
+      completeLineId: String(fixture.completeLineId),
+      incompleteLineId: String(fixture.incompleteLineId),
+    }
+  } else {
+    resolved = await resolveReceiptScenarioByLabels(frame, fixture)
   }
 
-  const lineStates = selectableLineIds.map((lineId) => getReceiptLineState(detailDoc, lineId))
-  const completeLine = (fixture.completeLineId && lineStates.find((state) => state.lineId === String(fixture.completeLineId)))
-    || lineStates.find((state) => state.hasValidArticle && state.hasValidLocation)
-    || lineStates[0]
-  const incompleteLine = (fixture.incompleteLineId && lineStates.find((state) => state.lineId === String(fixture.incompleteLineId)))
-    || lineStates.find((state) => state.isIncomplete)
-    || null
-
-  frame.__rezzervLayer1ReceiptFixture = {
-    batchId: fixture.batchId ? String(fixture.batchId) : (opened.batchId ? String(opened.batchId) : null),
-    completeLineId: completeLine?.lineId || null,
-    incompleteLineId: incompleteLine?.lineId || null,
-  }
-  return frame.__rezzervLayer1ReceiptFixture
+  frame.__rezzervLayer1ReceiptFixture = resolved
+  return resolved
 }
 
 async function login(frame) {
@@ -350,9 +410,10 @@ export async function runLayer1RegressionTests() {
     await runScenario('T6 Complete kassabonregel kan naar voorraad', async () => {
       const receiptFixture = await resolveReceiptFixture(frame, fixture)
       await navigateFrame(frame, '/kassabonnen')
-      const { detailDoc, lineSelect: fallbackLineSelect } = await openReceiptBatchWithSelectableLines(frame, receiptFixture.batchId)
-      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', receiptFixture.completeLineId) || fallbackLineSelect
-      if (!lineSelect) throw new Error('Geen receipt-line-select-* gevonden voor complete test')
+      const detailDoc = await openReceiptDetail(frame, receiptFixture.batchId)
+      await waitForReceiptLines(() => getFrameDocument(frame))
+      const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${receiptFixture.completeLineId}"]`)
+      if (!lineSelect) throw new Error('Layer1 receipt fixture ontbreekt of is incompleet')
       const lineId = extractIdFromTestId(lineSelect, 'receipt-line-select-')
       const { articleWrapper, articleControl } = getLineArticleControl(detailDoc, lineId)
       const locationSelect = getLineLocationControl(detailDoc, lineId)
@@ -374,11 +435,12 @@ export async function runLayer1RegressionTests() {
 
     await runScenario('T7 Incomplete kassabonregel wordt geblokkeerd', async () => {
       const receiptFixture = await resolveReceiptFixture(frame, fixture)
-      if (!receiptFixture.incompleteLineId) throw new Error('Geen fixture incompleteLineId gevonden voor T7')
+      if (!receiptFixture.incompleteLineId) throw new Error('Layer1 receipt fixture ontbreekt of is incompleet')
       await navigateFrame(frame, '/kassabonnen')
-      const { detailDoc } = await openReceiptBatchWithSelectableLines(frame, receiptFixture.batchId)
-      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', receiptFixture.incompleteLineId)
-      if (!lineSelect) throw new Error('Geen receipt-line-select-* gevonden voor incomplete test')
+      const detailDoc = await openReceiptDetail(frame, receiptFixture.batchId)
+      await waitForReceiptLines(() => getFrameDocument(frame))
+      const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${receiptFixture.incompleteLineId}"]`)
+      if (!lineSelect) throw new Error('Layer1 receipt fixture ontbreekt of is incompleet')
       const lineId = extractIdFromTestId(lineSelect, 'receipt-line-select-')
       const stateBefore = getReceiptLineState(detailDoc, lineId)
       if (!stateBefore.isIncomplete) {
