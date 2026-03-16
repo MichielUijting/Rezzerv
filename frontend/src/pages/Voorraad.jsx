@@ -597,7 +597,7 @@ export default function Voorraad() {
 
     if (column.key === "artikel") {
       return (
-        <div className="rz-inline-cell rz-inline-label rz-stock-article-cell" title={row?.canOpenDetails ? 'Dubbelklik op de rij voor details' : undefined}>
+        <div className="rz-inline-cell rz-inline-label rz-stock-article-cell" title={row?.canOpenDetails ? 'Dubbelklik op de rij voor details' : undefined} data-testid={row?.canOpenDetails ? `inventory-open-detail-${row.detailId || row.id}` : undefined}>
           <span>{row?.isAggregated ? `${row[column.key]} (samengevoegd)` : row[column.key]}</span>
         </div>
       );
@@ -622,14 +622,14 @@ export default function Voorraad() {
   };
 
   return (
-    <div className="rz-screen">
+    <div className="rz-screen" data-testid="inventory-page">
       <Header title="Voorraad" />
       <div className="rz-content">
         <div className="rz-content-inner">
           <div className="rz-card">
             {loadError && <div style={{ marginBottom: "12px", color: "#b42318", fontWeight: 700 }}>{loadError}</div>}
             <div className="rz-table-wrapper rz-stock-table-wrapper">
-              <table className="rz-table rz-stock-table">
+              <table className="rz-table rz-stock-table" data-testid="inventory-table">
                 <colgroup>
                   <col style={{ width: "48px" }} />
                   <col style={{ width: "34%" }} />
@@ -699,6 +699,7 @@ export default function Voorraad() {
                   {filteredRows.map((row) => (
                     <tr
                       key={row.id}
+                      data-testid={`inventory-row-${row.detailId || row.id}`}
                       className={`rz-stock-row-interactive${row.isAggregated ? " rz-stock-row-aggregated" : ""}`}
                       onDoubleClick={(event) => handleRowDoubleClick(event, row)}
                       onKeyDown={(event) => handleRowKeyDown(event, row)}

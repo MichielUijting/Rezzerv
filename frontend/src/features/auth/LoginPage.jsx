@@ -28,7 +28,7 @@ export default function LoginPage({ onLoggedIn }) {
   }
 
   return (
-    <div className="rz-screen">
+    <div className="rz-screen" data-testid="login-page">
       <Header title="Inloggen" />
       <div className="rz-content">
         <div className="rz-content-inner">
@@ -39,6 +39,7 @@ export default function LoginPage({ onLoggedIn }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="admin@rezzerv.local"
+                data-testid="login-email"
               />
               <Input
                 label="Wachtwoord"
@@ -46,9 +47,10 @@ export default function LoginPage({ onLoggedIn }) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Rezzerv123"
+                data-testid="login-password"
               />
 
-              <Button type="submit" variant="primary"  disabled={loading} className="rz-btn-center">
+              <Button type="submit" variant="primary"  disabled={loading} className="rz-btn-center" data-testid="login-submit">
                 {loading ? 'Bezig...' : 'Inloggen'}
               </Button>
 

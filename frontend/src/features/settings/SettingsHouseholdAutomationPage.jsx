@@ -141,7 +141,8 @@ export default function SettingsHouseholdAutomationPage() {
 
   return (
     <AppShell title="Instellingen" showExit={false}>
-      <Card>
+      <div data-testid="settings-page">
+        <Card>
         <div style={{ display: 'grid', gap: '18px' }}>
           <div>
             <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Huishoudautomatisering</h2>
@@ -159,6 +160,7 @@ export default function SettingsHouseholdAutomationPage() {
               <span className="rz-article-automation-label">Strategie</span>
               <select
                 className="rz-article-automation-select"
+                data-testid="household-automation-toggle"
                 value={mode}
                 onChange={(event) => {
                   setSaveMessage('')
@@ -190,8 +192,7 @@ export default function SettingsHouseholdAutomationPage() {
             </div>
           </div>
         </div>
-      </Card>
-
+        </Card>
       {showLeaveModal ? (
         <div className="rz-modal-backdrop" role="presentation">
           <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="leave-household-automation-title">
@@ -205,6 +206,7 @@ export default function SettingsHouseholdAutomationPage() {
           </div>
         </div>
       ) : null}
+      </div>
     </AppShell>
   )
 }

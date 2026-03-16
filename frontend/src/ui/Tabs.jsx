@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function Tabs({ tabs, defaultTab, children }) {
+export default function Tabs({ tabs, defaultTab, children, tabTestIdMap = {} }) {
   const [active, setActive] = useState(defaultTab || tabs[0]);
 
   return (
@@ -16,6 +16,7 @@ export default function Tabs({ tabs, defaultTab, children }) {
               aria-selected={isActive}
               className={isActive ? "rz-tab rz-tab-active" : "rz-tab"}
               onClick={() => setActive(t)}
+              data-testid={tabTestIdMap[t]}
             >
               {t}
             </button>

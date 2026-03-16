@@ -345,16 +345,16 @@ export default function ArticleAnalyticsTab({ articleData = {} }) {
   }, [articleData, articleMode, householdSettings, history, locations, period])
 
   return (
-    <div className="rz-analytics-tab">
+    <div className="rz-analytics-tab" data-testid="analysis-page">
       <AnalyticsChart buckets={analytics.chartBuckets} period={period} onPeriodChange={setPeriod} />
-      <AnalyticsAccordion title="Automatisering" rows={analytics.automation} defaultOpen />
-      <AnalyticsAccordion title="Prijsinzichten" rows={analytics.price} />
-      <AnalyticsAccordion title="Verbruiksbeeld" rows={analytics.consumption} />
-      <AnalyticsAccordion title="Voorraadprognose" rows={analytics.forecast} />
-      <AnalyticsAccordion title="Aanbeveling" variant="advice" defaultOpen>
+      <div data-testid="analysis-row-automation"><AnalyticsAccordion title="Automatisering" rows={analytics.automation} defaultOpen /></div>
+      <div data-testid="analysis-row-price"><AnalyticsAccordion title="Prijsinzichten" rows={analytics.price} /></div>
+      <div data-testid="analysis-row-consumption"><AnalyticsAccordion title="Verbruiksbeeld" rows={analytics.consumption} /></div>
+      <div data-testid="analysis-row-forecast"><AnalyticsAccordion title="Voorraadprognose" rows={analytics.forecast} /></div>
+      <div data-testid="analysis-row-advice"><AnalyticsAccordion title="Aanbeveling" variant="advice" defaultOpen>
         <p className="rz-analytics-advice-text">{analytics.recommendation}</p>
-      </AnalyticsAccordion>
-      <AnalyticsAccordion title="Onderbouwing" rows={analytics.quality} />
+      </AnalyticsAccordion></div>
+      <div data-testid="analysis-row-quality"><AnalyticsAccordion title="Onderbouwing" rows={analytics.quality} /></div>
     </div>
   )
 }

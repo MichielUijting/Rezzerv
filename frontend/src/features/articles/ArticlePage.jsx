@@ -375,7 +375,8 @@ export default function ArticlePage() {
   return (
     <AppShell title={pageTitle} showExit={false}>
       <ScreenCard fullWidth>
-        <div className="rz-article-detail-page">
+        <div className="rz-article-detail-page" data-testid="article-detail-page">
+          <div data-testid="article-detail-title" style={{ display: 'none' }}>{pageTitle}</div>
           {inventoryLoadError ? <div className="rz-article-detail-alert">{inventoryLoadError}</div> : null}
           {historyLoadError && !historyLoading && articleData ? <div className="rz-article-detail-alert">{historyLoadError}</div> : null}
 
@@ -391,7 +392,7 @@ export default function ArticlePage() {
               }
             />
           ) : articleData ? (
-            <Tabs tabs={TABS}>
+            <Tabs tabs={TABS} tabTestIdMap={{ Historie: "article-history-tab", Analyse: "article-analysis-tab" }}>
               {(activeTab) => {
                 const content = tabContent[activeTab]
                 return content || <PlaceholderTab text="Deze tab volgt later." />

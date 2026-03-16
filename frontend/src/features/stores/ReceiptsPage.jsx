@@ -168,11 +168,11 @@ export default function ReceiptsPage() {
 
   return (
     <AppShell title="Kassabonnen" showExit={false}>
-      <div style={{ display: 'grid', gap: '16px' }}>
+      <div style={{ display: 'grid', gap: '16px' }} data-testid="receipts-page">
         <ScreenCard>
         {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
         <div className="rz-table-wrapper">
-          <table className="rz-table">
+          <table className="rz-table" data-testid="receipts-table">
             <thead>
               <tr className="rz-table-header">
                 <th style={{ width: '44px' }}>
@@ -238,6 +238,7 @@ export default function ReceiptsPage() {
                 return (
                   <tr
                     key={item.batch_id}
+                    data-testid={`receipt-batch-row-${item.batch_id}`}
                     className={selected ? 'rz-row-selected' : ''}
                     onClick={() => toggleSelectedBatch(item.batch_id)}
                     onDoubleClick={() => {
@@ -247,6 +248,14 @@ export default function ReceiptsPage() {
                     style={{ cursor: 'pointer' }}
                   >
                     <td onClick={(event) => event.stopPropagation()}>
+                      <button
+                        type="button"
+                        data-testid={`receipt-batch-open-${item.batch_id}`}
+                        onClick={(event) => { event.stopPropagation(); setOpenedBatchId(item.batch_id) }}
+                        style={{ display: 'none' }}
+                        aria-hidden="true"
+                        tabIndex={-1}
+                      />
                       <input
                         type="checkbox"
                         checked={selected}

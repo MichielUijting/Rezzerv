@@ -61,12 +61,12 @@ export default function ArticleHistoryTab({ articleData = {}, isLoading = false,
   }
 
   return (
-    <div className="rz-history-tab">
+    <div className="rz-history-tab" data-testid="history-page">
       <section className="rz-history-group rz-article-detail-section">
         <h3 className="rz-history-group-title rz-article-detail-section-title">Voorraadhistorie</h3>
         <div className="rz-history-group-body rz-article-detail-section-body">
           {historyEntries.map((entry, index) => (
-            <article key={entry.id || `${entry.datetime || "moment"}-${entry.type || "event"}-${index}`} className="rz-history-card">
+            <article key={entry.id || `${entry.datetime || "moment"}-${entry.type || "event"}-${index}`} className="rz-history-card" data-testid={`history-row-${entry.id || index}`}>
               <div className="rz-history-card-top">
                 <div>
                   <div className="rz-history-card-datetime">{formatDateTime(entry.datetime)}</div>
