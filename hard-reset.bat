@@ -28,6 +28,8 @@ call :CleanupPortIfRezzerv %STALE_FRONTEND_PORT%
 if %errorlevel% neq 0 exit /b 1
 call :CleanupPortIfRezzerv %FRONTEND_PORT%
 if %errorlevel% neq 0 exit /b 1
+call :TryStopOldRezzervOnPort %STALE_FRONTEND_PORT% %REZZERV_VERSION%
+if %errorlevel% neq 0 exit /b 1
 
 echo [3/6] Re-checking Docker availability after cleanup...
 call :EnsureDockerRunning
