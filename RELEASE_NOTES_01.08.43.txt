@@ -1,0 +1,22 @@
+Release Protocol v1.0 – Compliance Check:
+Basisversie: Rezzerv-v01.08.42 (afkeurpunt)
+Nieuw versienummer: Rezzerv-v01.08.43
+Release-type: Infrastructure Patch
+Wijzigingsdoel: mini-patch op de startup-cleanup; PowerShell-variabele $pid vervangen door $owningPid en procesduiding aangescherpt zodat powershell.exe niet automatisch als Docker-gerelateerd wordt gelabeld.
+Gewijzigd:
+- start.bat
+- hard-reset.bat
+- VERSION.txt
+- version.json
+- frontend/version.json
+Niet gewijzigd:
+- kassabon-UI
+- backendlogica
+- huishoudregels
+- voorraadmutaties
+Getest:
+- statische codecontrole van batchscripts
+- versie-ophoging in zipbestanden
+Niet getest:
+- runtime op Windows/Docker Desktop buiten deze omgeving
+Risiconiveau: laag; beperkt tot startup-cleanup en procesclassificatie.

@@ -158,21 +158,24 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$port=%TARGET_PORT%;" ^
   "$listener = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -First 1;" ^
   "if (-not $listener) { Write-Host ('    Port ' + $port + ' is free.'); exit 0 }" ^
-  "$pid = $listener.OwningProcess;" ^
-  "$proc = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $pid) -ErrorAction SilentlyContinue;" ^
+  "$owningPid = $listener.OwningProcess;" ^
+  "$proc = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $owningPid) -ErrorAction SilentlyContinue;" ^
   "$name = if ($proc) { $proc.Name } else { '' };" ^
   "$cmd = if ($proc) { [string]$proc.CommandLine } else { '' };" ^
   "$sig = ($name + ' ' + $cmd).ToLowerInvariant();" ^
-  "$isDocker = $sig -match 'docker|com\\.docker|dockerdesktop|wsl|vmmem|vpnkit|moby';" ^
+  "$isDockerName = $name -match '(?i)^(docker|docker desktop|com\\.docker.*|docker-proxy|vpnkit|vmmem|vmmemws|wslhost)\\.exe$';" ^
+  "$isDockerCmd = $cmd.ToLowerInvariant() -match 'docker desktop|com\\.docker|docker-proxy|vpnkit|moby';" ^
+  "$isDocker = $isDockerName -or $isDockerCmd;" ^
   "$isRezzerv = $sig -match 'rezzerv|rezzerv_build';" ^
   "$isNodeLike = $sig -match 'node|npm|vite';" ^
-  "if ($isDocker) { Write-Host ('[ERROR] Port ' + $port + ' is occupied by Docker-related process PID ' + $pid + ' (' + $name + '). Automatic termination is blocked.'); exit 11 }" ^
-  "if ($isRezzerv -or $isNodeLike) { Write-Host ('    Port ' + $port + ' is occupied by leftover Rezzerv-like process PID ' + $pid + ' (' + $name + ') - stopping process...'); Stop-Process -Id $pid -Force -ErrorAction Stop; Start-Sleep -Seconds 1; exit 0 }" ^
-  "Write-Host ('[ERROR] Port ' + $port + ' is occupied by non-Rezzerv process PID ' + $pid + ' (' + $name + '). Command: ' + $cmd); exit 12"
+  "$isPowerShellRezzerv = ($name -match '(?i)^pwsh\\.exe$|(?i)^powershell\\.exe$') -and ($cmd.ToLowerInvariant() -match 'rezzerv|rezzerv_build|vite');" ^
+  "if ($isDocker) { Write-Host ('[ERROR] Port ' + $port + ' is occupied by excluded process PID ' + $owningPid + ' (' + $name + '). Command: ' + $cmd); exit 11 }" ^
+  "if ($isRezzerv -or $isNodeLike -or $isPowerShellRezzerv) { Write-Host ('    Port ' + $port + ' is occupied by leftover Rezzerv-like process PID ' + $owningPid + ' (' + $name + ') - stopping process...'); Stop-Process -Id $owningPid -Force -ErrorAction Stop; Start-Sleep -Seconds 1; exit 0 }" ^
+  "Write-Host ('[ERROR] Port ' + $port + ' is occupied by unknown process PID ' + $owningPid + ' (' + $name + '). Command: ' + $cmd); exit 12"
 set "PS_EXIT=%errorlevel%"
 if "%PS_EXIT%"=="0" exit /b 0
 if "%PS_EXIT%"=="11" (
-  echo [ERROR] Veilige cleanup gestopt: Docker-gerelateerd proces gebruikt poort %TARGET_PORT%.
+  echo [ERROR] Veilige cleanup gestopt: uitgesloten proces gebruikt poort %TARGET_PORT%.
   pause
   exit /b 1
 )
