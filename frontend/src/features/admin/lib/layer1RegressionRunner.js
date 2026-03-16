@@ -276,6 +276,28 @@ export async function runLayer1RegressionTests() {
       if (!detailDoc?.querySelector('[data-testid="receipt-lines-table"]')) throw new Error('receipt-lines-table niet gevonden')
     }, results)
 
+    await runScenario('T7 Incomplete kassabonregel wordt geblokkeerd', async () => {
+      await navigateFrame(frame, '/kassabonnen')
+      const { detailDoc, lineSelect: fallbackLineSelect } = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
+      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', fixture.incompleteLineId) || fallbackLineSelect
+      if (!lineSelect) throw new Error('Geen receipt-line-select-* gevonden voor incomplete test')
+      const lineId = extractIdFromTestId(lineSelect, 'receipt-line-select-')
+      const locationSelect = detailDoc.querySelector(`[data-testid="receipt-line-location-select-${lineId}"]`)
+      if (!lineSelect.checked) clickElement(lineSelect)
+      if (locationSelect) setSelectValue(locationSelect, '')
+      const processButton = detailDoc.querySelector('[data-testid="receipt-process-button"]')
+      if (!processButton) throw new Error('receipt-process-button niet gevonden')
+      clickElement(processButton)
+      await delay(250)
+      const statusNode = detailDoc.querySelector(`[data-testid="receipt-line-status-${lineId}"]`)
+      if (!statusNode) throw new Error(`receipt-line-status-${lineId} niet gevonden`)
+      const statusValue = String(statusNode.textContent || '').trim()
+      if (!statusValue || statusValue === 'ready') {
+        throw new Error(`Regel ${lineId} werd niet als incomplete regel herkend`)
+      }
+    }, results)
+
+
     await runScenario('T6 Complete kassabonregel kan naar voorraad', async () => {
       await navigateFrame(frame, '/kassabonnen')
       const { detailDoc, lineSelect: fallbackLineSelect } = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
@@ -299,27 +321,6 @@ export async function runLayer1RegressionTests() {
       if (!processButton) throw new Error('receipt-process-button niet gevonden')
       clickElement(processButton)
       await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-feedback"]'), WAIT_TIMEOUT, 'receipt-feedback niet zichtbaar na verwerken')
-    }, results)
-
-    await runScenario('T7 Incomplete kassabonregel wordt geblokkeerd', async () => {
-      await navigateFrame(frame, '/kassabonnen')
-      const { detailDoc, lineSelect: fallbackLineSelect } = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
-      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', fixture.incompleteLineId) || fallbackLineSelect
-      if (!lineSelect) throw new Error('Geen receipt-line-select-* gevonden voor incomplete test')
-      const lineId = extractIdFromTestId(lineSelect, 'receipt-line-select-')
-      const locationSelect = detailDoc.querySelector(`[data-testid="receipt-line-location-select-${lineId}"]`)
-      if (!lineSelect.checked) clickElement(lineSelect)
-      if (locationSelect) setSelectValue(locationSelect, '')
-      const processButton = detailDoc.querySelector('[data-testid="receipt-process-button"]')
-      if (!processButton) throw new Error('receipt-process-button niet gevonden')
-      clickElement(processButton)
-      await delay(250)
-      const statusNode = detailDoc.querySelector(`[data-testid="receipt-line-status-${lineId}"]`)
-      if (!statusNode) throw new Error(`receipt-line-status-${lineId} niet gevonden`)
-      const statusValue = String(statusNode.textContent || '').trim()
-      if (!statusValue || statusValue === 'ready') {
-        throw new Error(`Regel ${lineId} werd niet als incomplete regel herkend`)
-      }
     }, results)
 
     await runScenario('T8 Huishoudautomatisering uit', async () => {
