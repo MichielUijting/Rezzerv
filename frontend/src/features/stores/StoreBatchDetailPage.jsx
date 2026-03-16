@@ -616,16 +616,16 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
           <div className="rz-table-wrapper rz-store-batch-table-wrapper">
-            <table className="rz-table rz-store-workbench-table" style={{ minWidth: '980px' }}>
+            <table className="rz-table rz-store-workbench-table" style={{ minWidth: '860px' }}>
               <thead>
                 <tr className="rz-table-header">
                   <th style={{ width: '44px' }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
                   </th>
-                  <th>Bonartikel</th>
+                  <th className="rz-store-batch-col-item">Bonartikel</th>
                   <th className="rz-num rz-store-batch-col-quantity">Aantal</th>
-                  <th>Gekoppeld artikel</th>
-                  <th>Locatie</th>
+                  <th className="rz-store-batch-col-linked">Gekoppeld artikel</th>
+                  <th className="rz-store-batch-col-location">Locatie</th>
                   <th className="rz-num rz-store-batch-col-price">Prijs</th>
                 </tr>
                 <tr className="rz-table-filters">
@@ -668,9 +668,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       <td>
                         <input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} />
                       </td>
-                      <td><div className="rz-store-primary">{line.article_name_raw}</div></td>
+                      <td className="rz-store-batch-col-item"><div className="rz-store-primary">{line.article_name_raw}</div></td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
-                      <td>
+                      <td className="rz-store-batch-col-linked">
                         <StoreArticleSelector
                           lineId={line.id}
                           lineName={line.article_name_raw}
@@ -683,7 +683,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           canCreateArticle={Boolean(household?.is_household_admin)}
                         />
                       </td>
-                      <td>
+                      <td className="rz-store-batch-col-location">
                         <select
                           className="rz-input rz-store-select"
                           value={draft.locationId || ''}

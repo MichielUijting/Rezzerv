@@ -89,9 +89,9 @@ export default function ReceiptsPage() {
         const readyCount = Number(summary.ready || 0)
         const processedCount = Number(summary.processed || 0)
         const totalCount = Number(summary.total || batch.lines?.length || 0)
-        if (processedCount > 0 && processedCount >= totalCount && openCount === 0 && readyCount === 0) return 'Verwerkt'
-        if (processedCount > 0 && (openCount > 0 || readyCount > 0)) return 'Gedeeltelijk verwerkt'
-        return batch.import_status === 'processed' ? 'Verwerkt' : batchStatusLabel(batch.import_status)
+        if (processedCount > 0 && processedCount >= totalCount && openCount === 0 && readyCount === 0) return 'Volledig verwerkt'
+        if (processedCount > 0 || openCount > 0 || readyCount > 0) return 'Deels verwerkt'
+        return 'Niet verwerkt'
       })(),
     }))
 
@@ -152,6 +152,16 @@ export default function ReceiptsPage() {
     link.click()
     link.remove()
     window.URL.revokeObjectURL(url)
+  }
+
+  function handleDeleteSelected() {
+    if (selectedBatchIds.length === 0) return
+    const selectedSet = new Set(selectedBatchIds)
+    setBatches((current) => current.filter((batch) => !selectedSet.has(batch.batch_id)))
+    if (openedBatchId && selectedSet.has(openedBatchId)) {
+      setOpenedBatchId('')
+    }
+    setSelectedBatchIds([])
   }
 
   const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedBatchIds.includes(item.batch_id))
@@ -244,29 +254,10 @@ export default function ReceiptsPage() {
                         aria-label={`Selecteer ${item.providerName} van ${item.dateLabel}`}
                       />
                     </td>
-                    <td>
-                      <div style={{ fontWeight: 700 }}>{item.providerName}</div>
-                    </td>
-                    <td>{item.dateLabel}</td>
-                    <td className="rz-num">{item.totalLines}</td>
-                    <td>
-                      <span className={`rz-store-status-badge rz-store-status-badge--${item.uiState?.statusKey || 'new'}`}>
-                        {item.statusLabel}
-                      </span>
-                      <div style={{ color: '#2e7d4d', marginTop: '4px' }}>
-                        {(() => {
-                          const summary = item?.summary || {}
-                          const klaar = Number(summary.ready || item.uiState?.readyCount || 0)
-                          const actie = Number(summary.open || item.uiState?.openCount || 0)
-                          const verwerkt = Number(summary.processed || 0)
-                          const totaal = Number(summary.total || item.totalLines || 0)
-                          if (verwerkt > 0 && verwerkt >= totaal && actie === 0 && klaar === 0) return 'Volledig verwerkt'
-                          if (verwerkt > 0 && (actie > 0 || klaar > 0)) return `${verwerkt} verwerkt · ${actie} actie nodig`
-                          if (actie > 0 || klaar > 0) return `${klaar} klaar · ${actie} actie nodig`
-                          return 'Nog niet beoordeeld'
-                        })()}
-                      </div>
-                    </td>
+                    <td className="rz-receipts-cell">{item.providerName}</td>
+                    <td className="rz-receipts-cell">{item.dateLabel}</td>
+                    <td className="rz-num rz-receipts-cell">{item.totalLines}</td>
+                    <td className="rz-receipts-cell">{item.statusLabel}</td>
                   </tr>
                 )
               })}
@@ -275,6 +266,7 @@ export default function ReceiptsPage() {
         </div>
         <div className="rz-stock-table-actions">
           <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || listItems.length === 0}>Exporteren</Button>
+          <Button type="button" variant="secondary" onClick={handleDeleteSelected} disabled={selectedBatchIds.length === 0}>Verwijderen</Button>
         </div>
         </ScreenCard>
 

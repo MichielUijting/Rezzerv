@@ -479,11 +479,48 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-store-batch-col-quantity{
-  width: 48px;
-  max-width: 48px;
+  width: 96px;
+  max-width: 96px;
 }
 
 .rz-store-batch-col-price{
-  width: 46px;
-  max-width: 46px;
+  width: 92px;
+  max-width: 92px;
+}
+
+
+.rz-store-batch-col-item{
+  width: 33%;
+}
+
+.rz-store-batch-col-linked{
+  width: 26%;
+}
+
+.rz-store-batch-col-location{
+  width: 19%;
+}
+
+.rz-store-batch-col-item,
+.rz-store-batch-col-linked,
+.rz-store-batch-col-location,
+.rz-store-batch-col-quantity,
+.rz-store-batch-col-price{
+  white-space: normal;
+}
+
+.rz-receipts-cell,
+.rz-receipts-cell *{
+  font-family: inherit !important;
+  font-size: 16px !important;
+  font-weight: 400 !important;
+  color: #111827 !important;
+  line-height: 1.2 !important;
+}
+
+.rz-stock-table-actions{
+  display:flex;
+  justify-content:flex-end;
+  gap:12px;
+  flex-wrap:wrap;
 }
