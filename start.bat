@@ -193,15 +193,33 @@ pause
 exit /b 1
 
 :VerifyFrontendPorts
-powershell -NoProfile -Command "$primary = Test-NetConnection -ComputerName localhost -Port %FRONTEND_PORT% -WarningAction SilentlyContinue; if (-not $primary.TcpTestSucceeded) { exit 1 }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$currentVersion='%REZZERV_VERSION%';" ^
+  "$primaryUrl='http://localhost:%FRONTEND_PORT%/';" ^
+  "$staleUrl='http://localhost:%STALE_FRONTEND_PORT%/';" ^
+  "try { $primary = Invoke-WebRequest -Uri $primaryUrl -UseBasicParsing -TimeoutSec 4 } catch { exit 21 }" ^
+  "$primaryContent = [string]$primary.Content;" ^
+  "$primaryVersion = [regex]::Match($primaryContent, 'Rezzerv v([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value;" ^
+  "if (-not $primaryVersion) { $primaryVersion = [regex]::Match($primaryContent, 'Rezzerv[^0-9]*([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value }" ^
+  "if (-not $primaryVersion) { exit 22 }" ^
+  "if ($primaryVersion -ne $currentVersion) { Write-Host ('[ERROR] Active frontend on port %FRONTEND_PORT% serves version ' + $primaryVersion + ' instead of ' + $currentVersion + '.'); exit 23 }" ^
+  "$staleResponse = $null;" ^
+  "try { $staleResponse = Invoke-WebRequest -Uri $staleUrl -UseBasicParsing -TimeoutSec 3 } catch { exit 0 }" ^
+  "$staleContent = [string]$staleResponse.Content;" ^
+  "$staleVersion = [regex]::Match($staleContent, 'Rezzerv v([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value;" ^
+  "if (-not $staleVersion) { $staleVersion = [regex]::Match($staleContent, 'Rezzerv[^0-9]*([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value }" ^
+  "if (-not $staleVersion) { Write-Host ('[INFO] Port %STALE_FRONTEND_PORT% is reachable but does not appear to serve a Rezzerv frontend. Action: ignore'); exit 0 }" ^
+  "Write-Host ('[WARN] Port %STALE_FRONTEND_PORT% serves stale Rezzerv frontend version ' + $staleVersion + '. Attempting targeted cleanup...');" ^
+  "$candidates = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $n = ($_.Name | Out-String).Trim().ToLowerInvariant(); $cl = ([string]$_.CommandLine).ToLowerInvariant(); (($n -match 'node|npm|vite|powershell|pwsh') -and ($cl -match '5173|rezzerv|vite')) -or ($cl -match 'localhost:5173') };" ^
+  "$stopped = $false; foreach ($p in $candidates) { try { Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop; Write-Host ('[INFO] Stopped stale frontend candidate PID ' + $p.ProcessId + ' (' + $p.Name + ').'); $stopped = $true } catch {} }" ^
+  "Start-Sleep -Seconds 2;" ^
+  "try { $recheck = Invoke-WebRequest -Uri $staleUrl -UseBasicParsing -TimeoutSec 3; $recheckContent = [string]$recheck.Content; $recheckVersion = [regex]::Match($recheckContent, 'Rezzerv v([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value; if (-not $recheckVersion) { $recheckVersion = [regex]::Match($recheckContent, 'Rezzerv[^0-9]*([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value }; if ($recheckVersion) { Write-Host ('[ERROR] Old Rezzerv frontend on port %STALE_FRONTEND_PORT% is still active after cleanup. Version: ' + $recheckVersion); exit 24 } else { Write-Host ('[INFO] Port %STALE_FRONTEND_PORT% remains reachable but no longer serves a Rezzerv frontend. Action: ignore'); exit 0 } } catch { if ($stopped) { Write-Host ('[INFO] Stale frontend on port %STALE_FRONTEND_PORT% is no longer reachable after cleanup.'); } exit 0 }"
 if %errorlevel% neq 0 (
-  echo [ERROR] Expected frontend port %FRONTEND_PORT% is not reachable.
+  if "%errorlevel%"=="21" echo [ERROR] Expected frontend port %FRONTEND_PORT% is not reachable.
+  if "%errorlevel%"=="22" echo [ERROR] Active frontend on port %FRONTEND_PORT% does not expose a detectable Rezzerv version.
+  if "%errorlevel%"=="23" rem message already printed by PowerShell
+  if "%errorlevel%"=="24" rem message already printed by PowerShell
   exit /b 1
 )
-powershell -NoProfile -Command "$stale = Test-NetConnection -ComputerName localhost -Port %STALE_FRONTEND_PORT% -WarningAction SilentlyContinue; if ($stale.TcpTestSucceeded) { exit 1 }"
-if %errorlevel% neq 0 (
-  echo [ERROR] Old frontend port %STALE_FRONTEND_PORT% is still reachable after startup.
-  exit /b 1
-)
-echo     Active frontend verified on port %FRONTEND_PORT%. No stale frontend on port %STALE_FRONTEND_PORT%.
+echo     Active frontend verified on port %FRONTEND_PORT%. No stale Rezzerv frontend remains on port %STALE_FRONTEND_PORT%.
 exit /b 0
