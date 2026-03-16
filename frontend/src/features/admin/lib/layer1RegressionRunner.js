@@ -147,7 +147,30 @@ async function openInventoryDetail(frame, articleId = null) {
   return getFrameDocument(frame)
 }
 
+async function openReceiptDetail(frame, preferredBatchId = null) {
+  const existingDetail = getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]')
+  if (existingDetail) {
+    return getFrameDocument(frame)
+  }
+  const doc = getFrameDocument(frame)
+  const openButton = pickByTestIdPrefix(doc, 'receipt-batch-open-', preferredBatchId)
+  if (!openButton) throw new Error('Geen receipt-batch-open-* gevonden')
+  clickElement(openButton)
+  await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
+  return getFrameDocument(frame)
+}
+
 async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = null) {
+  let detailDoc = getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]') ? getFrameDocument(frame) : null
+  if (!detailDoc) {
+    detailDoc = await openReceiptDetail(frame, preferredBatchId)
+  }
+  let lineSelect = preferredBatchId ? pickByTestIdPrefix(detailDoc, 'receipt-line-select-', null) : detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
+  if (lineSelect) {
+    return { detailDoc, lineSelect }
+  }
+
+  await navigateFrame(frame, '/kassabonnen')
   const doc = getFrameDocument(frame)
   const candidates = []
   if (preferredBatchId) {
@@ -158,8 +181,8 @@ async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = nul
   for (const openButton of candidates) {
     clickElement(openButton)
     await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
-    const detailDoc = getFrameDocument(frame)
-    const lineSelect = preferredBatchId ? pickByTestIdPrefix(detailDoc, 'receipt-line-select-', null) : detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
+    detailDoc = getFrameDocument(frame)
+    lineSelect = detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
     if (lineSelect) {
       return { detailDoc, lineSelect }
     }
@@ -221,12 +244,8 @@ export async function runLayer1RegressionTests() {
 
     await runScenario('T5 Kassabondetail opent', async () => {
       await navigateFrame(frame, '/kassabonnen')
-      const doc = getFrameDocument(frame)
-      const openButton = pickByTestIdPrefix(doc, 'receipt-batch-open-', fixture.batchId)
-      if (!openButton) throw new Error('Geen receipt-batch-open-* gevonden')
-      clickElement(openButton)
-      await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
-      if (!getFrameDocument(frame)?.querySelector('[data-testid="receipt-lines-table"]')) throw new Error('receipt-lines-table niet gevonden')
+      const detailDoc = await openReceiptDetail(frame, fixture.batchId)
+      if (!detailDoc?.querySelector('[data-testid="receipt-lines-table"]')) throw new Error('receipt-lines-table niet gevonden')
     }, results)
 
     await runScenario('T6 Complete kassabonregel kan naar voorraad', async () => {
