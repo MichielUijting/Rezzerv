@@ -61,15 +61,15 @@ docker info >nul 2>&1
 if %errorlevel% neq 0 goto waitdocker
 exit /b 0
 
- :CleanupLegacyRezzervStacks
+:CleanupLegacyRezzervStacks
 set "LEGACY_FOUND="
-for %%C in (rezzerv-dev-frontend-1 rezzerv-dev-backend-1 rezzerv-dev-db-1) do (
-  docker ps -a --format "{{.Names}}" | findstr /I /X "%%C" >nul 2>&1
+for %%N in (rezzerv-dev-frontend-1 rezzerv-dev-backend-1 rezzerv-dev-db-1) do (
+  docker ps -a --format "{{.Names}}" | findstr /I /X "%%N" >nul
   if !errorlevel! equ 0 (
     set "LEGACY_FOUND=1"
-    echo     Removing explicit legacy container %%C ...
-    docker stop %%C >nul 2>&1
-    docker rm %%C >nul 2>&1
+    echo     Removing explicitly known legacy container %%N ...
+    docker stop %%N >nul 2>&1
+    docker rm %%N >nul 2>&1
   )
 )
 for /f "usebackq delims=" %%N in (`docker ps -a --format "{{.Names}}"`) do (
