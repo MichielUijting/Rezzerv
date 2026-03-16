@@ -450,7 +450,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const reviewDecision = line.review_decision || 'pending'
       const isSelected = selectedSet.has(line.id)
       const selectionState = deriveLineSelectionState({ draft, validLocationIds, processingStatus })
-      const { hasValidArticle, hasValidLocation, isProcessable } = selectionState
+      const { effectiveArticleId, hasValidArticle, hasValidLocation, isProcessable } = selectionState
 
       let statusKey = 'new'
       let statusLabel = 'Nieuw'
