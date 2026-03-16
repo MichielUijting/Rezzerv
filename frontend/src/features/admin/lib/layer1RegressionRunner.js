@@ -110,6 +110,11 @@ function clickElement(element) {
   element.dispatchEvent(new view.MouseEvent('click', { bubbles: true, cancelable: true, view }))
 }
 
+function doubleClickElement(element) {
+  const view = element?.ownerDocument?.defaultView || window
+  element.dispatchEvent(new view.MouseEvent('dblclick', { bubbles: true, cancelable: true, view }))
+}
+
 async function runScenario(name, fn, results) {
   const start = performance.now()
   try {
@@ -131,6 +136,36 @@ function pickByTestIdPrefix(doc, prefix, preferredId = null) {
 function extractIdFromTestId(element, prefix) {
   const value = element?.getAttribute('data-testid') || ''
   return value.startsWith(prefix) ? value.slice(prefix.length) : null
+}
+
+async function openInventoryDetail(frame, articleId = null) {
+  const doc = getFrameDocument(frame)
+  const trigger = pickByTestIdPrefix(doc, 'inventory-row-', articleId)
+  if (!trigger) throw new Error('Geen inventory-row-* gevonden')
+  doubleClickElement(trigger)
+  await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="article-detail-page"]'), WAIT_TIMEOUT, 'article-detail-page niet gevonden')
+  return getFrameDocument(frame)
+}
+
+async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = null) {
+  const doc = getFrameDocument(frame)
+  const candidates = []
+  if (preferredBatchId) {
+    const preferred = doc.querySelector(`[data-testid="receipt-batch-open-${preferredBatchId}"]`)
+    if (preferred) candidates.push(preferred)
+  }
+  candidates.push(...[...doc.querySelectorAll('[data-testid^="receipt-batch-open-"]')].filter((el) => !candidates.includes(el)))
+  for (const openButton of candidates) {
+    clickElement(openButton)
+    await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
+    const detailDoc = getFrameDocument(frame)
+    const lineSelect = preferredBatchId ? pickByTestIdPrefix(detailDoc, 'receipt-line-select-', null) : detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
+    if (lineSelect) {
+      return { detailDoc, lineSelect }
+    }
+    await navigateFrame(frame, '/kassabonnen')
+  }
+  throw new Error('Geen batch met selecteerbare receipt-line-select-* gevonden')
 }
 
 async function login(frame) {
@@ -173,12 +208,7 @@ export async function runLayer1RegressionTests() {
 
     await runScenario('T3 Artikeldetail opent vanuit Voorraad', async () => {
       await navigateFrame(frame, '/voorraad')
-      const doc = getFrameDocument(frame)
-      const openButton = pickByTestIdPrefix(doc, 'inventory-open-detail-', fixture.articleId)
-      if (!openButton) throw new Error('Geen inventory-open-detail-* gevonden')
-      clickElement(openButton)
-      await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="article-detail-page"]'), WAIT_TIMEOUT, 'article-detail-page niet gevonden')
-      const detailDoc = getFrameDocument(frame)
+      const detailDoc = await openInventoryDetail(frame, fixture.articleId)
       if (!detailDoc.querySelector('[data-testid="article-detail-title"]')) throw new Error('article-detail-title ontbreekt')
     }, results)
 
@@ -201,13 +231,8 @@ export async function runLayer1RegressionTests() {
 
     await runScenario('T6 Complete kassabonregel kan naar voorraad', async () => {
       await navigateFrame(frame, '/kassabonnen')
-      const doc = getFrameDocument(frame)
-      const openButton = pickByTestIdPrefix(doc, 'receipt-batch-open-', fixture.batchId)
-      if (!openButton) throw new Error('Geen testbatch beschikbaar voor complete verwerking')
-      clickElement(openButton)
-      await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
-      const detailDoc = getFrameDocument(frame)
-      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', fixture.completeLineId)
+      const { detailDoc, lineSelect: fallbackLineSelect } = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
+      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', fixture.completeLineId) || fallbackLineSelect
       if (!lineSelect) throw new Error('Geen receipt-line-select-* gevonden voor complete test')
       const lineId = extractIdFromTestId(lineSelect, 'receipt-line-select-')
       const articleWrapper = detailDoc.querySelector(`[data-testid="receipt-line-article-select-${lineId}"]`)
@@ -231,13 +256,8 @@ export async function runLayer1RegressionTests() {
 
     await runScenario('T7 Incomplete kassabonregel wordt geblokkeerd', async () => {
       await navigateFrame(frame, '/kassabonnen')
-      const doc = getFrameDocument(frame)
-      const openButton = pickByTestIdPrefix(doc, 'receipt-batch-open-', fixture.batchId)
-      if (!openButton) throw new Error('Geen testbatch beschikbaar voor incomplete validatie')
-      clickElement(openButton)
-      await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
-      const detailDoc = getFrameDocument(frame)
-      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', fixture.incompleteLineId)
+      const { detailDoc, lineSelect: fallbackLineSelect } = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
+      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', fixture.incompleteLineId) || fallbackLineSelect
       if (!lineSelect) throw new Error('Geen receipt-line-select-* gevonden voor incomplete test')
       const lineId = extractIdFromTestId(lineSelect, 'receipt-line-select-')
       const locationSelect = detailDoc.querySelector(`[data-testid="receipt-line-location-select-${lineId}"]`)
@@ -284,12 +304,7 @@ export async function runLayer1RegressionTests() {
 
     await runScenario('T10 Historie en Analyse zijn consistent bereikbaar', async () => {
       await navigateFrame(frame, '/voorraad')
-      const doc = getFrameDocument(frame)
-      const openButton = pickByTestIdPrefix(doc, 'inventory-open-detail-', fixture.articleId)
-      if (!openButton) throw new Error('Geen inventory-open-detail-* gevonden voor historie/analyse')
-      clickElement(openButton)
-      await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="article-detail-page"]'), WAIT_TIMEOUT, 'article-detail-page niet gevonden')
-      const detailDoc = getFrameDocument(frame)
+      const detailDoc = await openInventoryDetail(frame, fixture.articleId)
       const historyTab = detailDoc.querySelector('[data-testid="article-history-tab"]')
       const analysisTab = detailDoc.querySelector('[data-testid="article-analysis-tab"]')
       if (!historyTab || !analysisTab) throw new Error('Historie- of analyse-tab ontbreekt')

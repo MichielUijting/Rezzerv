@@ -597,7 +597,7 @@ export default function Voorraad() {
 
     if (column.key === "artikel") {
       return (
-        <div className="rz-inline-cell rz-inline-label rz-stock-article-cell" title={row?.canOpenDetails ? 'Dubbelklik op de rij voor details' : undefined} data-testid={row?.canOpenDetails ? `inventory-open-detail-${row.detailId || row.id}` : undefined}>
+        <div className="rz-inline-cell rz-inline-label rz-stock-article-cell" title={row?.canOpenDetails ? 'Dubbelklik op de rij voor details' : undefined}>
           <span>{row?.isAggregated ? `${row[column.key]} (samengevoegd)` : row[column.key]}</span>
         </div>
       );
@@ -700,6 +700,7 @@ export default function Voorraad() {
                     <tr
                       key={row.id}
                       data-testid={`inventory-row-${row.detailId || row.id}`}
+                      data-open-detail-testid={row.canOpenDetails ? `inventory-open-detail-${row.detailId || row.id}` : undefined}
                       className={`rz-stock-row-interactive${row.isAggregated ? " rz-stock-row-aggregated" : ""}`}
                       onDoubleClick={(event) => handleRowDoubleClick(event, row)}
                       onKeyDown={(event) => handleRowKeyDown(event, row)}
