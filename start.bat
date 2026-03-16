@@ -67,18 +67,8 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-echo Checking if Docker engine is running...
-docker info >nul 2>&1
-if %errorlevel% neq 0 (
-  echo Docker engine not running.
-  echo Attempting to start Docker Desktop...
-  start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-  echo Waiting for Docker engine...
-  :waitdocker
-  timeout /t 5 >nul
-  docker info >nul 2>&1
-  if %errorlevel% neq 0 goto waitdocker
-)
+call :EnsureDockerRunning
+if %errorlevel% neq 0 exit /b 1
 
 echo Validating docker-compose.yml...
 docker compose config >nul 2>&1
@@ -90,16 +80,20 @@ if %errorlevel% neq 0 (
 )
 
 echo Sanitizing previous Rezzerv runtime...
-echo [1/6] Stopping existing compose stack and removing orphans...
+echo [1/7] Stopping existing compose stack and removing orphans...
 docker compose down --remove-orphans >nul 2>&1
 
-echo [2/6] Releasing stale frontend ports if needed...
-call :KillPortIfListening %STALE_FRONTEND_PORT%
+echo [2/7] Checking frontend ports for leftover listeners...
+call :CleanupPortIfRezzerv %STALE_FRONTEND_PORT%
 if %errorlevel% neq 0 exit /b 1
-call :KillPortIfListening %FRONTEND_PORT%
+call :CleanupPortIfRezzerv %FRONTEND_PORT%
 if %errorlevel% neq 0 exit /b 1
 
-echo [3/6] Building updated images...
+echo [3/7] Re-checking Docker availability after cleanup...
+call :EnsureDockerRunning
+if %errorlevel% neq 0 exit /b 1
+
+echo [4/7] Building updated images...
 docker compose build --pull
 if %errorlevel% neq 0 (
   echo [ERROR] docker compose build failed.
@@ -107,7 +101,7 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-echo [4/6] Starting containers without deleting data volume...
+echo [5/7] Starting containers without deleting data volume...
 docker compose up -d --remove-orphans
 if %errorlevel% neq 0 (
   echo [ERROR] docker compose up failed.
@@ -115,7 +109,7 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-echo [5/6] Waiting for backend health...
+echo [6/7] Waiting for backend health...
 where curl >nul 2>&1
 if %errorlevel%==0 (
   :waithealth_curl
@@ -129,7 +123,7 @@ if %errorlevel%==0 (
   if %errorlevel% neq 0 goto waithealth_ps
 )
 
-echo [6/6] Verifying active frontend ports...
+echo [7/7] Verifying active frontend ports...
 call :VerifyFrontendPorts
 if %errorlevel% neq 0 (
   echo [ERROR] Frontend port verification failed.
@@ -144,25 +138,52 @@ echo Startup complete.
 pause
 exit /b 0
 
-:KillPortIfListening
-set "TARGET_PORT=%~1"
-set "FOUND_PID="
-for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":%TARGET_PORT% .*LISTENING"') do (
-  set "FOUND_PID=%%P"
-  goto :kill_found
-)
-goto :kill_done
+:EnsureDockerRunning
+echo Checking if Docker engine is running...
+docker info >nul 2>&1
+if %errorlevel% equ 0 exit /b 0
+echo Docker engine not running.
+echo Attempting to start Docker Desktop...
+start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+echo Waiting for Docker engine...
+:waitdocker
+timeout /t 5 >nul
+docker info >nul 2>&1
+if %errorlevel% neq 0 goto waitdocker
+exit /b 0
 
-:kill_found
-echo     Port %TARGET_PORT% was still in use by PID !FOUND_PID! - stopping process...
-taskkill /PID !FOUND_PID! /T /F >nul 2>&1
-if !errorlevel! neq 0 (
-  echo [ERROR] Could not stop process on port %TARGET_PORT%.
+:CleanupPortIfRezzerv
+set "TARGET_PORT=%~1"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$port=%TARGET_PORT%;" ^
+  "$listener = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -First 1;" ^
+  "if (-not $listener) { Write-Host ('    Port ' + $port + ' is free.'); exit 0 }" ^
+  "$pid = $listener.OwningProcess;" ^
+  "$proc = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $pid) -ErrorAction SilentlyContinue;" ^
+  "$name = if ($proc) { $proc.Name } else { '' };" ^
+  "$cmd = if ($proc) { [string]$proc.CommandLine } else { '' };" ^
+  "$sig = ($name + ' ' + $cmd).ToLowerInvariant();" ^
+  "$isDocker = $sig -match 'docker|com\\.docker|dockerdesktop|wsl|vmmem|vpnkit|moby';" ^
+  "$isRezzerv = $sig -match 'rezzerv|rezzerv_build';" ^
+  "$isNodeLike = $sig -match 'node|npm|vite';" ^
+  "if ($isDocker) { Write-Host ('[ERROR] Port ' + $port + ' is occupied by Docker-related process PID ' + $pid + ' (' + $name + '). Automatic termination is blocked.'); exit 11 }" ^
+  "if ($isRezzerv -or $isNodeLike) { Write-Host ('    Port ' + $port + ' is occupied by leftover Rezzerv-like process PID ' + $pid + ' (' + $name + ') - stopping process...'); Stop-Process -Id $pid -Force -ErrorAction Stop; Start-Sleep -Seconds 1; exit 0 }" ^
+  "Write-Host ('[ERROR] Port ' + $port + ' is occupied by non-Rezzerv process PID ' + $pid + ' (' + $name + '). Command: ' + $cmd); exit 12"
+set "PS_EXIT=%errorlevel%"
+if "%PS_EXIT%"=="0" exit /b 0
+if "%PS_EXIT%"=="11" (
+  echo [ERROR] Veilige cleanup gestopt: Docker-gerelateerd proces gebruikt poort %TARGET_PORT%.
+  pause
   exit /b 1
 )
-timeout /t 1 >nul
-:kill_done
-exit /b 0
+if "%PS_EXIT%"=="12" (
+  echo [ERROR] Veilige cleanup gestopt: onbekend proces gebruikt poort %TARGET_PORT%.
+  pause
+  exit /b 1
+)
+echo [ERROR] Port cleanup failed unexpectedly for port %TARGET_PORT%.
+pause
+exit /b 1
 
 :VerifyFrontendPorts
 powershell -NoProfile -Command "$primary = Test-NetConnection -ComputerName localhost -Port %FRONTEND_PORT% -WarningAction SilentlyContinue; if (-not $primary.TcpTestSucceeded) { exit 1 }"
