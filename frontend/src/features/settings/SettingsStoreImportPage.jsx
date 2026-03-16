@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useBlocker } from 'react-router-dom'
+import { Link, useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -132,6 +132,8 @@ export default function SettingsStoreImportPage() {
               Deze instelling geldt voor het hele huishouden. Alleen de beheerder van het huishouden kan het vereenvoudigingsniveau wijzigen.
             </p>
           </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}><Link to="/instellingen" data-testid="store-import-back-link" style={{ color: '#0f5b32', textDecoration: 'none', fontWeight: 600 }}>← Terug naar instellingen</Link></div>
 
           {isLoading ? <div>Instellingen laden…</div> : (
             <>
