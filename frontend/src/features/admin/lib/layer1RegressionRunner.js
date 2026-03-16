@@ -167,7 +167,7 @@ async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = nul
   }
   let lineSelect = detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
   if (lineSelect) {
-    return { detailDoc, lineSelect }
+    return { detailDoc, lineSelect, batchId: preferredBatchId ? String(preferredBatchId) : null }
   }
 
   await navigateFrame(frame, '/kassabonnen')
@@ -212,11 +212,81 @@ async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = nul
     detailDoc = getFrameDocument(frame)
     lineSelect = detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
     if (lineSelect) {
-      return { detailDoc, lineSelect }
+      return { detailDoc, lineSelect, batchId }
     }
     await navigateFrame(frame, '/kassabonnen')
   }
   throw new Error('Geen batch met selecteerbare receipt-line-select-* gevonden')
+}
+
+function getReceiptSelectableLineIds(detailDoc) {
+  return [...detailDoc.querySelectorAll('[data-testid^="receipt-line-select-"]')]
+    .map((element) => extractIdFromTestId(element, 'receipt-line-select-'))
+    .filter(Boolean)
+}
+
+function getLineArticleControl(detailDoc, lineId) {
+  const articleWrapper = detailDoc.querySelector(`[data-testid="receipt-line-article-select-${lineId}"]`)
+  const articleControl = articleWrapper?.querySelector('select') || articleWrapper?.querySelector('input') || null
+  return { articleWrapper, articleControl }
+}
+
+function getLineLocationControl(detailDoc, lineId) {
+  return detailDoc.querySelector(`[data-testid="receipt-line-location-select-${lineId}"]`)
+}
+
+function getReceiptLineState(detailDoc, lineId) {
+  const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${lineId}"]`)
+  const statusNode = detailDoc.querySelector(`[data-testid="receipt-line-status-${lineId}"]`)
+  const statusValue = String(statusNode?.textContent || '').trim().toLowerCase()
+  const { articleWrapper, articleControl } = getLineArticleControl(detailDoc, lineId)
+  const locationControl = getLineLocationControl(detailDoc, lineId)
+  const articleValue = articleControl?.value ?? ''
+  const locationValue = locationControl?.value ?? ''
+  const hasValidArticle = Boolean(articleWrapper) && Boolean(articleValue)
+  const hasValidLocation = Boolean(locationControl) && Boolean(locationValue)
+  const isIncomplete = !hasValidArticle || !hasValidLocation || (!!statusValue && statusValue !== 'ready')
+  return {
+    lineId,
+    lineSelect,
+    statusNode,
+    statusValue,
+    articleWrapper,
+    articleControl,
+    locationControl,
+    hasValidArticle,
+    hasValidLocation,
+    isIncomplete,
+  }
+}
+
+async function resolveReceiptFixture(frame, fixture) {
+  if (frame.__rezzervLayer1ReceiptFixture) {
+    return frame.__rezzervLayer1ReceiptFixture
+  }
+
+  await navigateFrame(frame, '/kassabonnen')
+  const opened = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
+  const detailDoc = opened.detailDoc
+  const selectableLineIds = getReceiptSelectableLineIds(detailDoc)
+  if (!selectableLineIds.length) {
+    throw new Error('Geen selecteerbare bonregels gevonden in fixturebatch')
+  }
+
+  const lineStates = selectableLineIds.map((lineId) => getReceiptLineState(detailDoc, lineId))
+  const completeLine = (fixture.completeLineId && lineStates.find((state) => state.lineId === String(fixture.completeLineId)))
+    || lineStates.find((state) => state.hasValidArticle && state.hasValidLocation)
+    || lineStates[0]
+  const incompleteLine = (fixture.incompleteLineId && lineStates.find((state) => state.lineId === String(fixture.incompleteLineId)))
+    || lineStates.find((state) => state.isIncomplete)
+    || null
+
+  frame.__rezzervLayer1ReceiptFixture = {
+    batchId: fixture.batchId ? String(fixture.batchId) : (opened.batchId ? String(opened.batchId) : null),
+    completeLineId: completeLine?.lineId || null,
+    incompleteLineId: incompleteLine?.lineId || null,
+  }
+  return frame.__rezzervLayer1ReceiptFixture
 }
 
 async function login(frame) {
@@ -241,6 +311,7 @@ export async function runLayer1RegressionTests() {
   const results = []
   const frame = createHiddenFrame()
   const fixture = getLayer1Fixture()
+  frame.__rezzervLayer1ReceiptFixture = null
 
   try {
     await runScenario('T1 Login werkt', async () => {
@@ -276,43 +347,21 @@ export async function runLayer1RegressionTests() {
       if (!detailDoc?.querySelector('[data-testid="receipt-lines-table"]')) throw new Error('receipt-lines-table niet gevonden')
     }, results)
 
-    await runScenario('T7 Incomplete kassabonregel wordt geblokkeerd', async () => {
-      await navigateFrame(frame, '/kassabonnen')
-      const { detailDoc, lineSelect: fallbackLineSelect } = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
-      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', fixture.incompleteLineId) || fallbackLineSelect
-      if (!lineSelect) throw new Error('Geen receipt-line-select-* gevonden voor incomplete test')
-      const lineId = extractIdFromTestId(lineSelect, 'receipt-line-select-')
-      const locationSelect = detailDoc.querySelector(`[data-testid="receipt-line-location-select-${lineId}"]`)
-      if (!lineSelect.checked) clickElement(lineSelect)
-      if (locationSelect) setSelectValue(locationSelect, '')
-      const processButton = detailDoc.querySelector('[data-testid="receipt-process-button"]')
-      if (!processButton) throw new Error('receipt-process-button niet gevonden')
-      clickElement(processButton)
-      await delay(250)
-      const statusNode = detailDoc.querySelector(`[data-testid="receipt-line-status-${lineId}"]`)
-      if (!statusNode) throw new Error(`receipt-line-status-${lineId} niet gevonden`)
-      const statusValue = String(statusNode.textContent || '').trim()
-      if (!statusValue || statusValue === 'ready') {
-        throw new Error(`Regel ${lineId} werd niet als incomplete regel herkend`)
-      }
-    }, results)
-
-
     await runScenario('T6 Complete kassabonregel kan naar voorraad', async () => {
+      const receiptFixture = await resolveReceiptFixture(frame, fixture)
       await navigateFrame(frame, '/kassabonnen')
-      const { detailDoc, lineSelect: fallbackLineSelect } = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
-      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', fixture.completeLineId) || fallbackLineSelect
+      const { detailDoc, lineSelect: fallbackLineSelect } = await openReceiptBatchWithSelectableLines(frame, receiptFixture.batchId)
+      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', receiptFixture.completeLineId) || fallbackLineSelect
       if (!lineSelect) throw new Error('Geen receipt-line-select-* gevonden voor complete test')
       const lineId = extractIdFromTestId(lineSelect, 'receipt-line-select-')
-      const articleWrapper = detailDoc.querySelector(`[data-testid="receipt-line-article-select-${lineId}"]`)
-      const articleSelect = articleWrapper?.querySelector('select') || articleWrapper?.querySelector('input')
-      const locationSelect = detailDoc.querySelector(`[data-testid="receipt-line-location-select-${lineId}"]`)
+      const { articleWrapper, articleControl } = getLineArticleControl(detailDoc, lineId)
+      const locationSelect = getLineLocationControl(detailDoc, lineId)
       if (!articleWrapper || !locationSelect) throw new Error(`Artikel- of locatiekeuze ontbreekt voor regel ${lineId}`)
       if (!lineSelect.checked) clickElement(lineSelect)
-      if (articleSelect?.tagName === 'SELECT') {
-        const nextOption = [...articleSelect.options].find((option) => option.value)
+      if (articleControl?.tagName === 'SELECT') {
+        const nextOption = [...articleControl.options].find((option) => option.value)
         if (!nextOption) throw new Error(`Geen artikeloptie beschikbaar voor regel ${lineId}`)
-        setSelectValue(articleSelect, nextOption.value)
+        setSelectValue(articleControl, nextOption.value)
       }
       const nextLocationOption = [...locationSelect.options].find((option) => option.value)
       if (!nextLocationOption) throw new Error(`Geen locatieoptie beschikbaar voor regel ${lineId}`)
@@ -321,6 +370,31 @@ export async function runLayer1RegressionTests() {
       if (!processButton) throw new Error('receipt-process-button niet gevonden')
       clickElement(processButton)
       await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-feedback"]'), WAIT_TIMEOUT, 'receipt-feedback niet zichtbaar na verwerken')
+    }, results)
+
+    await runScenario('T7 Incomplete kassabonregel wordt geblokkeerd', async () => {
+      const receiptFixture = await resolveReceiptFixture(frame, fixture)
+      if (!receiptFixture.incompleteLineId) throw new Error('Geen fixture incompleteLineId gevonden voor T7')
+      await navigateFrame(frame, '/kassabonnen')
+      const { detailDoc } = await openReceiptBatchWithSelectableLines(frame, receiptFixture.batchId)
+      const lineSelect = pickByTestIdPrefix(detailDoc, 'receipt-line-select-', receiptFixture.incompleteLineId)
+      if (!lineSelect) throw new Error('Geen receipt-line-select-* gevonden voor incomplete test')
+      const lineId = extractIdFromTestId(lineSelect, 'receipt-line-select-')
+      const stateBefore = getReceiptLineState(detailDoc, lineId)
+      if (!stateBefore.isIncomplete) {
+        throw new Error(`Fixtureregel ${lineId} is niet onvolledig voor T7`)
+      }
+      if (!lineSelect.checked) clickElement(lineSelect)
+      const processButton = detailDoc.querySelector('[data-testid="receipt-process-button"]')
+      if (!processButton) throw new Error('receipt-process-button niet gevonden')
+      clickElement(processButton)
+      await delay(250)
+      const statusNode = detailDoc.querySelector(`[data-testid="receipt-line-status-${lineId}"]`)
+      if (!statusNode) throw new Error(`receipt-line-status-${lineId} niet gevonden`)
+      const statusValue = String(statusNode.textContent || '').trim().toLowerCase()
+      if (!statusValue || statusValue === 'ready') {
+        throw new Error(`Regel ${lineId} werd niet als incomplete regel herkend`)
+      }
     }, results)
 
     await runScenario('T8 Huishoudautomatisering uit', async () => {
