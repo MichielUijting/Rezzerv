@@ -2985,6 +2985,82 @@ def generate_demo_data():
     }
 
 
+@app.post("/api/dev/generate-layer1-receipt-fixture")
+def generate_layer1_receipt_fixture():
+    reset_dev_tables()
+    ensure_ui_test_seed_data()
+
+    household = ensure_household("admin@rezzerv.local")
+    household_id = str(household.get("id") or "1")
+
+    with engine.begin() as conn:
+        batch = conn.execute(
+            text(
+                """
+                SELECT pib.id AS batch_id
+                FROM purchase_import_batches pib
+                JOIN store_providers sp ON sp.id = pib.store_provider_id
+                WHERE pib.household_id = :household_id
+                  AND sp.code = 'jumbo'
+                  AND COALESCE(pib.import_status, 'new') != 'processed'
+                ORDER BY pib.created_at DESC, pib.id DESC
+                LIMIT 1
+                """
+            ),
+            {"household_id": household_id},
+        ).mappings().first()
+
+        if not batch:
+            raise HTTPException(status_code=500, detail="Layer1 receipt fixture batch kon niet worden voorbereid")
+
+        batch_id = str(batch["batch_id"])
+        line_rows = conn.execute(
+            text(
+                """
+                SELECT id, article_name_raw, matched_household_article_id, target_location_id, processing_status
+                FROM purchase_import_lines
+                WHERE batch_id = :batch_id
+                ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
+                """
+            ),
+            {"batch_id": batch_id},
+        ).mappings().all()
+
+        complete_line_id = None
+        incomplete_line_id = None
+
+        for row in line_rows:
+            article_name = str(row.get("article_name_raw") or "").strip().lower()
+            if not complete_line_id and article_name == 'magere yoghurt':
+                complete_line_id = str(row['id'])
+            if not incomplete_line_id and article_name == 'appelsap':
+                incomplete_line_id = str(row['id'])
+
+        if not complete_line_id:
+            for row in line_rows:
+                if row.get('matched_household_article_id') and row.get('target_location_id') and str(row.get('processing_status') or '').lower() == 'pending':
+                    complete_line_id = str(row['id'])
+                    break
+
+        if not incomplete_line_id:
+            for row in line_rows:
+                has_valid_article = bool(row.get('matched_household_article_id'))
+                has_valid_location = bool(row.get('target_location_id'))
+                if (not has_valid_article or not has_valid_location) and str(row.get('processing_status') or '').lower() == 'pending':
+                    incomplete_line_id = str(row['id'])
+                    break
+
+        if not complete_line_id or not incomplete_line_id:
+            raise HTTPException(status_code=500, detail="Layer1 receipt fixture lines konden niet worden voorbereid")
+
+        return {
+            "householdId": household_id,
+            "batchId": batch_id,
+            "completeLineId": complete_line_id,
+            "incompleteLineId": incomplete_line_id,
+        }
+
+
 
 @app.get("/api/store-providers")
 def get_store_providers():

@@ -146,14 +146,26 @@ async function requestJson(url, options = {}) {
 }
 
 async function prepareLayer1ReceiptFixture(frame, fixture) {
-  try {
-    await requestJson('/api/dev/generate-demo-data', { method: 'POST', body: '{}' })
-  } catch (error) {
-    throw new Error('Layer1 receipt fixture kon niet worden voorbereid')
+  if (fixture.batchId && fixture.completeLineId && fixture.incompleteLineId) {
+    const resolved = {
+      batchId: String(fixture.batchId),
+      completeLineId: String(fixture.completeLineId),
+      incompleteLineId: String(fixture.incompleteLineId),
+    }
+    frame.__rezzervLayer1ReceiptFixture = resolved
+    return resolved
   }
-  frame.__rezzervLayer1ReceiptFixture = null
+
   try {
-    const resolved = await resolveReceiptScenarioByLabels(frame, fixture)
+    const prepared = await requestJson('/api/dev/generate-layer1-receipt-fixture', { method: 'POST', body: '{}' })
+    const resolved = {
+      batchId: String(prepared?.batchId || prepared?.batch_id || ''),
+      completeLineId: String(prepared?.completeLineId || prepared?.complete_line_id || ''),
+      incompleteLineId: String(prepared?.incompleteLineId || prepared?.incomplete_line_id || ''),
+    }
+    if (!resolved.batchId || !resolved.completeLineId || !resolved.incompleteLineId) {
+      throw new Error('Layer1 receipt fixture ontbreekt of is incompleet')
+    }
     frame.__rezzervLayer1ReceiptFixture = resolved
     return resolved
   } catch (error) {
