@@ -126,6 +126,41 @@ async function runScenario(name, fn, results) {
 }
 
 
+
+async function requestJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+    ...options,
+  })
+  if (!response.ok) {
+    throw new Error(`${url} gaf status ${response.status}`)
+  }
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return response.json()
+  }
+  return null
+}
+
+async function prepareLayer1ReceiptFixture(frame, fixture) {
+  try {
+    await requestJson('/api/dev/generate-demo-data', { method: 'POST', body: '{}' })
+  } catch (error) {
+    throw new Error('Layer1 receipt fixture kon niet worden voorbereid')
+  }
+  frame.__rezzervLayer1ReceiptFixture = null
+  try {
+    const resolved = await resolveReceiptScenarioByLabels(frame, fixture)
+    frame.__rezzervLayer1ReceiptFixture = resolved
+    return resolved
+  } catch (error) {
+    throw new Error('Layer1 receipt fixture kon niet worden voorbereid')
+  }
+}
+
 function normalizeText(value) {
   return String(value || '').trim().toLowerCase()
 }
@@ -334,19 +369,17 @@ async function resolveReceiptFixture(frame, fixture) {
   }
 
   const hasExplicitFixtureIds = Boolean(fixture.batchId && fixture.completeLineId && fixture.incompleteLineId)
-  let resolved
   if (hasExplicitFixtureIds) {
-    resolved = {
+    const resolved = {
       batchId: String(fixture.batchId),
       completeLineId: String(fixture.completeLineId),
       incompleteLineId: String(fixture.incompleteLineId),
     }
-  } else {
-    resolved = await resolveReceiptScenarioByLabels(frame, fixture)
+    frame.__rezzervLayer1ReceiptFixture = resolved
+    return resolved
   }
 
-  frame.__rezzervLayer1ReceiptFixture = resolved
-  return resolved
+  throw new Error('Layer1 receipt fixture ontbreekt of is incompleet')
 }
 
 async function login(frame) {
@@ -395,6 +428,7 @@ export async function runLayer1RegressionTests() {
     }, results)
 
     await runScenario('T4 Kassabonpagina opent', async () => {
+      await prepareLayer1ReceiptFixture(frame, fixture)
       await navigateFrame(frame, '/kassabonnen')
       const doc = getFrameDocument(frame)
       if (!doc.querySelector('[data-testid="receipts-page"]')) throw new Error('receipts-page niet gevonden')
@@ -402,8 +436,9 @@ export async function runLayer1RegressionTests() {
     }, results)
 
     await runScenario('T5 Kassabondetail opent', async () => {
+      const receiptFixture = await resolveReceiptFixture(frame, fixture)
       await navigateFrame(frame, '/kassabonnen')
-      const detailDoc = await openReceiptDetail(frame, fixture.batchId)
+      const detailDoc = await openReceiptDetail(frame, receiptFixture.batchId)
       if (!detailDoc?.querySelector('[data-testid="receipt-lines-table"]')) throw new Error('receipt-lines-table niet gevonden')
     }, results)
 
