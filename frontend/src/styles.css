@@ -461,3 +461,25 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 .rz-store-article-search select option{
   color:#154734;
 }
+
+
+.rz-store-batch-table-wrapper{
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 14px;
+  margin-bottom: 6px;
+}
+
+.rz-store-batch-table-wrapper .rz-table{
+  margin-bottom: 0;
+}
+
+.rz-store-batch-col-quantity{
+  width: 98px;
+  max-width: 98px;
+}
+
+.rz-store-batch-col-price{
+  width: 92px;
+  max-width: 92px;
+}

@@ -54,6 +54,22 @@ function detailValue(value, fallback = 'Niet van toepassing') {
   return String(value)
 }
 
+
+function deriveLineSelectionState({ draft, validLocationIds, processingStatus }) {
+  const effectiveArticleId = String(draft?.articleId || '')
+  const effectiveLocationId = String(draft?.locationId || '')
+  const hasValidArticle = Boolean(effectiveArticleId)
+  const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
+  const isProcessable = hasValidArticle && hasValidLocation && processingStatus !== 'processed'
+  return {
+    effectiveArticleId,
+    effectiveLocationId,
+    hasValidArticle,
+    hasValidLocation,
+    isProcessable,
+  }
+}
+
 export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false }) {
   const navigate = useNavigate()
   const params = useParams()
@@ -365,8 +381,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
     const selectedSet = new Set(selectedLineIds)
     const selectedEntries = lineUiStates.filter((entry) => selectedSet.has(entry.line.id))
-    const readyEntries = selectedEntries.filter((entry) => entry.hasValidArticle && entry.hasValidLocation)
-    const incompleteEntries = selectedEntries.filter((entry) => !(entry.hasValidArticle && entry.hasValidLocation))
+    const readyEntries = selectedEntries.filter((entry) => entry.isReadyForProcessing)
+    const incompleteEntries = selectedEntries.filter((entry) => !entry.isReadyForProcessing)
     if (incompleteEntries.length > 0) {
       setProcessConfirm({ readyCount: readyEntries.length, incompleteCount: incompleteEntries.length })
       return
@@ -430,13 +446,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     return lines.map((line) => {
       const draft = getDraftValues(line)
       const saveState = lineSaveState[line.id] || { dirty: false, status: 'idle', message: '', error: '' }
-      const effectiveArticleId = String(draft.articleId || '')
-      const effectiveLocationId = String(draft.locationId || '')
-      const hasValidArticle = Boolean(effectiveArticleId)
-      const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
-      const reviewDecision = line.review_decision || 'pending'
       const processingStatus = line.processing_status || 'pending'
+      const reviewDecision = line.review_decision || 'pending'
       const isSelected = selectedSet.has(line.id)
+      const selectionState = deriveLineSelectionState({ draft, validLocationIds, processingStatus })
+      const { hasValidArticle, hasValidLocation, isProcessable } = selectionState
 
       let statusKey = 'new'
       let statusLabel = 'Nieuw'
@@ -494,7 +508,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         statusLabel,
         statusReason,
         mappingState,
-        isReadyForProcessing: hasValidArticle && hasValidLocation && !saveState.dirty && processingStatus !== 'processed',
+        isReadyForProcessing: isProcessable,
+        isSelectionIncomplete: isSelected && !isProcessable && processingStatus !== 'processed',
         searchText: [line.article_name_raw, line.brand_raw, line.resolved_household_article_name]
           .filter(Boolean)
           .join(' ')
@@ -600,7 +615,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
-          <div className="rz-table-wrapper">
+          <div className="rz-table-wrapper rz-store-batch-table-wrapper">
             <table className="rz-table rz-store-workbench-table" style={{ minWidth: '980px' }}>
               <thead>
                 <tr className="rz-table-header">
@@ -608,10 +623,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
                   </th>
                   <th>Bonartikel</th>
-                  <th className="rz-num">Aantal</th>
+                  <th className="rz-num rz-store-batch-col-quantity">Aantal</th>
                   <th>Gekoppeld artikel</th>
                   <th>Locatie</th>
-                  <th className="rz-num">Prijs</th>
+                  <th className="rz-num rz-store-batch-col-price">Prijs</th>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
@@ -646,7 +661,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     entry.statusKey === 'ready' && !selected ? 'is-ready' : '',
                     entry.statusKey === 'ignored' && !selected ? 'is-ignored' : '',
                     selected && entry.isReadyForProcessing ? 'rz-row-selected' : '',
-                    selected && !entry.isReadyForProcessing && entry.processingStatus !== 'processed' ? 'is-selected-incomplete' : '',
+                    entry.isSelectionIncomplete ? 'is-selected-incomplete' : '',
                   ].filter(Boolean).join(' ')
                   return (
                     <tr key={line.id} className={rowClassName}>
@@ -654,7 +669,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         <input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} />
                       </td>
                       <td><div className="rz-store-primary">{line.article_name_raw}</div></td>
-                      <td className="rz-num"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
+                      <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td>
                         <StoreArticleSelector
                           lineId={line.id}
@@ -683,7 +698,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           ))}
                         </select>
                       </td>
-                      <td className="rz-num">{line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : '-'}</td>
+                      <td className="rz-num rz-store-batch-col-price">{line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : '-'}</td>
                     </tr>
                   )
                 })}
