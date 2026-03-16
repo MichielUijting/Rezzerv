@@ -426,6 +426,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   const lineUiStates = useMemo(() => {
     const lines = batch?.lines || []
+    const selectedSet = new Set(selectedLineIds)
     return lines.map((line) => {
       const draft = getDraftValues(line)
       const saveState = lineSaveState[line.id] || { dirty: false, status: 'idle', message: '', error: '' }
@@ -435,6 +436,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
       const reviewDecision = line.review_decision || 'pending'
       const processingStatus = line.processing_status || 'pending'
+      const isSelected = selectedSet.has(line.id)
 
       let statusKey = 'new'
       let statusLabel = 'Nieuw'
@@ -448,11 +450,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         statusKey = 'action_needed'
         statusLabel = 'Actie nodig'
         statusReason = line.processing_error || 'Vorige verwerking mislukte; controleer deze regel.'
-      } else if (reviewDecision === 'ignored') {
+      } else if (reviewDecision === 'ignored' && !isSelected) {
         statusKey = 'ignored'
         statusLabel = 'Genegeerd'
         statusReason = 'Door gebruiker overgeslagen.'
-      } else if (reviewDecision === 'selected') {
+      } else if (reviewDecision === 'selected' || isSelected) {
         if (saveState.dirty) {
           statusKey = 'action_needed'
           statusLabel = 'Actie nodig'
@@ -485,20 +487,21 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         saveState,
         reviewDecision,
         processingStatus,
+        isSelected,
         hasValidArticle,
         hasValidLocation,
         statusKey,
         statusLabel,
         statusReason,
         mappingState,
-        isReadyForProcessing: statusKey === 'ready',
+        isReadyForProcessing: hasValidArticle && hasValidLocation && !saveState.dirty && processingStatus !== 'processed',
         searchText: [line.article_name_raw, line.brand_raw, line.resolved_household_article_name]
           .filter(Boolean)
           .join(' ')
           .toLowerCase(),
       }
     })
-  }, [batch?.lines, lineSaveState, lineDrafts, validLocationIds])
+  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds])
 
   const summaryCounts = useMemo(() => {
     const counts = {
@@ -637,13 +640,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 ) : visibleLineUiStates.map((entry) => {
                   const { line, draft, statusLabel: currentStatusLabel } = entry
                   const lineBusy = busyLineId === line.id || isProcessingBatch
-                  const selected = selectedLineIds.includes(line.id)
+                  const selected = entry.isSelected
                   const rowClassName = [
                     'rz-store-workbench-row',
-                    entry.statusKey === 'ready' ? 'is-ready' : '',
-                    entry.statusKey === 'ignored' ? 'is-ignored' : '',
+                    entry.statusKey === 'ready' && !selected ? 'is-ready' : '',
+                    entry.statusKey === 'ignored' && !selected ? 'is-ignored' : '',
                     selected && entry.isReadyForProcessing ? 'rz-row-selected' : '',
-                    selected && !entry.isReadyForProcessing && entry.statusKey !== 'processed' ? 'is-selected-incomplete' : '',
+                    selected && !entry.isReadyForProcessing && entry.processingStatus !== 'processed' ? 'is-selected-incomplete' : '',
                   ].filter(Boolean).join(' ')
                   return (
                     <tr key={line.id} className={rowClassName}>
