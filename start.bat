@@ -1,13 +1,18 @@
 @echo off
-setlocal
+setlocal EnableExtensions EnableDelayedExpansion
+
+for /f "usebackq delims=" %%v in ("VERSION.txt") do set "REZZERV_VERSION=%%v"
+if "%REZZERV_VERSION%"=="" set "REZZERV_VERSION=Rezzerv-unknown"
+
+set "FRONTEND_PORT=5174"
+set "STALE_FRONTEND_PORT=5173"
+set "BACKEND_HEALTH_URL=http://localhost:8001/api/health"
+set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
 
 echo ========================================
 echo        Rezzerv Startup Routine
-for /f "usebackq delims=" %%v in ("VERSION.txt") do set "REZZERV_VERSION=%%v"
-if "%REZZERV_VERSION%"=="" set "REZZERV_VERSION=Rezzerv-unknown"
 echo Version: %REZZERV_VERSION%
 echo ========================================
-
 echo Modus: persistente normale start ^(databasevolume blijft behouden^)
 echo Gebruik hard-reset.bat alleen voor een expliciete schone reset.
 
@@ -84,39 +89,91 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-echo Starting application persistently ^(no volume reset^)...
-echo [1/3] Building updated images if needed...
-docker compose build
+echo Sanitizing previous Rezzerv runtime...
+echo [1/6] Stopping existing compose stack and removing orphans...
+docker compose down --remove-orphans >nul 2>&1
+
+echo [2/6] Releasing stale frontend ports if needed...
+call :KillPortIfListening %STALE_FRONTEND_PORT%
+if %errorlevel% neq 0 exit /b 1
+call :KillPortIfListening %FRONTEND_PORT%
+if %errorlevel% neq 0 exit /b 1
+
+echo [3/6] Building updated images...
+docker compose build --pull
 if %errorlevel% neq 0 (
   echo [ERROR] docker compose build failed.
   pause
   exit /b 1
 )
 
-echo [2/3] Starting containers without deleting data volume...
-docker compose up -d
+echo [4/6] Starting containers without deleting data volume...
+docker compose up -d --remove-orphans
 if %errorlevel% neq 0 (
   echo [ERROR] docker compose up failed.
   pause
   exit /b 1
 )
 
-echo [3/3] Waiting for backend health...
+echo [5/6] Waiting for backend health...
 where curl >nul 2>&1
 if %errorlevel%==0 (
   :waithealth_curl
   timeout /t 3 >nul
-  curl -s http://localhost:8001/api/health | find "ok" >nul
+  curl -s %BACKEND_HEALTH_URL% | find "ok" >nul
   if %errorlevel% neq 0 goto waithealth_curl
 ) else (
   :waithealth_ps
   timeout /t 3 >nul
-  powershell -NoProfile -Command "try { $r = Invoke-RestMethod -Uri http://localhost:8001/api/health -TimeoutSec 2; if ($r.status -ne 'ok') { exit 1 } } catch { exit 1 }" >nul 2>&1
+  powershell -NoProfile -Command "try { $r = Invoke-RestMethod -Uri '%BACKEND_HEALTH_URL%' -TimeoutSec 2; if ($r.status -ne 'ok') { exit 1 } } catch { exit 1 }" >nul 2>&1
   if %errorlevel% neq 0 goto waithealth_ps
 )
 
+echo [6/6] Verifying active frontend ports...
+call :VerifyFrontendPorts
+if %errorlevel% neq 0 (
+  echo [ERROR] Frontend port verification failed.
+  pause
+  exit /b 1
+)
+
 echo Opening application...
-start http://localhost:5174
+start %FRONTEND_URL%
 
 echo Startup complete.
 pause
+exit /b 0
+
+:KillPortIfListening
+set "TARGET_PORT=%~1"
+set "FOUND_PID="
+for /f "tokens=5" %%P in ('netstat -ano ^| findstr /R /C:":%TARGET_PORT% .*LISTENING"') do (
+  set "FOUND_PID=%%P"
+  goto :kill_found
+)
+goto :kill_done
+
+:kill_found
+echo     Port %TARGET_PORT% was still in use by PID !FOUND_PID! - stopping process...
+taskkill /PID !FOUND_PID! /T /F >nul 2>&1
+if !errorlevel! neq 0 (
+  echo [ERROR] Could not stop process on port %TARGET_PORT%.
+  exit /b 1
+)
+timeout /t 1 >nul
+:kill_done
+exit /b 0
+
+:VerifyFrontendPorts
+powershell -NoProfile -Command "$primary = Test-NetConnection -ComputerName localhost -Port %FRONTEND_PORT% -WarningAction SilentlyContinue; if (-not $primary.TcpTestSucceeded) { exit 1 }"
+if %errorlevel% neq 0 (
+  echo [ERROR] Expected frontend port %FRONTEND_PORT% is not reachable.
+  exit /b 1
+)
+powershell -NoProfile -Command "$stale = Test-NetConnection -ComputerName localhost -Port %STALE_FRONTEND_PORT% -WarningAction SilentlyContinue; if ($stale.TcpTestSucceeded) { exit 1 }"
+if %errorlevel% neq 0 (
+  echo [ERROR] Old frontend port %STALE_FRONTEND_PORT% is still reachable after startup.
+  exit /b 1
+)
+echo     Active frontend verified on port %FRONTEND_PORT%. No stale frontend on port %STALE_FRONTEND_PORT%.
+exit /b 0

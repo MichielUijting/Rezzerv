@@ -1,0 +1,27 @@
+Release Protocol v1.0 - Compliance Check:
+Basisversie: Rezzerv-v01.08.40
+Nieuw versienummer: 01.08.41
+Release-type: Infrastructuur release / startup-routine fix
+Wijzigingsdoel: voorkomen dat oude Rezzerv-instances naast een nieuwe blijven draaien door compose-down, orphan-cleanup, poortvrijgave op 5173/5174 en port-verificatie na startup.
+Aangepast:
+- start.bat
+- hard-reset.bat
+- VERSION.txt
+- version.json
+- frontend/version.json
+Niet gewijzigd:
+- kassabon-UI
+- backendlogica
+- huishoudregels
+- voorraadmutaties
+- styleguide
+Getest in code-review:
+- versie-injectieketen blijft intact
+- compose-down en remove-orphans toegevoegd
+- port cleanup voor 5173 en 5174 toegevoegd
+- post-start verificatie voor 5174 actief en 5173 niet actief toegevoegd
+Niet getest in container:
+- lokale Docker runtime op Windows
+- browsercache- en poortgedrag op gebruikersmachine
+Restrisico:
+- taskkill op poort-PID is bewust streng en kan een lokale niet-Rezzerv listener op 5173/5174 stoppen als die dezelfde poorten gebruikt.
