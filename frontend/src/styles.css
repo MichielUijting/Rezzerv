@@ -475,11 +475,11 @@ body { margin:0; color:var(--rz-text); background:var(--rz-bg); }
 }
 
 .rz-store-batch-col-quantity{
-  width: 98px;
-  max-width: 98px;
+  width: 68px;
+  max-width: 68px;
 }
 
 .rz-store-batch-col-price{
-  width: 92px;
-  max-width: 92px;
+  width: 64px;
+  max-width: 64px;
 }
