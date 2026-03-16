@@ -25,13 +25,14 @@ function statusLabel(status) {
 function typeLabel(type) {
   if (type === 'smoke') return 'Smoke test'
   if (type === 'layer1') return 'Laag-1 kernregressietest'
+  if (type === 'layer2') return 'Laag-2 route-/schermtest'
   if (type === 'regression') return 'Volledige regressietest'
   return 'Nog geen test'
 }
 
 export default function TestStatusCard({ status, progress }) {
   return (
-    <div className="rz-admin-status-card">
+    <div className="rz-admin-status-card" data-testid="test-status-card">
       <h4 className="rz-admin-status-title">Laatste teststatus</h4>
       <div className="rz-admin-stats">
         <div>Laatste test: {typeLabel(status?.test_type)}</div>

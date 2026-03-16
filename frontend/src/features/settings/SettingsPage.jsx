@@ -6,7 +6,7 @@ export default function SettingsPage() {
   return (
     <AppShell title="Instellingen" showExit={false}>
       <Card>
-        <div style={{ display: 'grid', gap: '18px' }}>
+        <div style={{ display: 'grid', gap: '18px' }} data-testid="settings-page">
           <div>
             <h2 style={{ margin: '0 0 8px 0', fontSize: '20px' }}>Instellingen</h2>
             <p style={{ margin: 0, color: '#667085' }}>Beheer hier voorkeuren voor de weergave en automatisering binnen Rezzerv.</p>

@@ -1,0 +1,50 @@
+import { getLayer1Fixture } from './layer1RegressionFixture'
+
+const FRAME_ID = 'rezzerv-layer2-runner-frame'
+const WAIT_TIMEOUT = 9000
+const POLL_INTERVAL = 100
+
+function delay(ms) { return new Promise((resolve) => window.setTimeout(resolve, ms)) }
+function waitForCondition(check, timeout = WAIT_TIMEOUT, errorMessage = 'Timeout') {
+  const start = Date.now()
+  return new Promise((resolve, reject) => {
+    function tick() {
+      try { const result = check(); if (result) return resolve(result) } catch {}
+      if (Date.now() - start >= timeout) return reject(new Error(errorMessage))
+      window.setTimeout(tick, POLL_INTERVAL)
+    }
+    tick()
+  })
+}
+function removeExistingFrame() { const existing=document.getElementById(FRAME_ID); if (existing) existing.remove() }
+function createHiddenFrame() { removeExistingFrame(); const frame=document.createElement('iframe'); frame.id=FRAME_ID; frame.title='Layer 2 regression runner'; frame.setAttribute('aria-hidden','true'); Object.assign(frame.style,{position:'fixed',left:'-10000px',top:'0',width:'1440px',height:'900px',opacity:'0',pointerEvents:'none',border:'0',background:'#fff'}); document.body.appendChild(frame); return frame }
+function getFrameDocument(frame) { return frame.contentDocument || frame.contentWindow?.document || null }
+async function navigateFrame(frame, path) {
+  await new Promise((resolve,reject)=>{ let settled=false; const timer=window.setTimeout(()=>{ if(settled)return; settled=true; reject(new Error(`Navigatie naar ${path} duurde te lang`)) }, WAIT_TIMEOUT); function handleLoad(){ if(settled)return; settled=true; window.clearTimeout(timer); resolve() } frame.addEventListener('load', handleLoad, { once:true }); frame.src=path })
+  await waitForCondition(()=>{ const doc=getFrameDocument(frame); return doc && doc.readyState==='complete' }, WAIT_TIMEOUT, `Pagina ${path} werd niet volledig geladen`)
+  await delay(150)
+}
+function setInputValue(input, value) { const view=input?.ownerDocument?.defaultView||window; const setter=Object.getOwnPropertyDescriptor(view.HTMLInputElement.prototype,'value')?.set; setter?.call(input, value); input.dispatchEvent(new view.Event('input',{bubbles:true})); input.dispatchEvent(new view.Event('change',{bubbles:true})) }
+function setSelectValue(select, value) { const view=select?.ownerDocument?.defaultView||window; const setter=Object.getOwnPropertyDescriptor(view.HTMLSelectElement.prototype,'value')?.set; setter?.call(select, value); select.dispatchEvent(new view.Event('input',{bubbles:true})); select.dispatchEvent(new view.Event('change',{bubbles:true})) }
+function clickElement(element) { const view=element?.ownerDocument?.defaultView||window; element.dispatchEvent(new view.MouseEvent('click',{bubbles:true,cancelable:true,view})) }
+function doubleClickElement(element) { const view=element?.ownerDocument?.defaultView||window; element.dispatchEvent(new view.MouseEvent('dblclick',{bubbles:true,cancelable:true,view})) }
+async function runScenario(name, fn, results) { const start=performance.now(); try { await fn(); results.push({name,status:'passed',error:null,durationMs:Math.round(performance.now()-start)}) } catch (error) { results.push({name,status:'failed',error:error.message||'Onbekende fout',durationMs:Math.round(performance.now()-start)}) } }
+async function login(frame) { await navigateFrame(frame,'/login'); const doc=getFrameDocument(frame); await waitForCondition(()=>doc?.querySelector('[data-testid="login-page"]'), WAIT_TIMEOUT, 'login-page niet gevonden'); const email=doc.querySelector('[data-testid="login-email"]'); const password=doc.querySelector('[data-testid="login-password"]'); const submit=doc.querySelector('[data-testid="login-submit"]'); if(!email||!password||!submit) throw new Error('Login testids ontbreken'); setInputValue(email,'admin@rezzerv.local'); setInputValue(password,'Rezzerv123'); clickElement(submit); await waitForCondition(()=>frame.contentWindow?.location?.pathname==='/home', WAIT_TIMEOUT, 'Login leidde niet naar /home'); await delay(150) }
+function pickByTestIdPrefix(doc, prefix, preferredId = null) { if (preferredId) { const exact = doc.querySelector(`[data-testid="${prefix}${preferredId}"]`); if (exact) return exact } return doc.querySelector(`[data-testid^="${prefix}"]`) }
+async function openInventoryDetail(frame, articleId = null) { const doc=getFrameDocument(frame); const trigger=pickByTestIdPrefix(doc,'inventory-row-',articleId); if(!trigger) throw new Error('Geen inventory-row-* gevonden'); doubleClickElement(trigger); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-detail-page"]'), WAIT_TIMEOUT, 'article-detail-page niet gevonden'); return getFrameDocument(frame) }
+async function openReceiptDetail(frame, preferredBatchId = null) { const doc=getFrameDocument(frame); const openButton=pickByTestIdPrefix(doc,'receipt-batch-open-',preferredBatchId); if(!openButton) throw new Error('Geen receipt-batch-open-* gevonden'); clickElement(openButton); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden'); return getFrameDocument(frame) }
+
+export async function runLayer2RouteTests() {
+  const results=[]; const frame=createHiddenFrame(); const fixture=getLayer1Fixture();
+  try {
+    await runScenario('R1 Admin opent', async ()=>{ await login(frame); await navigateFrame(frame,'/admin'); const doc=getFrameDocument(frame); if(!doc.querySelector('[data-testid="admin-page"]')) throw new Error('admin-page niet gevonden') }, results)
+    await runScenario('R2 Winkelimport opent', async ()=>{ await navigateFrame(frame,'/instellingen/winkelimport'); const doc=getFrameDocument(frame); if(!doc.querySelector('[data-testid="store-import-page"]')) throw new Error('store-import-page niet gevonden') }, results)
+    await runScenario('R3 Instellingenpagina opent', async ()=>{ await navigateFrame(frame,'/instellingen'); const doc=getFrameDocument(frame); if(!doc.querySelector('[data-testid="settings-page"]')) throw new Error('settings-page niet gevonden') }, results)
+    await runScenario('R4 Artikeldetail tabs zijn bereikbaar', async ()=>{ await navigateFrame(frame,'/voorraad'); const detailDoc=await openInventoryDetail(frame, fixture.articleId); const historyTab=detailDoc.querySelector('[data-testid="article-history-tab"]'); const analysisTab=detailDoc.querySelector('[data-testid="article-analysis-tab"]'); if(!historyTab||!analysisTab) throw new Error('Historie- of analyse-tab ontbreekt') }, results)
+    await runScenario('R5 Kassabon-overzicht en detailnavigatie werkt', async ()=>{ await navigateFrame(frame,'/kassabonnen'); let doc=getFrameDocument(frame); if(!doc.querySelector('[data-testid="receipts-page"]')) throw new Error('receipts-page niet gevonden'); await openReceiptDetail(frame, fixture.batchId); doc=getFrameDocument(frame); const back=doc.querySelector('[data-testid="receipt-back-to-overview"]'); if(!back) throw new Error('receipt-back-to-overview niet gevonden'); clickElement(back); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="receipts-page"]'), WAIT_TIMEOUT, 'Terug naar kassabonoverzicht lukte niet') }, results)
+    await runScenario('R6 Kernnavigatie tussen hoofdschermen werkt', async ()=>{ await navigateFrame(frame,'/voorraad'); if(!getFrameDocument(frame)?.querySelector('[data-testid="inventory-page"]')) throw new Error('inventory-page niet gevonden'); await openInventoryDetail(frame, fixture.articleId); let doc=getFrameDocument(frame); clickElement(doc.querySelector('[data-testid="article-history-tab"]')); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="history-page"]'), WAIT_TIMEOUT, 'history-page niet gevonden'); doc=getFrameDocument(frame); clickElement(doc.querySelector('[data-testid="article-analysis-tab"]')); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="analysis-page"]'), WAIT_TIMEOUT, 'analysis-page niet gevonden'); await navigateFrame(frame,'/kassabonnen'); if(!getFrameDocument(frame)?.querySelector('[data-testid="receipts-page"]')) throw new Error('receipts-page niet gevonden'); await navigateFrame(frame,'/admin'); if(!getFrameDocument(frame)?.querySelector('[data-testid="admin-page"]')) throw new Error('admin-page niet gevonden') }, results)
+    await runScenario('R7 Relevante waarschuwingen en modals openen', async ()=>{ await navigateFrame(frame,'/instellingen/winkelimport'); let doc=getFrameDocument(frame); const page=doc.querySelector('[data-testid="store-import-page"]'); if(!page) throw new Error('store-import-page niet gevonden'); const select=doc.querySelector('[data-testid="store-import-level-select"]'); if(!select) throw new Error('store-import-level-select niet gevonden'); const current=select.value; const next=[...select.options].find(o=>o.value && o.value!==current)?.value; if(!next) throw new Error('Geen alternatieve winkelimportoptie beschikbaar'); setSelectValue(select, next); await navigateFrame(frame, '/instellingen'); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="warning-dialog"]'), WAIT_TIMEOUT, 'warning-dialog niet gevonden'); const cancel=getFrameDocument(frame).querySelector('[data-testid="warning-cancel"]'); if(!cancel) throw new Error('warning-cancel niet gevonden'); clickElement(cancel); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="store-import-page"]'), WAIT_TIMEOUT, 'Terugkeer naar winkelimport na annuleren mislukte') }, results)
+    await runScenario('R8 Admin regressie-overzicht en testpaneel opent', async ()=>{ await navigateFrame(frame,'/admin'); const doc=getFrameDocument(frame); if(!doc.querySelector('[data-testid="test-run-panel"]')) throw new Error('test-run-panel niet gevonden'); if(!doc.querySelector('[data-testid="test-status-card"]')) throw new Error('test-status-card niet gevonden') }, results)
+  } finally { removeExistingFrame() }
+  return results
+}

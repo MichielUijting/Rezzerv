@@ -1,6 +1,6 @@
 import Button from '../../../ui/Button'
 
-export default function TestRunPanel({ isRunning, onRunSmoke, onRunLayer1, onRunRegression, onViewReport }) {
+export default function TestRunPanel({ isRunning, onRunSmoke, onRunLayer1, onRunLayer2, onRunRegression, onViewReport }) {
   return (
     <div className="rz-admin-actions">
       <Button variant="primary" onClick={onRunSmoke} disabled={isRunning}>
@@ -8,6 +8,9 @@ export default function TestRunPanel({ isRunning, onRunSmoke, onRunLayer1, onRun
       </Button>
       <Button variant="secondary" onClick={onRunLayer1} disabled={isRunning}>
         Laag-1 kernregressietest uitvoeren
+      </Button>
+      <Button variant="secondary" onClick={onRunLayer2} disabled={isRunning}>
+        Laag-2 route-/schermtest uitvoeren
       </Button>
       <Button variant="secondary" onClick={onRunRegression} disabled={isRunning}>
         Volledige regressietest uitvoeren

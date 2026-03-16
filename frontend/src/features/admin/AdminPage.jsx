@@ -10,12 +10,14 @@ import {
   fetchLatestTestReport,
   fetchLatestTestStatus,
   runLayer1Tests,
+  runLayer2Tests,
   runRegressionTests,
   runSmokeTests,
   submitTestResults,
 } from "./services/adminTestingService";
 import { runBrowserSmokeTests } from "./lib/browserSmokeRunner";
 import { runLayer1RegressionTests } from "./lib/layer1RegressionRunner";
+import { runLayer2RouteTests } from "./lib/layer2RouteRunner";
 import { runBrowserRegressionTests } from "./lib/browserRegressionRunner";
 
 export default function AdminPage() {
@@ -254,6 +256,37 @@ export default function AdminPage() {
     }
   }
 
+
+  async function handleRunLayer2() {
+    setTestMessage("");
+    setShowReport(false);
+    try {
+      const result = await runLayer2Tests();
+      setTestStatus((current) => ({ ...current, ...result }));
+      if (!result.started) {
+        setTestMessage("Er loopt al een test");
+        await refreshTestStatus();
+        return;
+      }
+
+      setTestMessage("Laag-2 route-/schermtest gestart");
+      const results = await runLayer2RouteTests();
+      await submitTestResults('layer2', results);
+      await refreshTestStatus();
+      const latestReport = await fetchLatestTestReport();
+      setTestReport(latestReport);
+      setShowReport(true);
+      setTestMessage('Laag-2 route-/schermtest afgerond');
+    } catch (error) {
+      try {
+        await submitTestResults('layer2', [{ name: 'Laag-2 runner', status: 'failed', error: error.message || 'Laag-2 route-/schermtest kon niet worden uitgevoerd' }]);
+        await refreshTestStatus();
+      } catch {
+      }
+      setTestMessage(error.message || "Laag-2 route-/schermtest kon niet worden gestart");
+    }
+  }
+
   async function handleRunSmoke() {
     setTestMessage("");
     setShowReport(false);
@@ -329,6 +362,7 @@ export default function AdminPage() {
 
   return (
     <AppShell title="Admin / Testdata" showExit={false}>
+      <div data-testid="admin-page">
       <Card>
         <div className="rz-admin-grid">
           <div className="rz-admin-panel">
@@ -358,13 +392,15 @@ export default function AdminPage() {
             <p className="rz-admin-muted">
               Start hier een smoke test, een laag-1 kernregressietest of een volledige regressietest en bekijk de laatste status.
             </p>
-            <TestRunPanel
+            <div data-testid="test-run-panel"><TestRunPanel
               isRunning={testStatus.status === "running"}
               onRunSmoke={handleRunSmoke}
               onRunLayer1={handleRunLayer1}
+              onRunLayer2={handleRunLayer2}
               onRunRegression={handleRunRegression}
               onViewReport={handleViewReport}
             />
+            </div>
             {testMessage ? <div className="rz-admin-message">{testMessage}</div> : null}
             <TestStatusCard status={testStatus} progress={regressionProgress} />
             {showReport && testReport ? (
@@ -455,6 +491,7 @@ export default function AdminPage() {
           </div>
         </div>
       </Card>
+      </div>
     </AppShell>
   );
 }

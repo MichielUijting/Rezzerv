@@ -123,6 +123,7 @@ export default function SettingsStoreImportPage() {
 
   return (
     <AppShell title="Instellingen" showExit={false}>
+      <div data-testid="store-import-page">
       <Card>
         <div style={{ display: 'grid', gap: '20px' }}>
           <div>
@@ -144,6 +145,7 @@ export default function SettingsStoreImportPage() {
                 </div>
                 <div style={{ minWidth: '240px', display: 'grid', gap: '10px' }}>
                   <select
+                    data-testid="store-import-level-select"
                     value={level}
                     onChange={(event) => {
                       setSaveError('')
@@ -200,17 +202,18 @@ export default function SettingsStoreImportPage() {
 
       {showLeaveModal ? (
         <div className="rz-modal-backdrop" role="presentation">
-          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="leave-store-import-settings-title">
+          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="leave-store-import-settings-title" data-testid="warning-dialog">
             <h3 id="leave-store-import-settings-title" className="rz-modal-title">Wijzigingen niet opgeslagen</h3>
             <p className="rz-modal-text">Je hebt wijzigingen aangebracht die nog niet zijn opgeslagen.</p>
             <div className="rz-modal-actions">
-              <Button variant="secondary" onClick={handleStay}>Blijven</Button>
-              <Button variant="secondary" onClick={handleLeaveWithoutSaving}>Niet opslaan</Button>
+              <Button variant="secondary" onClick={handleStay} data-testid="warning-cancel">Blijven</Button>
+              <Button variant="secondary" onClick={handleLeaveWithoutSaving} data-testid="warning-confirm">Niet opslaan</Button>
               <Button onClick={handleSaveAndLeave} disabled={isSaving || !canEdit}>{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
             </div>
           </div>
         </div>
       ) : null}
+      </div>
     </AppShell>
   )
 }
