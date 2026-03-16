@@ -9,11 +9,13 @@ import TestStatusCard from "./components/TestStatusCard";
 import {
   fetchLatestTestReport,
   fetchLatestTestStatus,
+  runLayer1Tests,
   runRegressionTests,
   runSmokeTests,
   submitTestResults,
 } from "./services/adminTestingService";
 import { runBrowserSmokeTests } from "./lib/browserSmokeRunner";
+import { runLayer1RegressionTests } from "./lib/layer1RegressionRunner";
 import { runBrowserRegressionTests } from "./lib/browserRegressionRunner";
 
 export default function AdminPage() {
@@ -221,6 +223,37 @@ export default function AdminPage() {
     setInventorySublocationId("");
   }
 
+  async function handleRunLayer1() {
+    setTestMessage("");
+    setShowReport(false);
+    try {
+      const result = await runLayer1Tests();
+      setTestStatus((current) => ({ ...current, ...result }));
+      if (!result.started) {
+        setTestMessage("Er loopt al een test");
+        await refreshTestStatus();
+        return;
+      }
+
+      setTestMessage("Laag-1 kernregressietest gestart");
+      const results = await runLayer1RegressionTests();
+      await submitTestResults('layer1', results);
+      await refreshTestStatus();
+      const latestReport = await fetchLatestTestReport();
+      setTestReport(latestReport);
+      setShowReport(true);
+      setTestMessage('Laag-1 kernregressietest afgerond');
+    } catch (error) {
+      try {
+        await submitTestResults('layer1', [{ name: 'Laag-1 runner', status: 'failed', error: error.message || 'Laag-1 kernregressietest kon niet worden uitgevoerd' }]);
+        await refreshTestStatus();
+      } catch {
+        // negeer secundaire fout
+      }
+      setTestMessage(error.message || "Laag-1 kernregressietest kon niet worden gestart");
+    }
+  }
+
   async function handleRunSmoke() {
     setTestMessage("");
     setShowReport(false);
@@ -323,11 +356,12 @@ export default function AdminPage() {
           <div className="rz-admin-panel">
             <h3>Testen</h3>
             <p className="rz-admin-muted">
-              Start hier een smoke test of een volledige regressietest en bekijk de laatste status.
+              Start hier een smoke test, een laag-1 kernregressietest of een volledige regressietest en bekijk de laatste status.
             </p>
             <TestRunPanel
               isRunning={testStatus.status === "running"}
               onRunSmoke={handleRunSmoke}
+              onRunLayer1={handleRunLayer1}
               onRunRegression={handleRunRegression}
               onViewReport={handleViewReport}
             />

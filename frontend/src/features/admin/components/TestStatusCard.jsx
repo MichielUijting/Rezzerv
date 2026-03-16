@@ -24,6 +24,7 @@ function statusLabel(status) {
 
 function typeLabel(type) {
   if (type === 'smoke') return 'Smoke test'
+  if (type === 'layer1') return 'Laag-1 kernregressietest'
   if (type === 'regression') return 'Volledige regressietest'
   return 'Nog geen test'
 }

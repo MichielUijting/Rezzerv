@@ -188,7 +188,7 @@ export default function SettingsHouseholdAutomationPage() {
                   {saveError || saveMessage}
                 </div>
               ) : null}
-              <Button onClick={handleSave} disabled={isSaving}>{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
+              <Button onClick={handleSave} disabled={isSaving} data-testid="household-automation-save">{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
             </div>
           </div>
         </div>

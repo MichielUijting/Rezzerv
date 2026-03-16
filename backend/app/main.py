@@ -4107,6 +4107,10 @@ def run_smoke_tests():
 def run_regression_tests():
     return testing_service.start_external_test("regression")
 
+@app.post("/api/dev/run-layer1-tests", response_model=TestStartResponse)
+def run_layer1_tests():
+    return testing_service.start_external_test("layer1")
+
 
 @app.post("/api/dev/test-report", response_model=TestStatusResponse)
 def complete_test_report(payload: TestCompleteRequest):

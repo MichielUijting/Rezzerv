@@ -77,6 +77,10 @@ export async function runRegressionTests() {
   return request('/api/dev/run-regression-tests', { method: 'POST', body: '{}' })
 }
 
+export async function runLayer1Tests() {
+  return request('/api/dev/run-layer1-tests', { method: 'POST', body: '{}' })
+}
+
 export async function fetchLatestTestStatus() {
   const data = await request('/api/dev/test-status', { method: 'GET' })
   return normalizeStatus(data)
