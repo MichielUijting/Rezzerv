@@ -142,17 +142,17 @@ exit /b 0
 
 :CleanupLegacyRezzervStacks
 set "LEGACY_FOUND="
-for /f "usebackq delims=" %%C in (`docker ps -aq --filter "name=^rezzerv-dev-"`) do (
-  set "LEGACY_FOUND=1"
-  echo     Removing legacy container %%C from compose project rezzerv-dev...
-  docker stop %%C >nul 2>&1
-  docker rm %%C >nul 2>&1
-)
-for /f "usebackq delims=" %%C in (`docker ps -aq --filter "name=^rezzerv_dev-"`) do (
-  set "LEGACY_FOUND=1"
-  echo     Removing legacy container %%C from compose project rezzerv_dev...
-  docker stop %%C >nul 2>&1
-  docker rm %%C >nul 2>&1
+for /f "usebackq delims=" %%N in (`docker ps -a --format "{{.Names}}"`) do (
+  set "CONTAINER_NAME=%%N"
+  set "IS_LEGACY="
+  if /I "!CONTAINER_NAME:~0,12!"=="rezzerv-dev-" set "IS_LEGACY=1"
+  if /I "!CONTAINER_NAME:~0,12!"=="rezzerv_dev-" set "IS_LEGACY=1"
+  if /I not "!CONTAINER_NAME:~0,14!"=="rezzerv_build-" if defined IS_LEGACY (
+    set "LEGACY_FOUND=1"
+    echo     Removing legacy container !CONTAINER_NAME! ...
+    docker stop !CONTAINER_NAME! >nul 2>&1
+    docker rm !CONTAINER_NAME! >nul 2>&1
+  )
 )
 if not defined LEGACY_FOUND echo     No legacy parallel Rezzerv stack detected.
 exit /b 0
