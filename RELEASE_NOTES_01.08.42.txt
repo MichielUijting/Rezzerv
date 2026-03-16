@@ -1,9 +1,0 @@
-Release Protocol v1.0 - Compliance Check:
-Basis: Rezzerv-v01.08.41 (afgekeurd als referentiepunt)
-Nieuw versienummer: Rezzerv-v01.08.42
-Release-type: Infrastructure Patch
-Wijzigingsdoel: veilige startup-cleanup zonder blinde kill van processen op frontendpoorten; alleen bewezen oude Rezzerv-processen worden beëindigd; Docker-beschikbaarheid wordt opnieuw gevalideerd vóór build.
-Niet gewijzigd: UI, backend, huishoudregels, voorraadmutaties.
-Getest: statische code-inspectie van start.bat en hard-reset.bat; packaging van versie-informatie.
-Niet getest in deze omgeving: lokale Windows runtime met Docker Desktop en poortconflicten.
-Restrisico: lokale Windows-procesnamen kunnen aanvullende whitelist/blacklist-fijnafstelling vereisen.
