@@ -83,6 +83,10 @@ echo Sanitizing previous Rezzerv runtime...
 echo [1/7] Stopping existing compose stack and removing orphans...
 docker compose down --remove-orphans >nul 2>&1
 
+echo [1b/7] Removing legacy parallel Rezzerv stacks if present...
+call :CleanupLegacyRezzervStacks
+if %errorlevel% neq 0 exit /b 1
+
 echo [2/7] Checking frontend ports for leftover listeners...
 call :CleanupPortIfRezzerv %STALE_FRONTEND_PORT%
 if %errorlevel% neq 0 exit /b 1
@@ -154,6 +158,25 @@ docker info >nul 2>&1
 if %errorlevel% neq 0 goto waitdocker
 exit /b 0
 
+
+:CleanupLegacyRezzervStacks
+set "LEGACY_FOUND="
+for /f "usebackq delims=" %%C in (`docker ps -aq --filter "name=^rezzerv-dev-"`) do (
+  set "LEGACY_FOUND=1"
+  echo     Removing legacy container %%C from compose project rezzerv-dev...
+  docker stop %%C >nul 2>&1
+  docker rm %%C >nul 2>&1
+)
+for /f "usebackq delims=" %%C in (`docker ps -aq --filter "name=^rezzerv_dev-"`) do (
+  set "LEGACY_FOUND=1"
+  echo     Removing legacy container %%C from compose project rezzerv_dev...
+  docker stop %%C >nul 2>&1
+  docker rm %%C >nul 2>&1
+)
+if not defined LEGACY_FOUND (
+  echo     No legacy parallel Rezzerv stack detected.
+)
+exit /b 0
 :CleanupPortIfRezzerv
 set "TARGET_PORT=%~1"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
