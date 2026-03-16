@@ -1,0 +1,6 @@
+Release Protocol v1.0 – Compliance Check:
+Basisversie: Rezzerv-v01.08.43
+Nieuw versienummer: 01.08.44
+Release-type: Infrastructure Patch
+Wijzigingsdoel: wslrelay.exe en WSL-signaturen classificeren als excluded WSL/runtime process met actie ignore, zodat veilige cleanup niet onterecht blokkeert.
+Niet gewijzigd: UI, backend, huishoudregels, voorraadlogica.
