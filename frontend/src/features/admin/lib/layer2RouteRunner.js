@@ -35,6 +35,35 @@ async function openInventoryDetail(frame, articleId = null) { const doc=getFrame
 async function openReceiptDetail(frame, preferredBatchId = null) { const doc=getFrameDocument(frame); const openButton=pickByTestIdPrefix(doc,'receipt-batch-open-',preferredBatchId); if(!openButton) throw new Error('Geen receipt-batch-open-* gevonden'); clickElement(openButton); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden'); return getFrameDocument(frame) }
 function getLastDownload(frame) { return frame?.contentWindow?.__rezzervLastDownload || null }
 
+async function openReceiptDetailWithSelectableLines(frame, preferredBatchId = null) {
+  await navigateFrame(frame, '/kassabonnen')
+  const seen = new Set()
+  const candidateIds = []
+  const doc = getFrameDocument(frame)
+  if (preferredBatchId && doc?.querySelector(`[data-testid="receipt-batch-open-${preferredBatchId}"]`)) {
+    candidateIds.push(String(preferredBatchId))
+    seen.add(String(preferredBatchId))
+  }
+  for (const element of [...(doc?.querySelectorAll('[data-testid^="receipt-batch-open-"]') || [])]) {
+    const id = String(element.getAttribute('data-testid') || '').replace('receipt-batch-open-','')
+    if (!id || seen.has(id)) continue
+    candidateIds.push(id)
+    seen.add(id)
+  }
+  for (const batchId of candidateIds) {
+    await navigateFrame(frame, '/kassabonnen')
+    const currentDoc = getFrameDocument(frame)
+    const openButton = currentDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
+    if (!openButton) continue
+    clickElement(openButton)
+    await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
+    const detailDoc = getFrameDocument(frame)
+    const lineSelect = detailDoc?.querySelector('[data-testid^="receipt-line-select-"]')
+    if (lineSelect) return { detailDoc, lineSelect, batchId }
+  }
+  throw new Error('Kassabondetailselectie of export ontbreekt')
+}
+
 export async function runLayer2RouteTests() {
   const results=[]; const frame=createHiddenFrame(); const fixture=getLayer1Fixture();
   try {
@@ -49,7 +78,7 @@ export async function runLayer2RouteTests() {
     await runScenario('R9 Runtime diagnose dropdown-locaties blijft bereikbaar via admin', async ()=>{ await navigateFrame(frame,'/admin'); const doc=getFrameDocument(frame); if(!doc.querySelector('[data-testid="admin-runtime-diagnostics-panel"]')) throw new Error('admin-runtime-diagnostics-panel niet gevonden'); if(!doc.querySelector('[data-testid="admin-diagnostic-location-button"]')) throw new Error('admin-diagnostic-location-button niet gevonden') }, results)
     await runScenario('R10 Runtime diagnose verwerkvalidatie blijft bereikbaar via admin', async ()=>{ await navigateFrame(frame,'/admin'); const doc=getFrameDocument(frame); if(!doc.querySelector('[data-testid="admin-runtime-diagnostics-panel"]')) throw new Error('admin-runtime-diagnostics-panel niet gevonden'); if(!doc.querySelector('[data-testid="admin-diagnostic-process-button"]')) throw new Error('admin-diagnostic-process-button niet gevonden') }, results)
     await runScenario('R11 Voorraad → Artikeldetail → Archiveren → Voorraad werkt', async ()=>{ await navigateFrame(frame,'/voorraad'); const inventoryDoc=getFrameDocument(frame); const trigger=inventoryDoc.querySelector('[data-testid^="inventory-row-"]'); if(!trigger) throw new Error('Geen inventory-row-* gevonden'); const articleId=String(trigger.getAttribute('data-testid')||'').replace('inventory-row-',''); doubleClickElement(trigger); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-detail-page"]'), WAIT_TIMEOUT, 'article-detail-page niet gevonden'); const detailDoc=getFrameDocument(frame); const archiveButton=detailDoc.querySelector('[data-testid="article-archive-button"]'); if(!archiveButton) throw new Error('article-archive-button ontbreekt'); clickElement(archiveButton); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-archive-modal"]'), WAIT_TIMEOUT, 'article-archive-modal niet gevonden'); const confirmButton=getFrameDocument(frame)?.querySelector('[data-testid="article-archive-confirm"]'); if(!confirmButton) throw new Error('article-archive-confirm ontbreekt'); clickElement(confirmButton); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-archive-status"]')?.textContent?.includes('Gearchiveerd'), WAIT_TIMEOUT, 'Artikelstatus werd niet gearchiveerd'); await navigateFrame(frame,'/voorraad'); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="inventory-page"]'), WAIT_TIMEOUT, 'inventory-page niet gevonden na archiveren'); if(getFrameDocument(frame)?.querySelector(`[data-testid="inventory-row-${articleId}"]`)) throw new Error('Gearchiveerd artikel bleef zichtbaar in actieve voorraad') }, results)
-    await runScenario('R12 Kassabondetail selectie en exportflow werkt', async ()=>{ await navigateFrame(frame,'/kassabonnen'); let doc=getFrameDocument(frame); const openButton=doc.querySelector('[data-testid^="receipt-batch-open-"]'); if(!openButton) throw new Error('Geen receipt-batch-open-* gevonden'); clickElement(openButton); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden'); doc=getFrameDocument(frame); const lineSelect=doc.querySelector('[data-testid^="receipt-line-select-"]'); const exportButton=doc.querySelector('[data-testid="receipt-export-button"]'); if(!lineSelect||!exportButton) throw new Error('Kassabondetail export ontbreekt in routeflow'); clickElement(lineSelect); await delay(120); clickElement(exportButton); await delay(180); if(!getLastDownload(frame)?.csv) throw new Error('Kassabondetail export ontbreekt in routeflow') }, results)
+    await runScenario('R12 Kassabondetail selectie en exportflow werkt', async ()=>{ const { detailDoc, lineSelect } = await openReceiptDetailWithSelectableLines(frame, fixture.batchId); const exportButton=detailDoc.querySelector('[data-testid="receipt-export-button"]'); if(!lineSelect||!exportButton) throw new Error('Kassabondetail export ontbreekt in routeflow'); if(!lineSelect.checked) clickElement(lineSelect); await delay(120); clickElement(exportButton); await delay(180); if(!getLastDownload(frame)?.csv) throw new Error('Kassabondetail export ontbreekt in routeflow') }, results)
   } finally { removeExistingFrame() }
   return results
 }

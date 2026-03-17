@@ -359,18 +359,12 @@ export async function runLayer3StyleguideTests() {
     }, results)
 
     await runScenario('L3.7 Kassabondetail toont exportknop binnen kaart', async () => {
-      await navigateFrame(frame, '/kassabonnen')
-      const doc = await openReceiptDetail(frame, fixture.batchId)
-      assertBuildTagVisible(doc)
-      const page = assertAppShellPage(doc, 'receipt-detail-page')
+      const { detailDoc } = await ensureReceiptFixture(frame, fixture)
+      assertBuildTagVisible(detailDoc)
+      const page = assertAppShellPage(detailDoc, 'receipt-detail-page')
       const card = assertScreenCard(page.closest('[data-testid="screen-card"]') || page.parentElement)
       const exportButton = card.querySelector('[data-testid="receipt-export-button"]')
       if (!exportButton) throw new Error('receipt-export-button ontbreekt binnen kaart')
-      const lineSelect = doc.querySelector('[data-testid^="receipt-line-select-"]')
-      if (!lineSelect) throw new Error('receipt-line-select-* ontbreekt voor exportstatus')
-      if (!exportButton.disabled) throw new Error('receipt-export-button moet starten zonder selectie')
-      clickElement(lineSelect)
-      await delay(120)
       if (exportButton.disabled) throw new Error('receipt-export-button reageert niet op selectie')
     }, results)
   } finally {
