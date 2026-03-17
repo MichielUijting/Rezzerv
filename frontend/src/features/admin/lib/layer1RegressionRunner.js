@@ -551,17 +551,15 @@ export async function runLayer1RegressionTests() {
     }, results)
 
     await runScenario('T11 Kassabondetail exporteert geselecteerde regels met kolomtitels', async () => {
-      const receiptFixture = await resolveReceiptFixture(frame, fixture)
-      await navigateFrame(frame, '/kassabonnen')
-      const detailDoc = await openReceiptDetail(frame, receiptFixture.batchId)
-      await waitForReceiptLines(() => getFrameDocument(frame))
-      const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${receiptFixture.completeLineId}"]`)
+      const { detailDoc, lineSelect } = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
       const exportButton = detailDoc.querySelector('[data-testid="receipt-export-button"]')
       if (!lineSelect || !exportButton) throw new Error('Kassabondetailselectie of export ontbreekt')
       if (!lineSelect.checked) clickElement(lineSelect)
-      await delay(120)
-      clickElement(exportButton)
-      await delay(180)
+      await delay(160)
+      const activeExportButton = getFrameDocument(frame)?.querySelector('[data-testid="receipt-export-button"]') || exportButton
+      if (activeExportButton.disabled) throw new Error('Kassabondetailselectie activeert export niet')
+      clickElement(activeExportButton)
+      await delay(220)
       const download = getLastDownload(frame)
       if (!download?.csv) throw new Error('Kassabondetailexport ontbreekt')
       const firstLine = String(download.csv || '').split('\n')[0] || ''
