@@ -4,7 +4,7 @@ export default function TestRunPanel({ isRunning, onRunSmoke, onRunLayer1, onRun
   return (
     <div>
       {showLegacyWarning ? (
-        <div className="rz-admin-inline-note" data-testid="legacy-suite-banner">Leidend: laag 1 / laag 2 / laag 3. Oude regressiesuite is alleen nog legacy referentie en diagnosehulp.</div>
+        <div className="rz-admin-inline-note" data-testid="legacy-suite-banner">Leidend: laag 1 / laag 2 / laag 3. De oude legacy-regressiesuite is opgeheven in Admin / Testdata.</div>
       ) : null}
       <div className="rz-admin-actions">
       <Button variant="primary" onClick={onRunSmoke} disabled={isRunning}>
