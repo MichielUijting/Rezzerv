@@ -357,6 +357,42 @@ export async function runLayer3StyleguideTests() {
       const { completeRow } = await ensureReceiptFixture(frame, fixture)
       assertRowColor(completeRow, READY_ROW_COLOR, 'Complete geselecteerde bonregel')
     }, results)
+
+    await runScenario('L3.7 Exportknoppen reageren correct op selectie in tabellen', async () => {
+      await navigateFrame(frame, '/voorraad')
+      let doc = getFrameDocument(frame)
+      const inventoryExportButton = doc.querySelector('[data-testid="inventory-export-button"]')
+      if (!inventoryExportButton) throw new Error('inventory-export-button ontbreekt')
+      if (!inventoryExportButton.disabled) throw new Error('Voorraad exportknop hoort disabled te zijn zonder selectie')
+      const inventoryRowCheckbox = doc.querySelector('[data-testid^="inventory-row-"] input[type="checkbox"]')
+      if (!inventoryRowCheckbox) throw new Error('Voorraadselectie ontbreekt')
+      clickElement(inventoryRowCheckbox)
+      if (inventoryExportButton.disabled) throw new Error('Voorraad exportknop bleef disabled na selectie')
+
+      await navigateFrame(frame, '/kassabonnen')
+      doc = getFrameDocument(frame)
+      const receiptsExportButton = doc.querySelector('[data-testid="receipts-export-button"]')
+      if (!receiptsExportButton) throw new Error('receipts-export-button ontbreekt')
+      if (!receiptsExportButton.disabled) throw new Error('Kassabon exportknop hoort disabled te zijn zonder selectie')
+      const receiptRowCheckbox = doc.querySelector('[data-testid^="receipt-batch-row-"] input[type="checkbox"]')
+      if (!receiptRowCheckbox) throw new Error('Kassabonselectie ontbreekt')
+      clickElement(receiptRowCheckbox)
+      if (receiptsExportButton.disabled) throw new Error('Kassabon exportknop bleef disabled na selectie')
+    }, results)
+
+    await runScenario('L3.8 Kassabondetail toont exportknop binnen kaart', async () => {
+      await navigateFrame(frame, '/kassabonnen')
+      const detailDoc = await openReceiptDetail(frame, fixture.batchId)
+      const page = assertAppShellPage(detailDoc, 'receipt-detail-page')
+      const card = assertScreenCard(page.closest('[data-testid="screen-card"]') || page.parentElement)
+      const exportButton = card.querySelector('[data-testid="receipt-lines-export-button"]')
+      if (!exportButton) throw new Error('receipt-lines-export-button ontbreekt')
+      if (!exportButton.disabled) throw new Error('Kassabondetail exportknop hoort disabled te zijn zonder selectie')
+      const lineCheckbox = card.querySelector('[data-testid^="receipt-line-select-"]')
+      if (!lineCheckbox) throw new Error('receipt-line-select-* ontbreekt voor exportstatus')
+      clickElement(lineCheckbox)
+      if (exportButton.disabled) throw new Error('Kassabondetail exportknop bleef disabled na selectie')
+    }, results)
   } finally {
     removeExistingFrame()
   }

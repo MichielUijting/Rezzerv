@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
+import { downloadCsv } from '../../lib/csvExport'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import {
   articleFallbackOptions,
@@ -96,6 +97,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [mappingFilter, setMappingFilter] = useState('all')
   const [locationFilter, setLocationFilter] = useState('all')
   const [processConfirm, setProcessConfirm] = useState(null)
+  const [exportFeedback, setExportFeedback] = useState('')
   const processFeedbackTimer = useRef(null)
 
   const providersByCode = useMemo(
@@ -556,12 +558,55 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
+  const selectedVisibleLineStates = useMemo(() => (
+    visibleLineUiStates.filter((entry) => selectedLineIds.includes(entry.line.id))
+  ), [visibleLineUiStates, selectedLineIds])
+
+  function handleExportSelected() {
+    if (selectedVisibleLineStates.length === 0) {
+      setExportFeedback('Selecteer eerst één of meer bonregels om te exporteren.')
+      return
+    }
+
+    const articleOptionsById = new Map(articleOptions.map((option) => [String(option.id), option]))
+    const locationOptionsById = new Map(locationOptions.map((option) => [String(option.id), option]))
+    const rows = selectedVisibleLineStates.map((entry) => {
+      const articleId = String(entry.draft?.articleId || '')
+      const locationId = String(entry.draft?.locationId || '')
+      const linkedArticle = articleId ? articleLabel(articleOptionsById.get(articleId) || { naam: entry.line?.resolved_household_article_name || '', merk: '' }) : ''
+      const locationLabel = locationId ? String(locationOptionsById.get(locationId)?.label || '') : ''
+      return {
+        article_name_raw: entry.line?.article_name_raw || '',
+        quantity: formatQuantity(entry.line?.quantity_raw, entry.line?.unit_raw),
+        linkedArticle,
+        locationLabel,
+        linePrice: entry.line?.line_price_raw != null ? `€ ${Number(entry.line.line_price_raw).toFixed(2)}` : '-',
+      }
+    })
+
+    downloadCsv({
+      filenamePrefix: 'rezzerv-kassabondetail',
+      columns: [
+        { key: 'article_name_raw', label: 'Bonartikel' },
+        { key: 'quantity', label: 'Aantal' },
+        { key: 'linkedArticle', label: 'Gekoppeld artikel' },
+        { key: 'locationLabel', label: 'Locatie' },
+        { key: 'linePrice', label: 'Prijs' },
+      ],
+      rows,
+    })
+    setExportFeedback(`${rows.length} geselecteerde bonregel(s) geëxporteerd als CSV.`)
+  }
+
+
   function handleSummaryTileClick(nextKey) {
+    setExportFeedback('')
     setActiveSummaryFilter(nextKey)
     setStatusFilter(nextKey === 'new_mapping' ? 'all' : nextKey)
   }
 
   function resetFilters() {
+    setExportFeedback('')
     setActiveSummaryFilter('all')
     setStatusFilter('all')
     setMappingFilter('all')
@@ -570,6 +615,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   }
 
   function showExceptionsOnly() {
+    setExportFeedback('')
     setActiveSummaryFilter('all')
     setStatusFilter('action_needed')
     setLocationFilter('missing')
@@ -577,10 +623,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   }
 
   function toggleLineSelection(lineId) {
+    setExportFeedback('')
     setSelectedLineIds((current) => current.includes(lineId) ? current.filter((value) => value !== lineId) : [...current, lineId])
   }
 
   function toggleSelectAllVisible() {
+    setExportFeedback('')
     const visibleIds = visibleLineUiStates.map((entry) => entry.line.id)
     const visibleIdSet = new Set(visibleIds)
     const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedLineIds.includes(id))
@@ -608,6 +656,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch} data-testid="receipt-process-button">Naar voorraad</Button>
+              <Button variant="secondary" onClick={handleExportSelected} disabled={selectedVisibleLineStates.length === 0} data-testid="receipt-lines-export-button">Exporteren</Button>
             </div>
           </div>
 
@@ -615,6 +664,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error" data-testid="receipt-feedback">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="receipt-feedback">{status}</div> : null}
+          {exportFeedback ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="receipt-lines-export-feedback">{exportFeedback}</div> : null}
           <div className="rz-table-wrapper rz-store-batch-table-wrapper">
             <table className="rz-table rz-store-workbench-table" style={{ minWidth: '860px' }} data-testid="receipt-lines-table">
               <thead>
@@ -631,16 +681,16 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 <tr className="rz-table-filters">
                   <th />
                   <th>
-                    <input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of gekoppeld artikel" />
+                    <input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => { setExportFeedback(''); setSearchValue(event.target.value) }} aria-label="Filter op bonartikel of gekoppeld artikel" />
                   </th>
                   <th />
                   <th>
-                    <select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
+                    <select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => { setExportFeedback(''); setMappingFilter(event.target.value) }}>
                       {MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
                     </select>
                   </th>
                   <th>
-                    <select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
+                    <select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => { setExportFeedback(''); setLocationFilter(event.target.value) }}>
                       {LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
                     </select>
                   </th>
