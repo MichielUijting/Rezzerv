@@ -30,13 +30,17 @@ const REMOVED_LEGACY_ITEMS = [
   { name: 'Legacy-matrixregel voor kernscherm UI-structuur', reason: 'Gedekt door laag 3 en daarom niet meer als losse legacy-regel zichtbaar.' },
 ]
 
+const MIGRATED_LEGACY_ITEMS = [
+  { name: 'Runtime diagnose dropdown-locaties', targetLayer: 'Laag 2', reason: 'Overgenomen als aparte admin-routecheck voor zichtbaarheid en bruikbare niche-ingang.' },
+  { name: 'Runtime diagnose verwerkvalidatie', targetLayer: 'Laag 2', reason: 'Overgenomen als aparte admin-routecheck voor zichtbaarheid en bruikbare niche-ingang.' },
+]
+
 const LEGACY_REGRESSION_MATRIX = [
-  { name: 'Legacy nichechecks uit oude gecombineerde regressierun', classification: 'Nog migreren', coverage: 'Ontbrekende dekking apart beoordelen', action: 'Alleen behouden tot expliciete migratie naar laag 1/2/3' },
   { name: 'Legacy runner voor gecombineerde regressie', classification: 'Legacy', coverage: 'Referentie / diagnosehulp voor resterende nichechecks', action: 'Niet leidend; alleen nog starten vanuit legacy-blok' },
   { name: 'Overige verouderde debug- of admin-ingangen rond legacy-runs', classification: 'Verwijderkandidaat', coverage: 'Geen productleidende dekking nodig', action: 'Pas schrappen als bevestigd is dat niemand hier nog op leunt' },
 ]
 
-const LEGACY_CLASSIFICATION_ORDER = ['Nog migreren', 'Legacy', 'Verwijderkandidaat']
+const LEGACY_CLASSIFICATION_ORDER = ['Legacy', 'Verwijderkandidaat']
 
 function summarizeLegacyMatrix(items) {
   return LEGACY_CLASSIFICATION_ORDER.map((label) => ({
@@ -521,6 +525,21 @@ export default function AdminPage() {
                 ))}
               </div>
             </div>
+            <div className="rz-admin-report" data-testid="legacy-migration-list">
+              <h4 className="rz-admin-status-title">Migratielijst v1</h4>
+              <div className="rz-admin-report-list">
+                {MIGRATED_LEGACY_ITEMS.map((item) => (
+                  <div key={item.name} className="rz-admin-report-row rz-admin-report-row--neutral">
+                    <div className="rz-admin-report-main">
+                      <span>{item.name}</span>
+                      <span>{item.targetLayer}</span>
+                    </div>
+                    <div className="rz-admin-report-meta-line">Reden: {item.reason}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="rz-admin-report" data-testid="legacy-removal-list">
               <h4 className="rz-admin-status-title">Verwijderlijst v1</h4>
               <div className="rz-admin-report-list">
@@ -537,16 +556,16 @@ export default function AdminPage() {
             </div>
           </div>
 
-          <div className="rz-admin-panel">
+          <div className="rz-admin-panel" data-testid="admin-runtime-diagnostics-panel">
             <h3>Runtime diagnose winkelkoppeling</h3>
             <p className="rz-admin-muted">
               Draai hier gerichte runtime-checks voor locatie-opties in de kassabon en voor geldige verwerkbaarheid van geselecteerde regels.
             </p>
             <div className="rz-admin-actions">
-              <Button variant="secondary" onClick={handleRunLocationDiagnostic} disabled={isRunningLocationDiagnostic}>
+              <Button variant="secondary" onClick={handleRunLocationDiagnostic} disabled={isRunningLocationDiagnostic} data-testid="admin-diagnostic-location-button">
                 {isRunningLocationDiagnostic ? 'Test draait…' : 'Test dropdown-locaties'}
               </Button>
-              <Button variant="secondary" onClick={handleRunProcessDiagnostic} disabled={isRunningProcessDiagnostic}>
+              <Button variant="secondary" onClick={handleRunProcessDiagnostic} disabled={isRunningProcessDiagnostic} data-testid="admin-diagnostic-process-button">
                 {isRunningProcessDiagnostic ? 'Test draait…' : 'Test verwerkvalidatie'}
               </Button>
             </div>
