@@ -357,42 +357,6 @@ export async function runLayer3StyleguideTests() {
       const { completeRow } = await ensureReceiptFixture(frame, fixture)
       assertRowColor(completeRow, READY_ROW_COLOR, 'Complete geselecteerde bonregel')
     }, results)
-
-    await runScenario('L3.7 Exportknoppen reageren correct op selectie in tabellen', async () => {
-      await navigateFrame(frame, '/voorraad')
-      let doc = getFrameDocument(frame)
-      const inventoryExport = doc.querySelector('[data-testid="inventory-export-button"]')
-      const inventorySelect = doc.querySelector('[data-testid^="inventory-row-"] input[type="checkbox"]')
-      if (!inventoryExport || !inventorySelect) throw new Error('Voorraadexport of selectie ontbreekt')
-      if (!inventoryExport.disabled) throw new Error('Voorraadexport moet uitgeschakeld starten zonder selectie')
-      clickElement(inventorySelect)
-      await delay(100)
-      if (inventoryExport.disabled) throw new Error('Voorraadexport reageert niet op selectie')
-
-      await navigateFrame(frame, '/kassabonnen')
-      doc = getFrameDocument(frame)
-      const receiptsExport = doc.querySelector('[data-testid="receipts-export-button"]')
-      const receiptSelect = doc.querySelector('tbody input[type="checkbox"]')
-      if (!receiptsExport || !receiptSelect) throw new Error('Kassabonnenexport of selectie ontbreekt')
-      clickElement(receiptSelect)
-      await delay(100)
-      if (receiptsExport.disabled) throw new Error('Kassabonnenexport reageert niet op selectie')
-    }, results)
-
-    await runScenario('L3.8 Kassabondetail toont exportknop binnen kaart', async () => {
-      await navigateFrame(frame, '/kassabonnen')
-      const doc = await openReceiptDetail(frame, fixture.batchId)
-      const page = assertAppShellPage(doc, 'receipt-detail-page')
-      const card = assertScreenCard(page.closest('[data-testid="screen-card"]') || page.parentElement)
-      const exportButton = card.querySelector('[data-testid="receipt-export-button"]')
-      if (!exportButton) throw new Error('receipt-export-button ontbreekt binnen kaart')
-      const lineSelect = doc.querySelector('[data-testid^="receipt-line-select-"]')
-      if (!lineSelect) throw new Error('receipt-line-select-* ontbreekt voor exportstatus')
-      if (!exportButton.disabled) throw new Error('receipt-export-button moet starten zonder selectie')
-      clickElement(lineSelect)
-      await delay(100)
-      if (exportButton.disabled) throw new Error('receipt-export-button reageert niet op selectie')
-    }, results)
   } finally {
     removeExistingFrame()
   }

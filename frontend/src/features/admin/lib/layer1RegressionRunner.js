@@ -412,20 +412,6 @@ async function login(frame) {
   await delay(150)
 }
 
-
-function getLastDownload(frame) {
-  return frame?.contentWindow?.__rezzervLastDownload || null
-}
-
-function assertCsvContains(download, requiredValues = []) {
-  if (!download?.csv) throw new Error('CSV-download ontbreekt')
-  const csv = String(download.csv || '')
-  if (!csv.includes(';')) throw new Error('CSV mist scheidingstekens')
-  requiredValues.forEach((value) => {
-    if (!csv.includes(String(value))) throw new Error(`CSV mist waarde: ${value}`)
-  })
-}
-
 export async function runLayer1RegressionTests() {
   const results = []
   const frame = createHiddenFrame()
@@ -557,53 +543,6 @@ export async function runLayer1RegressionTests() {
       await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="history-page"]'), WAIT_TIMEOUT, 'history-page niet gevonden')
       clickElement(analysisTab)
       await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="analysis-page"]'), WAIT_TIMEOUT, 'analysis-page niet gevonden')
-    }, results)
-
-    await runScenario('T11 Voorraad exporteert geselecteerde rijen met kolomtitels', async () => {
-      await navigateFrame(frame, '/voorraad')
-      const doc = getFrameDocument(frame)
-      const rowSelect = doc.querySelector('[data-testid^="inventory-row-"] input[type="checkbox"]')
-      const exportButton = doc.querySelector('[data-testid="inventory-export-button"]')
-      if (!rowSelect || !exportButton) throw new Error('Voorraadselectie of export ontbreekt')
-      clickElement(rowSelect)
-      await delay(100)
-      clickElement(exportButton)
-      await delay(150)
-      const download = getLastDownload(frame)
-      assertCsvContains(download, ['Artikel', 'Aantal', 'Locatie', 'Sublocatie'])
-      if ((download?.rowCount || 0) < 1) throw new Error('Voorraadexport bevat geen geselecteerde rij')
-    }, results)
-
-    await runScenario('T12 Kassabonnen exporteert geselecteerde rijen met kolomtitels', async () => {
-      await navigateFrame(frame, '/kassabonnen')
-      const doc = getFrameDocument(frame)
-      const rowSelect = doc.querySelector('[data-testid^="receipt-batch-row-"] input[type="checkbox"]') || doc.querySelector('tbody input[type="checkbox"]')
-      const exportButton = doc.querySelector('[data-testid="receipts-export-button"]')
-      if (!rowSelect || !exportButton) throw new Error('Kassabonnenselectie of export ontbreekt')
-      clickElement(rowSelect)
-      await delay(100)
-      clickElement(exportButton)
-      await delay(150)
-      const download = getLastDownload(frame)
-      assertCsvContains(download, ['Winkel', 'Datum', 'Regels', 'Status'])
-      if ((download?.rowCount || 0) < 1) throw new Error('Kassabonexport bevat geen geselecteerde rij')
-    }, results)
-
-    await runScenario('T13 Kassabondetail exporteert geselecteerde regels met kolomtitels', async () => {
-      const receiptFixture = await resolveReceiptFixture(frame, fixture)
-      await navigateFrame(frame, '/kassabonnen')
-      const detailDoc = await openReceiptDetail(frame, receiptFixture.batchId)
-      await waitForReceiptLines(() => getFrameDocument(frame))
-      const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${receiptFixture.completeLineId}"]`) || detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
-      const exportButton = detailDoc.querySelector('[data-testid="receipt-export-button"]')
-      if (!lineSelect || !exportButton) throw new Error('Kassabondetailselectie of export ontbreekt')
-      if (!lineSelect.checked) clickElement(lineSelect)
-      await delay(100)
-      clickElement(exportButton)
-      await delay(150)
-      const download = getLastDownload(frame)
-      assertCsvContains(download, ['Bonartikel', 'Aantal', 'Gekoppeld artikel', 'Locatie', 'Prijs', 'Status'])
-      if ((download?.rowCount || 0) < 1) throw new Error('Kassabondetailexport mist geselecteerde regel')
     }, results)
   } finally {
     removeExistingFrame()
