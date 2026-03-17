@@ -13,7 +13,7 @@ export default function ScreenCard({children, fullWidth=false}){
   };
 
   return (
-    <div style={style}>
+    <div style={style} data-testid="screen-card">
       {children}
     </div>
   );

@@ -11,6 +11,7 @@ import {
   fetchLatestTestStatus,
   runLayer1Tests,
   runLayer2Tests,
+  runLayer3Tests,
   runRegressionTests,
   runSmokeTests,
   submitTestResults,
@@ -18,6 +19,7 @@ import {
 import { runBrowserSmokeTests } from "./lib/browserSmokeRunner";
 import { runLayer1RegressionTests } from "./lib/layer1RegressionRunner";
 import { runLayer2RouteTests } from "./lib/layer2RouteRunner";
+import { runLayer3StyleguideTests } from "./lib/layer3StyleguideRunner";
 import { runBrowserRegressionTests } from "./lib/browserRegressionRunner";
 
 export default function AdminPage() {
@@ -287,6 +289,37 @@ export default function AdminPage() {
     }
   }
 
+
+  async function handleRunLayer3() {
+    setTestMessage("");
+    setShowReport(false);
+    try {
+      const result = await runLayer3Tests();
+      setTestStatus((current) => ({ ...current, ...result }));
+      if (!result.started) {
+        setTestMessage("Er loopt al een test");
+        await refreshTestStatus();
+        return;
+      }
+
+      setTestMessage("Laag-3 UI/styleguide-test gestart");
+      const results = await runLayer3StyleguideTests();
+      await submitTestResults('layer3', results);
+      await refreshTestStatus();
+      const latestReport = await fetchLatestTestReport();
+      setTestReport(latestReport);
+      setShowReport(true);
+      setTestMessage('Laag-3 UI/styleguide-test afgerond');
+    } catch (error) {
+      try {
+        await submitTestResults('layer3', [{ name: 'Laag-3 runner', status: 'failed', error: error.message || 'Laag-3 UI/styleguide-test kon niet worden uitgevoerd' }]);
+        await refreshTestStatus();
+      } catch {
+      }
+      setTestMessage(error.message || "Laag-3 UI/styleguide-test kon niet worden gestart");
+    }
+  }
+
   async function handleRunSmoke() {
     setTestMessage("");
     setShowReport(false);
@@ -390,13 +423,14 @@ export default function AdminPage() {
           <div className="rz-admin-panel">
             <h3>Testen</h3>
             <p className="rz-admin-muted">
-              Start hier een smoke test, een laag-1 kernregressietest of een volledige regressietest en bekijk de laatste status.
+              Start hier een smoke test, laag-1, laag-2 of laag-3 regressietest of een volledige regressietest en bekijk de laatste status.
             </p>
             <div data-testid="test-run-panel"><TestRunPanel
               isRunning={testStatus.status === "running"}
               onRunSmoke={handleRunSmoke}
               onRunLayer1={handleRunLayer1}
               onRunLayer2={handleRunLayer2}
+              onRunLayer3={handleRunLayer3}
               onRunRegression={handleRunRegression}
               onViewReport={handleViewReport}
             />

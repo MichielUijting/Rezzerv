@@ -4,8 +4,8 @@ export default function Tabs({ tabs, defaultTab, children, tabTestIdMap = {} }) 
   const [active, setActive] = useState(defaultTab || tabs[0]);
 
   return (
-    <div className="rz-tabs">
-      <div className="rz-tabbar" role="tablist" aria-label="Artikeldetails tabs">
+    <div className="rz-tabs" data-testid="tabs-root">
+      <div className="rz-tabbar" role="tablist" aria-label="Artikeldetails tabs" data-testid="tabs-tablist">
         {tabs.map((t) => {
           const isActive = active === t;
           return (
