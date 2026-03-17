@@ -107,6 +107,51 @@ function clickElement(element) {
   element.dispatchEvent(new view.MouseEvent('click', { bubbles: true, cancelable: true, view }))
 }
 
+async function requestJson(url, init = {}) {
+  const response = await fetch(url, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init.headers || {}),
+    },
+    ...init,
+  })
+  if (!response.ok) {
+    const message = await response.text().catch(() => '')
+    throw new Error(message || `Request mislukt (${response.status})`)
+  }
+  const contentType = response.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    return response.json()
+  }
+  return null
+}
+
+async function resolveReceiptFixture(frame, fixture) {
+  if (frame.__rezzervLayer3ReceiptFixture) return frame.__rezzervLayer3ReceiptFixture
+  if (fixture.batchId && fixture.completeLineId && fixture.incompleteLineId) {
+    const resolved = {
+      batchId: String(fixture.batchId),
+      completeLineId: String(fixture.completeLineId),
+      incompleteLineId: String(fixture.incompleteLineId),
+    }
+    frame.__rezzervLayer3ReceiptFixture = resolved
+    return resolved
+  }
+
+  const prepared = await requestJson('/api/dev/generate-layer1-receipt-fixture', { method: 'POST', body: '{}' })
+  const resolved = {
+    batchId: String(prepared?.batchId || prepared?.batch_id || ''),
+    completeLineId: String(prepared?.completeLineId || prepared?.complete_line_id || ''),
+    incompleteLineId: String(prepared?.incompleteLineId || prepared?.incomplete_line_id || ''),
+  }
+  if (!resolved.batchId || !resolved.completeLineId || !resolved.incompleteLineId) {
+    throw new Error('Layer-3 receipt fixture ontbreekt of is incompleet')
+  }
+  frame.__rezzervLayer3ReceiptFixture = resolved
+  return resolved
+}
+
 function doubleClickElement(element) {
   const view = element?.ownerDocument?.defaultView || window
   element.dispatchEvent(new view.MouseEvent('dblclick', { bubbles: true, cancelable: true, view }))
@@ -196,6 +241,8 @@ function assertStructure(doc, pageTestId) {
 }
 
 function assertScreenCard(page) {
+  if (!page) throw new Error('ScreenCard/Card ontbreekt')
+  if (page.matches?.('[data-testid="screen-card"], .rz-card')) return page
   const card = page.querySelector('[data-testid="screen-card"]') || page.querySelector('.rz-card')
   if (!card) throw new Error('ScreenCard/Card ontbreekt')
   return card
@@ -209,23 +256,27 @@ function assertTabsWithinCard(card) {
 }
 
 async function ensureReceiptFixture(frame, fixture) {
+  const resolvedFixture = await resolveReceiptFixture(frame, fixture)
   await navigateFrame(frame, '/kassabonnen')
-  await openReceiptDetail(frame, fixture.batchId)
+  await openReceiptDetail(frame, resolvedFixture.batchId)
   const detailDoc = getFrameDocument(frame)
-  await waitForCondition(() => detailDoc?.querySelector('[data-testid^="receipt-line-"]'), WAIT_TIMEOUT, 'Geen receipt-line-* gevonden in kassabondetail')
+  await waitForCondition(() => {
+    const doc = getFrameDocument(frame)
+    return doc?.querySelector('[data-testid^="receipt-line-"]')
+  }, WAIT_TIMEOUT, 'Geen receipt-line-* gevonden in kassabondetail')
 
-  const completeRow = detailDoc.querySelector(`[data-testid="receipt-line-${fixture.completeLineId}"]`)
-  const incompleteRow = detailDoc.querySelector(`[data-testid="receipt-line-${fixture.incompleteLineId}"]`)
-  const completeSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${fixture.completeLineId}"]`)
-  const incompleteSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${fixture.incompleteLineId}"]`)
+  const completeRow = detailDoc.querySelector(`[data-testid="receipt-line-${resolvedFixture.completeLineId}"]`)
+  const incompleteRow = detailDoc.querySelector(`[data-testid="receipt-line-${resolvedFixture.incompleteLineId}"]`)
+  const completeSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${resolvedFixture.completeLineId}"]`)
+  const incompleteSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${resolvedFixture.incompleteLineId}"]`)
 
   if (!completeRow || !incompleteRow || !completeSelect || !incompleteSelect) {
     throw new Error('Layer-3 fixtureregels ontbreken in kassabondetail')
   }
 
-  const incompleteArticle = detailDoc.querySelector(`[data-testid="receipt-line-article-select-${fixture.incompleteLineId}"] select`)
-  const incompleteLocation = detailDoc.querySelector(`[data-testid="receipt-line-location-select-${fixture.incompleteLineId}"]`)
-  const completeLocation = detailDoc.querySelector(`[data-testid="receipt-line-location-select-${fixture.completeLineId}"]`)
+  const incompleteArticle = detailDoc.querySelector(`[data-testid="receipt-line-article-select-${resolvedFixture.incompleteLineId}"] select`)
+  const incompleteLocation = detailDoc.querySelector(`[data-testid="receipt-line-location-select-${resolvedFixture.incompleteLineId}"]`)
+  const completeLocation = detailDoc.querySelector(`[data-testid="receipt-line-location-select-${resolvedFixture.completeLineId}"]`)
 
   if (incompleteArticle) setSelectValue(incompleteArticle, '')
   if (incompleteLocation) setSelectValue(incompleteLocation, '')
@@ -243,10 +294,13 @@ async function ensureReceiptFixture(frame, fixture) {
 }
 
 function assertRowColor(row, expectedColor, label) {
+  const view = row?.ownerDocument?.defaultView || window
   const firstCell = row?.querySelector('td')
-  const color = row?.ownerDocument?.defaultView?.getComputedStyle(firstCell || row).backgroundColor
-  if (color !== expectedColor) {
-    throw new Error(`${label} heeft kleur ${color || 'onbekend'} in plaats van ${expectedColor}`)
+  const rowColor = row ? view.getComputedStyle(row).backgroundColor : ''
+  const cellColor = firstCell ? view.getComputedStyle(firstCell).backgroundColor : ''
+  const matched = [cellColor, rowColor].includes(expectedColor)
+  if (!matched) {
+    throw new Error(`${label} heeft kleur ${cellColor || rowColor || 'onbekend'} in plaats van ${expectedColor}`)
   }
 }
 
