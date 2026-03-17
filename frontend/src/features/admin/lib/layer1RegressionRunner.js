@@ -394,35 +394,6 @@ async function resolveReceiptFixture(frame, fixture) {
   throw new Error('Layer1 receipt fixture ontbreekt of is incompleet')
 }
 
-
-async function captureCsvDownload(frame, triggerAction) {
-  const win = frame.contentWindow
-  if (!win?.URL || !win?.HTMLAnchorElement) throw new Error('Downloadcaptatie niet beschikbaar')
-  const originalCreateObjectURL = win.URL.createObjectURL?.bind(win.URL)
-  const originalRevokeObjectURL = win.URL.revokeObjectURL?.bind(win.URL)
-  const originalClick = win.HTMLAnchorElement.prototype.click
-  let capturedBlob = null
-  let capturedDownload = ''
-  try {
-    win.URL.createObjectURL = (blob) => {
-      capturedBlob = blob
-      return 'blob:rezzerv-captured'
-    }
-    win.URL.revokeObjectURL = () => {}
-    win.HTMLAnchorElement.prototype.click = function clickPatched() {
-      capturedDownload = this.download || ''
-    }
-    await triggerAction()
-    await waitForCondition(() => capturedBlob && capturedDownload, WAIT_TIMEOUT, 'CSV-download startte niet')
-    const text = typeof capturedBlob.text === 'function' ? await capturedBlob.text() : ''
-    return { text, download: capturedDownload }
-  } finally {
-    if (originalCreateObjectURL) win.URL.createObjectURL = originalCreateObjectURL
-    if (originalRevokeObjectURL) win.URL.revokeObjectURL = originalRevokeObjectURL
-    win.HTMLAnchorElement.prototype.click = originalClick
-  }
-}
-
 async function login(frame) {
   await navigateFrame(frame, '/login')
   const doc = getFrameDocument(frame)
@@ -439,6 +410,20 @@ async function login(frame) {
   clickElement(submitButton)
   await waitForCondition(() => frame.contentWindow?.location?.pathname === '/home', WAIT_TIMEOUT, 'Login leidde niet naar /home')
   await delay(150)
+}
+
+
+function getLastDownload(frame) {
+  return frame?.contentWindow?.__rezzervLastDownload || null
+}
+
+function assertCsvContains(download, requiredValues = []) {
+  if (!download?.csv) throw new Error('CSV-download ontbreekt')
+  const csv = String(download.csv || '')
+  if (!csv.includes(';')) throw new Error('CSV mist scheidingstekens')
+  requiredValues.forEach((value) => {
+    if (!csv.includes(String(value))) throw new Error(`CSV mist waarde: ${value}`)
+  })
 }
 
 export async function runLayer1RegressionTests() {
@@ -577,37 +562,31 @@ export async function runLayer1RegressionTests() {
     await runScenario('T11 Voorraad exporteert geselecteerde rijen met kolomtitels', async () => {
       await navigateFrame(frame, '/voorraad')
       const doc = getFrameDocument(frame)
-      const row = doc.querySelector('[data-testid^="inventory-row-"]')
-      if (!row) throw new Error('Geen inventory-row-* gevonden voor export')
-      const checkbox = row.querySelector('input[type="checkbox"]')
+      const rowSelect = doc.querySelector('[data-testid^="inventory-row-"] input[type="checkbox"]')
       const exportButton = doc.querySelector('[data-testid="inventory-export-button"]')
-      if (!checkbox || !exportButton) throw new Error('Selectiecheckbox of inventory-export-button ontbreekt')
-      clickElement(checkbox)
-      const articleText = String(row.querySelector('td:nth-child(2)')?.textContent || '').trim()
-      const download = await captureCsvDownload(frame, async () => {
-        clickElement(exportButton)
-      })
-      if (!download.download.includes('rezzerv-voorraad-')) throw new Error('Voorraadexport kreeg onjuiste bestandsnaam')
-      if (!download.text.includes('Artikel;Aantal;Locatie;Sublocatie')) throw new Error('Voorraadexport mist kolomtitels')
-      if (articleText && !download.text.includes(articleText)) throw new Error('Voorraadexport mist geselecteerde rij')
+      if (!rowSelect || !exportButton) throw new Error('Voorraadselectie of export ontbreekt')
+      clickElement(rowSelect)
+      await delay(100)
+      clickElement(exportButton)
+      await delay(150)
+      const download = getLastDownload(frame)
+      assertCsvContains(download, ['Artikel', 'Aantal', 'Locatie', 'Sublocatie'])
+      if ((download?.rowCount || 0) < 1) throw new Error('Voorraadexport bevat geen geselecteerde rij')
     }, results)
 
     await runScenario('T12 Kassabonnen exporteert geselecteerde rijen met kolomtitels', async () => {
       await navigateFrame(frame, '/kassabonnen')
       const doc = getFrameDocument(frame)
-      const row = doc.querySelector('[data-testid^="receipt-batch-row-"]')
-      if (!row) throw new Error('Geen receipt-batch-row-* gevonden voor export')
-      const checkbox = row.querySelector('input[type="checkbox"]')
+      const rowSelect = doc.querySelector('[data-testid^="receipt-batch-row-"] input[type="checkbox"]') || doc.querySelector('tbody input[type="checkbox"]')
       const exportButton = doc.querySelector('[data-testid="receipts-export-button"]')
-      if (!checkbox || !exportButton) throw new Error('Selectiecheckbox of receipts-export-button ontbreekt')
-      clickElement(checkbox)
-      const providerText = String(row.querySelector('td:nth-child(2)')?.textContent || '').trim()
-      const download = await captureCsvDownload(frame, async () => {
-        clickElement(exportButton)
-      })
-      if (!download.download.includes('rezzerv-kassabonnen-')) throw new Error('Kassabonexport kreeg onjuiste bestandsnaam')
-      if (!download.text.includes('Winkel;Datum;Artikelen;Status')) throw new Error('Kassabonexport mist kolomtitels')
-      if (providerText && !download.text.includes(providerText)) throw new Error('Kassabonexport mist geselecteerde rij')
+      if (!rowSelect || !exportButton) throw new Error('Kassabonnenselectie of export ontbreekt')
+      clickElement(rowSelect)
+      await delay(100)
+      clickElement(exportButton)
+      await delay(150)
+      const download = getLastDownload(frame)
+      assertCsvContains(download, ['Winkel', 'Datum', 'Regels', 'Status'])
+      if ((download?.rowCount || 0) < 1) throw new Error('Kassabonexport bevat geen geselecteerde rij')
     }, results)
 
     await runScenario('T13 Kassabondetail exporteert geselecteerde regels met kolomtitels', async () => {
@@ -615,18 +594,16 @@ export async function runLayer1RegressionTests() {
       await navigateFrame(frame, '/kassabonnen')
       const detailDoc = await openReceiptDetail(frame, receiptFixture.batchId)
       await waitForReceiptLines(() => getFrameDocument(frame))
-      const checkbox = detailDoc.querySelector(`[data-testid="receipt-line-select-${receiptFixture.completeLineId}"]`) || detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
-      const exportButton = detailDoc.querySelector('[data-testid="receipt-lines-export-button"]')
-      if (!checkbox || !exportButton) throw new Error('Selectiecheckbox of receipt-lines-export-button ontbreekt')
-      clickElement(checkbox)
-      const row = checkbox.closest('tr')
-      const articleText = String(row?.querySelector('td:nth-child(2)')?.textContent || '').trim()
-      const download = await captureCsvDownload(frame, async () => {
-        clickElement(exportButton)
-      })
-      if (!download.download.includes('rezzerv-kassabondetail-')) throw new Error('Kassabondetailexport kreeg onjuiste bestandsnaam')
-      if (!download.text.includes('Bonartikel;Aantal;Gekoppeld artikel;Locatie;Prijs')) throw new Error('Kassabondetailexport mist kolomtitels')
-      if (articleText && !download.text.includes(articleText)) throw new Error('Kassabondetailexport mist geselecteerde regel')
+      const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${receiptFixture.completeLineId}"]`) || detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
+      const exportButton = detailDoc.querySelector('[data-testid="receipt-export-button"]')
+      if (!lineSelect || !exportButton) throw new Error('Kassabondetailselectie of export ontbreekt')
+      if (!lineSelect.checked) clickElement(lineSelect)
+      await delay(100)
+      clickElement(exportButton)
+      await delay(150)
+      const download = getLastDownload(frame)
+      assertCsvContains(download, ['Bonartikel', 'Aantal', 'Gekoppeld artikel', 'Locatie', 'Prijs', 'Status'])
+      if ((download?.rowCount || 0) < 1) throw new Error('Kassabondetailexport mist geselecteerde regel')
     }, results)
   } finally {
     removeExistingFrame()

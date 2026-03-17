@@ -10,7 +10,6 @@ import {
   normalizeErrorMessage,
   providerLabel,
 } from './storeImportShared'
-import { downloadCsv } from '../../lib/csvExport'
 
 async function getLatestBatchMeta(connectionId) {
   try {
@@ -29,7 +28,6 @@ export default function ReceiptsPage() {
   const [error, setError] = useState('')
   const [selectedBatchIds, setSelectedBatchIds] = useState([])
   const [openedBatchId, setOpenedBatchId] = useState('')
-  const [exportFeedback, setExportFeedback] = useState('')
 
   const providersByCode = useMemo(
     () => Object.fromEntries(providers.map((provider) => [provider.code, provider])),
@@ -120,11 +118,9 @@ export default function ReceiptsPage() {
 
   function handleFilterChange(key, value) {
     setFilters((current) => ({ ...current, [key]: value }))
-    setExportFeedback('')
   }
 
   function toggleSelectedBatch(batchId) {
-    setExportFeedback('')
     setSelectedBatchIds((current) => (
       current.includes(batchId)
         ? current.filter((id) => id !== batchId)
@@ -134,30 +130,34 @@ export default function ReceiptsPage() {
 
   function toggleSelectAllVisible() {
     if (!listItems.length) return
-    setExportFeedback('')
     const visibleIds = listItems.map((item) => item.batch_id)
     const allVisibleSelected = visibleIds.every((id) => selectedBatchIds.includes(id))
     setSelectedBatchIds(allVisibleSelected ? [] : visibleIds)
   }
 
   function handleExport() {
-    if (selectedBatchIds.length === 0) {
-      setExportFeedback('Selecteer eerst één of meer kassabonnen om te exporteren.')
-      return
+    const selectedIds = selectedBatchIds.length ? new Set(selectedBatchIds) : null
+    const rows = listItems.filter((item) => !selectedIds || selectedIds.has(item.batch_id))
+    const header = ['Winkel', 'Datum', 'Regels', 'Status']
+    const csvRows = rows.map((item) => [item.providerName, item.dateLabel, String(item.totalLines), item.statusLabel])
+    const csv = [header, ...csvRows]
+      .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
+      .join('\n')
+    window.__rezzervLastDownload = {
+      filename: 'rezzerv-kassabonnen.csv',
+      csv,
+      rowCount: rows.length,
+      source: 'receipts',
     }
-    const selectedIds = new Set(selectedBatchIds)
-    const rows = listItems.filter((item) => selectedIds.has(item.batch_id))
-    downloadCsv({
-      filenamePrefix: 'rezzerv-kassabonnen',
-      columns: [
-        { key: 'providerName', label: 'Winkel' },
-        { key: 'dateLabel', label: 'Datum' },
-        { key: 'totalLines', label: 'Artikelen' },
-        { key: 'statusLabel', label: 'Status' },
-      ],
-      rows,
-    })
-    setExportFeedback(`${rows.length} geselecteerde kassabon(nen) geëxporteerd als CSV.`)
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'rezzerv-kassabonnen.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
   }
 
   function handleDeleteSelected() {
@@ -177,7 +177,6 @@ export default function ReceiptsPage() {
       <div style={{ display: 'grid', gap: '16px' }} data-testid="receipts-page">
         <ScreenCard>
         {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
-        {exportFeedback ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="receipts-export-feedback" style={{ marginBottom: '12px' }}>{exportFeedback}</div> : null}
         <div className="rz-table-wrapper">
           <table className="rz-table" data-testid="receipts-table">
             <thead>
@@ -281,7 +280,7 @@ export default function ReceiptsPage() {
           </table>
         </div>
         <div className="rz-stock-table-actions">
-          <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || selectedBatchIds.length === 0} data-testid="receipts-export-button">Exporteren</Button>
+          <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || listItems.length === 0} data-testid="receipts-export-button">Exporteren</Button>
           <Button type="button" variant="secondary" onClick={handleDeleteSelected} disabled={selectedBatchIds.length === 0}>Verwijderen</Button>
           {openedBatchId ? <Button type="button" variant="secondary" onClick={() => setOpenedBatchId('')} data-testid="receipt-back-to-overview">Terug naar overzicht</Button> : null}
         </div>

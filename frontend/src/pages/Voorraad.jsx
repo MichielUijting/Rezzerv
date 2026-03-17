@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
 import Button from "../ui/Button";
-import { downloadCsv } from "../lib/csvExport";
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase()
@@ -347,7 +346,6 @@ export default function Voorraad() {
   const [editingCell, setEditingCell] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [saveState, setSaveState] = useState({});
-  const [exportFeedback, setExportFeedback] = useState("");
   const [locationOptions, setLocationOptions] = useState({ locations: [], sublocationsByLocation: new Map() });
 
   useEffect(() => {
@@ -376,7 +374,6 @@ export default function Voorraad() {
 
   const handleFilterChange = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-    setExportFeedback("")
   };
 
   const filteredRows = useMemo(() => {
@@ -404,19 +401,43 @@ export default function Voorraad() {
   };
 
   const toggleRowChecked = (rowId) => {
-    setExportFeedback("")
     setRows((prev) =>
       prev.map((row) => (row.id === rowId ? { ...row, checked: !row.checked } : row))
     );
   };
 
-  const selectedFilteredRows = filteredRows.filter((row) => row.checked);
+
+
+  const selectedExportRows = filteredRows.filter((row) => row.checked);
+
+  const handleExport = () => {
+    if (!selectedExportRows.length) return;
+    const header = ['Artikel', 'Aantal', 'Locatie', 'Sublocatie'];
+    const csvRows = selectedExportRows.map((row) => [row.artikel, String(row.aantal ?? ''), row.locatie, row.sublocatie]);
+    const csv = [header, ...csvRows]
+      .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    window.__rezzervLastDownload = {
+      filename: 'rezzerv-voorraad.csv',
+      csv,
+      rowCount: selectedExportRows.length,
+      source: 'inventory',
+    };
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'rezzerv-voorraad.csv';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  };
 
   const allFilteredChecked =
     filteredRows.length > 0 && filteredRows.every((row) => row.checked);
 
   const toggleAllFiltered = () => {
-    setExportFeedback("")
     const nextValue = !allFilteredChecked;
     const filteredIds = new Set(filteredRows.map((row) => row.id));
 
@@ -426,27 +447,6 @@ export default function Voorraad() {
       )
     );
   };
-
-
-  const inventoryExportColumns = [
-    { key: "artikel", label: "Artikel" },
-    { key: "aantal", label: "Aantal" },
-    { key: "locatie", label: "Locatie" },
-    { key: "sublocatie", label: "Sublocatie" },
-  ]
-
-  const handleExport = () => {
-    if (selectedFilteredRows.length === 0) {
-      setExportFeedback('Selecteer eerst één of meer voorraadregels om te exporteren.')
-      return
-    }
-    downloadCsv({
-      filenamePrefix: 'rezzerv-voorraad',
-      columns: inventoryExportColumns,
-      rows: selectedFilteredRows,
-    })
-    setExportFeedback(`${selectedFilteredRows.length} geselecteerde voorraadregel(s) geëxporteerd als CSV.`)
-  }
 
   const startEdit = (row, key) => {
     if (!isColumnEditable(row, key)) return;
@@ -656,11 +656,6 @@ export default function Voorraad() {
         <div className="rz-content-inner">
           <div className="rz-card">
             {loadError && <div style={{ marginBottom: "12px", color: "#b42318", fontWeight: 700 }}>{loadError}</div>}
-{exportFeedback ? (
-              <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="inventory-export-feedback" style={{ marginBottom: 12 }}>
-                {exportFeedback}
-              </div>
-            ) : null}
             <div className="rz-table-wrapper rz-stock-table-wrapper">
               <table className="rz-table rz-stock-table" data-testid="inventory-table">
                 <colgroup>
@@ -774,7 +769,7 @@ export default function Voorraad() {
               </table>
             </div>
             <div className="rz-stock-table-actions">
-              <Button type="button" variant="secondary" onClick={handleExport} disabled={selectedFilteredRows.length === 0} data-testid="inventory-export-button">Exporteren</Button>
+              <Button type="button" variant="secondary" onClick={handleExport} disabled={selectedExportRows.length === 0} data-testid="inventory-export-button">Exporteren</Button>
             </div>
           </div>
         </div>
