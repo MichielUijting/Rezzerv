@@ -22,6 +22,27 @@ import { runLayer2RouteTests } from "./lib/layer2RouteRunner";
 import { runLayer3StyleguideTests } from "./lib/layer3StyleguideRunner";
 import { runBrowserRegressionTests } from "./lib/browserRegressionRunner";
 
+
+const LEGACY_REGRESSION_MATRIX = [
+  { name: 'Login werkt', classification: 'Overgenomen in laag 1', coverage: 'Laag 1 kernregressie', action: 'Legacy-variant niet uitbreiden' },
+  { name: 'Voorraad opent', classification: 'Overgenomen in laag 1', coverage: 'Laag 1 kernregressie', action: 'Legacy-variant niet uitbreiden' },
+  { name: 'Artikeldetail opent vanuit Voorraad', classification: 'Overgenomen in laag 1', coverage: 'Laag 1 kernregressie', action: 'Legacy-variant niet uitbreiden' },
+  { name: 'Admin / testpaneel opent', classification: 'Overgenomen in laag 2', coverage: 'Laag 2 route-/schermtest', action: 'Legacy-variant niet uitbreiden' },
+  { name: 'Voorraad / artikeldetail / kassabon UI-structuur', classification: 'Overgenomen in laag 3', coverage: 'Laag 3 UI/styleguide-test', action: 'Leidende dekking actief houden' },
+  { name: 'Oude gecombineerde volledige regressierun', classification: 'Legacy', coverage: 'Referentie / diagnosehulp', action: 'Niet leidend, later opschonen of verwijderen' },
+  { name: 'Verouderde admin- of debugknoppen rond legacy-runs', classification: 'Verwijderkandidaat', coverage: 'Geen productleidende dekking nodig', action: 'Eerst inventariseren, daarna pas verwijderen' },
+  { name: 'Nog niet gemigreerde nichechecks uit oude suite', classification: 'Nog migreren', coverage: 'Ontbrekende dekking apart beoordelen', action: 'Pas verwijderen na expliciete migratie' },
+]
+
+const LEGACY_CLASSIFICATION_ORDER = ['Overgenomen in laag 1', 'Overgenomen in laag 2', 'Overgenomen in laag 3', 'Nog migreren', 'Legacy', 'Verwijderkandidaat']
+
+function summarizeLegacyMatrix(items) {
+  return LEGACY_CLASSIFICATION_ORDER.map((label) => ({
+    label,
+    count: items.filter((item) => item.classification === label).length,
+  })).filter((item) => item.count > 0)
+}
+
 export default function AdminPage() {
   const navigate = useNavigate();
 
@@ -427,6 +448,7 @@ export default function AdminPage() {
             </p>
             <div data-testid="test-run-panel"><TestRunPanel
               isRunning={testStatus.status === "running"}
+              showLegacyWarning
               onRunSmoke={handleRunSmoke}
               onRunLayer1={handleRunLayer1}
               onRunLayer2={handleRunLayer2}
@@ -442,6 +464,8 @@ export default function AdminPage() {
                 <h4 className="rz-admin-status-title">Laatste testrapport</h4>
                 <div className="rz-admin-report-meta">
                   <div>Testtype: {testReport.test_type || "Onbekend"}</div>
+                  <div>Leidend: laag 1 / laag 2 / laag 3</div>
+                  <div>Legacy volledige regressierun: alleen referentie</div>
                   <div>Laatste run: {testReport.last_run_at ? new Date(testReport.last_run_at).toLocaleString("nl-NL") : "Nog geen rapport"}</div>
                   <div>Geslaagd: {testReport.results?.filter((result) => result.status === "passed").length || 0}</div>
                   <div>Gefaald: {testReport.results?.filter((result) => result.status === "failed").length || 0}</div>
@@ -462,6 +486,35 @@ export default function AdminPage() {
                 </div>
               </div>
             ) : null}
+          </div>
+
+
+
+          <div className="rz-admin-panel" data-testid="legacy-regression-panel">
+            <h3>Legacy regressiesuite</h3>
+            <p className="rz-admin-muted">
+              Oude regressietests zijn bevroren als legacy. Laag 1, laag 2 en laag 3 zijn leidend; legacy blijft alleen beschikbaar als referentie en diagnosehulp.
+            </p>
+            <div className="rz-admin-report">
+              <h4 className="rz-admin-status-title">Legacy-matrix</h4>
+              <div className="rz-admin-report-meta" data-testid="legacy-regression-summary">
+                {summarizeLegacyMatrix(LEGACY_REGRESSION_MATRIX).map((item) => (
+                  <div key={item.label}>{item.label}: {item.count}</div>
+                ))}
+              </div>
+              <div className="rz-admin-report-list">
+                {LEGACY_REGRESSION_MATRIX.map((item) => (
+                  <div key={item.name} className="rz-admin-report-row rz-admin-report-row--neutral">
+                    <div className="rz-admin-report-main">
+                      <span>{item.name}</span>
+                      <span>{item.classification}</span>
+                    </div>
+                    <div className="rz-admin-report-meta-line">Dekking: {item.coverage}</div>
+                    <div className="rz-admin-report-meta-line">Actie: {item.action}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className="rz-admin-panel">

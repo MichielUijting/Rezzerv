@@ -24,10 +24,10 @@ function statusLabel(status) {
 
 function typeLabel(type) {
   if (type === 'smoke') return 'Smoke test'
-  if (type === 'layer1') return 'Laag-1 kernregressietest'
-  if (type === 'layer2') return 'Laag-2 route-/schermtest'
-  if (type === 'layer3') return 'Laag-3 UI/styleguide-test'
-  if (type === 'regression') return 'Volledige regressietest'
+  if (type === 'layer1') return 'Laag-1 kernregressietest (leidend)'
+  if (type === 'layer2') return 'Laag-2 route-/schermtest (leidend)'
+  if (type === 'layer3') return 'Laag-3 UI/styleguide-test (leidend)'
+  if (type === 'regression') return 'Volledige regressietest (legacy referentie)'
   return 'Nog geen test'
 }
 
@@ -36,6 +36,8 @@ export default function TestStatusCard({ status, progress }) {
     <div className="rz-admin-status-card" data-testid="test-status-card">
       <h4 className="rz-admin-status-title">Laatste teststatus</h4>
       <div className="rz-admin-stats">
+        <div>Actieve regressiesuite: laag 1 / laag 2 / laag 3</div>
+        <div>Legacy-suite: alleen referentie en diagnosehulp</div>
         <div>Laatste test: {typeLabel(status?.test_type)}</div>
         <div>Status: {statusLabel(status?.status)}</div>
         <div>Laatste run: {formatDateTime(status?.last_run_at)}</div>

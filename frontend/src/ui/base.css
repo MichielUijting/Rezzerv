@@ -1378,3 +1378,18 @@ button.rz-tab.rz-tab-active {
   background: #f4fbf6;
   border: 2px solid var(--color-brand-primary);
 }
+
+.rz-admin-inline-note{
+  margin:0 0 12px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:#fff7e8;
+  border:1px solid #f1d7a7;
+  color:#5f4a1b;
+  font-size:14px;
+}
+
+.rz-admin-report-row--neutral{
+  border-left:4px solid #c8ced8;
+  background:#f8fafc;
+}
