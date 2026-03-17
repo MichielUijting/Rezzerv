@@ -390,6 +390,45 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     handleProcessSelected('selected_only')
   }
 
+
+  function handleExportSelected() {
+    if (!batch || selectedLineIds.length === 0) return
+    const selectedSet = new Set(selectedLineIds.map((id) => String(id)))
+    const rows = lineUiStates.filter((entry) => selectedSet.has(String(entry.line.id)))
+    const header = ['Bonartikel', 'Aantal', 'Gekoppeld artikel', 'Locatie', 'Prijs', 'Status']
+    const csvRows = rows.map((entry) => {
+      const articleName = entry.line.resolved_household_article_name || articleLabel(articleOptions.find((option) => String(option.id) === String(entry.draft.articleId))) || ''
+      const locationLabel = locationOptions.find((location) => String(location.id) === String(entry.draft.locationId))?.label || ''
+      const priceLabel = entry.line.line_price_raw != null ? entry.line.line_price_raw.toFixed(2) : ''
+      return [
+        entry.line.article_name_raw || '',
+        formatQuantity(entry.line.quantity_raw, entry.line.unit_raw),
+        articleName,
+        locationLabel,
+        priceLabel,
+        entry.statusLabel || '',
+      ]
+    })
+    const csv = [header, ...csvRows]
+      .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
+      .join('\n')
+    window.__rezzervLastDownload = {
+      filename: 'rezzerv-kassabondetail.csv',
+      csv,
+      rowCount: rows.length,
+      source: 'receipt-detail',
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'rezzerv-kassabondetail.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  }
+
   async function processBatchNow(mode = 'ready_only') {
     if (!batch) return
     setIsProcessingBatch(true)
@@ -607,6 +646,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               <div style={{ color: '#2e7d4d' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
               <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch} data-testid="receipt-process-button">Naar voorraad</Button>
             </div>
           </div>

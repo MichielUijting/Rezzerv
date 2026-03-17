@@ -253,6 +253,11 @@ function extractIdFromTestId(element, prefix) {
   return value.startsWith(prefix) ? value.slice(prefix.length) : null
 }
 
+
+function getLastDownload(frame) {
+  return frame?.contentWindow?.__rezzervLastDownload || null
+}
+
 async function openInventoryDetail(frame, articleId = null) {
   const doc = getFrameDocument(frame)
   const trigger = pickByTestIdPrefix(doc, 'inventory-row-', articleId)
@@ -544,6 +549,26 @@ export async function runLayer1RegressionTests() {
       clickElement(analysisTab)
       await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="analysis-page"]'), WAIT_TIMEOUT, 'analysis-page niet gevonden')
     }, results)
+
+    await runScenario('T11 Kassabondetail exporteert geselecteerde regels met kolomtitels', async () => {
+      const receiptFixture = await resolveReceiptFixture(frame, fixture)
+      await navigateFrame(frame, '/kassabonnen')
+      const detailDoc = await openReceiptDetail(frame, receiptFixture.batchId)
+      await waitForReceiptLines(() => getFrameDocument(frame))
+      const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${receiptFixture.completeLineId}"]`)
+      const exportButton = detailDoc.querySelector('[data-testid="receipt-export-button"]')
+      if (!lineSelect || !exportButton) throw new Error('Kassabondetailselectie of export ontbreekt')
+      if (!lineSelect.checked) clickElement(lineSelect)
+      await delay(120)
+      clickElement(exportButton)
+      await delay(180)
+      const download = getLastDownload(frame)
+      if (!download?.csv) throw new Error('Kassabondetailexport ontbreekt')
+      const firstLine = String(download.csv || '').split('\n')[0] || ''
+      if (!firstLine.includes('Bonartikel') || !firstLine.includes('Locatie')) throw new Error('Kassabondetailexport mist kolomtitels')
+      if ((download?.rowCount || 0) < 1) throw new Error('Kassabondetailexport mist geselecteerde regel')
+    }, results)
+
   } finally {
     removeExistingFrame()
   }
