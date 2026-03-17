@@ -12,33 +12,13 @@ import {
   runLayer1Tests,
   runLayer2Tests,
   runLayer3Tests,
-  runSmokeTests,
   submitTestResults,
 } from "./services/adminTestingService";
-import { runBrowserSmokeTests } from "./lib/browserSmokeRunner";
 import { runLayer1RegressionTests } from "./lib/layer1RegressionRunner";
 import { runLayer2RouteTests } from "./lib/layer2RouteRunner";
 import { runLayer3StyleguideTests } from "./lib/layer3StyleguideRunner";
 
 
-
-const REMOVED_LEGACY_ITEMS = [
-  { name: 'Quick action “Volledige regressietest uitvoeren” uit leidend testpaneel', reason: 'Admin-ingang verwijderd; laag 1/2/3 zijn leidend.' },
-  { name: 'Legacy nichechecks uitvoeren', reason: 'Laatste handmatige legacy-run uit de Admin UI verwijderd; regressie loopt nu alleen via laag 1/2/3.' },
-  { name: 'Legacy regressiesuite-blok in Admin / Testdata', reason: 'Legacy-paneel opgeheven; resterende informatie staat alleen nog als eindafbouw-overzicht in beeld.' },
-  { name: 'Legacy runner voor gecombineerde regressie als zichtbaar referentiepad', reason: 'Niet meer nodig in het productscherm nu nichechecks zijn gemigreerd of verwijderd.' },
-]
-
-const MIGRATED_LEGACY_ITEMS = [
-  { name: 'Runtime diagnose dropdown-locaties', targetLayer: 'Laag 2', reason: 'Overgenomen als aparte admin-routecheck voor zichtbaarheid en bruikbare niche-ingang.' },
-  { name: 'Runtime diagnose verwerkvalidatie', targetLayer: 'Laag 2', reason: 'Overgenomen als aparte admin-routecheck voor zichtbaarheid en bruikbare niche-ingang.' },
-]
-
-const LEGACY_FINALIZATION_ITEMS = [
-  { name: 'Leidende regressiesuite', outcome: 'Laag 1 / laag 2 / laag 3', note: 'Dit is nu de enige productleidende regressieroute.' },
-  { name: 'Legacy regressiesuite', outcome: 'Opgeheven in Admin / Testdata', note: 'Geen aparte productingang meer; oude referentie is uit het leidende scherm verwijderd.' },
-  { name: 'Bewust niet uitgebreid', outcome: 'Geen nieuwe feature- of UI-scope', note: 'Deze release rondt alleen de regressie-opschoning af.' },
-]
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -338,37 +318,6 @@ export default function AdminPage() {
     }
   }
 
-  async function handleRunSmoke() {
-    setTestMessage("");
-    setShowReport(false);
-    try {
-      const result = await runSmokeTests();
-      setTestStatus((current) => ({ ...current, ...result }));
-      if (!result.started) {
-        setTestMessage("Er loopt al een test");
-        await refreshTestStatus();
-        return;
-      }
-
-      setTestMessage("Smoke test gestart");
-      const results = await runBrowserSmokeTests();
-      await submitTestResults('smoke', results);
-      await refreshTestStatus();
-      const latestReport = await fetchLatestTestReport();
-      setTestReport(latestReport);
-      setShowReport(true);
-      setTestMessage('Smoke test afgerond');
-    } catch (error) {
-      try {
-        await submitTestResults('smoke', [{ name: 'Smoke test runner', status: 'failed', error: error.message || 'Smoke test kon niet worden uitgevoerd' }]);
-        await refreshTestStatus();
-      } catch {
-        // negeer secundaire fout
-      }
-      setTestMessage(error.message || "Smoke test kon niet worden gestart");
-    }
-  }
-
 
   async function handleViewReport() {
     setTestMessage("");
@@ -411,12 +360,11 @@ export default function AdminPage() {
           <div className="rz-admin-panel">
             <h3>Testen</h3>
             <p className="rz-admin-muted">
-              Start hier een smoke test of een leidende laag-1, laag-2 of laag-3 regressietest en bekijk de laatste status.
+              Start hier een leidende laag-1, laag-2 of laag-3 regressietest en bekijk de laatste status.
             </p>
             <div data-testid="test-run-panel"><TestRunPanel
               isRunning={testStatus.status === "running"}
-              showLegacyWarning
-              onRunSmoke={handleRunSmoke}
+              showSuiteNotice
               onRunLayer1={handleRunLayer1}
               onRunLayer2={handleRunLayer2}
               onRunLayer3={handleRunLayer3}
@@ -431,7 +379,6 @@ export default function AdminPage() {
                 <div className="rz-admin-report-meta">
                   <div>Testtype: {testReport.test_type || "Onbekend"}</div>
                   <div>Leidend: laag 1 / laag 2 / laag 3</div>
-                  <div>Legacy regressiesuite: opgeheven in Admin / Testdata</div>
                   <div>Laatste run: {testReport.last_run_at ? new Date(testReport.last_run_at).toLocaleString("nl-NL") : "Nog geen rapport"}</div>
                   <div>Geslaagd: {testReport.results?.filter((result) => result.status === "passed").length || 0}</div>
                   <div>Gefaald: {testReport.results?.filter((result) => result.status === "failed").length || 0}</div>
@@ -452,58 +399,6 @@ export default function AdminPage() {
                 </div>
               </div>
             ) : null}
-          </div>
-
-
-
-          <div className="rz-admin-panel" data-testid="legacy-finalization-panel">
-            <h3>Regressie-eindafbouw</h3>
-            <p className="rz-admin-muted">
-              De oude legacy-regressiesuite is opgeheven in Admin / Testdata. Alleen laag 1, laag 2 en laag 3 gelden nog als leidende regressieroute.
-            </p>
-            <div className="rz-admin-report" data-testid="legacy-finalization-list">
-              <h4 className="rz-admin-status-title">Eindlijst regressie-opschoning</h4>
-              <div className="rz-admin-report-list">
-                {LEGACY_FINALIZATION_ITEMS.map((item) => (
-                  <div key={item.name} className="rz-admin-report-row rz-admin-report-row--neutral">
-                    <div className="rz-admin-report-main">
-                      <span>{item.name}</span>
-                      <span>{item.outcome}</span>
-                    </div>
-                    <div className="rz-admin-report-meta-line">Toelichting: {item.note}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="rz-admin-report" data-testid="legacy-migration-list">
-              <h4 className="rz-admin-status-title">Migratielijst v1</h4>
-              <div className="rz-admin-report-list">
-                {MIGRATED_LEGACY_ITEMS.map((item) => (
-                  <div key={item.name} className="rz-admin-report-row rz-admin-report-row--neutral">
-                    <div className="rz-admin-report-main">
-                      <span>{item.name}</span>
-                      <span>{item.targetLayer}</span>
-                    </div>
-                    <div className="rz-admin-report-meta-line">Reden: {item.reason}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rz-admin-report" data-testid="legacy-removal-list">
-              <h4 className="rz-admin-status-title">Verwijderlijst eindafbouw</h4>
-              <div className="rz-admin-report-list">
-                {REMOVED_LEGACY_ITEMS.map((item) => (
-                  <div key={item.name} className="rz-admin-report-row rz-admin-report-row--neutral">
-                    <div className="rz-admin-report-main">
-                      <span>{item.name}</span>
-                      <span>Verwijderd</span>
-                    </div>
-                    <div className="rz-admin-report-meta-line">Reden: {item.reason}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
           <div className="rz-admin-panel" data-testid="admin-runtime-diagnostics-panel">
