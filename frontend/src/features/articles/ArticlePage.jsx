@@ -1,8 +1,9 @@
-import { useParams, useSearchParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Tabs from '../../ui/Tabs'
+import Button from '../../ui/Button'
 import demoData from '../../demo-articles.json'
 import { useArticleFieldVisibility } from './hooks/useArticleFieldVisibility'
 import ArticleOverviewTab from './tabs/ArticleOverviewTab'
@@ -86,6 +87,7 @@ function mapEventTypeLabel(eventType) {
   if (eventType === 'purchase') return 'Aankoop'
   if (eventType === 'manual_adjustment') return 'Handmatige voorraadcorrectie'
   if (eventType === 'auto_repurchase') return 'Automatisch (herhaalaankoop)'
+  if (eventType === 'archive') return 'Archivering'
   return eventType || 'Gebeurtenis'
 }
 
@@ -240,6 +242,7 @@ function ArticleDetailState({ title, message }) {
 }
 
 export default function ArticlePage() {
+  const navigate = useNavigate()
   const { articleId } = useParams()
   const [searchParams] = useSearchParams()
   const { visibilityMap, isLoading: visibilityLoading, error: visibilityError } = useArticleFieldVisibility()
@@ -250,6 +253,10 @@ export default function ArticlePage() {
   const [historyLoadError, setHistoryLoadError] = useState('')
   const [inventoryLoading, setInventoryLoading] = useState(true)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [archiveStatus, setArchiveStatus] = useState('active')
+  const [archiveMessage, setArchiveMessage] = useState('')
+  const [archiveError, setArchiveError] = useState('')
+  const [archiveBusy, setArchiveBusy] = useState(false)
 
   useEffect(() => {
     function handleAutomationChange() {
@@ -305,6 +312,13 @@ export default function ArticlePage() {
   const resolvedArticleName = resolution.articleName
 
   useEffect(() => {
+    setArchiveStatus('active')
+    setArchiveMessage('')
+    setArchiveError('')
+    setArchiveBusy(false)
+  }, [articleId, resolvedArticleName])
+
+  useEffect(() => {
     let cancelled = false
     setHistoryLoadError('')
 
@@ -348,19 +362,66 @@ export default function ArticlePage() {
     if (!activeArticle) return null
     const merged = activeArticle
     const liveHistory = mapLiveHistoryRows(liveHistoryRows)
+    const withStatus = { ...merged, status: archiveStatus }
 
     if (hasLiveInventoryMatch) {
-      return { ...merged, history: liveHistory }
+      return { ...withStatus, history: liveHistory }
     }
 
     if (isPureDemoArticle) {
-      return merged
+      return withStatus
     }
 
-    return liveHistory.length ? { ...merged, history: liveHistory } : merged
-  }, [activeArticle, automationVersion, liveHistoryRows, hasLiveInventoryMatch, isPureDemoArticle])
+    return liveHistory.length ? { ...withStatus, history: liveHistory } : withStatus
+  }, [activeArticle, archiveStatus, automationVersion, liveHistoryRows, hasLiveInventoryMatch, isPureDemoArticle])
 
   const pageTitle = `Artikel details: ${articleData?.name || resolvedArticleName || 'Onbekend artikel'}`
+  const canArchive = Boolean(articleData?.name) && hasLiveInventoryMatch && archiveStatus !== 'archived'
+
+  async function handleArchiveArticle() {
+    if (!articleData?.name || archiveBusy || !canArchive) return
+    const confirmed = window.confirm(`Archiveer ${articleData.name}? Het artikel verdwijnt uit actieve Voorraad maar blijft beschikbaar voor historie en analyses.`)
+    if (!confirmed) return
+
+    setArchiveBusy(true)
+    setArchiveError('')
+    setArchiveMessage('')
+    try {
+      const response = await fetch('/api/dev/articles/archive', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ article_name: articleData.name, reason: 'Handmatig gearchiveerd vanuit Artikeldetail' }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data?.detail || 'Artikel kon niet worden gearchiveerd.')
+      }
+      setArchiveStatus('archived')
+      setArchiveMessage(`${articleData.name} is gearchiveerd en verdwijnt uit actieve Voorraad.`)
+      setLiveInventoryRows((rows) => rows.filter((row) => normalizeName(row?.artikel) !== normalizeName(articleData.name)))
+      setLiveHistoryRows((rows) => [
+        {
+          id: `archive-${Date.now()}`,
+          created_at: new Date().toISOString(),
+          event_type: 'archive',
+          quantity: 0,
+          old_quantity: articleData.total_quantity ?? 0,
+          new_quantity: 0,
+          location_label: articleData.main_location || '',
+          source: 'article_archive',
+          note: data?.archive_reason || 'Handmatig gearchiveerd vanuit Artikeldetail',
+        },
+        ...rows,
+      ])
+    } catch (error) {
+      setArchiveError(error?.message || 'Artikel kon niet worden gearchiveerd.')
+    } finally {
+      setArchiveBusy(false)
+    }
+  }
 
   const tabContent = {
     Overzicht: articleData ? <ArticleOverviewTab articleData={articleData} visibilityMap={visibilityMap} visibilityLoading={visibilityLoading} visibilityError={visibilityError} /> : null,
@@ -377,6 +438,32 @@ export default function ArticlePage() {
       <ScreenCard fullWidth>
         <div className="rz-article-detail-page" data-testid="article-detail-page">
           <div data-testid="article-detail-title" style={{ display: 'none' }}>{pageTitle}</div>
+          {articleData ? (
+            <div className="rz-article-detail-toolbar" data-testid="article-archive-toolbar" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div data-testid="article-archive-status" style={{ fontWeight: 700, color: archiveStatus === 'archived' ? '#b54708' : '#2e7d4d' }}>
+                  Status: {archiveStatus === 'archived' ? 'Gearchiveerd' : 'Actief'}
+                </div>
+                {archiveMessage ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="article-archive-feedback">{archiveMessage}</div> : null}
+                {archiveError ? <div className="rz-article-detail-alert" data-testid="article-archive-error">{archiveError}</div> : null}
+              </div>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                {archiveStatus === 'archived' ? (
+                  <Button variant="secondary" type="button" data-testid="article-archive-back-to-inventory" onClick={() => navigate('/voorraad')}>Terug naar Voorraad</Button>
+                ) : null}
+                <Button
+                  variant={archiveStatus === 'archived' ? 'secondary' : 'primary'}
+                  type="button"
+                  data-testid="article-archive-button"
+                  onClick={handleArchiveArticle}
+                  disabled={!canArchive || archiveBusy}
+                  title={!hasLiveInventoryMatch ? 'Archiveren is alleen beschikbaar voor actieve voorraadartikelen.' : undefined}
+                >
+                  {archiveBusy ? 'Archiveren...' : archiveStatus === 'archived' ? 'Gearchiveerd' : 'Archiveren'}
+                </Button>
+              </div>
+            </div>
+          ) : null}
           {inventoryLoadError ? <div className="rz-article-detail-alert">{inventoryLoadError}</div> : null}
           {historyLoadError && !historyLoading && articleData ? <div className="rz-article-detail-alert">{historyLoadError}</div> : null}
 

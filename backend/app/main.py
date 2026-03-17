@@ -83,6 +83,11 @@ class InventoryUpdate(BaseModel):
     sublocation_name: Optional[str] = None
 
 
+class ArticleArchiveRequest(BaseModel):
+    article_name: str
+    reason: Optional[str] = None
+
+
 class DiagnosticRequest(BaseModel):
     household_id: Optional[str] = None
 
@@ -1166,6 +1171,18 @@ def ensure_release_813_schema():
         conn.execute(text("UPDATE purchase_import_lines SET location_override_mode = COALESCE(location_override_mode, 'auto')"))
 
 
+def ensure_release_814_schema():
+    with engine.begin() as conn:
+        inventory_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(inventory)")).fetchall()}
+        if "status" not in inventory_columns:
+            conn.execute(text("ALTER TABLE inventory ADD COLUMN status TEXT DEFAULT 'active'"))
+        if "archived_at" not in inventory_columns:
+            conn.execute(text("ALTER TABLE inventory ADD COLUMN archived_at DATETIME"))
+        if "archive_reason" not in inventory_columns:
+            conn.execute(text("ALTER TABLE inventory ADD COLUMN archive_reason TEXT"))
+        conn.execute(text("UPDATE inventory SET status = COALESCE(status, 'active')"))
+
+
 def normalize_store_memory_key(article_name: str | None, brand: str | None):
     name = (article_name or "").strip().lower()
     brand_value = (brand or "").strip().lower()
@@ -1524,6 +1541,7 @@ def get_article_total_quantity(conn, household_id: str, article_name: str) -> in
             FROM inventory
             WHERE household_id = :household_id
               AND lower(trim(naam)) = lower(trim(:naam))
+              AND COALESCE(status, 'active') = 'active'
             """
         ),
         {"household_id": str(household_id), "naam": article_name},
@@ -1716,7 +1734,8 @@ def apply_manual_inventory_adjustment(
               i.naam AS artikel,
               i.aantal AS aantal,
               COALESCE(s.naam, '') AS locatie,
-              COALESCE(sl.naam, '') AS sublocatie
+              COALESCE(sl.naam, '') AS sublocatie,
+              COALESCE(i.status, 'active') AS status
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
@@ -2209,6 +2228,7 @@ ensure_release_3_schema()
 ensure_release_4_schema()
 ensure_release_803_schema()
 ensure_release_813_schema()
+ensure_release_814_schema()
 seed_store_providers()
 
 
@@ -2781,6 +2801,88 @@ def update_inventory(inventory_id: str, payload: InventoryUpdate):
         )
     return updated_row
 
+@app.post("/api/dev/articles/archive")
+def archive_article(payload: ArticleArchiveRequest, authorization: Optional[str] = Header(None)):
+    article_name = (payload.article_name or "").strip()
+    if not article_name:
+        raise HTTPException(status_code=400, detail="article_name is verplicht")
+
+    reason = (payload.reason or "").strip() or "Handmatig gearchiveerd vanuit Artikeldetail"
+    effective_household_id = get_request_household_id(authorization)
+
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT i.id, i.naam, i.aantal, i.space_id, i.sublocation_id,
+                       COALESCE(s.naam, '') AS space_name,
+                       COALESCE(sl.naam, '') AS sublocation_name
+                FROM inventory i
+                LEFT JOIN spaces s ON s.id = i.space_id
+                LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
+                WHERE i.household_id = :household_id
+                  AND lower(trim(i.naam)) = lower(trim(:article_name))
+                  AND COALESCE(i.status, 'active') = 'active'
+                  AND COALESCE(i.aantal, 0) > 0
+                ORDER BY i.updated_at DESC, i.created_at ASC, i.id ASC
+                """
+            ),
+            {"household_id": effective_household_id, "article_name": article_name},
+        ).mappings().all()
+
+        if not rows:
+            raise HTTPException(status_code=404, detail="Geen actief artikel gevonden om te archiveren")
+
+        archived_ids = []
+        total_archived_quantity = 0
+        for row in rows:
+            old_quantity = int(row.get("aantal") or 0)
+            total_archived_quantity += old_quantity
+            conn.execute(
+                text(
+                    """
+                    UPDATE inventory
+                    SET status = 'archived',
+                        archived_at = CURRENT_TIMESTAMP,
+                        archive_reason = :reason,
+                        aantal = 0,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                    """
+                ),
+                {"id": row["id"], "reason": reason},
+            )
+            resolved_location = {
+                "location_id": row.get("sublocation_id") or row.get("space_id"),
+                "space_id": row.get("space_id"),
+                "sublocation_id": row.get("sublocation_id"),
+                "location_label": " / ".join(part for part in [row.get("space_name") or "", row.get("sublocation_name") or ""] if part),
+            }
+            create_inventory_event(
+                conn,
+                household_id=effective_household_id,
+                article_id=row["id"],
+                article_name=row["naam"],
+                resolved_location=resolved_location,
+                event_type='archive',
+                quantity=0,
+                source='article_archive',
+                note=reason,
+                old_quantity=old_quantity,
+                new_quantity=0,
+            )
+            archived_ids.append(str(row["id"]))
+
+    return {
+        "status": "ok",
+        "article_name": article_name,
+        "archived_inventory_ids": archived_ids,
+        "archived_count": len(archived_ids),
+        "archived_quantity": total_archived_quantity,
+        "archive_reason": reason,
+    }
+
+
 @app.get("/api/dev/inventory-preview")
 def inventory_preview(response: Response, authorization: Optional[str] = Header(None)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -2795,11 +2897,13 @@ def inventory_preview(response: Response, authorization: Optional[str] = Header(
               i.naam AS artikel,
               i.aantal AS aantal,
               COALESCE(s.naam, '') AS locatie,
-              COALESCE(sl.naam, '') AS sublocatie
+              COALESCE(sl.naam, '') AS sublocatie,
+              COALESCE(i.status, 'active') AS status
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
             WHERE i.household_id = :household_id
+              AND COALESCE(i.status, 'active') = 'active'
               AND COALESCE(i.aantal, 0) > 0
             ORDER BY i.updated_at DESC, i.created_at ASC, i.id ASC
             """)
