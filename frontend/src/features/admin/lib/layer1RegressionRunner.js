@@ -254,6 +254,30 @@ function extractIdFromTestId(element, prefix) {
 }
 
 
+function openReceiptBatchInline(doc, batchId) {
+  const row = doc?.querySelector(`[data-testid="receipt-batch-row-${batchId}"]`)
+  if (!row) return false
+  clickElement(row)
+  doubleClickElement(row)
+  return true
+}
+
+function getReceiptDetailScope(doc) {
+  const detail = doc?.querySelector('[data-testid="receipt-detail-page"]')
+  if (!detail) return null
+  return detail.closest('.rz-card') || detail
+}
+
+function getReceiptExportButton(doc) {
+  const scope = getReceiptDetailScope(doc) || doc
+  return scope?.querySelector('[data-testid="receipt-export-button"]') || null
+}
+
+function getFirstEnabledReceiptLineSelect(detailDoc) {
+  return [...detailDoc.querySelectorAll('[data-testid^="receipt-line-select-"]')]
+    .find((element) => !element.disabled) || null
+}
+
 function getLastDownload(frame) {
   return frame?.contentWindow?.__rezzervLastDownload || null
 }
@@ -273,9 +297,25 @@ async function openReceiptDetail(frame, preferredBatchId = null) {
     return getFrameDocument(frame)
   }
   const doc = getFrameDocument(frame)
-  const openButton = pickByTestIdPrefix(doc, 'receipt-batch-open-', preferredBatchId)
-  if (!openButton) throw new Error('Geen receipt-batch-open-* gevonden')
-  clickElement(openButton)
+  let opened = false
+  if (preferredBatchId) {
+    opened = openReceiptBatchInline(doc, preferredBatchId)
+  }
+  if (!opened) {
+    const row = preferredBatchId
+      ? doc.querySelector(`[data-testid="receipt-batch-row-${preferredBatchId}"]`)
+      : doc.querySelector('[data-testid^="receipt-batch-row-"]')
+    if (row) {
+      clickElement(row)
+      doubleClickElement(row)
+      opened = true
+    }
+  }
+  if (!opened) {
+    const openButton = pickByTestIdPrefix(doc, 'receipt-batch-open-', preferredBatchId)
+    if (!openButton) throw new Error('Geen receipt-batch-open-* gevonden')
+    clickElement(openButton)
+  }
   await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
   return getFrameDocument(frame)
 }
@@ -330,7 +370,7 @@ async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = nul
     }
     await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
     detailDoc = getFrameDocument(frame)
-    lineSelect = detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
+    lineSelect = getFirstEnabledReceiptLineSelect(detailDoc)
     if (lineSelect) {
       return { detailDoc, lineSelect, batchId }
     }
@@ -341,6 +381,7 @@ async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = nul
 
 function getReceiptSelectableLineIds(detailDoc) {
   return [...detailDoc.querySelectorAll('[data-testid^="receipt-line-select-"]')]
+    .filter((element) => !element.disabled)
     .map((element) => extractIdFromTestId(element, 'receipt-line-select-'))
     .filter(Boolean)
 }
@@ -552,11 +593,11 @@ export async function runLayer1RegressionTests() {
 
     await runScenario('T11 Kassabondetail exporteert geselecteerde regels met kolomtitels', async () => {
       const { detailDoc, lineSelect } = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
-      const exportButton = detailDoc.querySelector('[data-testid="receipt-export-button"]')
+      const exportButton = getReceiptExportButton(detailDoc)
       if (!lineSelect || !exportButton) throw new Error('Kassabondetailselectie of export ontbreekt')
       if (!lineSelect.checked) clickElement(lineSelect)
       await delay(160)
-      const activeExportButton = getFrameDocument(frame)?.querySelector('[data-testid="receipt-export-button"]') || exportButton
+      const activeExportButton = getReceiptExportButton(getFrameDocument(frame)) || exportButton
       if (activeExportButton.disabled) throw new Error('Kassabondetailselectie activeert export niet')
       clickElement(activeExportButton)
       await delay(220)
