@@ -1,4 +1,4 @@
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useParams, useSearchParams } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -242,7 +242,6 @@ function ArticleDetailState({ title, message }) {
 }
 
 export default function ArticlePage() {
-  const navigate = useNavigate()
   const { articleId } = useParams()
   const [searchParams] = useSearchParams()
   const { visibilityMap, isLoading: visibilityLoading, error: visibilityError } = useArticleFieldVisibility()
@@ -257,6 +256,7 @@ export default function ArticlePage() {
   const [archiveMessage, setArchiveMessage] = useState('')
   const [archiveError, setArchiveError] = useState('')
   const [archiveBusy, setArchiveBusy] = useState(false)
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
 
   useEffect(() => {
     function handleAutomationChange() {
@@ -316,6 +316,7 @@ export default function ArticlePage() {
     setArchiveMessage('')
     setArchiveError('')
     setArchiveBusy(false)
+    setArchiveConfirmOpen(false)
   }, [articleId, resolvedArticleName])
 
   useEffect(() => {
@@ -380,10 +381,9 @@ export default function ArticlePage() {
 
   async function handleArchiveArticle() {
     if (!articleData?.name || archiveBusy || !canArchive) return
-    const confirmed = window.confirm(`Archiveer ${articleData.name}? Het artikel verdwijnt uit actieve Voorraad maar blijft beschikbaar voor historie en analyses.`)
-    if (!confirmed) return
 
     setArchiveBusy(true)
+    setArchiveConfirmOpen(false)
     setArchiveError('')
     setArchiveMessage('')
     try {
@@ -448,14 +448,11 @@ export default function ArticlePage() {
                 {archiveError ? <div className="rz-article-detail-alert" data-testid="article-archive-error">{archiveError}</div> : null}
               </div>
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                {archiveStatus === 'archived' ? (
-                  <Button variant="secondary" type="button" data-testid="article-archive-back-to-inventory" onClick={() => navigate('/voorraad')}>Terug naar Voorraad</Button>
-                ) : null}
                 <Button
                   variant={archiveStatus === 'archived' ? 'secondary' : 'primary'}
                   type="button"
                   data-testid="article-archive-button"
-                  onClick={handleArchiveArticle}
+                  onClick={() => setArchiveConfirmOpen(true)}
                   disabled={!canArchive || archiveBusy}
                   title={!hasLiveInventoryMatch ? 'Archiveren is alleen beschikbaar voor actieve voorraadartikelen.' : undefined}
                 >
@@ -464,6 +461,29 @@ export default function ArticlePage() {
               </div>
             </div>
           ) : null}
+          {archiveConfirmOpen ? (
+            <div className="rz-modal-backdrop" role="presentation" data-testid="article-archive-modal-backdrop">
+              <div
+                className="rz-modal-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="article-archive-modal-title"
+                data-testid="article-archive-modal"
+              >
+                <h3 id="article-archive-modal-title" className="rz-modal-title">Artikel archiveren</h3>
+                <p className="rz-modal-text" data-testid="article-archive-modal-text">
+                  Archiveer {articleData?.name}? Het artikel verdwijnt uit actieve Voorraad maar blijft beschikbaar voor historie en analyses.
+                </p>
+                <div className="rz-modal-actions">
+                  <Button type="button" variant="secondary" data-testid="article-archive-cancel" onClick={() => setArchiveConfirmOpen(false)} disabled={archiveBusy}>Annuleren</Button>
+                  <Button type="button" data-testid="article-archive-confirm" onClick={handleArchiveArticle} disabled={archiveBusy}>
+                    {archiveBusy ? 'Archiveren...' : 'Archiveren'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           {inventoryLoadError ? <div className="rz-article-detail-alert">{inventoryLoadError}</div> : null}
           {historyLoadError && !historyLoading && articleData ? <div className="rz-article-detail-alert">{historyLoadError}</div> : null}
 
