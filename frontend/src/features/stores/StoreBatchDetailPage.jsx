@@ -607,7 +607,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               <div style={{ color: '#2e7d4d' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-              <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
               <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch} data-testid="receipt-process-button">Naar voorraad</Button>
             </div>
           </div>

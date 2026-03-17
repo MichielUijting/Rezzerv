@@ -406,34 +406,6 @@ export default function Voorraad() {
     );
   };
 
-
-
-  const selectedExportRows = filteredRows.filter((row) => row.checked);
-
-  const handleExport = () => {
-    if (!selectedExportRows.length) return;
-    const header = ['Artikel', 'Aantal', 'Locatie', 'Sublocatie'];
-    const csvRows = selectedExportRows.map((row) => [row.artikel, String(row.aantal ?? ''), row.locatie, row.sublocatie]);
-    const csv = [header, ...csvRows]
-      .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
-      .join('\n');
-    window.__rezzervLastDownload = {
-      filename: 'rezzerv-voorraad.csv',
-      csv,
-      rowCount: selectedExportRows.length,
-      source: 'inventory',
-    };
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'rezzerv-voorraad.csv';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
-  };
-
   const allFilteredChecked =
     filteredRows.length > 0 && filteredRows.every((row) => row.checked);
 
@@ -769,7 +741,7 @@ export default function Voorraad() {
               </table>
             </div>
             <div className="rz-stock-table-actions">
-              <Button type="button" variant="secondary" onClick={handleExport} disabled={selectedExportRows.length === 0} data-testid="inventory-export-button">Exporteren</Button>
+              <Button type="button" variant="secondary">Exporteren</Button>
             </div>
           </div>
         </div>

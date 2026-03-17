@@ -143,12 +143,6 @@ export default function ReceiptsPage() {
     const csv = [header, ...csvRows]
       .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
       .join('\n')
-    window.__rezzervLastDownload = {
-      filename: 'rezzerv-kassabonnen.csv',
-      csv,
-      rowCount: rows.length,
-      source: 'receipts',
-    }
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -280,7 +274,7 @@ export default function ReceiptsPage() {
           </table>
         </div>
         <div className="rz-stock-table-actions">
-          <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || listItems.length === 0} data-testid="receipts-export-button">Exporteren</Button>
+          <Button type="button" variant="secondary" onClick={handleExport} disabled={isLoading || listItems.length === 0}>Exporteren</Button>
           <Button type="button" variant="secondary" onClick={handleDeleteSelected} disabled={selectedBatchIds.length === 0}>Verwijderen</Button>
           {openedBatchId ? <Button type="button" variant="secondary" onClick={() => setOpenedBatchId('')} data-testid="receipt-back-to-overview">Terug naar overzicht</Button> : null}
         </div>
