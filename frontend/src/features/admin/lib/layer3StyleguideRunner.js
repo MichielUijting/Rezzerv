@@ -1,4 +1,5 @@
 import { getLayer1Fixture } from './layer1RegressionFixture'
+import { getRezzervVersionTag } from '../../../ui/version'
 
 const FRAME_ID = 'rezzerv-layer3-runner-frame'
 const WAIT_TIMEOUT = 9000
@@ -167,8 +168,22 @@ async function openReceiptDetail(frame, preferredBatchId = null) {
 function assertBuildTagVisible(doc) {
   const tag = doc.querySelector('[data-testid="build-tag"]')
   if (!tag) throw new Error('Versielabel ontbreekt')
-  const text = String(tag.textContent || '').trim()
-  if (!text.includes('Rezzerv v01.08.72')) throw new Error(`Versielabel toont onjuiste waarde: ${text || 'leeg'}`)
+  const value = String(tag.textContent || '').trim()
+  const expected = `Rezzerv v${getRezzervVersionTag()}`
+  if (value !== expected) throw new Error(`Versielabel toont onjuiste waarde: ${value || 'leeg'} (verwacht: ${expected})`)
+}
+
+function assertNoExitBar(doc) {
+  if (doc.querySelector('.rz-exitbar')) throw new Error('Verboden afsluitbalk gevonden op kernscherm')
+}
+
+function assertAppShellPage(doc, pageTestId) {
+  const page = doc.querySelector(`[data-testid="${pageTestId}"]`)
+  if (!page) throw new Error(`${pageTestId} ontbreekt`)
+  if (!doc.querySelector('[data-testid="app-header"]')) throw new Error('Header ontbreekt')
+  if (!page.closest('.rz-content-inner')) throw new Error(`${pageTestId} staat niet binnen rz-content-inner`)
+  assertNoExitBar(doc)
+  return page
 }
 
 function assertStructure(doc, pageTestId) {
@@ -247,6 +262,7 @@ export async function runLayer3StyleguideTests() {
       const doc = getFrameDocument(frame)
       assertStructure(doc, 'inventory-page')
       assertBuildTagVisible(doc)
+      assertNoExitBar(doc)
       assertScreenCard(doc.querySelector('[data-testid="inventory-page"]'))
       if (!doc.querySelector('[data-testid="inventory-table"]')) throw new Error('Voorraadtabel ontbreekt')
     }, results)
@@ -255,8 +271,7 @@ export async function runLayer3StyleguideTests() {
       await navigateFrame(frame, '/voorraad')
       const detailDoc = await openInventoryDetail(frame, fixture.articleId)
       assertBuildTagVisible(detailDoc)
-      const page = detailDoc.querySelector('[data-testid="article-detail-page"]')
-      if (!page) throw new Error('article-detail-page ontbreekt')
+      const page = assertAppShellPage(detailDoc, 'article-detail-page')
       const card = assertScreenCard(page.parentElement)
       assertTabsWithinCard(card)
     }, results)
@@ -264,8 +279,7 @@ export async function runLayer3StyleguideTests() {
     await runScenario('L3.3 Kassabonnen-overzicht gebruikt kaart en versielabel', async () => {
       await navigateFrame(frame, '/kassabonnen')
       const doc = getFrameDocument(frame)
-      const page = doc.querySelector('[data-testid="receipts-page"]')
-      if (!page) throw new Error('receipts-page ontbreekt')
+      const page = assertAppShellPage(doc, 'receipts-page')
       assertBuildTagVisible(doc)
       const card = assertScreenCard(page)
       if (!card.querySelector('[data-testid="receipts-table"]')) throw new Error('Kassabonnentabel ontbreekt')
@@ -275,8 +289,7 @@ export async function runLayer3StyleguideTests() {
       await navigateFrame(frame, '/kassabonnen')
       const doc = await openReceiptDetail(frame, fixture.batchId)
       assertBuildTagVisible(doc)
-      const page = doc.querySelector('[data-testid="receipt-detail-page"]')
-      if (!page) throw new Error('receipt-detail-page ontbreekt')
+      const page = assertAppShellPage(doc, 'receipt-detail-page')
       const card = assertScreenCard(page.closest('[data-testid="screen-card"]') || page.parentElement)
       assertTabsWithinCard(card)
     }, results)

@@ -443,6 +443,8 @@ export default function AdminPage() {
                 <div className="rz-admin-report-meta">
                   <div>Testtype: {testReport.test_type || "Onbekend"}</div>
                   <div>Laatste run: {testReport.last_run_at ? new Date(testReport.last_run_at).toLocaleString("nl-NL") : "Nog geen rapport"}</div>
+                  <div>Geslaagd: {testReport.results?.filter((result) => result.status === "passed").length || 0}</div>
+                  <div>Gefaald: {testReport.results?.filter((result) => result.status === "failed").length || 0}</div>
                 </div>
                 <div className="rz-admin-report-list">
                   {testReport.results?.length ? testReport.results.map((result) => (
