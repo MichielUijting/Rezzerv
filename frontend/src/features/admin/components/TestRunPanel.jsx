@@ -1,6 +1,6 @@
 import Button from '../../../ui/Button'
 
-export default function TestRunPanel({ isRunning, onRunSmoke, onRunLayer1, onRunLayer2, onRunLayer3, onRunRegression, onViewReport, showLegacyWarning = true }) {
+export default function TestRunPanel({ isRunning, onRunSmoke, onRunLayer1, onRunLayer2, onRunLayer3, onViewReport, showLegacyWarning = true }) {
   return (
     <div>
       {showLegacyWarning ? (
@@ -18,9 +18,6 @@ export default function TestRunPanel({ isRunning, onRunSmoke, onRunLayer1, onRun
       </Button>
       <Button variant="secondary" onClick={onRunLayer3} disabled={isRunning}>
         Laag-3 UI/styleguide-test uitvoeren
-      </Button>
-      <Button variant="secondary" onClick={onRunRegression} disabled={isRunning}>
-        Volledige regressietest uitvoeren
       </Button>
       <Button variant="secondary" onClick={onViewReport} disabled={isRunning === true ? false : false}>
         Laatste testrapport bekijken

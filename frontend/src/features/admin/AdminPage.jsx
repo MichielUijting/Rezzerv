@@ -23,18 +23,20 @@ import { runLayer3StyleguideTests } from "./lib/layer3StyleguideRunner";
 import { runBrowserRegressionTests } from "./lib/browserRegressionRunner";
 
 
-const LEGACY_REGRESSION_MATRIX = [
-  { name: 'Login werkt', classification: 'Overgenomen in laag 1', coverage: 'Laag 1 kernregressie', action: 'Legacy-variant niet uitbreiden' },
-  { name: 'Voorraad opent', classification: 'Overgenomen in laag 1', coverage: 'Laag 1 kernregressie', action: 'Legacy-variant niet uitbreiden' },
-  { name: 'Artikeldetail opent vanuit Voorraad', classification: 'Overgenomen in laag 1', coverage: 'Laag 1 kernregressie', action: 'Legacy-variant niet uitbreiden' },
-  { name: 'Admin / testpaneel opent', classification: 'Overgenomen in laag 2', coverage: 'Laag 2 route-/schermtest', action: 'Legacy-variant niet uitbreiden' },
-  { name: 'Voorraad / artikeldetail / kassabon UI-structuur', classification: 'Overgenomen in laag 3', coverage: 'Laag 3 UI/styleguide-test', action: 'Leidende dekking actief houden' },
-  { name: 'Oude gecombineerde volledige regressierun', classification: 'Legacy', coverage: 'Referentie / diagnosehulp', action: 'Niet leidend, later opschonen of verwijderen' },
-  { name: 'Verouderde admin- of debugknoppen rond legacy-runs', classification: 'Verwijderkandidaat', coverage: 'Geen productleidende dekking nodig', action: 'Eerst inventariseren, daarna pas verwijderen' },
-  { name: 'Nog niet gemigreerde nichechecks uit oude suite', classification: 'Nog migreren', coverage: 'Ontbrekende dekking apart beoordelen', action: 'Pas verwijderen na expliciete migratie' },
+const REMOVED_LEGACY_ITEMS = [
+  { name: 'Quick action “Volledige regressietest uitvoeren” uit leidend testpaneel', reason: 'Admin-ingang verwijderd; laag 1/2/3 zijn leidend, legacy blijft alleen in eigen blok beschikbaar.' },
+  { name: 'Legacy-matrixregels voor login / voorraad / artikeldetail openen', reason: 'Gedekt door laag 1 en daarom niet meer als losse legacy-regel zichtbaar.' },
+  { name: 'Legacy-matrixregel voor admin / testpaneel opent', reason: 'Gedekt door laag 2 en daarom niet meer als losse legacy-regel zichtbaar.' },
+  { name: 'Legacy-matrixregel voor kernscherm UI-structuur', reason: 'Gedekt door laag 3 en daarom niet meer als losse legacy-regel zichtbaar.' },
 ]
 
-const LEGACY_CLASSIFICATION_ORDER = ['Overgenomen in laag 1', 'Overgenomen in laag 2', 'Overgenomen in laag 3', 'Nog migreren', 'Legacy', 'Verwijderkandidaat']
+const LEGACY_REGRESSION_MATRIX = [
+  { name: 'Legacy nichechecks uit oude gecombineerde regressierun', classification: 'Nog migreren', coverage: 'Ontbrekende dekking apart beoordelen', action: 'Alleen behouden tot expliciete migratie naar laag 1/2/3' },
+  { name: 'Legacy runner voor gecombineerde regressie', classification: 'Legacy', coverage: 'Referentie / diagnosehulp voor resterende nichechecks', action: 'Niet leidend; alleen nog starten vanuit legacy-blok' },
+  { name: 'Overige verouderde debug- of admin-ingangen rond legacy-runs', classification: 'Verwijderkandidaat', coverage: 'Geen productleidende dekking nodig', action: 'Pas schrappen als bevestigd is dat niemand hier nog op leunt' },
+]
+
+const LEGACY_CLASSIFICATION_ORDER = ['Nog migreren', 'Legacy', 'Verwijderkandidaat']
 
 function summarizeLegacyMatrix(items) {
   return LEGACY_CLASSIFICATION_ORDER.map((label) => ({
@@ -444,7 +446,7 @@ export default function AdminPage() {
           <div className="rz-admin-panel">
             <h3>Testen</h3>
             <p className="rz-admin-muted">
-              Start hier een smoke test, laag-1, laag-2 of laag-3 regressietest of een volledige regressietest en bekijk de laatste status.
+              Start hier een smoke test of een leidende laag-1, laag-2 of laag-3 regressietest en bekijk de laatste status.
             </p>
             <div data-testid="test-run-panel"><TestRunPanel
               isRunning={testStatus.status === "running"}
@@ -453,7 +455,6 @@ export default function AdminPage() {
               onRunLayer1={handleRunLayer1}
               onRunLayer2={handleRunLayer2}
               onRunLayer3={handleRunLayer3}
-              onRunRegression={handleRunRegression}
               onViewReport={handleViewReport}
             />
             </div>
@@ -493,8 +494,13 @@ export default function AdminPage() {
           <div className="rz-admin-panel" data-testid="legacy-regression-panel">
             <h3>Legacy regressiesuite</h3>
             <p className="rz-admin-muted">
-              Oude regressietests zijn bevroren als legacy. Laag 1, laag 2 en laag 3 zijn leidend; legacy blijft alleen beschikbaar als referentie en diagnosehulp.
+              Oude regressietests zijn bevroren als legacy. Laag 1, laag 2 en laag 3 zijn leidend; legacy blijft alleen beschikbaar voor resterende nichechecks en diagnosehulp.
             </p>
+            <div className="rz-admin-actions">
+              <Button variant="secondary" onClick={handleRunRegression} disabled={testStatus.status === "running"}>
+                Legacy nichechecks uitvoeren
+              </Button>
+            </div>
             <div className="rz-admin-report">
               <h4 className="rz-admin-status-title">Legacy-matrix</h4>
               <div className="rz-admin-report-meta" data-testid="legacy-regression-summary">
@@ -511,6 +517,20 @@ export default function AdminPage() {
                     </div>
                     <div className="rz-admin-report-meta-line">Dekking: {item.coverage}</div>
                     <div className="rz-admin-report-meta-line">Actie: {item.action}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="rz-admin-report" data-testid="legacy-removal-list">
+              <h4 className="rz-admin-status-title">Verwijderlijst v1</h4>
+              <div className="rz-admin-report-list">
+                {REMOVED_LEGACY_ITEMS.map((item) => (
+                  <div key={item.name} className="rz-admin-report-row rz-admin-report-row--neutral">
+                    <div className="rz-admin-report-main">
+                      <span>{item.name}</span>
+                      <span>Verwijderd</span>
+                    </div>
+                    <div className="rz-admin-report-meta-line">Reden: {item.reason}</div>
                   </div>
                 ))}
               </div>
