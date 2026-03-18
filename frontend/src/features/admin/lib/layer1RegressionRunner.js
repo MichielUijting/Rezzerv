@@ -110,6 +110,15 @@ function clickElement(element) {
   element.dispatchEvent(new view.MouseEvent('click', { bubbles: true, cancelable: true, view }))
 }
 
+function nativeClick(element) {
+  if (!element) return
+  if (typeof element.click === 'function') {
+    element.click()
+    return
+  }
+  clickElement(element)
+}
+
 function doubleClickElement(element) {
   const view = element?.ownerDocument?.defaultView || window
   element.dispatchEvent(new view.MouseEvent('dblclick', { bubbles: true, cancelable: true, view }))
@@ -174,6 +183,27 @@ async function prepareLayer1ReceiptFixture(frame, fixture) {
     return resolved
   } catch (error) {
     throw new Error('Layer1 receipt fixture kon niet worden voorbereid')
+  }
+}
+
+async function prepareReceiptExportFixture(frame) {
+  if (frame.__rezzervReceiptExportFixture) return frame.__rezzervReceiptExportFixture
+  try {
+    const prepared = await requestJson('/api/dev/generate-receipt-export-fixture', { method: 'POST', body: '{}' })
+    const resolved = {
+      connectionId: String(prepared?.connectionId || prepared?.connection_id || ''),
+      batchId: String(prepared?.batchId || prepared?.batch_id || ''),
+      latestBatchId: String(prepared?.latestBatchId || prepared?.latest_batch_id || prepared?.batchId || prepared?.batch_id || ''),
+      exportLineId: String(prepared?.exportLineId || prepared?.export_line_id || ''),
+      exportArticleName: String(prepared?.exportArticleName || prepared?.export_article_name || ''),
+    }
+    if (!resolved.batchId || !resolved.exportLineId) {
+      throw new Error('Export fixture ontbreekt of is incompleet')
+    }
+    frame.__rezzervReceiptExportFixture = resolved
+    return resolved
+  } catch (error) {
+    throw new Error('Export fixture kon niet worden voorbereid')
   }
 }
 
@@ -604,23 +634,31 @@ export async function runLayer1RegressionTests() {
       await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="analysis-page"]'), WAIT_TIMEOUT, 'analysis-page niet gevonden')
     }, results)
 
-    await runScenario('T11 Kassabondetail exporteert geselecteerde regels met kolomtitels', async () => {
-      const receiptFixture = await resolveReceiptFixture(frame, fixture)
-      const preferredBatchId = receiptFixture.latestBatchId || receiptFixture.batchId
-      const { detailDoc, lineSelect } = await openReceiptBatchWithSelectableLines(frame, preferredBatchId, receiptFixture.completeLineId)
-      const exportButton = getReceiptExportButton(detailDoc)
-      if (!lineSelect || !exportButton) throw new Error('Kassabondetailselectie of export ontbreekt')
-      if (!lineSelect.checked) clickElement(lineSelect)
-      await delay(160)
-      const activeExportButton = getReceiptExportButton(getFrameDocument(frame)) || exportButton
-      if (activeExportButton.disabled) throw new Error('Kassabondetailselectie activeert export niet')
-      clickElement(activeExportButton)
+    await runScenario('T11 Export-testdataset detailroute exporteert vaste CSV met kolomtitels', async () => {
+      const exportFixture = await prepareReceiptExportFixture(frame)
+      const targetBatchId = exportFixture.latestBatchId || exportFixture.batchId
+      await navigateFrame(frame, `/winkels/batch/${encodeURIComponent(targetBatchId)}?fixture=export&t=${Date.now()}`)
+      const detailDoc = await waitForCondition(() => {
+        const liveDoc = getFrameDocument(frame)
+        return liveDoc?.querySelector('[data-testid="receipt-detail-page"]') ? liveDoc : null
+      }, WAIT_TIMEOUT, 'receipt-detail-page niet gevonden voor export-testdataset')
+      const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${exportFixture.exportLineId}"]`)
+      if (!lineSelect) throw new Error(`receipt-line-select-${exportFixture.exportLineId} niet gevonden in export-testdataset`)
+      if (lineSelect.disabled) throw new Error('Export-testdatasetregel is niet selecteerbaar')
+      nativeClick(lineSelect)
+      const activeExportButton = await waitForCondition(() => {
+        const liveDoc = getFrameDocument(frame)
+        const button = getReceiptExportButton(liveDoc)
+        return button && button.disabled === false ? button : null
+      }, WAIT_TIMEOUT, 'receipt-export-button werd niet actief voor export-testdataset')
+      nativeClick(activeExportButton)
       await delay(220)
       const download = getLastDownload(frame)
-      if (!download?.csv) throw new Error('Kassabondetailexport ontbreekt')
+      if (!download?.csv) throw new Error('Export-testdataset CSV ontbreekt')
       const firstLine = String(download.csv || '').split('\n')[0] || ''
-      if (!firstLine.includes('Bonartikel') || !firstLine.includes('Locatie')) throw new Error('Kassabondetailexport mist kolomtitels')
-      if ((download?.rowCount || 0) < 1) throw new Error('Kassabondetailexport mist geselecteerde regel')
+      if (!firstLine.includes('Bonartikel') || !firstLine.includes('Locatie')) throw new Error('Export-testdataset mist kolomtitels')
+      if ((download?.rowCount || 0) !== 1) throw new Error('Export-testdataset moet exact 1 regel exporteren')
+      if (!String(download.csv || '').includes(exportFixture.exportArticleName)) throw new Error('Export-testdataset mist de vaste testregel')
     }, results)
 
   } finally {

@@ -3184,6 +3184,182 @@ def generate_layer1_receipt_fixture():
         }
 
 
+@app.post("/api/dev/generate-receipt-export-fixture")
+def generate_receipt_export_fixture():
+    reset_dev_tables()
+    ensure_ui_test_seed_data()
+
+    household = ensure_household("admin@rezzerv.local")
+    household_id = str(household.get("id") or "1")
+
+    with engine.begin() as conn:
+        connection = conn.execute(
+            text(
+                """
+                SELECT hsc.id AS connection_id, hsc.store_provider_id
+                FROM household_store_connections hsc
+                JOIN store_providers sp ON sp.id = hsc.store_provider_id
+                WHERE hsc.household_id = :household_id
+                  AND sp.code = 'jumbo'
+                ORDER BY hsc.created_at DESC, hsc.id DESC
+                LIMIT 1
+                """
+            ),
+            {"household_id": household_id},
+        ).mappings().first()
+        if not connection:
+            raise HTTPException(status_code=500, detail="Export fixture connection kon niet worden voorbereid")
+
+        connection_id = str(connection["connection_id"])
+        store_provider_id = str(connection["store_provider_id"])
+        target_location_id = conn.execute(
+            text(
+                """
+                SELECT sl.id
+                FROM sublocations sl
+                JOIN spaces s ON s.id = sl.space_id
+                WHERE s.household_id = :household_id
+                  AND lower(s.naam) = 'keuken'
+                  AND lower(sl.naam) = 'kast 1'
+                LIMIT 1
+                """
+            ),
+            {"household_id": household_id},
+        ).scalar()
+        if not target_location_id:
+            raise HTTPException(status_code=500, detail="Export fixture locatie kon niet worden voorbereid")
+
+        batch_id = str(uuid.uuid4())
+        export_line_id = uuid.uuid4().hex
+        ignored_line_id = uuid.uuid4().hex
+        export_article_name = 'Export test compleet'
+        ignored_article_name = 'Export test genegeerd'
+        raw_payload = json.dumps({
+            'mock_profile': 'export-regression-fixture',
+            'provider_code': 'jumbo',
+            'batch_metadata': {
+                'purchase_date': '18-03-2026',
+                'store_name': 'Rezzerv Testdataset',
+                'store_label': 'Rezzerv Testdataset, Exportcontrole',
+            },
+            'lines': [
+                {
+                    'external_line_ref': 'export-fixture-line-1',
+                    'external_article_code': 'EXPORT-FIXTURE-1',
+                    'article_name_raw': export_article_name,
+                    'brand_raw': 'Rezzerv Test',
+                    'quantity_raw': 1,
+                    'unit_raw': 'stuk',
+                    'line_price_raw': 9.99,
+                    'currency_code': 'EUR',
+                },
+                {
+                    'external_line_ref': 'export-fixture-line-2',
+                    'external_article_code': 'EXPORT-FIXTURE-2',
+                    'article_name_raw': ignored_article_name,
+                    'brand_raw': 'Rezzerv Test',
+                    'quantity_raw': 1,
+                    'unit_raw': 'stuk',
+                    'line_price_raw': 1.11,
+                    'currency_code': 'EUR',
+                },
+            ],
+        })
+
+        conn.execute(
+            text(
+                """
+                INSERT INTO purchase_import_batches (
+                    id, household_id, store_provider_id, connection_id, source_type, source_reference, import_status, raw_payload, created_at
+                ) VALUES (
+                    :id, :household_id, :store_provider_id, :connection_id, 'mock', :source_reference, 'in_review', :raw_payload, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                'id': batch_id,
+                'household_id': household_id,
+                'store_provider_id': store_provider_id,
+                'connection_id': connection_id,
+                'source_reference': 'mock:export-regression-fixture',
+                'raw_payload': raw_payload,
+            },
+        )
+
+        conn.execute(
+            text(
+                """
+                INSERT INTO purchase_import_lines (
+                    id, batch_id, external_line_ref, external_article_code, article_name_raw, brand_raw, quantity_raw, unit_raw, line_price_raw, currency_code,
+                    match_status, review_decision, ui_sort_order, matched_household_article_id, target_location_id, processing_status,
+                    suggested_household_article_id, suggested_location_id, suggestion_confidence, suggestion_reason, is_auto_prefilled,
+                    article_override_mode, location_override_mode, created_at
+                ) VALUES (
+                    :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw, :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
+                    'matched', 'pending', 1, :matched_household_article_id, :target_location_id, 'pending',
+                    :matched_household_article_id, :target_location_id, 'high', :suggestion_reason, 1,
+                    'auto', 'auto', CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                'id': export_line_id,
+                'batch_id': batch_id,
+                'external_line_ref': 'export-fixture-line-1',
+                'external_article_code': 'EXPORT-FIXTURE-1',
+                'article_name_raw': export_article_name,
+                'brand_raw': 'Rezzerv Test',
+                'quantity_raw': 1,
+                'unit_raw': 'stuk',
+                'line_price_raw': 9.99,
+                'currency_code': 'EUR',
+                'matched_household_article_id': build_live_article_option_id('Melk'),
+                'target_location_id': target_location_id,
+                'suggestion_reason': 'Vaste export-regressiefixture',
+            },
+        )
+
+        conn.execute(
+            text(
+                """
+                INSERT INTO purchase_import_lines (
+                    id, batch_id, external_line_ref, external_article_code, article_name_raw, brand_raw, quantity_raw, unit_raw, line_price_raw, currency_code,
+                    match_status, review_decision, ui_sort_order, matched_household_article_id, target_location_id, processing_status,
+                    article_override_mode, location_override_mode, created_at
+                ) VALUES (
+                    :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw, :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
+                    'unmatched', 'ignored', 2, NULL, NULL, 'pending',
+                    'manual', 'manual', CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                'id': ignored_line_id,
+                'batch_id': batch_id,
+                'external_line_ref': 'export-fixture-line-2',
+                'external_article_code': 'EXPORT-FIXTURE-2',
+                'article_name_raw': ignored_article_name,
+                'brand_raw': 'Rezzerv Test',
+                'quantity_raw': 1,
+                'unit_raw': 'stuk',
+                'line_price_raw': 1.11,
+                'currency_code': 'EUR',
+            },
+        )
+
+        update_batch_status(conn, batch_id)
+
+    return {
+        'householdId': household_id,
+        'connectionId': connection_id,
+        'batchId': batch_id,
+        'latestBatchId': batch_id,
+        'exportLineId': export_line_id,
+        'ignoredLineId': ignored_line_id,
+        'exportArticleName': export_article_name,
+        'sourceReference': 'mock:export-regression-fixture',
+    }
+
 
 @app.get("/api/store-providers")
 def get_store_providers():
