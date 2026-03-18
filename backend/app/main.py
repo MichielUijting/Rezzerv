@@ -3176,7 +3176,9 @@ def generate_layer1_receipt_fixture():
 
         return {
             "householdId": household_id,
+            "connectionId": connection_id,
             "batchId": batch_id,
+            "latestBatchId": batch_id,
             "completeLineId": complete_line_id,
             "incompleteLineId": incomplete_line_id,
         }
