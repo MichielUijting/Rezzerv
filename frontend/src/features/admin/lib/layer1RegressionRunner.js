@@ -207,29 +207,6 @@ async function prepareReceiptExportFixture(frame) {
   }
 }
 
-async function prepareStoreConnectionsFixture(frame) {
-  if (frame.__rezzervStoreConnectionsFixture) return frame.__rezzervStoreConnectionsFixture
-  try {
-    const prepared = await requestJson('/api/dev/generate-store-connections-fixture', { method: 'POST', body: '{}' })
-    const resolved = {
-      householdId: String(prepared?.householdId || prepared?.household_id || '1'),
-      linkedProviderCode: String(prepared?.linkedProviderCode || prepared?.linked_provider_code || ''),
-      linkedConnectionId: String(prepared?.linkedConnectionId || prepared?.linked_connection_id || ''),
-      linkedCardNumber: String(prepared?.linkedCardNumber || prepared?.linked_card_number || ''),
-      updatedCardNumber: String(prepared?.updatedCardNumber || prepared?.updated_card_number || ''),
-      unlinkedProviderCode: String(prepared?.unlinkedProviderCode || prepared?.unlinked_provider_code || ''),
-      createCardNumber: String(prepared?.createCardNumber || prepared?.create_card_number || ''),
-    }
-    if (!resolved.linkedProviderCode || !resolved.unlinkedProviderCode) {
-      throw new Error('Store connections fixture ontbreekt of is incompleet')
-    }
-    frame.__rezzervStoreConnectionsFixture = resolved
-    return resolved
-  } catch (error) {
-    throw new Error('Store connections fixture kon niet worden voorbereid')
-  }
-}
-
 function normalizeText(value) {
   return String(value || '').trim().toLowerCase()
 }
@@ -657,6 +634,25 @@ export async function runLayer1RegressionTests() {
       await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="analysis-page"]'), WAIT_TIMEOUT, 'analysis-page niet gevonden')
     }, results)
 
+    await runScenario('T12 Kassa intake-item kan worden opgeslagen en status teruggelezen', async () => {
+      const uniqueRef = `kassa-layer1-${Date.now()}`
+      const created = await requestJson('/api/kassa-intake', {
+        method: 'POST',
+        body: JSON.stringify({ household_id: '1', source_type: 'foto_kassabon', source_reference: uniqueRef, status: 'nieuw' }),
+      })
+      if (!created?.id) throw new Error('Kassa intake-item werd niet opgeslagen')
+      await navigateFrame(frame, `/kassa?t=${Date.now()}`)
+      const kassaDoc = getFrameDocument(frame)
+      if (!kassaDoc.querySelector('[data-testid="kassa-page"]')) throw new Error('kassa-page niet gevonden')
+      const row = await waitForCondition(() => getFrameDocument(frame)?.querySelector(`[data-testid="kassa-intake-row-${created.id}"]`), WAIT_TIMEOUT, 'Kassa intake-item niet zichtbaar in overzicht')
+      const statusNode = getFrameDocument(frame)?.querySelector(`[data-testid="kassa-intake-status-${created.id}"]`)
+      if (!row || !statusNode) throw new Error('Kassa overzicht of status ontbreekt voor intake-item')
+      const statusValue = String(statusNode.textContent || '').trim().toLowerCase()
+      if (!statusValue.includes('nieuw')) throw new Error('Kassa-status werd niet als Nieuw getoond')
+      await navigateFrame(frame, `/kassa?refresh=${Date.now()}`)
+      if (!getFrameDocument(frame)?.querySelector(`[data-testid="kassa-intake-row-${created.id}"]`)) throw new Error('Kassa intake-item bleef niet zichtbaar na refresh')
+    }, results)
+
     await runScenario('T11 Export-testdataset response levert vaste CSV met kolomtitels', async () => {
       const exportFixture = await prepareReceiptExportFixture(frame)
       const targetBatchId = exportFixture.latestBatchId || exportFixture.batchId
@@ -673,32 +669,6 @@ export async function runLayer1RegressionTests() {
       const dataLines = String(csv || '').trim().split(/\r?\n/)
       if (dataLines.length !== 2) throw new Error('Export-testdataset moet exact 1 gegevensregel bevatten')
       if (!String(csv || '').includes(exportFixture.exportArticleName)) throw new Error('Export-testdataset mist de vaste testregel')
-    }, results)
-
-
-    await runScenario('T12 Winkelkoppeling kan worden opgeslagen en blijft zichtbaar na refresh', async () => {
-      const storeFixture = await prepareStoreConnectionsFixture(frame)
-      await navigateFrame(frame, `/winkelkoppelingen?t=${Date.now()}`)
-      let doc = getFrameDocument(frame)
-      const statusBefore = await waitForCondition(() => doc?.querySelector(`[data-testid="store-connection-status-${storeFixture.unlinkedProviderCode}"]`), WAIT_TIMEOUT, 'Status voor ongekoppelde winkel ontbreekt')
-      if (normalizeText(statusBefore.textContent) !== 'niet gekoppeld') throw new Error('Onverwachte beginstatus voor ongekoppelde winkel')
-      const action = doc.querySelector(`[data-testid="store-connection-action-${storeFixture.unlinkedProviderCode}"]`)
-      if (!action) throw new Error('Koppelactie ontbreekt voor ongekoppelde winkel')
-      clickElement(action)
-      await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="store-connection-editor"]'), WAIT_TIMEOUT, 'store-connection-editor niet gevonden')
-      doc = getFrameDocument(frame)
-      const input = doc.querySelector('[data-testid="store-connection-card-number"]')
-      const save = doc.querySelector('[data-testid="store-connection-save"]')
-      if (!input || !save) throw new Error('Kaartnummerinput of opslaan ontbreekt')
-      setInputValue(input, storeFixture.createCardNumber)
-      clickElement(save)
-      await waitForCondition(() => normalizeText(getFrameDocument(frame)?.querySelector(`[data-testid="store-connection-status-${storeFixture.unlinkedProviderCode}"]`)?.textContent) === 'gekoppeld', WAIT_TIMEOUT, 'Status werd niet gekoppeld na opslaan')
-      await navigateFrame(frame, `/winkelkoppelingen?refresh=${Date.now()}`)
-      doc = getFrameDocument(frame)
-      const statusAfter = await waitForCondition(() => doc?.querySelector(`[data-testid="store-connection-status-${storeFixture.unlinkedProviderCode}"]`), WAIT_TIMEOUT, 'Gekoppelde status ontbreekt na refresh')
-      if (normalizeText(statusAfter.textContent) !== 'gekoppeld') throw new Error('Gekoppelde status bleef niet zichtbaar na refresh')
-      const refNode = doc.querySelector(`[data-testid="store-connection-ref-${storeFixture.unlinkedProviderCode}"]`)
-      if (!refNode || !String(refNode.textContent || '').includes(storeFixture.createCardNumber)) throw new Error('Kaartnummer bleef niet zichtbaar na refresh')
     }, results)
 
   } finally {

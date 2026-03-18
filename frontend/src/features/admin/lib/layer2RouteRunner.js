@@ -85,23 +85,6 @@ async function prepareReceiptExportFixture(frame) {
   return resolved
 }
 
-async function prepareStoreConnectionsFixture(frame) {
-  if (frame.__rezzervStoreConnectionsFixture) return frame.__rezzervStoreConnectionsFixture
-  const prepared = await requestJson('/api/dev/generate-store-connections-fixture', { method: 'POST', body: '{}' })
-  const resolved = {
-    householdId: String(prepared?.householdId || prepared?.household_id || '1'),
-    linkedProviderCode: String(prepared?.linkedProviderCode || prepared?.linked_provider_code || ''),
-    linkedConnectionId: String(prepared?.linkedConnectionId || prepared?.linked_connection_id || ''),
-    linkedCardNumber: String(prepared?.linkedCardNumber || prepared?.linked_card_number || ''),
-    updatedCardNumber: String(prepared?.updatedCardNumber || prepared?.updated_card_number || ''),
-    unlinkedProviderCode: String(prepared?.unlinkedProviderCode || prepared?.unlinked_provider_code || ''),
-    createCardNumber: String(prepared?.createCardNumber || prepared?.create_card_number || ''),
-  }
-  if (!resolved.linkedProviderCode || !resolved.unlinkedProviderCode) throw new Error('Store connections fixture ontbreekt of is incompleet')
-  frame.__rezzervStoreConnectionsFixture = resolved
-  return resolved
-}
-
 async function openReceiptDetailWithSelectableLines(frame, preferredBatchId = null, preferredLineId = null) {
   const fixtureQuery = preferredBatchId ? `?fixtureBatch=${encodeURIComponent(preferredBatchId)}&t=${Date.now()}` : `?t=${Date.now()}`
   await navigateFrame(frame, `/kassabonnen${fixtureQuery}`)
@@ -166,10 +149,30 @@ export async function runLayer2RouteTests() {
     await runScenario('R9 Runtime diagnose dropdown-locaties blijft bereikbaar via admin', async ()=>{ await navigateFrame(frame,'/admin'); const doc=getFrameDocument(frame); if(!doc.querySelector('[data-testid="admin-runtime-diagnostics-panel"]')) throw new Error('admin-runtime-diagnostics-panel niet gevonden'); if(!doc.querySelector('[data-testid="admin-diagnostic-location-button"]')) throw new Error('admin-diagnostic-location-button niet gevonden') }, results)
     await runScenario('R10 Runtime diagnose verwerkvalidatie blijft bereikbaar via admin', async ()=>{ await navigateFrame(frame,'/admin'); const doc=getFrameDocument(frame); if(!doc.querySelector('[data-testid="admin-runtime-diagnostics-panel"]')) throw new Error('admin-runtime-diagnostics-panel niet gevonden'); if(!doc.querySelector('[data-testid="admin-diagnostic-process-button"]')) throw new Error('admin-diagnostic-process-button niet gevonden') }, results)
     await runScenario('R11 Voorraad → Artikeldetail → Archiveren → Voorraad werkt', async ()=>{ await navigateFrame(frame,'/voorraad'); const inventoryDoc=getFrameDocument(frame); const trigger=inventoryDoc.querySelector('[data-testid^="inventory-row-"]'); if(!trigger) throw new Error('Geen inventory-row-* gevonden'); const articleId=String(trigger.getAttribute('data-testid')||'').replace('inventory-row-',''); doubleClickElement(trigger); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-detail-page"]'), WAIT_TIMEOUT, 'article-detail-page niet gevonden'); const detailDoc=getFrameDocument(frame); const archiveButton=detailDoc.querySelector('[data-testid="article-archive-button"]'); if(!archiveButton) throw new Error('article-archive-button ontbreekt'); clickElement(archiveButton); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-archive-modal"]'), WAIT_TIMEOUT, 'article-archive-modal niet gevonden'); const confirmButton=getFrameDocument(frame)?.querySelector('[data-testid="article-archive-confirm"]'); if(!confirmButton) throw new Error('article-archive-confirm ontbreekt'); clickElement(confirmButton); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-archive-status"]')?.textContent?.includes('Gearchiveerd'), WAIT_TIMEOUT, 'Artikelstatus werd niet gearchiveerd'); await navigateFrame(frame,'/voorraad'); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="inventory-page"]'), WAIT_TIMEOUT, 'inventory-page niet gevonden na archiveren'); if(getFrameDocument(frame)?.querySelector(`[data-testid="inventory-row-${articleId}"]`)) throw new Error('Gearchiveerd artikel bleef zichtbaar in actieve voorraad') }, results)
+    await runScenario('R13 Home → Kassa → intake-item toevoegen → terug naar overzicht werkt', async ()=>{
+      await navigateFrame(frame, '/home')
+      let doc = getFrameDocument(frame)
+      const homeTile = doc.querySelector('[data-testid="home-tile-kassa"]')
+      if (!homeTile) throw new Error('home-tile-kassa niet gevonden')
+      clickElement(homeTile)
+      await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="kassa-page"]'), WAIT_TIMEOUT, 'kassa-page niet gevonden')
+      doc = getFrameDocument(frame)
+      const sourceSelect = doc.querySelector('[data-testid="kassa-source-type"]')
+      const referenceInput = doc.querySelector('[data-testid="kassa-source-reference"]')
+      const statusSelect = doc.querySelector('[data-testid="kassa-status-select"]')
+      const saveButton = doc.querySelector('[data-testid="kassa-save-button"]')
+      if (!sourceSelect || !referenceInput || !statusSelect || !saveButton) throw new Error('Kassa formulier ontbreekt')
+      const uniqueRef = `kassa-layer2-${Date.now()}`
+      setSelectValue(sourceSelect, 'email_bijlage')
+      setInputValue(referenceInput, uniqueRef)
+      setSelectValue(statusSelect, 'controle_nodig')
+      clickElement(saveButton)
+      await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="kassa-status"]'), WAIT_TIMEOUT, 'Kassa statusmelding niet zichtbaar na opslaan')
+      await waitForCondition(()=>Array.from(getFrameDocument(frame)?.querySelectorAll('[data-testid^="kassa-intake-reference-"]') || []).some((node)=>String(node.textContent||'').includes(uniqueRef)), WAIT_TIMEOUT, 'Kassa intake-item ontbreekt in overzicht na opslaan')
+    }, results)
+
     await runScenario('R12 Export-testdataset selectie activeert export op detailroute', async ()=>{ const exportFixture = await prepareReceiptExportFixture(frame); const targetBatchId = exportFixture.latestBatchId || exportFixture.batchId
     await navigateFrame(frame, `/winkels/batch/${encodeURIComponent(targetBatchId)}?fixture=export&t=${Date.now()}`); const detailDoc = await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]') ? getFrameDocument(frame) : null, WAIT_TIMEOUT, 'receipt-detail-page niet gevonden voor export-testdataset'); const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${exportFixture.exportLineId}"]`); const exportButton=getReceiptExportButton(detailDoc); if(!lineSelect||!exportButton) throw new Error('Export-testdataset selectie of export ontbreekt'); if(lineSelect.disabled) throw new Error('Export-testdatasetregel is niet selecteerbaar'); if(exportButton.disabled !== true) throw new Error('receipt-export-button hoort initieel uitgeschakeld te zijn'); nativeClick(lineSelect); const activeExportButton=await waitForCondition(()=>{ const liveDoc=getFrameDocument(frame); const button=getReceiptExportButton(liveDoc); return button && button.disabled===false ? button : null }, WAIT_TIMEOUT, 'receipt-export-button werd niet actief na selectie in export-testdataset'); const exactLine=getFrameDocument(frame)?.querySelector(`[data-testid="receipt-line-select-${exportFixture.exportLineId}"]`); if(!exactLine?.checked) throw new Error('Export-testdatasetregel bleef niet geselecteerd'); if(String(activeExportButton.textContent||'').trim().toLowerCase()!=='exporteren') throw new Error('receipt-export-button heeft onverwachte labeltekst') }, results)
-
-    await runScenario('R13 Home → Winkelkoppelingen → koppelen → opslaan → overzicht werkt', async ()=>{ const storeFixture = await prepareStoreConnectionsFixture(frame); await navigateFrame(frame,'/home'); const homeDoc=getFrameDocument(frame); const tile=homeDoc.querySelector('[data-testid="home-tile-winkelkoppelingen"]'); if(!tile) throw new Error('home-tile-winkelkoppelingen niet gevonden'); clickElement(tile); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="store-connections-page"]'), WAIT_TIMEOUT, 'store-connections-page niet gevonden'); let doc=getFrameDocument(frame); const action=doc.querySelector(`[data-testid="store-connection-action-${storeFixture.unlinkedProviderCode}"]`); if(!action) throw new Error('Koppelactie voor testwinkel ontbreekt'); clickElement(action); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="store-connection-editor"]'), WAIT_TIMEOUT, 'store-connection-editor niet gevonden'); doc=getFrameDocument(frame); const input=doc.querySelector('[data-testid="store-connection-card-number"]'); const save=doc.querySelector('[data-testid="store-connection-save"]'); if(!input||!save) throw new Error('store-connection-card-number of store-connection-save ontbreekt'); setInputValue(input, storeFixture.createCardNumber); clickElement(save); await waitForCondition(()=>String(getFrameDocument(frame)?.querySelector(`[data-testid="store-connection-status-${storeFixture.unlinkedProviderCode}"]`)?.textContent||'').trim().toLowerCase()==='gekoppeld', WAIT_TIMEOUT, 'Status bleef niet gekoppeld in overzicht'); const refNode=getFrameDocument(frame)?.querySelector(`[data-testid="store-connection-ref-${storeFixture.unlinkedProviderCode}"]`); if(!refNode||!String(refNode.textContent||'').includes(storeFixture.createCardNumber)) throw new Error('Opgeslagen kaartnummer ontbreekt in overzicht') }, results)
   } finally { removeExistingFrame() }
   return results
 }

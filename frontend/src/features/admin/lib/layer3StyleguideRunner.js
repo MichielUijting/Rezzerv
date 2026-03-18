@@ -152,20 +152,6 @@ async function resolveReceiptFixture(frame, fixture) {
   return resolved
 }
 
-async function prepareStoreConnectionsFixture(frame) {
-  if (frame.__rezzervStoreConnectionsFixture) return frame.__rezzervStoreConnectionsFixture
-  const prepared = await requestJson('/api/dev/generate-store-connections-fixture', { method: 'POST', body: '{}' })
-  const resolved = {
-    linkedProviderCode: String(prepared?.linkedProviderCode || prepared?.linked_provider_code || ''),
-    unlinkedProviderCode: String(prepared?.unlinkedProviderCode || prepared?.unlinked_provider_code || ''),
-  }
-  if (!resolved.linkedProviderCode || !resolved.unlinkedProviderCode) {
-    throw new Error('Layer-3 store connections fixture ontbreekt of is incompleet')
-  }
-  frame.__rezzervStoreConnectionsFixture = resolved
-  return resolved
-}
-
 function doubleClickElement(element) {
   const view = element?.ownerDocument?.defaultView || window
   element.dispatchEvent(new view.MouseEvent('dblclick', { bubbles: true, cancelable: true, view }))
@@ -372,6 +358,22 @@ export async function runLayer3StyleguideTests() {
       assertRowColor(completeRow, READY_ROW_COLOR, 'Complete geselecteerde bonregel')
     }, results)
 
+    await runScenario('L3.8 Kassa-tegel en Kassa-scherm gebruiken standaard kaartstructuur', async () => {
+      await navigateFrame(frame, '/home')
+      let doc = getFrameDocument(frame)
+      assertBuildTagVisible(doc)
+      const homeTile = doc.querySelector('[data-testid="home-tile-kassa"]')
+      if (!homeTile) throw new Error('home-tile-kassa ontbreekt')
+      clickElement(homeTile)
+      await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="kassa-page"]'), WAIT_TIMEOUT, 'kassa-page niet gevonden')
+      doc = getFrameDocument(frame)
+      assertBuildTagVisible(doc)
+      const page = assertAppShellPage(doc, 'kassa-page')
+      const card = assertScreenCard(page)
+      if (!card.querySelector('[data-testid="kassa-source-grid"]')) throw new Error('Kassa bronoverzicht ontbreekt')
+      if (!card.querySelector('[data-testid="kassa-intake-table"]')) throw new Error('Kassa intake-tabel ontbreekt')
+    }, results)
+
     await runScenario('L3.7 Kassabondetail toont exportknop binnen kaart', async () => {
       const { detailDoc } = await ensureReceiptFixture(frame, fixture)
       assertBuildTagVisible(detailDoc)
@@ -380,25 +382,6 @@ export async function runLayer3StyleguideTests() {
       const exportButton = card.querySelector('[data-testid="receipt-export-button"]')
       if (!exportButton) throw new Error('receipt-export-button ontbreekt binnen kaart')
       if (exportButton.disabled) throw new Error('receipt-export-button reageert niet op selectie')
-    }, results)
-
-
-    await runScenario('L3.8 Winkelkoppelingen gebruikt kaartstructuur en toont tegel', async () => {
-      const storeFixture = await prepareStoreConnectionsFixture(frame)
-      await navigateFrame(frame, '/home')
-      let doc = getFrameDocument(frame)
-      const tile = doc.querySelector('[data-testid="home-tile-winkelkoppelingen"]')
-      if (!tile) throw new Error('home-tile-winkelkoppelingen ontbreekt')
-      clickElement(tile)
-      await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="store-connections-page"]'), WAIT_TIMEOUT, 'store-connections-page ontbreekt')
-      doc = getFrameDocument(frame)
-      const page = assertAppShellPage(doc, 'store-connections-page')
-      assertBuildTagVisible(doc)
-      const cards = [...page.querySelectorAll('.rz-card, [data-testid="screen-card"]')]
-      if (cards.length < 2) throw new Error('Winkelkoppelingen mist kaartopbouw')
-      if (!page.querySelector('[data-testid="store-connections-table"]')) throw new Error('store-connections-table ontbreekt')
-      if (!page.querySelector(`[data-testid="store-connection-status-${storeFixture.linkedProviderCode}"]`)) throw new Error('Gekoppelde teststatus ontbreekt')
-      if (!page.querySelector(`[data-testid="store-connection-action-${storeFixture.unlinkedProviderCode}"]`)) throw new Error('Actie voor ongekoppelde testwinkel ontbreekt')
     }, results)
   } finally {
     removeExistingFrame()
