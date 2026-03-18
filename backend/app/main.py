@@ -3098,20 +3098,37 @@ def generate_layer1_receipt_fixture():
     household_id = str(household.get("id") or "1")
 
     with engine.begin() as conn:
+        connection = conn.execute(
+            text(
+                """
+                SELECT hsc.id AS connection_id
+                FROM household_store_connections hsc
+                JOIN store_providers sp ON sp.id = hsc.store_provider_id
+                WHERE hsc.household_id = :household_id
+                  AND sp.code = 'jumbo'
+                ORDER BY hsc.created_at DESC, hsc.id DESC
+                LIMIT 1
+                """
+            ),
+            {"household_id": household_id},
+        ).mappings().first()
+
+        if not connection:
+            raise HTTPException(status_code=500, detail="Layer1 receipt fixture connection kon niet worden voorbereid")
+
+        connection_id = str(connection["connection_id"])
         batch = conn.execute(
             text(
                 """
                 SELECT pib.id AS batch_id
                 FROM purchase_import_batches pib
-                JOIN store_providers sp ON sp.id = pib.store_provider_id
-                WHERE pib.household_id = :household_id
-                  AND sp.code = 'jumbo'
+                WHERE pib.connection_id = :connection_id
                   AND COALESCE(pib.import_status, 'new') != 'processed'
                 ORDER BY pib.created_at DESC, pib.id DESC
                 LIMIT 1
                 """
             ),
-            {"household_id": household_id},
+            {"connection_id": connection_id},
         ).mappings().first()
 
         if not batch:

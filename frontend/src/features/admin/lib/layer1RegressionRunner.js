@@ -148,6 +148,8 @@ async function requestJson(url, options = {}) {
 async function prepareLayer1ReceiptFixture(frame, fixture) {
   if (fixture.batchId && fixture.completeLineId && fixture.incompleteLineId) {
     const resolved = {
+      connectionId: String(fixture.connectionId || ''),
+      latestBatchId: String(fixture.latestBatchId || fixture.batchId),
       batchId: String(fixture.batchId),
       completeLineId: String(fixture.completeLineId),
       incompleteLineId: String(fixture.incompleteLineId),
@@ -159,6 +161,8 @@ async function prepareLayer1ReceiptFixture(frame, fixture) {
   try {
     const prepared = await requestJson('/api/dev/generate-layer1-receipt-fixture', { method: 'POST', body: '{}' })
     const resolved = {
+      connectionId: String(prepared?.connectionId || prepared?.connection_id || ''),
+      latestBatchId: String(prepared?.latestBatchId || prepared?.latest_batch_id || prepared?.batchId || prepared?.batch_id || ''),
       batchId: String(prepared?.batchId || prepared?.batch_id || ''),
       completeLineId: String(prepared?.completeLineId || prepared?.complete_line_id || ''),
       incompleteLineId: String(prepared?.incompleteLineId || prepared?.incomplete_line_id || ''),
@@ -321,7 +325,8 @@ async function openReceiptDetail(frame, preferredBatchId = null) {
 }
 
 async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = null, preferredLineId = null) {
-  await navigateFrame(frame, '/kassabonnen')
+  const fixtureQuery = preferredBatchId ? `?fixtureBatch=${encodeURIComponent(preferredBatchId)}&t=${Date.now()}` : `?t=${Date.now()}`
+  await navigateFrame(frame, `/kassabonnen${fixtureQuery}`)
   await waitForCondition(() => {
     const doc = getFrameDocument(frame)
     const rows = [...(doc?.querySelectorAll('[data-testid^="receipt-batch-row-"]') || [])]
@@ -377,7 +382,10 @@ async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = nul
     }
   }
 
-  throw new Error(preferredLineId ? `Geen batch met selecteerbare receipt-line-select-${preferredLineId} gevonden` : 'Geen batch met selecteerbare receipt-line-select-* gevonden')
+  const finalDoc = getFrameDocument(frame)
+  const rowIds = [...(finalDoc?.querySelectorAll('[data-testid^="receipt-batch-row-"]') || [])].map((el)=>el.getAttribute('data-testid'))
+  const openIds = [...(finalDoc?.querySelectorAll('[data-testid^="receipt-batch-open-"]') || [])].map((el)=>el.getAttribute('data-testid'))
+  throw new Error(preferredLineId ? `Fixturebatch ${preferredBatchId || 'onbekend'} niet bruikbaar; rowIds=${rowIds.join(',')}; openIds=${openIds.join(',')}; fixtureLine=${preferredLineId}` : 'Geen batch met selecteerbare receipt-line-select-* gevonden')
 }
 
 function getReceiptSelectableLineIds(detailDoc) {
@@ -430,6 +438,8 @@ async function resolveReceiptFixture(frame, fixture) {
   const hasExplicitFixtureIds = Boolean(fixture.batchId && fixture.completeLineId && fixture.incompleteLineId)
   if (hasExplicitFixtureIds) {
     const resolved = {
+      connectionId: String(fixture.connectionId || ''),
+      latestBatchId: String(fixture.latestBatchId || fixture.batchId),
       batchId: String(fixture.batchId),
       completeLineId: String(fixture.completeLineId),
       incompleteLineId: String(fixture.incompleteLineId),
