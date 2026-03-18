@@ -320,62 +320,64 @@ async function openReceiptDetail(frame, preferredBatchId = null) {
   return getFrameDocument(frame)
 }
 
-async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = null) {
-  let currentDoc = getFrameDocument(frame)
-  let detailDoc = currentDoc?.querySelector('[data-testid="receipt-detail-page"]') ? currentDoc : null
-  if (detailDoc) {
-    const lineSelect = getFirstEnabledReceiptLineSelect(detailDoc)
-    if (lineSelect) {
-      return { detailDoc, lineSelect, batchId: preferredBatchId ? String(preferredBatchId) : null }
-    }
-  }
-
+async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = null, preferredLineId = null) {
   await navigateFrame(frame, '/kassabonnen')
-  currentDoc = getFrameDocument(frame)
+  await waitForCondition(() => {
+    const doc = getFrameDocument(frame)
+    const rows = [...(doc?.querySelectorAll('[data-testid^="receipt-batch-row-"]') || [])]
+    return rows.length ? rows : null
+  }, WAIT_TIMEOUT, 'Geen receipt-batch-row-* gevonden')
 
   const candidateIds = []
   const seen = new Set()
+  const doc = getFrameDocument(frame)
 
-  function collectCandidateIds(doc) {
-    if (!doc) return
-    if (preferredBatchId && !seen.has(String(preferredBatchId))) {
-      const preferredRow = doc.querySelector(`[data-testid="receipt-batch-row-${preferredBatchId}"]`)
-      if (preferredRow) {
-        candidateIds.push(String(preferredBatchId))
-        seen.add(String(preferredBatchId))
-      }
-    }
-    for (const row of [...doc.querySelectorAll('[data-testid^="receipt-batch-row-"]')]) {
-      const batchId = extractIdFromTestId(row, 'receipt-batch-row-')
-      if (!batchId || seen.has(batchId)) continue
-      candidateIds.push(batchId)
-      seen.add(batchId)
+  if (preferredBatchId) {
+    const preferred = doc?.querySelector(`[data-testid="receipt-batch-row-${preferredBatchId}"]`)
+    if (preferred) {
+      candidateIds.push(String(preferredBatchId))
+      seen.add(String(preferredBatchId))
     }
   }
 
-  collectCandidateIds(currentDoc)
+  for (const row of [...(doc?.querySelectorAll('[data-testid^="receipt-batch-row-"]') || [])]) {
+    const batchId = extractIdFromTestId(row, 'receipt-batch-row-')
+    if (!batchId || seen.has(batchId)) continue
+    candidateIds.push(batchId)
+    seen.add(batchId)
+  }
 
   for (const batchId of candidateIds) {
     await navigateFrame(frame, '/kassabonnen')
-    currentDoc = getFrameDocument(frame)
-    if (!openReceiptBatchInline(currentDoc, batchId)) {
-      continue
-    }
-    detailDoc = await waitForCondition(() => {
-      const doc = getFrameDocument(frame)
-      const detail = doc?.querySelector('[data-testid="receipt-detail-page"]')
+    const currentDoc = getFrameDocument(frame)
+    const opened = openReceiptBatchInline(currentDoc, batchId)
+    if (!opened) continue
+
+    const detailDoc = await waitForCondition(() => {
+      const liveDoc = getFrameDocument(frame)
+      const detail = liveDoc?.querySelector('[data-testid="receipt-detail-page"]')
       if (!detail) return null
-      const scope = getReceiptDetailScope(doc) || detail
+      const scope = getReceiptDetailScope(liveDoc) || detail
+      if (preferredLineId) {
+        const exact = scope.querySelector(`[data-testid="receipt-line-select-${preferredLineId}"]`)
+        return exact && !exact.disabled ? liveDoc : null
+      }
       const selectable = [...scope.querySelectorAll('[data-testid^="receipt-line-select-"]')]
         .find((element) => !element.disabled)
-      return selectable ? doc : null
-    }, WAIT_TIMEOUT, 'Geen batch met selecteerbare receipt-line-select-* gevonden')
-    const lineSelect = getFirstEnabledReceiptLineSelect(detailDoc)
-    if (lineSelect) {
+      return selectable ? liveDoc : null
+    }, WAIT_TIMEOUT, preferredLineId ? `Fixtureregel receipt-line-select-${preferredLineId} niet selecteerbaar in batch ${batchId}` : 'Geen batch met selecteerbare receipt-line-select-* gevonden')
+
+    const scope = getReceiptDetailScope(detailDoc) || detailDoc
+    const lineSelect = preferredLineId
+      ? scope.querySelector(`[data-testid="receipt-line-select-${preferredLineId}"]`)
+      : getFirstEnabledReceiptLineSelect(scope)
+
+    if (lineSelect && !lineSelect.disabled) {
       return { detailDoc, lineSelect, batchId }
     }
   }
-  throw new Error('Geen batch met selecteerbare receipt-line-select-* gevonden')
+
+  throw new Error(preferredLineId ? `Geen batch met selecteerbare receipt-line-select-${preferredLineId} gevonden` : 'Geen batch met selecteerbare receipt-line-select-* gevonden')
 }
 
 function getReceiptSelectableLineIds(detailDoc) {
@@ -591,7 +593,8 @@ export async function runLayer1RegressionTests() {
     }, results)
 
     await runScenario('T11 Kassabondetail exporteert geselecteerde regels met kolomtitels', async () => {
-      const { detailDoc, lineSelect } = await openReceiptBatchWithSelectableLines(frame, fixture.batchId)
+      const receiptFixture = await resolveReceiptFixture(frame, fixture)
+      const { detailDoc, lineSelect } = await openReceiptBatchWithSelectableLines(frame, receiptFixture.batchId, receiptFixture.completeLineId)
       const exportButton = getReceiptExportButton(detailDoc)
       if (!lineSelect || !exportButton) throw new Error('Kassabondetailselectie of export ontbreekt')
       if (!lineSelect.checked) clickElement(lineSelect)
