@@ -95,6 +95,7 @@ class DiagnosticRequest(BaseModel):
 class StoreConnectionCreate(BaseModel):
     household_id: str | int
     store_provider_code: str
+    external_account_ref: Optional[str] = None
 
     @field_validator("household_id", mode="before")
     @classmethod
@@ -103,6 +104,27 @@ class StoreConnectionCreate(BaseModel):
             raise ValueError("household_id is verplicht")
         return str(value)
 
+    @field_validator("external_account_ref", mode="before")
+    @classmethod
+    def normalize_external_account_ref(cls, value):
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        return cleaned or None
+
+
+class StoreConnectionUpdateRequest(BaseModel):
+    external_account_ref: Optional[str] = None
+
+    @field_validator("external_account_ref", mode="before")
+    @classmethod
+    def normalize_external_account_ref(cls, value):
+        if value is None:
+            return None
+        cleaned = str(value).strip()
+        if not cleaned:
+            raise ValueError("Kaartnummer is verplicht")
+        return cleaned
 
 
 class PullPurchasesRequest(BaseModel):
@@ -3432,6 +3454,58 @@ def export_receipt_export_fixture(batchId: Optional[str] = Query(default=None), 
     return Response(content=csv, media_type='text/csv; charset=utf-8', headers=headers)
 
 
+@app.post("/api/dev/generate-store-connections-fixture")
+def generate_store_connections_fixture():
+    ensure_ui_test_seed_data()
+    household = ensure_household("admin@rezzerv.local")
+    household_id = str(household.get("id") or "1")
+    jumbo = ensure_store_provider('jumbo')
+    lidl = ensure_store_provider('lidl')
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                DELETE FROM household_store_connections
+                WHERE household_id = :household_id
+                  AND store_provider_id IN (:jumbo_id, :lidl_id)
+                """
+            ),
+            {"household_id": household_id, "jumbo_id": jumbo['id'], "lidl_id": lidl['id']},
+        )
+
+        jumbo_connection_id = str(uuid.uuid4())
+        conn.execute(
+            text(
+                """
+                INSERT INTO household_store_connections (
+                    id, household_id, store_provider_id, connection_status, external_account_ref,
+                    linked_at, last_sync_at, created_at, updated_at
+                ) VALUES (
+                    :id, :household_id, :store_provider_id, 'active', :external_account_ref,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": jumbo_connection_id,
+                "household_id": household_id,
+                "store_provider_id": jumbo['id'],
+                "external_account_ref": 'KAART-JUMBO-TEST-0001',
+            },
+        )
+
+    return {
+        "householdId": household_id,
+        "linkedProviderCode": 'jumbo',
+        "linkedConnectionId": jumbo_connection_id,
+        "linkedCardNumber": 'KAART-JUMBO-TEST-0001',
+        "updatedCardNumber": 'KAART-JUMBO-TEST-0002',
+        "unlinkedProviderCode": 'lidl',
+        "createCardNumber": 'KAART-LIDL-TEST-0001',
+    }
+
+
 @app.get("/api/store-providers")
 def get_store_providers():
     with engine.begin() as conn:
@@ -3448,6 +3522,14 @@ def get_store_providers():
     return [dict(row) for row in rows]
 
 
+def serialize_store_connection_row(row):
+    item = dict(row)
+    item["linked_at"] = normalize_datetime(item.get("linked_at"))
+    item["last_sync_at"] = normalize_datetime(item.get("last_sync_at"))
+    item["connection_type"] = item.get("connection_type") or 'klantenkaart'
+    return item
+
+
 @app.post("/api/store-connections")
 def create_store_connection(payload: StoreConnectionCreate):
     provider = ensure_store_provider(payload.store_provider_code)
@@ -3457,7 +3539,8 @@ def create_store_connection(payload: StoreConnectionCreate):
             text(
                 """
                 SELECT hsc.id, hsc.household_id, hsc.store_provider_id, hsc.connection_status,
-                       hsc.linked_at, sp.code AS store_provider_code
+                       hsc.external_account_ref, hsc.linked_at, hsc.last_sync_at,
+                       sp.code AS store_provider_code, sp.name AS store_provider_name
                 FROM household_store_connections hsc
                 JOIN store_providers sp ON sp.id = hsc.store_provider_id
                 WHERE hsc.household_id = :household_id
@@ -3471,18 +3554,16 @@ def create_store_connection(payload: StoreConnectionCreate):
         ).mappings().first()
 
         if existing:
-            result = dict(existing)
-            result["linked_at"] = normalize_datetime(result.get("linked_at"))
-            return result
+            return serialize_store_connection_row(existing)
 
         connection_id = str(uuid.uuid4())
         conn.execute(
             text(
                 """
                 INSERT INTO household_store_connections (
-                    id, household_id, store_provider_id, connection_status, linked_at
+                    id, household_id, store_provider_id, connection_status, external_account_ref, linked_at, created_at, updated_at
                 ) VALUES (
-                    :id, :household_id, :store_provider_id, 'active', CURRENT_TIMESTAMP
+                    :id, :household_id, :store_provider_id, 'active', :external_account_ref, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """
             ),
@@ -3490,13 +3571,15 @@ def create_store_connection(payload: StoreConnectionCreate):
                 "id": connection_id,
                 "household_id": payload.household_id,
                 "store_provider_id": provider["id"],
+                "external_account_ref": payload.external_account_ref,
             },
         )
         created = conn.execute(
             text(
                 """
                 SELECT hsc.id, hsc.household_id, hsc.store_provider_id, hsc.connection_status,
-                       hsc.linked_at, sp.code AS store_provider_code
+                       hsc.external_account_ref, hsc.linked_at, hsc.last_sync_at,
+                       sp.code AS store_provider_code, sp.name AS store_provider_name
                 FROM household_store_connections hsc
                 JOIN store_providers sp ON sp.id = hsc.store_provider_id
                 WHERE hsc.id = :id
@@ -3505,9 +3588,54 @@ def create_store_connection(payload: StoreConnectionCreate):
             {"id": connection_id},
         ).mappings().first()
 
-    result = dict(created)
-    result["linked_at"] = normalize_datetime(result.get("linked_at"))
-    return result
+    return serialize_store_connection_row(created)
+
+
+@app.put("/api/store-connections/{connection_id}")
+def update_store_connection(connection_id: str, payload: StoreConnectionUpdateRequest):
+    with engine.begin() as conn:
+        existing = conn.execute(
+            text(
+                """
+                SELECT hsc.id, hsc.household_id, hsc.store_provider_id, hsc.connection_status,
+                       hsc.external_account_ref, hsc.linked_at, hsc.last_sync_at,
+                       sp.code AS store_provider_code, sp.name AS store_provider_name
+                FROM household_store_connections hsc
+                JOIN store_providers sp ON sp.id = hsc.store_provider_id
+                WHERE hsc.id = :id
+                """
+            ),
+            {"id": connection_id},
+        ).mappings().first()
+        if not existing:
+            raise HTTPException(status_code=404, detail='Onbekende store connection')
+
+        conn.execute(
+            text(
+                """
+                UPDATE household_store_connections
+                SET external_account_ref = :external_account_ref,
+                    connection_status = 'active',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {"id": connection_id, "external_account_ref": payload.external_account_ref},
+        )
+        updated = conn.execute(
+            text(
+                """
+                SELECT hsc.id, hsc.household_id, hsc.store_provider_id, hsc.connection_status,
+                       hsc.external_account_ref, hsc.linked_at, hsc.last_sync_at,
+                       sp.code AS store_provider_code, sp.name AS store_provider_name
+                FROM household_store_connections hsc
+                JOIN store_providers sp ON sp.id = hsc.store_provider_id
+                WHERE hsc.id = :id
+                """
+            ),
+            {"id": connection_id},
+        ).mappings().first()
+    return serialize_store_connection_row(updated)
 
 
 @app.get("/api/store-connections")
@@ -3520,6 +3648,7 @@ def get_store_connections(householdId: str = Query(...)):
                     hsc.id,
                     hsc.household_id,
                     hsc.connection_status,
+                    hsc.external_account_ref,
                     hsc.linked_at,
                     hsc.last_sync_at,
                     sp.code AS store_provider_code,
@@ -3533,13 +3662,7 @@ def get_store_connections(householdId: str = Query(...)):
             {"household_id": householdId},
         ).mappings().all()
 
-    results = []
-    for row in rows:
-        item = dict(row)
-        item["linked_at"] = normalize_datetime(item.get("linked_at"))
-        item["last_sync_at"] = normalize_datetime(item.get("last_sync_at"))
-        results.append(item)
-    return results
+    return [serialize_store_connection_row(row) for row in rows]
 
 
 @app.post("/api/store-connections/{connection_id}/pull-purchases")
