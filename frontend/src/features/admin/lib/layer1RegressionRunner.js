@@ -321,16 +321,17 @@ async function openReceiptDetail(frame, preferredBatchId = null) {
 }
 
 async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = null) {
-  let detailDoc = getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]') ? getFrameDocument(frame) : null
-  if (!detailDoc) {
-    detailDoc = await openReceiptDetail(frame, preferredBatchId)
-  }
-  let lineSelect = detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
-  if (lineSelect) {
-    return { detailDoc, lineSelect, batchId: preferredBatchId ? String(preferredBatchId) : null }
+  let currentDoc = getFrameDocument(frame)
+  let detailDoc = currentDoc?.querySelector('[data-testid="receipt-detail-page"]') ? currentDoc : null
+  if (detailDoc) {
+    const lineSelect = getFirstEnabledReceiptLineSelect(detailDoc)
+    if (lineSelect) {
+      return { detailDoc, lineSelect, batchId: preferredBatchId ? String(preferredBatchId) : null }
+    }
   }
 
   await navigateFrame(frame, '/kassabonnen')
+  currentDoc = getFrameDocument(frame)
 
   const candidateIds = []
   const seen = new Set()
@@ -338,43 +339,41 @@ async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = nul
   function collectCandidateIds(doc) {
     if (!doc) return
     if (preferredBatchId && !seen.has(String(preferredBatchId))) {
-      const preferred = doc.querySelector(`[data-testid="receipt-batch-open-${preferredBatchId}"]`)
-      if (preferred) {
+      const preferredRow = doc.querySelector(`[data-testid="receipt-batch-row-${preferredBatchId}"]`)
+      if (preferredRow) {
         candidateIds.push(String(preferredBatchId))
         seen.add(String(preferredBatchId))
       }
     }
-    for (const element of [...doc.querySelectorAll('[data-testid^="receipt-batch-open-"]')]) {
-      const batchId = extractIdFromTestId(element, 'receipt-batch-open-')
+    for (const row of [...doc.querySelectorAll('[data-testid^="receipt-batch-row-"]')]) {
+      const batchId = extractIdFromTestId(row, 'receipt-batch-row-')
       if (!batchId || seen.has(batchId)) continue
       candidateIds.push(batchId)
       seen.add(batchId)
     }
   }
 
-  collectCandidateIds(getFrameDocument(frame))
+  collectCandidateIds(currentDoc)
 
   for (const batchId of candidateIds) {
-    const currentDoc = getFrameDocument(frame)
-    const openButton = currentDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
-    if (!openButton) {
-      await navigateFrame(frame, '/kassabonnen')
-      const refreshedDoc = getFrameDocument(frame)
-      const refreshedButton = refreshedDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
-      if (!refreshedButton) {
-        continue
-      }
-      clickElement(refreshedButton)
-    } else {
-      clickElement(openButton)
+    await navigateFrame(frame, '/kassabonnen')
+    currentDoc = getFrameDocument(frame)
+    if (!openReceiptBatchInline(currentDoc, batchId)) {
+      continue
     }
-    await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
-    detailDoc = getFrameDocument(frame)
-    lineSelect = getFirstEnabledReceiptLineSelect(detailDoc)
+    detailDoc = await waitForCondition(() => {
+      const doc = getFrameDocument(frame)
+      const detail = doc?.querySelector('[data-testid="receipt-detail-page"]')
+      if (!detail) return null
+      const scope = getReceiptDetailScope(doc) || detail
+      const selectable = [...scope.querySelectorAll('[data-testid^="receipt-line-select-"]')]
+        .find((element) => !element.disabled)
+      return selectable ? doc : null
+    }, WAIT_TIMEOUT, 'Geen batch met selecteerbare receipt-line-select-* gevonden')
+    const lineSelect = getFirstEnabledReceiptLineSelect(detailDoc)
     if (lineSelect) {
       return { detailDoc, lineSelect, batchId }
     }
-    await navigateFrame(frame, '/kassabonnen')
   }
   throw new Error('Geen batch met selecteerbare receipt-line-select-* gevonden')
 }

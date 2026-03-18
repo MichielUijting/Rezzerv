@@ -45,12 +45,12 @@ async function openReceiptDetailWithSelectableLines(frame, preferredBatchId = nu
   const seen = new Set()
   const candidateIds = []
   const doc = getFrameDocument(frame)
-  if (preferredBatchId && doc?.querySelector(`[data-testid="receipt-batch-open-${preferredBatchId}"]`)) {
+  if (preferredBatchId && doc?.querySelector(`[data-testid="receipt-batch-row-${preferredBatchId}"]`)) {
     candidateIds.push(String(preferredBatchId))
     seen.add(String(preferredBatchId))
   }
-  for (const element of [...(doc?.querySelectorAll('[data-testid^="receipt-batch-open-"]') || [])]) {
-    const id = String(element.getAttribute('data-testid') || '').replace('receipt-batch-open-','')
+  for (const row of [...(doc?.querySelectorAll('[data-testid^="receipt-batch-row-"]') || [])]) {
+    const id = String(row.getAttribute('data-testid') || '').replace('receipt-batch-row-','')
     if (!id || seen.has(id)) continue
     candidateIds.push(id)
     seen.add(id)
@@ -58,11 +58,15 @@ async function openReceiptDetailWithSelectableLines(frame, preferredBatchId = nu
   for (const batchId of candidateIds) {
     await navigateFrame(frame, '/kassabonnen')
     const currentDoc = getFrameDocument(frame)
-    const openButton = currentDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
-    if (!openButton) continue
-    clickElement(openButton)
-    await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
-    const detailDoc = getFrameDocument(frame)
+    if (!openReceiptBatchInline(currentDoc, batchId)) continue
+    const detailDoc = await waitForCondition(()=>{
+      const doc = getFrameDocument(frame)
+      const detail = doc?.querySelector('[data-testid="receipt-detail-page"]')
+      if (!detail) return null
+      const scope = getReceiptDetailScope(doc) || detail
+      const lineSelect = [...scope.querySelectorAll('[data-testid^="receipt-line-select-"]')].find((el)=>!el.disabled)
+      return lineSelect ? doc : null
+    }, WAIT_TIMEOUT, 'Kassabondetailselectie of export ontbreekt')
     const lineSelect = getFirstEnabledReceiptLineSelect(detailDoc)
     if (lineSelect) return { detailDoc, lineSelect, batchId }
   }
