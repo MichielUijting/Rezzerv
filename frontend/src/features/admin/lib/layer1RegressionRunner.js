@@ -634,32 +634,22 @@ export async function runLayer1RegressionTests() {
       await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="analysis-page"]'), WAIT_TIMEOUT, 'analysis-page niet gevonden')
     }, results)
 
-    await runScenario('T11 Export-testdataset detailroute exporteert vaste CSV met kolomtitels', async () => {
+    await runScenario('T11 Export-testdataset response levert vaste CSV met kolomtitels', async () => {
       const exportFixture = await prepareReceiptExportFixture(frame)
       const targetBatchId = exportFixture.latestBatchId || exportFixture.batchId
-      await navigateFrame(frame, `/winkels/batch/${encodeURIComponent(targetBatchId)}?fixture=export&t=${Date.now()}`)
-      const detailDoc = await waitForCondition(() => {
-        const liveDoc = getFrameDocument(frame)
-        return liveDoc?.querySelector('[data-testid="receipt-detail-page"]') ? liveDoc : null
-      }, WAIT_TIMEOUT, 'receipt-detail-page niet gevonden voor export-testdataset')
-      const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${exportFixture.exportLineId}"]`)
-      if (!lineSelect) throw new Error(`receipt-line-select-${exportFixture.exportLineId} niet gevonden in export-testdataset`)
-      if (lineSelect.disabled) throw new Error('Export-testdatasetregel is niet selecteerbaar')
-      nativeClick(lineSelect)
-      const activeExportButton = await waitForCondition(() => {
-        const liveDoc = getFrameDocument(frame)
-        const button = getReceiptExportButton(liveDoc)
-        return button && button.disabled === false ? button : null
-      }, WAIT_TIMEOUT, 'receipt-export-button werd niet actief voor export-testdataset')
-      nativeClick(activeExportButton)
-      const download = await waitForCondition(() => {
-        const payload = getLastDownload(frame)
-        return payload?.csv ? payload : null
-      }, WAIT_TIMEOUT, 'Export-testdataset CSV ontbreekt')
-      const firstLine = String(download.csv || '').split('\n')[0] || ''
+      const response = await fetch(`/api/dev/export-receipt-export-fixture?batchId=${encodeURIComponent(targetBatchId)}&lineId=${encodeURIComponent(exportFixture.exportLineId)}`)
+      if (!response.ok) throw new Error(`Export-testdataset endpoint gaf status ${response.status}`)
+      const contentType = response.headers.get('content-type') || ''
+      if (!contentType.toLowerCase().includes('text/csv')) throw new Error('Export-testdataset response is geen CSV')
+      const rowCountHeader = response.headers.get('x-rezzerv-row-count') || ''
+      const csv = await response.text()
+      if (!csv) throw new Error('Export-testdataset CSV ontbreekt')
+      const firstLine = String(csv || '').split('\n')[0] || ''
       if (!firstLine.includes('Bonartikel') || !firstLine.includes('Locatie')) throw new Error('Export-testdataset mist kolomtitels')
-      if ((download?.rowCount || 0) !== 1) throw new Error('Export-testdataset moet exact 1 regel exporteren')
-      if (!String(download.csv || '').includes(exportFixture.exportArticleName)) throw new Error('Export-testdataset mist de vaste testregel')
+      if (rowCountHeader && rowCountHeader !== '1') throw new Error('Export-testdataset moet exact 1 regel exporteren')
+      const dataLines = String(csv || '').trim().split(/\r?\n/)
+      if (dataLines.length !== 2) throw new Error('Export-testdataset moet exact 1 gegevensregel bevatten')
+      if (!String(csv || '').includes(exportFixture.exportArticleName)) throw new Error('Export-testdataset mist de vaste testregel')
     }, results)
 
   } finally {

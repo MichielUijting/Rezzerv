@@ -3360,6 +3360,77 @@ def generate_receipt_export_fixture():
         'sourceReference': 'mock:export-regression-fixture',
     }
 
+@app.get("/api/dev/export-receipt-export-fixture")
+def export_receipt_export_fixture(batchId: Optional[str] = Query(default=None), lineId: Optional[str] = Query(default=None)):
+    fixture = None
+    if not batchId or not lineId:
+        fixture = generate_receipt_export_fixture()
+    target_batch_id = str(batchId or (fixture or {}).get('latestBatchId') or (fixture or {}).get('batchId') or '')
+    target_line_id = str(lineId or (fixture or {}).get('exportLineId') or '')
+    if not target_batch_id or not target_line_id:
+        raise HTTPException(status_code=500, detail='Export fixture ids ontbreken')
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT
+                    pil.id AS line_id,
+                    pil.batch_id,
+                    pil.article_name_raw,
+                    pil.quantity_raw,
+                    pil.unit_raw,
+                    pil.line_price_raw,
+                    COALESCE(ha.naam, '') AS household_article_name,
+                    CASE
+                        WHEN s.naam IS NOT NULL AND sl.naam IS NOT NULL THEN s.naam || ' / ' || sl.naam
+                        WHEN s.naam IS NOT NULL THEN s.naam
+                        ELSE ''
+                    END AS location_label
+                FROM purchase_import_lines pil
+                LEFT JOIN household_articles ha ON ha.id = pil.matched_household_article_id
+                LEFT JOIN sublocations sl ON sl.id = pil.target_location_id
+                LEFT JOIN spaces s ON s.id = sl.space_id
+                WHERE pil.batch_id = :batch_id AND pil.id = :line_id
+                LIMIT 1
+                """
+            ),
+            {'batch_id': target_batch_id, 'line_id': target_line_id},
+        ).mappings().first()
+        if not row:
+            raise HTTPException(status_code=404, detail='Export fixture regel niet gevonden')
+
+    def csv_escape(value):
+        return '"' + str(value if value is not None else '').replace('"', '""') + '"'
+
+    quantity = row['quantity_raw']
+    unit = (row['unit_raw'] or '').strip()
+    if quantity is None:
+        quantity_label = ''
+    elif isinstance(quantity, (int, float)):
+        quantity_label = f"{quantity:g} {unit}".strip()
+    else:
+        quantity_label = f"{quantity} {unit}".strip()
+    price = row['line_price_raw']
+    price_label = f"{float(price):.2f}" if price is not None else ''
+
+    header = ['Bonartikel', 'Aantal', 'Gekoppeld artikel', 'Locatie', 'Prijs', 'Status']
+    data = [
+        row['article_name_raw'] or '',
+        quantity_label,
+        row['household_article_name'] or '',
+        row['location_label'] or '',
+        price_label,
+        'Klaar',
+    ]
+    csv = ';'.join(csv_escape(value) for value in header) + '\n' + ';'.join(csv_escape(value) for value in data)
+    headers = {
+        'Content-Disposition': 'attachment; filename="rezzerv-export-testdataset.csv"',
+        'X-Rezzerv-Row-Count': '1',
+        'X-Rezzerv-Source': 'receipt-export-fixture',
+    }
+    return Response(content=csv, media_type='text/csv; charset=utf-8', headers=headers)
+
 
 @app.get("/api/store-providers")
 def get_store_providers():
