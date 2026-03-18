@@ -52,12 +52,14 @@ async function requestJson(path, init = {}) {
 async function prepareLayer2ReceiptFixture(frame, fixture) {
   if (frame.__rezzervLayer2ReceiptFixture) return frame.__rezzervLayer2ReceiptFixture
   if (fixture.batchId && fixture.completeLineId) {
-    const resolved = { batchId: String(fixture.batchId), completeLineId: String(fixture.completeLineId), incompleteLineId: String(fixture.incompleteLineId || '') }
+    const resolved = { connectionId: String(fixture.connectionId || ''), latestBatchId: String(fixture.latestBatchId || fixture.batchId || ''), batchId: String(fixture.batchId), completeLineId: String(fixture.completeLineId), incompleteLineId: String(fixture.incompleteLineId || '') }
     frame.__rezzervLayer2ReceiptFixture = resolved
     return resolved
   }
   const prepared = await requestJson('/api/dev/generate-layer1-receipt-fixture', { method: 'POST', body: '{}' })
   const resolved = {
+    connectionId: String(prepared?.connectionId || prepared?.connection_id || ''),
+    latestBatchId: String(prepared?.latestBatchId || prepared?.latest_batch_id || prepared?.batchId || prepared?.batch_id || ''),
     batchId: String(prepared?.batchId || prepared?.batch_id || ''),
     completeLineId: String(prepared?.completeLineId || prepared?.complete_line_id || ''),
     incompleteLineId: String(prepared?.incompleteLineId || prepared?.incomplete_line_id || ''),
@@ -68,7 +70,8 @@ async function prepareLayer2ReceiptFixture(frame, fixture) {
 }
 
 async function openReceiptDetailWithSelectableLines(frame, preferredBatchId = null, preferredLineId = null) {
-  await navigateFrame(frame, '/kassabonnen')
+  const fixtureQuery = preferredBatchId ? `?fixtureBatch=${encodeURIComponent(preferredBatchId)}&t=${Date.now()}` : `?t=${Date.now()}`
+  await navigateFrame(frame, `/kassabonnen${fixtureQuery}`)
   await waitForCondition(() => {
     const doc = getFrameDocument(frame)
     const rows = [...(doc?.querySelectorAll('[data-testid^="receipt-batch-row-"]') || [])]
@@ -88,7 +91,8 @@ async function openReceiptDetailWithSelectableLines(frame, preferredBatchId = nu
     seen.add(id)
   }
   for (const batchId of candidateIds) {
-    await navigateFrame(frame, '/kassabonnen')
+    const batchQuery = `?fixtureBatch=${encodeURIComponent(batchId)}&t=${Date.now()}`
+    await navigateFrame(frame, `/kassabonnen${batchQuery}`)
     const currentDoc = getFrameDocument(frame)
     if (!openReceiptBatchInline(currentDoc, batchId)) continue
     const detailDoc = await waitForCondition(()=>{

@@ -225,7 +225,8 @@ async function resolveReceiptScenarioByLabels(frame, fixture) {
   for (const row of preferredRows) {
     const batchId = extractIdFromTestId(row, 'receipt-batch-row-')
     if (!batchId) continue
-    await navigateFrame(frame, '/kassabonnen')
+    const batchQuery = `?fixtureBatch=${encodeURIComponent(batchId)}&t=${Date.now()}`
+    await navigateFrame(frame, `/kassabonnen${batchQuery}`)
     const currentDoc = getFrameDocument(frame)
     const openButton = currentDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
     if (!openButton) continue
@@ -353,7 +354,8 @@ async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = nul
   }
 
   for (const batchId of candidateIds) {
-    await navigateFrame(frame, '/kassabonnen')
+    const batchQuery = `?fixtureBatch=${encodeURIComponent(batchId)}&t=${Date.now()}`
+    await navigateFrame(frame, `/kassabonnen${batchQuery}`)
     const currentDoc = getFrameDocument(frame)
     const opened = openReceiptBatchInline(currentDoc, batchId)
     if (!opened) continue
@@ -604,7 +606,8 @@ export async function runLayer1RegressionTests() {
 
     await runScenario('T11 Kassabondetail exporteert geselecteerde regels met kolomtitels', async () => {
       const receiptFixture = await resolveReceiptFixture(frame, fixture)
-      const { detailDoc, lineSelect } = await openReceiptBatchWithSelectableLines(frame, receiptFixture.batchId, receiptFixture.completeLineId)
+      const preferredBatchId = receiptFixture.latestBatchId || receiptFixture.batchId
+      const { detailDoc, lineSelect } = await openReceiptBatchWithSelectableLines(frame, preferredBatchId, receiptFixture.completeLineId)
       const exportButton = getReceiptExportButton(detailDoc)
       if (!lineSelect || !exportButton) throw new Error('Kassabondetailselectie of export ontbreekt')
       if (!lineSelect.checked) clickElement(lineSelect)

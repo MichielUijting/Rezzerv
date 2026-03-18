@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Button from '../../ui/Button'
@@ -28,6 +29,7 @@ export default function ReceiptsPage() {
   const [error, setError] = useState('')
   const [selectedBatchIds, setSelectedBatchIds] = useState([])
   const [openedBatchId, setOpenedBatchId] = useState('')
+  const location = useLocation()
 
   const providersByCode = useMemo(
     () => Object.fromEntries(providers.map((provider) => [provider.code, provider])),
@@ -74,7 +76,7 @@ export default function ReceiptsPage() {
 
     loadData()
     return () => { cancelled = true }
-  }, [])
+  }, [location.search])
 
   const listItems = useMemo(() => {
     const enriched = (batches || []).map((batch) => ({
