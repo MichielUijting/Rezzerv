@@ -1,0 +1,87 @@
+Rezzerv validatierapport v01.09.12
+=================================
+
+Release-doel
+------------
+Kassa uitbreiden met een bronhub achter de knop "Bon toevoegen", zodat Rezzerv de gebruiker meer ondersteunt bij het binnenhalen van kassabonnen via meerdere bronroutes.
+
+Wat is gewijzigd
+----------------
+1. Frontend / Kassa
+- "Bon toevoegen" opent nu een bronhub in plaats van direct alleen een bestandsdialoog.
+- Nieuwe bronkaarten toegevoegd voor:
+  - Foto of bestand
+  - E-mailbon toevoegen
+  - Map bewaken koppelen
+  - Klantenkaart koppelen
+  - Barcode / handmatig als fallback
+- Nieuw overzicht "Mijn bonbronnen" toegevoegd in de bronhub.
+- Mapbronnen kunnen vanuit de UI direct een scan starten.
+- Bestaande receipt importflow via bestand/foto blijft gekoppeld aan de bestaande uploadfunctionaliteit.
+
+2. Backend / receipt bronnen
+- Nieuw endpoint: GET /api/receipt-sources?householdId={id}
+- Nieuw endpoint: POST /api/receipt-sources
+- Bestaand endpoint POST /api/receipts/source-scan uitgebreid met nette 400-fout voor bronnen die nog geen mapscan ondersteunen.
+- Bronregistratie toegevoegd voor:
+  - watched_folder
+  - email
+  - customer_card
+- Bronlijst verrijkt met supports_scan en status_label voor UI-gebruik.
+
+Wat is bewust niet gewijzigd
+----------------------------
+- Geen parserwijziging
+- Geen wijziging aan receipt_tables of receipt_table_lines
+- Geen writes naar inventory_events
+- Geen wijziging aan bestaande voorraadflow
+- Geen wijziging aan actiebutton Kassabonnen voor opboeken naar voorraad
+- Geen redesign van de hele Kassa-module
+- Geen volledige mailboxsync
+- Geen volledige klantenkaartintegratie met externe winkelaccounts
+
+Wat is getest
+--------------
+1. Frontend
+- npm run build succesvol
+- Productiebuild bevat de nieuwe bronhub in Kassa
+
+2. Backend
+- python -m py_compile backend/app/main.py backend/app/services/receipt_service.py succesvol
+- /api/health = ok
+- GET /api/receipt-sources werkt
+- POST /api/receipt-sources werkt voor email, customer_card en watched_folder
+- POST /api/receipts/source-scan werkt voor watched_folder
+- POST /api/receipts/source-scan geeft nette 400 voor niet-scanbare bron (email)
+- Bestaande receipt importflow smoke getest met png-upload
+- inventory_events ongewijzigd gebleven
+
+Wat is niet getest
+------------------
+- docker compose build --no-cache (niet beschikbaar in deze omgeving)
+- Volledige browserregressierun buiten frontend productiebuild
+- Volledige mailbox-integratie (buiten scope)
+- Volledige klantenkaartintegratie met externe systemen (buiten scope)
+
+Risiconiveau
+------------
+Middel.
+Reden:
+- De release raakt zowel Kassa-UI als kleine receipt-bron-API-uitbreiding.
+- Parser- en voorraadlogica zijn bewust niet aangepast.
+- Grootste risico zit in de nieuwe bronhub-orchestratie, niet in voorraad of receipt parsing.
+
+Belangrijkste PO-testpunten
+---------------------------
+1. Start Rezzerv en log in.
+2. Open Kassa.
+3. Klik op "Bon toevoegen".
+4. Controleer dat de bronhub opent met alle 5 bronroutes.
+5. Controleer dat "Foto of bestand" nog steeds een bon kan uploaden.
+6. Controleer dat bestaande mapbronnen zichtbaar zijn en "Nu scannen" tonen.
+7. Registreer een klantenkaartbron en controleer dat deze in "Mijn bonbronnen" verschijnt.
+8. Controleer dat bestaande Kassa-lijst en Kassa-detail blijven werken.
+
+Eindoordeel
+-----------
+GO voor functionele PO-test van de nieuwe bronhub in Kassa.

@@ -623,13 +623,15 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
 def scan_receipt_source(engine, receipt_storage_root: Path, source_id: str) -> dict[str, Any] | None:
     with engine.begin() as conn:
         source = conn.execute(
-            text('SELECT id, household_id, label, source_path, is_active FROM receipt_sources WHERE id = :id LIMIT 1'),
+            text('SELECT id, household_id, type, label, source_path, is_active FROM receipt_sources WHERE id = :id LIMIT 1'),
             {'id': source_id},
         ).mappings().first()
         if not source:
             return None
         if not int(source['is_active'] or 0):
             raise ValueError('Bron is niet actief')
+        if str(source.get('type') or '') not in {'local_folder', 'scan_folder', 'watched_folder'}:
+            raise ValueError('Deze bron ondersteunt nog geen mapscan')
         run_id = uuid.uuid4().hex
         conn.execute(
             text('INSERT INTO receipt_processing_runs (id, source_id, files_found, files_imported, files_skipped, files_failed) VALUES (:id, :source_id, 0, 0, 0, 0)'),

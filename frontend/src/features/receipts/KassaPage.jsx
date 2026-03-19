@@ -68,6 +68,24 @@ async function uploadReceiptFile(householdId, file) {
   return data
 }
 
+async function fetchReceiptSources(householdId) {
+  return fetchJson(`/api/receipt-sources?householdId=${encodeURIComponent(householdId)}`)
+}
+
+async function createReceiptSource(payload) {
+  return fetchJson('/api/receipt-sources', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+async function scanReceiptSourceById(sourceId) {
+  return fetchJson('/api/receipts/source-scan', {
+    method: 'POST',
+    body: JSON.stringify({ source_id: sourceId }),
+  })
+}
+
 async function fetchReceiptPreview(receiptTableId) {
   const token = localStorage.getItem('rezzerv_token') || ''
   const response = await fetch(`/api/receipts/${encodeURIComponent(receiptTableId)}/preview`, {
@@ -404,14 +422,249 @@ function ReceiptDetailView({ receipt, onBack }) {
   )
 }
 
+function sourceTypeLabel(type) {
+  if (type === 'local_folder') return 'Lokale map'
+  if (type === 'scan_folder') return 'Scanmap'
+  if (type === 'watched_folder') return 'Bewaakte map'
+  if (type === 'email') return 'E-mail'
+  if (type === 'customer_card') return 'Klantenkaart'
+  if (type === 'barcode_fallback') return 'Barcode / handmatig'
+  return type || '-'
+}
+
+function ReceiptSourceHubModal({
+  isOpen,
+  onClose,
+  onChooseFile,
+  sources,
+  isLoadingSources,
+  sourceError,
+  sourceStatus,
+  onScanSource,
+  scanningSourceId,
+  onCreateWatchedFolder,
+  onCreateEmailSource,
+  onCreateCustomerCardSource,
+  savingSourceType,
+}) {
+  const [watchedFolderLabel, setWatchedFolderLabel] = useState('')
+  const [emailLabel, setEmailLabel] = useState('')
+  const [emailAddress, setEmailAddress] = useState('')
+  const [cardStore, setCardStore] = useState('')
+  const [cardLabel, setCardLabel] = useState('')
+  const [cardReference, setCardReference] = useState('')
+
+  useEffect(() => {
+    if (!isOpen) return
+    setWatchedFolderLabel('')
+    setEmailLabel('')
+    setEmailAddress('')
+    setCardStore('')
+    setCardLabel('')
+    setCardReference('')
+  }, [isOpen])
+
+  if (!isOpen) return null
+
+  const mapSources = sources.filter((source) => ['local_folder', 'scan_folder', 'watched_folder'].includes(source.type))
+  const emailSources = sources.filter((source) => source.type === 'email')
+  const customerCardSources = sources.filter((source) => source.type === 'customer_card')
+
+  return (
+    <div className="rz-modal-backdrop" role="presentation">
+      <div
+        className="rz-modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="kassa-bronhub-title"
+        style={{ width: 'min(1100px, 100%)', maxHeight: '90vh', overflow: 'auto', padding: '24px', gap: '20px' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div>
+            <h2 id="kassa-bronhub-title" className="rz-modal-title" style={{ fontSize: '22px' }}>Bon toevoegen</h2>
+            <p className="rz-modal-text">Kies hoe Rezzerv jouw kassabonnen moet binnenhalen. Zo hoeft de eindgebruiker minder zelf te regelen.</p>
+          </div>
+          <Button type="button" variant="secondary" onClick={onClose}>Sluiten</Button>
+        </div>
+
+        {sourceError ? <div className="rz-inline-feedback rz-inline-feedback--error">{sourceError}</div> : null}
+        {sourceStatus ? <div className="rz-inline-feedback rz-inline-feedback--success">{sourceStatus}</div> : null}
+
+        <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+          <ScreenCard fullWidth>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 700 }}>Foto of bestand</div>
+              <div style={{ color: '#667085' }}>Voeg direct een pdf, foto of screenshot van een bon toe. Deze route gebruikt de bestaande importflow.</div>
+              <Button type="button" variant="primary" onClick={onChooseFile}>Bestand kiezen</Button>
+            </div>
+          </ScreenCard>
+
+          <ScreenCard fullWidth>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 700 }}>E-mailbon toevoegen</div>
+              <div style={{ color: '#667085' }}>Positioneer e-mail als officiële bonbron. Automatische mailboxsync volgt later; in deze versie registreer je de bron of werk je via doorsturen.</div>
+              <div className="rz-inline-feedback rz-inline-feedback--warning">Stuur je bon voorlopig door naar jouw gekozen e-mailroute of registreer hier alvast de bron voor later automatisch ophalen.</div>
+              <input className="rz-input" value={emailLabel} onChange={(event) => setEmailLabel(event.target.value)} placeholder="Label, bijvoorbeeld Bonnen mailbox" />
+              <input className="rz-input" value={emailAddress} onChange={(event) => setEmailAddress(event.target.value)} placeholder="Doorstuuradres of afzender (optioneel)" />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => onCreateEmailSource({ label: emailLabel, external_reference: emailAddress })}
+                disabled={savingSourceType === 'email'}
+              >
+                {savingSourceType === 'email' ? 'Bewaren…' : 'E-mailbron bewaren'}
+              </Button>
+              {emailSources.length > 0 ? (
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {emailSources.map((source) => (
+                    <div key={source.id} style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '10px' }}>
+                      <div style={{ fontWeight: 700 }}>{source.label}</div>
+                      <div style={{ color: '#667085', fontSize: '14px' }}>{source.source_path || 'Geen afzender vastgelegd'} · {source.status_label}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </ScreenCard>
+
+          <ScreenCard fullWidth>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 700 }}>Map bewaken koppelen</div>
+              <div style={{ color: '#667085' }}>Gebruik bewaakte mappen om nieuwe bonnen automatisch op te pikken. Rezzerv kan de bron meteen scannen.</div>
+              {isLoadingSources ? <div style={{ color: '#667085' }}>Bronnen laden…</div> : null}
+              <div style={{ display: 'grid', gap: '8px' }}>
+                {mapSources.map((source) => (
+                  <div key={source.id} style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '10px', display: 'grid', gap: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{source.label}</div>
+                        <div style={{ color: '#667085', fontSize: '14px' }}>{sourceTypeLabel(source.type)} · {source.status_label}</div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => onScanSource(source.id)}
+                        disabled={scanningSourceId === source.id}
+                      >
+                        {scanningSourceId === source.id ? 'Scannen…' : 'Nu scannen'}
+                      </Button>
+                    </div>
+                    <div style={{ color: '#667085', fontSize: '14px', wordBreak: 'break-all' }}>{source.source_path || 'Geen map beschikbaar'}</div>
+                    <div style={{ color: '#667085', fontSize: '14px' }}>Laatst gescand: {formatDateTime(source.last_scan_at)}</div>
+                  </div>
+                ))}
+              </div>
+              <input className="rz-input" value={watchedFolderLabel} onChange={(event) => setWatchedFolderLabel(event.target.value)} placeholder="Naam voor nieuwe bewaakte map" />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => onCreateWatchedFolder({ label: watchedFolderLabel })}
+                disabled={savingSourceType === 'watched_folder'}
+              >
+                {savingSourceType === 'watched_folder' ? 'Aanmaken…' : 'Bewaakte map bewaren'}
+              </Button>
+            </div>
+          </ScreenCard>
+
+          <ScreenCard fullWidth>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 700 }}>Klantenkaart koppelen</div>
+              <div style={{ color: '#667085' }}>Registreer de klantenkaart nu alvast als officiële bonbron. Automatische winkelintegratie volgt later pas.</div>
+              <select className="rz-input" value={cardStore} onChange={(event) => setCardStore(event.target.value)}>
+                <option value="">Kies winkel</option>
+                <option value="Albert Heijn">Albert Heijn</option>
+                <option value="Jumbo">Jumbo</option>
+                <option value="Lidl">Lidl</option>
+                <option value="PLUS">PLUS</option>
+                <option value="ALDI">ALDI</option>
+                <option value="Overig">Overig</option>
+              </select>
+              <input className="rz-input" value={cardLabel} onChange={(event) => setCardLabel(event.target.value)} placeholder="Kaartlabel of accountnaam" />
+              <input className="rz-input" value={cardReference} onChange={(event) => setCardReference(event.target.value)} placeholder="Kaartnummer of referentie (optioneel)" />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => onCreateCustomerCardSource({ store_name: cardStore, account_label: cardLabel, external_reference: cardReference })}
+                disabled={savingSourceType === 'customer_card'}
+              >
+                {savingSourceType === 'customer_card' ? 'Bewaren…' : 'Klantenkaart bewaren'}
+              </Button>
+              {customerCardSources.length > 0 ? (
+                <div style={{ display: 'grid', gap: '8px' }}>
+                  {customerCardSources.map((source) => (
+                    <div key={source.id} style={{ border: '1px solid #d0d5dd', borderRadius: '8px', padding: '10px' }}>
+                      <div style={{ fontWeight: 700 }}>{source.label}</div>
+                      <div style={{ color: '#667085', fontSize: '14px' }}>{source.status_label}</div>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          </ScreenCard>
+
+          <ScreenCard fullWidth>
+            <div style={{ display: 'grid', gap: '12px' }}>
+              <div style={{ fontSize: '20px', fontWeight: 700 }}>Barcode / handmatig</div>
+              <div style={{ color: '#667085' }}>Vangnetroute wanneer geen bruikbare bonbron beschikbaar is. Gebruik deze route alleen als foto, e-mail, map of klantenkaart niet mogelijk is.</div>
+              <div className="rz-inline-feedback rz-inline-feedback--warning">Deze bron is bewust een fallback. Verwerking naar voorraad blijft bij de bestaande actiebutton Kassabonnen.</div>
+            </div>
+          </ScreenCard>
+        </div>
+
+        <ScreenCard fullWidth>
+          <div style={{ display: 'grid', gap: '12px' }}>
+            <div style={{ fontSize: '20px', fontWeight: 700 }}>Mijn bonbronnen</div>
+            <div style={{ color: '#667085' }}>Overzicht van gekoppelde bronnen. Zo voelt Rezzerv als beheerder van bonkanalen en niet alleen als losse uploadtool.</div>
+            {isLoadingSources ? (
+              <div>Bronnen laden…</div>
+            ) : sources.length === 0 ? (
+              <div>Er zijn nog geen gekoppelde bonbronnen zichtbaar.</div>
+            ) : (
+              <div className="rz-table-wrapper">
+                <table className="rz-table" data-testid="receipt-source-table">
+                  <thead>
+                    <tr className="rz-table-header">
+                      <th>Bron</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Laatst gescand</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sources.map((source) => (
+                      <tr key={source.id}>
+                        <td>{source.label}</td>
+                        <td>{sourceTypeLabel(source.type)}</td>
+                        <td>{source.status_label}</td>
+                        <td>{formatDateTime(source.last_scan_at)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </ScreenCard>
+      </div>
+    </div>
+  )
+}
+
 export default function KassaPage() {
   const [householdId, setHouseholdId] = useState('1')
   const [receipts, setReceipts] = useState([])
+  const [receiptSources, setReceiptSources] = useState([])
   const [filters, setFilters] = useState({ winkel: '', datum: '', status: '' })
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
+  const [isLoadingSources, setIsLoadingSources] = useState(false)
+  const [isSourceHubOpen, setIsSourceHubOpen] = useState(false)
+  const [scanningSourceId, setScanningSourceId] = useState('')
+  const [savingSourceType, setSavingSourceType] = useState('')
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
+  const [sourceError, setSourceError] = useState('')
+  const [sourceStatus, setSourceStatus] = useState('')
   const [selectedReceiptIds, setSelectedReceiptIds] = useState([])
   const [openedReceiptId, setOpenedReceiptId] = useState('')
   const [openedReceipt, setOpenedReceipt] = useState(null)
@@ -436,6 +689,19 @@ export default function KassaPage() {
     }
   }
 
+  async function loadReceiptSources(nextHouseholdId = householdId) {
+    setIsLoadingSources(true)
+    setSourceError('')
+    try {
+      const payload = await fetchReceiptSources(nextHouseholdId)
+      setReceiptSources(Array.isArray(payload?.items) ? payload.items : [])
+    } catch (err) {
+      setSourceError(normalizeErrorMessage(err?.message) || 'Bonbronnen konden niet worden geladen.')
+    } finally {
+      setIsLoadingSources(false)
+    }
+  }
+
   useEffect(() => {
     let cancelled = false
     async function bootstrap() {
@@ -447,11 +713,12 @@ export default function KassaPage() {
         if (cancelled) return
         const resolvedHouseholdId = String(household?.id || '1')
         setHouseholdId(resolvedHouseholdId)
-        await loadReceipts(resolvedHouseholdId)
+        await Promise.all([loadReceipts(resolvedHouseholdId), loadReceiptSources(resolvedHouseholdId)])
       } catch (err) {
         if (!cancelled) {
           setError(normalizeErrorMessage(err?.message) || 'Huishouden kon niet worden geladen.')
           setIsLoading(false)
+          setIsLoadingSources(false)
         }
       }
     }
@@ -507,8 +774,16 @@ export default function KassaPage() {
     setFilters((current) => ({ ...current, [key]: value }))
   }
 
-  function handleUploadClick() {
-    fileInputRef.current?.click()
+  function openSourceHub() {
+    setSourceError('')
+    setSourceStatus('')
+    setIsSourceHubOpen(true)
+    loadReceiptSources(householdId)
+  }
+
+  function handleChooseFileFromHub() {
+    setIsSourceHubOpen(false)
+    setTimeout(() => fileInputRef.current?.click(), 0)
   }
 
   async function handleUploadChange(event) {
@@ -524,6 +799,7 @@ export default function KassaPage() {
       if (result?.receipt_table_id) {
         await openReceiptDetail(result.receipt_table_id)
       }
+      setIsSourceHubOpen(false)
       if (result?.duplicate) {
         setStatus('Deze bon was al aanwezig en is niet opnieuw toegevoegd.')
       } else if (result?.receipt_table_id) {
@@ -535,6 +811,44 @@ export default function KassaPage() {
       setError(normalizeErrorMessage(err?.message) || 'Upload van de kassabon is mislukt.')
     } finally {
       setIsUploading(false)
+    }
+  }
+
+  async function handleScanSource(sourceId) {
+    setScanningSourceId(sourceId)
+    setSourceError('')
+    setSourceStatus('')
+    try {
+      const result = await scanReceiptSourceById(sourceId)
+      await Promise.all([loadReceipts(householdId), loadReceiptSources(householdId)])
+      setSourceStatus(`Scan afgerond: ${result.files_imported || 0} nieuw, ${result.files_skipped || 0} overgeslagen, ${result.files_failed || 0} mislukt.`)
+    } catch (err) {
+      setSourceError(normalizeErrorMessage(err?.message) || 'Mapscan kon niet worden gestart.')
+    } finally {
+      setScanningSourceId('')
+    }
+  }
+
+  async function handleCreateSource(sourceType, payload) {
+    setSavingSourceType(sourceType)
+    setSourceError('')
+    setSourceStatus('')
+    try {
+      const result = await createReceiptSource({ household_id: householdId, type: sourceType, ...payload })
+      await loadReceiptSources(householdId)
+      if (sourceType === 'watched_folder') {
+        setSourceStatus(`Bewaakte map toegevoegd: ${result.label}`)
+      } else if (sourceType === 'email') {
+        setSourceStatus(`E-mailbron geregistreerd: ${result.label}`)
+      } else if (sourceType === 'customer_card') {
+        setSourceStatus(`Klantenkaart geregistreerd: ${result.label}`)
+      } else {
+        setSourceStatus(`Bron geregistreerd: ${result.label}`)
+      }
+    } catch (err) {
+      setSourceError(normalizeErrorMessage(err?.message) || 'Bron registreren mislukt.')
+    } finally {
+      setSavingSourceType('')
     }
   }
 
@@ -558,8 +872,8 @@ export default function KassaPage() {
                   style={{ display: 'none' }}
                   onChange={handleUploadChange}
                 />
-                <Button type="button" variant="secondary" onClick={() => loadReceipts(householdId)} disabled={isLoading || isUploading}>Vernieuwen</Button>
-                <Button type="button" variant="primary" onClick={handleUploadClick} disabled={isUploading}>{isUploading ? 'Uploaden…' : 'Bon toevoegen'}</Button>
+                <Button type="button" variant="secondary" onClick={() => Promise.all([loadReceipts(householdId), loadReceiptSources(householdId)])} disabled={isLoading || isUploading}>Vernieuwen</Button>
+                <Button type="button" variant="primary" onClick={openSourceHub} disabled={isUploading}>{isUploading ? 'Uploaden…' : 'Bon toevoegen'}</Button>
               </div>
             </div>
 
@@ -641,6 +955,22 @@ export default function KassaPage() {
 
         {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} onBack={() => { setOpenedReceiptId(''); setOpenedReceipt(null) }} /> : null}
       </div>
+
+      <ReceiptSourceHubModal
+        isOpen={isSourceHubOpen}
+        onClose={() => setIsSourceHubOpen(false)}
+        onChooseFile={handleChooseFileFromHub}
+        sources={receiptSources}
+        isLoadingSources={isLoadingSources}
+        sourceError={sourceError}
+        sourceStatus={sourceStatus}
+        onScanSource={handleScanSource}
+        scanningSourceId={scanningSourceId}
+        onCreateWatchedFolder={(payload) => handleCreateSource('watched_folder', payload)}
+        onCreateEmailSource={(payload) => handleCreateSource('email', payload)}
+        onCreateCustomerCardSource={(payload) => handleCreateSource('customer_card', payload)}
+        savingSourceType={savingSourceType}
+      />
     </AppShell>
   )
 }

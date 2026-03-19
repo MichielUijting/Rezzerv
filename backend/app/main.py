@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import traceback
 import uuid
+import re
 from typing import List, Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
@@ -169,6 +170,17 @@ class ProcessBatchRequest(BaseModel):
 
 class ReceiptSourceScanRequest(BaseModel):
     source_id: str
+
+
+class ReceiptSourceCreateRequest(BaseModel):
+    household_id: str
+    type: str
+    label: Optional[str] = None
+    source_path: Optional[str] = None
+    store_name: Optional[str] = None
+    account_label: Optional[str] = None
+    external_reference: Optional[str] = None
+    is_active: bool = True
 
 
 STORE_PROVIDER_DEFINITIONS = {
@@ -2134,6 +2146,135 @@ def normalize_datetime(value):
     return str(value)
 
 
+def sanitize_source_slug(value: str) -> str:
+    candidate = re.sub(r'[^A-Za-z0-9._-]+', '-', (value or '').strip().lower())
+    candidate = candidate.strip('-._') or 'source'
+    return candidate[:80]
+
+
+def build_receipt_source_response(row):
+    item = serialize_receipt_row(dict(row))
+    source_type = str(item.get('type') or '')
+    supports_scan = source_type in {'local_folder', 'scan_folder', 'watched_folder'}
+    status_label = 'Actief' if item.get('is_active') else 'Inactief'
+    if source_type in {'email', 'customer_card'}:
+        status_label = 'Voorbereidende koppeling'
+    if source_type == 'barcode_fallback':
+        status_label = 'Vangnetroute'
+    if source_type == 'manual_upload':
+        status_label = 'Handmatig'
+    item['supports_scan'] = supports_scan
+    item['status_label'] = status_label
+    return item
+
+
+def ensure_receipt_source_path(household_id: str, source_type: str, label: str, requested_path: Optional[str] = None) -> Optional[str]:
+    if source_type not in {'local_folder', 'scan_folder', 'watched_folder'}:
+        return (requested_path or '').strip() or None
+    sources_root = RECEIPT_STORAGE_ROOT.parent / 'sources' / str(household_id)
+    sources_root.mkdir(parents=True, exist_ok=True)
+    if requested_path and str(requested_path).strip():
+        candidate = Path(str(requested_path).strip())
+        if not candidate.is_absolute():
+            candidate = (sources_root / candidate).resolve()
+        else:
+            candidate = candidate.resolve()
+    elif source_type == 'local_folder':
+        candidate = (sources_root / 'local-folder').resolve()
+    elif source_type == 'scan_folder':
+        candidate = (sources_root / 'scan-folder').resolve()
+    else:
+        candidate = (sources_root / sanitize_source_slug(label)).resolve()
+    candidate.mkdir(parents=True, exist_ok=True)
+    return str(candidate)
+
+
+def list_receipt_sources_for_household(household_id: str):
+    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, household_id)
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
+                FROM receipt_sources
+                WHERE household_id = :household_id
+                ORDER BY
+                    CASE type
+                        WHEN 'local_folder' THEN 1
+                        WHEN 'scan_folder' THEN 2
+                        WHEN 'watched_folder' THEN 3
+                        WHEN 'email' THEN 4
+                        WHEN 'customer_card' THEN 5
+                        WHEN 'barcode_fallback' THEN 6
+                        ELSE 9
+                    END,
+                    label COLLATE NOCASE ASC
+                """
+            ),
+            {'household_id': household_id},
+        ).mappings().all()
+    return [build_receipt_source_response(row) for row in rows]
+
+
+def create_receipt_source(payload: ReceiptSourceCreateRequest):
+    household_id = str(payload.household_id or '').strip() or '1'
+    source_type = str(payload.type or '').strip()
+    allowed_types = {'watched_folder', 'email', 'customer_card', 'barcode_fallback'}
+    if source_type not in allowed_types:
+        raise HTTPException(status_code=400, detail='Onbekend of niet-toegestaan bron type')
+
+    base_label = (payload.label or '').strip()
+    source_path = (payload.source_path or '').strip() or None
+    if source_type == 'watched_folder':
+        label = base_label or 'Bewaakte map'
+        source_path = ensure_receipt_source_path(household_id, source_type, label, source_path)
+    elif source_type == 'email':
+        email_value = (payload.external_reference or payload.source_path or '').strip()
+        label = base_label or ('E-mailbon' if not email_value else f'E-mailbon — {email_value}')
+        source_path = email_value or None
+    elif source_type == 'customer_card':
+        store_name = (payload.store_name or '').strip()
+        account_label = (payload.account_label or '').strip()
+        external_reference = (payload.external_reference or '').strip()
+        parts = [part for part in [store_name, account_label or external_reference] if part]
+        label = base_label or ('Klantenkaart' if not parts else ' — '.join(parts))
+        source_path = external_reference or account_label or None
+    else:
+        label = base_label or 'Barcode / handmatig'
+        source_path = None
+
+    source_id = uuid.uuid4().hex
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
+                VALUES (:id, :household_id, :type, :label, :source_path, :is_active)
+                """
+            ),
+            {
+                'id': source_id,
+                'household_id': household_id,
+                'type': source_type,
+                'label': label,
+                'source_path': source_path,
+                'is_active': 1 if payload.is_active else 0,
+            },
+        )
+        row = conn.execute(
+            text(
+                """
+                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
+                FROM receipt_sources
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {'id': source_id},
+        ).mappings().first()
+    return build_receipt_source_response(row)
+
+
 def ensure_household(email: str):
     user = users.get(email, {})
     household_key = user.get("household_key", email)
@@ -2174,12 +2315,26 @@ async def import_receipt(
     return JSONResponse(status_code=status_code, content=result)
 
 
+@app.get("/api/receipt-sources")
+def list_receipt_sources(householdId: str = Query(...)):
+    effective_household_id = str(householdId).strip() or '1'
+    return {'items': list_receipt_sources_for_household(effective_household_id)}
+
+
+@app.post("/api/receipt-sources")
+def register_receipt_source(payload: ReceiptSourceCreateRequest):
+    return create_receipt_source(payload)
+
+
 @app.post("/api/receipts/source-scan")
 def source_scan_receipts(payload: ReceiptSourceScanRequest):
     source_id = (payload.source_id or "").strip()
     if not source_id:
         raise HTTPException(status_code=400, detail="source_id is verplicht")
-    result = scan_receipt_source(engine, RECEIPT_STORAGE_ROOT, source_id)
+    try:
+        result = scan_receipt_source(engine, RECEIPT_STORAGE_ROOT, source_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     if result is None:
         raise HTTPException(status_code=404, detail="Onbekende receipt-bron")
     return result
