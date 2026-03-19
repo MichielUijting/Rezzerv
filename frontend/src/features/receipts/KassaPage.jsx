@@ -68,6 +68,38 @@ async function uploadReceiptFile(householdId, file) {
   return data
 }
 
+async function fetchReceiptPreview(receiptTableId) {
+  const token = localStorage.getItem('rezzerv_token') || ''
+  const response = await fetch(`/api/receipts/${encodeURIComponent(receiptTableId)}/preview`, {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    let detail = response.statusText
+    try {
+      const data = await response.json()
+      detail = data?.detail || detail
+    } catch {
+      try {
+        detail = await response.text()
+      } catch {
+        // ignore
+      }
+    }
+    throw new Error(normalizeErrorMessage(detail) || 'Preview van de originele bon kon niet worden geladen.')
+  }
+
+  const blob = await response.blob()
+  const contentType = response.headers.get('content-type') || blob.type || 'application/octet-stream'
+  const blobUrl = window.URL.createObjectURL(blob)
+  return {
+    blobUrl,
+    contentType,
+    isPdf: contentType.includes('pdf'),
+    isImage: contentType.startsWith('image/'),
+  }
+}
+
 function DetailInfoRow({ label, value }) {
   return (
     <div style={{ display: 'grid', gap: '4px' }}>
@@ -77,7 +109,119 @@ function DetailInfoRow({ label, value }) {
   )
 }
 
-function ReceiptDetailCard({ receipt, onBack }) {
+function ReceiptPreviewCard({ receipt }) {
+  const [previewState, setPreviewState] = useState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, error: '' })
+
+  useEffect(() => {
+    let cancelled = false
+    let activeUrl = ''
+
+    async function loadPreview() {
+      if (!receipt?.id) {
+        setPreviewState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, error: '' })
+        return
+      }
+      setPreviewState({ status: 'loading', blobUrl: '', contentType: '', isPdf: false, isImage: false, error: '' })
+      try {
+        const result = await fetchReceiptPreview(receipt.id)
+        if (cancelled) {
+          window.URL.revokeObjectURL(result.blobUrl)
+          return
+        }
+        activeUrl = result.blobUrl
+        setPreviewState({ status: 'ready', error: '', ...result })
+      } catch (err) {
+        if (!cancelled) {
+          setPreviewState({ status: 'error', blobUrl: '', contentType: '', isPdf: false, isImage: false, error: normalizeErrorMessage(err?.message) || 'Preview laden mislukt.' })
+        }
+      }
+    }
+
+    loadPreview()
+    return () => {
+      cancelled = true
+      if (activeUrl) window.URL.revokeObjectURL(activeUrl)
+    }
+  }, [receipt?.id])
+
+  const previewUrl = `/api/receipts/${encodeURIComponent(receipt?.id || '')}/preview`
+
+  return (
+    <ScreenCard>
+      <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-preview-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: '22px' }}>Bon-preview</div>
+            <div style={{ color: '#667085', marginTop: '4px' }}>
+              Vergelijk de originele bon visueel met de herkende bongegevens.
+            </div>
+          </div>
+          <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+            <a href={previewUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+              <Button type="button" variant="secondary">Open origineel</Button>
+            </a>
+          </div>
+        </div>
+
+        <div
+          style={{
+            border: '1px solid #d0d5dd',
+            borderRadius: '8px',
+            minHeight: '420px',
+            background: '#f8fafc',
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: previewState.isImage ? '16px' : '0',
+          }}
+        >
+          {previewState.status === 'loading' ? (
+            <div style={{ color: '#475467', fontWeight: 600 }}>Preview laden…</div>
+          ) : null}
+
+          {previewState.status === 'error' ? (
+            <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-fallback" style={{ maxWidth: '560px' }}>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <div>De preview van deze bon kon niet worden geladen.</div>
+                <div style={{ color: '#667085' }}>{previewState.error || 'Gebruik Open origineel om de bon read-only te bekijken.'}</div>
+                <div>
+                  <a href={previewUrl} target="_blank" rel="noreferrer">Open origineel</a>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {previewState.status === 'ready' && previewState.isPdf ? (
+            <iframe
+              src={previewState.blobUrl}
+              title={`Preview van bon ${receipt?.id}`}
+              style={{ width: '100%', minHeight: '560px', border: '0', background: '#fff' }}
+              data-testid="receipt-preview-pdf"
+            />
+          ) : null}
+
+          {previewState.status === 'ready' && previewState.isImage ? (
+            <img
+              src={previewState.blobUrl}
+              alt={`Preview van bon ${receipt?.id}`}
+              style={{ width: '100%', maxHeight: '720px', objectFit: 'contain', background: '#fff', borderRadius: '4px' }}
+              data-testid="receipt-preview-image"
+            />
+          ) : null}
+
+          {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage ? (
+            <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-unsupported" style={{ maxWidth: '560px' }}>
+              Voor dit bestandstype is geen ingebedde preview beschikbaar. Gebruik Open origineel om het bestand read-only te bekijken.
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </ScreenCard>
+  )
+}
+
+function ReceiptDetailInfoCard({ receipt, onBack }) {
   const [selectedLineIds, setSelectedLineIds] = useState([])
 
   useEffect(() => {
@@ -168,6 +312,11 @@ function ReceiptDetailCard({ receipt, onBack }) {
                 <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                   <DetailInfoRow label="Receipt table ID" value={receipt?.id} />
                   <DetailInfoRow label="Raw receipt ID" value={receipt?.raw_receipt_id} />
+                  <DetailInfoRow label="Bron" value={receipt?.source_label || 'Handmatige upload'} />
+                  <DetailInfoRow label="Oorspronkelijk bestand" value={receipt?.original_filename || 'Niet beschikbaar in deze release'} />
+                  <DetailInfoRow label="Bestandstype" value={receipt?.mime_type || 'Niet beschikbaar in deze release'} />
+                  <DetailInfoRow label="Imported at" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
+                  <DetailInfoRow label="Duplicate-status" value={receipt?.duplicate ? 'Dubbel bestand' : 'Geen duplicate gemeld'} />
                   <DetailInfoRow label="Aangemaakt" value={formatDateTime(receipt?.created_at)} />
                   <DetailInfoRow label="Bijgewerkt" value={formatDateTime(receipt?.updated_at)} />
                 </div>
@@ -198,11 +347,12 @@ function ReceiptDetailCard({ receipt, onBack }) {
                         <th>Eenheid</th>
                         <th className="rz-num">Stukprijs</th>
                         <th className="rz-num">Regelbedrag</th>
+                        <th className="rz-num">Korting</th>
                       </tr>
                     </thead>
                     <tbody>
                       {lines.length === 0 ? (
-                        <tr><td colSpan={7}>Geen artikelregels beschikbaar.</td></tr>
+                        <tr><td colSpan={8}>Geen artikelregels beschikbaar.</td></tr>
                       ) : lines.map((line) => {
                         const selected = selectedLineIds.includes(line.id)
                         return (
@@ -222,6 +372,7 @@ function ReceiptDetailCard({ receipt, onBack }) {
                             <td>{line.unit || '-'}</td>
                             <td className="rz-num">{formatMoney(line.unit_price, receipt?.currency)}</td>
                             <td className="rz-num">{formatMoney(line.line_total, receipt?.currency)}</td>
+                            <td className="rz-num">{formatMoney(line.discount_amount, receipt?.currency)}</td>
                           </tr>
                         )
                       })}
@@ -234,6 +385,22 @@ function ReceiptDetailCard({ receipt, onBack }) {
         </Tabs>
       </div>
     </ScreenCard>
+  )
+}
+
+function ReceiptDetailView({ receipt, onBack }) {
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gap: '16px',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        alignItems: 'start',
+      }}
+    >
+      <ReceiptPreviewCard receipt={receipt} />
+      <ReceiptDetailInfoCard receipt={receipt} onBack={onBack} />
+    </div>
   )
 }
 
@@ -259,7 +426,8 @@ export default function KassaPage() {
       setReceipts(items)
       if (openedReceiptId) {
         const detail = await fetchJson(`/api/receipts/${encodeURIComponent(openedReceiptId)}`)
-        setOpenedReceipt(detail)
+        const sourceItem = items.find((item) => String(item.receipt_table_id) === String(openedReceiptId)) || null
+        setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
       }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Kassabonnen konden niet worden geladen.')
@@ -314,8 +482,9 @@ export default function KassaPage() {
     setError('')
     try {
       const detail = await fetchJson(`/api/receipts/${encodeURIComponent(receiptTableId)}`)
+      const sourceItem = receipts.find((item) => String(item.receipt_table_id) === String(receiptTableId)) || null
       setOpenedReceiptId(receiptTableId)
-      setOpenedReceipt(detail)
+      setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
     }
@@ -470,7 +639,7 @@ export default function KassaPage() {
           </div>
         </ScreenCard>
 
-        {openedReceipt ? <ReceiptDetailCard receipt={openedReceipt} onBack={() => { setOpenedReceiptId(''); setOpenedReceipt(null) }} /> : null}
+        {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} onBack={() => { setOpenedReceiptId(''); setOpenedReceipt(null) }} /> : null}
       </div>
     </AppShell>
   )

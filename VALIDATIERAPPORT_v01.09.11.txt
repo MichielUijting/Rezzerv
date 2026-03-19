@@ -1,0 +1,42 @@
+Rezzerv validatierapport v01.09.11
+=================================
+
+Release-type:
+- Zuivere UI-release voor Kassa-detail
+
+Wat is gewijzigd:
+- Kassa-detail uitgebreid met een aparte Bon-preview card
+- Preview gebruikt bestaand read-only endpoint: GET /api/receipts/{receiptTableId}/preview
+- PDF wordt embedded getoond via iframe
+- JPG/PNG wordt direct als afbeelding getoond
+- Bij laadfout of niet-ondersteund bestandstype verschijnt een nette fallback met actie 'Open origineel'
+- Bestaande tabs Bonregels / Bonkop / Bron blijven beschikbaar in een aparte detail-card
+- Bonregels-tab toont nu ook korting als aparte kolom
+- Bron-tab toont beschikbare bronmetadata uit de huidige detail- en lijstdata; velden die in deze release niet beschikbaar zijn tonen expliciet dat ze nog niet beschikbaar zijn
+
+Wat is niet gewijzigd:
+- Geen backendwijziging
+- Geen parserwijziging
+- Geen wijziging aan receipt_tables of receipt_table_lines
+- Geen writes naar inventory_events
+- Geen wijziging aan bestaande voorraadfunctionaliteit
+- Geen redesign van de hele app
+- Geen wijziging aan de Kassa-lijstflow buiten de detailweergave
+
+Wat is getest:
+- Frontend productiebuild succesvol met npm run build
+- Versienummering opgehoogd naar 01.09.11 in VERSION.txt, version.json en frontend metadata
+- Broncodecontrole op aanwezigheid van de nieuwe preview-card, fallback en bestaande tabs
+
+Wat is niet getest:
+- Geen volledige browserregressierun in deze omgeving
+- Geen Docker runtime-validatie in deze omgeving
+- Geen handmatige kliktest in een draaiende browser binnen deze sandbox
+
+Risiconiveau:
+- Laag tot middel
+- Laag omdat alleen Kassa-detail UI is uitgebreid en bestaand preview-endpoint wordt hergebruikt
+- Middel omdat browserweergave van embedded PDF/image niet handmatig is nageklikt in deze omgeving
+
+Oordeel:
+- Build-technisch gereed voor functionele PO-test
