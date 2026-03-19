@@ -12,6 +12,7 @@ import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFi
 import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHouseholdAutomationPage'
 import SettingsStoreImportPage from '../../features/settings/SettingsStoreImportPage'
 import Voorraad from '../../pages/Voorraad'
+import RegressionRunnerPage from '../../features/admin/RegressionRunnerPage'
 import AuthGuard from './AuthGuard'
 
 function LoginRoute() {
@@ -45,6 +46,7 @@ const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
+  { path: '/regression-runner', element: <RegressionRunnerPage /> },
   { path: '/home', element: <Protected><HomePage /></Protected> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/winkels', element: <Protected><StoresPage /></Protected> },

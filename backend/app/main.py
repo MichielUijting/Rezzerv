@@ -4662,6 +4662,20 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
         raise HTTPException(status_code=500, detail=detail)
 
 
+@app.post("/api/dev/regression/reset")
+def reset_regression_fixture_state():
+    reset_dev_tables()
+    ensure_ui_test_seed_data()
+    version_path = Path(__file__).resolve().parents[2] / "VERSION.txt"
+    version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else None
+    return {
+        "status": "ok",
+        "dataset": "ui_seed",
+        "household_id": str(ensure_household("admin@rezzerv.local").get("id") or "1"),
+        "version": version,
+    }
+
+
 @app.post("/api/dev/run-smoke-tests", response_model=TestStartResponse)
 def run_smoke_tests():
     return testing_service.start_external_test("smoke")

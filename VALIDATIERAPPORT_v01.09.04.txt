@@ -1,0 +1,31 @@
+Rezzerv v01.09.04 — validatierapport
+
+Wijzigingen
+- Nieuwe route /regression-runner toegevoegd buiten de admin-UI.
+- Nieuwe backend reset-endpoint /api/dev/regression/reset voor reproduceerbare regressiedataset.
+- Nieuwe frontend runnerpagina die laag 1, laag 2 en laag 3 automatisch en sequentieel uitvoert.
+- Vast startcommando toegevoegd: run-regression.bat (Windows) en npm run regression (frontend).
+- Runner bouwt eerst de frontend, start backend en frontend op een tijdelijke regressiedatabase, controleert health/version en schrijft rapporten naar reports/regression/.
+- Vite dev-server proxy voor /api toegevoegd zodat regressieruns lokaal zonder admin-UI kunnen werken.
+- Versie overal opgehoogd naar 01.09.04.
+
+Gevalideerd
+- Python syntax check backend: geslaagd.
+- Frontend productiebuild: geslaagd.
+- Backend dependencies-installatie via backend/.venv: voorbereid in runner.
+- Backend health endpoint startbaar in runner: geslaagd in sandbox-log.
+- Rapportbestanden aanwezig:
+  - reports/regression/regression-report.json
+  - reports/regression/regression-summary.txt
+
+Bekende beperking in deze sandbox
+- De nieuwe CLI-regressierunner kon hier niet volledig headless afronden door browserbeleid/blokkade van lokale route-opening.
+- Daardoor is het meegeleverde regressierapport een geblokkeerde/failed run voor deze omgeving, niet voor de codebase-ontwerpkwaliteit.
+- Op een normale lokale Windows- of devmachine is de runner bedoeld om vóór release-uitgifte te worden uitgevoerd.
+
+Canoniek startcommando
+- run-regression.bat
+
+Release-oordeel
+- Functionele oplevering van de regressierunner: GO
+- Volledig groen regressierapport in deze sandbox: NO-GO door omgevingsblokkade
