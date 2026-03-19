@@ -12,7 +12,6 @@ import {
   runLayer1Tests,
   runLayer2Tests,
   runLayer3Tests,
-  runRegressionTests,
   submitTestResults,
 } from "./services/adminTestingService";
 import { runLayer1RegressionTests } from "./lib/layer1RegressionRunner";
@@ -333,14 +332,6 @@ export default function AdminPage() {
     setTestMessage("");
     setShowReport(false);
     try {
-      const start = await runRegressionTests();
-      setTestStatus((current) => ({ ...current, ...start }));
-      if (!start.started) {
-        setTestMessage("Er loopt al een test");
-        await refreshTestStatus();
-        return;
-      }
-
       setTestMessage('Regressietest alles gestart');
       const combinedResults = [];
       const suites = [
@@ -349,6 +340,7 @@ export default function AdminPage() {
           startFn: runLayer1Tests,
           runnerFn: runLayer1RegressionTests,
           startMessage: 'Regressietest alles: laag 1 gestart',
+          successMessage: 'Regressietest alles: laag 1 afgerond',
           failureMessage: 'Laag-1 kernregressietest kon niet worden uitgevoerd',
           prefix: 'Laag 1',
         },
@@ -357,6 +349,7 @@ export default function AdminPage() {
           startFn: runLayer2Tests,
           runnerFn: runLayer2RouteTests,
           startMessage: 'Regressietest alles: laag 2 gestart',
+          successMessage: 'Regressietest alles: laag 2 afgerond',
           failureMessage: 'Laag-2 route-/schermtest kon niet worden uitgevoerd',
           prefix: 'Laag 2',
         },
@@ -365,6 +358,7 @@ export default function AdminPage() {
           startFn: runLayer3Tests,
           runnerFn: runLayer3StyleguideTests,
           startMessage: 'Regressietest alles: laag 3 gestart',
+          successMessage: 'Regressietest alles: laag 3 afgerond',
           failureMessage: 'Laag-3 UI/styleguide-test kon niet worden uitgevoerd',
           prefix: 'Laag 3',
         },
@@ -373,12 +367,28 @@ export default function AdminPage() {
       for (const suite of suites) {
         try {
           const results = await executeLayerTest({
-            ...suite,
-            successMessage: '',
-            submitIndividualReport: false,
+            layerId: suite.layerId,
+            startFn: suite.startFn,
+            runnerFn: suite.runnerFn,
+            startMessage: suite.startMessage,
+            successMessage: suite.successMessage,
+            failureMessage: suite.failureMessage,
+            submitIndividualReport: true,
           });
           combinedResults.push(...results.map((item) => ({ ...item, name: `${suite.prefix} · ${item.name}` })));
         } catch (error) {
+          if (!error?.alreadyRunning) {
+            try {
+              await submitTestResults(suite.layerId, [{
+                name: `${suite.prefix} · Runner`,
+                status: 'failed',
+                error: error.message || suite.failureMessage,
+              }]);
+              await refreshTestStatus();
+            } catch {
+              // negeer secundaire fout
+            }
+          }
           combinedResults.push({
             name: `${suite.prefix} · Runner`,
             status: 'failed',

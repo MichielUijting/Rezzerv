@@ -1,0 +1,33 @@
+Rezzerv VALIDATIERAPPORT v01.09.07
+
+Scope
+- Gerichte bugfix op v01.09.06 voor de nieuwe admin-knop 'Regressietest alles'.
+- Doel: sequentiële uitvoering van laag 1 -> laag 2 -> laag 3 zonder de foutmelding 'Er loopt al een test'.
+
+Uitgevoerde wijziging
+- In frontend/src/features/admin/AdminPage.jsx is de gecombineerde flow aangepast.
+- De aparte start via runRegressionTests() is verwijderd uit handleRunAll().
+- Elke laag gebruikt nu alleen de bestaande laagflow:
+  - start laag
+  - voer runner uit
+  - submit individuele resultaten direct
+  - ga pas daarna door naar de volgende laag
+- Als een laag crasht nadat hij gestart is, wordt nu direct een failrapport voor die laag weggeschreven om de backend-status vrij te geven.
+- De 3 bestaande individuele regressieknoppen zijn inhoudelijk ongemoeid gelaten.
+
+Validatie
+- Frontend productiebuild: geslaagd
+- Backend Python syntaxcheck: geslaagd
+- Versienummering gecontroleerd op 01.09.07 in VERSION.txt, version.json en frontend package/public/dist versie-uitingen
+- Codecontrole uitgevoerd op de nieuwe orchestratie en directe submit per laag
+
+Niet volledig uitgevoerd
+- Geen volledige functionele regressierun in deze sandbox afgetekend
+- Geen browsermatige eind-tot-eind validatie tegen de live adminpagina in Docker
+
+Oordeel
+- GO als gerichte bugfix-release voor de knop 'Regressietest alles'
+- PO dient functioneel te verifiëren:
+  1. knop 'Regressietest alles' start zonder directe melding 'Er loopt al een test'
+  2. bestaande 3 regressieknoppen werken nog zoals voorheen
+  3. gecombineerd testrapport blijft beschikbaar
