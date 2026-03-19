@@ -1,0 +1,36 @@
+Rezzerv VALIDATIERAPPORT v01.09.06
+=================================
+Doel release
+- Additieve admin-UI wijziging: nieuwe knop "Regressietest alles" naast de 3 bestaande regressieknoppen.
+- Geen nieuwe testlogica; orchestratie over bestaande laag-1, laag-2 en laag-3 runners.
+
+Uitgevoerde wijzigingen
+- frontend/src/features/admin/components/TestRunPanel.jsx
+  - nieuwe knop toegevoegd: "Regressietest alles"
+- frontend/src/features/admin/AdminPage.jsx
+  - gedeelde executeLayerTest helper toegevoegd
+  - nieuwe handleRunAll orchestrator toegevoegd
+  - sequentiële volgorde: laag 1 -> laag 2 -> laag 3
+  - gecombineerd rapport wordt weggeschreven via bestaand testreport-endpoint als test_type regression_all
+- frontend/src/features/admin/components/TestStatusCard.jsx
+  - label toegevoegd voor test_type regression_all
+- versienummering overal opgehoogd naar 01.09.06
+
+Niet gewijzigd
+- backend regressielogica
+- individuele laag-1/laag-2/laag-3 runners
+- bestaande individuele regressieknoppen
+- adminpagina-structuur buiten additieve knop/orchestratie
+
+Validatie
+- frontend productiebuild: GESLAAGD
+- python syntax check backend: GESLAAGD
+- versieconsistentie gecontroleerd: GESLAAGD
+- aanwezigheid nieuwe knop/orchestratie gecontroleerd: GESLAAGD
+
+Bekende beperkingen
+- Geen volledige browser-regressierun in deze omgeving afgetekend.
+- Deze release voegt alleen een additieve UI-orchestratie toe; details blijven in bestaand testrapport.
+
+Oordeel
+- GO voor functionele PO-test van de nieuwe admin-knop "Regressietest alles".

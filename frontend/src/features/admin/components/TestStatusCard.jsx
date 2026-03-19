@@ -26,6 +26,7 @@ function typeLabel(type) {
   if (type === 'layer1') return 'Laag-1 kernregressietest (leidend)'
   if (type === 'layer2') return 'Laag-2 route-/schermtest (leidend)'
   if (type === 'layer3') return 'Laag-3 UI/styleguide-test (leidend)'
+  if (type === 'regression_all') return 'Regressietest alles (leidend)'
   return 'Nog geen test'
 }
 
