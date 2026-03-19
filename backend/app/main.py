@@ -104,45 +104,6 @@ class StoreConnectionCreate(BaseModel):
         return str(value)
 
 
-class KassaIntakeCreate(BaseModel):
-    household_id: str | int
-    source_type: str
-    source_reference: Optional[str] = None
-    status: str = 'nieuw'
-
-    @field_validator('household_id', mode='before')
-    @classmethod
-    def normalize_household_id(cls, value):
-        if value is None:
-            raise ValueError('household_id is verplicht')
-        return str(value)
-
-    @field_validator('source_type')
-    @classmethod
-    def validate_source_type(cls, value):
-        allowed = {'klantkaartbron', 'foto_kassabon', 'email_bijlage', 'api_klantkaart'}
-        normalized = str(value or '').strip().lower()
-        if normalized not in allowed:
-            raise ValueError('Ongeldige bronsoort')
-        return normalized
-
-    @field_validator('status')
-    @classmethod
-    def validate_status(cls, value):
-        allowed = {'nieuw', 'omgezet', 'controle_nodig'}
-        normalized = str(value or '').strip().lower()
-        if normalized not in allowed:
-            raise ValueError('Ongeldige Kassa-status')
-        return normalized
-
-    @field_validator('source_reference')
-    @classmethod
-    def normalize_source_reference(cls, value):
-        if value is None:
-            return None
-        normalized = str(value).strip()
-        return normalized or None
-
 
 class PullPurchasesRequest(BaseModel):
     mock_profile: str = "default"
@@ -415,31 +376,6 @@ def ensure_household_articles_schema():
         if "consumable" not in columns:
             conn.execute(text("ALTER TABLE household_articles ADD COLUMN consumable INTEGER"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_household_articles_household_name ON household_articles (household_id, naam)"))
-
-
-def ensure_kassa_intake_schema():
-    with engine.begin() as conn:
-        conn.execute(text(
-            """
-            CREATE TABLE IF NOT EXISTS kassa_intake_items (
-                id TEXT PRIMARY KEY,
-                household_id TEXT NOT NULL,
-                source_type TEXT NOT NULL,
-                source_reference TEXT,
-                status TEXT NOT NULL DEFAULT 'nieuw',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        ))
-        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(kassa_intake_items)")).fetchall()}
-        if 'source_reference' not in columns:
-            conn.execute(text("ALTER TABLE kassa_intake_items ADD COLUMN source_reference TEXT"))
-        if 'status' not in columns:
-            conn.execute(text("ALTER TABLE kassa_intake_items ADD COLUMN status TEXT NOT NULL DEFAULT 'nieuw'"))
-        if 'updated_at' not in columns:
-            conn.execute(text("ALTER TABLE kassa_intake_items ADD COLUMN updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_kassa_intake_household_created ON kassa_intake_items (household_id, created_at DESC)"))
 
 
 def normalize_household_article_name(value: str | None) -> str:
@@ -2287,7 +2223,6 @@ from app.models import household, space, sublocation, inventory, store_provider,
 Base.metadata.create_all(bind=engine)
 ensure_household_settings_schema()
 ensure_household_articles_schema()
-ensure_kassa_intake_schema()
 ensure_release_2_schema()
 ensure_release_3_schema()
 ensure_release_4_schema()
@@ -3495,64 +3430,6 @@ def export_receipt_export_fixture(batchId: Optional[str] = Query(default=None), 
         'X-Rezzerv-Source': 'receipt-export-fixture',
     }
     return Response(content=csv, media_type='text/csv; charset=utf-8', headers=headers)
-
-
-@app.get('/api/kassa-intake')
-def get_kassa_intake_items(householdId: str = Query(...)):
-    with engine.begin() as conn:
-        rows = conn.execute(
-            text(
-                """
-                SELECT id, household_id, source_type, source_reference, status, created_at, updated_at
-                FROM kassa_intake_items
-                WHERE household_id = :household_id
-                ORDER BY datetime(created_at) DESC, id DESC
-                """
-            ),
-            {'household_id': str(householdId)},
-        ).mappings().all()
-    results = []
-    for row in rows:
-        item = dict(row)
-        item['created_at'] = normalize_datetime(item.get('created_at'))
-        item['updated_at'] = normalize_datetime(item.get('updated_at'))
-        results.append(item)
-    return results
-
-
-@app.post('/api/kassa-intake')
-def create_kassa_intake_item(payload: KassaIntakeCreate):
-    item_id = str(uuid.uuid4())
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                INSERT INTO kassa_intake_items (id, household_id, source_type, source_reference, status, created_at, updated_at)
-                VALUES (:id, :household_id, :source_type, :source_reference, :status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """
-            ),
-            {
-                'id': item_id,
-                'household_id': payload.household_id,
-                'source_type': payload.source_type,
-                'source_reference': payload.source_reference,
-                'status': payload.status,
-            },
-        )
-        row = conn.execute(
-            text(
-                """
-                SELECT id, household_id, source_type, source_reference, status, created_at, updated_at
-                FROM kassa_intake_items
-                WHERE id = :id
-                """
-            ),
-            {'id': item_id},
-        ).mappings().first()
-    result = dict(row)
-    result['created_at'] = normalize_datetime(result.get('created_at'))
-    result['updated_at'] = normalize_datetime(result.get('updated_at'))
-    return result
 
 
 @app.get("/api/store-providers")

@@ -634,25 +634,6 @@ export async function runLayer1RegressionTests() {
       await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="analysis-page"]'), WAIT_TIMEOUT, 'analysis-page niet gevonden')
     }, results)
 
-    await runScenario('T12 Kassa intake-item kan worden opgeslagen en status teruggelezen', async () => {
-      const uniqueRef = `kassa-layer1-${Date.now()}`
-      const created = await requestJson('/api/kassa-intake', {
-        method: 'POST',
-        body: JSON.stringify({ household_id: '1', source_type: 'foto_kassabon', source_reference: uniqueRef, status: 'nieuw' }),
-      })
-      if (!created?.id) throw new Error('Kassa intake-item werd niet opgeslagen')
-      await navigateFrame(frame, `/kassa?t=${Date.now()}`)
-      const kassaDoc = getFrameDocument(frame)
-      if (!kassaDoc.querySelector('[data-testid="kassa-page"]')) throw new Error('kassa-page niet gevonden')
-      const row = await waitForCondition(() => getFrameDocument(frame)?.querySelector(`[data-testid="kassa-intake-row-${created.id}"]`), WAIT_TIMEOUT, 'Kassa intake-item niet zichtbaar in overzicht')
-      const statusNode = getFrameDocument(frame)?.querySelector(`[data-testid="kassa-intake-status-${created.id}"]`)
-      if (!row || !statusNode) throw new Error('Kassa overzicht of status ontbreekt voor intake-item')
-      const statusValue = String(statusNode.textContent || '').trim().toLowerCase()
-      if (!statusValue.includes('nieuw')) throw new Error('Kassa-status werd niet als Nieuw getoond')
-      await navigateFrame(frame, `/kassa?refresh=${Date.now()}`)
-      if (!getFrameDocument(frame)?.querySelector(`[data-testid="kassa-intake-row-${created.id}"]`)) throw new Error('Kassa intake-item bleef niet zichtbaar na refresh')
-    }, results)
-
     await runScenario('T11 Export-testdataset response levert vaste CSV met kolomtitels', async () => {
       const exportFixture = await prepareReceiptExportFixture(frame)
       const targetBatchId = exportFixture.latestBatchId || exportFixture.batchId

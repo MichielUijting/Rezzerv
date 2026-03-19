@@ -358,22 +358,6 @@ export async function runLayer3StyleguideTests() {
       assertRowColor(completeRow, READY_ROW_COLOR, 'Complete geselecteerde bonregel')
     }, results)
 
-    await runScenario('L3.8 Kassa-tegel en Kassa-scherm gebruiken standaard kaartstructuur', async () => {
-      await navigateFrame(frame, '/home')
-      let doc = getFrameDocument(frame)
-      assertBuildTagVisible(doc)
-      const homeTile = doc.querySelector('[data-testid="home-tile-kassa"]')
-      if (!homeTile) throw new Error('home-tile-kassa ontbreekt')
-      clickElement(homeTile)
-      await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="kassa-page"]'), WAIT_TIMEOUT, 'kassa-page niet gevonden')
-      doc = getFrameDocument(frame)
-      assertBuildTagVisible(doc)
-      const page = assertAppShellPage(doc, 'kassa-page')
-      const card = assertScreenCard(page)
-      if (!card.querySelector('[data-testid="kassa-source-grid"]')) throw new Error('Kassa bronoverzicht ontbreekt')
-      if (!card.querySelector('[data-testid="kassa-intake-table"]')) throw new Error('Kassa intake-tabel ontbreekt')
-    }, results)
-
     await runScenario('L3.7 Kassabondetail toont exportknop binnen kaart', async () => {
       const { detailDoc } = await ensureReceiptFixture(frame, fixture)
       assertBuildTagVisible(detailDoc)
