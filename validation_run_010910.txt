@@ -1,0 +1,9 @@
+health 200 {'status': 'ok'}
+inventory_events_before 5
+import_pdf 201 {'raw_receipt_id': '5b1af38326e04663989e852661a6335f', 'receipt_table_id': 'd71c3023dd224f93ac4b6e50d5c7824c', 'duplicate': False, 'parse_status': 'parsed'}
+preview_pdf 200 application/pdf inline; filename="receipt.pdf"
+import_image 201 {'raw_receipt_id': '5c440bb57ff14d62a97e0ef2abead24f', 'receipt_table_id': '554adadaa2c343539933e6071fca4fa0', 'duplicate': False, 'parse_status': 'review_needed'}
+preview_image 200 image/png inline; filename="receipt.png"
+preview_missing 404 {'detail': 'Originele bon ontbreekt'}
+inventory_events_after 5
+tmpdir /tmp/rezzerv_010910_validation_c651zlzb

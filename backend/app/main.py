@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel, Field, field_validator
 import json
 import os
@@ -2214,6 +2214,39 @@ def list_receipts(householdId: str = Query(...)):
             {"household_id": effective_household_id},
         ).mappings().all()
     return {"items": [serialize_receipt_row(dict(row)) for row in rows]}
+
+
+@app.get("/api/receipts/{receipt_table_id}/preview")
+def get_receipt_preview(receipt_table_id: str):
+    with engine.begin() as conn:
+        record = conn.execute(
+            text(
+                """
+                SELECT rt.id AS receipt_table_id, rr.original_filename, rr.mime_type, rr.storage_path
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                WHERE rt.id = :receipt_table_id
+                LIMIT 1
+                """
+            ),
+            {"receipt_table_id": receipt_table_id},
+        ).mappings().first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Bon niet gevonden")
+
+    storage_path = Path(record["storage_path"] or "")
+    if not storage_path.exists() or not storage_path.is_file():
+        raise HTTPException(status_code=404, detail="Originele bon ontbreekt")
+
+    try:
+        storage_path.resolve().relative_to(RECEIPT_STORAGE_ROOT.resolve())
+    except Exception:
+        raise HTTPException(status_code=403, detail="Bonbestand ligt buiten de toegestane opslag")
+
+    mime_type = str(record["mime_type"] or "application/octet-stream")
+    filename = str(record["original_filename"] or storage_path.name)
+    headers = {"Content-Disposition": f'inline; filename="{Path(filename).name}"'}
+    return FileResponse(path=storage_path, media_type=mime_type, filename=Path(filename).name, headers=headers)
 
 
 @app.get("/api/receipts/{receipt_table_id}")
