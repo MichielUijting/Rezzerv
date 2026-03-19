@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
 import json
+import os
+from pathlib import Path
 import traceback
 import uuid
 from typing import List, Optional
@@ -14,6 +16,7 @@ from sqlalchemy import text
 
 app = FastAPI()
 logger = logging.getLogger('rezzerv.api')
+RECEIPT_STORAGE_ROOT = Path(os.getenv('RECEIPT_STORAGE_ROOT', '/app/data/receipts/raw'))
 
 
 @app.exception_handler(Exception)
@@ -1183,6 +1186,119 @@ def ensure_release_814_schema():
         conn.execute(text("UPDATE inventory SET status = COALESCE(status, 'active')"))
 
 
+def ensure_release_902_schema():
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS receipt_sources (
+                    id TEXT PRIMARY KEY,
+                    household_id TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    label TEXT NOT NULL,
+                    source_path TEXT,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    last_scan_at DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS raw_receipts (
+                    id TEXT PRIMARY KEY,
+                    household_id TEXT NOT NULL,
+                    source_id TEXT,
+                    original_filename TEXT NOT NULL,
+                    mime_type TEXT NOT NULL,
+                    storage_path TEXT NOT NULL,
+                    sha256_hash TEXT NOT NULL,
+                    imported_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    duplicate_of_raw_receipt_id TEXT,
+                    raw_status TEXT NOT NULL DEFAULT 'imported',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS receipt_tables (
+                    id TEXT PRIMARY KEY,
+                    raw_receipt_id TEXT NOT NULL UNIQUE,
+                    household_id TEXT NOT NULL,
+                    store_name TEXT,
+                    store_branch TEXT,
+                    purchase_at DATETIME,
+                    total_amount NUMERIC(12,2),
+                    currency TEXT NOT NULL DEFAULT 'EUR',
+                    parse_status TEXT NOT NULL DEFAULT 'parsed',
+                    confidence_score NUMERIC(5,4),
+                    line_count INTEGER NOT NULL DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS receipt_table_lines (
+                    id TEXT PRIMARY KEY,
+                    receipt_table_id TEXT NOT NULL,
+                    line_index INTEGER NOT NULL,
+                    raw_label TEXT NOT NULL,
+                    normalized_label TEXT,
+                    quantity NUMERIC(12,3),
+                    unit TEXT,
+                    unit_price NUMERIC(12,4),
+                    line_total NUMERIC(12,2),
+                    discount_amount NUMERIC(12,2),
+                    barcode TEXT,
+                    article_match_status TEXT NOT NULL DEFAULT 'unmatched',
+                    matched_article_id TEXT,
+                    confidence_score NUMERIC(5,4),
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS receipt_processing_runs (
+                    id TEXT PRIMARY KEY,
+                    source_id TEXT,
+                    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    finished_at DATETIME,
+                    files_found INTEGER NOT NULL DEFAULT 0,
+                    files_imported INTEGER NOT NULL DEFAULT 0,
+                    files_skipped INTEGER NOT NULL DEFAULT 0,
+                    files_failed INTEGER NOT NULL DEFAULT 0
+                )
+                """
+            )
+        )
+
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_sources_household_active ON receipt_sources (household_id, is_active)"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_raw_receipts_household_hash ON raw_receipts (household_id, sha256_hash)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_raw_receipts_source_imported ON raw_receipts (source_id, imported_at DESC)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_tables_household_created ON receipt_tables (household_id, created_at DESC)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_tables_status_created ON receipt_tables (parse_status, created_at DESC)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_lines_receipt_lineindex ON receipt_table_lines (receipt_table_id, line_index)"))
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_table_lines_receipt_line ON receipt_table_lines (receipt_table_id, line_index)"))
+
+
+def ensure_receipt_storage_root():
+    RECEIPT_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
+
+
 def normalize_store_memory_key(article_name: str | None, brand: str | None):
     name = (article_name or "").strip().lower()
     brand_value = (brand or "").strip().lower()
@@ -2218,7 +2334,7 @@ def update_dev_article_automation_override(article_id: str, payload: ArticleAuto
 
 # SQLite datamodel initialization
 from app.db import engine, Base
-from app.models import household, space, sublocation, inventory, store_provider, store_connection, purchase_import
+from app.models import household, space, sublocation, inventory, store_provider, store_connection, purchase_import, receipt
 
 Base.metadata.create_all(bind=engine)
 ensure_household_settings_schema()
@@ -2229,6 +2345,8 @@ ensure_release_4_schema()
 ensure_release_803_schema()
 ensure_release_813_schema()
 ensure_release_814_schema()
+ensure_release_902_schema()
+ensure_receipt_storage_root()
 seed_store_providers()
 
 

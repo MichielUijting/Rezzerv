@@ -1,0 +1,52 @@
+Rezzerv v01.09.02 - Validatierapport
+
+Release scope
+- Uitgevoerd: Release 1A voor de nieuwe Kassa-keten (infra)
+- Niet uitgevoerd in deze release: parser/API/UI/voorraadmutaties
+
+Wijzigingen
+- Nieuwe receipt-infra toegevoegd:
+  - receipt_sources
+  - raw_receipts
+  - receipt_tables
+  - receipt_table_lines
+  - receipt_processing_runs
+- Nieuwe schema-upgrade toegevoegd in backend/app/main.py:
+  - ensure_release_902_schema()
+- Nieuwe SQLAlchemy modellen toegevoegd in backend/app/models/receipt.py
+- Receipt storage root voorbereid via RECEIPT_STORAGE_ROOT
+- Ontbrekend backend/requirements.txt toegevoegd zodat de backend-Dockerfile weer een geldige invoer heeft
+- Versie opgehoogd naar 01.09.02 in alle relevante versiebestanden
+
+Niet gewijzigd
+- Geen writes naar inventory_events
+- Geen wijziging aan bestaande voorraadlogica
+- Geen routerwijziging
+- Geen redesign
+- Geen Kassa-UI-aansluiting
+
+Uitgevoerde validatie
+- Python syntax check geslaagd:
+  - backend/app/main.py
+  - backend/app/db.py
+  - backend/app/models/*.py
+- FastAPI app import geslaagd
+- /api/health test geslaagd via TestClient: status 200, payload {"status":"ok"}
+- Nieuwe receipt-tabellen aangemaakt/bevestigd in:
+  - /rezzerv.db
+  - /backend/rezzerv.db
+  - /backend/rezzerv_test_temp.db
+- Receipt storage root kan worden aangemaakt
+
+Beperkingen van de validatie
+- docker/compose build niet uitgevoerd: Docker is niet beschikbaar in deze uitvoeromgeving
+- Geen parsertests uitgevoerd, want Release 1B valt buiten deze release
+- Geen frontend regressietest uitgevoerd, want geen UI-wijziging in scope
+
+Bekende baseline-opmerking
+- In baseline v01.08.99 ontbrak backend/requirements.txt terwijl backend/Dockerfile dit bestand verwacht.
+- Dit is hersteld in v01.09.02 om een geldige backend package-structuur te behouden.
+
+Conclusie
+- Release 1A infra is technisch ingebouwd en lokaal gevalideerd binnen de beschikbare uitvoeromgeving.
+- Release 1B (import/scan/parse/API) kan hierna als aparte backend-release worden uitgevoerd.
