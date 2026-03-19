@@ -652,10 +652,9 @@ export async function runLayer1RegressionTests() {
         return button && button.disabled === false ? button : null
       }, WAIT_TIMEOUT, 'receipt-export-button werd niet actief voor export-testdataset')
       nativeClick(activeExportButton)
-      const download = await waitForCondition(() => {
-        const payload = getLastDownload(frame)
-        return payload?.csv ? payload : null
-      }, WAIT_TIMEOUT, 'Export-testdataset CSV ontbreekt')
+      await delay(220)
+      const download = getLastDownload(frame)
+      if (!download?.csv) throw new Error('Export-testdataset CSV ontbreekt')
       const firstLine = String(download.csv || '').split('\n')[0] || ''
       if (!firstLine.includes('Bonartikel') || !firstLine.includes('Locatie')) throw new Error('Export-testdataset mist kolomtitels')
       if ((download?.rowCount || 0) !== 1) throw new Error('Export-testdataset moet exact 1 regel exporteren')
