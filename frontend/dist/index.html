@@ -103,17 +103,20 @@
         font-weight:700 !important;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-TD8URgoQ.js"></script>
+    <script type="module" crossorigin src="/assets/index-CCzqzVNE.js"></script>
     <link rel="stylesheet" crossorigin href="/assets/index-0MT30Mfs.css">
   </head>
   <body>
     <div id="root"></div>
     <script>
+      window.__REZZERV_VERSION__ = window.__REZZERV_VERSION__ || null
       fetch('/version.json', { cache: 'no-store' })
         .then((response) => response.ok ? response.json() : null)
         .then((versionInfo) => {
-          if (!versionInfo || !versionInfo.version) return
-          window.__REZZERV_VERSION__ = versionInfo
+          const version = typeof versionInfo?.version === 'string' ? versionInfo.version.trim() : ''
+          if (!version) return
+          window.__REZZERV_VERSION__ = { version }
+          window.dispatchEvent(new CustomEvent('rezzerv-version-ready', { detail: { version } }))
         })
         .catch(() => {})
     </script>

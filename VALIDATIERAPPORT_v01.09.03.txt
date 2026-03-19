@@ -1,0 +1,42 @@
+Rezzerv v01.09.03 - Validatierapport
+
+Doel van deze release
+- Versienummering consistent doorvoeren door de hele applicatie heen.
+
+Uitgevoerd
+- Versie opgehoogd naar 01.09.03 in VERSION.txt.
+- Root version.json omgezet naar geldig JSON-formaat: {"version": "01.09.03"}.
+- Frontend version.json-bestanden gelijkgetrokken op 01.09.03:
+  - frontend/version.json
+  - frontend/public/version.json
+  - frontend/dist/version.json
+- frontend/package.json gelijkgetrokken op 01.09.03.
+- frontend/package-lock.json top-level versie gelijkgetrokken op 01.09.03.
+- Build-tag runtime-synchronisatie toegevoegd:
+  - App luistert naar rezzerv-version-ready
+  - index.html laadt /version.json en publiceert de versie via window.__REZZERV_VERSION__
+- Frontend productiebuild opnieuw uitgevoerd met VITE_REZZERV_VERSION=01.09.03.
+
+Functioneel effect
+- Het zichtbare versielabel kan nu synchroon lopen met de machine-leesbare versiebron.
+- Scripts die /version.json als JSON verwachten, krijgen nu geldig JSON terug.
+- Start-/cleanup-logica en testlogica hebben één consistente versiebron.
+
+Gevalideerd
+- JSON-validatie geslaagd voor alle version.json-bestanden.
+- Consistentiecheck geslaagd tussen:
+  - VERSION.txt
+  - version.json
+  - frontend/version.json
+  - frontend/public/version.json
+  - frontend/dist/version.json
+  - frontend/package.json
+  - frontend/package-lock.json
+- Frontend build geslaagd.
+
+Niet volledig gevalideerd
+- docker compose build niet uitgevoerd in deze omgeving.
+- Eindgebruikersregressietest niet uitgevoerd in deze omgeving.
+
+Opmerking
+- Verwijzingen naar baseline v01.08.99 in dit rapport zijn historisch en geen actieve versiereferenties in de applicatie.

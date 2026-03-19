@@ -1,8 +1,16 @@
-import AppRouter from "./app/router/AppRouter";
+import { useEffect, useState } from "react";
+import AppRouter from "./app/router/AppRouter.jsx";
 import { getRezzervVersionTag } from "./ui/version";
 
 export default function App() {
-  const buildTag = getRezzervVersionTag();
+  const [buildTag, setBuildTag] = useState(getRezzervVersionTag());
+
+  useEffect(() => {
+    const refreshVersion = () => setBuildTag(getRezzervVersionTag());
+    window.addEventListener("rezzerv-version-ready", refreshVersion);
+    return () => window.removeEventListener("rezzerv-version-ready", refreshVersion);
+  }, []);
+
   return (
     <>
       <AppRouter />
