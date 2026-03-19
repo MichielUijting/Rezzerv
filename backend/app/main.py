@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header, Query, Request, Response
+from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field, field_validator
@@ -10,6 +10,7 @@ import uuid
 from typing import List, Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
+from app.services.receipt_service import ensure_default_receipt_sources, ingest_receipt, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from datetime import datetime
 import logging
 from sqlalchemy import text
@@ -165,6 +166,9 @@ class ProcessBatchRequest(BaseModel):
             raise ValueError("Alleen selected_only of ready_only wordt ondersteund")
         return value
 
+
+class ReceiptSourceScanRequest(BaseModel):
+    source_id: str
 
 
 STORE_PROVIDER_DEFINITIONS = {
@@ -2147,12 +2151,143 @@ def health():
     return {"status": "ok"}
 
 
+@app.post("/api/receipts/import")
+async def import_receipt(
+    household_id: str = Form(...),
+    file: UploadFile = File(...),
+):
+    effective_household_id = str(household_id).strip() or "1"
+    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Leeg bestand")
+    result = ingest_receipt(
+        engine=engine,
+        receipt_storage_root=RECEIPT_STORAGE_ROOT,
+        household_id=effective_household_id,
+        filename=file.filename or "receipt",
+        file_bytes=file_bytes,
+        source_id=f"{effective_household_id}-manual-upload",
+        mime_type=file.content_type,
+    )
+    status_code = 200 if result.get("duplicate") else 201
+    return JSONResponse(status_code=status_code, content=result)
+
+
+@app.post("/api/receipts/source-scan")
+def source_scan_receipts(payload: ReceiptSourceScanRequest):
+    source_id = (payload.source_id or "").strip()
+    if not source_id:
+        raise HTTPException(status_code=400, detail="source_id is verplicht")
+    result = scan_receipt_source(engine, RECEIPT_STORAGE_ROOT, source_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Onbekende receipt-bron")
+    return result
+
+
+@app.get("/api/receipts")
+def list_receipts(householdId: str = Query(...)):
+    effective_household_id = str(householdId).strip() or "1"
+    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                    rt.id AS receipt_table_id,
+                    rt.raw_receipt_id,
+                    rt.store_name,
+                    rt.purchase_at,
+                    rt.total_amount,
+                    rt.currency,
+                    rt.parse_status,
+                    rt.line_count,
+                    COALESCE(rs.label, 'Manual upload') AS source_label,
+                    rt.created_at
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
+                WHERE rt.household_id = :household_id
+                ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC
+                """
+            ),
+            {"household_id": effective_household_id},
+        ).mappings().all()
+    return {"items": [serialize_receipt_row(dict(row)) for row in rows]}
+
+
+@app.get("/api/receipts/{receipt_table_id}")
+def get_receipt_detail(receipt_table_id: str):
+    with engine.begin() as conn:
+        header = conn.execute(
+            text(
+                """
+                SELECT
+                    rt.id,
+                    rt.raw_receipt_id,
+                    rt.store_name,
+                    rt.store_branch,
+                    rt.purchase_at,
+                    rt.total_amount,
+                    rt.currency,
+                    rt.parse_status,
+                    rt.confidence_score,
+                    rt.line_count,
+                    rt.created_at,
+                    rt.updated_at
+                FROM receipt_tables rt
+                WHERE rt.id = :receipt_table_id
+                LIMIT 1
+                """
+            ),
+            {"receipt_table_id": receipt_table_id},
+        ).mappings().first()
+        if not header:
+            raise HTTPException(status_code=404, detail="Receipt table niet gevonden")
+        lines = conn.execute(
+            text(
+                """
+                SELECT
+                    id,
+                    line_index,
+                    raw_label,
+                    normalized_label,
+                    quantity,
+                    unit,
+                    unit_price,
+                    line_total,
+                    discount_amount,
+                    barcode,
+                    article_match_status,
+                    matched_article_id,
+                    confidence_score
+                FROM receipt_table_lines
+                WHERE receipt_table_id = :receipt_table_id
+                ORDER BY line_index ASC, created_at ASC
+                """
+            ),
+            {"receipt_table_id": receipt_table_id},
+        ).mappings().all()
+    payload = serialize_receipt_row(dict(header))
+    payload["lines"] = [serialize_receipt_row(dict(line)) for line in lines]
+    return payload
+
+
+@app.post("/api/receipts/{receipt_table_id}/reparse")
+def reparse_receipt_table(receipt_table_id: str):
+    result = reparse_receipt(engine, RECEIPT_STORAGE_ROOT, receipt_table_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Receipt table niet gevonden")
+    return result
+
+
 @app.post("/api/auth/login")
 def login(payload: LoginRequest):
     user = users.get(payload.email)
 
     if user and user["password"] == payload.password:
-        ensure_household(payload.email)
+        household = ensure_household(payload.email)
+        ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, str(household.get("id") or "1"))
 
         return {
             "token": build_auth_token(payload.email),
@@ -2348,7 +2483,8 @@ ensure_release_814_schema()
 ensure_release_902_schema()
 ensure_receipt_storage_root()
 seed_store_providers()
-
+admin_household = ensure_household("admin@rezzerv.local")
+ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, str(admin_household.get("id") or "1"))
 
 
 def ensure_ui_test_seed_data():
@@ -2407,8 +2543,8 @@ def ensure_ui_test_seed_data():
 
             for naam, aantal, space_id, sublocation_id in demo_rows:
                 conn.execute(
-                    text("INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id) VALUES (lower(hex(randomblob(16))), :naam, :aantal, :household_id, :space_id, :sublocation_id)"),
-                    {"naam": naam, "aantal": aantal, "household_id": household_id, "space_id": space_id, "sublocation_id": sublocation_id},
+                    text("INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id, status) VALUES (lower(hex(randomblob(16))), :naam, :aantal, :household_id, :space_id, :sublocation_id, :status)"),
+                    {"naam": naam, "aantal": aantal, "household_id": household_id, "space_id": space_id, "sublocation_id": sublocation_id, "status": "active"},
                 )
                 create_inventory_event(
                     conn,
