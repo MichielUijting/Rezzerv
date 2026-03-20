@@ -229,6 +229,39 @@ async function fetchReceiptPreview(receiptTableId) {
   }
 }
 
+
+function clearShareQueryParams() {
+  try {
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has('share_status')) return
+    url.searchParams.delete('share_status')
+    url.searchParams.delete('receipt_table_id')
+    url.searchParams.delete('duplicate')
+    url.searchParams.delete('parse_status')
+    url.searchParams.delete('message')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  } catch {
+    // ignore history errors
+  }
+}
+
+function readShareQueryParams() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const shareStatus = params.get('share_status') || ''
+    if (!shareStatus) return null
+    return {
+      shareStatus,
+      receiptTableId: params.get('receipt_table_id') || '',
+      duplicate: params.get('duplicate') === '1',
+      parseStatus: params.get('parse_status') || '',
+      message: params.get('message') || '',
+    }
+  } catch {
+    return null
+  }
+}
+
 function DetailInfoRow({ label, value }) {
   return (
     <div style={{ display: 'grid', gap: '4px' }}>
@@ -642,8 +675,8 @@ function ReceiptSourceHubModal({
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ fontSize: '20px', fontWeight: 700 }}>Delen naar Rezzerv</div>
-              <div style={{ color: '#667085' }}>Ontvang gedeelde kassabonbestanden vanuit apps, websites of bestandsomgevingen via dezelfde receipt-verwerking als de rest van Kassa.</div>
-              <Button type="button" variant="primary" onClick={onChooseSharedFile}>Gedeeld bestand kiezen</Button>
+              <div style={{ color: '#667085' }}>Ontvang gedeelde kassabonbestanden vanuit apps, websites of bestandsomgevingen direct in Rezzerv. Gebruik de geïnstalleerde Rezzerv-app als deeldoel of kies hier een gedeeld bestand als fallback.</div>
+              <Button type="button" variant="primary" onClick={onChooseSharedFile}>Fallback: gedeeld bestand kiezen</Button>
             </div>
           </ScreenCard>
 
@@ -703,9 +736,10 @@ export default function KassaPage() {
   async function loadReceipts(nextHouseholdId = householdId) {
     setIsLoading(true)
     setError('')
+    let items = []
     try {
       const list = await fetchJson(`/api/receipts?householdId=${encodeURIComponent(nextHouseholdId)}`)
-      const items = Array.isArray(list?.items) ? list.items : []
+      items = Array.isArray(list?.items) ? list.items : []
       setReceipts(items)
       if (openedReceiptId) {
         const detail = await fetchJson(`/api/receipts/${encodeURIComponent(openedReceiptId)}`)
@@ -717,6 +751,7 @@ export default function KassaPage() {
     } finally {
       setIsLoading(false)
     }
+    return items
   }
 
   useEffect(() => {
@@ -730,7 +765,31 @@ export default function KassaPage() {
         if (cancelled) return
         const resolvedHouseholdId = String(household?.id || '1')
         setHouseholdId(resolvedHouseholdId)
-        await loadReceipts(resolvedHouseholdId)
+        const items = await loadReceipts(resolvedHouseholdId)
+        if (cancelled) return
+        const sharedResult = readShareQueryParams()
+        if (sharedResult?.shareStatus === 'error') {
+          setError(sharedResult.message || 'Gedeelde inhoud kon niet worden verwerkt.')
+          clearShareQueryParams()
+          return
+        }
+        if (sharedResult?.shareStatus === 'success') {
+          const statusText = sharedResult.duplicate
+            ? 'Deze gedeelde bon was al aanwezig en is niet opnieuw toegevoegd.'
+            : `Gedeelde bon ontvangen met status: ${parseStatusLabel(sharedResult.parseStatus || 'partial')}`
+          setStatus(statusText)
+          if (sharedResult.receiptTableId) {
+            try {
+              const detail = await fetchJson(`/api/receipts/${encodeURIComponent(sharedResult.receiptTableId)}`)
+              const sourceItem = (items || []).find((item) => String(item.receipt_table_id) === String(sharedResult.receiptTableId)) || null
+              setOpenedReceiptId(sharedResult.receiptTableId)
+              setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
+            } catch {
+              // ignore detail preload errors after share redirect
+            }
+          }
+          clearShareQueryParams()
+        }
       } catch (err) {
         if (!cancelled) {
           setError(normalizeErrorMessage(err?.message) || 'Huishouden kon niet worden geladen.')

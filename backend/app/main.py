@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
 import json
 import os
@@ -2337,6 +2337,57 @@ async def import_shared_receipt(
     result['source_id'] = share_source['id']
     result['source_label'] = share_source.get('label')
     return result
+
+
+@app.post("/api/receipts/share-target")
+async def import_share_target_receipt(
+    household_id: str = Query('1'),
+    receipt: UploadFile = File(...),
+    title: Optional[str] = Form(None),
+    text_value: Optional[str] = Form(None, alias='text'),
+    url: Optional[str] = Form(None),
+):
+    effective_household_id = str(household_id or '1').strip() or '1'
+    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    share_source = ensure_share_receipt_source(engine, effective_household_id, 'shared_app')
+    file_bytes = await receipt.read()
+    if not file_bytes:
+        return RedirectResponse(url='/kassa?share_status=error&message=Gedeelde%20inhoud%20is%20leeg.', status_code=303)
+    resolved_label = None
+    for candidate in (title, text_value, url):
+        if candidate and str(candidate).strip():
+            resolved_label = str(candidate).strip()[:120]
+            break
+    if resolved_label:
+        with engine.begin() as conn:
+            conn.execute(
+                text('UPDATE receipt_sources SET label = :label, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
+                {'id': share_source['id'], 'label': resolved_label},
+            )
+    try:
+        result = ingest_receipt(
+            engine=engine,
+            receipt_storage_root=RECEIPT_STORAGE_ROOT,
+            household_id=effective_household_id,
+            filename=receipt.filename or 'shared-receipt',
+            file_bytes=file_bytes,
+            source_id=share_source['id'],
+            mime_type=receipt.content_type,
+            reject_non_receipt=True,
+        )
+    except ValueError as exc:
+        from urllib.parse import quote
+        return RedirectResponse(url=f"/kassa?share_status=error&message={quote(str(exc))}", status_code=303)
+
+    from urllib.parse import quote
+    receipt_id = str(result.get('receipt_table_id') or '')
+    duplicate_flag = '1' if result.get('duplicate') else '0'
+    parse_status = quote(str(result.get('parse_status') or 'partial'))
+    return RedirectResponse(
+        url=f"/kassa?share_status=success&receipt_table_id={receipt_id}&duplicate={duplicate_flag}&parse_status={parse_status}",
+        status_code=303,
+    )
+
 
 @app.post("/api/receipts/import")
 async def import_receipt(
