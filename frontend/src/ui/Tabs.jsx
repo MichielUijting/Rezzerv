@@ -17,7 +17,7 @@ export default function Tabs({ tabs, defaultTab, children, tabTestIdMap = {}, ac
               className={isActive ? "rz-tab rz-tab-active" : "rz-tab"}
               onClick={() => setActive(t)}
               data-testid={tabTestIdMap[t]}
-              style={isActive && activeColor ? { borderColor: activeColor, background: activeColor, color: "#ffffff", fontWeight: 700 } : undefined}
+              style={isActive && activeColor ? { borderColor: activeColor, background: "#ffffff", color: activeColor, fontWeight: 700, boxShadow: `inset 0 -2px 0 ${activeColor}` } : undefined}
             >
               {t}
             </button>

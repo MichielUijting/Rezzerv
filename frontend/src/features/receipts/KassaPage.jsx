@@ -271,7 +271,6 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
     }
   }, [receipt?.id])
 
-  const previewUrl = `/api/receipts/${encodeURIComponent(receipt?.id || '')}/preview`
 
   return (
     <ScreenCard>
@@ -307,7 +306,7 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
               padding: 0,
             }}
           >
-            ◀
+            ▶
           </button>
         </div>
       ) : (
@@ -339,11 +338,8 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
                   padding: 0,
                 }}
               >
-                ▶
+                ◀
               </button>
-              <a href={previewUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-                <Button type="button" variant="secondary">Open origineel</Button>
-              </a>
             </div>
           </div>
 
@@ -368,10 +364,7 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
               <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-fallback" style={{ maxWidth: '560px' }}>
                 <div style={{ display: 'grid', gap: '12px' }}>
                   <div>De preview van deze bon kon niet worden geladen.</div>
-                  <div style={{ color: '#667085' }}>{previewState.error || 'Gebruik Open origineel om de bon read-only te bekijken.'}</div>
-                  <div>
-                    <a href={previewUrl} target="_blank" rel="noreferrer">Open origineel</a>
-                  </div>
+                  <div style={{ color: '#667085' }}>{previewState.error || 'De bonpreview is momenteel niet beschikbaar.'}</div>
                 </div>
               </div>
             ) : null}
@@ -396,7 +389,7 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
 
             {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage ? (
               <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-unsupported" style={{ maxWidth: '560px' }}>
-                Voor dit bestandstype is geen ingebedde preview beschikbaar. Gebruik Open origineel om het bestand read-only te bekijken.
+                Voor dit bestandstype is geen ingebedde preview beschikbaar.
               </div>
             ) : null}
           </div>
@@ -473,7 +466,7 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
           </div>
         </div>
 
-        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" activeColor={amountsMatch(receipt) ? '#12B76A' : '#F79009'}>
+        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" activeColor={amountsMatch(receipt) ? '#166534' : '#B54708'}>
           {(activeTab) => {
             if (activeTab === 'Bonkop') {
               return (
@@ -585,6 +578,9 @@ function ReceiptDetailView({ receipt, onBack }) {
         gap: '16px',
         gridTemplateColumns: isPreviewCollapsed ? '56px minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)',
         alignItems: 'start',
+        width: '100%',
+        maxWidth: '900px',
+        margin: '0 auto',
       }}
     >
       <ReceiptPreviewCard
