@@ -67,7 +67,9 @@ function persistStoredReceiptIds(storageKey, ids) {
 function amountsMatch(receipt) {
   const totalAmount = Number(receipt?.total_amount)
   const lineTotalSum = Number(receipt?.line_total_sum)
+  const lineCount = Number(receipt?.line_count ?? receipt?.lines?.length ?? 0)
   if (!Number.isFinite(totalAmount) || !Number.isFinite(lineTotalSum)) return false
+  if (!Number.isFinite(lineCount) || lineCount <= 0) return false
   return Math.abs(totalAmount - lineTotalSum) < 0.01
 }
 
@@ -91,13 +93,13 @@ function inboxStatusStyle(value) {
   if (value === 'Controle nodig') {
     return {
       background: '#FFFAEB',
-      color: '#B54708',
+      color: '#166534',
       border: '1px solid #FEDF89',
     }
   }
   return {
     background: '#FFF7ED',
-    color: '#B54708',
+    color: '#166534',
     border: '1px solid #F9DBAF',
   }
 }
@@ -296,7 +298,7 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
               borderRadius: '999px',
               border: '1px solid #D0D5DD',
               background: '#FFFFFF',
-              color: '#B54708',
+              color: '#166534',
               fontSize: '18px',
               fontWeight: 700,
               cursor: 'pointer',
@@ -328,7 +330,7 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
                   borderRadius: '999px',
                   border: '1px solid #D0D5DD',
                   background: '#FFFFFF',
-                  color: '#B54708',
+                  color: '#166534',
                   fontSize: '18px',
                   fontWeight: 700,
                   cursor: 'pointer',
@@ -399,15 +401,23 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
   )
 }
 
-function ReceiptDetailInfoCard({ receipt, onBack }) {
+function ReceiptDetailInfoCard({ receipt }) {
   const [selectedLineIds, setSelectedLineIds] = useState([])
+  const [hiddenLineIds, setHiddenLineIds] = useState([])
 
   useEffect(() => {
     setSelectedLineIds([])
+    setHiddenLineIds([])
   }, [receipt?.id])
 
-  const lines = receipt?.lines || []
+  const baseLines = receipt?.lines || []
+  const lines = baseLines.filter((line) => !hiddenLineIds.includes(line.id))
   const allSelected = lines.length > 0 && lines.every((line) => selectedLineIds.includes(line.id))
+  const visibleLineTotalSum = lines.reduce((sum, line) => {
+    const value = Number(line?.line_total)
+    return Number.isFinite(value) ? sum + value : sum
+  }, 0)
+  const detailAmountsMatch = Number.isFinite(Number(receipt?.total_amount)) && lines.length > 0 && Math.abs(Number(receipt?.total_amount) - visibleLineTotalSum) < 0.01
 
   function toggleLine(lineId) {
     setSelectedLineIds((current) => (
@@ -451,6 +461,12 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
     window.URL.revokeObjectURL(url)
   }
 
+  function deleteSelectedLines() {
+    if (selectedLineIds.length === 0) return
+    setHiddenLineIds((current) => [...new Set([...current, ...selectedLineIds])])
+    setSelectedLineIds([])
+  }
+
   return (
     <ScreenCard>
       <div data-testid="receipt-detail-page" style={{ display: 'grid', gap: '16px' }}>
@@ -460,13 +476,9 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
               {receipt?.store_name || 'Kassabon'}
             </div>
           </div>
-          <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
-            <Button type="button" variant="secondary" onClick={onBack} data-testid="receipt-back-to-overview">Terug naar overzicht</Button>
-            <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
-          </div>
         </div>
 
-        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" activeColor={amountsMatch(receipt) ? '#166534' : '#B54708'}>
+        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" activeColor={detailAmountsMatch ? '#166534' : '#B54708'}>
           {(activeTab) => {
             if (activeTab === 'Bonkop') {
               return (
@@ -475,7 +487,7 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
                   <DetailInfoRow label="Vestiging" value={receipt?.store_branch} />
                   <DetailInfoRow label="Aankoopmoment" value={formatDateTime(receipt?.purchase_at)} />
                   <DetailInfoRow label="Totaal" value={formatMoney(receipt?.total_amount, receipt?.currency)} />
-                  <DetailInfoRow label="Som bonregels" value={formatMoney(receipt?.line_total_sum, receipt?.currency)} />
+                  <DetailInfoRow label="Som bonregels" value={formatMoney(visibleLineTotalSum, receipt?.currency)} />
                   <DetailInfoRow label="Valuta" value={receipt?.currency || 'EUR'} />
                   <DetailInfoRow label="Parse-status" value={parseStatusLabel(receipt?.parse_status)} />
                   <DetailInfoRow label="Confidence" value={receipt?.confidence_score ?? '-'} />
@@ -505,7 +517,7 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
                     Deze bon heeft nog geen herkende artikelregels. Controleer later opnieuw of upload een beter leesbare bon.
                   </div>
                 ) : null}
-                <div className="rz-table-wrapper" style={{ paddingBottom: '12px' }}>
+                <div className="rz-table-wrapper" style={{ paddingBottom: '12px', maxWidth: '100%' }}>
                   <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}>
                     <thead>
                       <tr className="rz-table-header">
@@ -555,6 +567,10 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
                     </tbody>
                   </table>
                 </div>
+                <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+                  <Button type="button" variant="secondary" onClick={deleteSelectedLines} disabled={selectedLineIds.length === 0}>Verwijderen</Button>
+                  <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
+                </div>
               </div>
             )
           }}
@@ -564,7 +580,7 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
   )
 }
 
-function ReceiptDetailView({ receipt, onBack }) {
+function ReceiptDetailView({ receipt }) {
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 
   useEffect(() => {
@@ -576,19 +592,23 @@ function ReceiptDetailView({ receipt, onBack }) {
       style={{
         display: 'grid',
         gap: '16px',
-        gridTemplateColumns: isPreviewCollapsed ? '56px minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)',
+        gridTemplateColumns: isPreviewCollapsed ? '44px minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)',
         alignItems: 'start',
         width: '100%',
         maxWidth: '900px',
         margin: '0 auto',
       }}
     >
-      <ReceiptPreviewCard
-        receipt={receipt}
-        isCollapsed={isPreviewCollapsed}
-        onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
-      />
-      <ReceiptDetailInfoCard receipt={receipt} onBack={onBack} />
+      <div style={{ minWidth: 0, width: '100%' }}>
+        <ReceiptPreviewCard
+          receipt={receipt}
+          isCollapsed={isPreviewCollapsed}
+          onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
+        />
+      </div>
+      <div style={{ minWidth: 0, width: '100%' }}>
+        <ReceiptDetailInfoCard receipt={receipt} />
+      </div>
     </div>
   )
 }
@@ -985,7 +1005,7 @@ export default function KassaPage() {
           </div>
         </ScreenCard>
 
-        {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} onBack={() => { setOpenedReceiptId(''); setOpenedReceipt(null) }} /> : null}
+        {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} /> : null}
       </div>
 
       <ReceiptSourceHubModal

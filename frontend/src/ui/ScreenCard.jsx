@@ -9,7 +9,9 @@ export default function ScreenCard({children, fullWidth=false}){
     borderRadius:"8px",
     width:"100%",
     maxWidth: fullWidth ? "none" : "900px",
-    margin:"0 auto"
+    margin:"0 auto",
+    minWidth: 0,
+    overflow: "hidden"
   };
 
   return (
