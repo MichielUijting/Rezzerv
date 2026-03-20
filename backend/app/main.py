@@ -11,7 +11,7 @@ import re
 from typing import List, Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
-from app.services.receipt_service import ensure_default_receipt_sources, ingest_receipt, reparse_receipt, scan_receipt_source, serialize_receipt_row
+from app.services.receipt_service import ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from datetime import datetime
 import logging
 from sqlalchemy import text
@@ -2291,6 +2291,52 @@ def ensure_household(email: str):
 def health():
     return {"status": "ok"}
 
+
+
+
+@app.post("/api/receipts/share-import")
+async def import_shared_receipt(
+    household_id: str = Form(...),
+    file: UploadFile = File(...),
+    source_context: str = Form('shared_file'),
+    source_label: Optional[str] = Form(None),
+    x_rezzerv_share_source: Optional[str] = Header(default=None),
+):
+    effective_household_id = str(household_id or '1')
+    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    resolved_context = str(x_rezzerv_share_source or source_context or 'shared_file')
+    share_source = ensure_share_receipt_source(engine, effective_household_id, resolved_context)
+    if source_label:
+        with engine.begin() as conn:
+            conn.execute(
+                text('UPDATE receipt_sources SET label = :label, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
+                {'id': share_source['id'], 'label': str(source_label).strip()[:120] or share_source['label']},
+            )
+            refreshed = conn.execute(
+                text('SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at FROM receipt_sources WHERE id = :id LIMIT 1'),
+                {'id': share_source['id']},
+            ).mappings().first()
+            if refreshed:
+                share_source = dict(refreshed)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail='Gedeelde inhoud is leeg.')
+    try:
+        result = ingest_receipt(
+            engine=engine,
+            receipt_storage_root=RECEIPT_STORAGE_ROOT,
+            household_id=effective_household_id,
+            filename=file.filename or 'shared-receipt',
+            file_bytes=file_bytes,
+            source_id=share_source['id'],
+            mime_type=file.content_type,
+            reject_non_receipt=True,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    result['source_id'] = share_source['id']
+    result['source_label'] = share_source.get('label')
+    return result
 
 @app.post("/api/receipts/import")
 async def import_receipt(

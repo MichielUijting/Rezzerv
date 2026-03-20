@@ -67,6 +67,52 @@ def sanitize_filename(name: str) -> str:
     return candidate[:180]
 
 
+
+
+def sanitize_share_context(value: str | None) -> str:
+    candidate = re.sub(r'[^a-z0-9_]+', '_', str(value or '').strip().lower())
+    candidate = candidate.strip('_')
+    return candidate or 'shared_file'
+
+
+def share_source_label_for_context(context: str) -> str:
+    mapping = {
+        'shared_app': 'Gedeeld uit app',
+        'shared_web': 'Gedeeld uit website',
+        'shared_file': 'Gedeeld bestand',
+        'shared_image': 'Gedeelde afbeelding',
+        'shared_pdf': 'Gedeelde pdf',
+    }
+    return mapping.get(context, f"Gedeeld ({context.replace('_', ' ')})")
+
+
+def ensure_share_receipt_source(engine, household_id: str, context: str) -> dict[str, Any]:
+    normalized_context = sanitize_share_context(context)
+    source_id = f'{household_id}-{normalized_context}'
+    label = share_source_label_for_context(normalized_context)
+    with engine.begin() as conn:
+        row = conn.execute(
+            text('SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at FROM receipt_sources WHERE id = :id LIMIT 1'),
+            {'id': source_id},
+        ).mappings().first()
+        if row:
+            conn.execute(
+                text('UPDATE receipt_sources SET label = :label, type = :type, is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
+                {'id': source_id, 'label': label, 'type': 'share_target'},
+            )
+        else:
+            conn.execute(
+                text(
+                    'INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active) VALUES (:id, :household_id, :type, :label, NULL, 1)'
+                ),
+                {'id': source_id, 'household_id': household_id, 'type': 'share_target', 'label': label},
+            )
+        row = conn.execute(
+            text('SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at FROM receipt_sources WHERE id = :id LIMIT 1'),
+            {'id': source_id},
+        ).mappings().first()
+    return dict(row)
+
 def detect_mime_type(filename: str, file_bytes: bytes, provided: str | None = None) -> str:
     if provided and provided != 'application/octet-stream':
         return provided
@@ -399,7 +445,7 @@ def _store_raw_file(storage_root: Path, household_id: str, raw_receipt_id: str, 
     return str(target_path)
 
 
-def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None) -> dict[str, Any]:
+def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None, reject_non_receipt: bool = False) -> dict[str, Any]:
     detected_mime = detect_mime_type(filename, file_bytes, mime_type)
     digest = sha256_hex(file_bytes)
     with engine.begin() as conn:
@@ -420,6 +466,8 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             }
 
     parse_result = parse_receipt_content(file_bytes, filename, detected_mime)
+    if reject_non_receipt and not parse_result.is_receipt:
+        raise ValueError('Gedeelde inhoud is niet als bruikbare kassabon herkend.')
     raw_receipt_id = uuid.uuid4().hex
     storage_path = _store_raw_file(receipt_storage_root, household_id, raw_receipt_id, filename, file_bytes)
 

@@ -166,6 +166,35 @@ async function uploadReceiptFile(householdId, file) {
   return data
 }
 
+
+
+async function uploadSharedReceiptFile(householdId, file, sourceContext = 'shared_file') {
+  const token = localStorage.getItem('rezzerv_token') || ''
+  const formData = new FormData()
+  formData.append('household_id', String(householdId))
+  formData.append('file', file)
+  formData.append('source_context', sourceContext)
+
+  const response = await fetch('/api/receipts/share-import', {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  })
+  const responseText = await response.text()
+  let data = null
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText)
+    } catch {
+      data = responseText
+    }
+  }
+  if (!response.ok) {
+    throw new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+  }
+  return data
+}
+
 async function fetchReceiptSources(householdId) {
   return fetchJson(`/api/receipt-sources?householdId=${encodeURIComponent(householdId)}`)
 }
@@ -546,6 +575,7 @@ function ReceiptSourceHubModal({
   isOpen,
   onClose,
   onChooseFile,
+  onChooseSharedFile,
 }) {
   if (!isOpen) return null
 
@@ -570,8 +600,8 @@ function ReceiptSourceHubModal({
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ fontSize: '20px', fontWeight: 700 }}>Delen naar Rezzerv</div>
-              <div style={{ color: '#667085' }}>Gebruik de gewone deeloptie vanuit een app of website om een kassabon naar Rezzerv te sturen. Deze route wordt in een volgende release verder uitgewerkt.</div>
-              <div className="rz-inline-feedback rz-inline-feedback--warning">Deelroute nog niet actief in deze versie.</div>
+              <div style={{ color: '#667085' }}>Ontvang gedeelde kassabonbestanden vanuit apps, websites of bestandsomgevingen via dezelfde receipt-verwerking als de rest van Kassa.</div>
+              <Button type="button" variant="primary" onClick={onChooseSharedFile}>Gedeeld bestand kiezen</Button>
             </div>
           </ScreenCard>
 
@@ -610,6 +640,7 @@ export default function KassaPage() {
   const [openedReceipt, setOpenedReceipt] = useState(null)
   const [checkedReceiptIds, setCheckedReceiptIds] = useState(() => loadCheckedReceiptIds())
   const [deletedReceiptIds, setDeletedReceiptIds] = useState(() => loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY))
+  const [uploadMode, setUploadMode] = useState('manual')
   const fileInputRef = useRef(null)
 
   function markReceiptChecked(receiptTableId) {
@@ -754,6 +785,12 @@ export default function KassaPage() {
   }
 
   function handleChooseFileFromHub() {
+    setUploadMode('manual')
+    setTimeout(() => fileInputRef.current?.click(), 0)
+  }
+
+  function handleChooseSharedFileFromHub() {
+    setUploadMode('shared_file')
     setTimeout(() => fileInputRef.current?.click(), 0)
   }
 
@@ -761,11 +798,19 @@ export default function KassaPage() {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
+    const activeUploadMode = uploadMode
     setIsUploading(true)
     setError('')
     setStatus('')
     try {
-      const result = await uploadReceiptFile(householdId, file)
+      const sharedContext = file.type?.includes('pdf')
+        ? 'shared_pdf'
+        : file.type?.startsWith('image/')
+          ? 'shared_image'
+          : 'shared_file'
+      const result = activeUploadMode === 'shared_file'
+        ? await uploadSharedReceiptFile(householdId, file, sharedContext)
+        : await uploadReceiptFile(householdId, file)
       await loadReceipts(householdId)
       if (result?.receipt_table_id) {
         await openReceiptDetail(result.receipt_table_id)
@@ -774,12 +819,16 @@ export default function KassaPage() {
       if (result?.duplicate) {
         setStatus('Deze bon was al aanwezig en is niet opnieuw toegevoegd.')
       } else if (result?.receipt_table_id) {
-        setStatus(`Bon toegevoegd met status: ${parseStatusLabel(result.parse_status)}`)
+        setStatus(activeUploadMode === 'shared_file'
+          ? `Gedeelde bon ontvangen met status: ${parseStatusLabel(result.parse_status)}`
+          : `Bon toegevoegd met status: ${parseStatusLabel(result.parse_status)}`)
       } else {
         setStatus('Bestand opgeslagen, maar nog niet als bruikbare kassabon herkend.')
       }
+      setUploadMode('manual')
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'Upload van de kassabon is mislukt.')
+      setError(normalizeErrorMessage(err?.message) || (activeUploadMode === 'shared_file' ? 'Ontvangen gedeelde inhoud kon niet worden verwerkt.' : 'Upload van de kassabon is mislukt.'))
+      setUploadMode('manual')
     } finally {
       setIsUploading(false)
     }
