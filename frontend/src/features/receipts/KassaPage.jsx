@@ -218,9 +218,8 @@ function DetailInfoRow({ label, value }) {
   )
 }
 
-function ReceiptPreviewCard({ receipt }) {
+function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
   const [previewState, setPreviewState] = useState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, error: '' })
-  const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -258,23 +257,39 @@ function ReceiptPreviewCard({ receipt }) {
 
   return (
     <ScreenCard>
-      <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-preview-card">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '22px' }}>Originele kassabon</div>
-            <div style={{ color: '#667085', marginTop: '4px' }}>
-              Vergelijk de originele bon visueel met de herkende bongegevens.
+      {isCollapsed ? (
+        <div
+          style={{
+            display: 'grid',
+            gap: '12px',
+            alignContent: 'start',
+            justifyItems: 'stretch',
+            minHeight: '100%',
+          }}
+          data-testid="receipt-preview-card"
+        >
+          <Button type="button" variant="secondary" onClick={onToggleCollapse} data-testid="receipt-preview-toggle">Uitklappen</Button>
+          <a href={previewUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+            <Button type="button" variant="secondary" style={{ width: '100%' }}>Open origineel</Button>
+          </a>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-preview-card">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: '22px' }}>Originele kassabon</div>
+              <div style={{ color: '#667085', marginTop: '4px' }}>
+                Vergelijk de originele bon visueel met de herkende bongegevens.
+              </div>
+            </div>
+            <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+              <Button type="button" variant="secondary" onClick={onToggleCollapse} data-testid="receipt-preview-toggle">Inklappen</Button>
+              <a href={previewUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+                <Button type="button" variant="secondary">Open origineel</Button>
+              </a>
             </div>
           </div>
-          <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
-            <Button type="button" variant="secondary" onClick={() => setIsCollapsed((current) => !current)} data-testid="receipt-preview-toggle">{isCollapsed ? 'Uitklappen' : 'Inklappen'}</Button>
-            <a href={previewUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-              <Button type="button" variant="secondary">Open origineel</Button>
-            </a>
-          </div>
-        </div>
 
-        {!isCollapsed ? (
           <div
             style={{
               border: '1px solid #d0d5dd',
@@ -328,10 +343,8 @@ function ReceiptPreviewCard({ receipt }) {
               </div>
             ) : null}
           </div>
-        ) : (
-          <div className="rz-inline-feedback" data-testid="receipt-preview-collapsed" style={{ maxWidth: '100%' }}>De originele kassabon is ingeklapt. Gebruik Uitklappen om de bon weer naast de tabel te bekijken.</div>
-        )}
-      </div>
+        </div>
+      )}
     </ScreenCard>
   )
 }
@@ -504,16 +517,26 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
 }
 
 function ReceiptDetailView({ receipt, onBack }) {
+  const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
+
+  useEffect(() => {
+    setIsPreviewCollapsed(false)
+  }, [receipt?.id])
+
   return (
     <div
       style={{
         display: 'grid',
         gap: '16px',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+        gridTemplateColumns: isPreviewCollapsed ? '96px minmax(0, 1fr)' : 'minmax(320px, 0.95fr) minmax(0, 1.05fr)',
         alignItems: 'start',
       }}
     >
-      <ReceiptPreviewCard receipt={receipt} />
+      <ReceiptPreviewCard
+        receipt={receipt}
+        isCollapsed={isPreviewCollapsed}
+        onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
+      />
       <ReceiptDetailInfoCard receipt={receipt} onBack={onBack} />
     </div>
   )

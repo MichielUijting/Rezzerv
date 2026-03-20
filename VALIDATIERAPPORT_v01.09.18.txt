@@ -1,0 +1,29 @@
+Rezzerv v01.09.18 - VALIDATIERAPPORT
+
+Wat is gewijzigd:
+- horizontaal inklappen van "Originele kassabon" hersteld
+- preview-card klapt nu in naar een smalle zij-kolom in plaats van naar een verticale melding onder de titel
+- knop Uitklappen blijft beschikbaar in de smalle previewkolom
+- knop Open origineel blijft beschikbaar in de smalle previewkolom
+- bij openen van een andere bon wordt de preview weer standaard uitgeklapt
+
+Wat is niet gewijzigd:
+- geen backendwijziging
+- geen parserwijziging
+- geen wijziging aan receipt_tables of receipt_table_lines
+- geen wijziging aan inventory_events
+- geen wijziging aan Kassa-inbox of Bon toevoegen
+
+Wat is getest:
+- frontend productiebuild geslaagd
+- versienummering opgehoogd naar 01.09.18 in de relevante versie-uitingen
+- codecontrole op horizontale collapse-flow in Kassa-detail uitgevoerd
+
+Wat is niet getest:
+- volledige browserregressierun
+- Windows start.bat runtime
+- Docker runtime-validatie
+
+Risiconiveau:
+- laag
+- kleine, gerichte UI-correctie in bestaand Kassa-detail
