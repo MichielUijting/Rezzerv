@@ -279,29 +279,68 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
         <div
           style={{
             display: 'grid',
-            gap: '12px',
             alignContent: 'start',
-            justifyItems: 'stretch',
+            justifyItems: 'center',
             minHeight: '100%',
           }}
           data-testid="receipt-preview-card"
         >
-          <Button type="button" variant="secondary" onClick={onToggleCollapse} data-testid="receipt-preview-toggle">Uitklappen</Button>
-          <a href={previewUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-            <Button type="button" variant="secondary" style={{ width: '100%' }}>Open origineel</Button>
-          </a>
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            data-testid="receipt-preview-toggle"
+            aria-label="Originele kassabon uitklappen"
+            title="Uitklappen"
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '999px',
+              border: '1px solid #D0D5DD',
+              background: '#FFFFFF',
+              color: '#B54708',
+              fontSize: '18px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+            }}
+          >
+            ◀
+          </button>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-preview-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
             <div>
               <div style={{ fontWeight: 700, fontSize: '22px' }}>Originele kassabon</div>
-              <div style={{ color: '#667085', marginTop: '4px' }}>
-                Vergelijk de originele bon visueel met de herkende bongegevens.
-              </div>
             </div>
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
-              <Button type="button" variant="secondary" onClick={onToggleCollapse} data-testid="receipt-preview-toggle">Inklappen</Button>
+              <button
+                type="button"
+                onClick={onToggleCollapse}
+                data-testid="receipt-preview-toggle"
+                aria-label="Originele kassabon inklappen"
+                title="Inklappen"
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '999px',
+                  border: '1px solid #D0D5DD',
+                  background: '#FFFFFF',
+                  color: '#B54708',
+                  fontSize: '18px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0,
+                }}
+              >
+                ▶
+              </button>
               <a href={previewUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
                 <Button type="button" variant="secondary">Open origineel</Button>
               </a>
@@ -427,9 +466,6 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
             <div style={{ fontWeight: 700, fontSize: '24px' }} data-testid="receipt-detail-title">
               {receipt?.store_name || 'Kassabon'}
             </div>
-            <div style={{ color: '#667085', marginTop: '4px' }}>
-              {formatDateTime(receipt?.purchase_at)} · {parseStatusLabel(receipt?.parse_status)}
-            </div>
           </div>
           <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
             <Button type="button" variant="secondary" onClick={onBack} data-testid="receipt-back-to-overview">Terug naar overzicht</Button>
@@ -437,7 +473,7 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
           </div>
         </div>
 
-        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels">
+        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" activeColor={amountsMatch(receipt) ? '#12B76A' : '#F79009'}>
           {(activeTab) => {
             if (activeTab === 'Bonkop') {
               return (
@@ -547,7 +583,7 @@ function ReceiptDetailView({ receipt, onBack }) {
       style={{
         display: 'grid',
         gap: '16px',
-        gridTemplateColumns: isPreviewCollapsed ? '96px minmax(0, 1fr)' : 'minmax(320px, 0.95fr) minmax(0, 1.05fr)',
+        gridTemplateColumns: isPreviewCollapsed ? '56px minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)',
         alignItems: 'start',
       }}
     >

@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function Tabs({ tabs, defaultTab, children, tabTestIdMap = {} }) {
+export default function Tabs({ tabs, defaultTab, children, tabTestIdMap = {}, activeColor = null }) {
   const [active, setActive] = useState(defaultTab || tabs[0]);
 
   return (
@@ -17,6 +17,7 @@ export default function Tabs({ tabs, defaultTab, children, tabTestIdMap = {} }) 
               className={isActive ? "rz-tab rz-tab-active" : "rz-tab"}
               onClick={() => setActive(t)}
               data-testid={tabTestIdMap[t]}
+              style={isActive && activeColor ? { borderColor: activeColor, background: activeColor, color: "#ffffff", fontWeight: 700 } : undefined}
             >
               {t}
             </button>
