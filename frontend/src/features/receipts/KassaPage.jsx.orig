@@ -43,7 +43,27 @@ function parseStatusLabel(value) {
 }
 
 
+const CHECKED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_checked_receipts'
 const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
+
+function loadCheckedReceiptIds() {
+  try {
+    const raw = window.localStorage.getItem(CHECKED_RECEIPTS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map((value) => String(value)) : []
+  } catch {
+    return []
+  }
+}
+
+function persistCheckedReceiptIds(ids) {
+  try {
+    window.localStorage.setItem(CHECKED_RECEIPTS_STORAGE_KEY, JSON.stringify([...new Set(ids.map((value) => String(value)))]))
+  } catch {
+    // ignore storage errors
+  }
+}
 
 function loadStoredReceiptIds(storageKey) {
   try {
@@ -64,19 +84,10 @@ function persistStoredReceiptIds(storageKey, ids) {
   }
 }
 
-function amountsMatch(receipt) {
-  const totalAmount = Number(receipt?.total_amount)
-  const lineTotalSum = Number(receipt?.line_total_sum)
-  if (!Number.isFinite(totalAmount) || !Number.isFinite(lineTotalSum)) return false
-  return Math.abs(totalAmount - lineTotalSum) < 0.01
-}
-
-function deriveInboxStatus(receipt) {
+function deriveInboxStatus(receipt, checkedReceiptIds = []) {
+  const receiptId = String(receipt?.receipt_table_id || receipt?.id || '')
+  if (checkedReceiptIds.includes(receiptId)) return 'Gecontroleerd'
   if (receipt?.parse_status === 'review_needed' || receipt?.parse_status === 'failed') return 'Controle nodig'
-  if (amountsMatch(receipt)) return 'Gecontroleerd'
-  if (receipt?.line_total_sum !== null && receipt?.line_total_sum !== undefined && receipt?.total_amount !== null && receipt?.total_amount !== undefined) {
-    return 'Controle nodig'
-  }
   return 'Nieuw'
 }
 
@@ -446,7 +457,6 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
                   <DetailInfoRow label="Vestiging" value={receipt?.store_branch} />
                   <DetailInfoRow label="Aankoopmoment" value={formatDateTime(receipt?.purchase_at)} />
                   <DetailInfoRow label="Totaal" value={formatMoney(receipt?.total_amount, receipt?.currency)} />
-                  <DetailInfoRow label="Som bonregels" value={formatMoney(receipt?.line_total_sum, receipt?.currency)} />
                   <DetailInfoRow label="Valuta" value={receipt?.currency || 'EUR'} />
                   <DetailInfoRow label="Parse-status" value={parseStatusLabel(receipt?.parse_status)} />
                   <DetailInfoRow label="Confidence" value={receipt?.confidence_score ?? '-'} />
@@ -628,9 +638,22 @@ export default function KassaPage() {
   const [selectedReceiptIds, setSelectedReceiptIds] = useState([])
   const [openedReceiptId, setOpenedReceiptId] = useState('')
   const [openedReceipt, setOpenedReceipt] = useState(null)
+  const [checkedReceiptIds, setCheckedReceiptIds] = useState(() => loadCheckedReceiptIds())
   const [deletedReceiptIds, setDeletedReceiptIds] = useState(() => loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY))
   const [uploadMode, setUploadMode] = useState('manual')
   const fileInputRef = useRef(null)
+
+  function markReceiptChecked(receiptTableId) {
+    const normalizedId = String(receiptTableId || '')
+    if (!normalizedId) return
+    setCheckedReceiptIds((current) => {
+      if (current.includes(normalizedId)) return current
+      const next = [...current, normalizedId]
+      persistCheckedReceiptIds(next)
+      return next
+    })
+  }
+
 
   function deleteSelectedReceipts() {
     if (selectedReceiptIds.length === 0) return
@@ -702,9 +725,9 @@ export default function KassaPage() {
   const inboxItems = useMemo(() => {
     return receipts
       .filter((item) => !deletedReceiptIds.includes(String(item?.receipt_table_id || '')))
-      .map((item) => ({ ...item, inbox_status: deriveInboxStatus(item) }))
+      .map((item) => ({ ...item, inbox_status: deriveInboxStatus(item, checkedReceiptIds) }))
       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-  }, [receipts, deletedReceiptIds])
+  }, [receipts, checkedReceiptIds, deletedReceiptIds])
 
   const inboxSummary = useMemo(() => ({
     Nieuw: inboxItems.filter((item) => item.inbox_status === 'Nieuw').length,
@@ -730,6 +753,7 @@ export default function KassaPage() {
       const sourceItem = receipts.find((item) => String(item.receipt_table_id) === String(receiptTableId)) || null
       setOpenedReceiptId(receiptTableId)
       setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
+      markReceiptChecked(receiptTableId)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
     }
@@ -873,8 +897,16 @@ export default function KassaPage() {
               })}
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0}>Verwijderen</Button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <Button type="button" variant={filters.status === '' ? 'primary' : 'secondary'} onClick={() => setFilters((current) => ({ ...current, status: '' }))}>Alle bonnen</Button>
+                <Button type="button" variant={filters.status === 'Nieuw' ? 'primary' : 'secondary'} onClick={() => applyStatusFilter('Nieuw')}>Nieuw</Button>
+                <Button type="button" variant={filters.status === 'Controle nodig' ? 'primary' : 'secondary'} onClick={() => applyStatusFilter('Controle nodig')}>Controle nodig</Button>
+                <Button type="button" variant={filters.status === 'Gecontroleerd' ? 'primary' : 'secondary'} onClick={() => applyStatusFilter('Gecontroleerd')}>Gecontroleerd</Button>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0}>Verwijderen</Button>
+              </div>
             </div>
 
             <div className="rz-table-wrapper">
@@ -960,7 +992,6 @@ export default function KassaPage() {
         isOpen={isSourceHubOpen}
         onClose={() => setIsSourceHubOpen(false)}
         onChooseFile={handleChooseFileFromHub}
-        onChooseSharedFile={handleChooseSharedFileFromHub}
       />
     </AppShell>
   )

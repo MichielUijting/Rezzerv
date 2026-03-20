@@ -2404,7 +2404,12 @@ def list_receipts(householdId: str = Query(...)):
                     rt.parse_status,
                     rt.line_count,
                     COALESCE(rs.label, 'Manual upload') AS source_label,
-                    rt.created_at
+                    rt.created_at,
+                    COALESCE((
+                        SELECT SUM(COALESCE(rtl.line_total, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                    ), 0) AS line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
@@ -2468,7 +2473,12 @@ def get_receipt_detail(receipt_table_id: str):
                     rt.confidence_score,
                     rt.line_count,
                     rt.created_at,
-                    rt.updated_at
+                    rt.updated_at,
+                    COALESCE((
+                        SELECT SUM(COALESCE(rtl.line_total, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                    ), 0) AS line_total_sum
                 FROM receipt_tables rt
                 WHERE rt.id = :receipt_table_id
                 LIMIT 1
