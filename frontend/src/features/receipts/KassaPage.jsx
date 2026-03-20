@@ -44,7 +44,6 @@ function parseStatusLabel(value) {
 
 
 const CHECKED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_checked_receipts'
-const ARCHIVED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_archived_receipts'
 const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
 
 function loadCheckedReceiptIds() {
@@ -221,6 +220,7 @@ function DetailInfoRow({ label, value }) {
 
 function ReceiptPreviewCard({ receipt }) {
   const [previewState, setPreviewState] = useState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, error: '' })
+  const [isCollapsed, setIsCollapsed] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -261,71 +261,76 @@ function ReceiptPreviewCard({ receipt }) {
       <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-preview-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '22px' }}>Bon-preview</div>
+            <div style={{ fontWeight: 700, fontSize: '22px' }}>Originele kassabon</div>
             <div style={{ color: '#667085', marginTop: '4px' }}>
               Vergelijk de originele bon visueel met de herkende bongegevens.
             </div>
           </div>
           <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+            <Button type="button" variant="secondary" onClick={() => setIsCollapsed((current) => !current)} data-testid="receipt-preview-toggle">{isCollapsed ? 'Uitklappen' : 'Inklappen'}</Button>
             <a href={previewUrl} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
               <Button type="button" variant="secondary">Open origineel</Button>
             </a>
           </div>
         </div>
 
-        <div
-          style={{
-            border: '1px solid #d0d5dd',
-            borderRadius: '8px',
-            minHeight: '420px',
-            background: '#f8fafc',
-            overflow: 'hidden',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: previewState.isImage ? '16px' : '0',
-          }}
-        >
-          {previewState.status === 'loading' ? (
-            <div style={{ color: '#475467', fontWeight: 600 }}>Preview laden…</div>
-          ) : null}
+        {!isCollapsed ? (
+          <div
+            style={{
+              border: '1px solid #d0d5dd',
+              borderRadius: '8px',
+              minHeight: '420px',
+              background: '#f8fafc',
+              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: previewState.isImage ? '16px' : '0',
+            }}
+          >
+            {previewState.status === 'loading' ? (
+              <div style={{ color: '#475467', fontWeight: 600 }}>Preview laden…</div>
+            ) : null}
 
-          {previewState.status === 'error' ? (
-            <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-fallback" style={{ maxWidth: '560px' }}>
-              <div style={{ display: 'grid', gap: '12px' }}>
-                <div>De preview van deze bon kon niet worden geladen.</div>
-                <div style={{ color: '#667085' }}>{previewState.error || 'Gebruik Open origineel om de bon read-only te bekijken.'}</div>
-                <div>
-                  <a href={previewUrl} target="_blank" rel="noreferrer">Open origineel</a>
+            {previewState.status === 'error' ? (
+              <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-fallback" style={{ maxWidth: '560px' }}>
+                <div style={{ display: 'grid', gap: '12px' }}>
+                  <div>De preview van deze bon kon niet worden geladen.</div>
+                  <div style={{ color: '#667085' }}>{previewState.error || 'Gebruik Open origineel om de bon read-only te bekijken.'}</div>
+                  <div>
+                    <a href={previewUrl} target="_blank" rel="noreferrer">Open origineel</a>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
 
-          {previewState.status === 'ready' && previewState.isPdf ? (
-            <iframe
-              src={previewState.blobUrl}
-              title={`Preview van bon ${receipt?.id}`}
-              style={{ width: '100%', minHeight: '560px', border: '0', background: '#fff' }}
-              data-testid="receipt-preview-pdf"
-            />
-          ) : null}
+            {previewState.status === 'ready' && previewState.isPdf ? (
+              <iframe
+                src={previewState.blobUrl}
+                title={`Preview van bon ${receipt?.id}`}
+                style={{ width: '100%', minHeight: '560px', border: '0', background: '#fff' }}
+                data-testid="receipt-preview-pdf"
+              />
+            ) : null}
 
-          {previewState.status === 'ready' && previewState.isImage ? (
-            <img
-              src={previewState.blobUrl}
-              alt={`Preview van bon ${receipt?.id}`}
-              style={{ width: '100%', maxHeight: '720px', objectFit: 'contain', background: '#fff', borderRadius: '4px' }}
-              data-testid="receipt-preview-image"
-            />
-          ) : null}
+            {previewState.status === 'ready' && previewState.isImage ? (
+              <img
+                src={previewState.blobUrl}
+                alt={`Preview van bon ${receipt?.id}`}
+                style={{ width: '100%', maxHeight: '720px', objectFit: 'contain', background: '#fff', borderRadius: '4px' }}
+                data-testid="receipt-preview-image"
+              />
+            ) : null}
 
-          {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage ? (
-            <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-unsupported" style={{ maxWidth: '560px' }}>
-              Voor dit bestandstype is geen ingebedde preview beschikbaar. Gebruik Open origineel om het bestand read-only te bekijken.
-            </div>
-          ) : null}
-        </div>
+            {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage ? (
+              <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-unsupported" style={{ maxWidth: '560px' }}>
+                Voor dit bestandstype is geen ingebedde preview beschikbaar. Gebruik Open origineel om het bestand read-only te bekijken.
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="rz-inline-feedback" data-testid="receipt-preview-collapsed" style={{ maxWidth: '100%' }}>De originele kassabon is ingeklapt. Gebruik Uitklappen om de bon weer naast de tabel te bekijken.</div>
+        )}
       </div>
     </ScreenCard>
   )
@@ -439,8 +444,8 @@ function ReceiptDetailInfoCard({ receipt, onBack }) {
                     Deze bon heeft nog geen herkende artikelregels. Controleer later opnieuw of upload een beter leesbare bon.
                   </div>
                 ) : null}
-                <div className="rz-table-wrapper">
-                  <table className="rz-table" data-testid="receipt-lines-table">
+                <div className="rz-table-wrapper" style={{ paddingBottom: '12px' }}>
+                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}>
                     <thead>
                       <tr className="rz-table-header">
                         <th style={{ width: '44px' }}>
@@ -581,7 +586,6 @@ export default function KassaPage() {
   const [openedReceiptId, setOpenedReceiptId] = useState('')
   const [openedReceipt, setOpenedReceipt] = useState(null)
   const [checkedReceiptIds, setCheckedReceiptIds] = useState(() => loadCheckedReceiptIds())
-  const [archivedReceiptIds, setArchivedReceiptIds] = useState(() => loadStoredReceiptIds(ARCHIVED_RECEIPTS_STORAGE_KEY))
   const [deletedReceiptIds, setDeletedReceiptIds] = useState(() => loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY))
   const fileInputRef = useRef(null)
 
@@ -596,21 +600,6 @@ export default function KassaPage() {
     })
   }
 
-  function archiveSelectedReceipts() {
-    if (selectedReceiptIds.length === 0) return
-    const archivedIds = selectedReceiptIds.map((value) => String(value))
-    setArchivedReceiptIds((current) => {
-      const next = [...new Set([...current, ...archivedIds])]
-      persistStoredReceiptIds(ARCHIVED_RECEIPTS_STORAGE_KEY, next)
-      return next
-    })
-    if (openedReceiptId && archivedIds.includes(String(openedReceiptId))) {
-      setOpenedReceiptId('')
-      setOpenedReceipt(null)
-    }
-    setSelectedReceiptIds([])
-    setStatus(`${archivedIds.length} bon${archivedIds.length === 1 ? '' : 'nen'} gearchiveerd.`)
-  }
 
   function deleteSelectedReceipts() {
     if (selectedReceiptIds.length === 0) return
@@ -681,10 +670,10 @@ export default function KassaPage() {
 
   const inboxItems = useMemo(() => {
     return receipts
-      .filter((item) => !archivedReceiptIds.includes(String(item?.receipt_table_id || '')) && !deletedReceiptIds.includes(String(item?.receipt_table_id || '')))
+      .filter((item) => !deletedReceiptIds.includes(String(item?.receipt_table_id || '')))
       .map((item) => ({ ...item, inbox_status: deriveInboxStatus(item, checkedReceiptIds) }))
       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-  }, [receipts, checkedReceiptIds, archivedReceiptIds, deletedReceiptIds])
+  }, [receipts, checkedReceiptIds, deletedReceiptIds])
 
   const inboxSummary = useMemo(() => ({
     Nieuw: inboxItems.filter((item) => item.inbox_status === 'Nieuw').length,
@@ -844,11 +833,7 @@ export default function KassaPage() {
                 <Button type="button" variant={filters.status === 'Gecontroleerd' ? 'primary' : 'secondary'} onClick={() => applyStatusFilter('Gecontroleerd')}>Gecontroleerd</Button>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                <Button type="button" variant="secondary" onClick={archiveSelectedReceipts} disabled={selectedReceiptIds.length === 0}>Archiveren</Button>
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0}>Verwijderen</Button>
-                <div style={{ color: '#667085', fontSize: '14px' }}>
-                  {listItems.length} bon{listItems.length === 1 ? '' : 'nen'} zichtbaar
-                </div>
               </div>
             </div>
 

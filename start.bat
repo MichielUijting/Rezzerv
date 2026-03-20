@@ -10,12 +10,12 @@ set "BACKEND_HEALTH_URL=http://localhost:8001/api/health"
 set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
 set "BUILD_DIR=%TEMP%\rezzerv_build"
 
- echo ========================================
- echo        Rezzerv Startup Routine
- echo Version: %REZZERV_VERSION%
- echo ========================================
- echo Modus: persistente normale start ^(databasevolume blijft behouden^)
- echo Gebruik hard-reset.bat alleen voor een expliciete schone reset.
+echo ========================================
+echo        Rezzerv Startup Routine
+echo Version: %REZZERV_VERSION%
+echo ========================================
+echo Modus: persistente normale start ^(databasevolume blijft behouden^)
+echo Gebruik hard-reset.bat alleen voor een expliciete schone reset.
 
 if exist "%BUILD_DIR%" rmdir /s /q "%BUILD_DIR%" >nul 2>&1
 mkdir "%BUILD_DIR%" >nul 2>&1
@@ -85,28 +85,19 @@ if %errorlevel% neq 0 (
 )
 
 echo [5/7] Starting containers without deleting data volume...
-docker compose up -d --remove-orphans
+docker compose up -d --remove-orphans >nul 2>&1
 if %errorlevel% neq 0 (
   echo [ERROR] docker compose up failed.
+  docker compose logs --tail 80
   pause
   exit /b 1
 )
 
 echo [6/7] Waiting for backend health...
-where curl >nul 2>&1
-if %errorlevel%==0 (
-  :waithealth_curl
-  timeout /t 3 >nul
-  curl -s %BACKEND_HEALTH_URL% | find "ok" >nul
-  if %errorlevel% neq 0 goto waithealth_curl
-) else (
-  :waithealth_ps
-  timeout /t 3 >nul
-  powershell -NoProfile -Command "try { $r = Invoke-RestMethod -Uri '%BACKEND_HEALTH_URL%' -TimeoutSec 2; if ($r.status -ne 'ok') { exit 1 } } catch { exit 1 }" >nul 2>&1
-  if %errorlevel% neq 0 goto waithealth_ps
-)
+call :WaitForBackendHealth || exit /b 1
 
 echo [7/7] Verifying active frontend ports...
+call :WaitForFrontend %FRONTEND_URL% || exit /b 1
 call :VerifyFrontendPorts
 if %errorlevel% neq 0 (
   echo [ERROR] Frontend port verification failed.
@@ -114,8 +105,8 @@ if %errorlevel% neq 0 (
   exit /b 1
 )
 
-echo Opening application...
-start %FRONTEND_URL%
+echo Opening frontend in browser...
+start "" "%FRONTEND_URL%"
 
 echo Startup complete.
 pause
@@ -125,6 +116,37 @@ exit /b 0
 echo Required project files/folders not found in current folder.
 pause
 exit /b 1
+
+:WaitForBackendHealth
+set /a BACKEND_HEALTH_ATTEMPTS=0
+:wait_backend_health
+set /a BACKEND_HEALTH_ATTEMPTS+=1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-RestMethod -Uri '%BACKEND_HEALTH_URL%' -TimeoutSec 2; if ($r.status -eq 'ok') { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
+if %errorlevel% equ 0 exit /b 0
+if %BACKEND_HEALTH_ATTEMPTS% GEQ 40 (
+  echo [ERROR] Backend healthcheck werd niet op tijd groen.
+  docker compose logs backend --tail 80
+  pause
+  exit /b 1
+)
+timeout /t 2 >nul
+goto wait_backend_health
+
+:WaitForFrontend
+set "TARGET_FRONTEND_URL=%~1"
+set /a FRONTEND_WAIT_ATTEMPTS=0
+:wait_frontend_ready
+set /a FRONTEND_WAIT_ATTEMPTS+=1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebRequest -Uri '%TARGET_FRONTEND_URL%/version.json' -UseBasicParsing -TimeoutSec 3; if ($r.StatusCode -ge 200 -and $r.StatusCode -lt 500) { exit 0 } else { exit 1 } } catch { exit 1 }" >nul 2>&1
+if %errorlevel% equ 0 exit /b 0
+if %FRONTEND_WAIT_ATTEMPTS% GEQ 40 (
+  echo [ERROR] Frontend werd niet op tijd bereikbaar op %TARGET_FRONTEND_URL%.
+  docker compose logs frontend --tail 80
+  pause
+  exit /b 1
+)
+timeout /t 2 >nul
+goto wait_frontend_ready
 
 :EnsureDockerRunning
 echo Checking if Docker engine is running...
@@ -155,7 +177,7 @@ for /f "usebackq delims=" %%N in (`docker ps -a --format "{{.Names}}"`) do (
   set "CONTAINER_NAME=%%N"
   set "IS_LEGACY="
   if /I "!CONTAINER_NAME:~0,12!"=="rezzerv-dev-" set "IS_LEGACY=1"
-  if /I "!CONTAINER_NAME:~0,12!"=="rezzerv_dev-" set "IS_LEGACY=1"
+  if /I "!CONTAINER_NAME:~0,12!"=="rezzerv_dev_" set "IS_LEGACY=1"
   if /I not "!CONTAINER_NAME:~0,14!"=="rezzerv_build-" if defined IS_LEGACY (
     set "LEGACY_FOUND=1"
     echo     Removing legacy container !CONTAINER_NAME! ...
