@@ -42,6 +42,78 @@ function parseStatusLabel(value) {
   return value || '-'
 }
 
+
+const CHECKED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_checked_receipts'
+
+function loadCheckedReceiptIds() {
+  try {
+    const raw = window.localStorage.getItem(CHECKED_RECEIPTS_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed.map((value) => String(value)) : []
+  } catch {
+    return []
+  }
+}
+
+function persistCheckedReceiptIds(ids) {
+  try {
+    window.localStorage.setItem(CHECKED_RECEIPTS_STORAGE_KEY, JSON.stringify([...new Set(ids.map((value) => String(value)))]))
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function deriveInboxStatus(receipt, checkedReceiptIds = []) {
+  const receiptId = String(receipt?.receipt_table_id || receipt?.id || '')
+  if (checkedReceiptIds.includes(receiptId)) return 'Gecontroleerd'
+  if (receipt?.parse_status === 'review_needed' || receipt?.parse_status === 'failed') return 'Controle nodig'
+  return 'Nieuw'
+}
+
+function inboxStatusStyle(value) {
+  if (value === 'Gecontroleerd') {
+    return {
+      background: '#ECFDF3',
+      color: '#027A48',
+      border: '1px solid #ABEFC6',
+    }
+  }
+  if (value === 'Controle nodig') {
+    return {
+      background: '#FFFAEB',
+      color: '#B54708',
+      border: '1px solid #FEDF89',
+    }
+  }
+  return {
+    background: '#EEF4FF',
+    color: '#3538CD',
+    border: '1px solid #C7D7FE',
+  }
+}
+
+function ReceiptStatusBadge({ value }) {
+  return (
+    <span
+      data-testid={`receipt-inbox-status-${String(value || '').toLowerCase().replace(/\s+/g, '-')}`}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '4px 10px',
+        borderRadius: '999px',
+        fontSize: '13px',
+        fontWeight: 700,
+        whiteSpace: 'nowrap',
+        ...inboxStatusStyle(value),
+      }}
+    >
+      {value || '-'}
+    </span>
+  )
+}
+
 async function uploadReceiptFile(householdId, file) {
   const token = localStorage.getItem('rezzerv_token') || ''
   const formData = new FormData()
@@ -481,7 +553,19 @@ export default function KassaPage() {
   const [selectedReceiptIds, setSelectedReceiptIds] = useState([])
   const [openedReceiptId, setOpenedReceiptId] = useState('')
   const [openedReceipt, setOpenedReceipt] = useState(null)
+  const [checkedReceiptIds, setCheckedReceiptIds] = useState(() => loadCheckedReceiptIds())
   const fileInputRef = useRef(null)
+
+  function markReceiptChecked(receiptTableId) {
+    const normalizedId = String(receiptTableId || '')
+    if (!normalizedId) return
+    setCheckedReceiptIds((current) => {
+      if (current.includes(normalizedId)) return current
+      const next = [...current, normalizedId]
+      persistCheckedReceiptIds(next)
+      return next
+    })
+  }
 
   async function loadReceipts(nextHouseholdId = householdId) {
     setIsLoading(true)
@@ -518,7 +602,6 @@ export default function KassaPage() {
         if (!cancelled) {
           setError(normalizeErrorMessage(err?.message) || 'Huishouden kon niet worden geladen.')
           setIsLoading(false)
-          setIsLoadingSources(false)
         }
       }
     }
@@ -535,13 +618,24 @@ export default function KassaPage() {
     }
   }, [receipts, openedReceiptId])
 
-  const listItems = useMemo(() => {
+  const inboxItems = useMemo(() => {
     return receipts
+      .map((item) => ({ ...item, inbox_status: deriveInboxStatus(item, checkedReceiptIds) }))
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+  }, [receipts, checkedReceiptIds])
+
+  const inboxSummary = useMemo(() => ({
+    Nieuw: inboxItems.filter((item) => item.inbox_status === 'Nieuw').length,
+    'Controle nodig': inboxItems.filter((item) => item.inbox_status === 'Controle nodig').length,
+    Gecontroleerd: inboxItems.filter((item) => item.inbox_status === 'Gecontroleerd').length,
+  }), [inboxItems])
+
+  const listItems = useMemo(() => {
+    return inboxItems
       .filter((item) => String(item.store_name || '').toLowerCase().includes(filters.winkel.trim().toLowerCase()))
       .filter((item) => formatDateTime(item.purchase_at).toLowerCase().includes(filters.datum.trim().toLowerCase()))
-      .filter((item) => parseStatusLabel(item.parse_status).toLowerCase().includes(filters.status.trim().toLowerCase()))
-      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-  }, [receipts, filters])
+      .filter((item) => (filters.status ? item.inbox_status === filters.status : true))
+  }, [inboxItems, filters])
 
   const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedReceiptIds.includes(item.receipt_table_id))
 
@@ -552,6 +646,7 @@ export default function KassaPage() {
       const sourceItem = receipts.find((item) => String(item.receipt_table_id) === String(receiptTableId)) || null
       setOpenedReceiptId(receiptTableId)
       setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
+      markReceiptChecked(receiptTableId)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
     }
@@ -572,6 +667,10 @@ export default function KassaPage() {
 
   function handleFilterChange(key, value) {
     setFilters((current) => ({ ...current, [key]: value }))
+  }
+
+  function applyStatusFilter(value) {
+    setFilters((current) => ({ ...current, status: current.status === value ? '' : value }))
   }
 
   function openSourceHub() {
@@ -617,9 +716,9 @@ export default function KassaPage() {
           <div style={{ display: 'grid', gap: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
               <div>
-                <div style={{ fontWeight: 700, fontSize: '24px' }}>Bonnenoverzicht</div>
+                <div style={{ fontWeight: 700, fontSize: '24px' }}>Bon-inbox</div>
                 <div style={{ color: '#667085', marginTop: '4px' }}>
-                  Voeg bonnen toe en open daarna per bon de herkende tabel.
+                  Zie direct welke bonnen nieuw zijn, controle nodig hebben of al gecontroleerd zijn.
                 </div>
               </div>
               <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
@@ -637,6 +736,54 @@ export default function KassaPage() {
 
             {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
             {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
+
+            <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+              {[
+                { key: 'Nieuw', helper: 'Nog niet gecontroleerd' },
+                { key: 'Controle nodig', helper: 'Vraagt extra aandacht' },
+                { key: 'Gecontroleerd', helper: 'Al bekeken in Kassa' },
+              ].map((entry) => {
+                const isActive = filters.status === entry.key
+                return (
+                  <button
+                    key={entry.key}
+                    type="button"
+                    onClick={() => applyStatusFilter(entry.key)}
+                    data-testid={`kassa-status-card-${String(entry.key).toLowerCase().replace(/\s+/g, '-')}`}
+                    style={{
+                      textAlign: 'left',
+                      borderRadius: '16px',
+                      border: isActive ? '2px solid #3538CD' : '1px solid #D0D5DD',
+                      background: '#FFFFFF',
+                      padding: '16px',
+                      display: 'grid',
+                      gap: '8px',
+                      cursor: 'pointer',
+                      boxShadow: isActive ? '0 0 0 3px rgba(53,56,205,0.08)' : 'none',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '8px', alignItems: 'center' }}>
+                      <div style={{ fontSize: '15px', fontWeight: 700 }}>{entry.key}</div>
+                      <ReceiptStatusBadge value={entry.key} />
+                    </div>
+                    <div style={{ fontSize: '28px', fontWeight: 800, lineHeight: 1 }}>{inboxSummary[entry.key] || 0}</div>
+                    <div style={{ fontSize: '13px', color: '#667085' }}>{entry.helper}</div>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <Button type="button" variant={filters.status === '' ? 'primary' : 'secondary'} onClick={() => setFilters((current) => ({ ...current, status: '' }))}>Alle bonnen</Button>
+                <Button type="button" variant={filters.status === 'Nieuw' ? 'primary' : 'secondary'} onClick={() => applyStatusFilter('Nieuw')}>Nieuw</Button>
+                <Button type="button" variant={filters.status === 'Controle nodig' ? 'primary' : 'secondary'} onClick={() => applyStatusFilter('Controle nodig')}>Controle nodig</Button>
+                <Button type="button" variant={filters.status === 'Gecontroleerd' ? 'primary' : 'secondary'} onClick={() => applyStatusFilter('Gecontroleerd')}>Gecontroleerd</Button>
+              </div>
+              <div style={{ color: '#667085', fontSize: '14px' }}>
+                {listItems.length} bon{listItems.length === 1 ? '' : 'nen'} zichtbaar
+              </div>
+            </div>
 
             <div className="rz-table-wrapper">
               <table className="rz-table" data-testid="kassa-table">
@@ -662,7 +809,7 @@ export default function KassaPage() {
                     <th />
                     <th />
                     <th>
-                      <input className="rz-input rz-inline-input" value={filters.status} onChange={(event) => handleFilterChange('status', event.target.value)} placeholder="Filter" aria-label="Filter op status" />
+                      <span style={{ fontSize: '13px', color: '#667085' }}>{filters.status || 'Alle statussen'}</span>
                     </th>
                   </tr>
                 </thead>
@@ -670,7 +817,7 @@ export default function KassaPage() {
                   {isLoading ? (
                     <tr><td colSpan={6}>Bonnen laden…</td></tr>
                   ) : listItems.length === 0 ? (
-                    <tr><td colSpan={6}>Er zijn nog geen bon-tabellen beschikbaar.</td></tr>
+                    <tr><td colSpan={6}>Er zijn nog geen bonnen in de inbox beschikbaar.</td></tr>
                   ) : listItems.map((item) => {
                     const selected = selectedReceiptIds.includes(item.receipt_table_id)
                     return (
@@ -679,7 +826,11 @@ export default function KassaPage() {
                         className={selected ? 'rz-row-selected' : ''}
                         onClick={() => toggleSelectedReceipt(item.receipt_table_id)}
                         onDoubleClick={() => openReceiptDetail(item.receipt_table_id)}
-                        style={{ cursor: 'pointer' }}
+                        data-testid={`kassa-row-${item.receipt_table_id}`}
+                        style={{
+                          cursor: 'pointer',
+                          boxShadow: `inset 4px 0 0 ${item.inbox_status === 'Gecontroleerd' ? '#12B76A' : item.inbox_status === 'Controle nodig' ? '#F79009' : '#6172F3'}`,
+                        }}
                       >
                         <td onClick={(event) => event.stopPropagation()}>
                           <button
@@ -701,7 +852,7 @@ export default function KassaPage() {
                         <td className="rz-receipts-cell">{formatDateTime(item.purchase_at)}</td>
                         <td className="rz-num rz-receipts-cell">{formatMoney(item.total_amount, item.currency)}</td>
                         <td className="rz-num rz-receipts-cell">{item.line_count ?? 0}</td>
-                        <td className="rz-receipts-cell">{parseStatusLabel(item.parse_status)}</td>
+                        <td className="rz-receipts-cell"><ReceiptStatusBadge value={item.inbox_status} /></td>
                       </tr>
                     )
                   })}
