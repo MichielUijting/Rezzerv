@@ -1139,8 +1139,7 @@ export default function KassaPage() {
         }
         if (sharedResult?.shareStatus === 'success') {
           if (sharedResult.duplicate) {
-            setDuplicateNotice(formatDuplicateImportMessage(sharedResult))
-            setStatus('')
+            announceDuplicate(sharedResult)
           } else {
             setDuplicateNotice('')
             setStatus(`Gedeelde bon ontvangen met status: ${parseStatusLabel(sharedResult.parseStatus || 'partial')}`)
@@ -1176,6 +1175,19 @@ export default function KassaPage() {
     return () => window.clearTimeout(timeoutId)
   }, [receiptInboxFocusId])
 
+  function announceDuplicate(result) {
+    setError('')
+    setStatus('')
+    setDuplicateNotice(formatDuplicateImportMessage(result))
+    try {
+      window.requestAnimationFrame(() => {
+        const feedback = document.querySelector('[data-testid="receipt-duplicate-feedback"]')
+        feedback?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      })
+    } catch {
+      // ignore scroll issues
+    }
+  }
 
   useEffect(() => {
     const visibleIds = new Set(receipts.map((receipt) => receipt.receipt_table_id))
@@ -1371,8 +1383,7 @@ export default function KassaPage() {
       }
 
       if (result?.duplicate) {
-        setDuplicateNotice(formatDuplicateImportMessage(result))
-        setStatus('')
+        announceDuplicate(result)
       } else if (result?.receipt_table_id) {
         setDuplicateNotice('')
         setStatus(`Foto verwerkt met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
@@ -1384,16 +1395,18 @@ export default function KassaPage() {
         setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
       }
 
-      try {
-        window.requestAnimationFrame(() => {
-          const targetRow = uploadedReceiptId
-            ? document.querySelector(`[data-testid="kassa-row-${uploadedReceiptId}"]`)
-            : null
-          const inbox = targetRow || document.querySelector('[data-testid="kassa-table"]')
-          inbox?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        })
-      } catch {
-        // ignore scroll issues
+      if (!result?.duplicate) {
+        try {
+          window.requestAnimationFrame(() => {
+            const targetRow = uploadedReceiptId
+              ? document.querySelector(`[data-testid="kassa-row-${uploadedReceiptId}"]`)
+              : null
+            const inbox = targetRow || document.querySelector('[data-testid="kassa-table"]')
+            inbox?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          })
+        } catch {
+          // ignore scroll issues
+        }
       }
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'Foto van kassabon kon niet worden verwerkt.'
@@ -1454,8 +1467,7 @@ export default function KassaPage() {
       }
 
       if (result?.duplicate) {
-        setDuplicateNotice(formatDuplicateImportMessage(result))
-        setStatus('')
+        announceDuplicate(result)
       } else if (result?.receipt_table_id) {
         setDuplicateNotice('')
         setStatus(`E-mailbon ontvangen met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
@@ -1467,16 +1479,18 @@ export default function KassaPage() {
         setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
       }
 
-      try {
-        window.requestAnimationFrame(() => {
-          const targetRow = uploadedReceiptId
-            ? document.querySelector(`[data-testid="kassa-row-${uploadedReceiptId}"]`)
-            : null
-          const inbox = targetRow || document.querySelector('[data-testid="kassa-table"]')
-          inbox?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        })
-      } catch {
-        // ignore scroll issues
+      if (!result?.duplicate) {
+        try {
+          window.requestAnimationFrame(() => {
+            const targetRow = uploadedReceiptId
+              ? document.querySelector(`[data-testid="kassa-row-${uploadedReceiptId}"]`)
+              : null
+            const inbox = targetRow || document.querySelector('[data-testid="kassa-table"]')
+            inbox?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          })
+        } catch {
+          // ignore scroll issues
+        }
       }
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'De e-mailbon kon niet worden verwerkt.'
@@ -1523,8 +1537,7 @@ export default function KassaPage() {
       }
       setIsSourceHubOpen(false)
       if (result?.duplicate) {
-        setDuplicateNotice(formatDuplicateImportMessage(result))
-        setStatus('')
+        announceDuplicate(result)
       } else if (result?.receipt_table_id) {
         setDuplicateNotice('')
         setStatus(activeUploadMode === 'shared_file'
