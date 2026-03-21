@@ -42,6 +42,13 @@ function parseStatusLabel(value) {
   return value || '-'
 }
 
+function emailPartLabel(value) {
+  if (value === 'attachment') return 'Bijlage uit e-mail'
+  if (value === 'html_body') return 'HTML-body van e-mail'
+  if (value === 'text_body') return 'Tekst-body van e-mail'
+  return value || '-'
+}
+
 
 const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
 const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: '', status: '' }
@@ -245,6 +252,32 @@ async function uploadSharedReceiptFile(householdId, file, sourceContext = 'share
   if (sourceLabel) formData.append('source_label', sourceLabel)
 
   const response = await fetch('/api/receipts/share-import', {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  })
+  const responseText = await response.text()
+  let data = null
+  if (responseText) {
+    try {
+      data = JSON.parse(responseText)
+    } catch {
+      data = responseText
+    }
+  }
+  if (!response.ok) {
+    throw new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+  }
+  return data
+}
+
+async function uploadEmailReceiptFile(householdId, emailFile) {
+  const token = localStorage.getItem('rezzerv_token') || ''
+  const formData = new FormData()
+  formData.append('household_id', String(householdId))
+  formData.append('email_file', emailFile)
+
+  const response = await fetch('/api/receipts/email-import', {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
@@ -615,6 +648,12 @@ function ReceiptDetailInfoCard({ receipt }) {
                   <DetailInfoRow label="Oorspronkelijk bestand" value={receipt?.original_filename || 'Niet beschikbaar in deze release'} />
                   <DetailInfoRow label="Bestandstype" value={receipt?.mime_type || 'Niet beschikbaar in deze release'} />
                   <DetailInfoRow label="Imported at" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
+                  <DetailInfoRow label="Afzender" value={receipt?.sender_name || receipt?.sender_email || '-'} />
+                  <DetailInfoRow label="Afzender e-mail" value={receipt?.sender_email || '-'} />
+                  <DetailInfoRow label="E-mail onderwerp" value={receipt?.email_subject || '-'} />
+                  <DetailInfoRow label="Ontvangen op" value={formatDateTime(receipt?.email_received_at)} />
+                  <DetailInfoRow label="Gekozen e-mailonderdeel" value={emailPartLabel(receipt?.selected_part_type)} />
+                  <DetailInfoRow label="Bestand uit e-mail" value={receipt?.email_selected_filename || '-'} />
                   <DetailInfoRow label="Duplicate-status" value={receipt?.duplicate ? 'Dubbel bestand' : 'Geen duplicate gemeld'} />
                   <DetailInfoRow label="Aangemaakt" value={formatDateTime(receipt?.created_at)} />
                   <DetailInfoRow label="Bijgewerkt" value={formatDateTime(receipt?.updated_at)} />
@@ -730,6 +769,12 @@ function ReceiptSourceHubModal({
   onChooseFile,
   onChooseSharedFile,
   onChooseCamera,
+  onChooseEmail,
+  onCopyEmailRoute,
+  emailRoute,
+  isEmailRouteLoading,
+  emailRouteError,
+  isUploading,
 }) {
   if (!isOpen) return null
 
@@ -770,8 +815,18 @@ function ReceiptSourceHubModal({
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ fontSize: '20px', fontWeight: 700 }}>E-mail doorsturen</div>
-              <div style={{ color: '#667085' }}>Stuur een e-mail met bonbijlage door naar jouw Rezzerv-route. Deze route wordt in een volgende release technisch aangesloten.</div>
-              <div className="rz-inline-feedback rz-inline-feedback--warning">E-mailroute nog niet actief in deze versie.</div>
+              <div style={{ color: '#667085' }}>Stuur een kassabonmail door naar jouw persoonlijke Rezzerv-adres. Voor lokale tests importeer je in deze versie een doorgestuurde mail als <strong>.eml</strong>-bestand.</div>
+              <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
+                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Jouw Rezzerv e-mailroute</div>
+                <div style={{ fontSize: '15px', fontWeight: 700, wordBreak: 'break-all' }}>
+                  {isEmailRouteLoading ? 'E-mailroute laden…' : emailRoute?.route_address || '-'}
+                </div>
+              </div>
+              {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
+              <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+                <Button type="button" variant="secondary" onClick={onCopyEmailRoute} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>Adres kopiëren</Button>
+                <Button type="button" variant="primary" onClick={onChooseEmail} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>E-mailbestand kiezen</Button>
+              </div>
             </div>
           </ScreenCard>
         </div>
@@ -844,9 +899,13 @@ export default function KassaPage() {
   const [uploadMode, setUploadMode] = useState('manual')
   const [cameraDraft, setCameraDraft] = useState(null)
   const [cameraError, setCameraError] = useState('')
+  const [emailRoute, setEmailRoute] = useState(null)
+  const [isEmailRouteLoading, setIsEmailRouteLoading] = useState(false)
+  const [emailRouteError, setEmailRouteError] = useState('')
   const [receiptInboxFocusId, setReceiptInboxFocusId] = useState('')
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
+  const emailInputRef = useRef(null)
 
 
   useEffect(() => {
@@ -1015,9 +1074,28 @@ export default function KassaPage() {
     setFilters((current) => ({ ...current, status: current.status === value ? '' : value }))
   }
 
+  async function ensureEmailRouteLoaded(forceReload = false) {
+    if (emailRoute?.route_address && !forceReload) return emailRoute
+    setIsEmailRouteLoading(true)
+    setEmailRouteError('')
+    try {
+      const route = await fetchJson(`/api/receipt-sources/email-route?householdId=${encodeURIComponent(householdId)}`)
+      setEmailRoute(route)
+      return route
+    } catch (err) {
+      const message = normalizeErrorMessage(err?.message) || 'De e-mailroute kon niet worden geladen.'
+      setEmailRouteError(message)
+      throw err
+    } finally {
+      setIsEmailRouteLoading(false)
+    }
+  }
+
   function openSourceHub() {
     setCameraError('')
+    setEmailRouteError('')
     setIsSourceHubOpen(true)
+    ensureEmailRouteLoaded().catch(() => {})
   }
 
   function handleChooseFileFromHub() {
@@ -1046,6 +1124,30 @@ export default function KassaPage() {
     setReceiptInboxFocusId('')
     setIsSourceHubOpen(false)
     setTimeout(() => cameraInputRef.current?.click(), 0)
+  }
+
+  function handleChooseEmailFromHub() {
+    setUploadMode('email_import')
+    setStatus('')
+    setError('')
+    setEmailRouteError('')
+    setReceiptInboxFocusId('')
+    setTimeout(() => emailInputRef.current?.click(), 0)
+  }
+
+  async function copyEmailRouteToClipboard() {
+    try {
+      const route = await ensureEmailRouteLoaded()
+      if (!route?.route_address) {
+        setEmailRouteError('Er is nog geen e-mailroute beschikbaar voor dit huishouden.')
+        return
+      }
+      await navigator.clipboard.writeText(route.route_address)
+      setStatus('Het Rezzerv e-mailadres is gekopieerd.')
+      setError('')
+    } catch (err) {
+      setEmailRouteError(normalizeErrorMessage(err?.message) || 'Het e-mailadres kon niet worden gekopieerd.')
+    }
   }
 
   function handleCameraCaptureChange(event) {
@@ -1136,6 +1238,66 @@ export default function KassaPage() {
     setTimeout(() => cameraInputRef.current?.click(), 0)
   }
 
+  async function handleEmailUploadChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setIsUploading(true)
+    setError('')
+    setStatus('')
+    setEmailRouteError('')
+    try {
+      const result = await uploadEmailReceiptFile(householdId, file)
+      const uploadedReceiptId = String(result?.receipt_table_id || '')
+      setIsSourceHubOpen(false)
+      setOpenedReceiptId('')
+      setOpenedReceipt(null)
+      setFilters(DEFAULT_RECEIPT_FILTERS)
+      setReceiptInboxFocusId(uploadedReceiptId)
+      const refreshedItems = await loadReceipts(householdId)
+      const receiptExistsInInbox = uploadedReceiptId
+        ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
+        : false
+
+      if (uploadedReceiptId && receiptExistsInInbox) {
+        setSelectedReceiptIds([uploadedReceiptId])
+      } else {
+        setSelectedReceiptIds([])
+      }
+
+      if (result?.duplicate) {
+        setStatus('Deze e-mailbon was al aanwezig en is niet opnieuw toegevoegd.')
+      } else if (result?.receipt_table_id) {
+        setStatus(`E-mailbon ontvangen met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
+      } else {
+        setStatus('E-mail verwerkt, maar nog niet als bruikbare kassabon herkend.')
+      }
+
+      if (uploadedReceiptId && !receiptExistsInInbox) {
+        setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
+      }
+
+      try {
+        window.requestAnimationFrame(() => {
+          const targetRow = uploadedReceiptId
+            ? document.querySelector(`[data-testid="kassa-row-${uploadedReceiptId}"]`)
+            : null
+          const inbox = targetRow || document.querySelector('[data-testid="kassa-table"]')
+          inbox?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        })
+      } catch {
+        // ignore scroll issues
+      }
+    } catch (err) {
+      const message = normalizeErrorMessage(err?.message) || 'De e-mailbon kon niet worden verwerkt.'
+      setEmailRouteError(message)
+      setError('')
+    } finally {
+      setIsUploading(false)
+      setUploadMode('manual')
+    }
+  }
+
   async function handleUploadChange(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -1203,6 +1365,13 @@ export default function KassaPage() {
                   capture="environment"
                   style={{ display: 'none' }}
                   onChange={handleCameraCaptureChange}
+                />
+                <input
+                  ref={emailInputRef}
+                  type="file"
+                  accept=".eml,message/rfc822"
+                  style={{ display: 'none' }}
+                  onChange={handleEmailUploadChange}
                 />
                 <Button type="button" variant="primary" onClick={openSourceHub} disabled={isUploading}>{isUploading ? 'Uploaden…' : 'Bon toevoegen'}</Button>
               </div>
@@ -1317,7 +1486,12 @@ export default function KassaPage() {
                             aria-label={`Selecteer bon ${item.store_name || 'onbekend'} van ${formatDateTime(item.purchase_at)}`}
                           />
                         </td>
-                        <td className="rz-receipts-cell">{item.store_name || 'Onbekende winkel'}</td>
+                        <td className="rz-receipts-cell">
+                          <div style={{ display: 'grid', gap: '4px' }}>
+                            <div>{item.store_name || 'Onbekende winkel'}</div>
+                            <div style={{ fontSize: '12px', color: '#667085', fontWeight: 700 }}>{item.source_label || 'Handmatige upload'}</div>
+                          </div>
+                        </td>
                         <td className="rz-receipts-cell">{formatDateTime(item.purchase_at)}</td>
                         <td className="rz-num rz-receipts-cell">{formatMoney(item.total_amount, item.currency)}</td>
                         <td className="rz-num rz-receipts-cell">{item.line_count ?? 0}</td>
@@ -1339,6 +1513,12 @@ export default function KassaPage() {
         onChooseFile={handleChooseFileFromHub}
         onChooseSharedFile={handleChooseSharedFileFromHub}
         onChooseCamera={handleChooseCameraFromHub}
+        onChooseEmail={handleChooseEmailFromHub}
+        onCopyEmailRoute={copyEmailRouteToClipboard}
+        emailRoute={emailRoute}
+        isEmailRouteLoading={isEmailRouteLoading}
+        emailRouteError={emailRouteError}
+        isUploading={isUploading}
       />
 
       <CameraCaptureModal

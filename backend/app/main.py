@@ -8,11 +8,14 @@ from pathlib import Path
 import traceback
 import uuid
 import re
-from typing import List, Optional
+from typing import Any, List, Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
 from app.services.receipt_service import ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from datetime import datetime
+from email import policy
+from email.parser import BytesParser
+from email.utils import getaddresses, parsedate_to_datetime
 import logging
 from sqlalchemy import text
 
@@ -1311,6 +1314,32 @@ def ensure_release_902_schema():
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_table_lines_receipt_line ON receipt_table_lines (receipt_table_id, line_index)"))
 
 
+def ensure_release_932_schema():
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS receipt_email_messages (
+                    raw_receipt_id TEXT PRIMARY KEY,
+                    household_id TEXT NOT NULL,
+                    sender_email TEXT,
+                    sender_name TEXT,
+                    subject TEXT,
+                    received_at DATETIME,
+                    body_text TEXT,
+                    body_html TEXT,
+                    selected_part_type TEXT,
+                    selected_filename TEXT,
+                    selected_mime_type TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_email_messages_household_received ON receipt_email_messages (household_id, received_at DESC)"))
+
+
 def ensure_receipt_storage_root():
     RECEIPT_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -2157,7 +2186,9 @@ def build_receipt_source_response(row):
     source_type = str(item.get('type') or '')
     supports_scan = source_type in {'local_folder', 'scan_folder', 'watched_folder'}
     status_label = 'Actief' if item.get('is_active') else 'Inactief'
-    if source_type in {'email', 'customer_card'}:
+    if source_type == 'email':
+        status_label = 'E-mailroute'
+    elif source_type == 'customer_card':
         status_label = 'Voorbereidende koppeling'
     if source_type == 'barcode_fallback':
         status_label = 'Vangnetroute'
@@ -2273,6 +2304,284 @@ def create_receipt_source(payload: ReceiptSourceCreateRequest):
             {'id': source_id},
         ).mappings().first()
     return build_receipt_source_response(row)
+
+
+def build_household_email_address(household_id: str) -> str:
+    normalized_household_id = sanitize_source_slug(str(household_id or '1'))
+    return f"bon+{normalized_household_id}@rezzerv.local"
+
+
+def ensure_household_email_source(household_id: str):
+    effective_household_id = str(household_id or '1').strip() or '1'
+    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    route_address = build_household_email_address(effective_household_id)
+    source_id = f'{effective_household_id}-email-route'
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
+                FROM receipt_sources
+                WHERE household_id = :household_id AND type = 'email'
+                ORDER BY CASE WHEN id = :preferred_id THEN 0 ELSE 1 END, created_at ASC
+                LIMIT 1
+                """
+            ),
+            {'household_id': effective_household_id, 'preferred_id': source_id},
+        ).mappings().first()
+        if row:
+            source_id = row['id']
+            conn.execute(
+                text(
+                    """
+                    UPDATE receipt_sources
+                    SET label = :label, source_path = :source_path, is_active = 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                    """
+                ),
+                {'id': source_id, 'label': 'E-mail', 'source_path': route_address},
+            )
+        else:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
+                    VALUES (:id, :household_id, 'email', :label, :source_path, 1)
+                    """
+                ),
+                {'id': source_id, 'household_id': effective_household_id, 'label': 'E-mail', 'source_path': route_address},
+            )
+        refreshed = conn.execute(
+            text(
+                """
+                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
+                FROM receipt_sources
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {'id': source_id},
+        ).mappings().first()
+    item = build_receipt_source_response(refreshed)
+    item['route_address'] = route_address
+    return item
+
+
+def parse_email_receipt_payload(email_bytes: bytes, fallback_filename: str = 'receipt.eml') -> dict[str, Any]:
+    try:
+        message = BytesParser(policy=policy.default).parsebytes(email_bytes)
+    except Exception as exc:
+        raise ValueError('Het e-mailbestand kon niet worden gelezen.') from exc
+
+    sender_name = None
+    sender_email = None
+    from_addresses = getaddresses(message.get_all('from', []))
+    if from_addresses:
+        sender_name, sender_email = from_addresses[0]
+        sender_name = (sender_name or '').strip() or None
+        sender_email = (sender_email or '').strip().lower() or None
+
+    subject = str(message.get('subject') or '').strip() or None
+    received_at = None
+    date_header = message.get('date')
+    if date_header:
+        try:
+            parsed = parsedate_to_datetime(date_header)
+            received_at = normalize_datetime(parsed) if parsed else None
+        except Exception:
+            received_at = None
+
+    body_text = None
+    body_html = None
+    attachments: list[dict[str, Any]] = []
+
+    if message.is_multipart():
+        for part in message.walk():
+            content_type = str(part.get_content_type() or 'application/octet-stream')
+            filename = part.get_filename()
+            disposition = (part.get_content_disposition() or '').lower()
+            payload = part.get_payload(decode=True) or b''
+            if not payload and content_type.startswith('text/'):
+                try:
+                    payload = part.get_content().encode('utf-8')
+                except Exception:
+                    payload = b''
+            if (filename or disposition in {'attachment', 'inline'}) and payload:
+                attachments.append({
+                    'filename': filename or 'bijlage',
+                    'mime_type': content_type,
+                    'payload': payload,
+                    'disposition': disposition,
+                })
+                continue
+            if content_type == 'text/plain' and body_text is None:
+                try:
+                    body_text = part.get_content()
+                except Exception:
+                    body_text = payload.decode('utf-8', errors='ignore') if payload else None
+            elif content_type == 'text/html' and body_html is None:
+                try:
+                    body_html = part.get_content()
+                except Exception:
+                    body_html = payload.decode('utf-8', errors='ignore') if payload else None
+    else:
+        content_type = str(message.get_content_type() or 'text/plain')
+        try:
+            single_content = message.get_content()
+        except Exception:
+            single_content = email_bytes.decode('utf-8', errors='ignore')
+        if content_type == 'text/html':
+            body_html = single_content
+        else:
+            body_text = single_content
+
+    attachments.sort(key=lambda item: len(item.get('payload') or b''), reverse=True)
+
+    selected = None
+    for predicate in (
+        lambda item: item['mime_type'] == 'application/pdf',
+        lambda item: str(item['mime_type']).startswith('image/'),
+    ):
+        for attachment in attachments:
+            if predicate(attachment) and attachment.get('payload'):
+                selected = {
+                    'selected_part_type': 'attachment',
+                    'selected_filename': attachment['filename'],
+                    'selected_mime_type': attachment['mime_type'],
+                    'selected_bytes': attachment['payload'],
+                }
+                break
+        if selected:
+            break
+
+    if not selected and body_html:
+        subject_slug = sanitize_source_slug(subject or Path(fallback_filename).stem or 'receipt-email')
+        selected = {
+            'selected_part_type': 'html_body',
+            'selected_filename': f'{subject_slug}.html',
+            'selected_mime_type': 'text/html',
+            'selected_bytes': body_html.encode('utf-8'),
+        }
+
+    if not selected and body_text:
+        subject_slug = sanitize_source_slug(subject or Path(fallback_filename).stem or 'receipt-email')
+        selected = {
+            'selected_part_type': 'text_body',
+            'selected_filename': f'{subject_slug}.txt',
+            'selected_mime_type': 'text/plain',
+            'selected_bytes': body_text.encode('utf-8'),
+        }
+
+    if not selected:
+        raise ValueError('In deze e-mail is geen bruikbare bonbijlage of mailinhoud gevonden.')
+
+    return {
+        'sender_name': sender_name,
+        'sender_email': sender_email,
+        'subject': subject,
+        'received_at': received_at,
+        'body_text': body_text,
+        'body_html': body_html,
+        **selected,
+    }
+
+
+def derive_email_receipt_store_name(payload: dict[str, Any]) -> str | None:
+    sender_name = str(payload.get('sender_name') or '').strip()
+    if sender_name:
+        return sender_name[:120]
+    sender_email = str(payload.get('sender_email') or '').strip().lower()
+    if sender_email and '@' in sender_email:
+        domain = sender_email.split('@', 1)[1].split('.', 1)[0].replace('-', ' ').replace('_', ' ').strip()
+        if domain:
+            return domain.title()[:120]
+    subject = str(payload.get('subject') or '').strip()
+    if subject:
+        return subject[:120]
+    return None
+
+
+def store_receipt_email_metadata(raw_receipt_id: str, household_id: str, payload: dict[str, Any]):
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO receipt_email_messages (
+                    raw_receipt_id, household_id, sender_email, sender_name, subject, received_at, body_text, body_html,
+                    selected_part_type, selected_filename, selected_mime_type, updated_at
+                ) VALUES (
+                    :raw_receipt_id, :household_id, :sender_email, :sender_name, :subject, :received_at, :body_text, :body_html,
+                    :selected_part_type, :selected_filename, :selected_mime_type, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT(raw_receipt_id) DO UPDATE SET
+                    household_id = excluded.household_id,
+                    sender_email = excluded.sender_email,
+                    sender_name = excluded.sender_name,
+                    subject = excluded.subject,
+                    received_at = excluded.received_at,
+                    body_text = excluded.body_text,
+                    body_html = excluded.body_html,
+                    selected_part_type = excluded.selected_part_type,
+                    selected_filename = excluded.selected_filename,
+                    selected_mime_type = excluded.selected_mime_type,
+                    updated_at = CURRENT_TIMESTAMP
+                """
+            ),
+            {
+                'raw_receipt_id': raw_receipt_id,
+                'household_id': household_id,
+                'sender_email': payload.get('sender_email'),
+                'sender_name': payload.get('sender_name'),
+                'subject': payload.get('subject'),
+                'received_at': payload.get('received_at'),
+                'body_text': payload.get('body_text'),
+                'body_html': payload.get('body_html'),
+                'selected_part_type': payload.get('selected_part_type'),
+                'selected_filename': payload.get('selected_filename'),
+                'selected_mime_type': payload.get('selected_mime_type'),
+            },
+        )
+
+
+def import_email_receipt_payload(household_id: str, email_bytes: bytes, fallback_filename: str = 'receipt.eml') -> dict[str, Any]:
+    email_source = ensure_household_email_source(household_id)
+    payload = parse_email_receipt_payload(email_bytes, fallback_filename=fallback_filename)
+    result = ingest_receipt(
+        engine=engine,
+        receipt_storage_root=RECEIPT_STORAGE_ROOT,
+        household_id=str(household_id),
+        filename=payload['selected_filename'],
+        file_bytes=payload['selected_bytes'],
+        source_id=email_source['id'],
+        mime_type=payload['selected_mime_type'],
+        reject_non_receipt=False,
+    )
+    raw_receipt_id = result.get('raw_receipt_id')
+    if raw_receipt_id:
+        store_receipt_email_metadata(raw_receipt_id, str(household_id), payload)
+    receipt_table_id = result.get('receipt_table_id')
+    if receipt_table_id:
+        derived_store_name = derive_email_receipt_store_name(payload)
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    UPDATE receipt_tables
+                    SET store_name = COALESCE(store_name, :store_name),
+                        purchase_at = COALESCE(purchase_at, :purchase_at),
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                    """
+                ),
+                {'id': receipt_table_id, 'store_name': derived_store_name, 'purchase_at': payload.get('received_at')},
+            )
+    result['source_id'] = email_source['id']
+    result['source_label'] = email_source.get('label', 'E-mail')
+    result['sender_email'] = payload.get('sender_email')
+    result['sender_name'] = payload.get('sender_name')
+    result['subject'] = payload.get('subject')
+    result['received_at'] = payload.get('received_at')
+    return result
 
 
 def ensure_household(email: str):
@@ -2423,6 +2732,29 @@ def register_receipt_source(payload: ReceiptSourceCreateRequest):
     return create_receipt_source(payload)
 
 
+@app.get("/api/receipt-sources/email-route")
+def get_receipt_email_route(householdId: str = Query(...)):
+    effective_household_id = str(householdId).strip() or '1'
+    return ensure_household_email_source(effective_household_id)
+
+
+@app.post("/api/receipts/email-import")
+async def import_email_receipt(
+    household_id: str = Form(...),
+    email_file: UploadFile = File(...),
+):
+    effective_household_id = str(household_id).strip() or '1'
+    email_bytes = await email_file.read()
+    if not email_bytes:
+        raise HTTPException(status_code=400, detail='Het e-mailbestand is leeg.')
+    try:
+        result = import_email_receipt_payload(effective_household_id, email_bytes, fallback_filename=email_file.filename or 'receipt.eml')
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    status_code = 200 if result.get('duplicate') else 201
+    return JSONResponse(status_code=status_code, content=result)
+
+
 @app.post("/api/receipts/source-scan")
 def source_scan_receipts(payload: ReceiptSourceScanRequest):
     source_id = (payload.source_id or "").strip()
@@ -2455,6 +2787,10 @@ def list_receipts(householdId: str = Query(...)):
                     rt.parse_status,
                     rt.line_count,
                     COALESCE(rs.label, 'Manual upload') AS source_label,
+                    rem.sender_email,
+                    rem.sender_name,
+                    rem.subject AS email_subject,
+                    rem.received_at AS email_received_at,
                     rt.created_at,
                     COALESCE((
                         SELECT SUM(COALESCE(rtl.line_total, 0))
@@ -2464,6 +2800,7 @@ def list_receipts(householdId: str = Query(...)):
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
+                LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
                 WHERE rt.household_id = :household_id
                 ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC
                 """
@@ -2525,12 +2862,26 @@ def get_receipt_detail(receipt_table_id: str):
                     rt.line_count,
                     rt.created_at,
                     rt.updated_at,
+                    COALESCE(rs.label, 'Manual upload') AS source_label,
+                    rr.original_filename,
+                    rr.mime_type,
+                    rr.imported_at,
+                    rem.sender_email,
+                    rem.sender_name,
+                    rem.subject AS email_subject,
+                    rem.received_at AS email_received_at,
+                    rem.selected_part_type,
+                    rem.selected_filename AS email_selected_filename,
+                    rem.selected_mime_type AS email_selected_mime_type,
                     COALESCE((
                         SELECT SUM(COALESCE(rtl.line_total, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
                     ), 0) AS line_total_sum
                 FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
+                LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
                 WHERE rt.id = :receipt_table_id
                 LIMIT 1
                 """
@@ -2776,6 +3127,7 @@ ensure_release_803_schema()
 ensure_release_813_schema()
 ensure_release_814_schema()
 ensure_release_902_schema()
+ensure_release_932_schema()
 ensure_receipt_storage_root()
 seed_store_providers()
 admin_household = ensure_household("admin@rezzerv.local")

@@ -19,7 +19,7 @@ try:
 except Exception:  # pragma: no cover
     PdfReader = None
 
-SUPPORTED_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg'}
+SUPPORTED_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.html', '.htm', '.txt'}
 KNOWN_STORES = [
     'Albert Heijn',
     'AH',
@@ -130,6 +130,18 @@ def detect_mime_type(filename: str, file_bytes: bytes, provided: str | None = No
 
 def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _html_to_text(value: str) -> str:
+    if not value:
+        return ''
+    normalized = re.sub(r'(?is)<\s*br\s*/?\s*>', '\n', value)
+    normalized = re.sub(r'(?is)</\s*p\s*>', '\n', normalized)
+    normalized = re.sub(r'(?is)<[^>]+>', ' ', normalized)
+    normalized = normalized.replace('&nbsp;', ' ').replace('&euro;', 'EUR')
+    normalized = re.sub(r'\s+', ' ', normalized)
+    normalized = normalized.replace(' \n', '\n').replace('\n ', '\n')
+    return normalized.strip()
 
 
 def _parse_decimal(raw: str | None) -> Decimal | None:
@@ -375,6 +387,40 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
             total_amount=total_amount,
             currency='EUR',
             lines=[],
+        )
+
+    if mime_type in {'text/html', 'text/plain'} or suffix in {'.html', '.htm', '.txt'}:
+        raw_text = file_bytes.decode('utf-8', errors='ignore')
+        if mime_type == 'text/html' or suffix in {'.html', '.htm'}:
+            raw_text = _html_to_text(raw_text)
+        text_lines = _normalize_text_lines(raw_text)
+        if not text_lines:
+            return ReceiptParseResult(
+                is_receipt=False,
+                parse_status='failed',
+                confidence_score=0.0,
+                store_name=None,
+                purchase_at=None,
+                total_amount=None,
+                currency='EUR',
+                lines=[],
+            )
+        store_name = _store_from_text(text_lines[:12], filename)
+        purchase_at = _purchase_at_from_lines(text_lines[:20], filename)
+        total_amount = _total_amount_from_lines(text_lines, filename)
+        lines = _extract_receipt_lines(text_lines)
+        has_signal = bool(store_name or purchase_at or total_amount or lines)
+        confidence = 0.62 if (total_amount and lines) else 0.46 if has_signal else 0.24
+        parse_status = 'partial' if has_signal and lines else 'review_needed'
+        return ReceiptParseResult(
+            is_receipt=True,
+            parse_status=parse_status,
+            confidence_score=confidence,
+            store_name=store_name,
+            purchase_at=purchase_at,
+            total_amount=total_amount,
+            currency='EUR',
+            lines=lines,
         )
 
     return ReceiptParseResult(
