@@ -108,8 +108,10 @@ if %errorlevel% neq 0 (
 echo Opening frontend in browser...
 start "" "%FRONTEND_URL%"
 
+echo Starting Cloudflare Quick Tunnel in a separate window...
+call :StartCloudflareTunnel
+
 echo Startup complete.
-pause
 exit /b 0
 
 :project_error
@@ -235,6 +237,25 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$listeners = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue; foreach ($listener in $listeners) { $owningPid = $listener.OwningProcess; $proc = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $owningPid) -ErrorAction SilentlyContinue; if (-not $proc) { continue }; $name=[string]$proc.Name; $cmd=[string]$proc.CommandLine; $sig=($name + ' ' + $cmd).ToLowerInvariant(); $isDocker=$name -match '(?i)^(docker|docker desktop|com\\.docker.*|docker-proxy|vpnkit|vmmem|vmmemws|wslhost)\\.exe$' -or $cmd.ToLowerInvariant() -match 'docker desktop|com\\.docker|docker-proxy|vpnkit|moby'; $isWsl=$name -match '(?i)^wslrelay\.exe$' -or $cmd.ToLowerInvariant() -match '--vm-id|wslrelay'; if ($isDocker -or $isWsl) { continue }; if ($sig -match 'rezzerv|vite|node|npm') { Write-Host ('    Stopping old Rezzerv-like process PID ' + $owningPid + ' (' + $name + ') on port ' + $port + '...'); Stop-Process -Id $owningPid -Force -ErrorAction SilentlyContinue } }" ^
   "Start-Sleep -Seconds 1; $remaining = GetVersion $base; if ($remaining -and $remaining -ne $targetVersion) { Write-Host ('[ERROR] Port ' + $port + ' still serves old Rezzerv version ' + $remaining + ' after targeted cleanup.'); exit 24 } else { exit 0 }"
 if %errorlevel% neq 0 exit /b 1
+exit /b 0
+
+:CleanupRezzervCloudflared
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$targetUrl='http://localhost:%FRONTEND_PORT%'; $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue ^| Where-Object { $_.Name -eq 'cloudflared.exe' }; foreach ($proc in $procs) { $cmd=[string]$proc.CommandLine; if ($cmd -and $cmd.ToLowerInvariant().Contains($targetUrl.ToLowerInvariant())) { try { Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop; Write-Host ('    Stopped previous Rezzerv Cloudflare tunnel PID ' + $proc.ProcessId + '.'); } catch {} } }"
+exit /b 0
+
+:StartCloudflareTunnel
+where cloudflared >nul 2>&1
+if %errorlevel% neq 0 (
+  echo [WARN] cloudflared not found. Skipping Cloudflare tunnel startup.
+  exit /b 0
+)
+call :CleanupRezzervCloudflared
+if not exist "%cd%\start-cloudflare-tunnel.bat" (
+  echo [WARN] start-cloudflare-tunnel.bat not found. Skipping Cloudflare tunnel startup.
+  exit /b 0
+)
+start "Rezzerv Cloudflare Tunnel" cmd /k start-cloudflare-tunnel.bat "%FRONTEND_URL%"
+echo     Cloudflare tunnel window opened separately.
 exit /b 0
 
 :VerifyFrontendPorts
