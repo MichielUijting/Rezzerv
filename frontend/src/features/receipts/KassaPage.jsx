@@ -974,17 +974,24 @@ export default function KassaPage() {
     try {
       const result = await uploadSharedReceiptFile(householdId, cameraDraft.file, 'camera_capture', 'Foto gemaakt in Rezzerv')
       await loadReceipts(householdId)
-      if (result?.receipt_table_id) {
-        await openReceiptDetail(result.receipt_table_id)
-      }
       clearCameraDraft()
       setIsSourceHubOpen(false)
+      setOpenedReceiptId('')
+      setOpenedReceipt(null)
       if (result?.duplicate) {
         setStatus('Deze bon was al aanwezig en is niet opnieuw toegevoegd.')
       } else if (result?.receipt_table_id) {
-        setStatus(`Foto verwerkt met status: ${parseStatusLabel(result.parse_status)}`)
+        setStatus(`Foto verwerkt met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
       } else {
         setStatus('Foto opgeslagen, maar nog niet als bruikbare kassabon herkend.')
+      }
+      try {
+        window.requestAnimationFrame(() => {
+          const inbox = document.querySelector('[data-testid="kassa-table"]')
+          inbox?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        })
+      } catch {
+        // ignore scroll issues
       }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Foto van kassabon kon niet worden verwerkt.')
