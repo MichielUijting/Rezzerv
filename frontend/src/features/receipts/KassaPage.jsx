@@ -806,6 +806,7 @@ function ReceiptSourceHubModal({
   emailRoute,
   isEmailRouteLoading,
   emailRouteError,
+  duplicateNotice,
   isUploading,
 }) {
   const [isEmailDropActive, setIsEmailDropActive] = useState(false)
@@ -986,6 +987,7 @@ function ReceiptSourceHubModal({
                 <div style={{ color: '#475467', fontSize: '14px' }}>Sleep hier een <strong>.eml</strong>-bestand naartoe of klik om een e-mailbestand te kiezen.</div>
                 <div style={{ color: '#667085', fontSize: '13px' }}>Ondersteund in deze versie: <strong>.eml</strong>. De bestaande importketen voor e-mailbonnen wordt hergebruikt.</div>
               </div>
+              {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-sourcehub-duplicate-feedback">{duplicateNotice}</div> : null}
               {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
               <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
                 <Button type="button" variant="secondary" onClick={onCopyEmailRoute} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>Adres kopiëren</Button>
@@ -1008,6 +1010,7 @@ function CameraCaptureModal({
   onCancel,
   isUploading,
   error,
+  duplicateNotice,
 }) {
   if (!isOpen) return null
 
@@ -1028,6 +1031,7 @@ function CameraCaptureModal({
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isUploading}>Annuleren</Button>
         </div>
 
+        {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-camera-duplicate-feedback">{duplicateNotice}</div> : null}
         {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
 
         <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', minHeight: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
@@ -1081,20 +1085,28 @@ export default function KassaPage() {
     }
   }, [cameraDraft])
 
-  function deleteSelectedReceipts() {
+  async function deleteSelectedReceipts() {
     if (selectedReceiptIds.length === 0) return
     const deletedIds = selectedReceiptIds.map((value) => String(value))
-    setDeletedReceiptIds((current) => {
-      const next = [...new Set([...current, ...deletedIds])]
-      persistStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY, next)
-      return next
-    })
-    if (openedReceiptId && deletedIds.includes(String(openedReceiptId))) {
-      setOpenedReceiptId('')
-      setOpenedReceipt(null)
+    setError('')
+    setDuplicateNotice('')
+    try {
+      await fetchJson('/api/receipts/delete', {
+        method: 'POST',
+        body: JSON.stringify({ receipt_table_ids: deletedIds }),
+      })
+      persistStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY, [])
+      setDeletedReceiptIds([])
+      if (openedReceiptId && deletedIds.includes(String(openedReceiptId))) {
+        setOpenedReceiptId('')
+        setOpenedReceipt(null)
+      }
+      setSelectedReceiptIds([])
+      await loadReceipts(householdId)
+      setStatus(`${deletedIds.length} bon${deletedIds.length === 1 ? '' : 'nen'} verwijderd uit de inbox.`)
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'De geselecteerde bonnen konden niet worden verwijderd.')
     }
-    setSelectedReceiptIds([])
-    setStatus(`${deletedIds.length} bon${deletedIds.length === 1 ? '' : 'nen'} verwijderd uit de inbox.`)
   }
 
   async function loadReceipts(nextHouseholdId = householdId) {
@@ -1129,6 +1141,19 @@ export default function KassaPage() {
         if (cancelled) return
         const resolvedHouseholdId = String(household?.id || '1')
         setHouseholdId(resolvedHouseholdId)
+        const storedDeletedIds = loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY)
+        if (storedDeletedIds.length) {
+          try {
+            await fetchJson('/api/receipts/delete', {
+              method: 'POST',
+              body: JSON.stringify({ receipt_table_ids: storedDeletedIds }),
+            })
+            persistStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY, [])
+            if (!cancelled) setDeletedReceiptIds([])
+          } catch {
+            // keep local fallback when backend sync fails
+          }
+        }
         const items = await loadReceipts(resolvedHouseholdId)
         if (cancelled) return
         const sharedResult = readShareQueryParams()
@@ -1364,38 +1389,38 @@ export default function KassaPage() {
       const result = await uploadSharedReceiptFile(householdId, preparedFile, 'camera_capture', 'Foto gemaakt in Rezzerv')
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
-      clearCameraDraft()
-      setIsSourceHubOpen(false)
-      setOpenedReceiptId('')
-      setOpenedReceipt(null)
-      setFilters(DEFAULT_RECEIPT_FILTERS)
-      setReceiptInboxFocusId(uploadedReceiptId)
-
-      const refreshedItems = await loadReceipts(householdId)
-      const receiptExistsInInbox = uploadedReceiptId
-        ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
-        : false
-
-      if (uploadedReceiptId && receiptExistsInInbox) {
-        setSelectedReceiptIds([uploadedReceiptId])
-      } else {
-        setSelectedReceiptIds([])
-      }
-
       if (result?.duplicate) {
         announceDuplicate(result)
-      } else if (result?.receipt_table_id) {
-        setDuplicateNotice('')
-        setStatus(`Foto verwerkt met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
       } else {
-        setStatus('Foto opgeslagen, maar nog niet als bruikbare kassabon herkend.')
-      }
+        clearCameraDraft()
+        setIsSourceHubOpen(false)
+        setOpenedReceiptId('')
+        setOpenedReceipt(null)
+        setFilters(DEFAULT_RECEIPT_FILTERS)
+        setReceiptInboxFocusId(uploadedReceiptId)
 
-      if (uploadedReceiptId && !receiptExistsInInbox) {
-        setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
-      }
+        const refreshedItems = await loadReceipts(householdId)
+        const receiptExistsInInbox = uploadedReceiptId
+          ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
+          : false
 
-      if (!result?.duplicate) {
+        if (uploadedReceiptId && receiptExistsInInbox) {
+          setSelectedReceiptIds([uploadedReceiptId])
+        } else {
+          setSelectedReceiptIds([])
+        }
+
+        if (result?.receipt_table_id) {
+          setDuplicateNotice('')
+          setStatus(`Foto verwerkt met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
+        } else {
+          setStatus('Foto opgeslagen, maar nog niet als bruikbare kassabon herkend.')
+        }
+
+        if (uploadedReceiptId && !receiptExistsInInbox) {
+          setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
+        }
+
         try {
           window.requestAnimationFrame(() => {
             const targetRow = uploadedReceiptId
@@ -1450,36 +1475,36 @@ export default function KassaPage() {
     try {
       const result = await uploadEmailReceiptFile(householdId, file)
       const uploadedReceiptId = String(result?.receipt_table_id || '')
-      setIsSourceHubOpen(false)
-      setOpenedReceiptId('')
-      setOpenedReceipt(null)
-      setFilters(DEFAULT_RECEIPT_FILTERS)
-      setReceiptInboxFocusId(uploadedReceiptId)
-      const refreshedItems = await loadReceipts(householdId)
-      const receiptExistsInInbox = uploadedReceiptId
-        ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
-        : false
-
-      if (uploadedReceiptId && receiptExistsInInbox) {
-        setSelectedReceiptIds([uploadedReceiptId])
-      } else {
-        setSelectedReceiptIds([])
-      }
-
       if (result?.duplicate) {
         announceDuplicate(result)
-      } else if (result?.receipt_table_id) {
-        setDuplicateNotice('')
-        setStatus(`E-mailbon ontvangen met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
       } else {
-        setStatus('E-mail verwerkt, maar nog niet als bruikbare kassabon herkend.')
-      }
+        setIsSourceHubOpen(false)
+        setOpenedReceiptId('')
+        setOpenedReceipt(null)
+        setFilters(DEFAULT_RECEIPT_FILTERS)
+        setReceiptInboxFocusId(uploadedReceiptId)
+        const refreshedItems = await loadReceipts(householdId)
+        const receiptExistsInInbox = uploadedReceiptId
+          ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
+          : false
 
-      if (uploadedReceiptId && !receiptExistsInInbox) {
-        setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
-      }
+        if (uploadedReceiptId && receiptExistsInInbox) {
+          setSelectedReceiptIds([uploadedReceiptId])
+        } else {
+          setSelectedReceiptIds([])
+        }
 
-      if (!result?.duplicate) {
+        if (result?.receipt_table_id) {
+          setDuplicateNotice('')
+          setStatus(`E-mailbon ontvangen met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
+        } else {
+          setStatus('E-mail verwerkt, maar nog niet als bruikbare kassabon herkend.')
+        }
+
+        if (uploadedReceiptId && !receiptExistsInInbox) {
+          setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
+        }
+
         try {
           window.requestAnimationFrame(() => {
             const targetRow = uploadedReceiptId
@@ -1531,20 +1556,22 @@ export default function KassaPage() {
       const result = activeUploadMode === 'shared_file'
         ? await uploadSharedReceiptFile(householdId, file, sharedContext)
         : await uploadReceiptFile(householdId, file)
-      await loadReceipts(householdId)
-      if (result?.receipt_table_id) {
-        await openReceiptDetail(result.receipt_table_id)
-      }
-      setIsSourceHubOpen(false)
       if (result?.duplicate) {
         announceDuplicate(result)
-      } else if (result?.receipt_table_id) {
-        setDuplicateNotice('')
-        setStatus(activeUploadMode === 'shared_file'
-          ? `Gedeelde bon ontvangen met status: ${parseStatusLabel(result.parse_status)}`
-          : `Bon toegevoegd met status: ${parseStatusLabel(result.parse_status)}`)
       } else {
-        setStatus('Bestand opgeslagen, maar nog niet als bruikbare kassabon herkend.')
+        await loadReceipts(householdId)
+        if (result?.receipt_table_id) {
+          await openReceiptDetail(result.receipt_table_id)
+        }
+        setIsSourceHubOpen(false)
+        if (result?.receipt_table_id) {
+          setDuplicateNotice('')
+          setStatus(activeUploadMode === 'shared_file'
+            ? `Gedeelde bon ontvangen met status: ${parseStatusLabel(result.parse_status)}`
+            : `Bon toegevoegd met status: ${parseStatusLabel(result.parse_status)}`)
+        } else {
+          setStatus('Bestand opgeslagen, maar nog niet als bruikbare kassabon herkend.')
+        }
       }
       setUploadMode('manual')
     } catch (err) {
@@ -1736,6 +1763,7 @@ export default function KassaPage() {
         emailRoute={emailRoute}
         isEmailRouteLoading={isEmailRouteLoading}
         emailRouteError={emailRouteError}
+        duplicateNotice={duplicateNotice}
         isUploading={isUploading}
       />
 
@@ -1747,6 +1775,7 @@ export default function KassaPage() {
         onCancel={cancelCameraDraft}
         isUploading={isUploading}
         error={cameraError}
+        duplicateNotice={duplicateNotice}
       />
     </AppShell>
   )

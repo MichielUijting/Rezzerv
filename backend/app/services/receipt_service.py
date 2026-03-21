@@ -496,7 +496,18 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
     digest = sha256_hex(file_bytes)
     with engine.begin() as conn:
         duplicate = conn.execute(
-            text('SELECT id, raw_status FROM raw_receipts WHERE household_id = :household_id AND sha256_hash = :sha256_hash LIMIT 1'),
+            text(
+                '''
+                SELECT rr.id, rr.raw_status
+                FROM raw_receipts rr
+                LEFT JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id
+                WHERE rr.household_id = :household_id
+                  AND rr.sha256_hash = :sha256_hash
+                  AND rr.deleted_at IS NULL
+                  AND (rt.id IS NULL OR rt.deleted_at IS NULL)
+                LIMIT 1
+                '''
+            ),
             {'household_id': household_id, 'sha256_hash': digest},
         ).mappings().first()
         if duplicate:

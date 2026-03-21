@@ -220,6 +220,10 @@ class ReceiptSourceCreateRequest(BaseModel):
     is_active: bool = True
 
 
+class ReceiptDeleteRequest(BaseModel):
+    receipt_table_ids: List[str] = Field(default_factory=list)
+
+
 STORE_PROVIDER_DEFINITIONS = {
     "lidl": {
         "name": "Lidl",
@@ -1455,6 +1459,18 @@ def ensure_release_935_schema():
         )
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_inbound_provider_email ON receipt_inbound_events (provider, provider_email_id)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_inbound_household_received ON receipt_inbound_events (household_id, received_at DESC, created_at DESC)"))
+
+
+def ensure_release_940_schema():
+    with engine.begin() as conn:
+        raw_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(raw_receipts)")).fetchall()}
+        receipt_columns = {row[1] for row in conn.execute(text("PRAGMA table_info(receipt_tables)")).fetchall()}
+        if 'deleted_at' not in raw_columns:
+            conn.execute(text("ALTER TABLE raw_receipts ADD COLUMN deleted_at DATETIME"))
+        if 'deleted_at' not in receipt_columns:
+            conn.execute(text("ALTER TABLE receipt_tables ADD COLUMN deleted_at DATETIME"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_raw_receipts_household_deleted ON raw_receipts (household_id, deleted_at)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_tables_household_deleted ON receipt_tables (household_id, deleted_at)"))
 
 def ensure_receipt_storage_root():
     RECEIPT_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
@@ -3749,6 +3765,39 @@ async def import_receipt(
     return JSONResponse(status_code=status_code, content=result)
 
 
+@app.post("/api/receipts/delete")
+def delete_receipts(payload: ReceiptDeleteRequest):
+    receipt_ids = [str(value).strip() for value in (payload.receipt_table_ids or []) if str(value).strip()]
+    if not receipt_ids:
+        raise HTTPException(status_code=400, detail="receipt_table_ids is verplicht")
+    placeholders = ", ".join([f":id_{idx}" for idx, _ in enumerate(receipt_ids)])
+    params = {f"id_{idx}": value for idx, value in enumerate(receipt_ids)}
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                f"""
+                SELECT rt.id AS receipt_table_id, rt.raw_receipt_id
+                FROM receipt_tables rt
+                WHERE rt.id IN ({placeholders})
+                  AND rt.deleted_at IS NULL
+                """
+            ),
+            params,
+        ).mappings().all()
+        if not rows:
+            return {'deleted_receipt_table_ids': [], 'deleted_count': 0}
+        deleted_receipt_ids = [str(row['receipt_table_id']) for row in rows]
+        raw_ids = [str(row['raw_receipt_id']) for row in rows if row.get('raw_receipt_id')]
+        receipt_params = {f"rid_{idx}": value for idx, value in enumerate(deleted_receipt_ids)}
+        receipt_placeholders = ", ".join([f":rid_{idx}" for idx, _ in enumerate(deleted_receipt_ids)])
+        conn.execute(text(f"UPDATE receipt_tables SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id IN ({receipt_placeholders})"), receipt_params)
+        if raw_ids:
+            raw_params = {f"raw_{idx}": value for idx, value in enumerate(raw_ids)}
+            raw_placeholders = ", ".join([f":raw_{idx}" for idx, _ in enumerate(raw_ids)])
+            conn.execute(text(f"UPDATE raw_receipts SET deleted_at = CURRENT_TIMESTAMP, sha256_hash = sha256_hash || ':deleted:' || id || ':' || strftime('%s','now') WHERE id IN ({raw_placeholders})"), raw_params)
+    return {'deleted_receipt_table_ids': deleted_receipt_ids, 'deleted_count': len(deleted_receipt_ids)}
+
+
 @app.get("/api/receipt-sources")
 def list_receipt_sources(householdId: str = Query(...)):
     effective_household_id = str(householdId).strip() or '1'
@@ -3960,6 +4009,8 @@ def list_receipts(householdId: str = Query(...)):
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
                 LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
                 WHERE rt.household_id = :household_id
+                  AND rt.deleted_at IS NULL
+                  AND rr.deleted_at IS NULL
                 ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC
                 """
             ),
@@ -3978,6 +4029,8 @@ def get_receipt_preview(receipt_table_id: str):
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 WHERE rt.id = :receipt_table_id
+                  AND rt.deleted_at IS NULL
+                  AND rr.deleted_at IS NULL
                 LIMIT 1
                 """
             ),
@@ -4041,6 +4094,8 @@ def get_receipt_detail(receipt_table_id: str):
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
                 LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
                 WHERE rt.id = :receipt_table_id
+                  AND rt.deleted_at IS NULL
+                  AND rr.deleted_at IS NULL
                 LIMIT 1
                 """
             ),
@@ -4288,6 +4343,7 @@ ensure_release_902_schema()
 ensure_release_932_schema()
 ensure_release_933_schema()
 ensure_release_935_schema()
+ensure_release_940_schema()
 ensure_receipt_storage_root()
 seed_store_providers()
 admin_household = ensure_household("admin@rezzerv.local")
