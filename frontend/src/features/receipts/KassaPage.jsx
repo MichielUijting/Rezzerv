@@ -49,6 +49,13 @@ function emailPartLabel(value) {
   return value || '-'
 }
 
+function inboundImportStatusLabel(value) {
+  if (value === 'imported') return 'Automatisch ontvangen'
+  if (value === 'duplicate') return 'Al eerder ontvangen'
+  if (value === 'failed') return 'Ontvangen, controle nodig'
+  if (value === 'received') return 'Webhook ontvangen'
+  return value || '-'
+}
 
 const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
 const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: '', status: '' }
@@ -794,11 +801,16 @@ function ReceiptSourceHubModal({
   const routeAddress = emailRoute?.route_address || '-'
   const routeIsPublic = Boolean(emailRoute?.route_is_public)
   const routeDomain = emailRoute?.route_domain || ''
+  const resendConfigured = Boolean(emailRoute?.resend_configured)
+  const latestInbound = emailRoute?.latest || null
+  const webhookEndpointPath = emailRoute?.webhook_endpoint_path || '/api/receipts/inbound'
   const forwardingStatusLabel = isEmailRouteLoading
     ? 'Doorstuuradres laden…'
-    : routeIsPublic
-      ? 'Forwarding-ready adres'
-      : 'Lokale demo-opstelling'
+    : routeIsPublic && resendConfigured
+      ? 'Automatische ontvangst mogelijk'
+      : routeIsPublic
+        ? 'Adres klaar, inbound nog niet actief'
+        : 'Lokale demo-opstelling'
 
   return (
     <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', overflowY: 'auto', padding: '16px 20px 20px' }}>
@@ -842,9 +854,11 @@ function ReceiptSourceHubModal({
                 <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Status</div>
                 <div style={{ fontSize: '15px', fontWeight: 700 }}>{forwardingStatusLabel}</div>
                 <div style={{ fontSize: '13px', color: '#667085' }}>
-                  {routeIsPublic
-                    ? 'Dit adres is klaar voor echte automatische forwarding zodra het gekoppelde maildomein live is ingericht.'
-                    : `Deze lokale build gebruikt nu ${routeDomain || 'een lokaal domein'}. Daardoor werkt automatisch ontvangen nog niet rechtstreeks vanaf internetmail. Gebruik voorlopig .eml als fallback.`}
+                  {routeIsPublic && resendConfigured
+                    ? 'Dit adres kan automatisch bonmails ontvangen zodra Resend naar jouw publieke Rezzerv-webhook post.'
+                    : routeIsPublic
+                      ? 'Het doorstuuradres is publiek, maar de Resend-inbound API-sleutel ontbreekt nog in Rezzerv. Gebruik voorlopig .eml als fallback.'
+                      : `Deze lokale build gebruikt nu ${routeDomain || 'een lokaal domein'}. Daardoor werkt automatisch ontvangen nog niet rechtstreeks vanaf internetmail. Gebruik voorlopig .eml als fallback.`}
                 </div>
               </div>
               <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
@@ -852,6 +866,21 @@ function ReceiptSourceHubModal({
                 <div style={{ fontSize: '15px', fontWeight: 700, wordBreak: 'break-all' }}>
                   {isEmailRouteLoading ? 'E-mailroute laden…' : routeAddress}
                 </div>
+              </div>
+              <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
+                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Automatische ontvangst</div>
+                <div style={{ fontSize: '15px', fontWeight: 700 }}>
+                  {latestInbound ? inboundImportStatusLabel(latestInbound.import_status) : 'Nog geen automatische mail ontvangen'}
+                </div>
+                <div style={{ fontSize: '13px', color: '#667085' }}>
+                  {latestInbound
+                    ? `Laatst ontvangen: ${formatDateTime(latestInbound.received_at || latestInbound.webhook_received_at)}`
+                    : 'Zodra Resend een mail aan Rezzerv doorstuurt, zie je dat hier terug.'}
+                </div>
+                {latestInbound?.sender_email ? (
+                  <div style={{ fontSize: '13px', color: '#667085' }}>Afzender: {latestInbound.sender_name ? `${latestInbound.sender_name} <${latestInbound.sender_email}>` : latestInbound.sender_email}</div>
+                ) : null}
+                <div style={{ fontSize: '13px', color: '#667085' }}>Webhook-pad in Rezzerv: <strong>{webhookEndpointPath}</strong></div>
               </div>
               <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '10px' }}>
                 <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Zo stel je forwarding in</div>
