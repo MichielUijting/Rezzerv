@@ -45,6 +45,82 @@ function parseStatusLabel(value) {
 
 const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
 const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: '', status: '' }
+const MAX_CAMERA_UPLOAD_BYTES = 4 * 1024 * 1024
+const MAX_CAMERA_DIMENSION = 1800
+
+function renameFileToJpeg(name = 'receipt.jpg') {
+  const baseName = String(name || 'receipt').replace(/\.[^.]+$/, '') || 'receipt'
+  return `${baseName}.jpg`
+}
+
+async function loadImageForCompression(file) {
+  const objectUrl = window.URL.createObjectURL(file)
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const nextImage = new Image()
+      nextImage.onload = () => resolve(nextImage)
+      nextImage.onerror = () => reject(new Error('Afbeelding kon niet worden geladen voor compressie.'))
+      nextImage.src = objectUrl
+    })
+    return image
+  } finally {
+    window.URL.revokeObjectURL(objectUrl)
+  }
+}
+
+async function canvasToJpegFile(canvas, originalName, quality) {
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((nextBlob) => {
+      if (nextBlob) resolve(nextBlob)
+      else reject(new Error('Afbeelding kon niet worden voorbereid voor upload.'))
+    }, 'image/jpeg', quality)
+  })
+  return new File([blob], renameFileToJpeg(originalName), { type: 'image/jpeg', lastModified: Date.now() })
+}
+
+async function prepareCameraUploadFile(file) {
+  if (!file || !file.type?.startsWith('image/')) return file
+  if (file.size <= MAX_CAMERA_UPLOAD_BYTES) return file
+
+  const image = await loadImageForCompression(file)
+  let width = Number(image.naturalWidth || image.width || 0)
+  let height = Number(image.naturalHeight || image.height || 0)
+  if (!width || !height) return file
+
+  const maxDimension = Math.max(width, height)
+  if (maxDimension > MAX_CAMERA_DIMENSION) {
+    const scale = MAX_CAMERA_DIMENSION / maxDimension
+    width = Math.max(1, Math.round(width * scale))
+    height = Math.max(1, Math.round(height * scale))
+  }
+
+  const canvas = document.createElement('canvas')
+  const context = canvas.getContext('2d', { alpha: false })
+  if (!context) return file
+
+  let bestFile = file
+  let currentWidth = width
+  let currentHeight = height
+
+  for (let dimensionAttempt = 0; dimensionAttempt < 4; dimensionAttempt += 1) {
+    canvas.width = currentWidth
+    canvas.height = currentHeight
+    context.fillStyle = '#ffffff'
+    context.fillRect(0, 0, currentWidth, currentHeight)
+    context.drawImage(image, 0, 0, currentWidth, currentHeight)
+
+    for (const quality of [0.9, 0.82, 0.74, 0.66, 0.58]) {
+      const candidateFile = await canvasToJpegFile(canvas, file.name, quality)
+      if (!bestFile || candidateFile.size < bestFile.size) bestFile = candidateFile
+      if (candidateFile.size <= MAX_CAMERA_UPLOAD_BYTES) return candidateFile
+    }
+
+    currentWidth = Math.max(1, Math.round(currentWidth * 0.85))
+    currentHeight = Math.max(1, Math.round(currentHeight * 0.85))
+  }
+
+  return bestFile
+}
 
 function loadStoredReceiptIds(storageKey) {
   try {
@@ -712,6 +788,7 @@ function CameraCaptureModal({
   onRetake,
   onCancel,
   isUploading,
+  error,
 }) {
   if (!isOpen) return null
 
@@ -731,6 +808,8 @@ function CameraCaptureModal({
           </div>
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isUploading}>Annuleren</Button>
         </div>
+
+        {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
 
         <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', minHeight: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           {draftUrl ? (
@@ -764,6 +843,7 @@ export default function KassaPage() {
   const [deletedReceiptIds, setDeletedReceiptIds] = useState(() => loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY))
   const [uploadMode, setUploadMode] = useState('manual')
   const [cameraDraft, setCameraDraft] = useState(null)
+  const [cameraError, setCameraError] = useState('')
   const [receiptInboxFocusId, setReceiptInboxFocusId] = useState('')
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
@@ -936,6 +1016,7 @@ export default function KassaPage() {
   }
 
   function openSourceHub() {
+    setCameraError('')
     setIsSourceHubOpen(true)
   }
 
@@ -961,13 +1042,16 @@ export default function KassaPage() {
     setUploadMode('camera_capture')
     setStatus('')
     setError('')
+    setCameraError('')
     setReceiptInboxFocusId('')
+    setIsSourceHubOpen(false)
     setTimeout(() => cameraInputRef.current?.click(), 0)
   }
 
   function handleCameraCaptureChange(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
+    setCameraError('')
     if (!file) {
       setUploadMode('manual')
       return
@@ -981,9 +1065,11 @@ export default function KassaPage() {
     if (!cameraDraft?.file) return
     setIsUploading(true)
     setError('')
+    setCameraError('')
     setStatus('')
     try {
-      const result = await uploadSharedReceiptFile(householdId, cameraDraft.file, 'camera_capture', 'Foto gemaakt in Rezzerv')
+      const preparedFile = await prepareCameraUploadFile(cameraDraft.file)
+      const result = await uploadSharedReceiptFile(householdId, preparedFile, 'camera_capture', 'Foto gemaakt in Rezzerv')
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
       clearCameraDraft()
@@ -1028,7 +1114,9 @@ export default function KassaPage() {
         // ignore scroll issues
       }
     } catch (err) {
-      setError(normalizeErrorMessage(err?.message) || 'Foto van kassabon kon niet worden verwerkt.')
+      const message = normalizeErrorMessage(err?.message) || 'Foto van kassabon kon niet worden verwerkt.'
+      setCameraError(message)
+      setError('')
     } finally {
       setIsUploading(false)
       setUploadMode('manual')
@@ -1036,11 +1124,13 @@ export default function KassaPage() {
   }
 
   function cancelCameraDraft() {
+    setCameraError('')
     clearCameraDraft()
     setUploadMode('manual')
   }
 
   function retakeCameraDraft() {
+    setCameraError('')
     clearCameraDraft()
     setUploadMode('camera_capture')
     setTimeout(() => cameraInputRef.current?.click(), 0)
@@ -1258,6 +1348,7 @@ export default function KassaPage() {
         onRetake={retakeCameraDraft}
         onCancel={cancelCameraDraft}
         isUploading={isUploading}
+        error={cameraError}
       />
     </AppShell>
   )
