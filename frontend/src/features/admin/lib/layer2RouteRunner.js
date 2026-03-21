@@ -16,6 +16,17 @@ function waitForCondition(check, timeout = WAIT_TIMEOUT, errorMessage = 'Timeout
     tick()
   })
 }
+function waitForAsyncCondition(check, timeout = WAIT_TIMEOUT, errorMessage = 'Timeout') {
+  const start = Date.now()
+  return new Promise((resolve, reject) => {
+    async function tick() {
+      try { const result = await check(); if (result) return resolve(result) } catch {}
+      if (Date.now() - start >= timeout) return reject(new Error(errorMessage))
+      window.setTimeout(tick, POLL_INTERVAL)
+    }
+    tick()
+  })
+}
 function removeExistingFrame() { const existing=document.getElementById(FRAME_ID); if (existing) existing.remove() }
 function createHiddenFrame() { removeExistingFrame(); const frame=document.createElement('iframe'); frame.id=FRAME_ID; frame.title='Layer 2 regression runner'; frame.setAttribute('aria-hidden','true'); Object.assign(frame.style,{position:'fixed',left:'-10000px',top:'0',width:'1440px',height:'900px',opacity:'0',pointerEvents:'none',border:'0',background:'#fff'}); document.body.appendChild(frame); return frame }
 function getFrameDocument(frame) { return frame.contentDocument || frame.contentWindow?.document || null }
@@ -49,6 +60,96 @@ async function requestJson(path, init = {}) {
   })
   if (!response.ok) throw new Error(`Request naar ${path} mislukte met status ${response.status}`)
   return response.json()
+}
+function queryButtonByText(doc, label) { return [...(doc?.querySelectorAll('button') || [])].find((entry) => entry.textContent?.trim() === label) || null }
+function buildRegressionReceiptEmailToken() { return `regressie-bon-${Date.now()}` }
+function buildRegressionReceiptEmailText(token) {
+  return [
+    'From: Rezzerv Test <regressie@rezzerv.local>',
+    `Subject: Rezzerv regressie ${token}`,
+    'Date: Sat, 21 Mar 2026 12:34:00 +0100',
+    'Content-Type: text/plain; charset=utf-8',
+    '',
+    `Lidl kassabon ${token}`,
+    'Kassabon',
+    'Datum 21-03-2026 12:34',
+    `${token} Mosterd 2,49`,
+    'Totaal 2,49',
+    '',
+  ].join('\\r\\n')
+}
+function createRegressionReceiptEmailFile(frame, token) {
+  const view = frame?.contentWindow || window
+  return new view.File([buildRegressionReceiptEmailText(token)], `${token}.eml`, { type: 'message/rfc822' })
+}
+function dispatchFileDrop(frame, target, file) {
+  const view = frame?.contentWindow || window
+  const dataTransfer = new view.DataTransfer()
+  dataTransfer.items.add(file)
+  for (const type of ['dragenter', 'dragover', 'drop']) {
+    const event = new view.Event(type, { bubbles: true, cancelable: true })
+    Object.defineProperty(event, 'dataTransfer', { value: dataTransfer })
+    target.dispatchEvent(event)
+  }
+}
+async function fetchKassaReceiptItems(householdId = '1') {
+  const data = await requestJson(`/api/receipts?householdId=${encodeURIComponent(householdId)}`)
+  return Array.isArray(data?.items) ? data.items : []
+}
+async function openKassaEmailSourceHub(frame) {
+  await navigateFrame(frame,'/kassa')
+  await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="kassa-page"]'), WAIT_TIMEOUT, 'kassa-page niet gevonden')
+  const doc=getFrameDocument(frame)
+  const addButton=doc.querySelector('[data-testid="kassa-add-receipt-button"]') || queryButtonByText(doc, 'Bon toevoegen')
+  if(!addButton) throw new Error('Bon toevoegen knop niet gevonden')
+  clickElement(addButton)
+  await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="kassa-email-dropzone"]'), WAIT_TIMEOUT, 'kassa-email-dropzone niet gevonden')
+  return getFrameDocument(frame)
+}
+async function importEmailReceiptViaDropzone(frame, token) {
+  const beforeItems = await fetchKassaReceiptItems('1')
+  const beforeIds = new Set(beforeItems.map((item) => String(item?.receipt_table_id || '')))
+  await openKassaEmailSourceHub(frame)
+  const dropzone = await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="kassa-email-dropzone"]'), WAIT_TIMEOUT, 'kassa-email-dropzone niet gevonden')
+  const file = createRegressionReceiptEmailFile(frame, token)
+  dispatchFileDrop(frame, dropzone, file)
+  const importedReceipt = await waitForAsyncCondition(async () => {
+    const items = await fetchKassaReceiptItems('1')
+    return items.find((item) => !beforeIds.has(String(item?.receipt_table_id || ''))) || null
+  }, WAIT_TIMEOUT, 'Nieuwe e-mailbon werd niet toegevoegd aan de inbox')
+  await waitForCondition(() => getFrameDocument(frame)?.querySelector(`[data-testid="kassa-row-${importedReceipt.receipt_table_id}"]`), WAIT_TIMEOUT, 'Nieuwe bonrij is niet zichtbaar in Kassa')
+  frame.__rezzervKassaReceiptFixture = { token, receiptTableId: String(importedReceipt.receipt_table_id), householdId: '1' }
+  return { beforeItems, importedReceipt }
+}
+async function triggerDuplicateEmailReceiptViaDropzone(frame, token, expectedReceiptId) {
+  const beforeItems = await fetchKassaReceiptItems('1')
+  await openKassaEmailSourceHub(frame)
+  const dropzone = await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="kassa-email-dropzone"]'), WAIT_TIMEOUT, 'kassa-email-dropzone niet gevonden')
+  const file = createRegressionReceiptEmailFile(frame, token)
+  dispatchFileDrop(frame, dropzone, file)
+  const duplicateFeedback = await waitForCondition(() => {
+    const doc = getFrameDocument(frame)
+    const element = doc?.querySelector('[data-testid="receipt-sourcehub-duplicate-feedback"]')
+    return element && element.textContent?.includes('al eerder toegevoegd') ? element : null
+  }, WAIT_TIMEOUT, 'Dubbele kassabonmelding werd niet zichtbaar')
+  const afterItems = await fetchKassaReceiptItems('1')
+  if (afterItems.length !== beforeItems.length) throw new Error('Duplicate import veranderde het aantal bonnen in de inbox')
+  if (expectedReceiptId && !afterItems.some((item) => String(item?.receipt_table_id || '') === String(expectedReceiptId))) throw new Error('Oorspronkelijke bon ontbreekt na duplicate import')
+  return duplicateFeedback
+}
+async function deleteReceiptViaKassa(frame, receiptTableId) {
+  await navigateFrame(frame,'/kassa')
+  const row = await waitForCondition(() => getFrameDocument(frame)?.querySelector(`[data-testid="kassa-row-${receiptTableId}"]`) || null, WAIT_TIMEOUT, `kassa-row-${receiptTableId} niet gevonden`)
+  const checkbox = row.querySelector('input[type="checkbox"]')
+  if (!checkbox) throw new Error('Selectiecheckbox voor bon ontbreekt')
+  nativeClick(checkbox)
+  const deleteButton = getFrameDocument(frame)?.querySelector('[data-testid="kassa-delete-selected-button"]') || queryButtonByText(getFrameDocument(frame), 'Verwijderen')
+  if (!deleteButton) throw new Error('Verwijderen-knop niet gevonden')
+  if (deleteButton.disabled) throw new Error('Verwijderen-knop bleef uitgeschakeld na selectie')
+  clickElement(deleteButton)
+  await waitForCondition(() => !getFrameDocument(frame)?.querySelector(`[data-testid="kassa-row-${receiptTableId}"]`), WAIT_TIMEOUT, 'Verwijderde bon bleef zichtbaar in Kassa')
+  const items = await fetchKassaReceiptItems('1')
+  if (items.some((item) => String(item?.receipt_table_id || '') === String(receiptTableId))) throw new Error('Verwijderde bon bleef aanwezig in de backendlijst')
 }
 async function prepareLayer2ReceiptFixture(frame, fixture) {
   if (frame.__rezzervLayer2ReceiptFixture) return frame.__rezzervLayer2ReceiptFixture
@@ -151,6 +252,9 @@ export async function runLayer2RouteTests() {
     await runScenario('R11 Voorraad → Artikeldetail → Archiveren → Voorraad werkt', async ()=>{ await navigateFrame(frame,'/voorraad'); const inventoryDoc=getFrameDocument(frame); const trigger=inventoryDoc.querySelector('[data-testid^="inventory-row-"]'); if(!trigger) throw new Error('Geen inventory-row-* gevonden'); const articleId=String(trigger.getAttribute('data-testid')||'').replace('inventory-row-',''); doubleClickElement(trigger); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-detail-page"]'), WAIT_TIMEOUT, 'article-detail-page niet gevonden'); const detailDoc=getFrameDocument(frame); const archiveButton=detailDoc.querySelector('[data-testid="article-archive-button"]'); if(!archiveButton) throw new Error('article-archive-button ontbreekt'); clickElement(archiveButton); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-archive-modal"]'), WAIT_TIMEOUT, 'article-archive-modal niet gevonden'); const confirmButton=getFrameDocument(frame)?.querySelector('[data-testid="article-archive-confirm"]'); if(!confirmButton) throw new Error('article-archive-confirm ontbreekt'); clickElement(confirmButton); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-archive-status"]')?.textContent?.includes('Gearchiveerd'), WAIT_TIMEOUT, 'Artikelstatus werd niet gearchiveerd'); await navigateFrame(frame,'/voorraad'); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="inventory-page"]'), WAIT_TIMEOUT, 'inventory-page niet gevonden na archiveren'); if(getFrameDocument(frame)?.querySelector(`[data-testid="inventory-row-${articleId}"]`)) throw new Error('Gearchiveerd artikel bleef zichtbaar in actieve voorraad') }, results)
     await runScenario('R12 Export-testdataset selectie activeert export op detailroute', async ()=>{ const exportFixture = await prepareReceiptExportFixture(frame); const targetBatchId = exportFixture.latestBatchId || exportFixture.batchId
     await navigateFrame(frame, `/winkels/batch/${encodeURIComponent(targetBatchId)}?fixture=export&t=${Date.now()}`); const detailDoc = await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]') ? getFrameDocument(frame) : null, WAIT_TIMEOUT, 'receipt-detail-page niet gevonden voor export-testdataset'); const lineSelect = detailDoc.querySelector(`[data-testid="receipt-line-select-${exportFixture.exportLineId}"]`); const exportButton=getReceiptExportButton(detailDoc); if(!lineSelect||!exportButton) throw new Error('Export-testdataset selectie of export ontbreekt'); if(lineSelect.disabled) throw new Error('Export-testdatasetregel is niet selecteerbaar'); if(exportButton.disabled !== true) throw new Error('receipt-export-button hoort initieel uitgeschakeld te zijn'); nativeClick(lineSelect); const activeExportButton=await waitForCondition(()=>{ const liveDoc=getFrameDocument(frame); const button=getReceiptExportButton(liveDoc); return button && button.disabled===false ? button : null }, WAIT_TIMEOUT, 'receipt-export-button werd niet actief na selectie in export-testdataset'); const exactLine=getFrameDocument(frame)?.querySelector(`[data-testid="receipt-line-select-${exportFixture.exportLineId}"]`); if(!exactLine?.checked) throw new Error('Export-testdatasetregel bleef niet geselecteerd'); if(String(activeExportButton.textContent||'').trim().toLowerCase()!=='exporteren') throw new Error('receipt-export-button heeft onverwachte labeltekst') }, results)
+    await runScenario('R13 Kassa importeert een .eml via de e-mail-dropzone', async ()=>{ const token = buildRegressionReceiptEmailToken(); const { importedReceipt } = await importEmailReceiptViaDropzone(frame, token); if (String(importedReceipt?.source_label || '').toLowerCase() !== 'e-mail') throw new Error('Nieuwe bon kreeg niet het bronlabel E-mail'); const statusMessage = await waitForCondition(() => { const doc = getFrameDocument(frame); return [...(doc?.querySelectorAll('.rz-inline-feedback--success') || [])].find((element) => element.textContent?.includes('E-mailbon ontvangen')) || null }, WAIT_TIMEOUT, 'Succesmelding voor e-mailimport niet zichtbaar'); if (!statusMessage.textContent?.includes('Bon-inbox')) throw new Error('Succesmelding noemt Bon-inbox niet') }, results)
+    await runScenario('R14 Kassa toont een melding bij een dubbele .eml-import zonder extra bon', async ()=>{ const fixtureState = frame.__rezzervKassaReceiptFixture || {}; if (!fixtureState.token || !fixtureState.receiptTableId) throw new Error('Kassa-fixture voor duplicate test ontbreekt'); const feedback = await triggerDuplicateEmailReceiptViaDropzone(frame, fixtureState.token, fixtureState.receiptTableId); if (!feedback.textContent?.includes('niet opnieuw geladen')) throw new Error('Dubbele kassabonmelding heeft onverwachte tekst'); if (!getFrameDocument(frame)?.querySelector('[data-testid="kassa-email-dropzone"]')) throw new Error('E-mailbron bleef niet open bij duplicate import') }, results)
+    await runScenario('R15 Verwijderen in Kassa maakt herimport van dezelfde .eml weer mogelijk', async ()=>{ const fixtureState = frame.__rezzervKassaReceiptFixture || {}; if (!fixtureState.token || !fixtureState.receiptTableId) throw new Error('Kassa-fixture voor verwijdertest ontbreekt'); await deleteReceiptViaKassa(frame, fixtureState.receiptTableId); const beforeReimport = await fetchKassaReceiptItems('1'); const beforeIds = new Set(beforeReimport.map((item) => String(item?.receipt_table_id || ''))); const { importedReceipt } = await importEmailReceiptViaDropzone(frame, fixtureState.token); if (beforeIds.has(String(importedReceipt?.receipt_table_id || ''))) throw new Error('Herimport na verwijderen leverde geen nieuwe bon op'); if (String(importedReceipt?.receipt_table_id || '') === String(fixtureState.receiptTableId)) throw new Error('Herimport na verwijderen hergebruikte onverwacht hetzelfde bon-id'); if (getFrameDocument(frame)?.querySelector('[data-testid="receipt-sourcehub-duplicate-feedback"]')) throw new Error('Herimport na verwijderen werd nog steeds als duplicate gemeld') }, results)
   } finally { removeExistingFrame() }
   return results
 }
