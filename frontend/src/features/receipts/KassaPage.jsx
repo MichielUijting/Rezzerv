@@ -159,12 +159,13 @@ async function uploadReceiptFile(householdId, file) {
 
 
 
-async function uploadSharedReceiptFile(householdId, file, sourceContext = 'shared_file') {
+async function uploadSharedReceiptFile(householdId, file, sourceContext = 'shared_file', sourceLabel = '') {
   const token = localStorage.getItem('rezzerv_token') || ''
   const formData = new FormData()
   formData.append('household_id', String(householdId))
   formData.append('file', file)
   formData.append('source_context', sourceContext)
+  if (sourceLabel) formData.append('source_label', sourceLabel)
 
   const response = await fetch('/api/receipts/share-import', {
     method: 'POST',
@@ -651,6 +652,7 @@ function ReceiptSourceHubModal({
   onClose,
   onChooseFile,
   onChooseSharedFile,
+  onChooseCamera,
 }) {
   if (!isOpen) return null
 
@@ -683,8 +685,8 @@ function ReceiptSourceHubModal({
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ fontSize: '20px', fontWeight: 700 }}>Foto maken</div>
-              <div style={{ color: '#667085' }}>Voeg een foto, screenshot of pdf van een kassabon toe via de bestaande importflow.</div>
-              <Button type="button" variant="primary" onClick={onChooseFile}>Foto of bestand kiezen</Button>
+              <div style={{ color: '#667085' }}>Maak direct in Rezzerv een foto van een papieren kassabon. Na bevestigen wordt deze via dezelfde bonketen verwerkt.</div>
+              <Button type="button" variant="primary" onClick={onChooseCamera}>Camera openen</Button>
             </div>
           </ScreenCard>
 
@@ -695,6 +697,51 @@ function ReceiptSourceHubModal({
               <div className="rz-inline-feedback rz-inline-feedback--warning">E-mailroute nog niet actief in deze versie.</div>
             </div>
           </ScreenCard>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+function CameraCaptureModal({
+  isOpen,
+  draftUrl,
+  onConfirm,
+  onRetake,
+  onCancel,
+  isUploading,
+}) {
+  if (!isOpen) return null
+
+  return (
+    <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', overflowY: 'auto', padding: '16px 20px 20px' }}>
+      <div
+        className="rz-modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="kassa-camera-title"
+        style={{ width: 'min(900px, 100%)', maxHeight: 'calc(100vh - 88px)', overflow: 'auto', padding: '24px', gap: '20px', marginTop: '0' }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div>
+            <h2 id="kassa-camera-title" className="rz-modal-title" style={{ fontSize: '22px' }}>Foto controleren</h2>
+            <p className="rz-modal-text">Controleer of de kassabon volledig zichtbaar is voordat je hem opslaat in Kassa.</p>
+          </div>
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={isUploading}>Annuleren</Button>
+        </div>
+
+        <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', minHeight: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
+          {draftUrl ? (
+            <img src={draftUrl} alt="Voorbeeld van gefotografeerde kassabon" style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '8px', background: '#fff' }} />
+          ) : (
+            <div style={{ color: '#667085' }}>Geen voorbeeld beschikbaar.</div>
+          )}
+        </div>
+
+        <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+          <Button type="button" variant="secondary" onClick={onRetake} disabled={isUploading}>Opnieuw</Button>
+          <Button type="button" variant="primary" onClick={onConfirm} disabled={isUploading}>{isUploading ? 'Opslaan…' : 'Bevestigen'}</Button>
         </div>
       </div>
     </div>
@@ -715,7 +762,18 @@ export default function KassaPage() {
   const [openedReceipt, setOpenedReceipt] = useState(null)
   const [deletedReceiptIds, setDeletedReceiptIds] = useState(() => loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY))
   const [uploadMode, setUploadMode] = useState('manual')
+  const [cameraDraft, setCameraDraft] = useState(null)
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
+
+
+  useEffect(() => {
+    return () => {
+      if (cameraDraft?.previewUrl) {
+        window.URL.revokeObjectURL(cameraDraft.previewUrl)
+      }
+    }
+  }, [cameraDraft])
 
   function deleteSelectedReceipts() {
     if (selectedReceiptIds.length === 0) return
@@ -881,6 +939,72 @@ export default function KassaPage() {
     setTimeout(() => fileInputRef.current?.click(), 0)
   }
 
+
+  function clearCameraDraft() {
+    setCameraDraft((current) => {
+      if (current?.previewUrl) window.URL.revokeObjectURL(current.previewUrl)
+      return null
+    })
+  }
+
+  function handleChooseCameraFromHub() {
+    setUploadMode('camera_capture')
+    setStatus('')
+    setError('')
+    setTimeout(() => cameraInputRef.current?.click(), 0)
+  }
+
+  function handleCameraCaptureChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) {
+      setUploadMode('manual')
+      return
+    }
+    clearCameraDraft()
+    const previewUrl = window.URL.createObjectURL(file)
+    setCameraDraft({ file, previewUrl })
+  }
+
+  async function confirmCameraDraft() {
+    if (!cameraDraft?.file) return
+    setIsUploading(true)
+    setError('')
+    setStatus('')
+    try {
+      const result = await uploadSharedReceiptFile(householdId, cameraDraft.file, 'camera_capture', 'Foto gemaakt in Rezzerv')
+      await loadReceipts(householdId)
+      if (result?.receipt_table_id) {
+        await openReceiptDetail(result.receipt_table_id)
+      }
+      clearCameraDraft()
+      setIsSourceHubOpen(false)
+      if (result?.duplicate) {
+        setStatus('Deze bon was al aanwezig en is niet opnieuw toegevoegd.')
+      } else if (result?.receipt_table_id) {
+        setStatus(`Foto verwerkt met status: ${parseStatusLabel(result.parse_status)}`)
+      } else {
+        setStatus('Foto opgeslagen, maar nog niet als bruikbare kassabon herkend.')
+      }
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'Foto van kassabon kon niet worden verwerkt.')
+    } finally {
+      setIsUploading(false)
+      setUploadMode('manual')
+    }
+  }
+
+  function cancelCameraDraft() {
+    clearCameraDraft()
+    setUploadMode('manual')
+  }
+
+  function retakeCameraDraft() {
+    clearCameraDraft()
+    setUploadMode('camera_capture')
+    setTimeout(() => cameraInputRef.current?.click(), 0)
+  }
+
   async function handleUploadChange(event) {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -940,6 +1064,14 @@ export default function KassaPage() {
                   accept=".pdf,.png,.jpg,.jpeg"
                   style={{ display: 'none' }}
                   onChange={handleUploadChange}
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  style={{ display: 'none' }}
+                  onChange={handleCameraCaptureChange}
                 />
                 <Button type="button" variant="primary" onClick={openSourceHub} disabled={isUploading}>{isUploading ? 'Uploaden…' : 'Bon toevoegen'}</Button>
               </div>
@@ -1072,6 +1204,16 @@ export default function KassaPage() {
         onClose={() => setIsSourceHubOpen(false)}
         onChooseFile={handleChooseFileFromHub}
         onChooseSharedFile={handleChooseSharedFileFromHub}
+        onChooseCamera={handleChooseCameraFromHub}
+      />
+
+      <CameraCaptureModal
+        isOpen={Boolean(cameraDraft)}
+        draftUrl={cameraDraft?.previewUrl || ''}
+        onConfirm={confirmCameraDraft}
+        onRetake={retakeCameraDraft}
+        onCancel={cancelCameraDraft}
+        isUploading={isUploading}
       />
     </AppShell>
   )
