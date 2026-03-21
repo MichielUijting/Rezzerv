@@ -19,6 +19,8 @@ services:
     environment:
       DATABASE_URL: sqlite:////app/data/rezzerv.db
       PYTHONUNBUFFERED: "1"
+      # Stel later een echt maildomein in, bijvoorbeeld bon.rezzerv.nl, zodra forwarding live staat.
+      REZZERV_RECEIPT_EMAIL_DOMAIN: ${REZZERV_RECEIPT_EMAIL_DOMAIN:-rezzerv.local}
     volumes:
       - sqlite_data:/app/data
     depends_on:

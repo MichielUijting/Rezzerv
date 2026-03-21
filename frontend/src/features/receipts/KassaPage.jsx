@@ -301,6 +301,20 @@ async function fetchReceiptSources(householdId) {
   return fetchJson(`/api/receipt-sources?householdId=${encodeURIComponent(householdId)}`)
 }
 
+async function fetchGmailConnectionStatus(householdId) {
+  return fetchJson(`/api/receipt-sources/gmail-status?householdId=${encodeURIComponent(householdId)}`)
+}
+
+async function fetchGmailConnectUrl(householdId, frontendOrigin) {
+  return fetchJson(`/api/receipts/gmail/connect-url?householdId=${encodeURIComponent(householdId)}&frontendOrigin=${encodeURIComponent(frontendOrigin || window.location.origin)}`)
+}
+
+async function syncGmailMailbox(householdId) {
+  return fetchJson(`/api/receipts/gmail/sync?householdId=${encodeURIComponent(householdId)}`, {
+    method: 'POST',
+  })
+}
+
 async function createReceiptSource(payload) {
   return fetchJson('/api/receipt-sources', {
     method: 'POST',
@@ -766,7 +780,6 @@ function ReceiptDetailView({ receipt }) {
 function ReceiptSourceHubModal({
   isOpen,
   onClose,
-  onChooseFile,
   onChooseSharedFile,
   onChooseCamera,
   onChooseEmail,
@@ -777,6 +790,15 @@ function ReceiptSourceHubModal({
   isUploading,
 }) {
   if (!isOpen) return null
+
+  const routeAddress = emailRoute?.route_address || '-'
+  const routeIsPublic = Boolean(emailRoute?.route_is_public)
+  const routeDomain = emailRoute?.route_domain || ''
+  const forwardingStatusLabel = isEmailRouteLoading
+    ? 'Doorstuuradres laden…'
+    : routeIsPublic
+      ? 'Forwarding-ready adres'
+      : 'Lokale demo-opstelling'
 
   return (
     <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', overflowY: 'auto', padding: '16px 20px 20px' }}>
@@ -815,17 +837,47 @@ function ReceiptSourceHubModal({
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ fontSize: '20px', fontWeight: 700 }}>E-mail doorsturen</div>
-              <div style={{ color: '#667085' }}>Stuur een kassabonmail door naar jouw persoonlijke Rezzerv-adres. Voor lokale tests importeer je in deze versie een doorgestuurde mail als <strong>.eml</strong>-bestand.</div>
+              <div style={{ color: '#667085' }}>Laat kassabonmails automatisch doorsturen naar je persoonlijke Rezzerv-adres. Gebruik in Gmail of Outlook een regel/filter voor kassabonnen. De handmatige <strong>.eml</strong>-import blijft beschikbaar als fallback.</div>
               <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
-                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Jouw Rezzerv e-mailroute</div>
+                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Status</div>
+                <div style={{ fontSize: '15px', fontWeight: 700 }}>{forwardingStatusLabel}</div>
+                <div style={{ fontSize: '13px', color: '#667085' }}>
+                  {routeIsPublic
+                    ? 'Dit adres is klaar voor echte automatische forwarding zodra het gekoppelde maildomein live is ingericht.'
+                    : `Deze lokale build gebruikt nu ${routeDomain || 'een lokaal domein'}. Daardoor werkt automatisch ontvangen nog niet rechtstreeks vanaf internetmail. Gebruik voorlopig .eml als fallback.`}
+                </div>
+              </div>
+              <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
+                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Persoonlijk Rezzerv-adres</div>
                 <div style={{ fontSize: '15px', fontWeight: 700, wordBreak: 'break-all' }}>
-                  {isEmailRouteLoading ? 'E-mailroute laden…' : emailRoute?.route_address || '-'}
+                  {isEmailRouteLoading ? 'E-mailroute laden…' : routeAddress}
+                </div>
+              </div>
+              <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '10px' }}>
+                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Zo stel je forwarding in</div>
+                <div style={{ display: 'grid', gap: '10px', color: '#344054', fontSize: '14px' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: '4px' }}>Gmail</div>
+                    <ol style={{ margin: 0, paddingLeft: '20px', display: 'grid', gap: '4px' }}>
+                      <li>Open Gmail instellingen en voeg dit Rezzerv-adres toe als doorstuuradres.</li>
+                      <li>Bevestig het adres wanneer Gmail daar om vraagt.</li>
+                      <li>Maak daarna een filter voor kassabonmails en kies als actie: doorsturen naar Rezzerv.</li>
+                    </ol>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: '4px' }}>Outlook</div>
+                    <ol style={{ margin: 0, paddingLeft: '20px', display: 'grid', gap: '4px' }}>
+                      <li>Open regels in Outlook.</li>
+                      <li>Maak een regel voor kassabonmails of bekende winkels.</li>
+                      <li>Kies als actie: doorsturen of redirecten naar dit Rezzerv-adres.</li>
+                    </ol>
+                  </div>
                 </div>
               </div>
               {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
               <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
                 <Button type="button" variant="secondary" onClick={onCopyEmailRoute} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>Adres kopiëren</Button>
-                <Button type="button" variant="primary" onClick={onChooseEmail} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>E-mailbestand kiezen</Button>
+                <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>Fallback: e-mailbestand kiezen</Button>
               </div>
             </div>
           </ScreenCard>
@@ -1008,6 +1060,7 @@ export default function KassaPage() {
     return () => window.clearTimeout(timeoutId)
   }, [receiptInboxFocusId])
 
+
   useEffect(() => {
     const visibleIds = new Set(receipts.map((receipt) => receipt.receipt_table_id))
     setSelectedReceiptIds((current) => current.filter((id) => visibleIds.has(id)))
@@ -1091,6 +1144,9 @@ export default function KassaPage() {
     }
   }
 
+
+
+
   function openSourceHub() {
     setCameraError('')
     setEmailRouteError('')
@@ -1132,6 +1188,7 @@ export default function KassaPage() {
     setError('')
     setEmailRouteError('')
     setReceiptInboxFocusId('')
+    setIsSourceHubOpen(false)
     setTimeout(() => emailInputRef.current?.click(), 0)
   }
 
@@ -1510,7 +1567,6 @@ export default function KassaPage() {
       <ReceiptSourceHubModal
         isOpen={isSourceHubOpen}
         onClose={() => setIsSourceHubOpen(false)}
-        onChooseFile={handleChooseFileFromHub}
         onChooseSharedFile={handleChooseSharedFileFromHub}
         onChooseCamera={handleChooseCameraFromHub}
         onChooseEmail={handleChooseEmailFromHub}

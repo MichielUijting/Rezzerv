@@ -491,7 +491,7 @@ def _store_raw_file(storage_root: Path, household_id: str, raw_receipt_id: str, 
     return str(target_path)
 
 
-def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None, reject_non_receipt: bool = False) -> dict[str, Any]:
+def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None, reject_non_receipt: bool = False, create_failed_receipt_table: bool = False, failed_store_name: str | None = None, failed_purchase_at: str | None = None) -> dict[str, Any]:
     detected_mime = detect_mime_type(filename, file_bytes, mime_type)
     digest = sha256_hex(file_bytes)
     with engine.begin() as conn:
@@ -540,8 +540,15 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             },
         )
         receipt_table_id = None
-        if parse_result.is_receipt:
+        if parse_result.is_receipt or create_failed_receipt_table:
             receipt_table_id = uuid.uuid4().hex
+            table_store_name = parse_result.store_name if parse_result.is_receipt else failed_store_name
+            table_purchase_at = parse_result.purchase_at if parse_result.is_receipt else failed_purchase_at
+            table_total_amount = _amount_to_float(parse_result.total_amount) if parse_result.is_receipt else None
+            table_currency = parse_result.currency if parse_result.currency else 'EUR'
+            table_parse_status = parse_result.parse_status if parse_result.is_receipt else 'failed'
+            table_confidence = parse_result.confidence_score
+            table_line_count = len(parse_result.lines) if parse_result.is_receipt else 0
             conn.execute(
                 text(
                     '''
@@ -556,44 +563,45 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                     'id': receipt_table_id,
                     'raw_receipt_id': raw_receipt_id,
                     'household_id': household_id,
-                    'store_name': parse_result.store_name,
-                    'store_branch': parse_result.store_branch,
-                    'purchase_at': parse_result.purchase_at,
-                    'total_amount': _amount_to_float(parse_result.total_amount),
-                    'currency': parse_result.currency,
-                    'parse_status': parse_result.parse_status,
-                    'confidence_score': parse_result.confidence_score,
-                    'line_count': len(parse_result.lines),
+                    'store_name': table_store_name,
+                    'store_branch': parse_result.store_branch if parse_result.is_receipt else None,
+                    'purchase_at': table_purchase_at,
+                    'total_amount': table_total_amount,
+                    'currency': table_currency,
+                    'parse_status': table_parse_status,
+                    'confidence_score': table_confidence,
+                    'line_count': table_line_count,
                 },
             )
-            for index, line in enumerate(parse_result.lines):
-                conn.execute(
-                    text(
-                        '''
-                        INSERT INTO receipt_table_lines (
-                            id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score
-                        ) VALUES (
-                            :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score
-                        )
-                        '''
-                    ),
-                    {
-                        'id': uuid.uuid4().hex,
-                        'receipt_table_id': receipt_table_id,
-                        'line_index': index,
-                        'raw_label': line['raw_label'],
-                        'normalized_label': line.get('normalized_label'),
-                        'quantity': line.get('quantity'),
-                        'unit': line.get('unit'),
-                        'unit_price': line.get('unit_price'),
-                        'line_total': line.get('line_total'),
-                        'discount_amount': line.get('discount_amount'),
-                        'barcode': line.get('barcode'),
-                        'article_match_status': 'unmatched',
-                        'matched_article_id': None,
-                        'confidence_score': line.get('confidence_score'),
-                    },
-                )
+            if parse_result.is_receipt:
+                for index, line in enumerate(parse_result.lines):
+                    conn.execute(
+                        text(
+                            '''
+                            INSERT INTO receipt_table_lines (
+                                id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id, confidence_score
+                            ) VALUES (
+                                :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit, :unit_price, :line_total, :discount_amount, :barcode, :article_match_status, :matched_article_id, :confidence_score
+                            )
+                            '''
+                        ),
+                        {
+                            'id': uuid.uuid4().hex,
+                            'receipt_table_id': receipt_table_id,
+                            'line_index': index,
+                            'raw_label': line['raw_label'],
+                            'normalized_label': line.get('normalized_label'),
+                            'quantity': line.get('quantity'),
+                            'unit': line.get('unit'),
+                            'unit_price': line.get('unit_price'),
+                            'line_total': line.get('line_total'),
+                            'discount_amount': line.get('discount_amount'),
+                            'barcode': line.get('barcode'),
+                            'article_match_status': 'unmatched',
+                            'matched_article_id': None,
+                            'confidence_score': line.get('confidence_score'),
+                        },
+                    )
         return {
             'raw_receipt_id': raw_receipt_id,
             'receipt_table_id': receipt_table_id,

@@ -1,18 +1,26 @@
 from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
+import base64
+import hashlib
+import hmac
+import html
 import json
 import os
 from pathlib import Path
+import secrets
 import traceback
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 import re
 from typing import Any, List, Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
 from app.services.receipt_service import ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, reparse_receipt, scan_receipt_source, serialize_receipt_row
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses, parsedate_to_datetime
@@ -23,6 +31,23 @@ app = FastAPI()
 logger = logging.getLogger('rezzerv.api')
 RECEIPT_STORAGE_ROOT = Path(os.getenv('RECEIPT_STORAGE_ROOT', '/app/data/receipts/raw'))
 
+GMAIL_OAUTH_CLIENT_ID = os.getenv('REZZERV_GMAIL_CLIENT_ID', '').strip()
+GMAIL_OAUTH_CLIENT_SECRET = os.getenv('REZZERV_GMAIL_CLIENT_SECRET', '').strip()
+GMAIL_OAUTH_REDIRECT_URI = os.getenv('REZZERV_GMAIL_REDIRECT_URI', '').strip()
+GMAIL_OAUTH_SCOPES = tuple(
+    scope.strip()
+    for scope in os.getenv(
+        'REZZERV_GMAIL_SCOPES',
+        'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.labels',
+    ).split()
+    if scope.strip()
+)
+GMAIL_STATE_SECRET = (os.getenv('REZZERV_GMAIL_STATE_SECRET', 'rezzerv-gmail-dev-secret') or 'rezzerv-gmail-dev-secret').encode('utf-8')
+GMAIL_DEFAULT_LABEL_NAME = os.getenv('REZZERV_GMAIL_LABEL_NAME', 'Rezzerv/Bonnen').strip() or 'Rezzerv/Bonnen'
+GMAIL_SYNC_BATCH_SIZE = max(1, min(int(os.getenv('REZZERV_GMAIL_SYNC_BATCH_SIZE', '25') or '25'), 100))
+RECEIPT_EMAIL_DOMAIN = (os.getenv('REZZERV_RECEIPT_EMAIL_DOMAIN', 'rezzerv.local') or 'rezzerv.local').strip() or 'rezzerv.local'
+
+
 
 @app.exception_handler(Exception)
 async def unhandled_api_exception_handler(request: Request, exc: Exception):
@@ -30,6 +55,12 @@ async def unhandled_api_exception_handler(request: Request, exc: Exception):
         logger.exception('Onverwerkte API-fout op %s', request.url.path)
         return JSONResponse(status_code=500, content={'detail': 'Interne serverfout in de API'})
     raise exc
+
+def normalize_api_error_message(value: Any, fallback: str = 'Verzoek mislukt') -> str:
+    if value is None:
+        return fallback
+    message = str(value).strip()
+    return message or fallback
 
 # In-memory opslag (MVP login)
 households = {}
@@ -1340,6 +1371,55 @@ def ensure_release_932_schema():
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_email_messages_household_received ON receipt_email_messages (household_id, received_at DESC)"))
 
 
+def ensure_release_933_schema():
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS receipt_gmail_accounts (
+                    household_id TEXT PRIMARY KEY,
+                    source_id TEXT,
+                    google_email TEXT,
+                    google_user_sub TEXT,
+                    label_name TEXT NOT NULL,
+                    label_id TEXT,
+                    access_token TEXT,
+                    refresh_token TEXT,
+                    token_expires_at DATETIME,
+                    sync_status TEXT NOT NULL DEFAULT 'not_connected',
+                    last_synced_at DATETIME,
+                    last_error TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS receipt_gmail_imports (
+                    id TEXT PRIMARY KEY,
+                    household_id TEXT NOT NULL,
+                    gmail_message_id TEXT NOT NULL,
+                    gmail_thread_id TEXT,
+                    gmail_history_id TEXT,
+                    gmail_internal_date DATETIME,
+                    raw_receipt_id TEXT,
+                    receipt_table_id TEXT,
+                    import_status TEXT NOT NULL DEFAULT 'imported',
+                    error_message TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        )
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_gmail_imports_household_message ON receipt_gmail_imports (household_id, gmail_message_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_gmail_accounts_sync ON receipt_gmail_accounts (sync_status, last_synced_at DESC)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_gmail_imports_household_created ON receipt_gmail_imports (household_id, created_at DESC)"))
+
+
 def ensure_receipt_storage_root():
     RECEIPT_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -2188,6 +2268,8 @@ def build_receipt_source_response(row):
     status_label = 'Actief' if item.get('is_active') else 'Inactief'
     if source_type == 'email':
         status_label = 'E-mailroute'
+    elif source_type == 'gmail_label':
+        status_label = 'Gmail-label'
     elif source_type == 'customer_card':
         status_label = 'Voorbereidende koppeling'
     if source_type == 'barcode_fallback':
@@ -2235,8 +2317,9 @@ def list_receipt_sources_for_household(household_id: str):
                         WHEN 'scan_folder' THEN 2
                         WHEN 'watched_folder' THEN 3
                         WHEN 'email' THEN 4
-                        WHEN 'customer_card' THEN 5
-                        WHEN 'barcode_fallback' THEN 6
+                        WHEN 'gmail_label' THEN 5
+                        WHEN 'customer_card' THEN 6
+                        WHEN 'barcode_fallback' THEN 7
                         ELSE 9
                     END,
                     label COLLATE NOCASE ASC
@@ -2306,9 +2389,20 @@ def create_receipt_source(payload: ReceiptSourceCreateRequest):
     return build_receipt_source_response(row)
 
 
+def is_public_receipt_email_domain(domain: str) -> bool:
+    domain_value = str(domain or '').strip().lower()
+    if not domain_value:
+        return False
+    if domain_value in {'localhost', 'rezzerv.local'}:
+        return False
+    if domain_value.endswith('.local') or domain_value.endswith('.localhost') or domain_value.endswith('.invalid'):
+        return False
+    return '.' in domain_value
+
+
 def build_household_email_address(household_id: str) -> str:
     normalized_household_id = sanitize_source_slug(str(household_id or '1'))
-    return f"bon+{normalized_household_id}@rezzerv.local"
+    return f"bon+{normalized_household_id}@{RECEIPT_EMAIL_DOMAIN}"
 
 
 def ensure_household_email_source(household_id: str):
@@ -2364,7 +2458,551 @@ def ensure_household_email_source(household_id: str):
         ).mappings().first()
     item = build_receipt_source_response(refreshed)
     item['route_address'] = route_address
+    item['route_domain'] = RECEIPT_EMAIL_DOMAIN
+    item['route_is_public'] = is_public_receipt_email_domain(RECEIPT_EMAIL_DOMAIN)
+    item['delivery_mode'] = 'forwarding_ready' if item['route_is_public'] else 'local_demo'
     return item
+
+
+def ensure_household_gmail_source(household_id: str):
+    effective_household_id = str(household_id or '1').strip() or '1'
+    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    label_name = GMAIL_DEFAULT_LABEL_NAME
+    source_id = f'{effective_household_id}-gmail-label'
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
+                FROM receipt_sources
+                WHERE household_id = :household_id AND type = 'gmail_label'
+                ORDER BY CASE WHEN id = :preferred_id THEN 0 ELSE 1 END, created_at ASC
+                LIMIT 1
+                """
+            ),
+            {'household_id': effective_household_id, 'preferred_id': source_id},
+        ).mappings().first()
+        if row:
+            source_id = row['id']
+            conn.execute(
+                text(
+                    """
+                    UPDATE receipt_sources
+                    SET label = :label, source_path = :source_path, is_active = 1, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :id
+                    """
+                ),
+                {'id': source_id, 'label': 'E-mail', 'source_path': label_name},
+            )
+        else:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
+                    VALUES (:id, :household_id, 'gmail_label', :label, :source_path, 1)
+                    """
+                ),
+                {'id': source_id, 'household_id': effective_household_id, 'label': 'E-mail', 'source_path': label_name},
+            )
+        refreshed = conn.execute(
+            text(
+                """
+                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
+                FROM receipt_sources
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {'id': source_id},
+        ).mappings().first()
+    item = build_receipt_source_response(refreshed)
+    item['gmail_label_name'] = label_name
+    return item
+
+
+def gmail_is_configured() -> bool:
+    return bool(GMAIL_OAUTH_CLIENT_ID and GMAIL_OAUTH_CLIENT_SECRET)
+
+
+def resolve_gmail_redirect_uri(request: Request | None = None) -> str:
+    if GMAIL_OAUTH_REDIRECT_URI:
+        return GMAIL_OAUTH_REDIRECT_URI
+    if request is None:
+        raise HTTPException(status_code=503, detail='De Gmail redirect-URI is nog niet geconfigureerd.')
+    return f"{str(request.base_url).rstrip('/')}/api/receipts/gmail/callback"
+
+
+def sign_gmail_state(payload: dict[str, Any]) -> str:
+    serialized = json.dumps(payload, separators=(',', ':'), sort_keys=True).encode('utf-8')
+    signature = hmac.new(GMAIL_STATE_SECRET, serialized, hashlib.sha256).hexdigest()
+    encoded = base64.urlsafe_b64encode(serialized).decode('ascii').rstrip('=')
+    return f'{encoded}.{signature}'
+
+
+def verify_gmail_state(state_token: str) -> dict[str, Any]:
+    if not state_token or '.' not in state_token:
+        raise HTTPException(status_code=400, detail='Ongeldige Gmail-state ontvangen.')
+    encoded, provided_signature = state_token.rsplit('.', 1)
+    padding = '=' * (-len(encoded) % 4)
+    try:
+        serialized = base64.urlsafe_b64decode(f'{encoded}{padding}'.encode('ascii'))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail='Gmail-state kon niet worden gelezen.') from exc
+    expected_signature = hmac.new(GMAIL_STATE_SECRET, serialized, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(provided_signature, expected_signature):
+        raise HTTPException(status_code=400, detail='Gmail-state is ongeldig of verlopen.')
+    try:
+        payload = json.loads(serialized.decode('utf-8'))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail='Gmail-state bevat ongeldige gegevens.') from exc
+    if str(payload.get('provider') or '') != 'gmail':
+        raise HTTPException(status_code=400, detail='Onbekende OAuth-provider.')
+    return payload
+
+
+def gmail_datetime_from_timestamp(value: Any) -> str | None:
+    try:
+        if value is None or value == '':
+            return None
+        if isinstance(value, (int, float)):
+            dt = datetime.fromtimestamp(float(value), tz=timezone.utc)
+        else:
+            value_str = str(value).strip()
+            if not value_str:
+                return None
+            if value_str.isdigit():
+                dt = datetime.fromtimestamp(int(value_str) / 1000, tz=timezone.utc)
+            else:
+                dt = datetime.fromisoformat(value_str.replace('Z', '+00:00'))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat()
+    except Exception:
+        return None
+
+
+def parse_gmail_token_expiry(expires_in: Any) -> str | None:
+    try:
+        seconds = int(expires_in)
+    except Exception:
+        return None
+    dt = datetime.now(timezone.utc) + timedelta(seconds=max(0, seconds - 60))
+    return dt.replace(microsecond=0).isoformat()
+
+
+def gmail_json_request(url: str, method: str = 'GET', *, headers: Optional[dict[str, str]] = None, data: Any = None, timeout: float = 30.0) -> dict[str, Any]:
+    request_headers = {'Accept': 'application/json', **(headers or {})}
+    payload = None
+    if data is not None:
+        if isinstance(data, (bytes, bytearray)):
+            payload = bytes(data)
+        else:
+            payload = json.dumps(data).encode('utf-8')
+            request_headers.setdefault('Content-Type', 'application/json')
+    request_obj = urllib.request.Request(url, data=payload, headers=request_headers, method=method)
+    try:
+        with urllib.request.urlopen(request_obj, timeout=timeout) as response:
+            body = response.read()
+            if not body:
+                return {}
+            return json.loads(body.decode('utf-8'))
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode('utf-8', errors='ignore')
+        detail = None
+        try:
+            parsed = json.loads(body)
+            detail = parsed.get('error_description') or (parsed.get('error') if isinstance(parsed.get('error'), str) else None)
+            if isinstance(parsed.get('error'), dict):
+                detail = parsed['error'].get('message') or detail
+        except Exception:
+            detail = body.strip() or exc.reason
+        raise HTTPException(status_code=502, detail=f'Gmail-API fout: {detail or exc.reason}') from exc
+    except urllib.error.URLError as exc:
+        raise HTTPException(status_code=502, detail=f'Gmail-API is niet bereikbaar: {exc.reason}') from exc
+
+
+def gmail_form_request(url: str, data: dict[str, Any]) -> dict[str, Any]:
+    encoded = urllib.parse.urlencode({key: value for key, value in data.items() if value is not None}).encode('utf-8')
+    request_obj = urllib.request.Request(url, data=encoded, headers={'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json'}, method='POST')
+    try:
+        with urllib.request.urlopen(request_obj, timeout=30.0) as response:
+            body = response.read()
+            return json.loads(body.decode('utf-8')) if body else {}
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode('utf-8', errors='ignore')
+        detail = None
+        try:
+            parsed = json.loads(body)
+            detail = parsed.get('error_description') or parsed.get('error')
+        except Exception:
+            detail = body.strip() or exc.reason
+        raise HTTPException(status_code=502, detail=f'Google OAuth fout: {detail or exc.reason}') from exc
+    except urllib.error.URLError as exc:
+        raise HTTPException(status_code=502, detail=f'Google OAuth is niet bereikbaar: {exc.reason}') from exc
+
+
+def upsert_receipt_gmail_account(household_id: str, values: dict[str, Any]):
+    effective_household_id = str(household_id or '1').strip() or '1'
+    gmail_source = ensure_household_gmail_source(effective_household_id)
+    current = get_receipt_gmail_account(effective_household_id, create_if_missing=False)
+    merged = {
+        'household_id': effective_household_id,
+        'source_id': gmail_source['id'],
+        'google_email': current.get('google_email'),
+        'google_user_sub': current.get('google_user_sub'),
+        'label_name': current.get('label_name') or GMAIL_DEFAULT_LABEL_NAME,
+        'label_id': current.get('label_id'),
+        'access_token': current.get('access_token'),
+        'refresh_token': current.get('refresh_token'),
+        'token_expires_at': current.get('token_expires_at'),
+        'sync_status': current.get('sync_status') or 'not_connected',
+        'last_synced_at': current.get('last_synced_at'),
+        'last_error': current.get('last_error'),
+    }
+    merged.update({key: value for key, value in values.items() if key in merged})
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO receipt_gmail_accounts (
+                    household_id, source_id, google_email, google_user_sub, label_name, label_id,
+                    access_token, refresh_token, token_expires_at, sync_status, last_synced_at, last_error, updated_at
+                ) VALUES (
+                    :household_id, :source_id, :google_email, :google_user_sub, :label_name, :label_id,
+                    :access_token, :refresh_token, :token_expires_at, :sync_status, :last_synced_at, :last_error, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT(household_id) DO UPDATE SET
+                    source_id = excluded.source_id,
+                    google_email = excluded.google_email,
+                    google_user_sub = excluded.google_user_sub,
+                    label_name = excluded.label_name,
+                    label_id = excluded.label_id,
+                    access_token = excluded.access_token,
+                    refresh_token = excluded.refresh_token,
+                    token_expires_at = excluded.token_expires_at,
+                    sync_status = excluded.sync_status,
+                    last_synced_at = excluded.last_synced_at,
+                    last_error = excluded.last_error,
+                    updated_at = CURRENT_TIMESTAMP
+                """
+            ),
+            merged,
+        )
+    return get_receipt_gmail_account(effective_household_id, create_if_missing=True)
+
+
+def build_receipt_gmail_account_response(row: dict[str, Any] | None, household_id: str) -> dict[str, Any]:
+    gmail_source = ensure_household_gmail_source(household_id)
+    item = serialize_receipt_row(dict(row or {}))
+    item['household_id'] = str(household_id or '1')
+    item['source_id'] = item.get('source_id') or gmail_source['id']
+    item['label_name'] = item.get('label_name') or GMAIL_DEFAULT_LABEL_NAME
+    item['configured'] = gmail_is_configured()
+    item['connected'] = bool(item.get('refresh_token') or item.get('access_token'))
+    item['source_label'] = gmail_source.get('label', 'E-mail')
+    item['sync_status'] = item.get('sync_status') or ('ready' if item['connected'] else 'not_connected')
+    return item
+
+
+def get_receipt_gmail_account(household_id: str, create_if_missing: bool = True) -> dict[str, Any]:
+    effective_household_id = str(household_id or '1').strip() or '1'
+    if create_if_missing:
+        ensure_household_gmail_source(effective_household_id)
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT household_id, source_id, google_email, google_user_sub, label_name, label_id,
+                       access_token, refresh_token, token_expires_at, sync_status, last_synced_at, last_error,
+                       created_at, updated_at
+                FROM receipt_gmail_accounts
+                WHERE household_id = :household_id
+                LIMIT 1
+                """
+            ),
+            {'household_id': effective_household_id},
+        ).mappings().first()
+    if not row and create_if_missing:
+        row = upsert_receipt_gmail_account(effective_household_id, {'label_name': GMAIL_DEFAULT_LABEL_NAME, 'sync_status': 'not_connected'})
+        return row
+    return build_receipt_gmail_account_response(row, effective_household_id)
+
+
+def build_gmail_connect_url(household_id: str, redirect_uri: str, frontend_origin: str | None = None) -> str:
+    state_payload = {
+        'provider': 'gmail',
+        'household_id': str(household_id or '1'),
+        'frontend_origin': (frontend_origin or '').strip() or None,
+        'nonce': secrets.token_urlsafe(12),
+    }
+    query = {
+        'client_id': GMAIL_OAUTH_CLIENT_ID,
+        'redirect_uri': redirect_uri,
+        'response_type': 'code',
+        'scope': ' '.join(GMAIL_OAUTH_SCOPES),
+        'access_type': 'offline',
+        'prompt': 'consent',
+        'include_granted_scopes': 'true',
+        'state': sign_gmail_state(state_payload),
+    }
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{urllib.parse.urlencode(query)}"
+
+
+def exchange_gmail_code_for_tokens(code: str, redirect_uri: str) -> dict[str, Any]:
+    return gmail_form_request(
+        'https://oauth2.googleapis.com/token',
+        {
+            'code': code,
+            'client_id': GMAIL_OAUTH_CLIENT_ID,
+            'client_secret': GMAIL_OAUTH_CLIENT_SECRET,
+            'redirect_uri': redirect_uri,
+            'grant_type': 'authorization_code',
+        },
+    )
+
+
+def refresh_gmail_access_token(account: dict[str, Any]) -> dict[str, Any]:
+    refresh_token = str(account.get('refresh_token') or '').strip()
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail='Deze Gmail-koppeling heeft geen refresh-token. Koppel Gmail opnieuw.')
+    tokens = gmail_form_request(
+        'https://oauth2.googleapis.com/token',
+        {
+            'client_id': GMAIL_OAUTH_CLIENT_ID,
+            'client_secret': GMAIL_OAUTH_CLIENT_SECRET,
+            'refresh_token': refresh_token,
+            'grant_type': 'refresh_token',
+        },
+    )
+    return upsert_receipt_gmail_account(
+        account['household_id'],
+        {
+            'access_token': tokens.get('access_token'),
+            'refresh_token': tokens.get('refresh_token') or refresh_token,
+            'token_expires_at': parse_gmail_token_expiry(tokens.get('expires_in')),
+            'sync_status': 'connected',
+            'last_error': None,
+        },
+    )
+
+
+def get_valid_gmail_access_token(account: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    access_token = str(account.get('access_token') or '').strip()
+    expires_at = gmail_datetime_from_timestamp(account.get('token_expires_at'))
+    now_utc = datetime.now(timezone.utc)
+    if access_token and expires_at:
+        try:
+            parsed = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            if parsed > now_utc + timedelta(seconds=30):
+                return access_token, account
+        except Exception:
+            pass
+    refreshed = refresh_gmail_access_token(account)
+    refreshed_token = str(refreshed.get('access_token') or '').strip()
+    if not refreshed_token:
+        raise HTTPException(status_code=400, detail='De Gmail access-token ontbreekt na verversen. Koppel Gmail opnieuw.')
+    return refreshed_token, refreshed
+
+
+def gmail_api_request(account: dict[str, Any], path: str, *, method: str = 'GET', params: Optional[dict[str, Any]] = None, data: Any = None, retry_on_unauthorized: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
+    token, current_account = get_valid_gmail_access_token(account)
+    url = f"https://gmail.googleapis.com/gmail/v1/{path.lstrip('/')}"
+    if params:
+        query = urllib.parse.urlencode({key: value for key, value in params.items() if value is not None and value != ''}, doseq=True)
+        if query:
+            url = f'{url}?{query}'
+    try:
+        response = gmail_json_request(url, method=method, headers={'Authorization': f'Bearer {token}'}, data=data)
+        return response, current_account
+    except HTTPException as exc:
+        if retry_on_unauthorized and '401' in str(exc.detail):
+            refreshed = refresh_gmail_access_token(current_account)
+            return gmail_api_request(refreshed, path, method=method, params=params, data=data, retry_on_unauthorized=False)
+        raise
+
+
+def gmail_get_profile(account: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    return gmail_api_request(account, 'users/me/profile')
+
+
+def ensure_gmail_label(account: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    label_name = str(account.get('label_name') or GMAIL_DEFAULT_LABEL_NAME).strip() or GMAIL_DEFAULT_LABEL_NAME
+    labels_payload, current_account = gmail_api_request(account, 'users/me/labels')
+    labels = labels_payload.get('labels') or []
+    for label in labels:
+        if str(label.get('name') or '').strip().lower() == label_name.lower():
+            label_id = str(label.get('id') or '').strip()
+            updated = upsert_receipt_gmail_account(current_account['household_id'], {'label_name': label_name, 'label_id': label_id, 'sync_status': 'connected', 'last_error': None})
+            return label_id, updated
+    created_label, updated_account = gmail_api_request(
+        current_account,
+        'users/me/labels',
+        method='POST',
+        data={
+            'name': label_name,
+            'messageListVisibility': 'show',
+            'labelListVisibility': 'labelShow',
+        },
+    )
+    label_id = str(created_label.get('id') or '').strip()
+    updated = upsert_receipt_gmail_account(updated_account['household_id'], {'label_name': label_name, 'label_id': label_id, 'sync_status': 'connected', 'last_error': None})
+    return label_id, updated
+
+
+def has_processed_gmail_message(household_id: str, gmail_message_id: str) -> bool:
+    with engine.begin() as conn:
+        existing = conn.execute(
+            text('SELECT id FROM receipt_gmail_imports WHERE household_id = :household_id AND gmail_message_id = :gmail_message_id LIMIT 1'),
+            {'household_id': household_id, 'gmail_message_id': gmail_message_id},
+        ).first()
+    return bool(existing)
+
+
+def store_gmail_import_result(household_id: str, gmail_message_id: str, values: dict[str, Any]):
+    payload = {
+        'id': values.get('id') or uuid.uuid4().hex,
+        'household_id': household_id,
+        'gmail_message_id': gmail_message_id,
+        'gmail_thread_id': values.get('gmail_thread_id'),
+        'gmail_history_id': values.get('gmail_history_id'),
+        'gmail_internal_date': values.get('gmail_internal_date'),
+        'raw_receipt_id': values.get('raw_receipt_id'),
+        'receipt_table_id': values.get('receipt_table_id'),
+        'import_status': values.get('import_status') or 'imported',
+        'error_message': values.get('error_message'),
+    }
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO receipt_gmail_imports (
+                    id, household_id, gmail_message_id, gmail_thread_id, gmail_history_id, gmail_internal_date,
+                    raw_receipt_id, receipt_table_id, import_status, error_message, updated_at
+                ) VALUES (
+                    :id, :household_id, :gmail_message_id, :gmail_thread_id, :gmail_history_id, :gmail_internal_date,
+                    :raw_receipt_id, :receipt_table_id, :import_status, :error_message, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT(household_id, gmail_message_id) DO UPDATE SET
+                    gmail_thread_id = excluded.gmail_thread_id,
+                    gmail_history_id = excluded.gmail_history_id,
+                    gmail_internal_date = excluded.gmail_internal_date,
+                    raw_receipt_id = excluded.raw_receipt_id,
+                    receipt_table_id = excluded.receipt_table_id,
+                    import_status = excluded.import_status,
+                    error_message = excluded.error_message,
+                    updated_at = CURRENT_TIMESTAMP
+                """
+            ),
+            payload,
+        )
+
+
+def decode_gmail_raw_message(raw_value: str) -> bytes:
+    if not raw_value:
+        raise ValueError('De Gmail-API gaf geen ruwe e-mailinhoud terug.')
+    padding = '=' * (-len(raw_value) % 4)
+    try:
+        return base64.urlsafe_b64decode(f'{raw_value}{padding}'.encode('ascii'))
+    except Exception as exc:
+        raise ValueError('De Gmail-API gaf ongeldige e-mailinhoud terug.') from exc
+
+
+def sync_gmail_receipts(household_id: str) -> dict[str, Any]:
+    effective_household_id = str(household_id or '1').strip() or '1'
+    account = get_receipt_gmail_account(effective_household_id, create_if_missing=True)
+    if not gmail_is_configured():
+        raise HTTPException(status_code=503, detail='De Gmail-koppeling is nog niet geconfigureerd in Rezzerv.')
+    if not account.get('connected'):
+        raise HTTPException(status_code=400, detail='Gmail is nog niet gekoppeld voor dit huishouden.')
+
+    label_id, account = ensure_gmail_label(account)
+    messages_payload, account = gmail_api_request(
+        account,
+        'users/me/messages',
+        params={'labelIds': [label_id], 'maxResults': GMAIL_SYNC_BATCH_SIZE},
+    )
+    messages = messages_payload.get('messages') or []
+    imported = 0
+    duplicates = 0
+    skipped = 0
+    failed = 0
+    latest_receipt_table_id = None
+    latest_raw_receipt_id = None
+
+    for message_item in messages:
+        gmail_message_id = str(message_item.get('id') or '').strip()
+        if not gmail_message_id:
+            continue
+        if has_processed_gmail_message(effective_household_id, gmail_message_id):
+            skipped += 1
+            continue
+        gmail_message_payload, account = gmail_api_request(
+            account,
+            f'users/me/messages/{urllib.parse.quote(gmail_message_id)}',
+            params={'format': 'raw'},
+        )
+        try:
+            email_bytes = decode_gmail_raw_message(str(gmail_message_payload.get('raw') or ''))
+            result = import_email_receipt_payload(effective_household_id, email_bytes, fallback_filename=f'gmail-{gmail_message_id}.eml', source_id=account.get('source_id'))
+            latest_receipt_table_id = result.get('receipt_table_id') or latest_receipt_table_id
+            latest_raw_receipt_id = result.get('raw_receipt_id') or latest_raw_receipt_id
+            if result.get('duplicate'):
+                duplicates += 1
+            else:
+                imported += 1
+            store_gmail_import_result(
+                effective_household_id,
+                gmail_message_id,
+                {
+                    'gmail_thread_id': gmail_message_payload.get('threadId'),
+                    'gmail_history_id': gmail_message_payload.get('historyId'),
+                    'gmail_internal_date': gmail_datetime_from_timestamp(gmail_message_payload.get('internalDate')),
+                    'raw_receipt_id': result.get('raw_receipt_id'),
+                    'receipt_table_id': result.get('receipt_table_id'),
+                    'import_status': 'duplicate' if result.get('duplicate') else str(result.get('parse_status') or 'imported'),
+                    'error_message': None,
+                },
+            )
+        except Exception as exc:
+            failed += 1
+            store_gmail_import_result(
+                effective_household_id,
+                gmail_message_id,
+                {
+                    'gmail_thread_id': gmail_message_payload.get('threadId'),
+                    'gmail_history_id': gmail_message_payload.get('historyId'),
+                    'gmail_internal_date': gmail_datetime_from_timestamp(gmail_message_payload.get('internalDate')),
+                    'import_status': 'failed',
+                    'error_message': normalize_api_error_message(str(exc) or 'Gmail-bericht kon niet worden verwerkt.'),
+                },
+            )
+
+    synced_at = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    upsert_receipt_gmail_account(
+        effective_household_id,
+        {
+            'label_name': account.get('label_name') or GMAIL_DEFAULT_LABEL_NAME,
+            'label_id': label_id,
+            'sync_status': 'ready',
+            'last_synced_at': synced_at,
+            'last_error': None,
+        },
+    )
+    return {
+        'connected': True,
+        'label_name': account.get('label_name') or GMAIL_DEFAULT_LABEL_NAME,
+        'label_id': label_id,
+        'messages_seen': len(messages),
+        'imported': imported,
+        'duplicates': duplicates,
+        'skipped': skipped,
+        'failed': failed,
+        'last_synced_at': synced_at,
+        'latest_receipt_table_id': latest_receipt_table_id,
+        'latest_raw_receipt_id': latest_raw_receipt_id,
+    }
 
 
 def parse_email_receipt_payload(email_bytes: bytes, fallback_filename: str = 'receipt.eml') -> dict[str, Any]:
@@ -2543,18 +3181,22 @@ def store_receipt_email_metadata(raw_receipt_id: str, household_id: str, payload
         )
 
 
-def import_email_receipt_payload(household_id: str, email_bytes: bytes, fallback_filename: str = 'receipt.eml') -> dict[str, Any]:
-    email_source = ensure_household_email_source(household_id)
+def import_email_receipt_payload(household_id: str, email_bytes: bytes, fallback_filename: str = 'receipt.eml', source_id: str | None = None) -> dict[str, Any]:
+    default_email_source = ensure_household_email_source(household_id)
     payload = parse_email_receipt_payload(email_bytes, fallback_filename=fallback_filename)
+    effective_source_id = str(source_id or default_email_source['id']).strip() or default_email_source['id']
     result = ingest_receipt(
         engine=engine,
         receipt_storage_root=RECEIPT_STORAGE_ROOT,
         household_id=str(household_id),
         filename=payload['selected_filename'],
         file_bytes=payload['selected_bytes'],
-        source_id=email_source['id'],
+        source_id=effective_source_id,
         mime_type=payload['selected_mime_type'],
         reject_non_receipt=False,
+        create_failed_receipt_table=True,
+        failed_store_name=derive_email_receipt_store_name(payload),
+        failed_purchase_at=payload.get('received_at'),
     )
     raw_receipt_id = result.get('raw_receipt_id')
     if raw_receipt_id:
@@ -2575,8 +3217,8 @@ def import_email_receipt_payload(household_id: str, email_bytes: bytes, fallback
                 ),
                 {'id': receipt_table_id, 'store_name': derived_store_name, 'purchase_at': payload.get('received_at')},
             )
-    result['source_id'] = email_source['id']
-    result['source_label'] = email_source.get('label', 'E-mail')
+    result['source_id'] = effective_source_id
+    result['source_label'] = default_email_source.get('label', 'E-mail')
     result['sender_email'] = payload.get('sender_email')
     result['sender_name'] = payload.get('sender_name')
     result['subject'] = payload.get('subject')
@@ -2736,6 +3378,125 @@ def register_receipt_source(payload: ReceiptSourceCreateRequest):
 def get_receipt_email_route(householdId: str = Query(...)):
     effective_household_id = str(householdId).strip() or '1'
     return ensure_household_email_source(effective_household_id)
+
+
+@app.get("/api/receipt-sources/gmail-status")
+def get_receipt_gmail_status(householdId: str = Query(...)):
+    effective_household_id = str(householdId).strip() or '1'
+    status = get_receipt_gmail_account(effective_household_id, create_if_missing=True)
+    status['gmail_route_address'] = build_household_email_address(effective_household_id)
+    status['configured'] = gmail_is_configured()
+    return status
+
+
+@app.get("/api/receipts/gmail/connect-url")
+def get_receipt_gmail_connect_url(
+    request: Request,
+    householdId: str = Query(...),
+    frontendOrigin: str = Query(''),
+):
+    if not gmail_is_configured():
+        raise HTTPException(status_code=503, detail='De Gmail-koppeling is nog niet geconfigureerd in Rezzerv. Voeg eerst Google OAuth clientgegevens toe.')
+    effective_household_id = str(householdId).strip() or '1'
+    redirect_uri = resolve_gmail_redirect_uri(request)
+    return {
+        'configured': True,
+        'authorization_url': build_gmail_connect_url(effective_household_id, redirect_uri, frontend_origin=frontendOrigin),
+        'redirect_uri': redirect_uri,
+        'label_name': GMAIL_DEFAULT_LABEL_NAME,
+    }
+
+
+@app.get("/api/receipts/gmail/callback")
+def handle_receipt_gmail_callback(
+    request: Request,
+    code: str | None = Query(None),
+    state: str | None = Query(None),
+    error: str | None = Query(None),
+    error_description: str | None = Query(None),
+):
+    state_payload = verify_gmail_state(state or '')
+    frontend_origin = str(state_payload.get('frontend_origin') or '').strip() or '*'
+
+    def render_popup(status: str, message: str, connected_email: str | None = None):
+        payload = {
+            'type': 'rezzerv-gmail-oauth',
+            'status': status,
+            'message': message,
+            'connected_email': connected_email,
+        }
+        message_text = html.escape(message)
+        return HTMLResponse(
+            content=f"""
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <title>Rezzerv Gmail koppeling</title>
+  </head>
+  <body>
+    <p>{message_text}</p>
+    <script>
+      (function() {{
+        var payload = JSON.parse({json.dumps(json.dumps(payload))});
+        if (window.opener && window.opener.postMessage) {{
+          try {{
+            window.opener.postMessage(payload, {json.dumps(frontend_origin)});
+          }} catch (error) {{
+            window.opener.postMessage(payload, '*');
+          }}
+        }}
+        window.setTimeout(function() {{ window.close(); }}, 200);
+      }})();
+    </script>
+  </body>
+</html>
+""",
+            media_type='text/html',
+        )
+
+    if error:
+        message = normalize_api_error_message(error_description or error, 'Google OAuth werd geannuleerd.')
+        upsert_receipt_gmail_account(str(state_payload.get('household_id') or '1'), {'sync_status': 'error', 'last_error': message})
+        return render_popup('error', message)
+    if not code:
+        return render_popup('error', 'Google OAuth leverde geen autorisatiecode op.')
+
+    redirect_uri = resolve_gmail_redirect_uri(request)
+    tokens = exchange_gmail_code_for_tokens(code, redirect_uri)
+    effective_household_id = str(state_payload.get('household_id') or '1').strip() or '1'
+    account = upsert_receipt_gmail_account(
+        effective_household_id,
+        {
+            'access_token': tokens.get('access_token'),
+            'refresh_token': tokens.get('refresh_token'),
+            'token_expires_at': parse_gmail_token_expiry(tokens.get('expires_in')),
+            'sync_status': 'connected',
+            'last_error': None,
+            'label_name': GMAIL_DEFAULT_LABEL_NAME,
+        },
+    )
+    profile, _ = gmail_get_profile(account)
+    connected_email = str(profile.get('emailAddress') or '').strip() or None
+    account = upsert_receipt_gmail_account(
+        effective_household_id,
+        {
+            'google_email': connected_email,
+            'google_user_sub': account.get('google_user_sub'),
+            'sync_status': 'connected',
+            'last_error': None,
+        },
+    )
+    label_id, _ = ensure_gmail_label(account)
+    upsert_receipt_gmail_account(effective_household_id, {'label_id': label_id, 'sync_status': 'connected', 'last_error': None})
+    return render_popup('success', 'Gmail is gekoppeld aan Rezzerv.', connected_email=connected_email)
+
+
+@app.post("/api/receipts/gmail/sync")
+def sync_receipt_gmail_mailbox(householdId: str = Query(...)):
+    effective_household_id = str(householdId).strip() or '1'
+    result = sync_gmail_receipts(effective_household_id)
+    return result
 
 
 @app.post("/api/receipts/email-import")
@@ -3128,6 +3889,7 @@ ensure_release_813_schema()
 ensure_release_814_schema()
 ensure_release_902_schema()
 ensure_release_932_schema()
+ensure_release_933_schema()
 ensure_receipt_storage_root()
 seed_store_providers()
 admin_household = ensure_household("admin@rezzerv.local")
