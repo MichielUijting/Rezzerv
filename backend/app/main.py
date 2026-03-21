@@ -45,10 +45,6 @@ GMAIL_OAUTH_SCOPES = tuple(
 GMAIL_STATE_SECRET = (os.getenv('REZZERV_GMAIL_STATE_SECRET', 'rezzerv-gmail-dev-secret') or 'rezzerv-gmail-dev-secret').encode('utf-8')
 GMAIL_DEFAULT_LABEL_NAME = os.getenv('REZZERV_GMAIL_LABEL_NAME', 'Rezzerv/Bonnen').strip() or 'Rezzerv/Bonnen'
 GMAIL_SYNC_BATCH_SIZE = max(1, min(int(os.getenv('REZZERV_GMAIL_SYNC_BATCH_SIZE', '25') or '25'), 100))
-RECEIPT_EMAIL_DOMAIN = (os.getenv('REZZERV_RECEIPT_EMAIL_DOMAIN', 'rezzerv.local') or 'rezzerv.local').strip() or 'rezzerv.local'
-RESEND_API_KEY = (os.getenv('REZZERV_RESEND_API_KEY', '') or '').strip()
-RESEND_API_BASE_URL = (os.getenv('REZZERV_RESEND_API_BASE_URL', 'https://api.resend.com') or 'https://api.resend.com').rstrip('/')
-RECEIPT_INBOUND_PATH = '/api/receipts/inbound'
 
 
 
@@ -1423,39 +1419,6 @@ def ensure_release_933_schema():
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_gmail_imports_household_created ON receipt_gmail_imports (household_id, created_at DESC)"))
 
 
-
-
-def ensure_release_935_schema():
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                CREATE TABLE IF NOT EXISTS receipt_inbound_events (
-                    id TEXT PRIMARY KEY,
-                    household_id TEXT,
-                    source_id TEXT,
-                    provider TEXT NOT NULL,
-                    provider_email_id TEXT NOT NULL,
-                    provider_message_id TEXT,
-                    route_address TEXT,
-                    sender_email TEXT,
-                    sender_name TEXT,
-                    subject TEXT,
-                    received_at DATETIME,
-                    webhook_received_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    import_status TEXT NOT NULL DEFAULT 'received',
-                    raw_receipt_id TEXT,
-                    receipt_table_id TEXT,
-                    error_message TEXT,
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-                """
-            )
-        )
-        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_inbound_provider_email ON receipt_inbound_events (provider, provider_email_id)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_inbound_household_received ON receipt_inbound_events (household_id, received_at DESC, created_at DESC)"))
-
 def ensure_receipt_storage_root():
     RECEIPT_STORAGE_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -2425,20 +2388,9 @@ def create_receipt_source(payload: ReceiptSourceCreateRequest):
     return build_receipt_source_response(row)
 
 
-def is_public_receipt_email_domain(domain: str) -> bool:
-    domain_value = str(domain or '').strip().lower()
-    if not domain_value:
-        return False
-    if domain_value in {'localhost', 'rezzerv.local'}:
-        return False
-    if domain_value.endswith('.local') or domain_value.endswith('.localhost') or domain_value.endswith('.invalid'):
-        return False
-    return '.' in domain_value
-
-
 def build_household_email_address(household_id: str) -> str:
     normalized_household_id = sanitize_source_slug(str(household_id or '1'))
-    return f"bon+{normalized_household_id}@{RECEIPT_EMAIL_DOMAIN}"
+    return f"bon+{normalized_household_id}@rezzerv.local"
 
 
 def ensure_household_email_source(household_id: str):
@@ -2494,10 +2446,6 @@ def ensure_household_email_source(household_id: str):
         ).mappings().first()
     item = build_receipt_source_response(refreshed)
     item['route_address'] = route_address
-    item['route_domain'] = RECEIPT_EMAIL_DOMAIN
-    item['route_is_public'] = is_public_receipt_email_domain(RECEIPT_EMAIL_DOMAIN)
-    item['delivery_mode'] = 'forwarding_ready' if item['route_is_public'] else 'local_demo'
-    item.update(build_receipt_inbound_status(effective_household_id))
     return item
 
 
@@ -3042,355 +2990,6 @@ def sync_gmail_receipts(household_id: str) -> dict[str, Any]:
     }
 
 
-
-
-def resend_is_configured() -> bool:
-    return bool(RESEND_API_KEY)
-
-
-def resend_json_request(path: str, method: str = 'GET', *, data: Any = None, timeout: float = 30.0) -> dict[str, Any]:
-    if not resend_is_configured():
-        raise HTTPException(status_code=503, detail='De Resend API-sleutel is nog niet geconfigureerd in Rezzerv.')
-    url = f"{RESEND_API_BASE_URL}/{path.lstrip('/')}"
-    request_headers = {
-        'Accept': 'application/json',
-        'Authorization': f'Bearer {RESEND_API_KEY}',
-    }
-    payload = None
-    if data is not None:
-        payload = json.dumps(data).encode('utf-8')
-        request_headers['Content-Type'] = 'application/json'
-    request_obj = urllib.request.Request(url, data=payload, headers=request_headers, method=method)
-    try:
-        with urllib.request.urlopen(request_obj, timeout=timeout) as response:
-            body = response.read()
-            if not body:
-                return {}
-            return json.loads(body.decode('utf-8'))
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode('utf-8', errors='ignore')
-        detail = None
-        try:
-            parsed = json.loads(body)
-            detail = parsed.get('message') or parsed.get('error') or parsed.get('detail')
-        except Exception:
-            detail = body or exc.reason
-        raise HTTPException(status_code=exc.code, detail=normalize_api_error_message(detail, 'Resend-verzoek is mislukt.'))
-    except urllib.error.URLError as exc:
-        raise HTTPException(status_code=502, detail=normalize_api_error_message(exc.reason, 'Resend is momenteel niet bereikbaar.'))
-
-
-def download_remote_bytes(download_url: str, timeout: float = 60.0) -> bytes:
-    request_obj = urllib.request.Request(download_url, headers={'Accept': '*/*'})
-    try:
-        with urllib.request.urlopen(request_obj, timeout=timeout) as response:
-            return response.read()
-    except urllib.error.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f'Het downloaden van de ontvangen e-mail is mislukt ({exc.code}).')
-    except urllib.error.URLError as exc:
-        raise HTTPException(status_code=502, detail=normalize_api_error_message(exc.reason, 'De ontvangen e-mail kon niet worden gedownload.'))
-
-
-def extract_email_addresses(values: Any) -> list[str]:
-    candidates: list[str] = []
-    if values is None:
-        return candidates
-    if isinstance(values, (list, tuple, set)):
-        for item in values:
-            candidates.extend(extract_email_addresses(item))
-        return candidates
-    parsed_addresses = [address for _, address in getaddresses([str(values)]) if address]
-    if parsed_addresses:
-        return [address.strip().lower() for address in parsed_addresses if address.strip()]
-    raw_value = str(values).strip().lower()
-    return [raw_value] if raw_value else []
-
-
-def get_receipt_source_by_address(address: str) -> dict[str, Any] | None:
-    normalized_address = str(address or '').strip().lower()
-    if not normalized_address:
-        return None
-    with engine.begin() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
-                FROM receipt_sources
-                WHERE type = 'email' AND lower(source_path) = :source_path
-                LIMIT 1
-                """
-            ),
-            {'source_path': normalized_address},
-        ).mappings().first()
-    return build_receipt_source_response(row) if row else None
-
-
-def resolve_household_email_source(recipient_addresses: list[str]) -> dict[str, Any]:
-    for recipient in recipient_addresses:
-        source = get_receipt_source_by_address(recipient)
-        if source:
-            source['route_address'] = recipient
-            return source
-    for recipient in recipient_addresses:
-        local_part, _, domain_part = recipient.partition('@')
-        if not local_part or not domain_part:
-            continue
-        if domain_part.strip().lower() != RECEIPT_EMAIL_DOMAIN.lower():
-            continue
-        if '+' not in local_part:
-            continue
-        _, household_hint = local_part.split('+', 1)
-        normalized_household = sanitize_source_slug(household_hint)
-        if not normalized_household:
-            continue
-        source = ensure_household_email_source(normalized_household)
-        if str(source.get('route_address') or '').strip().lower() == recipient:
-            return source
-    raise HTTPException(status_code=400, detail='Deze inkomende e-mail past niet bij een bekend Rezzerv-adres.')
-
-
-def get_resend_received_email(email_id: str) -> dict[str, Any]:
-    response = resend_json_request(f'/emails/receiving/{urllib.parse.quote(str(email_id).strip())}')
-    if isinstance(response, dict) and isinstance(response.get('data'), dict):
-        return response['data']
-    if isinstance(response, dict):
-        return response
-    raise HTTPException(status_code=502, detail='Resend leverde geen bruikbare e-mailgegevens op.')
-
-
-def normalize_resend_received_at(value: Any) -> str | None:
-    if value is None or value == '':
-        return None
-    try:
-        parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=timezone.utc)
-        return normalize_datetime(parsed)
-    except Exception:
-        return None
-
-
-
-def get_receipt_inbound_event(provider: str, provider_email_id: str) -> dict[str, Any] | None:
-    with engine.begin() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT id, household_id, source_id, provider, provider_email_id, provider_message_id,
-                       route_address, sender_email, sender_name, subject, received_at, webhook_received_at,
-                       import_status, raw_receipt_id, receipt_table_id, error_message, created_at, updated_at
-                FROM receipt_inbound_events
-                WHERE provider = :provider AND provider_email_id = :provider_email_id
-                LIMIT 1
-                """
-            ),
-            {'provider': str(provider), 'provider_email_id': str(provider_email_id)},
-        ).mappings().first()
-    return dict(row) if row else None
-
-
-def upsert_receipt_inbound_event(values: dict[str, Any]) -> dict[str, Any]:
-    normalized_values = {
-        'id': values.get('id') or str(uuid.uuid4()),
-        'household_id': values.get('household_id'),
-        'source_id': values.get('source_id'),
-        'provider': str(values.get('provider') or 'resend').strip() or 'resend',
-        'provider_email_id': str(values.get('provider_email_id') or '').strip(),
-        'provider_message_id': values.get('provider_message_id'),
-        'route_address': values.get('route_address'),
-        'sender_email': values.get('sender_email'),
-        'sender_name': values.get('sender_name'),
-        'subject': values.get('subject'),
-        'received_at': values.get('received_at'),
-        'import_status': str(values.get('import_status') or 'received').strip() or 'received',
-        'raw_receipt_id': values.get('raw_receipt_id'),
-        'receipt_table_id': values.get('receipt_table_id'),
-        'error_message': values.get('error_message'),
-    }
-    if not normalized_values['provider_email_id']:
-        raise ValueError('provider_email_id is verplicht voor inbound events')
-    with engine.begin() as conn:
-        conn.execute(
-            text(
-                """
-                INSERT INTO receipt_inbound_events (
-                    id, household_id, source_id, provider, provider_email_id, provider_message_id,
-                    route_address, sender_email, sender_name, subject, received_at,
-                    import_status, raw_receipt_id, receipt_table_id, error_message, updated_at
-                ) VALUES (
-                    :id, :household_id, :source_id, :provider, :provider_email_id, :provider_message_id,
-                    :route_address, :sender_email, :sender_name, :subject, :received_at,
-                    :import_status, :raw_receipt_id, :receipt_table_id, :error_message, CURRENT_TIMESTAMP
-                )
-                ON CONFLICT(provider, provider_email_id) DO UPDATE SET
-                    household_id = excluded.household_id,
-                    source_id = excluded.source_id,
-                    provider_message_id = excluded.provider_message_id,
-                    route_address = excluded.route_address,
-                    sender_email = excluded.sender_email,
-                    sender_name = excluded.sender_name,
-                    subject = excluded.subject,
-                    received_at = excluded.received_at,
-                    import_status = excluded.import_status,
-                    raw_receipt_id = excluded.raw_receipt_id,
-                    receipt_table_id = excluded.receipt_table_id,
-                    error_message = excluded.error_message,
-                    updated_at = CURRENT_TIMESTAMP
-                """
-            ),
-            normalized_values,
-        )
-        row = conn.execute(
-            text(
-                """
-                SELECT id, household_id, source_id, provider, provider_email_id, provider_message_id,
-                       route_address, sender_email, sender_name, subject, received_at, webhook_received_at,
-                       import_status, raw_receipt_id, receipt_table_id, error_message, created_at, updated_at
-                FROM receipt_inbound_events
-                WHERE provider = :provider AND provider_email_id = :provider_email_id
-                LIMIT 1
-                """
-            ),
-            {'provider': normalized_values['provider'], 'provider_email_id': normalized_values['provider_email_id']},
-        ).mappings().first()
-    return dict(row) if row else normalized_values
-
-
-def get_latest_receipt_inbound_event(household_id: str) -> dict[str, Any] | None:
-    with engine.begin() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT id, household_id, source_id, provider, provider_email_id, provider_message_id,
-                       route_address, sender_email, sender_name, subject, received_at, webhook_received_at,
-                       import_status, raw_receipt_id, receipt_table_id, error_message, created_at, updated_at
-                FROM receipt_inbound_events
-                WHERE household_id = :household_id
-                ORDER BY COALESCE(received_at, webhook_received_at, created_at) DESC, created_at DESC
-                LIMIT 1
-                """
-            ),
-            {'household_id': str(household_id)},
-        ).mappings().first()
-    return dict(row) if row else None
-
-
-def build_receipt_inbound_status(household_id: str) -> dict[str, Any]:
-    latest = get_latest_receipt_inbound_event(str(household_id))
-    return {
-        'provider': 'resend',
-        'resend_configured': resend_is_configured(),
-        'webhook_endpoint_path': RECEIPT_INBOUND_PATH,
-        'latest': latest,
-    }
-
-
-def mark_receipt_source_scanned(source_id: str):
-    with engine.begin() as conn:
-        conn.execute(
-            text('UPDATE receipt_sources SET last_scan_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
-            {'id': str(source_id)},
-        )
-
-
-def import_resend_inbound_event(event_payload: dict[str, Any]) -> dict[str, Any]:
-    if str(event_payload.get('type') or '').strip() != 'email.received':
-        return {'ignored': True, 'reason': 'unsupported_event_type'}
-    event_data = event_payload.get('data') if isinstance(event_payload.get('data'), dict) else {}
-    email_id = str(event_data.get('email_id') or '').strip()
-    if not email_id:
-        raise HTTPException(status_code=400, detail='De inbound webhook mist een email_id.')
-    existing = get_receipt_inbound_event('resend', email_id)
-    if existing and (existing.get('receipt_table_id') or existing.get('raw_receipt_id') or existing.get('import_status') in {'imported', 'duplicate', 'failed'}):
-        return {
-            'duplicate': True,
-            'provider': 'resend',
-            'provider_email_id': email_id,
-            'import_status': existing.get('import_status') or 'duplicate',
-            'receipt_table_id': existing.get('receipt_table_id'),
-            'raw_receipt_id': existing.get('raw_receipt_id'),
-        }
-
-    if not existing:
-        upsert_receipt_inbound_event({'provider': 'resend', 'provider_email_id': email_id, 'import_status': 'received'})
-
-    received_email = get_resend_received_email(email_id)
-    recipient_addresses = extract_email_addresses(event_data.get('to') or received_email.get('to') or [])
-    source = resolve_household_email_source(recipient_addresses)
-    effective_household_id = str(source.get('household_id') or '1').strip() or '1'
-    route_address = str(source.get('route_address') or source.get('source_path') or '').strip().lower()
-    raw_info = received_email.get('raw') if isinstance(received_email.get('raw'), dict) else {}
-    raw_download_url = str(raw_info.get('download_url') or '').strip()
-    if not raw_download_url:
-        raise HTTPException(status_code=502, detail='Resend leverde geen downloadbare ruwe e-mail voor deze inbound gebeurtenis.')
-    raw_email_bytes = download_remote_bytes(raw_download_url)
-    sender_name = None
-    sender_email = None
-    from_addresses = getaddresses([str(received_email.get('from') or event_data.get('from') or '')])
-    if from_addresses:
-        sender_name, sender_email = from_addresses[0]
-        sender_name = (sender_name or '').strip() or None
-        sender_email = (sender_email or '').strip().lower() or None
-    try:
-        result = import_email_receipt_payload(
-            effective_household_id,
-            raw_email_bytes,
-            fallback_filename=f'resend-{email_id}.eml',
-            source_id=str(source.get('id') or ''),
-        )
-    except ValueError:
-        fallback_subject = str(received_email.get('subject') or event_data.get('subject') or 'E-mailbon').strip() or 'E-mailbon'
-        fallback_store_name = sender_name or (sender_email.split('@', 1)[1].split('.', 1)[0].replace('-', ' ').replace('_', ' ').title() if sender_email and '@' in sender_email else None) or fallback_subject[:120]
-        fallback_text = '\n'.join(
-            part
-            for part in [
-                fallback_subject,
-                str(received_email.get('html') or '').strip(),
-                str(received_email.get('text') or '').strip(),
-            ]
-            if part
-        ).encode('utf-8')
-        result = ingest_receipt(
-            engine=engine,
-            receipt_storage_root=RECEIPT_STORAGE_ROOT,
-            household_id=effective_household_id,
-            filename=f'resend-{email_id}.txt',
-            file_bytes=fallback_text or fallback_subject.encode('utf-8'),
-            source_id=str(source.get('id') or ''),
-            mime_type='text/plain',
-            reject_non_receipt=False,
-            create_failed_receipt_table=True,
-            failed_store_name=fallback_store_name,
-            failed_purchase_at=normalize_resend_received_at(received_email.get('created_at') or event_data.get('created_at')),
-        )
-    import_status = 'duplicate' if result.get('duplicate') else ('imported' if result.get('receipt_table_id') or result.get('raw_receipt_id') else 'failed')
-    inbound_row = upsert_receipt_inbound_event(
-        {
-            'household_id': effective_household_id,
-            'source_id': source.get('id'),
-            'provider': 'resend',
-            'provider_email_id': email_id,
-            'provider_message_id': received_email.get('message_id') or event_data.get('message_id'),
-            'route_address': route_address,
-            'sender_email': sender_email,
-            'sender_name': sender_name,
-            'subject': received_email.get('subject') or event_data.get('subject'),
-            'received_at': normalize_resend_received_at(received_email.get('created_at') or event_data.get('created_at')),
-            'import_status': import_status,
-            'raw_receipt_id': result.get('raw_receipt_id'),
-            'receipt_table_id': result.get('receipt_table_id'),
-            'error_message': None,
-        }
-    )
-    mark_receipt_source_scanned(str(source.get('id') or ''))
-    response = dict(result)
-    response['provider'] = 'resend'
-    response['provider_email_id'] = email_id
-    response['import_status'] = import_status
-    response['route_address'] = route_address
-    response['latest_inbound'] = inbound_row
-    return response
-
 def parse_email_receipt_payload(email_bytes: bytes, fallback_filename: str = 'receipt.eml') -> dict[str, Any]:
     try:
         message = BytesParser(policy=policy.default).parsebytes(email_bytes)
@@ -3765,17 +3364,6 @@ def get_receipt_email_route(householdId: str = Query(...)):
     effective_household_id = str(householdId).strip() or '1'
     return ensure_household_email_source(effective_household_id)
 
-
-
-
-@app.post("/api/receipts/inbound")
-async def receive_receipt_inbound_email(request: Request):
-    try:
-        payload = await request.json()
-    except Exception:
-        raise HTTPException(status_code=400, detail='De inbound webhook bevat geen geldige JSON-payload.')
-    result = import_resend_inbound_event(payload if isinstance(payload, dict) else {})
-    return result
 
 @app.get("/api/receipt-sources/gmail-status")
 def get_receipt_gmail_status(householdId: str = Query(...)):
@@ -4287,7 +3875,6 @@ ensure_release_814_schema()
 ensure_release_902_schema()
 ensure_release_932_schema()
 ensure_release_933_schema()
-ensure_release_935_schema()
 ensure_receipt_storage_root()
 seed_store_providers()
 admin_household = ensure_household("admin@rezzerv.local")
