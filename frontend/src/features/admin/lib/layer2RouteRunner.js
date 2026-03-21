@@ -68,7 +68,9 @@ function buildRegressionReceiptEmailText(token) {
     'From: Rezzerv Test <regressie@rezzerv.local>',
     `Subject: Rezzerv regressie ${token}`,
     'Date: Sat, 21 Mar 2026 12:34:00 +0100',
+    'MIME-Version: 1.0',
     'Content-Type: text/plain; charset=utf-8',
+    'Content-Transfer-Encoding: 8bit',
     '',
     `Lidl kassabon ${token}`,
     'Kassabon',
@@ -76,7 +78,7 @@ function buildRegressionReceiptEmailText(token) {
     `${token} Mosterd 2,49`,
     'Totaal 2,49',
     '',
-  ].join('\\r\\n')
+  ].join('\r\n')
 }
 function createRegressionReceiptEmailFile(frame, token) {
   const view = frame?.contentWindow || window
