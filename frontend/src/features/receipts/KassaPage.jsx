@@ -304,6 +304,13 @@ async function uploadEmailReceiptFile(householdId, emailFile) {
   return data
 }
 
+function isSupportedEmailImportFile(file) {
+  if (!file) return false
+  const fileName = String(file.name || '').toLowerCase()
+  const fileType = String(file.type || '').toLowerCase()
+  return fileName.endsWith('.eml') || fileType === 'message/rfc822'
+}
+
 async function fetchReceiptSources(householdId) {
   return fetchJson(`/api/receipt-sources?householdId=${encodeURIComponent(householdId)}`)
 }
@@ -790,13 +797,53 @@ function ReceiptSourceHubModal({
   onChooseSharedFile,
   onChooseCamera,
   onChooseEmail,
+  onDropEmailFile,
   onCopyEmailRoute,
   emailRoute,
   isEmailRouteLoading,
   emailRouteError,
   isUploading,
 }) {
+  const [isEmailDropActive, setIsEmailDropActive] = useState(false)
+
   if (!isOpen) return null
+
+  function handleEmailDragEnter(event) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (isUploading) return
+    setIsEmailDropActive(true)
+  }
+
+  function handleEmailDragOver(event) {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+    if (isUploading) return
+    if (!isEmailDropActive) setIsEmailDropActive(true)
+  }
+
+  function handleEmailDragLeave(event) {
+    event.preventDefault()
+    event.stopPropagation()
+    const nextTarget = event.relatedTarget
+    if (nextTarget && event.currentTarget?.contains?.(nextTarget)) return
+    setIsEmailDropActive(false)
+  }
+
+  async function handleEmailDrop(event) {
+    event.preventDefault()
+    event.stopPropagation()
+    setIsEmailDropActive(false)
+    if (isUploading) return
+    const files = Array.from(event.dataTransfer?.files || [])
+    const emailFile = files.find(isSupportedEmailImportFile) || files[0] || null
+    if (!emailFile) {
+      onDropEmailFile?.(null)
+      return
+    }
+    await onDropEmailFile?.(emailFile)
+  }
 
   const routeAddress = emailRoute?.route_address || '-'
   const routeIsPublic = Boolean(emailRoute?.route_is_public)
@@ -903,10 +950,42 @@ function ReceiptSourceHubModal({
                   </div>
                 </div>
               </div>
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => { if (!isUploading) onChooseEmail?.() }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    if (!isUploading) onChooseEmail?.()
+                  }
+                }}
+                onDragEnter={handleEmailDragEnter}
+                onDragOver={handleEmailDragOver}
+                onDragLeave={handleEmailDragLeave}
+                onDrop={handleEmailDrop}
+                style={{
+                  borderRadius: '16px',
+                  border: isEmailDropActive ? '2px dashed #12B76A' : '2px dashed #D0D5DD',
+                  background: isEmailDropActive ? 'rgba(18, 183, 106, 0.06)' : '#F8FAFC',
+                  padding: '18px 16px',
+                  display: 'grid',
+                  gap: '8px',
+                  cursor: isUploading ? 'progress' : 'copy',
+                  outline: 'none',
+                  boxShadow: isEmailDropActive ? '0 0 0 4px rgba(18,183,106,0.12)' : 'none',
+                }}
+                aria-label="Sleep een .eml-bestand naar Rezzerv of klik om een e-mailbestand te kiezen"
+                data-testid="kassa-email-dropzone"
+              >
+                <div style={{ fontSize: '16px', fontWeight: 700 }}>E-mail slepen</div>
+                <div style={{ color: '#475467', fontSize: '14px' }}>Sleep hier een <strong>.eml</strong>-bestand naartoe of klik om een e-mailbestand te kiezen.</div>
+                <div style={{ color: '#667085', fontSize: '13px' }}>Ondersteund in deze versie: <strong>.eml</strong>. De bestaande importketen voor e-mailbonnen wordt hergebruikt.</div>
+              </div>
               {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
               <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
                 <Button type="button" variant="secondary" onClick={onCopyEmailRoute} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>Adres kopiëren</Button>
-                <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>Fallback: e-mailbestand kiezen</Button>
+                <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>E-mailbestand kiezen</Button>
               </div>
             </div>
           </ScreenCard>
@@ -1324,10 +1403,17 @@ export default function KassaPage() {
     setTimeout(() => cameraInputRef.current?.click(), 0)
   }
 
-  async function handleEmailUploadChange(event) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
+  async function processEmailImportFile(file) {
+    if (!file) {
+      setEmailRouteError('Sleep een .eml-bestand naar het landingsgebied of kies handmatig een e-mailbestand.')
+      setError('')
+      return
+    }
+    if (!isSupportedEmailImportFile(file)) {
+      setEmailRouteError('Dit bestandstype wordt nog niet ondersteund. Gebruik in deze versie een .eml-bestand.')
+      setError('')
+      return
+    }
     setIsUploading(true)
     setError('')
     setStatus('')
@@ -1382,6 +1468,17 @@ export default function KassaPage() {
       setIsUploading(false)
       setUploadMode('manual')
     }
+  }
+
+  async function handleEmailUploadChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    await processEmailImportFile(file)
+  }
+
+  async function handleDroppedEmailFile(file) {
+    await processEmailImportFile(file)
   }
 
   async function handleUploadChange(event) {
@@ -1599,6 +1696,7 @@ export default function KassaPage() {
         onChooseSharedFile={handleChooseSharedFileFromHub}
         onChooseCamera={handleChooseCameraFromHub}
         onChooseEmail={handleChooseEmailFromHub}
+        onDropEmailFile={handleDroppedEmailFile}
         onCopyEmailRoute={copyEmailRouteToClipboard}
         emailRoute={emailRoute}
         isEmailRouteLoading={isEmailRouteLoading}
