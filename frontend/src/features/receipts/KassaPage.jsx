@@ -44,6 +44,7 @@ function parseStatusLabel(value) {
 
 
 const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
+const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: '', status: '' }
 
 function loadStoredReceiptIds(storageKey) {
   try {
@@ -751,7 +752,7 @@ function CameraCaptureModal({
 export default function KassaPage() {
   const [householdId, setHouseholdId] = useState('1')
   const [receipts, setReceipts] = useState([])
-  const [filters, setFilters] = useState({ winkel: '', datum: '', totaal: '', artikelen: '', status: '' })
+  const [filters, setFilters] = useState(DEFAULT_RECEIPT_FILTERS)
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
   const [isSourceHubOpen, setIsSourceHubOpen] = useState(false)
@@ -763,6 +764,7 @@ export default function KassaPage() {
   const [deletedReceiptIds, setDeletedReceiptIds] = useState(() => loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY))
   const [uploadMode, setUploadMode] = useState('manual')
   const [cameraDraft, setCameraDraft] = useState(null)
+  const [receiptInboxFocusId, setReceiptInboxFocusId] = useState('')
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
@@ -860,6 +862,14 @@ export default function KassaPage() {
   }, [])
 
   useEffect(() => {
+    if (!receiptInboxFocusId) return undefined
+    const timeoutId = window.setTimeout(() => {
+      setReceiptInboxFocusId('')
+    }, 6000)
+    return () => window.clearTimeout(timeoutId)
+  }, [receiptInboxFocusId])
+
+  useEffect(() => {
     const visibleIds = new Set(receipts.map((receipt) => receipt.receipt_table_id))
     setSelectedReceiptIds((current) => current.filter((id) => visibleIds.has(id)))
     if (openedReceiptId && !visibleIds.has(openedReceiptId)) {
@@ -951,6 +961,7 @@ export default function KassaPage() {
     setUploadMode('camera_capture')
     setStatus('')
     setError('')
+    setReceiptInboxFocusId('')
     setTimeout(() => cameraInputRef.current?.click(), 0)
   }
 
@@ -973,11 +984,26 @@ export default function KassaPage() {
     setStatus('')
     try {
       const result = await uploadSharedReceiptFile(householdId, cameraDraft.file, 'camera_capture', 'Foto gemaakt in Rezzerv')
-      await loadReceipts(householdId)
+      const uploadedReceiptId = String(result?.receipt_table_id || '')
+
       clearCameraDraft()
       setIsSourceHubOpen(false)
       setOpenedReceiptId('')
       setOpenedReceipt(null)
+      setFilters(DEFAULT_RECEIPT_FILTERS)
+      setReceiptInboxFocusId(uploadedReceiptId)
+
+      const refreshedItems = await loadReceipts(householdId)
+      const receiptExistsInInbox = uploadedReceiptId
+        ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
+        : false
+
+      if (uploadedReceiptId && receiptExistsInInbox) {
+        setSelectedReceiptIds([uploadedReceiptId])
+      } else {
+        setSelectedReceiptIds([])
+      }
+
       if (result?.duplicate) {
         setStatus('Deze bon was al aanwezig en is niet opnieuw toegevoegd.')
       } else if (result?.receipt_table_id) {
@@ -985,9 +1011,17 @@ export default function KassaPage() {
       } else {
         setStatus('Foto opgeslagen, maar nog niet als bruikbare kassabon herkend.')
       }
+
+      if (uploadedReceiptId && !receiptExistsInInbox) {
+        setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
+      }
+
       try {
         window.requestAnimationFrame(() => {
-          const inbox = document.querySelector('[data-testid="kassa-table"]')
+          const targetRow = uploadedReceiptId
+            ? document.querySelector(`[data-testid="kassa-row-${uploadedReceiptId}"]`)
+            : null
+          const inbox = targetRow || document.querySelector('[data-testid="kassa-table"]')
           inbox?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         })
       } catch {
@@ -1172,6 +1206,9 @@ export default function KassaPage() {
                         style={{
                           cursor: 'pointer',
                           boxShadow: `inset 4px 0 0 ${item.inbox_status === 'Gecontroleerd' ? '#12B76A' : item.inbox_status === 'Controle nodig' ? '#F79009' : '#B54708'}`,
+                          background: String(item.receipt_table_id) === receiptInboxFocusId ? '#ECFDF3' : undefined,
+                          outline: String(item.receipt_table_id) === receiptInboxFocusId ? '2px solid #12B76A' : undefined,
+                          outlineOffset: String(item.receipt_table_id) === receiptInboxFocusId ? '-2px' : undefined,
                         }}
                       >
                         <td onClick={(event) => event.stopPropagation()}>
