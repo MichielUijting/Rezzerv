@@ -49,6 +49,13 @@ function emailPartLabel(value) {
   return value || '-'
 }
 
+function inboundImportStatusLabel(value) {
+  if (value === 'imported') return 'Automatisch ontvangen'
+  if (value === 'duplicate') return 'Al eerder ontvangen'
+  if (value === 'failed') return 'Ontvangen, controle nodig'
+  if (value === 'received') return 'Webhook ontvangen'
+  return value || '-'
+}
 
 const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
 const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: '', status: '' }
@@ -780,23 +787,30 @@ function ReceiptDetailView({ receipt }) {
 function ReceiptSourceHubModal({
   isOpen,
   onClose,
-  onChooseFile,
   onChooseSharedFile,
   onChooseCamera,
   onChooseEmail,
   onCopyEmailRoute,
-  onStartGmailConnect,
-  onSyncGmail,
   emailRoute,
-  gmailConnection,
   isEmailRouteLoading,
-  isGmailLoading,
-  isGmailSyncing,
   emailRouteError,
-  gmailError,
   isUploading,
 }) {
   if (!isOpen) return null
+
+  const routeAddress = emailRoute?.route_address || '-'
+  const routeIsPublic = Boolean(emailRoute?.route_is_public)
+  const routeDomain = emailRoute?.route_domain || ''
+  const resendConfigured = Boolean(emailRoute?.resend_configured)
+  const latestInbound = emailRoute?.latest || null
+  const webhookEndpointPath = emailRoute?.webhook_endpoint_path || '/api/receipts/inbound'
+  const forwardingStatusLabel = isEmailRouteLoading
+    ? 'Doorstuuradres laden…'
+    : routeIsPublic && resendConfigured
+      ? 'Automatische ontvangst mogelijk'
+      : routeIsPublic
+        ? 'Adres klaar, inbound nog niet actief'
+        : 'Lokale demo-opstelling'
 
   return (
     <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', overflowY: 'auto', padding: '16px 20px 20px' }}>
@@ -834,34 +848,62 @@ function ReceiptSourceHubModal({
 
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
-              <div style={{ fontSize: '20px', fontWeight: 700 }}>E-mail</div>
-              <div style={{ color: '#667085' }}>Koppel Gmail zodat Rezzerv alleen het label <strong>{gmailConnection?.label_name || 'Rezzerv/Bonnen'}</strong> leest. De handmatige <strong>.eml</strong>-import blijft beschikbaar als fallback.</div>
+              <div style={{ fontSize: '20px', fontWeight: 700 }}>E-mail doorsturen</div>
+              <div style={{ color: '#667085' }}>Laat kassabonmails automatisch doorsturen naar je persoonlijke Rezzerv-adres. Gebruik in Gmail of Outlook een regel/filter voor kassabonnen. De handmatige <strong>.eml</strong>-import blijft beschikbaar als fallback.</div>
               <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
-                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Gmail status</div>
-                <div style={{ fontSize: '15px', fontWeight: 700, wordBreak: 'break-word' }}>
-                  {isGmailLoading
-                    ? 'Gmail-status laden…'
-                    : !gmailConnection?.configured
-                      ? 'Gmail-koppeling is nog niet geconfigureerd'
-                      : gmailConnection?.connected
-                        ? `Gekoppeld${gmailConnection?.google_email ? `: ${gmailConnection.google_email}` : ''}`
-                        : 'Nog niet gekoppeld'}
+                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Status</div>
+                <div style={{ fontSize: '15px', fontWeight: 700 }}>{forwardingStatusLabel}</div>
+                <div style={{ fontSize: '13px', color: '#667085' }}>
+                  {routeIsPublic && resendConfigured
+                    ? 'Dit adres kan automatisch bonmails ontvangen zodra Resend naar jouw publieke Rezzerv-webhook post.'
+                    : routeIsPublic
+                      ? 'Het doorstuuradres is publiek, maar de Resend-inbound API-sleutel ontbreekt nog in Rezzerv. Gebruik voorlopig .eml als fallback.'
+                      : `Deze lokale build gebruikt nu ${routeDomain || 'een lokaal domein'}. Daardoor werkt automatisch ontvangen nog niet rechtstreeks vanaf internetmail. Gebruik voorlopig .eml als fallback.`}
                 </div>
-                <div style={{ fontSize: '13px', color: '#667085' }}>Label: {gmailConnection?.label_name || 'Rezzerv/Bonnen'}</div>
-                <div style={{ fontSize: '13px', color: '#667085' }}>Laatste sync: {gmailConnection?.last_synced_at ? formatDateTime(gmailConnection.last_synced_at) : '-'}</div>
               </div>
               <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
                 <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Persoonlijk Rezzerv-adres</div>
                 <div style={{ fontSize: '15px', fontWeight: 700, wordBreak: 'break-all' }}>
-                  {isEmailRouteLoading ? 'E-mailroute laden…' : emailRoute?.route_address || '-'}
+                  {isEmailRouteLoading ? 'E-mailroute laden…' : routeAddress}
                 </div>
               </div>
-              {gmailError ? <div className="rz-inline-feedback rz-inline-feedback--error">{gmailError}</div> : null}
-              {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
-              <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
-                <Button type="button" variant="primary" onClick={onStartGmailConnect} disabled={isGmailLoading || isUploading || !gmailConnection?.configured}>{gmailConnection?.connected ? 'Gmail opnieuw koppelen' : 'Gmail koppelen'}</Button>
-                <Button type="button" variant="secondary" onClick={onSyncGmail} disabled={isGmailLoading || isGmailSyncing || isUploading || !gmailConnection?.connected}>{isGmailSyncing ? 'Synchroniseren…' : 'Nu synchroniseren'}</Button>
+              <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
+                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Automatische ontvangst</div>
+                <div style={{ fontSize: '15px', fontWeight: 700 }}>
+                  {latestInbound ? inboundImportStatusLabel(latestInbound.import_status) : 'Nog geen automatische mail ontvangen'}
+                </div>
+                <div style={{ fontSize: '13px', color: '#667085' }}>
+                  {latestInbound
+                    ? `Laatst ontvangen: ${formatDateTime(latestInbound.received_at || latestInbound.webhook_received_at)}`
+                    : 'Zodra Resend een mail aan Rezzerv doorstuurt, zie je dat hier terug.'}
+                </div>
+                {latestInbound?.sender_email ? (
+                  <div style={{ fontSize: '13px', color: '#667085' }}>Afzender: {latestInbound.sender_name ? `${latestInbound.sender_name} <${latestInbound.sender_email}>` : latestInbound.sender_email}</div>
+                ) : null}
+                <div style={{ fontSize: '13px', color: '#667085' }}>Webhook-pad in Rezzerv: <strong>{webhookEndpointPath}</strong></div>
               </div>
+              <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '10px' }}>
+                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Zo stel je forwarding in</div>
+                <div style={{ display: 'grid', gap: '10px', color: '#344054', fontSize: '14px' }}>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: '4px' }}>Gmail</div>
+                    <ol style={{ margin: 0, paddingLeft: '20px', display: 'grid', gap: '4px' }}>
+                      <li>Open Gmail instellingen en voeg dit Rezzerv-adres toe als doorstuuradres.</li>
+                      <li>Bevestig het adres wanneer Gmail daar om vraagt.</li>
+                      <li>Maak daarna een filter voor kassabonmails en kies als actie: doorsturen naar Rezzerv.</li>
+                    </ol>
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, marginBottom: '4px' }}>Outlook</div>
+                    <ol style={{ margin: 0, paddingLeft: '20px', display: 'grid', gap: '4px' }}>
+                      <li>Open regels in Outlook.</li>
+                      <li>Maak een regel voor kassabonmails of bekende winkels.</li>
+                      <li>Kies als actie: doorsturen of redirecten naar dit Rezzerv-adres.</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+              {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
               <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
                 <Button type="button" variant="secondary" onClick={onCopyEmailRoute} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>Adres kopiëren</Button>
                 <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>Fallback: e-mailbestand kiezen</Button>
@@ -941,16 +983,10 @@ export default function KassaPage() {
   const [emailRoute, setEmailRoute] = useState(null)
   const [isEmailRouteLoading, setIsEmailRouteLoading] = useState(false)
   const [emailRouteError, setEmailRouteError] = useState('')
-  const [gmailConnection, setGmailConnection] = useState(null)
-  const [isGmailLoading, setIsGmailLoading] = useState(false)
-  const [isGmailSyncing, setIsGmailSyncing] = useState(false)
-  const [gmailError, setGmailError] = useState('')
   const [receiptInboxFocusId, setReceiptInboxFocusId] = useState('')
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const emailInputRef = useRef(null)
-  const gmailPopupRef = useRef(null)
-  const gmailAutoSyncDoneRef = useRef(false)
 
 
   useEffect(() => {
@@ -1011,12 +1047,6 @@ export default function KassaPage() {
         setHouseholdId(resolvedHouseholdId)
         const items = await loadReceipts(resolvedHouseholdId)
         if (cancelled) return
-        try {
-          const connection = await fetchGmailConnectionStatus(resolvedHouseholdId)
-          if (!cancelled) setGmailConnection(connection)
-        } catch {
-          // ignore Gmail status preload errors during bootstrap
-        }
         const sharedResult = readShareQueryParams()
         if (sharedResult?.shareStatus === 'error') {
           setError(sharedResult.message || 'Gedeelde inhoud kon niet worden verwerkt.')
@@ -1059,44 +1089,6 @@ export default function KassaPage() {
     return () => window.clearTimeout(timeoutId)
   }, [receiptInboxFocusId])
 
-
-  useEffect(() => {
-    function handleGmailOauthMessage(event) {
-      const payload = event?.data
-      if (!payload || payload.type !== 'rezzerv-gmail-oauth') return
-      if (payload.status === 'success') {
-        setStatus(payload.message || 'Gmail is gekoppeld aan Rezzerv.')
-        setGmailError('')
-        ensureGmailConnectionLoaded(true)
-          .then(() => performGmailSync({ silent: true }))
-          .catch(() => {})
-      } else {
-        setGmailError(payload.message || 'Gmail kon niet worden gekoppeld.')
-      }
-      if (gmailPopupRef.current && !gmailPopupRef.current.closed) {
-        gmailPopupRef.current.close()
-      }
-      gmailPopupRef.current = null
-    }
-
-    window.addEventListener('message', handleGmailOauthMessage)
-    return () => window.removeEventListener('message', handleGmailOauthMessage)
-  }, [householdId])
-
-  useEffect(() => {
-    if (!gmailConnection?.connected || !householdId || gmailAutoSyncDoneRef.current) return undefined
-    gmailAutoSyncDoneRef.current = true
-    performGmailSync({ silent: true }).catch(() => {})
-    return undefined
-  }, [gmailConnection?.connected, householdId])
-
-  useEffect(() => {
-    if (!gmailConnection?.connected || !householdId) return undefined
-    const intervalId = window.setInterval(() => {
-      performGmailSync({ silent: true }).catch(() => {})
-    }, 60000)
-    return () => window.clearInterval(intervalId)
-  }, [gmailConnection?.connected, householdId])
 
   useEffect(() => {
     const visibleIds = new Set(receipts.map((receipt) => receipt.receipt_table_id))
@@ -1181,89 +1173,14 @@ export default function KassaPage() {
     }
   }
 
-  async function ensureGmailConnectionLoaded(forceReload = false) {
-    if (gmailConnection && !forceReload) return gmailConnection
-    setIsGmailLoading(true)
-    setGmailError('')
-    try {
-      const connection = await fetchGmailConnectionStatus(householdId)
-      setGmailConnection(connection)
-      return connection
-    } catch (err) {
-      const message = normalizeErrorMessage(err?.message) || 'De Gmail-koppeling kon niet worden geladen.'
-      setGmailError(message)
-      throw err
-    } finally {
-      setIsGmailLoading(false)
-    }
-  }
 
-  async function performGmailSync(options = {}) {
-    const { silent = false } = options
-    setIsGmailSyncing(true)
-    if (!silent) {
-      setError('')
-      setStatus('')
-    }
-    setGmailError('')
-    try {
-      const result = await syncGmailMailbox(householdId)
-      const uploadedReceiptId = String(result?.latest_receipt_table_id || '')
-      const refreshedItems = await loadReceipts(householdId)
-      if (uploadedReceiptId) {
-        setSelectedReceiptIds([uploadedReceiptId])
-        setReceiptInboxFocusId(uploadedReceiptId)
-      }
-      const refreshedConnection = await ensureGmailConnectionLoaded(true)
-      if (!silent || Number(result?.imported || 0) > 0 || Number(result?.duplicates || 0) > 0) {
-        const statusParts = []
-        if (Number(result?.imported || 0) > 0) statusParts.push(`${result.imported} nieuwe bon${Number(result.imported) === 1 ? '' : 'nen'}`)
-        if (Number(result?.duplicates || 0) > 0) statusParts.push(`${result.duplicates} duplicate${Number(result.duplicates) === 1 ? '' : 's'}`)
-        if (Number(result?.failed || 0) > 0) statusParts.push(`${result.failed} fout${Number(result.failed) === 1 ? '' : 'en'}`)
-        setStatus(statusParts.length > 0 ? `Gmail gesynchroniseerd: ${statusParts.join(', ')}.` : 'Gmail is gesynchroniseerd. Er waren geen nieuwe bonnen.')
-      }
-      if (uploadedReceiptId && refreshedItems.some((item) => String(item.receipt_table_id) === uploadedReceiptId)) {
-        window.requestAnimationFrame(() => {
-          const targetRow = document.querySelector(`[data-testid="kassa-row-${uploadedReceiptId}"]`)
-          const inbox = targetRow || document.querySelector('[data-testid="kassa-table"]')
-          inbox?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        })
-      }
-      return refreshedConnection
-    } catch (err) {
-      const message = normalizeErrorMessage(err?.message) || 'Gmail kon niet worden gesynchroniseerd.'
-      setGmailError(message)
-      if (!silent) setError('')
-      throw err
-    } finally {
-      setIsGmailSyncing(false)
-    }
-  }
 
-  async function startGmailConnect() {
-    setGmailError('')
-    setError('')
-    setStatus('')
-    try {
-      const payload = await fetchGmailConnectUrl(householdId, window.location.origin)
-      const popup = window.open(payload.authorization_url, 'rezzerv-gmail-oauth', 'popup=yes,width=560,height=720')
-      if (!popup) {
-        setGmailError('De browser blokkeerde het Google-inlogvenster. Sta pop-ups tijdelijk toe voor Rezzerv.')
-        return
-      }
-      gmailPopupRef.current = popup
-    } catch (err) {
-      setGmailError(normalizeErrorMessage(err?.message) || 'De Gmail-koppeling kon niet worden gestart.')
-    }
-  }
 
   function openSourceHub() {
     setCameraError('')
     setEmailRouteError('')
-    setGmailError('')
     setIsSourceHubOpen(true)
     ensureEmailRouteLoaded().catch(() => {})
-    ensureGmailConnectionLoaded().catch(() => {})
   }
 
   function handleChooseFileFromHub() {
@@ -1300,6 +1217,7 @@ export default function KassaPage() {
     setError('')
     setEmailRouteError('')
     setReceiptInboxFocusId('')
+    setIsSourceHubOpen(false)
     setTimeout(() => emailInputRef.current?.click(), 0)
   }
 
@@ -1678,20 +1596,13 @@ export default function KassaPage() {
       <ReceiptSourceHubModal
         isOpen={isSourceHubOpen}
         onClose={() => setIsSourceHubOpen(false)}
-        onChooseFile={handleChooseFileFromHub}
         onChooseSharedFile={handleChooseSharedFileFromHub}
         onChooseCamera={handleChooseCameraFromHub}
         onChooseEmail={handleChooseEmailFromHub}
         onCopyEmailRoute={copyEmailRouteToClipboard}
-        onStartGmailConnect={startGmailConnect}
-        onSyncGmail={() => performGmailSync({ silent: false }).catch(() => {})}
         emailRoute={emailRoute}
-        gmailConnection={gmailConnection}
         isEmailRouteLoading={isEmailRouteLoading}
-        isGmailLoading={isGmailLoading}
-        isGmailSyncing={isGmailSyncing}
         emailRouteError={emailRouteError}
-        gmailError={gmailError}
         isUploading={isUploading}
       />
 
