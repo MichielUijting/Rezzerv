@@ -508,6 +508,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                 'raw_receipt_id': duplicate['id'],
                 'receipt_table_id': existing_table['id'] if existing_table else None,
                 'duplicate': True,
+                'duplicate_message': 'Deze kassabon is al eerder toegevoegd en is niet opnieuw geladen.',
                 'parse_status': existing_table['parse_status'] if existing_table else duplicate['raw_status'],
             }
 

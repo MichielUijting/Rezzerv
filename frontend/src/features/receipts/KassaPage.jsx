@@ -57,6 +57,10 @@ function inboundImportStatusLabel(value) {
   return value || '-'
 }
 
+function formatDuplicateImportMessage(result) {
+  return normalizeErrorMessage(result?.duplicate_message || result?.message) || 'Deze kassabon is al eerder toegevoegd en is niet opnieuw geladen.'
+}
+
 const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
 const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: '', status: '' }
 const MAX_CAMERA_UPLOAD_BYTES = 4 * 1024 * 1024
@@ -1052,6 +1056,7 @@ export default function KassaPage() {
   const [isSourceHubOpen, setIsSourceHubOpen] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
+  const [duplicateNotice, setDuplicateNotice] = useState('')
   const [selectedReceiptIds, setSelectedReceiptIds] = useState([])
   const [openedReceiptId, setOpenedReceiptId] = useState('')
   const [openedReceipt, setOpenedReceipt] = useState(null)
@@ -1133,10 +1138,13 @@ export default function KassaPage() {
           return
         }
         if (sharedResult?.shareStatus === 'success') {
-          const statusText = sharedResult.duplicate
-            ? 'Deze gedeelde bon was al aanwezig en is niet opnieuw toegevoegd.'
-            : `Gedeelde bon ontvangen met status: ${parseStatusLabel(sharedResult.parseStatus || 'partial')}`
-          setStatus(statusText)
+          if (sharedResult.duplicate) {
+            setDuplicateNotice(formatDuplicateImportMessage(sharedResult))
+            setStatus('')
+          } else {
+            setDuplicateNotice('')
+            setStatus(`Gedeelde bon ontvangen met status: ${parseStatusLabel(sharedResult.parseStatus || 'partial')}`)
+          }
           if (sharedResult.receiptTableId) {
             try {
               const detail = await fetchJson(`/api/receipts/${encodeURIComponent(sharedResult.receiptTableId)}`)
@@ -1258,6 +1266,7 @@ export default function KassaPage() {
   function openSourceHub() {
     setCameraError('')
     setEmailRouteError('')
+    setDuplicateNotice('')
     setIsSourceHubOpen(true)
     ensureEmailRouteLoaded().catch(() => {})
   }
@@ -1284,6 +1293,7 @@ export default function KassaPage() {
     setUploadMode('camera_capture')
     setStatus('')
     setError('')
+    setDuplicateNotice('')
     setCameraError('')
     setReceiptInboxFocusId('')
     setIsSourceHubOpen(false)
@@ -1294,6 +1304,7 @@ export default function KassaPage() {
     setUploadMode('email_import')
     setStatus('')
     setError('')
+    setDuplicateNotice('')
     setEmailRouteError('')
     setReceiptInboxFocusId('')
     setIsSourceHubOpen(false)
@@ -1310,6 +1321,7 @@ export default function KassaPage() {
       await navigator.clipboard.writeText(route.route_address)
       setStatus('Het Rezzerv e-mailadres is gekopieerd.')
       setError('')
+      setDuplicateNotice('')
     } catch (err) {
       setEmailRouteError(normalizeErrorMessage(err?.message) || 'Het e-mailadres kon niet worden gekopieerd.')
     }
@@ -1334,6 +1346,7 @@ export default function KassaPage() {
     setError('')
     setCameraError('')
     setStatus('')
+    setDuplicateNotice('')
     try {
       const preparedFile = await prepareCameraUploadFile(cameraDraft.file)
       const result = await uploadSharedReceiptFile(householdId, preparedFile, 'camera_capture', 'Foto gemaakt in Rezzerv')
@@ -1358,8 +1371,10 @@ export default function KassaPage() {
       }
 
       if (result?.duplicate) {
-        setStatus('Deze bon was al aanwezig en is niet opnieuw toegevoegd.')
+        setDuplicateNotice(formatDuplicateImportMessage(result))
+        setStatus('')
       } else if (result?.receipt_table_id) {
+        setDuplicateNotice('')
         setStatus(`Foto verwerkt met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
       } else {
         setStatus('Foto opgeslagen, maar nog niet als bruikbare kassabon herkend.')
@@ -1417,6 +1432,7 @@ export default function KassaPage() {
     setIsUploading(true)
     setError('')
     setStatus('')
+    setDuplicateNotice('')
     setEmailRouteError('')
     try {
       const result = await uploadEmailReceiptFile(householdId, file)
@@ -1438,8 +1454,10 @@ export default function KassaPage() {
       }
 
       if (result?.duplicate) {
-        setStatus('Deze e-mailbon was al aanwezig en is niet opnieuw toegevoegd.')
+        setDuplicateNotice(formatDuplicateImportMessage(result))
+        setStatus('')
       } else if (result?.receipt_table_id) {
+        setDuplicateNotice('')
         setStatus(`E-mailbon ontvangen met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
       } else {
         setStatus('E-mail verwerkt, maar nog niet als bruikbare kassabon herkend.')
@@ -1489,6 +1507,7 @@ export default function KassaPage() {
     setIsUploading(true)
     setError('')
     setStatus('')
+    setDuplicateNotice('')
     try {
       const sharedContext = file.type?.includes('pdf')
         ? 'shared_pdf'
@@ -1504,8 +1523,10 @@ export default function KassaPage() {
       }
       setIsSourceHubOpen(false)
       if (result?.duplicate) {
-        setStatus('Deze bon was al aanwezig en is niet opnieuw toegevoegd.')
+        setDuplicateNotice(formatDuplicateImportMessage(result))
+        setStatus('')
       } else if (result?.receipt_table_id) {
+        setDuplicateNotice('')
         setStatus(activeUploadMode === 'shared_file'
           ? `Gedeelde bon ontvangen met status: ${parseStatusLabel(result.parse_status)}`
           : `Bon toegevoegd met status: ${parseStatusLabel(result.parse_status)}`)
@@ -1561,6 +1582,7 @@ export default function KassaPage() {
             </div>
 
             {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
+            {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-duplicate-feedback">{duplicateNotice}</div> : null}
             {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
 
             <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
