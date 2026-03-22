@@ -201,7 +201,7 @@ def _is_plausible_total_amount(value: Decimal | None) -> bool:
     return Decimal('0.00') < amount <= Decimal('10000.00')
 
 
-def _build_receipt_fingerprint_from_parts(store_name: str | None, purchase_at: str | None, total_amount: Decimal | None, line_parts: list[str]) -> str:
+def _build_receipt_fingerprint(store_name: str | None, purchase_at: str | None, total_amount: Decimal | None, lines: list[dict[str, Any]]) -> str:
     store_part = _normalize_fingerprint_text(store_name)
     purchase_part = ''
     if purchase_at:
@@ -210,58 +210,16 @@ def _build_receipt_fingerprint_from_parts(store_name: str | None, purchase_at: s
         except Exception:
             purchase_part = _normalize_fingerprint_text(purchase_at)
     total_part = f"{Decimal(total_amount).quantize(Decimal('0.01')):.2f}" if total_amount is not None else ''
-    normalized_lines = [part for part in (_normalize_fingerprint_text(item) for item in (line_parts or [])) if part]
-    return '||'.join([store_part, purchase_part, total_part, '##'.join(normalized_lines[:12])])
-
-
-def _build_receipt_fingerprint(store_name: str | None, purchase_at: str | None, total_amount: Decimal | None, lines: list[dict[str, Any]]) -> str:
     line_parts: list[str] = []
     for line in lines[:12]:
         label = _normalize_fingerprint_text(line.get('normalized_label') or line.get('raw_label'))
         if not label:
             continue
-        line_parts.append(label)
-    return _build_receipt_fingerprint_from_parts(store_name, purchase_at, total_amount, line_parts)
+        amount = _parse_decimal(str(line.get('line_total')))
+        amount_part = f"{amount:.2f}" if amount is not None else ''
+        line_parts.append(f"{label}|{amount_part}")
+    return '||'.join([store_part, purchase_part, total_part, '##'.join(line_parts)])
 
-
-def _find_duplicate_receipt_by_fingerprint(conn, household_id: str, parse_result: ReceiptParseResult) -> dict[str, Any] | None:
-    if not parse_result.is_receipt:
-        return None
-    fingerprint = _build_receipt_fingerprint(parse_result.store_name, parse_result.purchase_at, parse_result.total_amount, parse_result.lines)
-    if not fingerprint.strip('|'):
-        return None
-    rows = conn.execute(
-        text(
-            '''
-            SELECT
-                rt.id AS receipt_table_id,
-                rr.id AS raw_receipt_id,
-                rt.store_name,
-                rt.purchase_at,
-                rt.total_amount,
-                COALESCE((
-                    SELECT GROUP_CONCAT(COALESCE(NULLIF(TRIM(rtl.normalized_label), ''), TRIM(rtl.raw_label)), '||')
-                    FROM receipt_table_lines rtl
-                    WHERE rtl.receipt_table_id = rt.id
-                ), '') AS line_signature
-            FROM receipt_tables rt
-            JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-            WHERE rt.household_id = :household_id
-            '''
-        ),
-        {'household_id': household_id},
-    ).mappings().all()
-    for row in rows:
-        line_parts = [part for part in str(row.get('line_signature') or '').split('||') if part]
-        row_total = row.get('total_amount')
-        try:
-            row_total = Decimal(str(row_total)) if row_total is not None else None
-        except Exception:
-            row_total = None
-        candidate = _build_receipt_fingerprint_from_parts(row.get('store_name'), row.get('purchase_at'), row_total, line_parts)
-        if candidate and candidate == fingerprint:
-            return {'receipt_table_id': row.get('receipt_table_id'), 'raw_receipt_id': row.get('raw_receipt_id')}
-    return None
 
 def _parse_quantity(raw: str | None) -> Decimal | None:
     if not raw:
@@ -481,7 +439,7 @@ def _parse_result_from_text_lines(
     purchase_at = _purchase_at_from_lines(text_lines[:20], filename)
     total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
     lines = _extract_receipt_lines(text_lines)
-    if total_amount is None and len(lines) >= 3 and (store_name or purchase_at):
+    if total_amount is None and len(lines) >= 2:
         line_sum = Decimal('0.00')
         line_sum_has_value = False
         for line in lines:
@@ -503,8 +461,6 @@ def _parse_result_from_text_lines(
 
     suspicious_single_line = len(lines) <= 1 and total_amount is not None
     suspicious_filename_signal = bool(re.search(r'(?i)regressie[-_ ]?bon|receipt|mosterd', filename)) and len(lines) <= 1
-    if suspicious_single_line or ((not explicit_total_found) and len(lines) < 3):
-        total_amount = None
     _ = _build_receipt_fingerprint(store_name, purchase_at, total_amount, lines)
 
     if lines:
@@ -522,7 +478,6 @@ def _parse_result_from_text_lines(
         parse_status = 'review_needed'
 
     if suspicious_single_line or suspicious_filename_signal or not purchase_at:
-        total_amount = None if suspicious_single_line or not explicit_total_found else total_amount
         confidence = min(confidence, review_confidence)
         parse_status = 'review_needed'
 
@@ -1038,9 +993,8 @@ def repair_receipts_for_household(engine, receipt_storage_root: Path, household_
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
                   AND (
-                    (rr.mime_type IN ('text/plain', 'text/html', 'message/rfc822') AND rem.body_html IS NOT NULL)
-                    OR COALESCE(rt.line_count, 0) <= 1
-                    OR rt.parse_status IN ('partial', 'review_needed', 'failed')
+                    (rr.mime_type IN ('text/plain', 'text/html') AND rem.body_html IS NOT NULL)
+                    OR (rt.parse_status = 'parsed' AND COALESCE(rt.line_count, 0) <= 1)
                     OR rt.purchase_at IS NULL
                     OR rt.total_amount IS NULL
                     OR rt.total_amount <= 0

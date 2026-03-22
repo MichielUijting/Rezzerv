@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Button from '../../ui/Button'
@@ -59,52 +60,6 @@ function inboundImportStatusLabel(value) {
 
 function formatDuplicateImportMessage(result) {
   return normalizeErrorMessage(result?.duplicate_message || result?.message) || 'Deze kassabon is al eerder toegevoegd en is niet opnieuw geladen.'
-}
-
-
-function normalizeReceiptKeyPart(value) {
-  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
-}
-
-function normalizeReceiptDateKey(value) {
-  const raw = String(value || '').trim()
-  if (!raw) return ''
-  const date = new Date(raw)
-  if (!Number.isNaN(date.getTime())) {
-    const year = date.getFullYear()
-    const month = String(date.getMonth() + 1).padStart(2, '0')
-    const day = String(date.getDate()).padStart(2, '0')
-    const hour = String(date.getHours()).padStart(2, '0')
-    const minute = String(date.getMinutes()).padStart(2, '0')
-    return `${year}-${month}-${day} ${hour}:${minute}`
-  }
-  return raw.slice(0, 16)
-}
-
-function normalizeReceiptAmountKey(value) {
-  if (value === null || value === undefined || value === '') return ''
-  const number = Number(value)
-  if (Number.isNaN(number) || number <= 0) return ''
-  return number.toFixed(2)
-}
-
-function dedupeReceiptInboxItems(items) {
-  const seen = new Set()
-  const result = []
-  for (const item of Array.isArray(items) ? items : []) {
-    const key = [
-      normalizeReceiptKeyPart(item?.store_name),
-      normalizeReceiptDateKey(item?.purchase_at || item?.email_received_at),
-      normalizeReceiptAmountKey(item?.total_amount),
-      String(item?.line_count || 0),
-      normalizeReceiptKeyPart(item?.email_subject || item?.original_filename || ''),
-    ].join('|')
-    const dedupeKey = key.replace(/^\|+|\|+$/g, '') || String(item?.receipt_table_id || '')
-    if (seen.has(dedupeKey)) continue
-    seen.add(dedupeKey)
-    result.push(item)
-  }
-  return result
 }
 
 const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
@@ -460,7 +415,7 @@ async function fetchReceiptPreview(receiptTableId) {
   const isPdf = contentType.includes('pdf')
   const isImage = contentType.startsWith('image/')
   const isHtml = contentType.startsWith('text/html')
-  const isText = contentType.startsWith('text/plain') || contentType.startsWith('message/rfc822') || contentType.startsWith('text/message')
+  const isText = contentType.startsWith('text/plain') || contentType.startsWith('message/rfc822')
   const blobUrl = (isPdf || isImage) ? window.URL.createObjectURL(blob) : ''
   const textContent = (isHtml || isText) ? await blob.text() : ''
   return {
@@ -916,9 +871,7 @@ function ReceiptDetailView({ receipt }) {
   )
 }
 
-function ReceiptSourceHubModal({
-  isOpen,
-  onClose,
+function ReceiptSourceHubContent({
   onChooseReceiptFile,
   onChooseCamera,
   onChooseEmail,
@@ -933,7 +886,6 @@ function ReceiptSourceHubModal({
   const [isLandingDropActive, setIsLandingDropActive] = useState(false)
 
   useEffect(() => {
-    if (!isOpen) return undefined
 
     function handleWindowPaste(event) {
       if (isUploading) return
@@ -945,9 +897,7 @@ function ReceiptSourceHubModal({
 
     window.addEventListener('paste', handleWindowPaste)
     return () => window.removeEventListener('paste', handleWindowPaste)
-  }, [isOpen, isUploading, onDropLandingFile])
-
-  if (!isOpen) return null
+  }, [isUploading, onDropLandingFile])
 
   function handleLandingDragEnter(event) {
     event.preventDefault()
@@ -1000,22 +950,12 @@ function ReceiptSourceHubModal({
         : 'Lokale demo-opstelling'
 
   return (
-    <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', overflowY: 'auto', padding: '16px 20px 20px' }}>
-      <div
-        className="rz-modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="kassa-bronhub-title"
-        style={{ width: 'min(1100px, 100%)', maxHeight: 'calc(100vh - 88px)', overflow: 'auto', padding: '24px', gap: '20px', marginTop: '0' }}
-      >
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div>
-            <h2 id="kassa-bronhub-title" className="rz-modal-title" style={{ fontSize: '22px' }}>Bon toevoegen</h2>
-            <p className="rz-modal-text">Voeg een kassabon centraal toe via slepen, plakken of kiezen. De bestaande verwerkingsroutes voor e-mail en bonbestanden blijven intact.</p>
-          </div>
-        </div>
+    <div style={{ display: 'grid', gap: '20px' }} data-testid="kassa-add-screen">
+      <div>
+        <h2 id="kassa-bronhub-title" className="rz-modal-title" style={{ fontSize: '22px' }}>Bon toevoegen</h2>
+      </div>
 
-        <ScreenCard fullWidth>
+      <ScreenCard fullWidth>
           <div style={{ display: 'grid', gap: '18px' }}>
             <div
               role="button"
@@ -1050,9 +990,6 @@ function ReceiptSourceHubModal({
               <div style={{ fontSize: '22px', fontWeight: 700, color: '#166534' }}>Sleep hier je kassabon of e-mail</div>
               <div style={{ color: '#344054', fontSize: '15px', maxWidth: '640px' }}>
                 Ondersteund in deze landingsplaats: <strong>.eml</strong>, <strong>.pdf</strong>, <strong>.png</strong>, <strong>.jpg</strong> en <strong>.jpeg</strong>.
-              </div>
-              <div style={{ color: '#667085', fontSize: '14px', maxWidth: '680px' }}>
-                Je kunt ook klikken om via Verkenner te kiezen of plakken vanuit het klembord zodra je browser daar een bestand of afbeelding uit aanbiedt.
               </div>
             </div>
 
@@ -1151,7 +1088,6 @@ function ReceiptSourceHubModal({
             </div>
           </ScreenCard>
         </div>
-      </div>
     </div>
   )
 }
@@ -1206,13 +1142,45 @@ function CameraCaptureModal({
   )
 }
 
+
+function ReceiptUploadInputs({ fileInputRef, cameraInputRef, emailInputRef, onLandingUploadChange, onCameraCaptureChange, onEmailUploadChange }) {
+  return (
+    <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".eml,message/rfc822,.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
+        style={{ display: 'none' }}
+        onChange={onLandingUploadChange}
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        style={{ display: 'none' }}
+        onChange={onCameraCaptureChange}
+      />
+      <input
+        ref={emailInputRef}
+        type="file"
+        accept=".eml,message/rfc822"
+        style={{ display: 'none' }}
+        onChange={onEmailUploadChange}
+      />
+    </>
+  )
+}
+
 export default function KassaPage() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const isAddReceiptRoute = location.pathname === '/kassa/nieuw'
   const [householdId, setHouseholdId] = useState('1')
   const [receipts, setReceipts] = useState([])
   const [filters, setFilters] = useState(DEFAULT_RECEIPT_FILTERS)
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
-  const [isSourceHubOpen, setIsSourceHubOpen] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [duplicateNotice, setDuplicateNotice] = useState('')
@@ -1239,6 +1207,14 @@ export default function KassaPage() {
       }
     }
   }, [cameraDraft])
+
+  useEffect(() => {
+    if (!isAddReceiptRoute) return
+    setCameraError('')
+    setEmailRouteError('')
+    setDuplicateNotice('')
+    ensureEmailRouteLoaded().catch(() => {})
+  }, [isAddReceiptRoute])
 
   async function deleteSelectedReceipts() {
     if (selectedReceiptIds.length === 0) return
@@ -1270,7 +1246,7 @@ export default function KassaPage() {
     let items = []
     try {
       const list = await fetchJson(`/api/receipts?householdId=${encodeURIComponent(nextHouseholdId)}`)
-      items = dedupeReceiptInboxItems(Array.isArray(list?.items) ? list.items : [])
+      items = Array.isArray(list?.items) ? list.items : []
       setReceipts(items)
       if (openedReceiptId) {
         const detail = await fetchJson(`/api/receipts/${encodeURIComponent(openedReceiptId)}`)
@@ -1459,8 +1435,7 @@ export default function KassaPage() {
     setCameraError('')
     setEmailRouteError('')
     setDuplicateNotice('')
-    setIsSourceHubOpen(true)
-    ensureEmailRouteLoaded().catch(() => {})
+    navigate('/kassa/nieuw')
   }
 
   function handleChooseReceiptFileFromHub() {
@@ -1487,7 +1462,6 @@ export default function KassaPage() {
     setDuplicateNotice('')
     setCameraError('')
     setReceiptInboxFocusId('')
-    setIsSourceHubOpen(false)
     setTimeout(() => cameraInputRef.current?.click(), 0)
   }
 
@@ -1498,7 +1472,6 @@ export default function KassaPage() {
     setDuplicateNotice('')
     setEmailRouteError('')
     setReceiptInboxFocusId('')
-    setIsSourceHubOpen(false)
     setTimeout(() => emailInputRef.current?.click(), 0)
   }
 
@@ -1547,8 +1520,7 @@ export default function KassaPage() {
         announceDuplicate(result)
       } else {
         clearCameraDraft()
-        setIsSourceHubOpen(false)
-        setOpenedReceiptId('')
+            setOpenedReceiptId('')
         setOpenedReceipt(null)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
@@ -1574,6 +1546,8 @@ export default function KassaPage() {
         if (uploadedReceiptId && !receiptExistsInInbox) {
           setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
         }
+
+        if (isAddReceiptRoute) navigate('/kassa')
 
         try {
           window.requestAnimationFrame(() => {
@@ -1632,8 +1606,7 @@ export default function KassaPage() {
       if (result?.duplicate) {
         announceDuplicate(result)
       } else {
-        setIsSourceHubOpen(false)
-        setOpenedReceiptId('')
+            setOpenedReceiptId('')
         setOpenedReceipt(null)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
@@ -1658,6 +1631,8 @@ export default function KassaPage() {
         if (uploadedReceiptId && !receiptExistsInInbox) {
           setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
         }
+
+        if (isAddReceiptRoute) navigate('/kassa')
 
         try {
           window.requestAnimationFrame(() => {
@@ -1704,8 +1679,7 @@ export default function KassaPage() {
       if (result?.duplicate) {
         announceDuplicate(result)
       } else {
-        setIsSourceHubOpen(false)
-        setOpenedReceiptId('')
+            setOpenedReceiptId('')
         setOpenedReceipt(null)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
@@ -1730,6 +1704,8 @@ export default function KassaPage() {
         if (uploadedReceiptId && !receiptExistsInInbox) {
           setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
         }
+
+        if (isAddReceiptRoute) navigate('/kassa')
 
         try {
           window.requestAnimationFrame(() => {
@@ -1790,189 +1766,184 @@ export default function KassaPage() {
   }
 
   return (
-    <AppShell title="Kassa" showExit={false}>
-      <div style={{ display: 'grid', gap: '16px' }} data-testid="kassa-page">
-        <ScreenCard>
-          <div style={{ display: 'grid', gap: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: '24px' }}>Bon-inbox</div>
-                <div style={{ color: '#667085', marginTop: '4px' }}>
-                  Zie direct welke bonnen nieuw zijn, controle nodig hebben of al gecontroleerd zijn.
+    <AppShell title={isAddReceiptRoute ? 'Bon toevoegen' : 'Kassa'} showExit={false}>
+      <ReceiptUploadInputs
+        fileInputRef={fileInputRef}
+        cameraInputRef={cameraInputRef}
+        emailInputRef={emailInputRef}
+        onLandingUploadChange={handleLandingUploadChange}
+        onCameraCaptureChange={handleCameraCaptureChange}
+        onEmailUploadChange={handleEmailUploadChange}
+      />
+
+      {isAddReceiptRoute ? (
+        <div data-testid="kassa-add-page" style={{ display: 'grid', gap: '16px' }}>
+          {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
+          {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-duplicate-feedback">{duplicateNotice}</div> : null}
+          {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
+
+          <ScreenCard fullWidth>
+            <ReceiptSourceHubContent
+              onChooseReceiptFile={handleChooseReceiptFileFromHub}
+              onChooseCamera={handleChooseCameraFromHub}
+              onChooseEmail={handleChooseEmailFromHub}
+              onDropLandingFile={handleDroppedLandingFile}
+              onCopyEmailRoute={copyEmailRouteToClipboard}
+              emailRoute={emailRoute}
+              isEmailRouteLoading={isEmailRouteLoading}
+              emailRouteError={emailRouteError}
+              duplicateNotice={duplicateNotice}
+              isUploading={isUploading}
+            />
+          </ScreenCard>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: '16px' }} data-testid="kassa-page">
+          <ScreenCard>
+            <div style={{ display: 'grid', gap: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '24px' }}>Bon-inbox</div>
+                  <div style={{ color: '#667085', marginTop: '4px' }}>
+                    Zie direct welke bonnen nieuw zijn, controle nodig hebben of al gecontroleerd zijn.
+                  </div>
+                </div>
+                <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+                  <Button type="button" variant="primary" onClick={openSourceHub} disabled={isUploading} data-testid="kassa-add-receipt-button">{isUploading ? 'Uploaden…' : 'Bon toevoegen'}</Button>
                 </div>
               </div>
-              <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".eml,message/rfc822,.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-                  style={{ display: 'none' }}
-                  onChange={handleLandingUploadChange}
-                />
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="environment"
-                  style={{ display: 'none' }}
-                  onChange={handleCameraCaptureChange}
-                />
-                <input
-                  ref={emailInputRef}
-                  type="file"
-                  accept=".eml,message/rfc822"
-                  style={{ display: 'none' }}
-                  onChange={handleEmailUploadChange}
-                />
-                <Button type="button" variant="primary" onClick={openSourceHub} disabled={isUploading} data-testid="kassa-add-receipt-button">{isUploading ? 'Uploaden…' : 'Bon toevoegen'}</Button>
+
+              {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
+              {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-duplicate-feedback">{duplicateNotice}</div> : null}
+              {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
+
+              <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                {[
+                  { key: 'Nieuw', helper: 'Nog niet gecontroleerd' },
+                  { key: 'Controle nodig', helper: 'Vraagt extra aandacht' },
+                  { key: 'Gecontroleerd', helper: 'Al bekeken in Kassa' },
+                ].map((entry) => {
+                  const isActive = filters.status === entry.key
+                  return (
+                    <button
+                      key={entry.key}
+                      type="button"
+                      onClick={() => applyStatusFilter(entry.key)}
+                      data-testid={`kassa-status-card-${String(entry.key).toLowerCase().replace(/\s+/g, '-')}`}
+                      style={{
+                        textAlign: 'center',
+                        borderRadius: '16px',
+                        border: isActive ? `2px solid ${inboxStatusAccentColor(entry.key)}` : '1px solid #D0D5DD',
+                        background: '#FFFFFF',
+                        padding: '16px',
+                        display: 'grid',
+                        gap: '8px',
+                        cursor: 'pointer',
+                        boxShadow: isActive ? `0 0 0 3px ${entry.key === 'Gecontroleerd' ? 'rgba(18,183,106,0.12)' : entry.key === 'Controle nodig' ? 'rgba(247,144,9,0.12)' : 'rgba(181,71,8,0.12)'}` : 'none',
+                        position: 'relative',
+                        overflow: 'hidden',
+                      }}
+                    >
+                      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', background: inboxStatusAccentColor(entry.key) }} />
+                      <div style={{ fontSize: '15px', fontWeight: 700, justifySelf: 'center' }}>{entry.key}</div>
+                      <div style={{ fontSize: '28px', fontWeight: 800, lineHeight: 1 }}>{inboxSummary[entry.key] || 0}</div>
+                      <div style={{ fontSize: '13px', color: '#667085' }}>{entry.helper}</div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
+              </div>
+
+              <div className="rz-table-wrapper">
+                <table className="rz-table" data-testid="kassa-table">
+                  <thead>
+                    <tr className="rz-table-header">
+                      <th style={{ width: '44px' }}>
+                        <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare bonnen" />
+                      </th>
+                      <th>Winkel</th>
+                      <th>Datum</th>
+                      <th className="rz-num">Totaal</th>
+                      <th className="rz-num">Artikelen</th>
+                    </tr>
+                    <tr className="rz-table-filters">
+                      <th />
+                      <th>
+                        <input className="rz-input rz-inline-input" value={filters.winkel} onChange={(event) => handleFilterChange('winkel', event.target.value)} placeholder="Filter" aria-label="Filter op winkel" />
+                      </th>
+                      <th>
+                        <input className="rz-input rz-inline-input" value={filters.datum} onChange={(event) => handleFilterChange('datum', event.target.value)} placeholder="Filter" aria-label="Filter op datum" />
+                      </th>
+                      <th>
+                        <input className="rz-input rz-inline-input" value={filters.totaal} onChange={(event) => handleFilterChange('totaal', event.target.value)} placeholder="Filter" aria-label="Filter op totaal" />
+                      </th>
+                      <th>
+                        <input className="rz-input rz-inline-input" value={filters.artikelen} onChange={(event) => handleFilterChange('artikelen', event.target.value)} placeholder="Filter" aria-label="Filter op artikelen" />
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isLoading ? (
+                      <tr><td colSpan={5}>Bonnen laden…</td></tr>
+                    ) : listItems.length === 0 ? (
+                      <tr><td colSpan={5}>Er zijn nog geen bonnen in de inbox beschikbaar.</td></tr>
+                    ) : listItems.map((item) => {
+                      const selected = selectedReceiptIds.includes(item.receipt_table_id)
+                      return (
+                        <tr
+                          key={item.receipt_table_id}
+                          className={selected ? 'rz-row-selected' : ''}
+                          onClick={() => toggleSelectedReceipt(item.receipt_table_id)}
+                          onDoubleClick={() => openReceiptDetail(item.receipt_table_id)}
+                          data-testid={`kassa-row-${item.receipt_table_id}`}
+                          style={{
+                            cursor: 'pointer',
+                            boxShadow: `inset 4px 0 0 ${item.inbox_status === 'Gecontroleerd' ? '#12B76A' : item.inbox_status === 'Controle nodig' ? '#F79009' : '#B54708'}`,
+                            background: String(item.receipt_table_id) === receiptInboxFocusId ? '#ECFDF3' : undefined,
+                            outline: String(item.receipt_table_id) === receiptInboxFocusId ? '2px solid #12B76A' : undefined,
+                            outlineOffset: String(item.receipt_table_id) === receiptInboxFocusId ? '-2px' : undefined,
+                          }}
+                        >
+                          <td onClick={(event) => event.stopPropagation()}>
+                            <button
+                              type="button"
+                              data-testid={`kassa-open-${item.receipt_table_id}`}
+                              onClick={(event) => { event.stopPropagation(); openReceiptDetail(item.receipt_table_id) }}
+                              style={{ display: 'none' }}
+                              aria-hidden="true"
+                              tabIndex={-1}
+                            />
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggleSelectedReceipt(item.receipt_table_id)}
+                              aria-label={`Selecteer bon ${item.store_name || 'onbekend'} van ${formatDateTime(item.purchase_at)}`}
+                            />
+                          </td>
+                          <td className="rz-receipts-cell">
+                            <div style={{ display: 'grid', gap: '4px' }}>
+                              <div>{item.store_name || 'Onbekende winkel'}</div>
+                              <div style={{ fontSize: '12px', color: '#667085', fontWeight: 700 }}>{item.source_label || 'Handmatige upload'}</div>
+                            </div>
+                          </td>
+                          <td className="rz-receipts-cell">{formatDateTime(item.purchase_at)}</td>
+                          <td className="rz-num rz-receipts-cell">{formatMoney(item.total_amount, item.currency)}</td>
+                          <td className="rz-num rz-receipts-cell">{item.line_count ?? 0}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
+          </ScreenCard>
 
-            {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
-            {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-duplicate-feedback">{duplicateNotice}</div> : null}
-            {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
-
-            <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
-              {[
-                { key: 'Nieuw', helper: 'Nog niet gecontroleerd' },
-                { key: 'Controle nodig', helper: 'Vraagt extra aandacht' },
-                { key: 'Gecontroleerd', helper: 'Al bekeken in Kassa' },
-              ].map((entry) => {
-                const isActive = filters.status === entry.key
-                return (
-                  <button
-                    key={entry.key}
-                    type="button"
-                    onClick={() => applyStatusFilter(entry.key)}
-                    data-testid={`kassa-status-card-${String(entry.key).toLowerCase().replace(/\s+/g, '-')}`}
-                    style={{
-                      textAlign: 'center',
-                      borderRadius: '16px',
-                      border: isActive ? `2px solid ${inboxStatusAccentColor(entry.key)}` : '1px solid #D0D5DD',
-                      background: '#FFFFFF',
-                      padding: '16px',
-                      display: 'grid',
-                      gap: '8px',
-                      cursor: 'pointer',
-                      boxShadow: isActive ? `0 0 0 3px ${entry.key === 'Gecontroleerd' ? 'rgba(18,183,106,0.12)' : entry.key === 'Controle nodig' ? 'rgba(247,144,9,0.12)' : 'rgba(181,71,8,0.12)'}` : 'none',
-                      position: 'relative',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '8px', background: inboxStatusAccentColor(entry.key) }} />
-                    <div style={{ fontSize: '15px', fontWeight: 700, justifySelf: 'center' }}>{entry.key}</div>
-                    <div style={{ fontSize: '28px', fontWeight: 800, lineHeight: 1 }}>{inboxSummary[entry.key] || 0}</div>
-                    <div style={{ fontSize: '13px', color: '#667085' }}>{entry.helper}</div>
-                  </button>
-                )
-              })}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-              <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
-            </div>
-
-            <div className="rz-table-wrapper">
-              <table className="rz-table" data-testid="kassa-table">
-                <thead>
-                  <tr className="rz-table-header">
-                    <th style={{ width: '44px' }}>
-                      <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare bonnen" />
-                    </th>
-                    <th>Winkel</th>
-                    <th>Datum</th>
-                    <th className="rz-num">Totaal</th>
-                    <th className="rz-num">Artikelen</th>
-                  </tr>
-                  <tr className="rz-table-filters">
-                    <th />
-                    <th>
-                      <input className="rz-input rz-inline-input" value={filters.winkel} onChange={(event) => handleFilterChange('winkel', event.target.value)} placeholder="Filter" aria-label="Filter op winkel" />
-                    </th>
-                    <th>
-                      <input className="rz-input rz-inline-input" value={filters.datum} onChange={(event) => handleFilterChange('datum', event.target.value)} placeholder="Filter" aria-label="Filter op datum" />
-                    </th>
-                    <th>
-                      <input className="rz-input rz-inline-input" value={filters.totaal} onChange={(event) => handleFilterChange('totaal', event.target.value)} placeholder="Filter" aria-label="Filter op totaal" />
-                    </th>
-                    <th>
-                      <input className="rz-input rz-inline-input" value={filters.artikelen} onChange={(event) => handleFilterChange('artikelen', event.target.value)} placeholder="Filter" aria-label="Filter op artikelen" />
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {isLoading ? (
-                    <tr><td colSpan={5}>Bonnen laden…</td></tr>
-                  ) : listItems.length === 0 ? (
-                    <tr><td colSpan={5}>Er zijn nog geen bonnen in de inbox beschikbaar.</td></tr>
-                  ) : listItems.map((item) => {
-                    const selected = selectedReceiptIds.includes(item.receipt_table_id)
-                    return (
-                      <tr
-                        key={item.receipt_table_id}
-                        className={selected ? 'rz-row-selected' : ''}
-                        onClick={() => toggleSelectedReceipt(item.receipt_table_id)}
-                        onDoubleClick={() => openReceiptDetail(item.receipt_table_id)}
-                        data-testid={`kassa-row-${item.receipt_table_id}`}
-                        style={{
-                          cursor: 'pointer',
-                          boxShadow: `inset 4px 0 0 ${item.inbox_status === 'Gecontroleerd' ? '#12B76A' : item.inbox_status === 'Controle nodig' ? '#F79009' : '#B54708'}`,
-                          background: String(item.receipt_table_id) === receiptInboxFocusId ? '#ECFDF3' : undefined,
-                          outline: String(item.receipt_table_id) === receiptInboxFocusId ? '2px solid #12B76A' : undefined,
-                          outlineOffset: String(item.receipt_table_id) === receiptInboxFocusId ? '-2px' : undefined,
-                        }}
-                      >
-                        <td onClick={(event) => event.stopPropagation()}>
-                          <button
-                            type="button"
-                            data-testid={`kassa-open-${item.receipt_table_id}`}
-                            onClick={(event) => { event.stopPropagation(); openReceiptDetail(item.receipt_table_id) }}
-                            style={{ display: 'none' }}
-                            aria-hidden="true"
-                            tabIndex={-1}
-                          />
-                          <input
-                            type="checkbox"
-                            checked={selected}
-                            onChange={() => toggleSelectedReceipt(item.receipt_table_id)}
-                            aria-label={`Selecteer bon ${item.store_name || 'onbekend'} van ${formatDateTime(item.purchase_at)}`}
-                          />
-                        </td>
-                        <td className="rz-receipts-cell">
-                          <div style={{ display: 'grid', gap: '4px' }}>
-                            <div>{item.store_name || 'Onbekende winkel'}</div>
-                            <div style={{ fontSize: '12px', color: '#667085', fontWeight: 700 }}>{item.source_label || 'Handmatige upload'}</div>
-                          </div>
-                        </td>
-                        <td className="rz-receipts-cell">{formatDateTime(item.purchase_at)}</td>
-                        <td className="rz-num rz-receipts-cell">{formatMoney(item.total_amount, item.currency)}</td>
-                        <td className="rz-num rz-receipts-cell">{item.line_count ?? 0}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </ScreenCard>
-
-        {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} /> : null}
-      </div>
-
-      <ReceiptSourceHubModal
-        isOpen={isSourceHubOpen}
-        onClose={() => setIsSourceHubOpen(false)}
-        onChooseReceiptFile={handleChooseReceiptFileFromHub}
-        onChooseCamera={handleChooseCameraFromHub}
-        onChooseEmail={handleChooseEmailFromHub}
-        onDropLandingFile={handleDroppedLandingFile}
-        onCopyEmailRoute={copyEmailRouteToClipboard}
-        emailRoute={emailRoute}
-        isEmailRouteLoading={isEmailRouteLoading}
-        emailRouteError={emailRouteError}
-        duplicateNotice={duplicateNotice}
-        isUploading={isUploading}
-      />
+          {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} /> : null}
+        </div>
+      )}
 
       <CameraCaptureModal
         isOpen={Boolean(cameraDraft)}

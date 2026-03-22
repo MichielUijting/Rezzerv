@@ -9,7 +9,6 @@ import html
 import json
 import os
 from pathlib import Path
-from decimal import Decimal, InvalidOperation
 import secrets
 import traceback
 import urllib.error
@@ -3977,73 +3976,11 @@ def source_scan_receipts(payload: ReceiptSourceScanRequest):
     return result
 
 
-
-def _normalize_receipt_list_key_part(value: Any) -> str:
-    return re.sub(r'\s+', ' ', str(value or '').strip().lower())
-
-
-def _coerce_receipt_purchase_at(value: Any) -> str | None:
-    if value in (None, ''):
-        return None
-    raw = str(value).strip()
-    try:
-        parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
-    except Exception:
-        return raw if raw and not re.match(r'^21\d\d-', raw) else None
-    current_year = datetime.utcnow().year
-    if not (current_year - 10 <= parsed.year <= current_year + 1):
-        return None
-    return parsed.isoformat()
-
-
-def _coerce_receipt_total_amount(value: Any, *, line_count: int = 0, parse_status: str = '') -> float | None:
-    if value in (None, ''):
-        return None
-    try:
-        amount = Decimal(str(value)).quantize(Decimal('0.01'))
-    except (InvalidOperation, ValueError, TypeError):
-        return None
-    if amount <= Decimal('0.00') or amount > Decimal('10000.00'):
-        return None
-    if line_count <= 1 and str(parse_status or '').strip().lower() != 'parsed':
-        return None
-    return float(amount)
-
-
-def _sanitize_receipt_header_row(row: dict[str, Any]) -> dict[str, Any]:
-    cleaned = dict(row)
-    parse_status = str(cleaned.get('parse_status') or '').strip().lower()
-    line_count = int(cleaned.get('line_count') or 0)
-    cleaned['purchase_at'] = _coerce_receipt_purchase_at(cleaned.get('purchase_at'))
-    cleaned['total_amount'] = _coerce_receipt_total_amount(cleaned.get('total_amount'), line_count=line_count, parse_status=parse_status)
-    return cleaned
-
-
-def _build_receipt_inbox_dedupe_key(row: dict[str, Any]) -> str:
-    purchase_at = _coerce_receipt_purchase_at(row.get('purchase_at') or row.get('email_received_at'))
-    purchase_key = ''
-    if purchase_at:
-        try:
-            purchase_key = datetime.fromisoformat(str(purchase_at).replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M')
-        except Exception:
-            purchase_key = str(purchase_at)[:16]
-    total_amount = _coerce_receipt_total_amount(row.get('total_amount'), line_count=int(row.get('line_count') or 0), parse_status=str(row.get('parse_status') or ''))
-    total_key = f"{total_amount:.2f}" if total_amount is not None else ''
-    line_signature = _normalize_receipt_list_key_part(row.get('line_signature') or row.get('email_subject') or row.get('original_filename'))
-    parts = [
-        _normalize_receipt_list_key_part(row.get('store_name')),
-        purchase_key,
-        total_key,
-        line_signature,
-    ]
-    return '|'.join(part for part in parts if part)
-
-
 @app.get("/api/receipts")
 def list_receipts(householdId: str = Query(...)):
     effective_household_id = str(householdId).strip() or "1"
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
-    repair_receipts_for_household(engine, RECEIPT_STORAGE_ROOT, effective_household_id, limit=100)
+    repair_receipts_for_household(engine, RECEIPT_STORAGE_ROOT, effective_household_id, limit=20)
     with engine.begin() as conn:
         rows = conn.execute(
             text(
@@ -4069,12 +4006,7 @@ def list_receipts(householdId: str = Query(...)):
                         SELECT SUM(COALESCE(rtl.line_total, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                    ), 0) AS line_total_sum,
-                    COALESCE((
-                        SELECT GROUP_CONCAT(COALESCE(NULLIF(TRIM(rtl.normalized_label), ''), TRIM(rtl.raw_label)), '||')
-                        FROM receipt_table_lines rtl
-                        WHERE rtl.receipt_table_id = rt.id
-                    ), '') AS line_signature
+                    ), 0) AS line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
@@ -4088,18 +4020,30 @@ def list_receipts(householdId: str = Query(...)):
             {"household_id": effective_household_id},
         ).mappings().all()
 
+    def normalize_key_part(value):
+        return re.sub(r'\s+', ' ', str(value or '').strip().lower())
+
     deduped_items = []
     seen_keys = set()
     for row in rows:
-        cleaned_row = _sanitize_receipt_header_row(dict(row))
-        dedupe_key = _build_receipt_inbox_dedupe_key(cleaned_row) or _normalize_receipt_list_key_part(cleaned_row.get('sha256_hash')) or str(cleaned_row.get('receipt_table_id') or '')
+        store_name = normalize_key_part(row.get('store_name'))
+        purchase_at = normalize_key_part(row.get('purchase_at'))
+        total_amount = row.get('total_amount')
+        try:
+            total_key = f"{float(total_amount):.2f}" if total_amount is not None else ''
+        except Exception:
+            total_key = normalize_key_part(total_amount)
+        line_count = str(row.get('line_count') or 0)
+        source_label = normalize_key_part(row.get('source_label'))
+        sha_key = normalize_key_part(row.get('sha256_hash'))
+        fingerprint_key = (store_name, purchase_at, total_key, line_count, source_label)
+        dedupe_key = sha_key or '|'.join(fingerprint_key)
         if dedupe_key in seen_keys:
             continue
         seen_keys.add(dedupe_key)
-        serialized = serialize_receipt_row(cleaned_row)
+        serialized = serialize_receipt_row(dict(row))
         serialized.pop('original_filename', None)
         serialized.pop('sha256_hash', None)
-        serialized.pop('line_signature', None)
         deduped_items.append(serialized)
     return {"items": deduped_items}
 
@@ -4117,8 +4061,7 @@ def get_receipt_preview(receipt_table_id: str):
                     rr.storage_path,
                     rem.body_html,
                     rem.body_text,
-                    rem.selected_part_type,
-                    rem.selected_mime_type
+                    rem.selected_part_type
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
@@ -4134,22 +4077,11 @@ def get_receipt_preview(receipt_table_id: str):
         raise HTTPException(status_code=404, detail="Bon niet gevonden")
 
     selected_part_type = str(record.get("selected_part_type") or "").strip().lower()
-    selected_mime_type = str(record.get("selected_mime_type") or "").strip().lower()
     body_html = record.get("body_html")
     body_text = record.get("body_text")
-    mime_type = str(record["mime_type"] or "application/octet-stream")
-
-    if body_html and (
-        selected_part_type in {"html_body", "text_body"}
-        or selected_mime_type == "text/html"
-        or mime_type in {"text/html", "text/plain", "message/rfc822"}
-    ):
+    if selected_part_type in {"html_body", "text_body"} and body_html:
         return HTMLResponse(content=str(body_html), headers={"Content-Disposition": "inline"})
-    if body_text and (
-        selected_part_type == "text_body"
-        or selected_mime_type == "text/plain"
-        or mime_type in {"text/plain", "message/rfc822"}
-    ):
+    if selected_part_type == "text_body" and body_text:
         return Response(content=str(body_text), media_type="text/plain", headers={"Content-Disposition": "inline"})
 
     storage_path = Path(record["storage_path"] or "")
@@ -4161,6 +4093,7 @@ def get_receipt_preview(receipt_table_id: str):
     except Exception:
         raise HTTPException(status_code=403, detail="Bonbestand ligt buiten de toegestane opslag")
 
+    mime_type = str(record["mime_type"] or "application/octet-stream")
     filename = str(record["original_filename"] or storage_path.name)
     headers = {"Content-Disposition": f'inline; filename="{Path(filename).name}"'}
     return FileResponse(path=storage_path, media_type=mime_type, filename=Path(filename).name, headers=headers)
@@ -4239,7 +4172,7 @@ def get_receipt_detail(receipt_table_id: str):
             ),
             {"receipt_table_id": receipt_table_id},
         ).mappings().all()
-    payload = serialize_receipt_row(_sanitize_receipt_header_row(dict(header)))
+    payload = serialize_receipt_row(dict(header))
     payload["lines"] = [serialize_receipt_row(dict(line)) for line in lines]
     return payload
 

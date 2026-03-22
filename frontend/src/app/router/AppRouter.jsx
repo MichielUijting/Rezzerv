@@ -53,6 +53,7 @@ const router = createBrowserRouter([
   { path: '/winkels', element: <Protected><StoresPage /></Protected> },
   { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
+  { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><StoresPage /></Protected> },
   { path: '/winkels/batch/:batchId', element: <Protected><StoreBatchDetailPage /></Protected> },
