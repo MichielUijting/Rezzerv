@@ -315,6 +315,38 @@ function isSupportedEmailImportFile(file) {
   return fileName.endsWith('.eml') || fileType === 'message/rfc822'
 }
 
+function isSupportedReceiptLandingFile(file) {
+  if (!file) return false
+  if (isSupportedEmailImportFile(file)) return true
+  const fileName = String(file.name || '').toLowerCase()
+  const fileType = String(file.type || '').toLowerCase()
+  if (fileName.endsWith('.pdf')) return true
+  if (fileName.endsWith('.png') || fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.webp')) return true
+  if (fileType === 'application/pdf') return true
+  if (fileType.startsWith('image/')) return true
+  return false
+}
+
+function pickSupportedReceiptLandingFile(files) {
+  if (!Array.isArray(files) || files.length === 0) return null
+  return files.find(isSupportedReceiptLandingFile) || null
+}
+
+function buildClipboardImportFile(clipboardData) {
+  if (!clipboardData) return null
+  const directFiles = Array.from(clipboardData.files || [])
+  const directMatch = pickSupportedReceiptLandingFile(directFiles)
+  if (directMatch) return directMatch
+
+  for (const item of Array.from(clipboardData.items || [])) {
+    const candidateFile = item?.getAsFile?.()
+    if (candidateFile && isSupportedReceiptLandingFile(candidateFile)) {
+      return candidateFile
+    }
+  }
+  return null
+}
+
 async function fetchReceiptSources(householdId) {
   return fetchJson(`/api/receipt-sources?householdId=${encodeURIComponent(householdId)}`)
 }
@@ -798,10 +830,10 @@ function ReceiptDetailView({ receipt }) {
 function ReceiptSourceHubModal({
   isOpen,
   onClose,
-  onChooseSharedFile,
+  onChooseExplorerFile,
   onChooseCamera,
-  onChooseEmail,
-  onDropEmailFile,
+  onDropLandingFile,
+  onPasteLandingClipboard,
   onCopyEmailRoute,
   emailRoute,
   isEmailRouteLoading,
@@ -810,8 +842,6 @@ function ReceiptSourceHubModal({
   isUploading,
 }) {
   const [isEmailDropActive, setIsEmailDropActive] = useState(false)
-
-  if (!isOpen) return null
 
   function handleEmailDragEnter(event) {
     event.preventDefault()
@@ -836,18 +866,23 @@ function ReceiptSourceHubModal({
     setIsEmailDropActive(false)
   }
 
-  async function handleEmailDrop(event) {
+  async function handleLandingDrop(event) {
     event.preventDefault()
     event.stopPropagation()
     setIsEmailDropActive(false)
     if (isUploading) return
     const files = Array.from(event.dataTransfer?.files || [])
-    const emailFile = files.find(isSupportedEmailImportFile) || files[0] || null
-    if (!emailFile) {
-      onDropEmailFile?.(null)
-      return
-    }
-    await onDropEmailFile?.(emailFile)
+    const importFile = pickSupportedReceiptLandingFile(files)
+    if (!importFile) return
+    await onDropLandingFile?.(importFile)
+  }
+
+  async function handleLandingPaste(event) {
+    if (isUploading) return
+    const importFile = buildClipboardImportFile(event.clipboardData)
+    if (!importFile) return
+    event.preventDefault()
+    await onPasteLandingClipboard?.(importFile)
   }
 
   const routeAddress = emailRoute?.route_address || '-'
@@ -855,7 +890,6 @@ function ReceiptSourceHubModal({
   const routeDomain = emailRoute?.route_domain || ''
   const resendConfigured = Boolean(emailRoute?.resend_configured)
   const latestInbound = emailRoute?.latest || null
-  const webhookEndpointPath = emailRoute?.webhook_endpoint_path || '/api/receipts/inbound'
   const forwardingStatusLabel = isEmailRouteLoading
     ? 'Doorstuuradres laden…'
     : routeIsPublic && resendConfigured
@@ -863,6 +897,21 @@ function ReceiptSourceHubModal({
       : routeIsPublic
         ? 'Adres klaar, inbound nog niet actief'
         : 'Lokale demo-opstelling'
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    async function handleWindowPaste(event) {
+      if (isUploading) return
+      const importFile = buildClipboardImportFile(event.clipboardData)
+      if (!importFile) return
+      event.preventDefault()
+      await onPasteLandingClipboard?.(importFile)
+    }
+    window.addEventListener('paste', handleWindowPaste)
+    return () => window.removeEventListener('paste', handleWindowPaste)
+  }, [isOpen, isUploading, onPasteLandingClipboard])
+
+  if (!isOpen) return null
 
   return (
     <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', overflowY: 'auto', padding: '16px 20px 20px' }}>
@@ -876,73 +925,115 @@ function ReceiptSourceHubModal({
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div>
             <h2 id="kassa-bronhub-title" className="rz-modal-title" style={{ fontSize: '22px' }}>Bon toevoegen</h2>
-            <p className="rz-modal-text">Kies één van de drie officiële routes om een kassabon in Rezzerv te krijgen.</p>
+            <p className="rz-modal-text">Gebruik het landingsgebied om bonnen te slepen of te plakken. Handmatig kiezen via Verkenner blijft daaronder beschikbaar.</p>
           </div>
           <Button type="button" variant="secondary" onClick={onClose}>Sluiten</Button>
         </div>
 
-        <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-          <ScreenCard fullWidth>
-            <div style={{ display: 'grid', gap: '12px' }}>
-              <div style={{ fontSize: '20px', fontWeight: 700 }}>Delen naar Rezzerv</div>
-              <div style={{ color: '#667085' }}>Ontvang gedeelde kassabonbestanden vanuit apps, websites of bestandsomgevingen direct in Rezzerv. Gebruik de geïnstalleerde Rezzerv-app als deeldoel of kies hier een gedeeld bestand als fallback.</div>
-              <Button type="button" variant="primary" onClick={onChooseSharedFile}>Fallback: gedeeld bestand kiezen</Button>
-            </div>
-          </ScreenCard>
+        <div style={{ display: 'grid', gap: '16px' }}>
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => { if (!isUploading) onChooseExplorerFile?.() }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                if (!isUploading) onChooseExplorerFile?.()
+              }
+            }}
+            onPaste={handleLandingPaste}
+            onDragEnter={handleEmailDragEnter}
+            onDragOver={handleEmailDragOver}
+            onDragLeave={handleEmailDragLeave}
+            onDrop={handleLandingDrop}
+            style={{
+              width: 'min(760px, 100%)',
+              justifySelf: 'center',
+              borderRadius: '20px',
+              border: isEmailDropActive ? '2px dashed #12B76A' : '2px dashed #166534',
+              background: isEmailDropActive ? 'rgba(18, 183, 106, 0.06)' : '#F8FAFC',
+              padding: '28px 24px',
+              display: 'grid',
+              gap: '10px',
+              textAlign: 'center',
+              cursor: isUploading ? 'progress' : 'copy',
+              outline: 'none',
+              boxShadow: isEmailDropActive ? '0 0 0 4px rgba(18,183,106,0.12)' : 'none',
+            }}
+            aria-label="Sleep of plak een kassabon, e-mailbestand of afbeelding in het landingsgebied"
+            data-testid="kassa-email-dropzone"
+          >
+            <div style={{ fontSize: '22px', fontWeight: 700 }}>Sleep of plak hier je kassabon</div>
+            <div style={{ color: '#475467', fontSize: '15px' }}>Ondersteund in deze versie: <strong>.eml</strong>, <strong>.pdf</strong> en afbeeldingen zoals <strong>.png</strong>, <strong>.jpg</strong> en <strong>.jpeg</strong>.</div>
+            <div style={{ color: '#667085', fontSize: '13px' }}>Je kunt hier bestanden naartoe slepen of een afbeelding / e-mail vanuit het klembord plakken.</div>
+          </div>
 
-          <ScreenCard fullWidth>
-            <div style={{ display: 'grid', gap: '12px' }}>
-              <div style={{ fontSize: '20px', fontWeight: 700 }}>Foto maken</div>
-              <div style={{ color: '#667085' }}>Maak direct in Rezzerv een foto van een papieren kassabon. Na bevestigen wordt deze via dezelfde bonketen verwerkt.</div>
-              <Button type="button" variant="primary" onClick={onChooseCamera}>Camera openen</Button>
-            </div>
-          </ScreenCard>
+          <div className="rz-stock-table-actions" style={{ justifyContent: 'center' }}>
+            <Button type="button" variant="primary" onClick={onChooseExplorerFile} disabled={isUploading}>Bestanden via Verkenner kiezen</Button>
+          </div>
 
-          <ScreenCard fullWidth>
-            <div style={{ display: 'grid', gap: '12px' }}>
-              <div style={{ fontSize: '20px', fontWeight: 700 }}>E-mail doorsturen</div>
-              <div style={{ color: '#667085' }}>Laat kassabonmails automatisch doorsturen naar je persoonlijke Rezzerv-adres. Gebruik in Gmail of Outlook een regel/filter voor kassabonnen. De handmatige <strong>.eml</strong>-import blijft beschikbaar als fallback.</div>
-              <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
-                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Status</div>
-                <div style={{ fontSize: '15px', fontWeight: 700 }}>{forwardingStatusLabel}</div>
-                <div style={{ fontSize: '13px', color: '#667085' }}>
-                  {routeIsPublic && resendConfigured
-                    ? 'Dit adres kan automatisch bonmails ontvangen zodra Resend naar jouw publieke Rezzerv-webhook post.'
-                    : routeIsPublic
-                      ? 'Het doorstuuradres is publiek, maar de Resend-inbound API-sleutel ontbreekt nog in Rezzerv. Gebruik voorlopig .eml als fallback.'
-                      : `Deze lokale build gebruikt nu ${routeDomain || 'een lokaal domein'}. Daardoor werkt automatisch ontvangen nog niet rechtstreeks vanaf internetmail. Gebruik voorlopig .eml als fallback.`}
+          {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-sourcehub-duplicate-feedback">{duplicateNotice}</div> : null}
+          {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
+
+          <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', alignItems: 'start' }}>
+            <ScreenCard fullWidth>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700 }}>Bestanden en formaten</div>
+                <div style={{ color: '#667085' }}>Alle ondersteunde bonbestanden kun je nu in het landingsgebied slepen of plakken. Gebruik Verkenner als je liever handmatig een bestand kiest.</div>
+                <div style={{ color: '#344054', fontSize: '14px' }}>
+                  Ondersteund: <strong>.eml</strong>, <strong>.pdf</strong> en afbeeldingen zoals <strong>.png</strong>, <strong>.jpg</strong> en <strong>.jpeg</strong>.
                 </div>
               </div>
-              <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
-                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Persoonlijk Rezzerv-adres</div>
-                <div style={{ fontSize: '15px', fontWeight: 700, wordBreak: 'break-all' }}>
-                  {isEmailRouteLoading ? 'E-mailroute laden…' : routeAddress}
+            </ScreenCard>
+
+            <ScreenCard fullWidth>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700 }}>Camera</div>
+                <div style={{ color: '#667085' }}>Voor een papieren kassabon kun je nog steeds direct vanuit Rezzerv een foto maken.</div>
+                <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+                  <Button type="button" variant="secondary" onClick={onChooseCamera} disabled={isUploading}>Camera openen</Button>
                 </div>
               </div>
-              <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
-                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Automatische ontvangst</div>
-                <div style={{ fontSize: '15px', fontWeight: 700 }}>
-                  {latestInbound ? inboundImportStatusLabel(latestInbound.import_status) : 'Nog geen automatische mail ontvangen'}
+            </ScreenCard>
+
+            <ScreenCard fullWidth>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700 }}>E-mail doorsturen</div>
+                <div style={{ color: '#667085' }}>Automatisch doorsturen naar Rezzerv blijft beschikbaar als vervolgstap. De handmatige route via slepen, plakken of Verkenner werkt nu het snelst.</div>
+                <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
+                  <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Persoonlijk Rezzerv-adres</div>
+                  <div style={{ fontSize: '15px', fontWeight: 700, wordBreak: 'break-all' }}>
+                    {isEmailRouteLoading ? 'E-mailroute laden…' : routeAddress}
+                  </div>
                 </div>
-                <div style={{ fontSize: '13px', color: '#667085' }}>
-                  {latestInbound
-                    ? `Laatst ontvangen: ${formatDateTime(latestInbound.received_at || latestInbound.webhook_received_at)}`
-                    : 'Zodra Resend een mail aan Rezzerv doorstuurt, zie je dat hier terug.'}
+                <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
+                  <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Status</div>
+                  <div style={{ fontSize: '15px', fontWeight: 700 }}>{forwardingStatusLabel}</div>
+                  <div style={{ fontSize: '13px', color: '#667085' }}>
+                    {routeIsPublic && resendConfigured
+                      ? 'Dit adres kan automatisch bonmails ontvangen zodra Resend naar jouw publieke Rezzerv-webhook post.'
+                      : routeIsPublic
+                        ? 'Het doorstuuradres is publiek, maar de Resend-inbound API-sleutel ontbreekt nog in Rezzerv.'
+                        : `Deze lokale build gebruikt nu ${routeDomain || 'een lokaal domein'}. Daardoor werkt automatisch ontvangen nog niet rechtstreeks vanaf internetmail.`}
+                  </div>
                 </div>
-                {latestInbound?.sender_email ? (
-                  <div style={{ fontSize: '13px', color: '#667085' }}>Afzender: {latestInbound.sender_name ? `${latestInbound.sender_name} <${latestInbound.sender_email}>` : latestInbound.sender_email}</div>
-                ) : null}
-                <div style={{ fontSize: '13px', color: '#667085' }}>Webhook-pad in Rezzerv: <strong>{webhookEndpointPath}</strong></div>
+                <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+                  <Button type="button" variant="secondary" onClick={onCopyEmailRoute} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>Adres kopiëren</Button>
+                </div>
               </div>
-              <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '10px' }}>
-                <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Zo stel je forwarding in</div>
+            </ScreenCard>
+
+            <ScreenCard fullWidth>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                <div style={{ fontSize: '18px', fontWeight: 700 }}>Uitleg</div>
+                <div style={{ color: '#667085' }}>Deze toelichting houden we voorlopig nog bewust zichtbaar. In een later stadium kan dit scherm rustiger worden gemaakt met minder tekst.</div>
                 <div style={{ display: 'grid', gap: '10px', color: '#344054', fontSize: '14px' }}>
                   <div>
                     <div style={{ fontWeight: 700, marginBottom: '4px' }}>Gmail</div>
                     <ol style={{ margin: 0, paddingLeft: '20px', display: 'grid', gap: '4px' }}>
-                      <li>Open Gmail instellingen en voeg dit Rezzerv-adres toe als doorstuuradres.</li>
+                      <li>Voeg het Rezzerv-adres toe als doorstuuradres.</li>
                       <li>Bevestig het adres wanneer Gmail daar om vraagt.</li>
-                      <li>Maak daarna een filter voor kassabonmails en kies als actie: doorsturen naar Rezzerv.</li>
+                      <li>Maak daarna een filter voor kassabonmails en stuur die door naar Rezzerv.</li>
                     </ol>
                   </div>
                   <div>
@@ -955,46 +1046,8 @@ function ReceiptSourceHubModal({
                   </div>
                 </div>
               </div>
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => { if (!isUploading) onChooseEmail?.() }}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    if (!isUploading) onChooseEmail?.()
-                  }
-                }}
-                onDragEnter={handleEmailDragEnter}
-                onDragOver={handleEmailDragOver}
-                onDragLeave={handleEmailDragLeave}
-                onDrop={handleEmailDrop}
-                style={{
-                  borderRadius: '16px',
-                  border: isEmailDropActive ? '2px dashed #12B76A' : '2px dashed #D0D5DD',
-                  background: isEmailDropActive ? 'rgba(18, 183, 106, 0.06)' : '#F8FAFC',
-                  padding: '18px 16px',
-                  display: 'grid',
-                  gap: '8px',
-                  cursor: isUploading ? 'progress' : 'copy',
-                  outline: 'none',
-                  boxShadow: isEmailDropActive ? '0 0 0 4px rgba(18,183,106,0.12)' : 'none',
-                }}
-                aria-label="Sleep een .eml-bestand naar Rezzerv of klik om een e-mailbestand te kiezen"
-                data-testid="kassa-email-dropzone"
-              >
-                <div style={{ fontSize: '16px', fontWeight: 700 }}>E-mail slepen</div>
-                <div style={{ color: '#475467', fontSize: '14px' }}>Sleep hier een <strong>.eml</strong>-bestand naartoe of klik om een e-mailbestand te kiezen.</div>
-                <div style={{ color: '#667085', fontSize: '13px' }}>Ondersteund in deze versie: <strong>.eml</strong>. De bestaande importketen voor e-mailbonnen wordt hergebruikt.</div>
-              </div>
-              {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-sourcehub-duplicate-feedback">{duplicateNotice}</div> : null}
-              {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
-              <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
-                <Button type="button" variant="secondary" onClick={onCopyEmailRoute} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>Adres kopiëren</Button>
-                <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading}>E-mailbestand kiezen</Button>
-              </div>
-            </div>
-          </ScreenCard>
+            </ScreenCard>
+          </div>
         </div>
       </div>
     </div>
@@ -1012,8 +1065,6 @@ function CameraCaptureModal({
   error,
   duplicateNotice,
 }) {
-  if (!isOpen) return null
-
   return (
     <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', overflowY: 'auto', padding: '16px 20px 20px' }}>
       <div
@@ -1073,6 +1124,7 @@ export default function KassaPage() {
   const [emailRouteError, setEmailRouteError] = useState('')
   const [receiptInboxFocusId, setReceiptInboxFocusId] = useState('')
   const fileInputRef = useRef(null)
+  const landingInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const emailInputRef = useRef(null)
 
@@ -1308,14 +1360,14 @@ export default function KassaPage() {
     ensureEmailRouteLoaded().catch(() => {})
   }
 
-  function handleChooseFileFromHub() {
+  function handleChooseExplorerFileFromHub() {
     setUploadMode('manual')
-    setTimeout(() => fileInputRef.current?.click(), 0)
-  }
-
-  function handleChooseSharedFileFromHub() {
-    setUploadMode('shared_file')
-    setTimeout(() => fileInputRef.current?.click(), 0)
+    setStatus('')
+    setError('')
+    setDuplicateNotice('')
+    setEmailRouteError('')
+    setReceiptInboxFocusId('')
+    setTimeout(() => landingInputRef.current?.click(), 0)
   }
 
 
@@ -1337,16 +1389,6 @@ export default function KassaPage() {
     setTimeout(() => cameraInputRef.current?.click(), 0)
   }
 
-  function handleChooseEmailFromHub() {
-    setUploadMode('email_import')
-    setStatus('')
-    setError('')
-    setDuplicateNotice('')
-    setEmailRouteError('')
-    setReceiptInboxFocusId('')
-    setIsSourceHubOpen(false)
-    setTimeout(() => emailInputRef.current?.click(), 0)
-  }
 
   async function copyEmailRouteToClipboard() {
     try {
@@ -1456,6 +1498,61 @@ export default function KassaPage() {
     setTimeout(() => cameraInputRef.current?.click(), 0)
   }
 
+  async function processStandardReceiptImportFile(file) {
+    if (!file) {
+      setEmailRouteError('Sleep, plak of kies een ondersteund bonbestand om verder te gaan.')
+      setError('')
+      return
+    }
+    setIsUploading(true)
+    setError('')
+    setStatus('')
+    setDuplicateNotice('')
+    setEmailRouteError('')
+    try {
+      const result = await uploadReceiptFile(householdId, file)
+      if (result?.duplicate) {
+        announceDuplicate(result)
+      } else {
+        await loadReceipts(householdId)
+        if (result?.receipt_table_id) {
+          await openReceiptDetail(result.receipt_table_id)
+        }
+        setIsSourceHubOpen(false)
+        if (result?.receipt_table_id) {
+          setDuplicateNotice('')
+          setStatus(`Bon toegevoegd met status: ${parseStatusLabel(result.parse_status)}`)
+        } else {
+          setStatus('Bestand opgeslagen, maar nog niet als bruikbare kassabon herkend.')
+        }
+      }
+    } catch (err) {
+      setEmailRouteError(normalizeErrorMessage(err?.message) || 'Upload van de kassabon is mislukt.')
+      setError('')
+    } finally {
+      setIsUploading(false)
+      setUploadMode('manual')
+    }
+  }
+
+  async function processLandingImportFile(file) {
+    if (!file) {
+      setEmailRouteError('Sleep, plak of kies een ondersteund bonbestand om verder te gaan.')
+      setError('')
+      return
+    }
+    if (!isSupportedReceiptLandingFile(file)) {
+      setEmailRouteError('Dit bestandstype wordt nog niet ondersteund. Gebruik .eml, .pdf of een afbeelding van de kassabon.')
+      setError('')
+      return
+    }
+    if (isSupportedEmailImportFile(file)) {
+      await processEmailImportFile(file)
+      return
+    }
+    await processStandardReceiptImportFile(file)
+  }
+
   async function processEmailImportFile(file) {
     if (!file) {
       setEmailRouteError('Sleep een .eml-bestand naar het landingsgebied of kies handmatig een e-mailbestand.')
@@ -1534,8 +1631,15 @@ export default function KassaPage() {
     await processEmailImportFile(file)
   }
 
-  async function handleDroppedEmailFile(file) {
-    await processEmailImportFile(file)
+  async function handleLandingUploadChange(event) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    await processLandingImportFile(file)
+  }
+
+  async function handleDroppedLandingFile(file) {
+    await processLandingImportFile(file)
   }
 
   async function handleUploadChange(event) {
@@ -1601,6 +1705,13 @@ export default function KassaPage() {
                   accept=".pdf,.png,.jpg,.jpeg"
                   style={{ display: 'none' }}
                   onChange={handleUploadChange}
+                />
+                <input
+                  ref={landingInputRef}
+                  type="file"
+                  accept=".eml,.pdf,.png,.jpg,.jpeg,.webp,message/rfc822,application/pdf,image/*"
+                  style={{ display: 'none' }}
+                  onChange={handleLandingUploadChange}
                 />
                 <input
                   ref={cameraInputRef}
@@ -1755,10 +1866,10 @@ export default function KassaPage() {
       <ReceiptSourceHubModal
         isOpen={isSourceHubOpen}
         onClose={() => setIsSourceHubOpen(false)}
-        onChooseSharedFile={handleChooseSharedFileFromHub}
+        onChooseExplorerFile={handleChooseExplorerFileFromHub}
         onChooseCamera={handleChooseCameraFromHub}
-        onChooseEmail={handleChooseEmailFromHub}
-        onDropEmailFile={handleDroppedEmailFile}
+        onDropLandingFile={handleDroppedLandingFile}
+        onPasteLandingClipboard={handleDroppedLandingFile}
         onCopyEmailRoute={copyEmailRouteToClipboard}
         emailRoute={emailRoute}
         isEmailRouteLoading={isEmailRouteLoading}
