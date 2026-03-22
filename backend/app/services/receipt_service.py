@@ -265,23 +265,27 @@ def _purchase_at_from_lines(lines: Iterable[str], filename: str) -> str | None:
     return None
 
 
-def _total_amount_from_lines(lines: list[str], filename: str) -> Decimal | None:
-    keyword_lines = []
-    fallback_amounts: list[Decimal] = []
+def _total_amount_from_lines(lines: list[str], filename: str) -> tuple[Decimal | None, bool]:
+    explicit_totals: list[Decimal] = []
+    subtotal_amounts: list[Decimal] = []
     amount_pattern = re.compile(r'(-?\d{1,4}(?:[\.,]\d{2}))')
     for line in lines + [filename]:
         lowered = line.lower()
         matches = amount_pattern.findall(line)
         parsed_matches = [_parse_decimal(item) for item in matches]
         parsed_matches = [item for item in parsed_matches if item is not None]
-        if any(keyword in lowered for keyword in ('totaal', 'te betalen', 'total', 'subtotaal')) and parsed_matches:
-            keyword_lines.extend(parsed_matches)
-        fallback_amounts.extend(parsed_matches)
-    if keyword_lines:
-        return keyword_lines[-1]
-    if fallback_amounts:
-        return fallback_amounts[-1]
-    return None
+        if not parsed_matches:
+            continue
+        if any(keyword in lowered for keyword in ('totaal', 'te betalen', 'total')):
+            explicit_totals.extend(parsed_matches)
+            continue
+        if any(keyword in lowered for keyword in ('subtotaal', 'subtotal')):
+            subtotal_amounts.extend(parsed_matches)
+    if explicit_totals:
+        return explicit_totals[-1], True
+    if subtotal_amounts:
+        return subtotal_amounts[-1], False
+    return None, False
 
 
 def _looks_like_non_receipt(lines: list[str]) -> bool:
@@ -379,15 +383,33 @@ def _parse_result_from_text_lines(
 
     store_name = _store_from_text(text_lines[:12], filename)
     purchase_at = _purchase_at_from_lines(text_lines[:20], filename)
-    total_amount = _total_amount_from_lines(text_lines, filename)
+    total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
     lines = _extract_receipt_lines(text_lines)
+    if total_amount is None and len(lines) >= 2:
+        line_sum = Decimal('0.00')
+        line_sum_has_value = False
+        for line in lines:
+            value = _parse_decimal(str(line.get('line_total')))
+            if value is None:
+                continue
+            line_sum += value
+            line_sum_has_value = True
+        if line_sum_has_value and line_sum > Decimal('0.00'):
+            total_amount = line_sum.quantize(Decimal('0.01'))
     has_signal = bool(store_name or purchase_at or total_amount or lines)
     if not has_signal:
         return _failed_receipt_result(0.1)
 
     if lines:
-        confidence = rich_confidence if (store_name and total_amount and lines) else partial_confidence
-        parse_status = 'parsed' if (total_amount or purchase_at or store_name) and lines else 'partial'
+        if explicit_total_found and total_amount is not None and len(lines) >= 1:
+            confidence = rich_confidence if store_name else partial_confidence
+            parse_status = 'parsed'
+        elif total_amount is not None and len(lines) >= 2 and (store_name or purchase_at):
+            confidence = partial_confidence
+            parse_status = 'partial'
+        else:
+            confidence = review_confidence
+            parse_status = 'review_needed'
     else:
         confidence = review_confidence
         parse_status = 'review_needed'

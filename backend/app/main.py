@@ -3984,34 +3984,59 @@ def list_receipts(householdId: str = Query(...)):
         rows = conn.execute(
             text(
                 """
+                WITH ranked_receipts AS (
+                    SELECT
+                        rt.id AS receipt_table_id,
+                        rt.raw_receipt_id,
+                        rt.store_name,
+                        rt.purchase_at,
+                        rt.total_amount,
+                        rt.currency,
+                        rt.parse_status,
+                        rt.line_count,
+                        COALESCE(rs.label, 'Manual upload') AS source_label,
+                        rem.sender_email,
+                        rem.sender_name,
+                        rem.subject AS email_subject,
+                        rem.received_at AS email_received_at,
+                        rt.created_at,
+                        COALESCE((
+                            SELECT SUM(COALESCE(rtl.line_total, 0))
+                            FROM receipt_table_lines rtl
+                            WHERE rtl.receipt_table_id = rt.id
+                        ), 0) AS line_total_sum,
+                        COALESCE(NULLIF(rr.sha256_hash, ''), rt.id) AS dedupe_key,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY COALESCE(NULLIF(rr.sha256_hash, ''), rt.id)
+                            ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
+                        ) AS dedupe_rank
+                    FROM receipt_tables rt
+                    JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                    LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
+                    LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
+                    WHERE rt.household_id = :household_id
+                      AND rt.deleted_at IS NULL
+                      AND rr.deleted_at IS NULL
+                )
                 SELECT
-                    rt.id AS receipt_table_id,
-                    rt.raw_receipt_id,
-                    rt.store_name,
-                    rt.purchase_at,
-                    rt.total_amount,
-                    rt.currency,
-                    rt.parse_status,
-                    rt.line_count,
-                    COALESCE(rs.label, 'Manual upload') AS source_label,
-                    rem.sender_email,
-                    rem.sender_name,
-                    rem.subject AS email_subject,
-                    rem.received_at AS email_received_at,
-                    rt.created_at,
-                    COALESCE((
-                        SELECT SUM(COALESCE(rtl.line_total, 0))
-                        FROM receipt_table_lines rtl
-                        WHERE rtl.receipt_table_id = rt.id
-                    ), 0) AS line_total_sum
-                FROM receipt_tables rt
-                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-                LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
-                LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
-                WHERE rt.household_id = :household_id
-                  AND rt.deleted_at IS NULL
-                  AND rr.deleted_at IS NULL
-                ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC
+                    receipt_table_id,
+                    raw_receipt_id,
+                    store_name,
+                    purchase_at,
+                    total_amount,
+                    currency,
+                    parse_status,
+                    line_count,
+                    source_label,
+                    sender_email,
+                    sender_name,
+                    email_subject,
+                    email_received_at,
+                    created_at,
+                    line_total_sum
+                FROM ranked_receipts
+                WHERE dedupe_rank = 1
+                ORDER BY COALESCE(purchase_at, created_at) DESC, created_at DESC
                 """
             ),
             {"household_id": effective_household_id},

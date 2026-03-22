@@ -170,7 +170,11 @@ function amountsMatch(receipt) {
 
 function deriveInboxStatus(receipt) {
   if (receipt?.parse_status === 'review_needed' || receipt?.parse_status === 'failed') return 'Controle nodig'
-  if (amountsMatch(receipt)) return 'Gecontroleerd'
+  const lineCount = Number(receipt?.line_count ?? receipt?.lines?.length ?? 0)
+  const confidence = Number(receipt?.confidence_score)
+  if (receipt?.parse_status === 'parsed' && amountsMatch(receipt) && lineCount >= 2 && Number.isFinite(confidence) && confidence >= 0.95) {
+    return 'Gecontroleerd'
+  }
   if (receipt?.line_total_sum !== null && receipt?.line_total_sum !== undefined && receipt?.total_amount !== null && receipt?.total_amount !== undefined) {
     return 'Controle nodig'
   }
@@ -407,12 +411,20 @@ async function fetchReceiptPreview(receiptTableId) {
 
   const blob = await response.blob()
   const contentType = response.headers.get('content-type') || blob.type || 'application/octet-stream'
-  const blobUrl = window.URL.createObjectURL(blob)
+  const isPdf = contentType.includes('pdf')
+  const isImage = contentType.startsWith('image/')
+  const isHtml = contentType.startsWith('text/html')
+  const isText = contentType.startsWith('text/plain') || contentType.startsWith('message/rfc822')
+  const blobUrl = (isPdf || isImage) ? window.URL.createObjectURL(blob) : ''
+  const textContent = (isHtml || isText) ? await blob.text() : ''
   return {
     blobUrl,
     contentType,
-    isPdf: contentType.includes('pdf'),
-    isImage: contentType.startsWith('image/'),
+    isPdf,
+    isImage,
+    isHtml,
+    isText,
+    textContent,
   }
 }
 
@@ -459,7 +471,7 @@ function DetailInfoRow({ label, value }) {
 }
 
 function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
-  const [previewState, setPreviewState] = useState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, error: '' })
+  const [previewState, setPreviewState] = useState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: '' })
 
   useEffect(() => {
     let cancelled = false
@@ -467,10 +479,10 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
 
     async function loadPreview() {
       if (!receipt?.id) {
-        setPreviewState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, error: '' })
+        setPreviewState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: '' })
         return
       }
-      setPreviewState({ status: 'loading', blobUrl: '', contentType: '', isPdf: false, isImage: false, error: '' })
+      setPreviewState({ status: 'loading', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: '' })
       try {
         const result = await fetchReceiptPreview(receipt.id)
         if (cancelled) {
@@ -481,7 +493,7 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
         setPreviewState({ status: 'ready', error: '', ...result })
       } catch (err) {
         if (!cancelled) {
-          setPreviewState({ status: 'error', blobUrl: '', contentType: '', isPdf: false, isImage: false, error: normalizeErrorMessage(err?.message) || 'Preview laden mislukt.' })
+          setPreviewState({ status: 'error', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: normalizeErrorMessage(err?.message) || 'Preview laden mislukt.' })
         }
       }
     }
@@ -609,7 +621,26 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
               />
             ) : null}
 
-            {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage ? (
+            {previewState.status === 'ready' && previewState.isHtml ? (
+              <iframe
+                srcDoc={previewState.textContent || '<p>Geen HTML-preview beschikbaar.</p>'}
+                title={`HTML-preview van bon ${receipt?.id}`}
+                style={{ width: '100%', minHeight: '560px', border: '0', background: '#fff' }}
+                sandbox=""
+                data-testid="receipt-preview-html"
+              />
+            ) : null}
+
+            {previewState.status === 'ready' && previewState.isText ? (
+              <pre
+                style={{ width: '100%', minHeight: '560px', margin: 0, padding: '16px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fff', fontFamily: 'inherit', fontSize: '14px', lineHeight: 1.5 }}
+                data-testid="receipt-preview-text"
+              >
+                {previewState.textContent || 'Geen tekstpreview beschikbaar.'}
+              </pre>
+            ) : null}
+
+            {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage && !previewState.isHtml && !previewState.isText ? (
               <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-unsupported" style={{ maxWidth: '560px' }}>
                 Voor dit bestandstype is geen ingebedde preview beschikbaar.
               </div>
