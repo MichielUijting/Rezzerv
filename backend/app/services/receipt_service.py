@@ -15,7 +15,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any, Iterable
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 
 try:
     from pypdf import PdfReader
@@ -859,6 +859,18 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
     parse_result = parse_receipt_content(file_bytes, filename, detected_mime)
     if reject_non_receipt and not parse_result.is_receipt:
         raise ValueError('Gedeelde inhoud is niet als bruikbare kassabon herkend.')
+    parse_fingerprint = build_receipt_fingerprint_from_parse_result(parse_result) if parse_result.is_receipt else ''
+    if parse_fingerprint:
+        with engine.begin() as conn:
+            existing_by_fingerprint = find_existing_receipt_by_fingerprint(conn, household_id, parse_fingerprint)
+            if existing_by_fingerprint:
+                return {
+                    'raw_receipt_id': existing_by_fingerprint['raw_receipt_id'],
+                    'receipt_table_id': existing_by_fingerprint['receipt_table_id'],
+                    'duplicate': True,
+                    'duplicate_message': 'Deze kassabon is al eerder toegevoegd en is niet opnieuw geladen.',
+                    'parse_status': existing_by_fingerprint['parse_status'],
+                }
     raw_receipt_id = uuid.uuid4().hex
     storage_path = _store_raw_file(receipt_storage_root, household_id, raw_receipt_id, filename, file_bytes)
 

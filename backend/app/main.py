@@ -19,7 +19,7 @@ import re
 from typing import Any, List, Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
-from app.services.receipt_service import ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
+from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from datetime import datetime, timedelta, timezone
 from email import policy
 from email.parser import BytesParser
@@ -3980,7 +3980,6 @@ def source_scan_receipts(payload: ReceiptSourceScanRequest):
 def list_receipts(householdId: str = Query(...)):
     effective_household_id = str(householdId).strip() or "1"
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
-    repair_receipts_for_household(engine, RECEIPT_STORAGE_ROOT, effective_household_id, limit=20)
     with engine.begin() as conn:
         rows = conn.execute(
             text(
@@ -4198,7 +4197,9 @@ def login(payload: LoginRequest):
 
     if user and user["password"] == payload.password:
         household = ensure_household(payload.email)
-        ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, str(household.get("id") or "1"))
+        effective_household_id = str(household.get("id") or "1")
+        ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+        dedupe_receipts_for_household(engine, effective_household_id)
 
         return {
             "token": build_auth_token(payload.email),
@@ -4399,7 +4400,9 @@ ensure_release_940_schema()
 ensure_receipt_storage_root()
 seed_store_providers()
 admin_household = ensure_household("admin@rezzerv.local")
-ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, str(admin_household.get("id") or "1"))
+admin_household_id = str(admin_household.get("id") or "1")
+ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, admin_household_id)
+dedupe_receipts_for_household(engine, admin_household_id)
 
 
 def ensure_ui_test_seed_data():
