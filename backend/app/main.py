@@ -19,7 +19,7 @@ import re
 from typing import Any, List, Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
-from app.services.receipt_service import ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, reparse_receipt, scan_receipt_source, serialize_receipt_row
+from app.services.receipt_service import ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from datetime import datetime, timedelta, timezone
 from email import policy
 from email.parser import BytesParser
@@ -3980,68 +3980,72 @@ def source_scan_receipts(payload: ReceiptSourceScanRequest):
 def list_receipts(householdId: str = Query(...)):
     effective_household_id = str(householdId).strip() or "1"
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    repair_receipts_for_household(engine, RECEIPT_STORAGE_ROOT, effective_household_id, limit=20)
     with engine.begin() as conn:
         rows = conn.execute(
             text(
                 """
-                WITH ranked_receipts AS (
-                    SELECT
-                        rt.id AS receipt_table_id,
-                        rt.raw_receipt_id,
-                        rt.store_name,
-                        rt.purchase_at,
-                        rt.total_amount,
-                        rt.currency,
-                        rt.parse_status,
-                        rt.line_count,
-                        COALESCE(rs.label, 'Manual upload') AS source_label,
-                        rem.sender_email,
-                        rem.sender_name,
-                        rem.subject AS email_subject,
-                        rem.received_at AS email_received_at,
-                        rt.created_at,
-                        COALESCE((
-                            SELECT SUM(COALESCE(rtl.line_total, 0))
-                            FROM receipt_table_lines rtl
-                            WHERE rtl.receipt_table_id = rt.id
-                        ), 0) AS line_total_sum,
-                        COALESCE(NULLIF(rr.sha256_hash, ''), rt.id) AS dedupe_key,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY COALESCE(NULLIF(rr.sha256_hash, ''), rt.id)
-                            ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
-                        ) AS dedupe_rank
-                    FROM receipt_tables rt
-                    JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-                    LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
-                    LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
-                    WHERE rt.household_id = :household_id
-                      AND rt.deleted_at IS NULL
-                      AND rr.deleted_at IS NULL
-                )
                 SELECT
-                    receipt_table_id,
-                    raw_receipt_id,
-                    store_name,
-                    purchase_at,
-                    total_amount,
-                    currency,
-                    parse_status,
-                    line_count,
-                    source_label,
-                    sender_email,
-                    sender_name,
-                    email_subject,
-                    email_received_at,
-                    created_at,
-                    line_total_sum
-                FROM ranked_receipts
-                WHERE dedupe_rank = 1
-                ORDER BY COALESCE(purchase_at, created_at) DESC, created_at DESC
+                    rt.id AS receipt_table_id,
+                    rt.raw_receipt_id,
+                    rt.store_name,
+                    rt.purchase_at,
+                    rt.total_amount,
+                    rt.currency,
+                    rt.parse_status,
+                    rt.line_count,
+                    COALESCE(rs.label, 'Manual upload') AS source_label,
+                    rem.sender_email,
+                    rem.sender_name,
+                    rem.subject AS email_subject,
+                    rem.received_at AS email_received_at,
+                    rr.original_filename,
+                    rr.sha256_hash,
+                    rt.created_at,
+                    COALESCE((
+                        SELECT SUM(COALESCE(rtl.line_total, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                    ), 0) AS line_total_sum
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
+                LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
+                WHERE rt.household_id = :household_id
+                  AND rt.deleted_at IS NULL
+                  AND rr.deleted_at IS NULL
+                ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
                 """
             ),
             {"household_id": effective_household_id},
         ).mappings().all()
-    return {"items": [serialize_receipt_row(dict(row)) for row in rows]}
+
+    def normalize_key_part(value):
+        return re.sub(r'\s+', ' ', str(value or '').strip().lower())
+
+    deduped_items = []
+    seen_keys = set()
+    for row in rows:
+        store_name = normalize_key_part(row.get('store_name'))
+        purchase_at = normalize_key_part(row.get('purchase_at'))
+        total_amount = row.get('total_amount')
+        try:
+            total_key = f"{float(total_amount):.2f}" if total_amount is not None else ''
+        except Exception:
+            total_key = normalize_key_part(total_amount)
+        line_count = str(row.get('line_count') or 0)
+        source_label = normalize_key_part(row.get('source_label'))
+        sha_key = normalize_key_part(row.get('sha256_hash'))
+        fingerprint_key = (store_name, purchase_at, total_key, line_count, source_label)
+        dedupe_key = sha_key or '|'.join(fingerprint_key)
+        if dedupe_key in seen_keys:
+            continue
+        seen_keys.add(dedupe_key)
+        serialized = serialize_receipt_row(dict(row))
+        serialized.pop('original_filename', None)
+        serialized.pop('sha256_hash', None)
+        deduped_items.append(serialized)
+    return {"items": deduped_items}
 
 
 @app.get("/api/receipts/{receipt_table_id}/preview")
@@ -4050,9 +4054,17 @@ def get_receipt_preview(receipt_table_id: str):
         record = conn.execute(
             text(
                 """
-                SELECT rt.id AS receipt_table_id, rr.original_filename, rr.mime_type, rr.storage_path
+                SELECT
+                    rt.id AS receipt_table_id,
+                    rr.original_filename,
+                    rr.mime_type,
+                    rr.storage_path,
+                    rem.body_html,
+                    rem.body_text,
+                    rem.selected_part_type
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
                 WHERE rt.id = :receipt_table_id
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
@@ -4063,6 +4075,14 @@ def get_receipt_preview(receipt_table_id: str):
         ).mappings().first()
     if not record:
         raise HTTPException(status_code=404, detail="Bon niet gevonden")
+
+    selected_part_type = str(record.get("selected_part_type") or "").strip().lower()
+    body_html = record.get("body_html")
+    body_text = record.get("body_text")
+    if selected_part_type in {"html_body", "text_body"} and body_html:
+        return HTMLResponse(content=str(body_html), headers={"Content-Disposition": "inline"})
+    if selected_part_type == "text_body" and body_text:
+        return Response(content=str(body_text), media_type="text/plain", headers={"Content-Disposition": "inline"})
 
     storage_path = Path(record["storage_path"] or "")
     if not storage_path.exists() or not storage_path.is_file():
@@ -4163,6 +4183,13 @@ def reparse_receipt_table(receipt_table_id: str):
     if result is None:
         raise HTTPException(status_code=404, detail="Receipt table niet gevonden")
     return result
+
+
+@app.post("/api/receipts/reparse-suspicious")
+def reparse_suspicious_receipts(householdId: str = Query(...), limit: int = Query(25, ge=1, le=100)):
+    effective_household_id = str(householdId).strip() or "1"
+    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
+    return repair_receipts_for_household(engine, RECEIPT_STORAGE_ROOT, effective_household_id, limit=limit)
 
 
 @app.post("/api/auth/login")

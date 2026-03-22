@@ -174,6 +174,53 @@ def _parse_decimal(raw: str | None) -> Decimal | None:
         return None
 
 
+def _normalize_fingerprint_text(value: Any) -> str:
+    normalized = re.sub(r'\s+', ' ', str(value or '').strip().lower())
+    normalized = re.sub(r'[^a-z0-9€.,:;\-_/ ]+', '', normalized)
+    return normalized.strip()
+
+
+def _is_plausible_purchase_at(value: str | None) -> bool:
+    if not value:
+        return False
+    try:
+        parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    except Exception:
+        return False
+    current_year = datetime.utcnow().year
+    return current_year - 10 <= parsed.year <= current_year + 1
+
+
+def _is_plausible_total_amount(value: Decimal | None) -> bool:
+    if value is None:
+        return False
+    try:
+        amount = Decimal(value).quantize(Decimal('0.01'))
+    except Exception:
+        return False
+    return Decimal('0.00') < amount <= Decimal('10000.00')
+
+
+def _build_receipt_fingerprint(store_name: str | None, purchase_at: str | None, total_amount: Decimal | None, lines: list[dict[str, Any]]) -> str:
+    store_part = _normalize_fingerprint_text(store_name)
+    purchase_part = ''
+    if purchase_at:
+        try:
+            purchase_part = datetime.fromisoformat(str(purchase_at).replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M')
+        except Exception:
+            purchase_part = _normalize_fingerprint_text(purchase_at)
+    total_part = f"{Decimal(total_amount).quantize(Decimal('0.01')):.2f}" if total_amount is not None else ''
+    line_parts: list[str] = []
+    for line in lines[:12]:
+        label = _normalize_fingerprint_text(line.get('normalized_label') or line.get('raw_label'))
+        if not label:
+            continue
+        amount = _parse_decimal(str(line.get('line_total')))
+        amount_part = f"{amount:.2f}" if amount is not None else ''
+        line_parts.append(f"{label}|{amount_part}")
+    return '||'.join([store_part, purchase_part, total_part, '##'.join(line_parts)])
+
+
 def _parse_quantity(raw: str | None) -> Decimal | None:
     if not raw:
         return None
@@ -244,8 +291,7 @@ def _purchase_at_from_lines(lines: Iterable[str], filename: str) -> str | None:
         r'(\d{2}[/-]\d{2}[/-]\d{4})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?',
         r'(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?',
     ]
-    candidates = list(lines) + [filename]
-    for candidate in candidates:
+    for candidate in list(lines):
         for pattern in patterns:
             match = re.search(pattern, candidate)
             if not match:
@@ -259,7 +305,9 @@ def _purchase_at_from_lines(lines: Iterable[str], filename: str) -> str | None:
                     parsed = datetime.strptime(date_part, fmt)
                     hh, mm, ss = time_part.split(':')
                     parsed = parsed.replace(hour=int(hh), minute=int(mm), second=int(ss))
-                    return parsed.isoformat()
+                    iso_value = parsed.isoformat()
+                    if _is_plausible_purchase_at(iso_value):
+                        return iso_value
                 except ValueError:
                     continue
     return None
@@ -268,19 +316,25 @@ def _purchase_at_from_lines(lines: Iterable[str], filename: str) -> str | None:
 def _total_amount_from_lines(lines: list[str], filename: str) -> tuple[Decimal | None, bool]:
     explicit_totals: list[Decimal] = []
     subtotal_amounts: list[Decimal] = []
-    amount_pattern = re.compile(r'(-?\d{1,4}(?:[\.,]\d{2}))')
-    for line in lines + [filename]:
+    amount_pattern = re.compile(r'(-?\d{1,6}(?:[\.,]\d{2}))')
+    explicit_total_pattern = re.compile(r'(?i)\b(totaal(?!\s*btw)|te betalen|te voldoen|eindtotaal|total due|amount due|total)\b')
+    subtotal_pattern = re.compile(r'(?i)\b(subtotaal|subtotal)\b')
+    refund_pattern = re.compile(r'(?i)\b(retour|refund|credit)\b')
+    for line in lines:
         lowered = line.lower()
         matches = amount_pattern.findall(line)
         parsed_matches = [_parse_decimal(item) for item in matches]
         parsed_matches = [item for item in parsed_matches if item is not None]
         if not parsed_matches:
             continue
-        if any(keyword in lowered for keyword in ('totaal', 'te betalen', 'total')):
-            explicit_totals.extend(parsed_matches)
+        if subtotal_pattern.search(lowered):
+            subtotal_amounts.extend([value for value in parsed_matches if _is_plausible_total_amount(value)])
             continue
-        if any(keyword in lowered for keyword in ('subtotaal', 'subtotal')):
-            subtotal_amounts.extend(parsed_matches)
+        if explicit_total_pattern.search(lowered):
+            for value in parsed_matches:
+                if refund_pattern.search(lowered) or _is_plausible_total_amount(value):
+                    explicit_totals.append(value)
+            continue
     if explicit_totals:
         return explicit_totals[-1], True
     if subtotal_amounts:
@@ -394,14 +448,23 @@ def _parse_result_from_text_lines(
                 continue
             line_sum += value
             line_sum_has_value = True
-        if line_sum_has_value and line_sum > Decimal('0.00'):
+        if line_sum_has_value and _is_plausible_total_amount(line_sum):
             total_amount = line_sum.quantize(Decimal('0.01'))
+    if total_amount is not None and not _is_plausible_total_amount(total_amount):
+        total_amount = None
+    if purchase_at and not _is_plausible_purchase_at(purchase_at):
+        purchase_at = None
+
     has_signal = bool(store_name or purchase_at or total_amount or lines)
     if not has_signal:
         return _failed_receipt_result(0.1)
 
+    suspicious_single_line = len(lines) <= 1 and total_amount is not None
+    suspicious_filename_signal = bool(re.search(r'(?i)regressie[-_ ]?bon|receipt|mosterd', filename)) and len(lines) <= 1
+    _ = _build_receipt_fingerprint(store_name, purchase_at, total_amount, lines)
+
     if lines:
-        if explicit_total_found and total_amount is not None and len(lines) >= 1:
+        if explicit_total_found and total_amount is not None and len(lines) >= 2 and (store_name or purchase_at):
             confidence = rich_confidence if store_name else partial_confidence
             parse_status = 'parsed'
         elif total_amount is not None and len(lines) >= 2 and (store_name or purchase_at):
@@ -412,6 +475,10 @@ def _parse_result_from_text_lines(
             parse_status = 'review_needed'
     else:
         confidence = review_confidence
+        parse_status = 'review_needed'
+
+    if suspicious_single_line or suspicious_filename_signal or not purchase_at:
+        confidence = min(confidence, review_confidence)
         parse_status = 'review_needed'
 
     return ReceiptParseResult(
@@ -672,7 +739,7 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
 
         store_name = _store_from_text([], filename)
         purchase_at = _purchase_at_from_lines([], filename)
-        total_amount = _total_amount_from_lines([], filename)
+        total_amount, _ = _total_amount_from_lines([], filename)
         confidence = 0.35 if (store_name or purchase_at or total_amount) else 0.20
         return ReceiptParseResult(
             is_receipt=True,
@@ -888,14 +955,86 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
         }
 
 
+def _resolve_reparse_source_payload(record: dict[str, Any], file_bytes: bytes) -> tuple[bytes, str, str]:
+    mime_type = str(record.get('mime_type') or 'application/octet-stream')
+    filename = str(record.get('original_filename') or 'receipt')
+    selected_part_type = str(record.get('selected_part_type') or '').strip().lower()
+    body_html = record.get('body_html')
+    body_text = record.get('body_text')
+
+    if selected_part_type in {'text_body', 'html_body'} and body_html:
+        html_filename = f"{Path(filename).stem or 'receipt'}.html"
+        return body_html.encode('utf-8', errors='ignore'), html_filename, 'text/html'
+    if selected_part_type == 'text_body' and body_text:
+        txt_filename = f"{Path(filename).stem or 'receipt'}.txt"
+        return body_text.encode('utf-8', errors='ignore'), txt_filename, 'text/plain'
+    return file_bytes, filename, mime_type
+
+
+def repair_receipts_for_household(engine, receipt_storage_root: Path, household_id: str, limit: int = 25) -> dict[str, Any]:
+    repaired_ids: list[str] = []
+    with engine.begin() as conn:
+        candidates = conn.execute(
+            text(
+                '''
+                SELECT
+                    rt.id AS receipt_table_id,
+                    rr.mime_type,
+                    rt.parse_status,
+                    rt.purchase_at,
+                    rt.total_amount,
+                    rt.line_count,
+                    rem.selected_part_type,
+                    rem.body_html
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
+                WHERE rt.household_id = :household_id
+                  AND rt.deleted_at IS NULL
+                  AND rr.deleted_at IS NULL
+                  AND (
+                    (rr.mime_type IN ('text/plain', 'text/html') AND rem.body_html IS NOT NULL)
+                    OR (rt.parse_status = 'parsed' AND COALESCE(rt.line_count, 0) <= 1)
+                    OR rt.purchase_at IS NULL
+                    OR rt.total_amount IS NULL
+                    OR rt.total_amount <= 0
+                    OR rt.purchase_at LIKE '21__-%'
+                  )
+                ORDER BY rt.updated_at DESC, rt.created_at DESC
+                LIMIT :limit
+                '''
+            ),
+            {'household_id': household_id, 'limit': max(1, int(limit))},
+        ).mappings().all()
+    for candidate in candidates:
+        try:
+            result = reparse_receipt(engine, receipt_storage_root, str(candidate['receipt_table_id']))
+        except Exception as exc:
+            LOGGER.warning('Herstel van kassabon %s mislukt: %s', candidate['receipt_table_id'], exc)
+            continue
+        if result:
+            repaired_ids.append(str(candidate['receipt_table_id']))
+    return {'repaired_count': len(repaired_ids), 'receipt_table_ids': repaired_ids}
+
+
 def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -> dict[str, Any] | None:
     with engine.begin() as conn:
         record = conn.execute(
             text(
                 '''
-                SELECT rt.id AS receipt_table_id, rt.raw_receipt_id, rr.household_id, rr.original_filename, rr.mime_type, rr.storage_path
+                SELECT
+                    rt.id AS receipt_table_id,
+                    rt.raw_receipt_id,
+                    rr.household_id,
+                    rr.original_filename,
+                    rr.mime_type,
+                    rr.storage_path,
+                    rem.body_html,
+                    rem.body_text,
+                    rem.selected_part_type
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
                 WHERE rt.id = :receipt_table_id
                 LIMIT 1
                 '''
@@ -908,7 +1047,8 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
     if not file_path.exists():
         raise FileNotFoundError(f'Ruwe bon ontbreekt op {file_path}')
     file_bytes = file_path.read_bytes()
-    parse_result = parse_receipt_content(file_bytes, record['original_filename'], record['mime_type'])
+    parse_bytes, parse_filename, parse_mime_type = _resolve_reparse_source_payload(dict(record), file_bytes)
+    parse_result = parse_receipt_content(parse_bytes, parse_filename, parse_mime_type)
     with engine.begin() as conn:
         conn.execute(text('DELETE FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id'), {'receipt_table_id': receipt_table_id})
         conn.execute(
