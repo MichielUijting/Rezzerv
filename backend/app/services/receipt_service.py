@@ -823,6 +823,23 @@ def _group_paddle_texts_to_lines(texts: list[str], boxes: list[Any] | None) -> l
     return result_lines
 
 
+def _normalize_paddle_collection(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if hasattr(value, 'tolist'):
+        try:
+            value = value.tolist()
+        except Exception:
+            pass
+    if isinstance(value, (str, bytes, bytearray)):
+        return [value]
+    try:
+        return list(value)
+    except TypeError:
+        return [value]
+
+
+
 def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[str], float | None]:
     model = _get_paddle_ocr()
     if model is None:
@@ -841,24 +858,24 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
     texts: list[str] = []
     scores: list[float] = []
     boxes: list[Any] = []
-    for item in result or []:
+    for item in _normalize_paddle_collection(result):
         payload = _extract_payload_from_paddle_item(item)
-        current_texts = payload.get('rec_texts') or payload.get('texts') or []
-        current_scores = payload.get('rec_scores') or payload.get('scores') or []
-        current_boxes = payload.get('rec_boxes') or payload.get('dt_polys') or payload.get('rec_polys') or []
-        texts.extend([str(text) for text in current_texts if str(text).strip()])
+        current_texts = _normalize_paddle_collection(payload.get('rec_texts') or payload.get('texts'))
+        current_scores = _normalize_paddle_collection(payload.get('rec_scores') or payload.get('scores'))
+        current_boxes = payload.get('rec_boxes')
+        if current_boxes is None:
+            current_boxes = payload.get('dt_polys')
+        if current_boxes is None:
+            current_boxes = payload.get('rec_polys')
+        current_boxes = _normalize_paddle_collection(current_boxes)
+        normalized_texts = [str(text) for text in current_texts if str(text).strip()]
+        texts.extend(normalized_texts)
         for score in current_scores:
             try:
                 scores.append(float(score))
             except (TypeError, ValueError):
                 continue
-        if hasattr(current_boxes, 'tolist'):
-            current_boxes = current_boxes.tolist()
-        try:
-            current_boxes = list(current_boxes)
-        except TypeError:
-            current_boxes = []
-        boxes.extend(current_boxes[: len(current_texts)])
+        boxes.extend(current_boxes[: len(normalized_texts)])
 
     line_candidates = _group_paddle_texts_to_lines(texts, boxes if boxes else None)
     confidence = round(sum(scores) / len(scores), 4) if scores else None
