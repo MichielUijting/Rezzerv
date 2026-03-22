@@ -61,6 +61,52 @@ function formatDuplicateImportMessage(result) {
   return normalizeErrorMessage(result?.duplicate_message || result?.message) || 'Deze kassabon is al eerder toegevoegd en is niet opnieuw geladen.'
 }
 
+
+function normalizeReceiptKeyPart(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function normalizeReceiptDateKey(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const date = new Date(raw)
+  if (!Number.isNaN(date.getTime())) {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hour = String(date.getHours()).padStart(2, '0')
+    const minute = String(date.getMinutes()).padStart(2, '0')
+    return `${year}-${month}-${day} ${hour}:${minute}`
+  }
+  return raw.slice(0, 16)
+}
+
+function normalizeReceiptAmountKey(value) {
+  if (value === null || value === undefined || value === '') return ''
+  const number = Number(value)
+  if (Number.isNaN(number) || number <= 0) return ''
+  return number.toFixed(2)
+}
+
+function dedupeReceiptInboxItems(items) {
+  const seen = new Set()
+  const result = []
+  for (const item of Array.isArray(items) ? items : []) {
+    const key = [
+      normalizeReceiptKeyPart(item?.store_name),
+      normalizeReceiptDateKey(item?.purchase_at || item?.email_received_at),
+      normalizeReceiptAmountKey(item?.total_amount),
+      String(item?.line_count || 0),
+      normalizeReceiptKeyPart(item?.email_subject || item?.original_filename || ''),
+    ].join('|')
+    const dedupeKey = key.replace(/^\|+|\|+$/g, '') || String(item?.receipt_table_id || '')
+    if (seen.has(dedupeKey)) continue
+    seen.add(dedupeKey)
+    result.push(item)
+  }
+  return result
+}
+
 const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
 const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: '', status: '' }
 const MAX_CAMERA_UPLOAD_BYTES = 4 * 1024 * 1024
@@ -414,7 +460,7 @@ async function fetchReceiptPreview(receiptTableId) {
   const isPdf = contentType.includes('pdf')
   const isImage = contentType.startsWith('image/')
   const isHtml = contentType.startsWith('text/html')
-  const isText = contentType.startsWith('text/plain') || contentType.startsWith('message/rfc822')
+  const isText = contentType.startsWith('text/plain') || contentType.startsWith('message/rfc822') || contentType.startsWith('text/message')
   const blobUrl = (isPdf || isImage) ? window.URL.createObjectURL(blob) : ''
   const textContent = (isHtml || isText) ? await blob.text() : ''
   return {
@@ -967,7 +1013,6 @@ function ReceiptSourceHubModal({
             <h2 id="kassa-bronhub-title" className="rz-modal-title" style={{ fontSize: '22px' }}>Bon toevoegen</h2>
             <p className="rz-modal-text">Voeg een kassabon centraal toe via slepen, plakken of kiezen. De bestaande verwerkingsroutes voor e-mail en bonbestanden blijven intact.</p>
           </div>
-          <Button type="button" variant="secondary" onClick={onClose}>Sluiten</Button>
         </div>
 
         <ScreenCard fullWidth>
@@ -1012,7 +1057,7 @@ function ReceiptSourceHubModal({
             </div>
 
             <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', alignItems: 'stretch' }}>
-              <Button type="button" variant="primary" onClick={onChooseReceiptFile} disabled={isUploading} style={{ width: '100%' }}>Bestanden via Verkenner kiezen</Button>
+              <Button type="button" variant="primary" onClick={onChooseReceiptFile} disabled={isUploading} style={{ width: '100%' }}>Bestanden kiezen</Button>
               <Button type="button" variant="secondary" onClick={onChooseCamera} disabled={isUploading} style={{ width: '100%' }}>Camera openen</Button>
               <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isUploading} style={{ width: '100%' }}>Alleen .eml kiezen</Button>
               <Button type="button" variant="secondary" onClick={onCopyEmailRoute} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading} style={{ width: '100%' }}>Adres kopiëren</Button>
@@ -1225,7 +1270,7 @@ export default function KassaPage() {
     let items = []
     try {
       const list = await fetchJson(`/api/receipts?householdId=${encodeURIComponent(nextHouseholdId)}`)
-      items = Array.isArray(list?.items) ? list.items : []
+      items = dedupeReceiptInboxItems(Array.isArray(list?.items) ? list.items : [])
       setReceipts(items)
       if (openedReceiptId) {
         const detail = await fetchJson(`/api/receipts/${encodeURIComponent(openedReceiptId)}`)
