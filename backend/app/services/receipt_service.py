@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import io
+import logging
 import mimetypes
 import re
 import shutil
+import tempfile
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from statistics import median
 from typing import Any, Iterable
 
 from sqlalchemy import text
@@ -18,6 +21,16 @@ try:
     from pypdf import PdfReader
 except Exception:  # pragma: no cover
     PdfReader = None
+
+try:
+    import ocrmypdf
+except Exception:  # pragma: no cover
+    ocrmypdf = None
+
+try:
+    from paddleocr import PaddleOCR
+except Exception:  # pragma: no cover
+    PaddleOCR = None
 
 SUPPORTED_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.html', '.htm', '.txt'}
 KNOWN_STORES = [
@@ -45,6 +58,9 @@ IGNORED_LINE_MARKERS = {
     'totaal', 'te betalen', 'betaling', 'pin', 'contant', 'wisselgeld', 'btw', 'subtotaal', 'subtotal',
     'kassa', 'kassabon', 'ticket', 'bonnr', 'filiaal', 'adres', 'datum', 'tijd', 'transactie'
 }
+
+LOGGER = logging.getLogger(__name__)
+_PADDLE_OCR_INSTANCE = None
 
 
 @dataclass
@@ -334,46 +350,304 @@ def _extract_receipt_lines(lines: list[str]) -> list[dict[str, Any]]:
     return extracted
 
 
+
+def _failed_receipt_result(confidence: float = 0.0) -> ReceiptParseResult:
+    return ReceiptParseResult(
+        is_receipt=False,
+        parse_status='failed',
+        confidence_score=confidence,
+        store_name=None,
+        purchase_at=None,
+        total_amount=None,
+        currency='EUR',
+        lines=[],
+    )
+
+
+def _parse_result_from_text_lines(
+    text_lines: list[str],
+    filename: str,
+    *,
+    rich_confidence: float,
+    partial_confidence: float,
+    review_confidence: float,
+) -> ReceiptParseResult:
+    if not text_lines:
+        return _failed_receipt_result(0.0)
+    if _looks_like_non_receipt(text_lines):
+        return _failed_receipt_result(0.05)
+
+    store_name = _store_from_text(text_lines[:12], filename)
+    purchase_at = _purchase_at_from_lines(text_lines[:20], filename)
+    total_amount = _total_amount_from_lines(text_lines, filename)
+    lines = _extract_receipt_lines(text_lines)
+    has_signal = bool(store_name or purchase_at or total_amount or lines)
+    if not has_signal:
+        return _failed_receipt_result(0.1)
+
+    if lines:
+        confidence = rich_confidence if (store_name and total_amount and lines) else partial_confidence
+        parse_status = 'parsed' if (total_amount or purchase_at or store_name) and lines else 'partial'
+    else:
+        confidence = review_confidence
+        parse_status = 'review_needed'
+
+    return ReceiptParseResult(
+        is_receipt=True,
+        parse_status=parse_status,
+        confidence_score=confidence,
+        store_name=store_name,
+        purchase_at=purchase_at,
+        total_amount=total_amount,
+        currency='EUR',
+        lines=lines,
+    )
+
+
+def _ocr_pdf_text_with_ocrmypdf(file_bytes: bytes, filename: str) -> str:
+    if ocrmypdf is None:
+        return ''
+    suffix = Path(filename).suffix.lower() or '.pdf'
+    try:
+        with tempfile.TemporaryDirectory(prefix='rezzerv-ocrpdf-') as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / f'input{suffix}'
+            output_path = temp_root / 'output.pdf'
+            sidecar_path = temp_root / 'output.txt'
+            input_path.write_bytes(file_bytes)
+            ocrmypdf.ocr(
+                input_path,
+                output_path,
+                language=['nld', 'eng'],
+                sidecar=sidecar_path,
+                force_ocr=True,
+                deskew=True,
+                rotate_pages=True,
+                output_type='pdf',
+                progress_bar=False,
+            )
+            sidecar_text = sidecar_path.read_text(encoding='utf-8', errors='ignore') if sidecar_path.exists() else ''
+            if sidecar_text.strip():
+                return sidecar_text
+            if output_path.exists():
+                return _extract_pdf_text(output_path.read_bytes())
+    except Exception as exc:  # pragma: no cover - depends on optional OCR runtime
+        LOGGER.warning('OCRmyPDF fallback mislukt voor %s: %s', filename, exc)
+    return ''
+
+
+def _get_paddle_ocr():
+    global _PADDLE_OCR_INSTANCE
+    if _PADDLE_OCR_INSTANCE is not None:
+        return _PADDLE_OCR_INSTANCE
+    if PaddleOCR is None:
+        return None
+
+    constructors = [
+        {
+            'use_doc_orientation_classify': False,
+            'use_doc_unwarping': False,
+            'use_textline_orientation': False,
+            'lang': 'en',
+        },
+        {
+            'use_angle_cls': True,
+            'lang': 'en',
+        },
+        {
+            'lang': 'en',
+        },
+    ]
+    for kwargs in constructors:
+        try:
+            _PADDLE_OCR_INSTANCE = PaddleOCR(**kwargs)
+            break
+        except TypeError:
+            continue
+        except Exception as exc:  # pragma: no cover - runtime dependency/model download issue
+            LOGGER.warning('PaddleOCR initialisatie mislukt: %s', exc)
+            return None
+    return _PADDLE_OCR_INSTANCE
+
+
+def _ocr_bbox_to_line_anchor(bbox: Any) -> tuple[float, float, float] | None:
+    if bbox is None:
+        return None
+    try:
+        if isinstance(bbox, (list, tuple)) and len(bbox) == 4 and not isinstance(bbox[0], (list, tuple)):
+            x1, y1, x2, y2 = [float(v) for v in bbox]
+            return ((y1 + y2) / 2.0, x1, max(1.0, y2 - y1))
+        points = []
+        for point in bbox:
+            if not isinstance(point, (list, tuple)) or len(point) < 2:
+                continue
+            points.append((float(point[0]), float(point[1])))
+        if not points:
+            return None
+        xs = [pt[0] for pt in points]
+        ys = [pt[1] for pt in points]
+        return ((min(ys) + max(ys)) / 2.0, min(xs), max(1.0, max(ys) - min(ys)))
+    except Exception:
+        return None
+
+
+def _extract_payload_from_paddle_item(item: Any) -> dict[str, Any]:
+    candidates: list[Any] = [item]
+    for attr_name in ('res', 'json', 'result'):
+        attr = getattr(item, attr_name, None)
+        if attr is None:
+            continue
+        try:
+            value = attr() if callable(attr) else attr
+        except TypeError:
+            value = attr
+        candidates.append(value)
+    to_dict = getattr(item, 'to_dict', None)
+    if callable(to_dict):
+        try:
+            candidates.append(to_dict())
+        except Exception:
+            pass
+    for candidate in candidates:
+        if isinstance(candidate, dict):
+            if isinstance(candidate.get('res'), dict):
+                return candidate['res']
+            return candidate
+    return {}
+
+
+def _group_paddle_texts_to_lines(texts: list[str], boxes: list[Any] | None) -> list[str]:
+    if not texts:
+        return []
+    if not boxes or len(boxes) != len(texts):
+        return [re.sub(r'\s+', ' ', text).strip() for text in texts if str(text).strip()]
+
+    fragments: list[tuple[float, float, float, str]] = []
+    heights: list[float] = []
+    for text_value, box in zip(texts, boxes):
+        normalized_text = re.sub(r'\s+', ' ', str(text_value or '')).strip()
+        if not normalized_text:
+            continue
+        anchor = _ocr_bbox_to_line_anchor(box)
+        if anchor is None:
+            fragments.append((float(len(fragments) * 100), float(len(fragments)), 10.0, normalized_text))
+            continue
+        center_y, min_x, height = anchor
+        heights.append(height)
+        fragments.append((center_y, min_x, height, normalized_text))
+
+    if not fragments:
+        return []
+
+    fragments.sort(key=lambda item: (item[0], item[1]))
+    merge_threshold = max(12.0, (median(heights) if heights else 12.0) * 0.7)
+    grouped: list[list[tuple[float, float, float, str]]] = []
+    for fragment in fragments:
+        if not grouped:
+            grouped.append([fragment])
+            continue
+        current_group = grouped[-1]
+        current_y = sum(part[0] for part in current_group) / len(current_group)
+        if abs(fragment[0] - current_y) <= merge_threshold:
+            current_group.append(fragment)
+        else:
+            grouped.append([fragment])
+
+    result_lines: list[str] = []
+    for group in grouped:
+        group.sort(key=lambda item: item[1])
+        merged = ' '.join(part[3] for part in group).strip()
+        merged = re.sub(r'\s+', ' ', merged)
+        if merged:
+            result_lines.append(merged)
+    return result_lines
+
+
+def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[str], float | None]:
+    model = _get_paddle_ocr()
+    if model is None:
+        return [], None
+
+    suffix = Path(filename).suffix.lower() or '.png'
+    try:
+        with tempfile.TemporaryDirectory(prefix='rezzerv-paddleocr-') as temp_dir:
+            image_path = Path(temp_dir) / f'image{suffix}'
+            image_path.write_bytes(file_bytes)
+            result = model.predict(str(image_path))
+    except Exception as exc:  # pragma: no cover - runtime dependency/model download issue
+        LOGGER.warning('PaddleOCR verwerking mislukt voor %s: %s', filename, exc)
+        return [], None
+
+    texts: list[str] = []
+    scores: list[float] = []
+    boxes: list[Any] = []
+    for item in result or []:
+        payload = _extract_payload_from_paddle_item(item)
+        current_texts = payload.get('rec_texts') or payload.get('texts') or []
+        current_scores = payload.get('rec_scores') or payload.get('scores') or []
+        current_boxes = payload.get('rec_boxes') or payload.get('dt_polys') or payload.get('rec_polys') or []
+        texts.extend([str(text) for text in current_texts if str(text).strip()])
+        for score in current_scores:
+            try:
+                scores.append(float(score))
+            except (TypeError, ValueError):
+                continue
+        if hasattr(current_boxes, 'tolist'):
+            current_boxes = current_boxes.tolist()
+        try:
+            current_boxes = list(current_boxes)
+        except TypeError:
+            current_boxes = []
+        boxes.extend(current_boxes[: len(current_texts)])
+
+    line_candidates = _group_paddle_texts_to_lines(texts, boxes if boxes else None)
+    confidence = round(sum(scores) / len(scores), 4) if scores else None
+    return line_candidates, confidence
+
+
 def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> ReceiptParseResult:
     suffix = Path(filename).suffix.lower()
-    store_name = None
-    purchase_at = None
-    total_amount = None
-    lines: list[dict[str, Any]] = []
-    confidence = None
 
     if mime_type == 'application/pdf' or suffix == '.pdf':
-        text_content = _preprocess_pdf_text(_extract_pdf_text(file_bytes))
-        text_lines = _normalize_text_lines(text_content)
-        if not text_lines or _looks_like_non_receipt(text_lines):
-            return ReceiptParseResult(
-                is_receipt=False,
-                parse_status='failed',
-                confidence_score=0.05,
-                store_name=None,
-                purchase_at=None,
-                total_amount=None,
-                currency='EUR',
-                lines=[],
-            )
-        store_name = _store_from_text(text_lines[:12], filename)
-        purchase_at = _purchase_at_from_lines(text_lines[:20], filename)
-        total_amount = _total_amount_from_lines(text_lines, filename)
-        lines = _extract_receipt_lines(text_lines)
-        confidence = 0.92 if (store_name and total_amount and lines) else 0.74 if (total_amount or lines) else 0.45
-        parse_status = 'parsed' if (total_amount or purchase_at or store_name) and lines else 'partial' if (store_name or total_amount or purchase_at) else 'review_needed'
-        return ReceiptParseResult(
-            is_receipt=bool(store_name or total_amount or purchase_at or lines),
-            parse_status=parse_status,
-            confidence_score=confidence,
-            store_name=store_name,
-            purchase_at=purchase_at,
-            total_amount=total_amount,
-            currency='EUR',
-            lines=lines,
+        pdf_text = _preprocess_pdf_text(_extract_pdf_text(file_bytes))
+        pdf_lines = _normalize_text_lines(pdf_text)
+        direct_result = _parse_result_from_text_lines(
+            pdf_lines,
+            filename,
+            rich_confidence=0.92,
+            partial_confidence=0.74,
+            review_confidence=0.48,
         )
+        if direct_result.is_receipt:
+            return direct_result
+
+        ocr_text = _preprocess_pdf_text(_ocr_pdf_text_with_ocrmypdf(file_bytes, filename))
+        ocr_lines = _normalize_text_lines(ocr_text)
+        ocr_result = _parse_result_from_text_lines(
+            ocr_lines,
+            filename,
+            rich_confidence=0.88,
+            partial_confidence=0.68,
+            review_confidence=0.42,
+        )
+        return ocr_result
 
     if mime_type.startswith('image/') or suffix in {'.png', '.jpg', '.jpeg'}:
+        ocr_lines, ocr_confidence = _ocr_image_text_with_paddle(file_bytes, filename)
+        image_result = _parse_result_from_text_lines(
+            ocr_lines,
+            filename,
+            rich_confidence=0.84,
+            partial_confidence=0.64,
+            review_confidence=0.36,
+        )
+        if image_result.is_receipt:
+            if ocr_confidence is not None and image_result.confidence_score is not None:
+                image_result.confidence_score = round(min(image_result.confidence_score, ocr_confidence), 4)
+            elif ocr_confidence is not None:
+                image_result.confidence_score = round(ocr_confidence, 4)
+            return image_result
+
         store_name = _store_from_text([], filename)
         purchase_at = _purchase_at_from_lines([], filename)
         total_amount = _total_amount_from_lines([], filename)
@@ -394,45 +668,15 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
         if mime_type == 'text/html' or suffix in {'.html', '.htm'}:
             raw_text = _html_to_text(raw_text)
         text_lines = _normalize_text_lines(raw_text)
-        if not text_lines:
-            return ReceiptParseResult(
-                is_receipt=False,
-                parse_status='failed',
-                confidence_score=0.0,
-                store_name=None,
-                purchase_at=None,
-                total_amount=None,
-                currency='EUR',
-                lines=[],
-            )
-        store_name = _store_from_text(text_lines[:12], filename)
-        purchase_at = _purchase_at_from_lines(text_lines[:20], filename)
-        total_amount = _total_amount_from_lines(text_lines, filename)
-        lines = _extract_receipt_lines(text_lines)
-        has_signal = bool(store_name or purchase_at or total_amount or lines)
-        confidence = 0.62 if (total_amount and lines) else 0.46 if has_signal else 0.24
-        parse_status = 'partial' if has_signal and lines else 'review_needed'
-        return ReceiptParseResult(
-            is_receipt=True,
-            parse_status=parse_status,
-            confidence_score=confidence,
-            store_name=store_name,
-            purchase_at=purchase_at,
-            total_amount=total_amount,
-            currency='EUR',
-            lines=lines,
-        )
+        return _parse_result_from_text_lines(
+            text_lines,
+            filename,
+            rich_confidence=0.62,
+            partial_confidence=0.46,
+            review_confidence=0.24,
+        ) if text_lines else _failed_receipt_result(0.0)
 
-    return ReceiptParseResult(
-        is_receipt=False,
-        parse_status='failed',
-        confidence_score=0.0,
-        store_name=None,
-        purchase_at=None,
-        total_amount=None,
-        currency='EUR',
-        lines=[],
-    )
+    return _failed_receipt_result(0.0)
 
 
 def ensure_default_receipt_sources(engine, receipt_root: Path, household_id: str) -> list[dict[str, Any]]:
