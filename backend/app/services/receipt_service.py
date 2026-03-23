@@ -6,6 +6,7 @@ import logging
 import mimetypes
 import re
 import shutil
+import subprocess
 import tempfile
 import uuid
 from dataclasses import dataclass
@@ -457,18 +458,25 @@ def _store_from_text(lines: Iterable[str], filename: str) -> str | None:
     return None
 
 
+
 def _purchase_at_from_lines(lines: Iterable[str], filename: str) -> str | None:
     patterns = [
-        r'(\d{2}[/-]\d{2}[/-]\d{4})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?',
-        r'(\d{4}-\d{2}-\d{2})(?:\s+(\d{2}:\d{2}(?::\d{2})?))?',
+        re.compile(r'(?P<date>\d{1,2}[/-]\d{1,2}[/-]\d{4})(?:\s+(?P<time>\d{1,2}:\d{2}(?::\d{2})?))?'),
+        re.compile(r'(?P<time>\d{1,2}:\d{2}(?::\d{2})?)\s+(?P<date>\d{1,2}[/-]\d{1,2}[/-]\d{4})'),
+        re.compile(r'(?P<date>\d{4}-\d{2}-\d{2})(?:\s+(?P<time>\d{1,2}:\d{2}(?::\d{2})?))?'),
     ]
+    candidates: list[tuple[int, str]] = []
     for candidate in list(lines):
+        normalized_candidate = str(candidate or '').strip()
+        lowered = normalized_candidate.lower()
         for pattern in patterns:
-            match = re.search(pattern, candidate)
+            match = pattern.search(normalized_candidate)
             if not match:
                 continue
-            date_part = match.group(1)
-            time_part = match.group(2) or '00:00:00'
+            date_part = match.groupdict().get('date')
+            time_part = match.groupdict().get('time') or '00:00:00'
+            if not date_part:
+                continue
             if len(time_part) == 5:
                 time_part += ':00'
             for fmt in ('%d-%m-%Y', '%d/%m/%Y', '%Y-%m-%d'):
@@ -477,41 +485,73 @@ def _purchase_at_from_lines(lines: Iterable[str], filename: str) -> str | None:
                     hh, mm, ss = time_part.split(':')
                     parsed = parsed.replace(hour=int(hh), minute=int(mm), second=int(ss))
                     iso_value = parsed.isoformat()
-                    if _is_plausible_purchase_at(iso_value):
-                        return iso_value
+                    if not _is_plausible_purchase_at(iso_value):
+                        continue
+                    score = 0
+                    if 'betaling' in lowered:
+                        score += 20
+                    if match.groupdict().get('time'):
+                        score += 10
+                    if 'totaal' in lowered or 'auth.' in lowered:
+                        score += 5
+                    candidates.append((score, iso_value))
                 except ValueError:
                     continue
-    return None
+    if not candidates:
+        return None
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
 
 
 def _total_amount_from_lines(lines: list[str], filename: str) -> tuple[Decimal | None, bool]:
-    explicit_totals: list[Decimal] = []
-    subtotal_amounts: list[Decimal] = []
     amount_pattern = re.compile(r'(-?\d{1,6}(?:[\.,]\d{2}))')
-    explicit_total_pattern = re.compile(r'(?i)\b(totaal(?!\s*btw)|te betalen|te voldoen|eindtotaal|total due|amount due|total)\b')
+    explicit_total_pattern = re.compile(r'(?i)\b(totaal|te betalen|te voldoen|eindtotaal|total due|amount due)\b')
     subtotal_pattern = re.compile(r'(?i)\b(subtotaal|subtotal)\b')
+    payment_pattern = re.compile(r'(?i)\b(bankpas|pinnen|pin|betaald|betaling)\b')
+    vat_pattern = re.compile(r'(?i)\b(btw|bedr\.excl|bedr\.incl|bedrag excl|bedrag incl)\b')
     refund_pattern = re.compile(r'(?i)\b(retour|refund|credit)\b')
-    for line in lines:
-        lowered = line.lower()
-        matches = amount_pattern.findall(line)
+    candidates: list[tuple[int, int, Decimal, bool]] = []
+    in_vat_block = False
+
+    for index, line in enumerate(lines):
+        lowered = str(line or '').lower()
+        if vat_pattern.search(lowered) or lowered.startswith('%'):
+            in_vat_block = True
+        matches = amount_pattern.findall(str(line or ''))
         parsed_matches = [_parse_decimal(item) for item in matches]
         parsed_matches = [item for item in parsed_matches if item is not None]
         if not parsed_matches:
             continue
         if subtotal_pattern.search(lowered):
-            subtotal_amounts.extend([value for value in parsed_matches if _is_plausible_total_amount(value)])
             continue
-        if explicit_total_pattern.search(lowered):
-            for value in parsed_matches:
-                if refund_pattern.search(lowered) or _is_plausible_total_amount(value):
-                    explicit_totals.append(value)
+        if any(token in lowered for token in ('voordeel', 'korting', 'koopzegel', 'koopzegels', 'waarvan', 'bonus box')):
             continue
-    if explicit_totals:
-        return explicit_totals[-1], True
-    if subtotal_amounts:
-        return subtotal_amounts[-1], False
-    return None, False
+        explicit = bool(explicit_total_pattern.search(lowered))
+        payment = bool(payment_pattern.search(lowered))
+        if not explicit and not payment:
+            continue
+        amount = parsed_matches[-1]
+        score = 0
+        if explicit:
+            score += 40
+        if payment:
+            score += 25
+        if 'eur' in lowered:
+            score += 10
+        if in_vat_block or vat_pattern.search(lowered):
+            score -= 100
+        if refund_pattern.search(lowered):
+            score -= 60
+        if len(parsed_matches) > 1:
+            score -= 10 * (len(parsed_matches) - 1)
+        if _is_plausible_total_amount(amount):
+            candidates.append((score, index, amount, explicit))
 
+    if not candidates:
+        return None, False
+    valid_candidates = [candidate for candidate in candidates if candidate[0] > 0]
+    chosen = sorted(valid_candidates or candidates, key=lambda item: (item[0], item[1]))[-1]
+    return chosen[2], chosen[3]
 
 def _looks_like_non_receipt(lines: list[str]) -> bool:
     if not lines:
@@ -531,54 +571,140 @@ def _looks_like_non_receipt(lines: list[str]) -> bool:
     return signal_count == 0
 
 
+
+def _clean_receipt_label(value: str | None) -> str:
+    label = re.sub(r'\s+', ' ', str(value or '')).strip(' .:-')
+    label = re.sub(r'\s+(?:EUR|[A-Z]{1,3})$', '', label).strip()
+    label = re.sub(r'^[0O]\s+(?=[A-Za-z])', '', label).strip()
+    return label[:255]
+
+
+def _should_skip_receipt_line(line: str) -> bool:
+    lowered = str(line or '').strip().lower()
+    if not lowered:
+        return True
+    skip_markers = (
+        'subtotaal', 'subtotal', 'uw voordeel', 'waarvan', 'bonus box', 'koopzegel', 'koopzegels',
+        'totaal korting', 'prijsvoordeel', 'spaaractie', 'spaaracties', 'betaald met', 'bankpas', 'pinnen', 'vpay', 'actie ', 'korting',
+        'betaling', 'auth.', 'autorisatie', 'merchant', 'terminal', 'transactie', 'kaartnr', 'kaart:',
+        'contactloze', 'contactloos', 'klantticket', 'btw over', 'btw overzicht', 'bedr.excl', 'bedr.incl',
+        'bedrag excl', 'bedrag incl', 'filiaal informatie', 'aantal artikelen', 'aantal papieren',
+        'openingstijden', 'dank u wel', 'aankoop gedaan bij', 'merchant ref', 'v-pay', 'maestro',
+        'v pay', 'copy kaarthouder', 'kopie kaarthouder', 'akkoord', 'poi:', 'token', 'period', 'periode:'
+    )
+    if any(marker in lowered for marker in skip_markers):
+        return True
+    if lowered.startswith(('bonus ', 'bbox ', 'korting ', 'retour ', 'refund ')):
+        return True
+    if 'totaal' in lowered:
+        return True
+    if re.match(r'^(?:\d+%|%)\b', lowered):
+        return True
+    if re.match(r'^[A-Z]\s+\d{1,2}\s+\d', str(line or '').strip()):
+        return True
+    if re.search(r'\d{1,2}:\d{2}\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}', lowered):
+        return True
+    return False
+
+
+def _looks_like_item_label_only(line: str) -> bool:
+    candidate = re.sub(r'\s+', ' ', str(line or '')).strip()
+    if not candidate or _should_skip_receipt_line(candidate):
+        return False
+    if not re.search(r'[A-Za-z]', candidate):
+        return False
+    if re.search(r'\d+[\.,]\d{2}', candidate):
+        return False
+    return True
+
+
 def _extract_receipt_lines(lines: list[str]) -> list[dict[str, Any]]:
     extracted: list[dict[str, Any]] = []
-    amount_end_re = re.compile(r'^(?P<label>.+?)\s+(?P<amount>-?\d{1,4}(?:[\.,]\d{2}))$')
-    qty_prefix_re = re.compile(r'^(?P<qty>\d+(?:[\.,]\d+)?)\s*[xX]\s+(?P<label>.+)$')
+    qty_first_re = re.compile(
+        r'^(?P<qty>\d+(?:[\.,]\d+)?(?:\s*kg)?)\s+(?P<label>.+?)\s+(?P<amount1>-?\d{1,6}(?:[\.,]\d{2}))'
+        r'(?:\s+(?P<amount2>-?\d{1,6}(?:[\.,]\d{2})))?(?:\s+(?:EUR|[A-Z]{1,3}))?$',
+        re.IGNORECASE,
+    )
+    label_first_re = re.compile(
+        r'^(?P<label>[A-Za-z].*?)\s+(?:(?P<qty>\d+(?:[\.,]\d+)?)\s*[xX]\s+)?(?P<amount1>-?\d{1,6}(?:[\.,]\d{2}))'
+        r'(?:\s+(?P<amount2>-?\d{1,6}(?:[\.,]\d{2})))?(?:\s+(?:EUR|[A-Z]{1,3}))?$',
+        re.IGNORECASE,
+    )
+    detail_only_re = re.compile(
+        r'^(?P<qty>\d+(?:[\.,]\d+)?)\s*(?:kg\s*)?[xX]\s+(?P<amount1>-?\d{1,6}(?:[\.,]\d{2}))'
+        r'(?:\s+(?P<amount2>-?\d{1,6}(?:[\.,]\d{2})))?(?:\s+(?:EUR|[A-Z]{1,3}))?$',
+        re.IGNORECASE,
+    )
+    pending_label: str | None = None
 
-    for line in lines:
-        lowered = line.lower()
-        if len(line) < 3:
-            continue
-        if any(marker in lowered for marker in IGNORED_LINE_MARKERS):
-            continue
-        if re.search(r'\d{2}[/-]\d{2}[/-]\d{4}', line):
-            continue
-        match = amount_end_re.match(line)
-        if not match:
-            continue
-        label = match.group('label').strip(' .:-')
-        if not label or len(label) < 2 or label.replace(' ', '').isdigit():
-            continue
-        amount = _parse_decimal(match.group('amount'))
-        quantity = None
-        normalized_label = label
-        qty_match = qty_prefix_re.match(label)
-        if qty_match:
-            quantity = _parse_quantity(qty_match.group('qty'))
-            normalized_label = qty_match.group('label').strip()
-        discount_amount = None
-        line_total = amount
-        if any(token in lowered for token in ('korting', 'retour', 'discount')):
-            discount_amount = amount.copy_abs() if amount is not None else None
-            if amount is not None and amount > 0:
-                line_total = amount.copy_negate()
+    def append_line(label: str, qty_raw: str | None, amount1_raw: str | None, amount2_raw: str | None) -> None:
+        label_value = _clean_receipt_label(label)
+        if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
+            return
+        quantity = _parse_quantity((qty_raw or '').replace('kg', '').replace('KG', '').strip()) if qty_raw else None
+        if quantity is not None and quantity <= 0:
+            quantity = None
+        amount1 = _parse_decimal(amount1_raw)
+        amount2 = _parse_decimal(amount2_raw)
+        if amount1 is None and amount2 is None:
+            return
+        if amount2 is not None:
+            unit_price = amount1
+            line_total = amount2
+        else:
+            unit_price = amount1
+            line_total = amount1
         extracted.append(
             {
-                'raw_label': label,
-                'normalized_label': normalized_label[:255],
+                'raw_label': label_value,
+                'normalized_label': label_value,
                 'quantity': _amount_to_float(quantity),
-                'unit': None,
-                'unit_price': _amount_to_float(amount),
+                'unit': 'kg' if qty_raw and 'kg' in qty_raw.lower() else None,
+                'unit_price': _amount_to_float(unit_price),
                 'line_total': _amount_to_float(line_total),
-                'discount_amount': _amount_to_float(discount_amount),
+                'discount_amount': None,
                 'barcode': None,
                 'confidence_score': 0.85,
             }
         )
+
+    for line in lines:
+        normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
+        normalized = re.sub(r'(?<=\d)/(?!/)(?=\d{2}\b)', ',', normalized)
+        normalized = re.sub(r'^[^A-Za-z0-9]+', '', normalized).strip()
+        normalized = re.sub(r'[^A-Za-z0-9]+$', '', normalized).strip()
+        if len(normalized) < 2:
+            continue
+        if _should_skip_receipt_line(normalized):
+            pending_label = None
+            continue
+        if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', normalized):
+            pending_label = None
+            continue
+
+        detail_match = detail_only_re.match(normalized)
+        if detail_match and pending_label:
+            append_line(pending_label, detail_match.group('qty'), detail_match.group('amount1'), detail_match.group('amount2'))
+            pending_label = None
+            continue
+        if detail_match:
+            continue
+
+        qty_first_match = qty_first_re.match(normalized)
+        if qty_first_match:
+            append_line(qty_first_match.group('label'), qty_first_match.group('qty'), qty_first_match.group('amount1'), qty_first_match.group('amount2'))
+            pending_label = None
+            continue
+
+        label_first_match = label_first_re.match(normalized)
+        if label_first_match:
+            append_line(label_first_match.group('label'), label_first_match.group('qty'), label_first_match.group('amount1'), label_first_match.group('amount2'))
+            pending_label = None
+            continue
+
+        pending_label = normalized if _looks_like_item_label_only(normalized) else None
+
     return extracted
-
-
 
 def _failed_receipt_result(confidence: float = 0.0) -> ReceiptParseResult:
     return ReceiptParseResult(
@@ -607,7 +733,7 @@ def _parse_result_from_text_lines(
         return _failed_receipt_result(0.05)
 
     store_name = _store_from_text(text_lines[:12], filename)
-    purchase_at = _purchase_at_from_lines(text_lines[:20], filename)
+    purchase_at = _purchase_at_from_lines(text_lines, filename)
     total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
     lines = _extract_receipt_lines(text_lines)
     if total_amount is None and len(lines) >= 2:
@@ -882,6 +1008,25 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
     return line_candidates, confidence
 
 
+
+def _ocr_image_text_with_tesseract(file_bytes: bytes, filename: str) -> tuple[list[str], float | None]:
+    suffix = Path(filename).suffix.lower() or '.png'
+    language = 'nld+eng'
+    try:
+        with tempfile.TemporaryDirectory(prefix='rezzerv-tesseract-') as temp_dir:
+            image_path = Path(temp_dir) / f'image{suffix}'
+            image_path.write_bytes(file_bytes)
+            command = ['tesseract', str(image_path), 'stdout', '-l', language, '--psm', '6']
+            completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=90)
+            if completed.returncode != 0:
+                LOGGER.warning('Tesseract verwerking mislukt voor %s: %s', filename, (completed.stderr or '').strip())
+                return [], None
+            text_output = completed.stdout or ''
+            return _normalize_text_lines(text_output), None
+    except Exception as exc:  # pragma: no cover - runtime dependency
+        LOGGER.warning('Tesseract fallback mislukt voor %s: %s', filename, exc)
+        return [], None
+
 def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> ReceiptParseResult:
     suffix = Path(filename).suffix.lower()
 
@@ -911,6 +1056,10 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
 
     if mime_type.startswith('image/') or suffix in {'.png', '.jpg', '.jpeg'}:
         ocr_lines, ocr_confidence = _ocr_image_text_with_paddle(file_bytes, filename)
+        if not ocr_lines:
+            ocr_lines, fallback_confidence = _ocr_image_text_with_tesseract(file_bytes, filename)
+            if ocr_confidence is None:
+                ocr_confidence = fallback_confidence
         image_result = _parse_result_from_text_lines(
             ocr_lines,
             filename,
@@ -925,9 +1074,9 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                 image_result.confidence_score = round(ocr_confidence, 4)
             return image_result
 
-        store_name = _store_from_text([], filename)
-        purchase_at = _purchase_at_from_lines([], filename)
-        total_amount, _ = _total_amount_from_lines([], filename)
+        store_name = _store_from_text(ocr_lines, filename)
+        purchase_at = _purchase_at_from_lines(ocr_lines, filename)
+        total_amount, _ = _total_amount_from_lines(ocr_lines, filename)
         confidence = 0.35 if (store_name or purchase_at or total_amount) else 0.20
         return ReceiptParseResult(
             is_receipt=True,

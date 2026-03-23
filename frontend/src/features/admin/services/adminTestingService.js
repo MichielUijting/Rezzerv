@@ -107,3 +107,11 @@ export async function submitTestResults(testType, results) {
     body: JSON.stringify({ test_type: testType, results }),
   })
 }
+
+export async function runParsingFixtureTests() {
+  return request('/api/dev/run-parsing-fixture-tests', { method: 'POST', body: '{}' })
+}
+
+export async function runParsingRawTests() {
+  return request('/api/dev/run-parsing-raw-tests', { method: 'POST', body: '{}' })
+}

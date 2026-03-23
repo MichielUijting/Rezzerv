@@ -12,6 +12,8 @@ import {
   runLayer1Tests,
   runLayer2Tests,
   runLayer3Tests,
+  runParsingFixtureTests,
+  runParsingRawTests,
   submitTestResults,
 } from "./services/adminTestingService";
 import { runLayer1RegressionTests } from "./lib/layer1RegressionRunner";
@@ -416,6 +418,37 @@ export default function AdminPage() {
     }
   }
 
+
+  async function handleRunParsingFixture() {
+    setTestMessage('');
+    setShowReport(false);
+    try {
+      const report = await runParsingFixtureTests();
+      await refreshTestStatus();
+      setTestReport(report);
+      setShowReport(true);
+      const failedCount = report?.results?.filter((item) => item.status === 'failed').length || 0;
+      setTestMessage(failedCount > 0 ? `Parsing fixture-baseline afgerond: ${failedCount} fout(en).` : 'Parsing fixture-baseline geslaagd.');
+    } catch (error) {
+      setTestMessage(error.message || 'Parsing fixture-baseline kon niet worden gestart');
+    }
+  }
+
+  async function handleRunParsingRaw() {
+    setTestMessage('');
+    setShowReport(false);
+    try {
+      const report = await runParsingRawTests();
+      await refreshTestStatus();
+      setTestReport(report);
+      setShowReport(true);
+      const failedCount = report?.results?.filter((item) => item.status === 'failed').length || 0;
+      setTestMessage(failedCount > 0 ? `Parsing raw-baseline afgerond: ${failedCount} fout(en).` : 'Parsing raw-baseline geslaagd.');
+    } catch (error) {
+      setTestMessage(error.message || 'Parsing raw-baseline kon niet worden gestart');
+    }
+  }
+
   async function handleViewReport() {
     setTestMessage("");
     try {
@@ -469,6 +502,10 @@ export default function AdminPage() {
               onViewReport={handleViewReport}
             />
             </div>
+            <div className="rz-admin-actions" style={{ marginTop: '12px' }}>
+              <Button variant="secondary" onClick={handleRunParsingFixture} disabled={testStatus.status === "running"}>Parsing fixtures</Button>
+              <Button variant="secondary" onClick={handleRunParsingRaw} disabled={testStatus.status === "running"}>Parsing raw bestanden</Button>
+            </div>
             {testMessage ? <div className="rz-admin-message">{testMessage}</div> : null}
             <TestStatusCard status={testStatus} progress={regressionProgress} />
             {showReport && testReport ? (
@@ -492,6 +529,12 @@ export default function AdminPage() {
                       {result.error ? <div className="rz-admin-report-meta-line">Fout: {result.error}</div> : null}
                       {result.triageRationale ? <div className="rz-admin-report-meta-line">Analyse: {result.triageRationale}</div> : null}
                       {result.triageSuggestedAction ? <div className="rz-admin-report-meta-line">Advies: {result.triageSuggestedAction}</div> : null}
+                      {result.details?.extraction_method ? <div className="rz-admin-report-meta-line">Extractie: {result.details.extraction_method} · tekstlengte {result.details.text_length ?? 0}</div> : null}
+                      {result.details?.store_expected ? <div className="rz-admin-report-meta-line">Winkel: verwacht {result.details.store_expected} · gevonden {result.details.store_found || '-'}</div> : null}
+                      {result.details?.purchase_expected ? <div className="rz-admin-report-meta-line">Datum/tijd: verwacht {result.details.purchase_expected} · gevonden {result.details.purchase_found || '-'}</div> : null}
+                      {result.details?.total_expected ? <div className="rz-admin-report-meta-line">Totaal: verwacht {result.details.total_expected} · gevonden {result.details.total_found || '-'}</div> : null}
+                      {result.details?.line_count_expected !== undefined ? <div className="rz-admin-report-meta-line">Bonregels: verwacht {result.details.line_count_expected} · gevonden {result.details.line_count_found}</div> : null}
+                      {result.details?.attachment_found !== null && result.details?.attachment_found !== undefined ? <div className="rz-admin-report-meta-line">Bijlage gevonden: {result.details.attachment_found ? 'ja' : 'nee'}</div> : null}
                     </div>
                   )) : <div className="rz-admin-muted">Nog geen rapport beschikbaar</div>}
                 </div>
