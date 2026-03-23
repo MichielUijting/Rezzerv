@@ -880,12 +880,9 @@ function ReceiptSourceHubContent({
   emailRoute,
   isEmailRouteLoading,
   emailRouteError,
-  feedbackMessage,
-  feedbackVariant = 'success',
+  duplicateNotice,
   isUploading,
   uploadProgress,
-  showHeading = true,
-  showSupportPanels = true,
 }) {
   const [isLandingDropActive, setIsLandingDropActive] = useState(false)
 
@@ -952,25 +949,15 @@ function ReceiptSourceHubContent({
       : routeIsPublic
         ? 'Adres klaar, inbound nog niet actief'
         : 'Lokale demo-opstelling'
-  const feedbackClassName = feedbackVariant === 'error'
-    ? 'rz-inline-feedback rz-inline-feedback--error'
-    : feedbackVariant === 'warning'
-      ? 'rz-inline-feedback rz-inline-feedback--warning'
-      : 'rz-inline-feedback rz-inline-feedback--success'
 
   return (
     <div style={{ display: 'grid', gap: '20px' }} data-testid="kassa-add-screen">
-      {showHeading ? (
-        <div>
-          <h2 id="kassa-bronhub-title" className="rz-modal-title" style={{ fontSize: '22px' }}>Bon toevoegen</h2>
-        </div>
-      ) : null}
+      <div>
+        <h2 id="kassa-bronhub-title" className="rz-modal-title" style={{ fontSize: '22px' }}>Bon toevoegen</h2>
+      </div>
 
       <ScreenCard fullWidth>
           <div style={{ display: 'grid', gap: '18px' }}>
-            {feedbackMessage ? (
-              <div className={feedbackClassName} style={{ fontWeight: 700 }} data-testid="receipt-landing-feedback">{feedbackMessage}</div>
-            ) : null}
             <div
               role="button"
               tabIndex={0}
@@ -1039,12 +1026,11 @@ function ReceiptSourceHubContent({
               </div>
             ) : null}
 
+            {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-sourcehub-duplicate-feedback">{duplicateNotice}</div> : null}
             {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
           </div>
         </ScreenCard>
 
-        {showSupportPanels ? (
-        <>
         <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '10px' }}>
@@ -1139,8 +1125,6 @@ function ReceiptSourceHubContent({
             </div>
           </ScreenCard>
         </div>
-        </>
-        ) : null}
     </div>
   )
 }
@@ -1267,8 +1251,6 @@ export default function KassaPage() {
     setCameraError('')
     setEmailRouteError('')
     setDuplicateNotice('')
-    setStatus('')
-    setError('')
     resetUploadProgress()
     ensureEmailRouteLoaded().catch(() => {})
   }, [isAddReceiptRoute])
@@ -1423,14 +1405,6 @@ export default function KassaPage() {
     'Controle nodig': inboxItems.filter((item) => item.inbox_status === 'Controle nodig').length,
     Gecontroleerd: inboxItems.filter((item) => item.inbox_status === 'Gecontroleerd').length,
   }), [inboxItems])
-
-
-  const landingFeedback = useMemo(() => {
-    if (error) return { message: error, variant: 'error' }
-    if (duplicateNotice) return { message: duplicateNotice, variant: 'warning' }
-    if (status) return { message: status, variant: 'success' }
-    return null
-  }, [error, duplicateNotice, status])
 
   const listItems = useMemo(() => {
     return inboxItems
@@ -1867,20 +1841,25 @@ export default function KassaPage() {
 
       {isAddReceiptRoute ? (
         <div data-testid="kassa-add-page" style={{ display: 'grid', gap: '16px' }}>
-          <ReceiptSourceHubContent
-            onChooseReceiptFile={handleChooseReceiptFileFromHub}
-            onChooseCamera={handleChooseCameraFromHub}
-            onChooseEmail={handleChooseEmailFromHub}
-            onDropLandingFile={handleDroppedLandingFile}
-            onCopyEmailRoute={copyEmailRouteToClipboard}
-            emailRoute={emailRoute}
-            isEmailRouteLoading={isEmailRouteLoading}
-            emailRouteError={emailRouteError}
-            feedbackMessage={landingFeedback?.message || ''}
-            feedbackVariant={landingFeedback?.variant || 'success'}
-            isUploading={isUploading}
-            uploadProgress={uploadProgress}
-          />
+          {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
+          {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-duplicate-feedback">{duplicateNotice}</div> : null}
+          {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
+
+          <ScreenCard fullWidth>
+            <ReceiptSourceHubContent
+              onChooseReceiptFile={handleChooseReceiptFileFromHub}
+              onChooseCamera={handleChooseCameraFromHub}
+              onChooseEmail={handleChooseEmailFromHub}
+              onDropLandingFile={handleDroppedLandingFile}
+              onCopyEmailRoute={copyEmailRouteToClipboard}
+              emailRoute={emailRoute}
+              isEmailRouteLoading={isEmailRouteLoading}
+              emailRouteError={emailRouteError}
+              duplicateNotice={duplicateNotice}
+              isUploading={isUploading}
+              uploadProgress={uploadProgress}
+            />
+          </ScreenCard>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: '16px' }} data-testid="kassa-page">
@@ -1898,22 +1877,9 @@ export default function KassaPage() {
                 </div>
               </div>
 
-              <ReceiptSourceHubContent
-                onChooseReceiptFile={handleChooseReceiptFileFromHub}
-                onChooseCamera={handleChooseCameraFromHub}
-                onChooseEmail={handleChooseEmailFromHub}
-                onDropLandingFile={handleDroppedLandingFile}
-                onCopyEmailRoute={copyEmailRouteToClipboard}
-                emailRoute={emailRoute}
-                isEmailRouteLoading={isEmailRouteLoading}
-                emailRouteError={emailRouteError}
-                feedbackMessage={landingFeedback?.message || ''}
-                feedbackVariant={landingFeedback?.variant || 'success'}
-                isUploading={isUploading}
-                uploadProgress={uploadProgress}
-                showHeading={false}
-                showSupportPanels={false}
-              />
+              {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
+              {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-duplicate-feedback">{duplicateNotice}</div> : null}
+              {status ? <div className="rz-inline-feedback rz-inline-feedback--success">{status}</div> : null}
 
               <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
                 {[
