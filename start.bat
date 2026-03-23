@@ -85,7 +85,7 @@ if %errorlevel% neq 0 (
 )
 
 echo [5/7] Starting containers without deleting data volume...
-docker compose up -d --remove-orphans >nul 2>&1
+docker compose up -d --remove-orphans --force-recreate >nul 2>&1
 if %errorlevel% neq 0 (
   echo [ERROR] docker compose up failed.
   docker compose logs --tail 80
@@ -228,17 +228,16 @@ set "TARGET_VERSION=%~2"
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$port=%TARGET_PORT%;" ^
   "$targetVersion='%TARGET_VERSION%';" ^
-  "function GetVersion([string]$base) { try { $v = Invoke-RestMethod -Uri ($base + '/version.json') -TimeoutSec 3; if ($v.version) { return [string]$v.version } } catch {}; try { $resp = Invoke-WebRequest -Uri ($base + '/') -UseBasicParsing -TimeoutSec 3; $content=[string]$resp.Content; $m=[regex]::Match($content,'Rezzerv[^0-9]*([0-9]+\.[0-9]+\.[0-9]+)'); if ($m.Success) { return $m.Groups[1].Value } } catch {}; return '' }" ^
+  "function GetVersion([string]$base, [ref]$raw) { $headers=@{'Cache-Control'='no-cache, no-store, must-revalidate'; 'Pragma'='no-cache'}; $raw.Value=''; try { $u = $base + '/version.json?cb=' + [guid]::NewGuid().ToString('N'); $resp = Invoke-WebRequest -Uri $u -Headers $headers -UseBasicParsing -TimeoutSec 3; $raw.Value = [string]$resp.Content; try { $v = $raw.Value | ConvertFrom-Json -ErrorAction Stop; if ($v.version) { return [string]$v.version } } catch {} } catch {}; try { $u = $base + '/?cb=' + [guid]::NewGuid().ToString('N'); $resp = Invoke-WebRequest -Uri $u -Headers $headers -UseBasicParsing -TimeoutSec 3; $content=[string]$resp.Content; if (-not $raw.Value) { $raw.Value = $content }; $m=[regex]::Match($content,'Rezzerv[^0-9]*([0-9]+\.[0-9]+\.[0-9]+)'); if ($m.Success) { return $m.Groups[1].Value } } catch {}; return '' }" ^
   "$base='http://localhost:' + $port;" ^
-  "$servedVersion = GetVersion $base;" ^
+  "$servedBody = ''; $servedVersion = GetVersion $base ([ref]$servedBody);" ^
   "if (-not $servedVersion) { exit 0 }" ^
   "if ($servedVersion -eq $targetVersion) { Write-Host ('[INFO] Port ' + $port + ' already serves current Rezzerv version ' + $servedVersion + '. Action: ignore'); exit 0 }" ^
   "Write-Host ('[WARN] Port ' + $port + ' serves old Rezzerv version ' + $servedVersion + ' while target is ' + $targetVersion + '. Attempting targeted cleanup...');" ^
-  "$listeners = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue; foreach ($listener in $listeners) { $owningPid = $listener.OwningProcess; $proc = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $owningPid) -ErrorAction SilentlyContinue; if (-not $proc) { continue }; $name=[string]$proc.Name; $cmd=[string]$proc.CommandLine; $sig=($name + ' ' + $cmd).ToLowerInvariant(); $isDocker=$name -match '(?i)^(docker|docker desktop|com\\.docker.*|docker-proxy|vpnkit|vmmem|vmmemws|wslhost)\\.exe$' -or $cmd.ToLowerInvariant() -match 'docker desktop|com\\.docker|docker-proxy|vpnkit|moby'; $isWsl=$name -match '(?i)^wslrelay\.exe$' -or $cmd.ToLowerInvariant() -match '--vm-id|wslrelay'; if ($isDocker -or $isWsl) { continue }; if ($sig -match 'rezzerv|vite|node|npm') { Write-Host ('    Stopping old Rezzerv-like process PID ' + $owningPid + ' (' + $name + ') on port ' + $port + '...'); Stop-Process -Id $owningPid -Force -ErrorAction SilentlyContinue } }" ^
-  "Start-Sleep -Seconds 1; $remaining = GetVersion $base; if ($remaining -and $remaining -ne $targetVersion) { Write-Host ('[ERROR] Port ' + $port + ' still serves old Rezzerv version ' + $remaining + ' after targeted cleanup.'); exit 24 } else { exit 0 }"
+  "$listeners = Get-NetTCPConnection -State Listen -LocalPort $port -ErrorAction SilentlyContinue; foreach ($listener in $listeners) { $owningPid = $listener.OwningProcess; $proc = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $owningPid) -ErrorAction SilentlyContinue; if (-not $proc) { continue }; $name=[string]$proc.Name; $cmd=[string]$proc.CommandLine; $sig=($name + ' ' + $cmd).ToLowerInvariant(); $isDocker=$name -match '(?i)^(docker|docker desktop|com\.docker.*|docker-proxy|vpnkit|vmmem|vmmemws|wslhost)\.exe$' -or $cmd.ToLowerInvariant() -match 'docker desktop|com\.docker|docker-proxy|vpnkit|moby'; $isWsl=$name -match '(?i)^wslrelay\.exe$' -or $cmd.ToLowerInvariant() -match '--vm-id|wslrelay'; if ($isDocker -or $isWsl) { continue }; if ($sig -match 'rezzerv|vite|node|npm') { Write-Host ('    Stopping old Rezzerv-like process PID ' + $owningPid + ' (' + $name + ') on port ' + $port + '...'); Stop-Process -Id $owningPid -Force -ErrorAction SilentlyContinue } }" ^
+  "Start-Sleep -Seconds 1; $remainingBody = ''; $remaining = GetVersion $base ([ref]$remainingBody); if ($remaining -and $remaining -ne $targetVersion) { $flat = (($remainingBody -replace '\s+',' ').Trim()); $sample = $flat.Substring(0, [Math]::Min($flat.Length, 220)); Write-Host ('[ERROR] Port ' + $port + ' still serves old Rezzerv version ' + $remaining + ' after targeted cleanup. Response sample: ' + $sample); exit 24 } else { exit 0 }"
 if %errorlevel% neq 0 exit /b 1
 exit /b 0
-
 :CleanupRezzervCloudflared
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$targetUrl='http://localhost:%FRONTEND_PORT%'; $procs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue ^| Where-Object { $_.Name -eq 'cloudflared.exe' }; foreach ($proc in $procs) { $cmd=[string]$proc.CommandLine; if ($cmd -and $cmd.ToLowerInvariant().Contains($targetUrl.ToLowerInvariant())) { try { Stop-Process -Id $proc.ProcessId -Force -ErrorAction Stop; Write-Host ('    Stopped previous Rezzerv Cloudflare tunnel PID ' + $proc.ProcessId + '.'); } catch {} } }"
 exit /b 0
@@ -263,16 +262,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$currentVersion='%REZZERV_VERSION%';" ^
   "$primaryUrl='http://localhost:%FRONTEND_PORT%';" ^
   "$staleUrl='http://localhost:%STALE_FRONTEND_PORT%';" ^
-  "function GetVersion([string]$base) { try { $v = Invoke-RestMethod -Uri ($base + '/version.json') -TimeoutSec 3; if ($v.version) { return [string]$v.version } } catch {}; try { $resp = Invoke-WebRequest -Uri ($base + '/') -UseBasicParsing -TimeoutSec 3; $content=[string]$resp.Content; $m=[regex]::Match($content,'Rezzerv[^0-9]*([0-9]+\.[0-9]+\.[0-9]+)'); if ($m.Success) { return $m.Groups[1].Value }; if ($content -match 'Rezzerv') { return 'UI_CONFIRMED_NO_VERSION' } } catch {}; return '' }" ^
-  "$primaryVersion = GetVersion $primaryUrl;" ^
+  "function GetVersion([string]$base, [ref]$raw) { $headers=@{'Cache-Control'='no-cache, no-store, must-revalidate'; 'Pragma'='no-cache'}; $raw.Value=''; try { $u = $base + '/version.json?cb=' + [guid]::NewGuid().ToString('N'); $resp = Invoke-WebRequest -Uri $u -Headers $headers -UseBasicParsing -TimeoutSec 3; $raw.Value = [string]$resp.Content; try { $v = $raw.Value | ConvertFrom-Json -ErrorAction Stop; if ($v.version) { return [string]$v.version } } catch {} } catch {}; try { $u = $base + '/?cb=' + [guid]::NewGuid().ToString('N'); $resp = Invoke-WebRequest -Uri $u -Headers $headers -UseBasicParsing -TimeoutSec 3; $content=[string]$resp.Content; if (-not $raw.Value) { $raw.Value = $content }; $m=[regex]::Match($content,'Rezzerv[^0-9]*([0-9]+\.[0-9]+\.[0-9]+)'); if ($m.Success) { return $m.Groups[1].Value }; if ($content -match 'Rezzerv') { return 'UI_CONFIRMED_NO_VERSION' } } catch {}; return '' }" ^
+  "$primaryBody = ''; $primaryVersion = GetVersion $primaryUrl ([ref]$primaryBody);" ^
   "if (-not $primaryVersion) { exit 21 }" ^
-  "if ($primaryVersion -ne 'UI_CONFIRMED_NO_VERSION' -and $primaryVersion -ne $currentVersion) { Write-Host ('[ERROR] Active frontend on port %FRONTEND_PORT% serves version ' + $primaryVersion + ' instead of ' + $currentVersion + '.'); exit 23 }" ^
+  "if ($primaryVersion -ne 'UI_CONFIRMED_NO_VERSION' -and $primaryVersion -ne $currentVersion) { $flat = (($primaryBody -replace '\s+',' ').Trim()); $sample = $flat.Substring(0, [Math]::Min($flat.Length, 220)); Write-Host ('[ERROR] Active frontend on port %FRONTEND_PORT% serves version ' + $primaryVersion + ' instead of ' + $currentVersion + '. Response sample: ' + $sample); exit 23 }" ^
   "if ($primaryVersion -eq 'UI_CONFIRMED_NO_VERSION') { Write-Host ('[INFO] Active frontend on port %FRONTEND_PORT% serves Rezzerv UI, but no machine-detectable version string was found. Action: allow'); }" ^
-  "$staleVersion = GetVersion $staleUrl;" ^
+  "$staleBody = ''; $staleVersion = GetVersion $staleUrl ([ref]$staleBody);" ^
   "if (-not $staleVersion) { exit 0 }" ^
   "if ($staleVersion -eq 'UI_CONFIRMED_NO_VERSION') { Write-Host ('[INFO] Port %STALE_FRONTEND_PORT% is reachable and shows Rezzerv UI without detectable version. Action: warn only'); exit 0 }" ^
   "if ($staleVersion -eq $currentVersion) { Write-Host ('[INFO] Port %STALE_FRONTEND_PORT% mirrors current Rezzerv version ' + $staleVersion + '. Action: ignore'); exit 0 }" ^
-  "Write-Host ('[ERROR] Port %STALE_FRONTEND_PORT% still serves old Rezzerv frontend version ' + $staleVersion + ' while target is ' + $currentVersion + '.'); exit 24"
+  "$flat = (($staleBody -replace '\s+',' ').Trim()); $sample = $flat.Substring(0, [Math]::Min($flat.Length, 220)); Write-Host ('[ERROR] Port %STALE_FRONTEND_PORT% still serves old Rezzerv frontend version ' + $staleVersion + ' while target is ' + $currentVersion + '. Response sample: ' + $sample); exit 24"
 if %errorlevel% neq 0 (
   if "%errorlevel%"=="21" echo [ERROR] Expected frontend port %FRONTEND_PORT% is not reachable.
   exit /b 1
