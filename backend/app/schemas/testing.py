@@ -1,5 +1,5 @@
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, ConfigDict
+from typing import Optional, List
 
 
 class TestStartResponse(BaseModel):
@@ -18,10 +18,11 @@ class TestStatusResponse(BaseModel):
 
 
 class TestScenarioResult(BaseModel):
+    model_config = ConfigDict(extra="allow")
     name: str
     status: str
     error: Optional[str] = None
-    details: Optional[Dict[str, Any]] = None
+    details: Optional[dict] = None
 
 
 class TestReportResponse(BaseModel):

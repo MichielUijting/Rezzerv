@@ -105,9 +105,6 @@ class TestingService:
     def _run_test(self, test_type: str) -> None:
         if test_type == "smoke":
             results = self._run_smoke_results()
-        elif test_type == "parsing_baseline":
-            from app.services.receipt_parsing_test_service import run_receipt_parsing_baseline_results
-            results = run_receipt_parsing_baseline_results()
         else:
             results = self._run_regression_results()
         self._finish(test_type, results)

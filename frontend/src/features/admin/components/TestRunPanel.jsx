@@ -1,6 +1,6 @@
 import Button from '../../../ui/Button'
 
-export default function TestRunPanel({ isRunning, onRunLayer1, onRunLayer2, onRunLayer3, onRunParsingBaseline, onRunAll, onViewReport, showSuiteNotice = true }) {
+export default function TestRunPanel({ isRunning, onRunLayer1, onRunLayer2, onRunLayer3, onRunAll, onViewReport, showSuiteNotice = true }) {
   return (
     <div>
       {showSuiteNotice ? (
@@ -15,9 +15,6 @@ export default function TestRunPanel({ isRunning, onRunLayer1, onRunLayer2, onRu
       </Button>
       <Button variant="secondary" onClick={onRunLayer3} disabled={isRunning}>
         Laag-3 UI/styleguide-test uitvoeren
-      </Button>
-      <Button variant="secondary" onClick={onRunParsingBaseline} disabled={isRunning}>
-        Parsing-baseline uitvoeren
       </Button>
       <Button variant="primary" onClick={onRunAll} disabled={isRunning} data-testid="run-all-regression-tests-button">
         Regressietest alles

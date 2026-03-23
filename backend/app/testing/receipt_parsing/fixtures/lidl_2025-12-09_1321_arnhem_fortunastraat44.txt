@@ -1,19 +1,8 @@
-Lidl Arnhem
-Fortunastraat 44
-6846 XZ Arnhem
-OMSCHRIJVING EUR
-Cabernet Sauvignon 2 x 3,99 7,98 C
-Bananen 0,79 B
-0,616 kg x 1,29 EUR
-Kipfiletblokjes BL 9,29 B
-Snackradijs 0,99 B
-Taugé 2 x 0,99 1,98 B
-Aantal 7 art
-Totaal 21,03
-Bankpas 21,03
-BETALING
-09/12/2025 13:21
-Totaal: 21,03 EUR
-% Bedr.Excl BTW Bedr.Incl
-B 9 11,97 1,08 13,05
-C 21 6,60 1,38 7,98
+Lidl
+BETALING Datum 09/12/2025 13:21
+2 Cabernet Sauvignon 3,99 7,98
+0,616KG Bananen 1,29 0,79
+1 Kipfiletblokjes BL 9,29
+1 Snackradijs 0,99
+2 Taugé 0,99 1,98
+TOTAAL 21,03

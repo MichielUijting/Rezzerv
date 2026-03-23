@@ -20,6 +20,7 @@ from typing import Any, List, Optional
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
 from app.services.testing_service import testing_service
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
+from app.services.receipt_baseline_service import run_receipt_parsing_baseline_suite
 from datetime import datetime, timedelta, timezone
 from email import policy
 from email.parser import BytesParser
@@ -6757,10 +6758,23 @@ def run_layer2_tests():
 def run_layer3_tests():
     return testing_service.start_external_test("layer3")
 
+@app.post("/api/dev/run-parsing-fixture-tests")
+def run_parsing_fixture_tests():
+    started = testing_service.start_external_test("parsing_fixture")
+    if not started.get("started"):
+        raise HTTPException(status_code=409, detail="Er loopt al een andere test")
+    results = run_receipt_parsing_baseline_suite("fixture")
+    testing_service.complete_external_test("parsing_fixture", results)
+    return testing_service.get_report()
 
-@app.post("/api/dev/run-parsing-baseline-tests", response_model=TestStartResponse)
-def run_parsing_baseline_tests():
-    return testing_service.start_test("parsing_baseline")
+@app.post("/api/dev/run-parsing-raw-tests")
+def run_parsing_raw_tests():
+    started = testing_service.start_external_test("parsing_raw")
+    if not started.get("started"):
+        raise HTTPException(status_code=409, detail="Er loopt al een andere test")
+    results = run_receipt_parsing_baseline_suite("raw")
+    testing_service.complete_external_test("parsing_raw", results)
+    return testing_service.get_report()
 
 
 @app.post("/api/dev/test-report", response_model=TestStatusResponse)
