@@ -6758,6 +6758,11 @@ def run_layer3_tests():
     return testing_service.start_external_test("layer3")
 
 
+@app.post("/api/dev/run-parsing-baseline-tests", response_model=TestStartResponse)
+def run_parsing_baseline_tests():
+    return testing_service.start_test("parsing_baseline")
+
+
 @app.post("/api/dev/test-report", response_model=TestStatusResponse)
 def complete_test_report(payload: TestCompleteRequest):
     results = [item.model_dump() for item in payload.results]

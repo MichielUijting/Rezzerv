@@ -1,0 +1,97 @@
+Rezzerv-v01.09.59 Parsing Hardening Fase 1
+SUBTAAK 2 — AFWIJKINGENOVERZICHT HUIDIGE PARSER/WERKFLOW
+
+BELANGRIJK
+Dit overzicht is opgesteld op basis van de nu beschikbare bronextractie in deze workspace.
+De daadwerkelijke Rezzerv-parsercode en buildbasis zijn hier niet aanwezig, dus dit is een
+objectief bron- en parseerbaarheidsrapport, geen claim dat de volledige releasezip al is gebouwd.
+
+1. jumbo_2024-05-21_1458_elst_basilica19
+Wat klopt al:
+- De bon is visueel goed leesbaar.
+- Winkel, datum/tijd, totaal en 7 genormaliseerde bonregels zijn handmatig eenduidig vast te stellen.
+
+Wat klopt nog niet / risico:
+- Geen aantoonbare huidige parserrun beschikbaar in deze workspace.
+- Zonder robuuste OCR/vision-laag is deze bon nog geen automatische baseline-run.
+- Kortingsregel "ACTIE KIP -2,48" moet uit bonregels gefilterd blijven.
+
+Status:
+- Baseline gereed.
+- Automatische parseruitkomst nog niet aantoonbaar in deze workspace.
+
+2. lidl_2025-11-25_1237_arnhem_fortunastraat44
+Wat klopt al:
+- Na extractie van de PNG-bijlage zijn winkel, datum/tijd, totaal en artikelregels duidelijk leesbaar.
+- Totaal 34,14 en betalingstijd 25/11/2025 12:37 zijn eenduidig.
+
+Wat klopt nog niet / risico:
+- De huidige bronworkflow op raw .eml levert vooral MIME/base64 en niet direct kassabonvelden.
+- Zonder attachment-extractie faalt parsing van winkel, datum/tijd, totaal en bonregels.
+- "Lidl Plus korting -1,17" moet niet als bonregel meetellen.
+- "Aantal 22 art." mag niet worden verward met 22 bonregels; baseline bonregelcount is 18.
+
+Status:
+- Bronworkflow faalt op raw .eml.
+- Na attachment-extractie is de bon bruikbaar.
+
+3. lidl_2025-12-09_1321_arnhem_fortunastraat44
+Wat klopt al:
+- Na extractie van de PNG-bijlage zijn winkel, datum/tijd, totaal en artikelregels duidelijk leesbaar.
+- Totaal 21,03 en betalingstijd 09/12/2025 13:21 zijn eenduidig.
+
+Wat klopt nog niet / risico:
+- Zelfde attachment-probleem als bij Lidl3: raw .eml is geen directe kassabon-tekstinput.
+- "Aantal 7 art." is stuks/hoeveelheden, niet 7 bonregels; baseline bonregelcount is 5.
+
+Status:
+- Bronworkflow faalt op raw .eml.
+- Na attachment-extractie is de bon bruikbaar.
+
+4. ah_2026-03-14_1713_8770
+Wat klopt al:
+- PDF-tekst bevat direct parseerbare datum/tijd: 14/03/2026 17:13.
+- PDF-tekst bevat direct parseerbaar receipt total: 49,27.
+- Artikelregels zijn grotendeels netjes tekstueel aanwezig.
+
+Wat klopt nog niet / risico:
+- Er staan meerdere TOTAAL-regels in de tekst:
+  * receipt total 49,27
+  * BTW totaal 36,82 / 4,25
+  Een naïeve regex kan het verkeerde totaal pakken.
+- "28 SUBTOTAAL 43,35" kan foutief als artikelregel tellen.
+- "82 KOOPZEGELS PREMIUM 8,20" kan foutief als artikelregel tellen.
+- BONUS/BBOX-regels moeten consequent uit bonregels blijven.
+- Winkelnaam "Albert Heijn" is in deze input vooral duidelijk via bestand/context, niet als nette store header.
+
+Status:
+- Metadata grotendeels parseerbaar.
+- Hardening nodig op totalextractie en bonregel-filtering.
+
+5. ah_2026-03-20_1627_8521
+Wat klopt al:
+- PDF-tekst bevat direct parseerbare tijd/datum: 16:27 20-3-2026.
+- PDF-tekst bevat direct parseerbaar receipt total: 5,02.
+- Artikelset is klein en helder.
+
+Wat klopt nog niet / risico:
+- Ook hier staan meerdere TOTAAL-regels:
+  * receipt total 5,02
+  * BTW totaal 3,87 / 0,35
+- "3 SUBTOTAAL 4,37" kan foutief als artikelregel tellen.
+- "8 KOOPZEGELS PREMIUM 0,80" kan foutief als artikelregel tellen.
+- BBOX-regel moet uit bonregels blijven.
+
+Status:
+- Metadata grotendeels parseerbaar.
+- Hardening nodig op totalextractie en bonregel-filtering.
+
+SAMENVATTING HUIDIGE AFWIJKINGEN
+A. Bronprobleem
+- EML + image attachment wordt nog niet als kassabonbron genormaliseerd.
+B. Totaalextractie
+- Receipt total en BTW-totalen moeten van elkaar worden onderscheiden.
+C. Datum/tijd-validatie
+- Parser moet alleen geldige aankoopdatum/tijd accepteren, liefst uit betaling-context.
+D. Bonregel-filtering
+- Subtotaal, voordeel, koopzegels, bonus/bbox, BTW, betaalregels en terminalregels mogen niet als artikelen landen.

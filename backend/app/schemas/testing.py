@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 
 
 class TestStartResponse(BaseModel):
@@ -21,6 +21,7 @@ class TestScenarioResult(BaseModel):
     name: str
     status: str
     error: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
 
 
 class TestReportResponse(BaseModel):

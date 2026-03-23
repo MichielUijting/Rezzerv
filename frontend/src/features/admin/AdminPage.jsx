@@ -12,6 +12,7 @@ import {
   runLayer1Tests,
   runLayer2Tests,
   runLayer3Tests,
+  runParsingBaselineTests,
   submitTestResults,
 } from "./services/adminTestingService";
 import { runLayer1RegressionTests } from "./lib/layer1RegressionRunner";
@@ -328,6 +329,21 @@ export default function AdminPage() {
     }
   }
 
+  async function handleRunParsingBaseline() {
+    setTestMessage("");
+    setShowReport(false);
+    try {
+      const start = await runParsingBaselineTests();
+      if (start?.started === false && start?.status === 'running') {
+        throw new Error('Er draait al een andere test. Wacht tot die klaar is.');
+      }
+      await refreshTestStatus();
+      setTestMessage('Parsing-baseline gestart');
+    } catch (error) {
+      setTestMessage(error.message || 'Parsing-baseline kon niet worden gestart');
+    }
+  }
+
   async function handleRunAll() {
     setTestMessage("");
     setShowReport(false);
@@ -457,7 +473,7 @@ export default function AdminPage() {
           <div className="rz-admin-panel">
             <h3>Testen</h3>
             <p className="rz-admin-muted">
-              Start hier een leidende laag-1, laag-2 of laag-3 regressietest en bekijk de laatste status.
+              Start hier een leidende laag-1, laag-2 of laag-3 regressietest, of draai de parsing-baseline voor kassabonnen, en bekijk de laatste status.
             </p>
             <div data-testid="test-run-panel"><TestRunPanel
               isRunning={testStatus.status === "running"}
@@ -465,6 +481,7 @@ export default function AdminPage() {
               onRunLayer1={handleRunLayer1}
               onRunLayer2={handleRunLayer2}
               onRunLayer3={handleRunLayer3}
+              onRunParsingBaseline={handleRunParsingBaseline}
               onRunAll={handleRunAll}
               onViewReport={handleViewReport}
             />
@@ -476,7 +493,7 @@ export default function AdminPage() {
                 <h4 className="rz-admin-status-title">Laatste testrapport</h4>
                 <div className="rz-admin-report-meta">
                   <div>Testtype: {testReport.test_type || "Onbekend"}</div>
-                  <div>Leidend: laag 1 / laag 2 / laag 3</div>
+                  <div>Leidend: laag 1 / laag 2 / laag 3 / parsing-baseline</div>
                   <div>Laatste run: {testReport.last_run_at ? new Date(testReport.last_run_at).toLocaleString("nl-NL") : "Nog geen rapport"}</div>
                   <div>Geslaagd: {testReport.results?.filter((result) => result.status === "passed").length || 0}</div>
                   <div>Gefaald: {testReport.results?.filter((result) => result.status === "failed").length || 0}</div>
@@ -491,7 +508,8 @@ export default function AdminPage() {
                       {result.triageCategory ? <div className="rz-admin-report-meta-line">Type: {result.triageCategory}</div> : null}
                       {result.error ? <div className="rz-admin-report-meta-line">Fout: {result.error}</div> : null}
                       {result.triageRationale ? <div className="rz-admin-report-meta-line">Analyse: {result.triageRationale}</div> : null}
-                      {result.triageSuggestedAction ? <div className="rz-admin-report-meta-line">Advies: {result.triageSuggestedAction}</div> : null}
+                      {result.details?.matches?.length ? <div className="rz-admin-report-meta-line">Matches: {result.details.matches.join(', ')}</div> : null}
+                      {result.details?.mismatches?.length ? <div className="rz-admin-report-meta-line">Afwijkingen: {result.details.mismatches.join(' | ')}</div> : null}
                     </div>
                   )) : <div className="rz-admin-muted">Nog geen rapport beschikbaar</div>}
                 </div>

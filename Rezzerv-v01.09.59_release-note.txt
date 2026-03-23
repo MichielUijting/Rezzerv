@@ -1,0 +1,26 @@
+Rezzerv-v01.09.59 — Parsing Hardening Fase 1
+
+Wat is gewijzigd:
+- Baseline van 5 kassabonnen vastgelegd in de code onder backend/app/testing/receipt_parsing/.
+- Nieuwe server-side parsing-baselinetest toegevoegd via /api/dev/run-parsing-baseline-tests.
+- Parser gehard op:
+  * totaalextractie met voorkeur voor betaling/samenvatting en blokkade van BTW-totalen
+  * datum/tijd-extractie met payment-context en validatie
+  * bonregel-filtering met uitsluiting van subtotalen, korting-, BTW-, betaal- en spaarregels
+- Artikelregelheuristiek uitgebreid voor:
+  * qty + label + totaal
+  * qty + label + prijs + totaal
+  * label + qty x prijs + totaal
+  * vervolgregel voor gewicht/prijs (bijv. banaan/aardappel)
+
+Wat is niet gewijzigd:
+- Geen deduplicatie-fingerprint-wijziging
+- Geen wijziging aan herparse bij openen van Kassa
+- Geen DB-schemawijziging
+- Geen inventory_events-contractwijziging
+
+Resultaat baseline:
+- 5 van 5 baseline-bonnen geslaagd op store, purchase_datetime, total_eur, line_item_count en line_labels.
+
+Opmerking:
+- De baseline-workflow draait bewust op vaste .txt-fixtures van de bonnen, zodat OCR-ruis de regressietest niet onstabiel maakt.

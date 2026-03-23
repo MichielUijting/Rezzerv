@@ -1,0 +1,139 @@
+Rezzerv-v01.09.59 Parsing Hardening Fase 1
+
+SUBTAAK 1 — BASELINE TESTMATRIX
+
+Definitie bonregel: artikelregel na normalisatie; korting/betaling/BTW/subtotaal/koopzegels tellen niet mee.
+
+------------------------------------------------------------------------
+receipt_id: jumbo_2024-05-21_1458_elst_basilica19
+source_file: Jumbo bon.jpeg
+store: Jumbo Elst
+address: Basilica 19, 6661 TT Elst
+purchase_datetime: 2024-05-21T14:58:00
+total_eur: 22.82
+line_item_count: 7
+status: baseline_confirmed_manual
+line_items:
+  01. KIPBLOKJE DIJFIL 350 (qty=2, unit_price=4.99, line_total=9.98)
+  02. KASTANJE CHAMPIG VD (qty=1, unit_price=2.79, line_total=2.79)
+  03. BIO RODE BIET VACUM (qty=1, unit_price=1.45, line_total=1.45)
+  04. COURGETTE (qty=1, unit_price=0.69, line_total=0.69)
+  05. JUMBO RISOTTO ARBORI (qty=1, unit_price=1.75, line_total=1.75)
+  06. VP ASPERGESOEP (qty=1, unit_price=6.49, line_total=6.49)
+  07. REMIA MOSTERDSAUS (qty=1, unit_price=2.15, line_total=2.15)
+discount_lines:
+  - ACTIE KIP: -2.48
+notes:
+  - Bonregelcount telt artikelregels, niet stuks.
+  - Kortingsregel telt niet als bonregel.
+------------------------------------------------------------------------
+receipt_id: lidl_2025-11-25_1237_arnhem_fortunastraat44
+source_file: Lidl3.eml -> 220007428120251125221829 (1).png
+store: Lidl Arnhem
+address: Fortunastraat 44, 6846 XZ Arnhem
+purchase_datetime: 2025-11-25T12:37:00
+total_eur: 34.14
+line_item_count: 18
+status: baseline_confirmed_manual_from_attachment
+line_items:
+  01. Aardappel zoet (qty=1.224, unit=kg, unit_price=2.65, line_total=3.24)
+  02. Tortilla chips XXL (qty=1, line_total=1.29)
+  03. Knorr CaS Ch. tomaat (qty=1, line_total=0.89)
+  04. Knorr CaS kip (qty=1, line_total=0.89)
+  05. Mexicaanse kruiden (qty=1, line_total=1.49)
+  06. Verse halfvolle melk (qty=1, line_total=0.89)
+  07. Gouda belegen gerasp (qty=1, line_total=2.39)
+  08. Slagersleverworst (qty=1, line_total=1.49)
+  09. Rundersaucijzen (qty=2, unit_price=4.99, line_total=9.98)
+  10. Kidneybonen (qty=1, line_total=2.59)
+  11. Snacktomaten (qty=1, line_total=1.79)
+  12. Komkommer (qty=2, unit_price=0.79, line_total=1.58)
+  13. Duurzame basmati rijst (qty=1, line_total=1.69)
+  14. Crème fraîche 30% (qty=1, line_total=0.99)
+  15. Tomatenblokjes (qty=2, unit_price=0.58, line_total=1.16)
+  16. Mexicaanse kruidenm. (qty=1, line_total=0.49)
+  17. Mexicaanse kruidenm. (qty=1, line_total=0.49)
+  18. Taco saus (qty=2, unit_price=0.99, line_total=1.98)
+discount_lines:
+  - Lidl Plus korting: -1.17
+notes:
+  - Aantal 22 art. verwijst naar stuks/hoeveelheden, niet naar bonregels.
+  - Discount line telt niet als bonregel.
+------------------------------------------------------------------------
+receipt_id: lidl_2025-12-09_1321_arnhem_fortunastraat44
+source_file: Lidl2.eml -> 220007428220251209231057.png
+store: Lidl Arnhem
+address: Fortunastraat 44, 6846 XZ Arnhem
+purchase_datetime: 2025-12-09T13:21:00
+total_eur: 21.03
+line_item_count: 5
+status: baseline_confirmed_manual_from_attachment
+line_items:
+  01. Cabernet Sauvignon (qty=2, unit_price=3.99, line_total=7.98)
+  02. Bananen (qty=0.616, unit=kg, unit_price=1.29, line_total=0.79)
+  03. Kipfiletblokjes BL (qty=1, line_total=9.29)
+  04. Snackradijs (qty=1, line_total=0.99)
+  05. Taugé (qty=2, unit_price=0.99, line_total=1.98)
+notes:
+  - Aantal 7 art. verwijst naar stuks/hoeveelheden, niet naar bonregels.
+------------------------------------------------------------------------
+receipt_id: ah_2026-03-14_1713_8770
+source_file: AH_kassabon_2026-03-14 171300_8770.pdf
+store: Albert Heijn
+address: -
+purchase_datetime: 2026-03-14T17:13:00
+total_eur: 49.27
+line_item_count: 22
+status: baseline_confirmed_from_pdf_text
+line_items:
+  01. PREI (qty=1, line_total=1.30)
+  02. KOMKOMMER (qty=2, unit_price=0.99, line_total=1.98)
+  03. DRUIVEN (qty=1, line_total=2.69)
+  04. KIWI GOLD (qty=0.404, unit=kg, unit_price=7.90, line_total=3.19)
+  05. WINTERPEEN (qty=1, line_total=0.70)
+  06. AH GRF ROOKV (qty=1, line_total=2.12)
+  07. VOLK BOLLEN (qty=1, line_total=1.99)
+  08. WALDK HALF (qty=1, line_total=1.35)
+  09. REMIA SAUS (qty=1, line_total=2.15)
+  10. ZAANS H MAYO (qty=1, line_total=1.59)
+  11. AH MUFFINS (qty=1, line_total=1.99)
+  12. AH BOUILLON (qty=1, line_total=1.65)
+  13. AH BOUILLON (qty=2, unit_price=0.59, line_total=1.18)
+  14. AH BOUILLON (qty=1, line_total=0.69)
+  15. KATJA SNOEP (qty=1, line_total=2.69)
+  16. AH HV MELK (qty=1, line_total=1.29)
+  17. AH TORTILLA (qty=1, line_total=1.19)
+  18. CHIO CHIPS (qty=2, unit_price=0.69, line_total=1.38)
+  19. AH CHIPS (qty=3, unit_price=0.39, line_total=1.17)
+  20. CHIO CHIPS (qty=1, line_total=0.69)
+  21. AH MALBEC (qty=2, unit_price=4.69, line_total=9.38)
+  22. TUINERWTEN (qty=1, line_total=0.99)
+discount_lines:
+  - BONUS MBCHIPS: -0.54
+  - BBOX ELLWaldkorn: -0.20
+  - BONUS AHKOMKOMMERP: -0.49
+  - BONUS ALLEREMIA: -0.54
+  - BONUS AHPREIPERSTU: -0.51
+notes:
+  - 28 SUBTOTAAL is geen bonregel maar quantity-som.
+  - 82 KOOPZEGELS PREMIUM 8,20 is geen bonregel.
+  - Tweede TOTAAL in BTW-blok mag niet als receipt total worden genomen.
+------------------------------------------------------------------------
+receipt_id: ah_2026-03-20_1627_8521
+source_file: AH_kassabon_2026-03-20 162700_8521.pdf
+store: Albert Heijn
+address: -
+purchase_datetime: 2026-03-20T16:27:00
+total_eur: 5.02
+line_item_count: 3
+status: baseline_confirmed_from_pdf_text
+line_items:
+  01. POEDERSUIKER (qty=1, line_total=1.19)
+  02. CARE INLEGKR (qty=1, line_total=0.99)
+  03. AH POFFERTJE (qty=1, line_total=2.19)
+discount_lines:
+  - BBOX Care menstr: -0.15
+notes:
+  - 3 SUBTOTAAL 4,37 is geen bonregel maar quantity-som.
+  - 8 KOOPZEGELS PREMIUM 0,80 is geen bonregel.
+  - BTW-TOTAAL 3,87 0,35 mag niet als receipt total worden genomen.

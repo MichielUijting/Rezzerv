@@ -1,0 +1,15 @@
+Rezzerv-v01.09.59 Parsing Baseline Testrapport
+
+- jumbo_2024-05-21_1458_elst_basilica19: passed
+  matches: store, purchase_datetime, total_eur, line_item_count, line_labels
+- lidl_2025-11-25_1237_arnhem_fortunastraat44: passed
+  matches: store, purchase_datetime, total_eur, line_item_count, line_labels
+- lidl_2025-12-09_1321_arnhem_fortunastraat44: passed
+  matches: store, purchase_datetime, total_eur, line_item_count, line_labels
+- ah_2026-03-14_1713_8770: passed
+  matches: store, purchase_datetime, total_eur, line_item_count, line_labels
+- ah_2026-03-20_1627_8521: passed
+  matches: store, purchase_datetime, total_eur, line_item_count, line_labels
+
+Geslaagd: 5
+Gefaald: 0

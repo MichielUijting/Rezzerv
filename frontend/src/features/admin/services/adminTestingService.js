@@ -89,6 +89,10 @@ export async function runLayer3Tests() {
   return request('/api/dev/run-layer3-tests', { method: 'POST', body: '{}' })
 }
 
+export async function runParsingBaselineTests() {
+  return request('/api/dev/run-parsing-baseline-tests', { method: 'POST', body: '{}' })
+}
+
 export async function fetchLatestTestStatus() {
   const data = await request('/api/dev/test-status', { method: 'GET' })
   return normalizeStatus(data)
