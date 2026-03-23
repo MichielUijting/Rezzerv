@@ -221,6 +221,177 @@ def _build_receipt_fingerprint(store_name: str | None, purchase_at: str | None, 
     return '||'.join([store_part, purchase_part, total_part, '##'.join(line_parts)])
 
 
+
+
+def build_receipt_fingerprint_from_parse_result(parse_result: ReceiptParseResult | None) -> str:
+    if not parse_result or not parse_result.is_receipt:
+        return ''
+    purchase_at = parse_result.purchase_at if _is_plausible_purchase_at(parse_result.purchase_at) else None
+    total_amount = parse_result.total_amount if _is_plausible_total_amount(parse_result.total_amount) else None
+    return _build_receipt_fingerprint(parse_result.store_name, purchase_at, total_amount, parse_result.lines)
+
+
+def _column_exists(conn, table_name: str, column_name: str) -> bool:
+    rows = conn.execute(text(f'PRAGMA table_info({table_name})')).mappings().all()
+    return any(str(row.get('name') or '').lower() == column_name.lower() for row in rows)
+
+
+def _load_line_groups(conn, receipt_table_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    groups: dict[str, list[dict[str, Any]]] = {receipt_table_id: [] for receipt_table_id in receipt_table_ids}
+    if not receipt_table_ids:
+        return groups
+    stmt = text(
+        'SELECT receipt_table_id, raw_label, normalized_label, line_total FROM receipt_table_lines WHERE receipt_table_id IN :receipt_table_ids ORDER BY receipt_table_id, line_index'
+    ).bindparams(bindparam('receipt_table_ids', expanding=True))
+    rows = conn.execute(stmt, {'receipt_table_ids': receipt_table_ids}).mappings().all()
+    for row in rows:
+        groups.setdefault(str(row['receipt_table_id']), []).append(dict(row))
+    return groups
+
+
+def _fingerprint_from_stored_receipt(row: dict[str, Any], lines: list[dict[str, Any]]) -> str:
+    purchase_at = row.get('purchase_at') if _is_plausible_purchase_at(row.get('purchase_at')) else None
+    total_amount = _parse_decimal(str(row.get('total_amount'))) if row.get('total_amount') is not None else None
+    if not _is_plausible_total_amount(total_amount):
+        total_amount = None
+    return _build_receipt_fingerprint(row.get('store_name'), purchase_at, total_amount, lines)
+
+
+def find_existing_receipt_by_fingerprint(conn, household_id: str, fingerprint: str) -> dict[str, Any] | None:
+    if not fingerprint:
+        return None
+    has_rt_deleted = _column_exists(conn, 'receipt_tables', 'deleted_at')
+    has_rr_deleted = _column_exists(conn, 'raw_receipts', 'deleted_at')
+    where_parts = ['rt.household_id = :household_id']
+    if has_rt_deleted:
+        where_parts.append('rt.deleted_at IS NULL')
+    if has_rr_deleted:
+        where_parts.append('rr.deleted_at IS NULL')
+    rows = conn.execute(
+        text(
+            f"""
+            SELECT
+                rt.id AS receipt_table_id,
+                rr.id AS raw_receipt_id,
+                rt.store_name,
+                rt.purchase_at,
+                rt.total_amount,
+                rt.parse_status
+            FROM receipt_tables rt
+            JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+            WHERE {' AND '.join(where_parts)}
+            ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
+            """
+        ),
+        {'household_id': household_id},
+    ).mappings().all()
+    if not rows:
+        return None
+    line_groups = _load_line_groups(conn, [str(row['receipt_table_id']) for row in rows])
+    for row in rows:
+        candidate_fingerprint = _fingerprint_from_stored_receipt(dict(row), line_groups.get(str(row['receipt_table_id']), []))
+        if candidate_fingerprint and candidate_fingerprint == fingerprint:
+            return dict(row)
+    return None
+
+
+def dedupe_receipts_for_household(engine, household_id: str) -> dict[str, Any]:
+    effective_household_id = str(household_id or '').strip()
+    if not effective_household_id:
+        return {'deduped_count': 0, 'kept_count': 0, 'duplicate_table_ids': []}
+
+    with engine.begin() as conn:
+        has_rt_deleted = _column_exists(conn, 'receipt_tables', 'deleted_at')
+        has_rr_deleted = _column_exists(conn, 'raw_receipts', 'deleted_at')
+        where_parts = ['rt.household_id = :household_id']
+        if has_rt_deleted:
+            where_parts.append('rt.deleted_at IS NULL')
+        if has_rr_deleted:
+            where_parts.append('rr.deleted_at IS NULL')
+        rows = conn.execute(
+            text(
+                f"""
+                SELECT
+                    rt.id AS receipt_table_id,
+                    rr.id AS raw_receipt_id,
+                    rt.store_name,
+                    rt.purchase_at,
+                    rt.total_amount,
+                    rt.created_at,
+                    rt.parse_status,
+                    rr.raw_status
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                WHERE {' AND '.join(where_parts)}
+                ORDER BY COALESCE(rt.purchase_at, rt.created_at) ASC, rt.created_at ASC, rt.id ASC
+                """
+            ),
+            {'household_id': effective_household_id},
+        ).mappings().all()
+
+        if not rows:
+            return {'deduped_count': 0, 'kept_count': 0, 'duplicate_table_ids': []}
+
+        receipt_table_ids = [str(row['receipt_table_id']) for row in rows]
+        line_groups = _load_line_groups(conn, receipt_table_ids)
+        seen: dict[str, dict[str, Any]] = {}
+        duplicate_rows: list[dict[str, Any]] = []
+
+        for row in rows:
+            row_dict = dict(row)
+            fingerprint = _fingerprint_from_stored_receipt(row_dict, line_groups.get(str(row['receipt_table_id']), []))
+            if not fingerprint:
+                continue
+            keeper = seen.get(fingerprint)
+            if keeper is None:
+                seen[fingerprint] = row_dict
+                continue
+            duplicate_rows.append({
+                'receipt_table_id': str(row['receipt_table_id']),
+                'raw_receipt_id': str(row['raw_receipt_id']),
+                'keep_raw_receipt_id': str(keeper['raw_receipt_id']),
+            })
+
+        if duplicate_rows:
+            conn.execute(
+                text(
+                    """
+                    UPDATE raw_receipts
+                    SET duplicate_of_raw_receipt_id = COALESCE(duplicate_of_raw_receipt_id, :keep_raw_receipt_id),
+                        raw_status = CASE WHEN raw_status = 'failed' THEN raw_status ELSE 'duplicate' END
+                    WHERE id = :raw_receipt_id
+                    """
+                ),
+                duplicate_rows,
+            )
+            if has_rr_deleted:
+                conn.execute(
+                    text('UPDATE raw_receipts SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP) WHERE id = :raw_receipt_id'),
+                    duplicate_rows,
+                )
+            conn.execute(
+                text(
+                    """
+                    UPDATE receipt_tables
+                    SET parse_status = CASE WHEN parse_status = 'failed' THEN parse_status ELSE 'duplicate' END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :receipt_table_id
+                    """
+                ),
+                duplicate_rows,
+            )
+            if has_rt_deleted:
+                conn.execute(
+                    text('UPDATE receipt_tables SET deleted_at = COALESCE(deleted_at, CURRENT_TIMESTAMP), updated_at = CURRENT_TIMESTAMP WHERE id = :receipt_table_id'),
+                    duplicate_rows,
+                )
+
+    return {
+        'deduped_count': len(duplicate_rows),
+        'kept_count': len(rows) - len(duplicate_rows),
+        'duplicate_table_ids': [row['receipt_table_id'] for row in duplicate_rows],
+    }
+
 def _parse_quantity(raw: str | None) -> Decimal | None:
     if not raw:
         return None
@@ -652,6 +823,23 @@ def _group_paddle_texts_to_lines(texts: list[str], boxes: list[Any] | None) -> l
     return result_lines
 
 
+def _normalize_paddle_collection(value: Any) -> list[Any]:
+    if value is None:
+        return []
+    if hasattr(value, 'tolist'):
+        try:
+            value = value.tolist()
+        except Exception:
+            pass
+    if isinstance(value, (str, bytes, bytearray)):
+        return [value]
+    try:
+        return list(value)
+    except TypeError:
+        return [value]
+
+
+
 def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[str], float | None]:
     model = _get_paddle_ocr()
     if model is None:
@@ -670,24 +858,24 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
     texts: list[str] = []
     scores: list[float] = []
     boxes: list[Any] = []
-    for item in result or []:
+    for item in _normalize_paddle_collection(result):
         payload = _extract_payload_from_paddle_item(item)
-        current_texts = payload.get('rec_texts') or payload.get('texts') or []
-        current_scores = payload.get('rec_scores') or payload.get('scores') or []
-        current_boxes = payload.get('rec_boxes') or payload.get('dt_polys') or payload.get('rec_polys') or []
-        texts.extend([str(text) for text in current_texts if str(text).strip()])
+        current_texts = _normalize_paddle_collection(payload.get('rec_texts') or payload.get('texts'))
+        current_scores = _normalize_paddle_collection(payload.get('rec_scores') or payload.get('scores'))
+        current_boxes = payload.get('rec_boxes')
+        if current_boxes is None:
+            current_boxes = payload.get('dt_polys')
+        if current_boxes is None:
+            current_boxes = payload.get('rec_polys')
+        current_boxes = _normalize_paddle_collection(current_boxes)
+        normalized_texts = [str(text) for text in current_texts if str(text).strip()]
+        texts.extend(normalized_texts)
         for score in current_scores:
             try:
                 scores.append(float(score))
             except (TypeError, ValueError):
                 continue
-        if hasattr(current_boxes, 'tolist'):
-            current_boxes = current_boxes.tolist()
-        try:
-            current_boxes = list(current_boxes)
-        except TypeError:
-            current_boxes = []
-        boxes.extend(current_boxes[: len(current_texts)])
+        boxes.extend(current_boxes[: len(normalized_texts)])
 
     line_candidates = _group_paddle_texts_to_lines(texts, boxes if boxes else None)
     confidence = round(sum(scores) / len(scores), 4) if scores else None

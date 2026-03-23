@@ -882,6 +882,7 @@ function ReceiptSourceHubContent({
   emailRouteError,
   duplicateNotice,
   isUploading,
+  uploadProgress,
 }) {
   const [isLandingDropActive, setIsLandingDropActive] = useState(false)
 
@@ -993,12 +994,37 @@ function ReceiptSourceHubContent({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', alignItems: 'stretch' }}>
-              <Button type="button" variant="primary" onClick={onChooseReceiptFile} disabled={isUploading} style={{ width: '100%' }}>Bestanden kiezen</Button>
-              <Button type="button" variant="secondary" onClick={onChooseCamera} disabled={isUploading} style={{ width: '100%' }}>Camera openen</Button>
-              <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isUploading} style={{ width: '100%' }}>Alleen .eml kiezen</Button>
-              <Button type="button" variant="secondary" onClick={onCopyEmailRoute} disabled={isEmailRouteLoading || !emailRoute?.route_address || isUploading} style={{ width: '100%' }}>Adres kopiëren</Button>
+            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', alignItems: 'stretch' }}>
+              <Button type="button" variant="primary" onClick={onChooseReceiptFile} disabled={isUploading} style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Bestanden kiezen</Button>
+              <Button type="button" variant="secondary" onClick={onChooseCamera} disabled={isUploading} style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Camera openen</Button>
+              <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isUploading} style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Email inlezen</Button>
             </div>
+
+            {uploadProgress?.active ? (
+              <div
+                className="rz-inline-feedback rz-inline-feedback--success"
+                data-testid="receipt-upload-progress"
+                aria-live="polite"
+                style={{ display: 'grid', gap: '8px' }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ fontWeight: 700 }}>{uploadProgress.label || 'Kassabon verwerken…'}</div>
+                  <div style={{ fontSize: '13px', color: '#667085' }}>{Math.max(5, Math.min(100, Math.round(uploadProgress.percent || 0)))}%</div>
+                </div>
+                <div style={{ height: '10px', borderRadius: '999px', background: '#D1FADF', overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${Math.max(5, Math.min(100, Math.round(uploadProgress.percent || 0)))}%`,
+                      background: '#166534',
+                      borderRadius: '999px',
+                      transition: 'width 240ms ease',
+                    }}
+                  />
+                </div>
+                <div style={{ fontSize: '13px', color: '#344054' }}>{uploadProgress.detail || 'Even geduld, Rezzerv verwerkt de bon en laadt daarna Kassa.'}</div>
+              </div>
+            ) : null}
 
             {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-sourcehub-duplicate-feedback">{duplicateNotice}</div> : null}
             {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
@@ -1085,6 +1111,17 @@ function ReceiptSourceHubContent({
                   </ol>
                 </div>
               </div>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onCopyEmailRoute}
+                disabled
+                aria-disabled="true"
+                title="Adres kopiëren wordt later weer geactiveerd."
+                style={{ width: 'fit-content', minWidth: '180px', opacity: 0.55, cursor: 'not-allowed' }}
+              >
+                Adres kopiëren
+              </Button>
             </div>
           </ScreenCard>
         </div>
@@ -1181,6 +1218,7 @@ export default function KassaPage() {
   const [filters, setFilters] = useState(DEFAULT_RECEIPT_FILTERS)
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState({ active: false, label: '', detail: '', percent: 0 })
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [duplicateNotice, setDuplicateNotice] = useState('')
@@ -1213,6 +1251,7 @@ export default function KassaPage() {
     setCameraError('')
     setEmailRouteError('')
     setDuplicateNotice('')
+    resetUploadProgress()
     ensureEmailRouteLoaded().catch(() => {})
   }, [isAddReceiptRoute])
 
@@ -1429,12 +1468,23 @@ export default function KassaPage() {
   }
 
 
+  function setUploadProgressState(active, label = '', detail = '', percent = 0) {
+    setUploadProgress({ active, label, detail, percent })
+  }
 
+  function resetUploadProgress() {
+    setUploadProgress({ active: false, label: '', detail: '', percent: 0 })
+  }
+
+  function buildPostImportProgressMessage(kindLabel) {
+    return `${kindLabel} wordt gecontroleerd en daarna wordt Kassa opnieuw geladen.`
+  }
 
   function openSourceHub() {
     setCameraError('')
     setEmailRouteError('')
     setDuplicateNotice('')
+    resetUploadProgress()
     navigate('/kassa/nieuw')
   }
 
@@ -1507,12 +1557,14 @@ export default function KassaPage() {
   async function confirmCameraDraft() {
     if (!cameraDraft?.file) return
     setIsUploading(true)
+    setUploadProgressState(true, 'Kassabon verwerken…', 'Rezzerv bereidt de foto voor en verwerkt daarna de bon.', 15)
     setError('')
     setCameraError('')
     setStatus('')
     setDuplicateNotice('')
     try {
       const preparedFile = await prepareCameraUploadFile(cameraDraft.file)
+      setUploadProgressState(true, 'Kassabon verwerken…', 'De gefotografeerde kassabon wordt nu geanalyseerd.', 45)
       const result = await uploadSharedReceiptFile(householdId, preparedFile, 'camera_capture', 'Foto gemaakt in Rezzerv')
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
@@ -1525,6 +1577,7 @@ export default function KassaPage() {
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
 
+        setUploadProgressState(true, 'Kassa laden…', buildPostImportProgressMessage('De foto'), 85)
         const refreshedItems = await loadReceipts(householdId)
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
@@ -1547,6 +1600,7 @@ export default function KassaPage() {
           setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
         }
 
+        setUploadProgressState(true, 'Kassa openen…', 'De nieuwe bon staat klaar in Kassa.', 100)
         if (isAddReceiptRoute) navigate('/kassa')
 
         try {
@@ -1567,6 +1621,7 @@ export default function KassaPage() {
       setError('')
     } finally {
       setIsUploading(false)
+      resetUploadProgress()
       setUploadMode('manual')
     }
   }
@@ -1596,6 +1651,7 @@ export default function KassaPage() {
       return
     }
     setIsUploading(true)
+    setUploadProgressState(true, 'E-mail verwerken…', 'Rezzerv leest de e-mailbon en zet die klaar voor Kassa.', 20)
     setError('')
     setStatus('')
     setDuplicateNotice('')
@@ -1610,6 +1666,7 @@ export default function KassaPage() {
         setOpenedReceipt(null)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
+        setUploadProgressState(true, 'Kassa laden…', buildPostImportProgressMessage('De e-mailbon'), 85)
         const refreshedItems = await loadReceipts(householdId)
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
@@ -1632,6 +1689,7 @@ export default function KassaPage() {
           setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
         }
 
+        setUploadProgressState(true, 'Kassa openen…', 'De nieuwe e-mailbon staat klaar in Kassa.', 100)
         if (isAddReceiptRoute) navigate('/kassa')
 
         try {
@@ -1652,6 +1710,7 @@ export default function KassaPage() {
       setError('')
     } finally {
       setIsUploading(false)
+      resetUploadProgress()
       setUploadMode('manual')
     }
   }
@@ -1669,6 +1728,7 @@ export default function KassaPage() {
     }
 
     setIsUploading(true)
+    setUploadProgressState(true, 'Kassabon verwerken…', 'Rezzerv verwerkt het bestand en bereidt Kassa voor.', 20)
     setError('')
     setStatus('')
     setDuplicateNotice('')
@@ -1683,6 +1743,7 @@ export default function KassaPage() {
         setOpenedReceipt(null)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
+        setUploadProgressState(true, 'Kassa laden…', buildPostImportProgressMessage('De kassabon'), 85)
         const refreshedItems = await loadReceipts(householdId)
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
@@ -1705,6 +1766,7 @@ export default function KassaPage() {
           setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
         }
 
+        setUploadProgressState(true, 'Kassa openen…', 'De nieuwe kassabon staat klaar in Kassa.', 100)
         if (isAddReceiptRoute) navigate('/kassa')
 
         try {
@@ -1724,6 +1786,7 @@ export default function KassaPage() {
       setError('')
     } finally {
       setIsUploading(false)
+      resetUploadProgress()
       setUploadMode('manual')
     }
   }
@@ -1794,6 +1857,7 @@ export default function KassaPage() {
               emailRouteError={emailRouteError}
               duplicateNotice={duplicateNotice}
               isUploading={isUploading}
+              uploadProgress={uploadProgress}
             />
           </ScreenCard>
         </div>

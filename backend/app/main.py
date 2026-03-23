@@ -3752,15 +3752,21 @@ async def import_receipt(
     file_bytes = await file.read()
     if not file_bytes:
         raise HTTPException(status_code=400, detail="Leeg bestand")
-    result = ingest_receipt(
-        engine=engine,
-        receipt_storage_root=RECEIPT_STORAGE_ROOT,
-        household_id=effective_household_id,
-        filename=file.filename or "receipt",
-        file_bytes=file_bytes,
-        source_id=f"{effective_household_id}-manual-upload",
-        mime_type=file.content_type,
-    )
+    try:
+        result = ingest_receipt(
+            engine=engine,
+            receipt_storage_root=RECEIPT_STORAGE_ROOT,
+            household_id=effective_household_id,
+            filename=file.filename or "receipt",
+            file_bytes=file_bytes,
+            source_id=f"{effective_household_id}-manual-upload",
+            mime_type=file.content_type,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception('Onverwachte fout bij handmatige bonimport voor household %s', effective_household_id)
+        raise HTTPException(status_code=500, detail='De geplakte of gekozen inhoud kon niet volledig als kassabon worden verwerkt.') from exc
     status_code = 200 if result.get("duplicate") else 201
     return JSONResponse(status_code=status_code, content=result)
 
