@@ -656,16 +656,12 @@ def _normalize_discount_match_text(value: str | None) -> str:
 
 def _extract_discount_entries(lines: list[str]) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
-    seen_raw_lines: set[str] = set()
     amount_pattern = re.compile(r'(-?\d{1,6}(?:[\.,]\d{2}))')
     for index, raw_line in enumerate(lines):
         normalized = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
         if len(normalized) < 2:
             continue
         lowered = normalized.lower()
-        dedupe_key = re.sub(r'\s+', ' ', lowered)
-        if dedupe_key in seen_raw_lines:
-            continue
         discount_signal = lowered.startswith(('bonus ', 'bbox ', 'korting ', 'actie ')) or any(token in lowered for token in (' korting', 'uw voordeel', 'prijsvoordeel', 'lidl plus'))
         if not discount_signal:
             continue
@@ -682,12 +678,13 @@ def _extract_discount_entries(lines: list[str]) -> list[dict[str, Any]]:
         if amount >= 0:
             continue
         label = amount_pattern.sub('', normalized).strip(' -')
-        seen_raw_lines.add(dedupe_key)
+        normalized_label = _normalize_discount_match_text(label or normalized)
         entries.append({
             'raw_label': label or normalized,
-            'normalized_label': _normalize_discount_match_text(label or normalized),
+            'normalized_label': normalized_label,
             'amount': amount.quantize(Decimal('0.01')),
             'source_index': index,
+            'is_generic_discount': normalized_label == '',
         })
     return entries
 
@@ -733,6 +730,22 @@ def _apply_discount_entries(lines: list[dict[str, Any]], discount_entries: list[
         current = _parse_decimal(str(lines[target_index].get('discount_amount'))) or Decimal('0.00')
         lines[target_index]['discount_amount'] = _amount_to_float((current + amount).quantize(Decimal('0.01')))
 
+    def find_nearest_preceding_line_index(entry_source_index: int, *, max_distance: int | None = None) -> int | None:
+        fallback_index = None
+        fallback_source_index = -1
+        for index, line in enumerate(lines):
+            line_source_index = line.get('source_index')
+            if line_source_index is None:
+                continue
+            if line_source_index > entry_source_index:
+                continue
+            if max_distance is not None and (entry_source_index - line_source_index) > max_distance:
+                continue
+            if line_source_index >= fallback_source_index:
+                fallback_index = index
+                fallback_source_index = line_source_index
+        return fallback_index
+
     total_discount = Decimal('0.00')
     for entry in discount_entries:
         amount = entry['amount']
@@ -757,24 +770,24 @@ def _apply_discount_entries(lines: list[dict[str, Any]], discount_entries: list[
         if entry_source_index is None:
             continue
 
-        fallback_index = None
-        fallback_source_index = -1
-        for index, line in enumerate(lines):
-            line_source_index = line.get('source_index')
-            if line_source_index is None:
-                continue
-            if line_source_index <= entry_source_index and line_source_index >= fallback_source_index:
-                fallback_index = index
-                fallback_source_index = line_source_index
+        if entry.get('is_generic_discount'):
+            nearby_index = find_nearest_preceding_line_index(int(entry_source_index), max_distance=2)
+            if nearby_index is not None:
+                attach_discount(nearby_index, amount)
+            continue
+
+        fallback_index = find_nearest_preceding_line_index(int(entry_source_index))
         if fallback_index is not None:
             attach_discount(fallback_index, amount)
     return total_discount.quantize(Decimal('0.01')) if total_discount != Decimal('0.00') else None
 
 
-def _extract_savings_action_lines(lines: list[str]) -> list[dict[str, Any]]:
+def _extract_savings_action_lines(lines: list[str], store_name: str | None = None) -> list[dict[str, Any]]:
     extracted: list[dict[str, Any]] = []
+    normalized_store = str(store_name or '').strip().lower()
+
     qty_first_re = re.compile(
-        r'^(?P<qty>\d+(?:[\.,]\d+)?)\s+(?P<label>.+?)\s+(?P<amount>-?\d{1,6}(?:[\.,]\d{2}))(?:\s+(?:EUR|[A-Z]{1,3}))?$',
+        r'^(?P<prefix>[^\d-]*)?(?P<qty>\d+(?:[\.,]\d+)?)\s+(?P<label>.+?)\s+(?P<amount>-?\d{1,6}(?:[\.,]\d{2}))(?:\s+(?:EUR|[A-Z]{1,3}))?$',
         re.IGNORECASE,
     )
     for source_index, raw_line in enumerate(lines):
@@ -782,7 +795,7 @@ def _extract_savings_action_lines(lines: list[str]) -> list[dict[str, Any]]:
         lowered = normalized.lower()
         if not normalized or not any(token in lowered for token in ('koopzegel', 'koopzegels', 'spaaractie', 'spaaracties')):
             continue
-        if any(token in lowered for token in ('uw voordeel', 'totaal prijsvoordeel', 'totaal korting', 'betaald met', 'bankpas')):
+        if any(token in lowered for token in ('uw voordeel', 'totaal prijsvoordeel', 'totaal korting', 'betaald met', 'bankpas', 'aantal artikelen')):
             continue
         match = qty_first_re.match(normalized)
         if not match:
@@ -791,10 +804,19 @@ def _extract_savings_action_lines(lines: list[str]) -> list[dict[str, Any]]:
         line_total = _parse_decimal(match.group('amount'))
         if quantity is None or line_total is None or quantity <= 0 or line_total <= 0:
             continue
-        unit_price = (line_total / quantity).quantize(Decimal('0.01')) if quantity else line_total
         label_value = _clean_receipt_label(match.group('label'))
         if not label_value:
             continue
+
+        include_line = False
+        if 'jumbo' in normalized_store:
+            include_line = True
+        elif 'albert heijn' in normalized_store or normalized_store == 'ah':
+            include_line = quantity <= Decimal('10') and line_total <= Decimal('1.00')
+        if not include_line:
+            continue
+
+        unit_price = (line_total / quantity).quantize(Decimal('0.01')) if quantity else line_total
         extracted.append(
             {
                 'raw_label': label_value,
@@ -1063,7 +1085,7 @@ def _parse_result_from_text_lines(
     purchase_at = _purchase_at_from_lines(text_lines, filename)
     total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
     lines = _extract_receipt_lines(text_lines)
-    savings_action_lines = _extract_savings_action_lines(text_lines)
+    savings_action_lines = _extract_savings_action_lines(text_lines, store_name=store_name)
     if savings_action_lines:
         existing_keys = {
             (

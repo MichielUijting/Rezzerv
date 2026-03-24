@@ -434,5 +434,166 @@
       "8 KOOPZEGELS PREMIUM 0,80 is geen bonregel.",
       "BTW-TOTAAL 3,87 0,35 mag niet als receipt total worden genomen."
     ]
+  },
+  {
+    "receipt_id": "lidl_2025-12-16_1337_arnhem_elderveldplein5",
+    "source_file": "Lidl_total_prijsvoordeel_2025-12-16.txt",
+    "source_type": "text/plain",
+    "store_chain": "Lidl",
+    "store_name": "Lidl Arnhem",
+    "store_address": "Elderveldplein 5, 6843 JA Arnhem",
+    "purchase_datetime": "2025-12-16T13:37:00",
+    "total_eur": 40.75,
+    "line_item_count": 18,
+    "status": "baseline_confirmed_manual_from_user_screenshot",
+    "line_items": [
+      {
+        "name": "Jonge bladsla",
+        "qty": 1,
+        "line_total_eur": 1.39
+      },
+      {
+        "name": "Jonge bladsla",
+        "qty": 1,
+        "line_total_eur": 1.39
+      },
+      {
+        "name": "Veldsla",
+        "qty": 1,
+        "line_total_eur": 1.19
+      },
+      {
+        "name": "Spekreepjes",
+        "qty": 1,
+        "line_total_eur": 3.25
+      },
+      {
+        "name": "Gebronsde pasta Linguin",
+        "qty": 1,
+        "line_total_eur": 1.69
+      },
+      {
+        "name": "Mozzarella geraspt",
+        "qty": 1,
+        "line_total_eur": 2.99
+      },
+      {
+        "name": "Runderchipolata",
+        "qty": 1,
+        "line_total_eur": 4.79
+      },
+      {
+        "name": "Rundersaucijzen",
+        "qty": 1,
+        "line_total_eur": 4.99
+      },
+      {
+        "name": "Geraspte kaas",
+        "qty": 1,
+        "line_total_eur": 2.99
+      },
+      {
+        "name": "Kipdijfilet blokjes",
+        "qty": 1,
+        "line_total_eur": 3.49
+      },
+      {
+        "name": "Maaltijdsauzen SK7",
+        "qty": 1,
+        "line_total_eur": 1.79
+      },
+      {
+        "name": "Tomatenpuree gecon",
+        "qty": 3,
+        "unit_price_eur": 0.59,
+        "line_total_eur": 1.77
+      },
+      {
+        "name": "Italiaanse rasp kaas",
+        "qty": 1,
+        "line_total_eur": 2.89
+      },
+      {
+        "name": "Lasagnebladen 500g",
+        "qty": 1,
+        "line_total_eur": 1.69
+      },
+      {
+        "name": "Tomatens. met basil.",
+        "qty": 1,
+        "line_total_eur": 1.89
+      },
+      {
+        "name": "Peterselie bos",
+        "qty": 1,
+        "line_total_eur": 1.49
+      },
+      {
+        "name": "Winterpeen",
+        "qty": 1,
+        "line_total_eur": 0.29
+      },
+      {
+        "name": "Courgette groen",
+        "qty": 2,
+        "unit_price_eur": 0.79,
+        "line_total_eur": 1.58
+      }
+    ],
+    "discount_lines": [
+      {
+        "name": "Lidl Plus korting",
+        "amount_eur": -0.4
+      },
+      {
+        "name": "Lidl Plus korting",
+        "amount_eur": -0.4
+      }
+    ],
+    "notes": [
+      "Totaal prijsvoordeel 0,80 is een bonsamenvatting en mag niet als extra korting op het laatste artikel landen.",
+      "Twee identieke Lidl Plus korting-regels horen beide behouden te blijven."
+    ]
+  },
+  {
+    "receipt_id": "jumbo_2024-05-21_1458_elst_basilica19_koopzegels",
+    "source_file": "Jumbo_koopzegels.txt",
+    "source_type": "text/plain",
+    "store_chain": "Jumbo",
+    "store_name": "Jumbo Elst",
+    "store_address": "Basilica 19, 6661 TT Elst",
+    "purchase_datetime": "2024-05-21T14:58:00",
+    "total_eur": 16.39,
+    "line_item_count": 3,
+    "status": "baseline_synthetic_regression_case",
+    "line_items": [
+      {
+        "name": "KIPBLOKJE DIJFIL 350",
+        "qty": 2,
+        "unit_price_eur": 4.99,
+        "line_total_eur": 9.98
+      },
+      {
+        "name": "COURGETTE",
+        "qty": 1,
+        "line_total_eur": 0.69
+      },
+      {
+        "name": "KOOPZEGELS PREMIUM",
+        "qty": 82,
+        "unit_price_eur": 0.1,
+        "line_total_eur": 8.2
+      }
+    ],
+    "discount_lines": [
+      {
+        "name": "ACTIE KIP",
+        "amount_eur": -2.48
+      }
+    ],
+    "notes": [
+      "Voor Jumbo moeten koopzegels als volwaardige bonregel worden opgenomen.",
+      "Deze regressiecase is synthetisch en test expliciet de parser-normalisatie voor koopzegels."
+    ]
   }
 ]
