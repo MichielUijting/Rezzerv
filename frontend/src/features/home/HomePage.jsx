@@ -10,7 +10,7 @@ const tiles = [
   { key: 'uitlenen', label: 'Uitlenen', icon: '🔁' },
   { key: 'voorraad', label: 'Voorraad', icon: '📦' },
   { key: 'winkels', label: 'Winkels', icon: '🏬' },
-  { key: 'kassabonnen', label: 'Kassabonnen', icon: '🧾' },
+  { key: 'kassabonnen', label: 'Uitpakken', icon: '🧾' },
   { key: 'kassa', label: 'Kassa', icon: '🧾' },
   { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳' },
   { key: 'recepten', label: 'Recepten', icon: '🍳' },

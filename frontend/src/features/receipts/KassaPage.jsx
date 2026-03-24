@@ -1995,6 +1995,28 @@ export default function KassaPage() {
     await processLandingReceiptFile(file)
   }
 
+  async function openSelectedReceiptInUitpakken() {
+    const preferredReceiptId = String(openedReceipt?.id || selectedReceiptIds[0] || '')
+    if (!preferredReceiptId) return
+
+    let receiptContext = openedReceipt
+    if (!receiptContext || String(receiptContext?.id || '') !== preferredReceiptId) {
+      try {
+        receiptContext = await fetchJson(`/api/receipts/${encodeURIComponent(preferredReceiptId)}`)
+      } catch (err) {
+        setError(normalizeErrorMessage(err?.message) || 'De bon kon niet naar Uitpakken worden geopend.')
+        return
+      }
+    }
+
+    navigate(`/kassabonnen?receipt_table_id=${encodeURIComponent(preferredReceiptId)}`, {
+      state: {
+        receiptContext,
+        fromKassa: true,
+      },
+    })
+  }
+
   return (
     <AppShell title={isAddReceiptRoute ? 'Bon toevoegen' : 'Kassa'} showExit={false}>
       <ReceiptUploadInputs
@@ -2035,6 +2057,7 @@ export default function KassaPage() {
                   </div>
                 </div>
                 <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+                  <Button type="button" variant="secondary" onClick={openSelectedReceiptInUitpakken} disabled={isUploading || (!openedReceipt && selectedReceiptIds.length === 0)} data-testid="kassa-open-uitpakken-button">Naar Uitpakken</Button>
                   <Button type="button" variant="primary" onClick={openSourceHub} disabled={isUploading} data-testid="kassa-add-receipt-button">{isUploading ? 'Uploaden…' : 'Bon toevoegen'}</Button>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Button from '../../ui/Button'
@@ -21,6 +21,43 @@ async function getLatestBatchMeta(connectionId) {
   }
 }
 
+function formatDateTime(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return new Intl.DateTimeFormat('nl-NL', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
+}
+
+function formatMoney(value, currency = 'EUR') {
+  if (value === null || value === undefined || value === '') return '-'
+  const number = Number(value)
+  if (Number.isNaN(number)) return String(value)
+  try {
+    return new Intl.NumberFormat('nl-NL', {
+      style: 'currency',
+      currency: currency || 'EUR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(number)
+  } catch {
+    return `${number.toFixed(2)} ${currency || 'EUR'}`
+  }
+}
+
+function parseReceiptStatusLabel(value) {
+  if (value === 'parsed') return 'Geparsed'
+  if (value === 'partial') return 'Gedeeltelijk herkend'
+  if (value === 'review_needed') return 'Controle nodig'
+  if (value === 'failed') return 'Niet herkend'
+  return value || '-'
+}
+
 export default function ReceiptsPage() {
   const [providers, setProviders] = useState([])
   const [batches, setBatches] = useState([])
@@ -30,6 +67,9 @@ export default function ReceiptsPage() {
   const [selectedBatchIds, setSelectedBatchIds] = useState([])
   const [openedBatchId, setOpenedBatchId] = useState('')
   const location = useLocation()
+  const navigate = useNavigate()
+  const [receiptContext, setReceiptContext] = useState(() => location?.state?.receiptContext || null)
+  const [receiptContextError, setReceiptContextError] = useState('')
 
   const providersByCode = useMemo(
     () => Object.fromEntries(providers.map((provider) => [provider.code, provider])),
@@ -67,7 +107,7 @@ export default function ReceiptsPage() {
         setBatches(loadedBatches)
       } catch (err) {
         if (!cancelled) {
-          setError(normalizeErrorMessage(err?.message) || 'Kassabonnen konden niet worden geladen.')
+          setError(normalizeErrorMessage(err?.message) || 'Uitpakken kon niet worden geladen.')
         }
       } finally {
         if (!cancelled) setIsLoading(false)
@@ -77,6 +117,39 @@ export default function ReceiptsPage() {
     loadData()
     return () => { cancelled = true }
   }, [location.search])
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const requestedReceiptId = String(params.get('receipt_table_id') || '').trim()
+    const routeReceiptContext = location.state?.receiptContext || null
+
+    if (routeReceiptContext && String(routeReceiptContext?.id || '') === requestedReceiptId) {
+      setReceiptContext(routeReceiptContext)
+      setReceiptContextError('')
+      return
+    }
+
+    if (!requestedReceiptId) {
+      setReceiptContext(routeReceiptContext)
+      setReceiptContextError('')
+      return
+    }
+
+    let cancelled = false
+    setReceiptContextError('')
+    fetchJson(`/api/receipts/${encodeURIComponent(requestedReceiptId)}`)
+      .then((result) => {
+        if (!cancelled) setReceiptContext(result || null)
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setReceiptContext(null)
+          setReceiptContextError(normalizeErrorMessage(err?.message) || 'De bon uit Kassa kon niet worden geladen in Uitpakken.')
+        }
+      })
+
+    return () => { cancelled = true }
+  }, [location.search, location.state])
 
   const listItems = useMemo(() => {
     const enriched = (batches || []).map((batch) => ({
@@ -149,7 +222,7 @@ export default function ReceiptsPage() {
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = 'rezzerv-kassabonnen.csv'
+    link.download = 'rezzerv-uitpakken.csv'
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -167,10 +240,44 @@ export default function ReceiptsPage() {
   }
 
   const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedBatchIds.includes(item.batch_id))
+  const receiptContextVisible = Boolean(receiptContext || receiptContextError)
 
   return (
-    <AppShell title="Kassabonnen" showExit={false}>
+    <AppShell title="Uitpakken" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="receipts-page">
+        {receiptContextVisible ? (
+          <ScreenCard>
+            <div style={{ display: 'grid', gap: '12px' }} data-testid="uitpakken-receipt-context">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '24px' }}>Bon uit Kassa</div>
+                  <div style={{ color: '#667085', marginTop: '4px' }}>
+                    Deze bon is vanuit Kassa geopend en staat hier klaar als context voor het uitpakken.
+                  </div>
+                </div>
+                <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
+                  <Button type="button" variant="secondary" onClick={() => navigate('/kassa')}>Terug naar Kassa</Button>
+                </div>
+              </div>
+
+              {receiptContextError ? (
+                <div className="rz-inline-feedback rz-inline-feedback--error">{receiptContextError}</div>
+              ) : null}
+
+              {receiptContext ? (
+                <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+                  <div><strong>Winkel</strong><div>{receiptContext.store_name || 'Onbekende winkel'}</div></div>
+                  <div><strong>Aankoopmoment</strong><div>{formatDateTime(receiptContext.purchase_at)}</div></div>
+                  <div><strong>Totaal</strong><div>{formatMoney(receiptContext.total_amount, receiptContext.currency)}</div></div>
+                  <div><strong>Bonregels</strong><div>{receiptContext.line_count ?? receiptContext.lines?.length ?? 0}</div></div>
+                  <div><strong>Parse-status</strong><div>{parseReceiptStatusLabel(receiptContext.parse_status)}</div></div>
+                  <div><strong>Receipt ID</strong><div>{receiptContext.id || '-'}</div></div>
+                </div>
+              ) : null}
+            </div>
+          </ScreenCard>
+        ) : null}
+
         <ScreenCard>
         {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
         <div className="rz-table-wrapper">
@@ -182,7 +289,7 @@ export default function ReceiptsPage() {
                     type="checkbox"
                     checked={allVisibleSelected}
                     onChange={toggleSelectAllVisible}
-                    aria-label="Selecteer alle zichtbare kassabonnen"
+                    aria-label="Selecteer alle zichtbare bonnen in Uitpakken"
                   />
                 </th>
                 <th style={{ width: '26.6%' }}>Winkel</th>
@@ -234,7 +341,7 @@ export default function ReceiptsPage() {
               {isLoading ? (
                 <tr><td colSpan={5}>Bonnen laden…</td></tr>
               ) : listItems.length === 0 ? (
-                <tr><td colSpan={5}>Er zijn nog geen kassabonnen.</td></tr>
+                <tr><td colSpan={5}>Er zijn nog geen bonnen om uit te pakken.</td></tr>
               ) : listItems.map((item) => {
                 const selected = selectedBatchIds.includes(item.batch_id)
                 return (
