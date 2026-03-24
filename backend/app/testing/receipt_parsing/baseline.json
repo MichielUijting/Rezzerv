@@ -399,7 +399,7 @@
     "store_address": null,
     "purchase_datetime": "2026-03-20T16:27:00",
     "total_eur": 5.02,
-    "line_item_count": 3,
+    "line_item_count": 4,
     "status": "baseline_confirmed_from_pdf_text",
     "line_items": [
       {
@@ -416,6 +416,11 @@
         "name": "AH POFFERTJE",
         "qty": 1,
         "line_total_eur": 2.19
+      },
+      {
+        "name": "KOOPZEGELS PREMIUM",
+        "qty": 8,
+        "line_total_eur": 0.8
       }
     ],
     "discount_lines": [

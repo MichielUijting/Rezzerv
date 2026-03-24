@@ -876,8 +876,8 @@ function ReceiptDetailInfoCard({ receipt }) {
                     Deze bon heeft nog geen herkende artikelregels. Controleer later opnieuw of upload een beter leesbare bon.
                   </div>
                 ) : null}
-                <div className="rz-table-wrapper" style={{ paddingBottom: '12px', maxWidth: '100%', width: '100%', overflowX: 'auto' }}>
-                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: buildTableWidth(lineColumnWidths) }}>
+                <div className="rz-table-wrapper" style={{ paddingBottom: '18px', maxWidth: '100%', width: '100%', overflowX: 'auto', overflowY: 'hidden', scrollbarGutter: 'stable both-edges' }}>
+                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: buildTableWidth(lineColumnWidths), marginBottom: '8px' }}>
                     <colgroup>
                       <col style={{ width: `${lineColumnWidths.select}px` }} />
                       <col style={{ width: `${lineColumnWidths.article}px` }} />
@@ -2091,8 +2091,8 @@ export default function KassaPage() {
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
-              <div className="rz-table-wrapper" style={{ overflowX: 'auto', maxWidth: '100%', width: '100%' }}>
-                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: buildTableWidth(inboxColumnWidths) }}>
+              <div className="rz-table-wrapper" style={{ overflowX: 'auto', overflowY: 'hidden', maxWidth: '100%', width: '100%', paddingBottom: '18px', scrollbarGutter: 'stable both-edges' }}>
+                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: buildTableWidth(inboxColumnWidths), marginBottom: '8px' }}>
                   <colgroup>
                     <col style={{ width: `${inboxColumnWidths.select}px` }} />
                     <col style={{ width: `${inboxColumnWidths.store}px` }} />

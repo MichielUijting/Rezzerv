@@ -770,6 +770,83 @@ def _apply_discount_entries(lines: list[dict[str, Any]], discount_entries: list[
             attach_discount(fallback_index, amount)
     return total_discount.quantize(Decimal('0.01')) if total_discount != Decimal('0.00') else None
 
+
+def _extract_savings_action_lines(lines: list[str]) -> list[dict[str, Any]]:
+    extracted: list[dict[str, Any]] = []
+    qty_first_re = re.compile(
+        r'^(?P<qty>\d+(?:[\.,]\d+)?)\s+(?P<label>.+?)\s+(?P<amount>-?\d{1,6}(?:[\.,]\d{2}))(?:\s+(?:EUR|[A-Z]{1,3}))?$',
+        re.IGNORECASE,
+    )
+    for source_index, raw_line in enumerate(lines):
+        normalized = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
+        lowered = normalized.lower()
+        if not normalized or not any(token in lowered for token in ('koopzegel', 'koopzegels', 'spaaractie', 'spaaracties')):
+            continue
+        if any(token in lowered for token in ('uw voordeel', 'totaal prijsvoordeel', 'totaal korting', 'betaald met', 'bankpas')):
+            continue
+        match = qty_first_re.match(normalized)
+        if not match:
+            continue
+        quantity = _parse_quantity(match.group('qty'))
+        line_total = _parse_decimal(match.group('amount'))
+        if quantity is None or line_total is None or quantity <= 0 or line_total <= 0:
+            continue
+        unit_price = (line_total / quantity).quantize(Decimal('0.01')) if quantity else line_total
+        label_value = _clean_receipt_label(match.group('label'))
+        if not label_value:
+            continue
+        extracted.append(
+            {
+                'raw_label': label_value,
+                'normalized_label': label_value,
+                'quantity': _amount_to_float(quantity),
+                'unit': None,
+                'unit_price': _amount_to_float(unit_price),
+                'line_total': _amount_to_float(line_total),
+                'discount_amount': None,
+                'barcode': None,
+                'confidence_score': 0.8,
+                'source_index': source_index,
+            }
+        )
+    return extracted
+
+
+def _line_decimal_total(line: dict[str, Any]) -> Decimal:
+    return _parse_decimal(str(line.get('line_total'))) or Decimal('0.00')
+
+
+def _discount_decimal_total(line: dict[str, Any]) -> Decimal:
+    return _parse_decimal(str(line.get('discount_amount'))) or Decimal('0.00')
+
+
+def _result_quality_score(result: ReceiptParseResult) -> tuple[int, int, int, int, int]:
+    if not result.is_receipt:
+        return (0, 0, 0, 0, 0)
+    line_count = len(result.lines or [])
+    has_total = 1 if result.total_amount is not None else 0
+    has_store = 1 if result.store_name else 0
+    has_purchase = 1 if result.purchase_at else 0
+    total_match = 0
+    if result.total_amount is not None and line_count:
+        line_sum = sum((_line_decimal_total(line) for line in result.lines), Decimal('0.00'))
+        discount_sum = result.discount_total if result.discount_total is not None else sum((_discount_decimal_total(line) for line in result.lines), Decimal('0.00'))
+        if discount_sum is None:
+            discount_sum = Decimal('0.00')
+        try:
+            if abs((line_sum + discount_sum) - result.total_amount) < Decimal('0.011'):
+                total_match = 1
+        except Exception:
+            total_match = 0
+    status_weight = {'parsed': 3, 'partial': 2, 'review_needed': 1, 'failed': 0}.get(str(result.parse_status or ''), 0)
+    return (has_total + has_store + has_purchase + total_match, status_weight, line_count, has_total, total_match)
+
+
+def _choose_better_receipt_result(primary: ReceiptParseResult, secondary: ReceiptParseResult) -> ReceiptParseResult:
+    primary_score = _result_quality_score(primary)
+    secondary_score = _result_quality_score(secondary)
+    return secondary if secondary_score > primary_score else primary
+
 def _looks_like_non_receipt(lines: list[str]) -> bool:
     if not lines:
         return True
@@ -986,6 +1063,29 @@ def _parse_result_from_text_lines(
     purchase_at = _purchase_at_from_lines(text_lines, filename)
     total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
     lines = _extract_receipt_lines(text_lines)
+    savings_action_lines = _extract_savings_action_lines(text_lines)
+    if savings_action_lines:
+        existing_keys = {
+            (
+                str(line.get('raw_label') or '').strip().lower(),
+                str(line.get('quantity') or ''),
+                str(line.get('line_total') or ''),
+                str(line.get('source_index') or ''),
+            )
+            for line in lines
+        }
+        for extra_line in savings_action_lines:
+            extra_key = (
+                str(extra_line.get('raw_label') or '').strip().lower(),
+                str(extra_line.get('quantity') or ''),
+                str(extra_line.get('line_total') or ''),
+                str(extra_line.get('source_index') or ''),
+            )
+            if extra_key in existing_keys:
+                continue
+            lines.append(extra_line)
+            existing_keys.add(extra_key)
+        lines.sort(key=lambda item: int(item.get('source_index') or 0))
     discount_total = _apply_discount_entries(lines, _extract_discount_entries(text_lines))
     if total_amount is None and len(lines) >= 2:
         line_sum = Decimal('0.00')
@@ -1312,28 +1412,39 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
         return ocr_result
 
     if mime_type.startswith('image/') or suffix in {'.png', '.jpg', '.jpeg'}:
-        ocr_lines, ocr_confidence = _ocr_image_text_with_paddle(file_bytes, filename)
-        if not ocr_lines:
-            ocr_lines, fallback_confidence = _ocr_image_text_with_tesseract(file_bytes, filename)
-            if ocr_confidence is None:
-                ocr_confidence = fallback_confidence
-        image_result = _parse_result_from_text_lines(
-            ocr_lines,
+        paddle_lines, paddle_confidence = _ocr_image_text_with_paddle(file_bytes, filename)
+        tesseract_lines, tesseract_confidence = _ocr_image_text_with_tesseract(file_bytes, filename)
+
+        paddle_result = _parse_result_from_text_lines(
+            paddle_lines,
             filename,
             rich_confidence=0.84,
             partial_confidence=0.64,
             review_confidence=0.36,
-        )
+        ) if paddle_lines else _failed_receipt_result(0.0)
+        tesseract_result = _parse_result_from_text_lines(
+            tesseract_lines,
+            filename,
+            rich_confidence=0.82,
+            partial_confidence=0.62,
+            review_confidence=0.34,
+        ) if tesseract_lines else _failed_receipt_result(0.0)
+
+        image_result = _choose_better_receipt_result(paddle_result, tesseract_result)
+        chosen_confidence = paddle_confidence if image_result is paddle_result else tesseract_confidence
+        chosen_lines = paddle_lines if image_result is paddle_result else tesseract_lines
+
         if image_result.is_receipt:
-            if ocr_confidence is not None and image_result.confidence_score is not None:
-                image_result.confidence_score = round(min(image_result.confidence_score, ocr_confidence), 4)
-            elif ocr_confidence is not None:
-                image_result.confidence_score = round(ocr_confidence, 4)
+            if chosen_confidence is not None and image_result.confidence_score is not None:
+                image_result.confidence_score = round(min(image_result.confidence_score, chosen_confidence), 4)
+            elif chosen_confidence is not None:
+                image_result.confidence_score = round(chosen_confidence, 4)
             return image_result
 
-        store_name = _store_from_text(ocr_lines, filename)
-        purchase_at = _purchase_at_from_lines(ocr_lines, filename)
-        total_amount, _ = _total_amount_from_lines(ocr_lines, filename)
+        fallback_lines = chosen_lines or paddle_lines or tesseract_lines
+        store_name = _store_from_text(fallback_lines, filename)
+        purchase_at = _purchase_at_from_lines(fallback_lines, filename)
+        total_amount, _ = _total_amount_from_lines(fallback_lines, filename)
         confidence = 0.35 if (store_name or purchase_at or total_amount) else 0.20
         return ReceiptParseResult(
             is_receipt=True,
