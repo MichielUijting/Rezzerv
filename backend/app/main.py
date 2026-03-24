@@ -2301,6 +2301,197 @@ def ensure_store_provider(provider_code: str):
     return dict(provider)
 
 
+def unpack_receipt_amounts_match(receipt):
+    try:
+        total_amount = float(receipt.get('total_amount'))
+        line_total_sum = receipt.get('line_total_sum')
+        discount_total = receipt.get('discount_total_effective', receipt.get('discount_total'))
+        net_line_total_sum = receipt.get('net_line_total_sum')
+        if net_line_total_sum is None:
+            net_line_total_sum = (float(line_total_sum or 0) + float(discount_total or 0))
+        else:
+            net_line_total_sum = float(net_line_total_sum)
+        line_count = int(receipt.get('line_count') or 0)
+    except Exception:
+        return False
+    if line_count <= 0:
+        return False
+    return abs(total_amount - net_line_total_sum) < 0.01
+
+
+def derive_unpack_receipt_status(receipt):
+    parse_status = str(receipt.get('parse_status') or '').strip().lower()
+    if parse_status in {'review_needed', 'failed'}:
+        return 'Controle nodig'
+    try:
+        line_count = int(receipt.get('line_count') or 0)
+    except Exception:
+        line_count = 0
+    if parse_status == 'parsed' and unpack_receipt_amounts_match(receipt) and line_count >= 1:
+        return 'Gecontroleerd'
+    if receipt.get('line_total_sum') is not None and receipt.get('total_amount') is not None:
+        return 'Controle nodig'
+    return 'Nieuw'
+
+
+def ensure_receipt_unpack_provider(conn):
+    provider = conn.execute(
+        text("SELECT id, code, name FROM store_providers WHERE code = 'receipt' LIMIT 1")
+    ).mappings().first()
+    if provider:
+        return dict(provider)
+    provider_id = str(uuid.uuid4())
+    conn.execute(
+        text("""
+        INSERT INTO store_providers (id, code, name, status, import_mode)
+        VALUES (:id, 'receipt', 'Kassabon', 'active', 'receipt')
+        """),
+        {'id': provider_id},
+    )
+    return {'id': provider_id, 'code': 'receipt', 'name': 'Kassabon'}
+
+
+def ensure_receipt_unpack_connection(conn, household_id: str, provider_id: str):
+    connection = conn.execute(
+        text("""
+        SELECT id
+        FROM household_store_connections
+        WHERE household_id = :household_id AND store_provider_id = :provider_id
+        ORDER BY linked_at DESC, id DESC
+        LIMIT 1
+        """),
+        {'household_id': household_id, 'provider_id': provider_id},
+    ).mappings().first()
+    if connection:
+        return str(connection['id'])
+    connection_id = str(uuid.uuid4())
+    conn.execute(
+        text("""
+        INSERT INTO household_store_connections (
+            id, household_id, store_provider_id, connection_status, linked_at
+        ) VALUES (
+            :id, :household_id, :provider_id, 'active', CURRENT_TIMESTAMP
+        )
+        """),
+        {'id': connection_id, 'household_id': household_id, 'provider_id': provider_id},
+    )
+    return connection_id
+
+
+def _receipt_purchase_date_label(receipt):
+    value = receipt.get('purchase_at') or receipt.get('created_at') or ''
+    value = str(value)
+    if len(value) >= 10:
+        return value[:10]
+    return value or 'Onbekend'
+
+
+def ensure_unpack_batch_for_receipt(conn, receipt):
+    receipt_table_id = str(receipt.get('receipt_table_id') or receipt.get('id') or '').strip()
+    household_id = str(receipt.get('household_id') or '').strip()
+    if not receipt_table_id or not household_id:
+        raise HTTPException(status_code=400, detail='Bon-id of huishouden ontbreekt voor Uitpakken')
+
+    existing = conn.execute(
+        text("""
+        SELECT id AS batch_id
+        FROM purchase_import_batches
+        WHERE household_id = :household_id
+          AND source_type = 'receipt'
+          AND source_reference = :source_reference
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+        """),
+        {'household_id': household_id, 'source_reference': f'receipt:{receipt_table_id}'},
+    ).mappings().first()
+    if existing:
+        return str(existing['batch_id'])
+
+    provider = ensure_receipt_unpack_provider(conn)
+    connection_id = ensure_receipt_unpack_connection(conn, household_id, str(provider['id']))
+
+    batch_id = str(uuid.uuid4())
+    raw_payload = json.dumps({
+        'provider_code': 'receipt',
+        'receipt_table_id': receipt_table_id,
+        'batch_metadata': {
+            'purchase_date': _receipt_purchase_date_label(receipt),
+            'store_name': receipt.get('store_name') or receipt.get('store_branch') or 'Kassabon',
+            'store_label': receipt.get('store_name') or receipt.get('store_branch') or 'Kassabon',
+        },
+    })
+    conn.execute(
+        text("""
+        INSERT INTO purchase_import_batches (
+            id, household_id, store_provider_id, connection_id, source_type,
+            source_reference, import_status, raw_payload, created_at
+        ) VALUES (
+            :id, :household_id, :store_provider_id, :connection_id, 'receipt',
+            :source_reference, 'new', :raw_payload, CURRENT_TIMESTAMP
+        )
+        """),
+        {
+            'id': batch_id,
+            'household_id': household_id,
+            'store_provider_id': str(provider['id']),
+            'connection_id': connection_id,
+            'source_reference': f'receipt:{receipt_table_id}',
+            'raw_payload': raw_payload,
+        },
+    )
+
+    line_rows = conn.execute(
+        text("""
+        SELECT id, line_index, raw_label, quantity, unit, line_total, barcode
+        FROM receipt_table_lines
+        WHERE receipt_table_id = :receipt_table_id
+        ORDER BY line_index ASC, id ASC
+        """),
+        {'receipt_table_id': receipt_table_id},
+    ).mappings().all()
+
+    for offset, line in enumerate(line_rows, start=1):
+        raw_label = str(line.get('raw_label') or '').strip()
+        if not raw_label:
+            continue
+        try:
+            quantity_value = float(line.get('quantity')) if line.get('quantity') is not None else 1.0
+        except Exception:
+            quantity_value = 1.0
+        try:
+            line_price_value = float(line.get('line_total')) if line.get('line_total') is not None else None
+        except Exception:
+            line_price_value = None
+        conn.execute(
+            text("""
+            INSERT INTO purchase_import_lines (
+                id, batch_id, external_line_ref, external_article_code, article_name_raw,
+                brand_raw, quantity_raw, unit_raw, line_price_raw, currency_code,
+                match_status, review_decision, ui_sort_order, created_at
+            ) VALUES (
+                :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw,
+                :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
+                'unmatched', 'selected', :ui_sort_order, CURRENT_TIMESTAMP
+            )
+            """),
+            {
+                'id': str(uuid.uuid4()),
+                'batch_id': batch_id,
+                'external_line_ref': f"receipt-line:{line.get('id') or offset}",
+                'external_article_code': line.get('barcode'),
+                'article_name_raw': raw_label,
+                'brand_raw': receipt.get('store_name') or '',
+                'quantity_raw': quantity_value,
+                'unit_raw': line.get('unit') or '',
+                'line_price_raw': line_price_value,
+                'currency_code': receipt.get('currency') or 'EUR',
+                'ui_sort_order': int(line.get('line_index') or offset),
+            },
+        )
+
+    return batch_id
+
+
 def normalize_datetime(value):
     if value is None:
         return None
@@ -3993,299 +4184,19 @@ def source_scan_receipts(payload: ReceiptSourceScanRequest):
     return result
 
 
-
-
-def receipt_amounts_match(row: dict[str, Any]) -> bool:
-    try:
-        total_amount = float(row.get('total_amount'))
-        line_total_sum = float(row.get('line_total_sum') or 0)
-        discount_total = float(row.get('discount_total') or 0)
-        net_line_total_sum = line_total_sum + discount_total
-        line_count = int(row.get('line_count') or 0)
-    except Exception:
-        return False
-    if line_count <= 0:
-        return False
-    return abs(total_amount - net_line_total_sum) < 0.01
-
-
-def derive_receipt_unpack_status(row: dict[str, Any]) -> str:
-    parse_status = str(row.get('parse_status') or '').strip().lower()
-    if parse_status in {'review_needed', 'failed'}:
-        return 'Controle nodig'
-    line_count = int(row.get('line_count') or 0)
-    if parse_status == 'parsed' and receipt_amounts_match(row) and line_count >= 1:
-        return 'Gecontroleerd'
-    if row.get('line_total_sum') is not None and row.get('total_amount') is not None:
-        return 'Controle nodig'
-    return 'Nieuw'
-
-
-def infer_store_provider_code(store_name: str | None) -> str:
-    label = re.sub(r'\s+', ' ', str(store_name or '').strip().lower())
-    if not label:
-        return 'kassa'
-    if 'albert heijn' in label or re.fullmatch(r'ah(?:\s+.*)?', label):
-        return 'ah'
-    if 'jumbo' in label:
-        return 'jumbo'
-    if 'lidl' in label:
-        return 'lidl'
-    if 'aldi' in label:
-        return 'aldi'
-    if 'picnic' in label:
-        return 'picnic'
-    return sanitize_source_slug(label)
-
-
-def ensure_dynamic_store_provider(conn, store_name: str | None):
-    provider_code = infer_store_provider_code(store_name)
-    provider_name = str(store_name or provider_code or 'Kassa').strip() or 'Kassa'
-    existing = conn.execute(
-        text(
-            """
-            SELECT id, code, name, status, import_mode
-            FROM store_providers
-            WHERE code = :code
-            LIMIT 1
-            """
-        ),
-        {'code': provider_code},
-    ).mappings().first()
-    if existing:
-        if existing['status'] != 'active' or existing['name'] != provider_name or existing['import_mode'] != 'receipt':
-            conn.execute(
-                text(
-                    """
-                    UPDATE store_providers
-                    SET name = :name,
-                        status = 'active',
-                        import_mode = 'receipt'
-                    WHERE code = :code
-                    """
-                ),
-                {'code': provider_code, 'name': provider_name},
-            )
-            existing = conn.execute(
-                text(
-                    """
-                    SELECT id, code, name, status, import_mode
-                    FROM store_providers
-                    WHERE code = :code
-                    LIMIT 1
-                    """
-                ),
-                {'code': provider_code},
-            ).mappings().first()
-        return dict(existing)
-
-    provider_id = str(uuid.uuid4())
-    conn.execute(
-        text(
-            """
-            INSERT INTO store_providers (id, code, name, status, import_mode)
-            VALUES (:id, :code, :name, 'active', 'receipt')
-            """
-        ),
-        {'id': provider_id, 'code': provider_code, 'name': provider_name},
-    )
-    return {
-        'id': provider_id,
-        'code': provider_code,
-        'name': provider_name,
-        'status': 'active',
-        'import_mode': 'receipt',
-    }
-
-
-def ensure_unpack_batch_for_receipt(conn, receipt_row: dict[str, Any], line_rows: list[dict[str, Any]]) -> dict[str, Any]:
-    receipt_table_id = str(receipt_row.get('receipt_table_id') or '').strip()
-    if not receipt_table_id:
-        raise HTTPException(status_code=400, detail='Receipt mist een id voor Uitpakken')
-
-    household_id = str(receipt_row.get('household_id') or '1')
-    provider = ensure_dynamic_store_provider(conn, receipt_row.get('store_name'))
-    source_reference = f'receipt:{receipt_table_id}'
-    purchase_at = receipt_row.get('purchase_at')
-    batch_metadata = {
-        'purchase_date': str(purchase_at or '')[:10] if purchase_at else None,
-        'store_name': receipt_row.get('store_name') or provider['name'],
-        'store_label': receipt_row.get('store_name') or provider['name'],
-        'receipt_table_id': receipt_table_id,
-        'receipt_status': derive_receipt_unpack_status(receipt_row),
-    }
-
-    existing_batch = conn.execute(
-        text(
-            """
-            SELECT id
-            FROM purchase_import_batches
-            WHERE household_id = :household_id
-              AND source_type = 'receipt'
-              AND source_reference = :source_reference
-            LIMIT 1
-            """
-        ),
-        {'household_id': household_id, 'source_reference': source_reference},
-    ).mappings().first()
-
-    raw_payload = json.dumps({'batch_metadata': batch_metadata, 'receipt_table_id': receipt_table_id}, ensure_ascii=False)
-    if existing_batch:
-        batch_id = str(existing_batch['id'])
-        conn.execute(
-            text(
-                """
-                UPDATE purchase_import_batches
-                SET store_provider_id = :store_provider_id,
-                    purchase_date_from = :purchase_date,
-                    purchase_date_to = :purchase_date,
-                    raw_payload = :raw_payload
-                WHERE id = :id
-                """
-            ),
-            {
-                'id': batch_id,
-                'store_provider_id': provider['id'],
-                'purchase_date': purchase_at,
-                'raw_payload': raw_payload,
-            },
-        )
-    else:
-        batch_id = str(uuid.uuid4())
-        conn.execute(
-            text(
-                """
-                INSERT INTO purchase_import_batches (
-                    id, household_id, store_provider_id, connection_id, source_type,
-                    source_reference, purchase_date_from, purchase_date_to,
-                    import_status, raw_payload, created_at
-                ) VALUES (
-                    :id, :household_id, :store_provider_id, NULL, 'receipt',
-                    :source_reference, :purchase_date, :purchase_date,
-                    'in_review', :raw_payload, CURRENT_TIMESTAMP
-                )
-                """
-            ),
-            {
-                'id': batch_id,
-                'household_id': household_id,
-                'store_provider_id': provider['id'],
-                'source_reference': source_reference,
-                'purchase_date': purchase_at,
-                'raw_payload': raw_payload,
-            },
-        )
-
-    existing_lines = {
-        str(row['external_line_ref']): dict(row)
-        for row in conn.execute(
-            text(
-                """
-                SELECT id, external_line_ref, article_name_raw, quantity_raw, unit_raw, line_price_raw, currency_code
-                FROM purchase_import_lines
-                WHERE batch_id = :batch_id
-                """
-            ),
-            {'batch_id': batch_id},
-        ).mappings().all()
-    }
-
-    inserted_or_updated = False
-    for index, line in enumerate(line_rows, start=1):
-        external_line_ref = f"receipt-line:{line.get('id') or index}"
-        article_name_raw = str(line.get('raw_label') or line.get('normalized_label') or f'Bonregel {index}').strip() or f'Bonregel {index}'
-        quantity_raw = line.get('quantity')
-        unit_raw = line.get('unit')
-        line_price_raw = line.get('line_total') if line.get('line_total') is not None else line.get('unit_price')
-        currency_code = receipt_row.get('currency') or 'EUR'
-        match_status = 'matched' if line.get('matched_article_id') else 'unmatched'
-        review_decision = 'selected' if line.get('matched_article_id') else 'pending'
-        row_payload = {
-            'batch_id': batch_id,
-            'external_line_ref': external_line_ref,
-            'external_article_code': line.get('barcode'),
-            'article_name_raw': article_name_raw,
-            'brand_raw': receipt_row.get('store_name'),
-            'quantity_raw': quantity_raw,
-            'unit_raw': unit_raw,
-            'line_price_raw': line_price_raw,
-            'currency_code': currency_code,
-            'match_status': match_status,
-            'matched_household_article_id': line.get('matched_article_id'),
-            'review_decision': review_decision,
-            'ui_sort_order': int(line.get('line_index') or index),
-        }
-        existing_line = existing_lines.get(external_line_ref)
-        if existing_line:
-            conn.execute(
-                text(
-                    """
-                    UPDATE purchase_import_lines
-                    SET external_article_code = :external_article_code,
-                        article_name_raw = :article_name_raw,
-                        brand_raw = :brand_raw,
-                        quantity_raw = :quantity_raw,
-                        unit_raw = :unit_raw,
-                        line_price_raw = :line_price_raw,
-                        currency_code = :currency_code,
-                        updated_at = CURRENT_TIMESTAMP,
-                        ui_sort_order = :ui_sort_order
-                    WHERE id = :id
-                    """
-                ),
-                {**row_payload, 'id': existing_line['id']},
-            )
-            inserted_or_updated = True
-            continue
-
-        conn.execute(
-            text(
-                """
-                INSERT INTO purchase_import_lines (
-                    id, batch_id, external_line_ref, external_article_code, article_name_raw,
-                    brand_raw, quantity_raw, unit_raw, line_price_raw, currency_code,
-                    match_status, matched_household_article_id, review_decision, ui_sort_order, created_at
-                ) VALUES (
-                    :id, :batch_id, :external_line_ref, :external_article_code, :article_name_raw,
-                    :brand_raw, :quantity_raw, :unit_raw, :line_price_raw, :currency_code,
-                    :match_status, :matched_household_article_id, :review_decision, :ui_sort_order, CURRENT_TIMESTAMP
-                )
-                """
-            ),
-            {**row_payload, 'id': str(uuid.uuid4())},
-        )
-        inserted_or_updated = True
-
-    if inserted_or_updated:
-        apply_prefill_to_batch(conn, batch_id, household_id, provider['code'])
-    import_status = update_batch_status(conn, batch_id)
-    return {
-        'batch_id': batch_id,
-        'store_provider_code': provider['code'],
-        'store_provider_name': provider['name'],
-        'import_status': import_status,
-        'receipt_status': batch_metadata['receipt_status'],
-        'receipt_table_id': receipt_table_id,
-        'purchase_date': batch_metadata['purchase_date'],
-        'store_name': batch_metadata['store_name'],
-        'store_label': batch_metadata['store_label'],
-        'line_count': len(line_rows),
-        'created_at': receipt_row.get('created_at'),
-    }
-
-
-@app.get("/api/unpack-batches")
-def list_unpack_batches(householdId: str = Query(...)):
-    effective_household_id = str(householdId).strip() or '1'
+@app.get("/api/unpack-start-batches")
+def list_unpack_start_batches(householdId: str = Query(...)):
+    effective_household_id = str(householdId).strip() or "1"
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
     with engine.begin() as conn:
-        receipt_rows = conn.execute(
+        rows = conn.execute(
             text(
                 """
                 SELECT
                     rt.id AS receipt_table_id,
                     rt.household_id,
                     rt.store_name,
+                    rt.store_branch,
                     rt.purchase_at,
                     rt.total_amount,
                     rt.discount_total,
@@ -4296,14 +4207,23 @@ def list_unpack_batches(householdId: str = Query(...)):
                         FROM receipt_table_lines rtl_count
                         WHERE rtl_count.receipt_table_id = rt.id
                     ), rt.line_count, 0) AS line_count,
+                    COALESCE(rs.label, 'Manual upload') AS source_label,
+                    rr.sha256_hash,
                     rt.created_at,
                     COALESCE((
                         SELECT SUM(COALESCE(rtl.line_total, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                    ), 0) AS line_total_sum
+                    ), 0) AS line_total_sum,
+                    COALESCE(rt.discount_total, 0) AS discount_total_effective,
+                    COALESCE((
+                        SELECT SUM(COALESCE(rtl.line_total, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                    ), 0) + COALESCE(rt.discount_total, 0) AS net_line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
                 WHERE rt.household_id = :household_id
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
@@ -4313,29 +4233,49 @@ def list_unpack_batches(householdId: str = Query(...)):
             {'household_id': effective_household_id},
         ).mappings().all()
 
+        def normalize_key_part(value):
+            return re.sub(r'\s+', ' ', str(value or '').strip().lower())
+
         items = []
-        for row in receipt_rows:
-            row_dict = dict(row)
-            receipt_status = derive_receipt_unpack_status(row_dict)
-            if receipt_status not in {'Gecontroleerd', 'Controle nodig'}:
+        seen_keys = set()
+        for row in rows:
+            serialized = serialize_receipt_row(dict(row))
+            store_name = normalize_key_part(serialized.get('store_name'))
+            purchase_at = normalize_key_part(serialized.get('purchase_at'))
+            total_amount = serialized.get('total_amount')
+            try:
+                total_key = f"{float(total_amount):.2f}" if total_amount is not None else ''
+            except Exception:
+                total_key = normalize_key_part(total_amount)
+            line_count = str(serialized.get('line_count') or 0)
+            source_label = normalize_key_part(serialized.get('source_label'))
+            sha_key = normalize_key_part(serialized.get('sha256_hash'))
+            fingerprint_key = (store_name, purchase_at, total_key, line_count, source_label)
+            dedupe_key = sha_key or '|'.join(fingerprint_key)
+            if dedupe_key in seen_keys:
                 continue
-            line_rows = [
-                dict(line)
-                for line in conn.execute(
-                    text(
-                        """
-                        SELECT id, line_index, raw_label, normalized_label, quantity, unit, unit_price, line_total, barcode, matched_article_id
-                        FROM receipt_table_lines
-                        WHERE receipt_table_id = :receipt_table_id
-                        ORDER BY line_index ASC, created_at ASC
-                        """
-                    ),
-                    {'receipt_table_id': row_dict['receipt_table_id']},
-                ).mappings().all()
-            ]
-            if not line_rows:
+            seen_keys.add(dedupe_key)
+
+            inbox_status = derive_unpack_receipt_status(serialized)
+            if inbox_status not in {'Gecontroleerd', 'Controle nodig'}:
                 continue
-            items.append(ensure_unpack_batch_for_receipt(conn, row_dict, line_rows))
+
+            batch_id = ensure_unpack_batch_for_receipt(conn, serialized)
+            purchase_at_value = serialized.get('purchase_at') or serialized.get('created_at') or ''
+            purchase_label = str(purchase_at_value)[:10] if purchase_at_value else '-'
+            store_label = serialized.get('store_name') or serialized.get('store_branch') or serialized.get('source_label') or 'Kassabon'
+            items.append({
+                'batch_id': batch_id,
+                'receipt_table_id': serialized.get('receipt_table_id'),
+                'store_provider_code': 'receipt',
+                'store_provider_name': store_label,
+                'purchase_date': purchase_label,
+                'created_at': serialized.get('created_at'),
+                'summary': {'total': int(serialized.get('line_count') or 0)},
+                'inbox_status': inbox_status,
+            })
+
+    items.sort(key=lambda item: str(item.get('created_at') or ''), reverse=True)
     return {'items': items}
 
 
