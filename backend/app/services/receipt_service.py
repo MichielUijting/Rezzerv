@@ -711,6 +711,15 @@ def _discount_match_score(discount_label: str | None, line_label: str | None) ->
             score += 30 + len(token)
         elif token in discount_compact:
             score += 18 + len(token)
+    if line_tokens and discount_tokens and line_tokens[0] == discount_tokens[0]:
+        score += 26 + len(line_tokens[0])
+    common_prefix = 0
+    for left, right in zip(discount_compact, line_compact):
+        if left != right:
+            break
+        common_prefix += 1
+    if common_prefix >= 4:
+        score += 12 + common_prefix
     ratio = SequenceMatcher(None, discount_compact, line_compact).ratio()
     score += int(round(ratio * 20))
     return score

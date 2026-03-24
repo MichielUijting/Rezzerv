@@ -252,8 +252,7 @@ function amountsMatch(receipt) {
 function deriveInboxStatus(receipt) {
   if (receipt?.parse_status === 'review_needed' || receipt?.parse_status === 'failed') return 'Controle nodig'
   const lineCount = Number(receipt?.line_count ?? receipt?.lines?.length ?? 0)
-  const confidence = Number(receipt?.confidence_score)
-  if (receipt?.parse_status === 'parsed' && amountsMatch(receipt) && lineCount >= 2 && Number.isFinite(confidence) && confidence >= 0.95) {
+  if (receipt?.parse_status === 'parsed' && amountsMatch(receipt) && lineCount >= 1) {
     return 'Gecontroleerd'
   }
   if (receipt?.line_total_sum !== null && receipt?.line_total_sum !== undefined && receipt?.total_amount !== null && receipt?.total_amount !== undefined) {
@@ -754,7 +753,10 @@ function ReceiptDetailInfoCard({ receipt }) {
     return Number.isFinite(value) ? sum + value : sum
   }, 0)
   const receiptLevelDiscount = Number(receipt?.discount_total_effective ?? receipt?.discount_total)
-  const effectiveDiscountTotal = Number.isFinite(receiptLevelDiscount) ? receiptLevelDiscount : visibleDiscountSum
+  const hasLineLevelDiscounts = lines.some((line) => Number.isFinite(Number(line?.discount_amount)) && Math.abs(Number(line.discount_amount)) > 0.0001)
+  const effectiveDiscountTotal = hasLineLevelDiscounts
+    ? visibleDiscountSum
+    : (Number.isFinite(receiptLevelDiscount) ? receiptLevelDiscount : visibleDiscountSum)
   const visibleNetTotalSum = visibleLineTotalSum + effectiveDiscountTotal
   const detailAmountsMatch = Number.isFinite(Number(receipt?.total_amount)) && lines.length > 0 && Math.abs(Number(receipt?.total_amount) - visibleNetTotalSum) < 0.01
   const lineColumnDefaults = useMemo(() => ({
@@ -874,8 +876,8 @@ function ReceiptDetailInfoCard({ receipt }) {
                     Deze bon heeft nog geen herkende artikelregels. Controleer later opnieuw of upload een beter leesbare bon.
                   </div>
                 ) : null}
-                <div className="rz-table-wrapper" style={{ paddingBottom: '12px', maxWidth: '100%', overflowX: 'auto' }}>
-                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }}>
+                <div className="rz-table-wrapper" style={{ paddingBottom: '12px', maxWidth: '100%', width: '100%', overflowX: 'auto' }}>
+                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: buildTableWidth(lineColumnWidths) }}>
                     <colgroup>
                       <col style={{ width: `${lineColumnWidths.select}px` }} />
                       <col style={{ width: `${lineColumnWidths.article}px` }} />
@@ -973,16 +975,18 @@ function ReceiptDetailView({ receipt }) {
         width: '100%',
         maxWidth: '900px',
         margin: '0 auto',
+        minWidth: 0,
+        overflow: 'hidden',
       }}
     >
-      <div style={{ minWidth: 0, width: '100%' }}>
+      <div style={{ minWidth: 0, width: '100%', overflow: 'hidden' }}>
         <ReceiptPreviewCard
           receipt={receipt}
           isCollapsed={isPreviewCollapsed}
           onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
         />
       </div>
-      <div style={{ minWidth: 0, width: '100%' }}>
+      <div style={{ minWidth: 0, width: '100%', overflow: 'hidden' }}>
         <ReceiptDetailInfoCard receipt={receipt} />
       </div>
     </div>
@@ -1536,6 +1540,13 @@ export default function KassaPage() {
     }
   }, [receipts, openedReceiptId])
 
+  useEffect(() => {
+    if (receipts.length === 0) {
+      setOpenedReceiptId('')
+      setOpenedReceipt(null)
+    }
+  }, [receipts])
+
   const inboxItems = useMemo(() => {
     return receipts
       .filter((item) => !deletedReceiptIds.includes(String(item?.receipt_table_id || '')))
@@ -2080,8 +2091,8 @@ export default function KassaPage() {
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
-              <div className="rz-table-wrapper" style={{ overflowX: 'auto' }}>
-                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
+              <div className="rz-table-wrapper" style={{ overflowX: 'auto', maxWidth: '100%', width: '100%' }}>
+                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: buildTableWidth(inboxColumnWidths) }}>
                   <colgroup>
                     <col style={{ width: `${inboxColumnWidths.select}px` }} />
                     <col style={{ width: `${inboxColumnWidths.store}px` }} />
@@ -2156,8 +2167,6 @@ export default function KassaPage() {
                           <td className="rz-receipts-cell">
                             <div style={{ display: 'grid', gap: '4px' }}>
                               <div style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{item.store_name || 'Onbekende winkel'}</div>
-                              <div style={{ fontSize: '12px', color: '#667085' }}>{item.store_branch || '-'}</div>
-                              <div style={{ fontSize: '12px', color: '#667085', fontWeight: 700 }}>{item.source_label || 'Handmatige upload'}</div>
                             </div>
                           </td>
                           <td className="rz-receipts-cell">{formatDateTime(item.purchase_at)}</td>
