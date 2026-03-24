@@ -1426,7 +1426,7 @@ export default function KassaPage() {
     }
   }
 
-  async function loadReceipts(nextHouseholdId = householdId) {
+  async function loadReceipts(nextHouseholdId = householdId, options = {}) {
     setIsLoading(true)
     setError('')
     let items = []
@@ -1434,9 +1434,11 @@ export default function KassaPage() {
       const list = await fetchJson(`/api/receipts?householdId=${encodeURIComponent(nextHouseholdId)}`)
       items = Array.isArray(list?.items) ? list.items : []
       setReceipts(items)
-      if (openedReceiptId) {
-        const detail = await fetchJson(`/api/receipts/${encodeURIComponent(openedReceiptId)}`)
-        const sourceItem = items.find((item) => String(item.receipt_table_id) === String(openedReceiptId)) || null
+      const activeReceiptId = String(options?.openReceiptId || openedReceiptId || '')
+      if (activeReceiptId) {
+        const detail = options?.prefetchedDetail || await fetchJson(`/api/receipts/${encodeURIComponent(activeReceiptId)}`)
+        const sourceItem = items.find((item) => String(item.receipt_table_id) === activeReceiptId) || null
+        setOpenedReceiptId(activeReceiptId)
         setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
       }
     } catch (err) {
@@ -1579,11 +1581,11 @@ export default function KassaPage() {
 
   const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedReceiptIds.includes(item.receipt_table_id))
 
-  async function openReceiptDetail(receiptTableId) {
+  async function openReceiptDetail(receiptTableId, sourceItems = receipts, prefetchedDetail = null) {
     setError('')
     try {
-      const detail = await fetchJson(`/api/receipts/${encodeURIComponent(receiptTableId)}`)
-      const sourceItem = receipts.find((item) => String(item.receipt_table_id) === String(receiptTableId)) || null
+      const detail = prefetchedDetail || await fetchJson(`/api/receipts/${encodeURIComponent(receiptTableId)}`)
+      const sourceItem = sourceItems.find((item) => String(item.receipt_table_id) === String(receiptTableId)) || null
       setOpenedReceiptId(receiptTableId)
       setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
     } catch (err) {
@@ -1747,6 +1749,7 @@ export default function KassaPage() {
 
         if (uploadedReceiptId && receiptExistsInInbox) {
           setSelectedReceiptIds([uploadedReceiptId])
+          await openReceiptDetail(uploadedReceiptId, refreshedItems)
         } else {
           setSelectedReceiptIds([])
         }
@@ -1836,6 +1839,7 @@ export default function KassaPage() {
 
         if (uploadedReceiptId && receiptExistsInInbox) {
           setSelectedReceiptIds([uploadedReceiptId])
+          await openReceiptDetail(uploadedReceiptId, refreshedItems)
         } else {
           setSelectedReceiptIds([])
         }
@@ -1913,6 +1917,7 @@ export default function KassaPage() {
 
         if (uploadedReceiptId && receiptExistsInInbox) {
           setSelectedReceiptIds([uploadedReceiptId])
+          await openReceiptDetail(uploadedReceiptId, refreshedItems)
         } else {
           setSelectedReceiptIds([])
         }
@@ -2092,7 +2097,7 @@ export default function KassaPage() {
               </div>
 
               <div className="rz-table-wrapper" style={{ overflowX: 'auto', overflowY: 'hidden', maxWidth: '100%', width: '100%', paddingBottom: '18px', scrollbarGutter: 'stable both-edges' }}>
-                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: buildTableWidth(inboxColumnWidths), marginBottom: '8px' }}>
+                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), marginBottom: '8px' }}>
                   <colgroup>
                     <col style={{ width: `${inboxColumnWidths.select}px` }} />
                     <col style={{ width: `${inboxColumnWidths.store}px` }} />
