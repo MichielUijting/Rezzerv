@@ -67,6 +67,83 @@ const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: 
 const MAX_CAMERA_UPLOAD_BYTES = 4 * 1024 * 1024
 const MAX_CAMERA_DIMENSION = 1800
 
+function formatQuantity(value) {
+  if (value === null || value === undefined || value === '') return '-'
+  const number = Number(value)
+  if (Number.isNaN(number)) return String(value)
+  const hasThousandths = Math.abs(number - Math.round(number)) > 0.0009
+  return new Intl.NumberFormat('nl-NL', {
+    minimumFractionDigits: hasThousandths ? 3 : 0,
+    maximumFractionDigits: hasThousandths ? 3 : 2,
+  }).format(number)
+}
+
+function useResizableColumnWidths(defaultWidths) {
+  const [widths, setWidths] = useState(() => ({ ...defaultWidths }))
+  const widthsRef = useRef(widths)
+
+  useEffect(() => {
+    widthsRef.current = widths
+  }, [widths])
+
+  useEffect(() => {
+    setWidths({ ...defaultWidths })
+  }, [defaultWidths])
+
+  function startResize(columnKey, event) {
+    event.preventDefault()
+    event.stopPropagation()
+    const startX = event.clientX
+    const startWidth = Number(widthsRef.current?.[columnKey] ?? defaultWidths?.[columnKey] ?? 120)
+
+    function handleMouseMove(moveEvent) {
+      const delta = moveEvent.clientX - startX
+      const nextWidth = Math.max(56, Math.round(startWidth + delta))
+      setWidths((current) => ({ ...current, [columnKey]: nextWidth }))
+    }
+
+    function handleMouseUp() {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+  }
+
+  return { widths, startResize }
+}
+
+function ResizableHeaderCell({ columnKey, widths, onStartResize, className = '', style = {}, children }) {
+  return (
+    <th className={className} style={{ ...style, position: 'relative', width: widths?.[columnKey] ? `${widths[columnKey]}px` : style.width }}>
+      <div style={{ paddingRight: '10px' }}>{children}</div>
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Kolom breedte aanpassen"
+        onMouseDown={(event) => onStartResize(columnKey, event)}
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: '-3px',
+          width: '8px',
+          height: '100%',
+          cursor: 'col-resize',
+          userSelect: 'none',
+          touchAction: 'none',
+          zIndex: 2,
+        }}
+      />
+    </th>
+  )
+}
+
+function buildTableWidth(widths, fallbackWidth = '100%') {
+  const total = Object.values(widths || {}).reduce((sum, value) => sum + Number(value || 0), 0)
+  return total > 0 ? `${total}px` : fallbackWidth
+}
+
 function renameFileToJpeg(name = 'receipt.jpg') {
   const baseName = String(name || 'receipt').replace(/\.[^.]+$/, '') || 'receipt'
   return `${baseName}.jpg`
@@ -677,8 +754,19 @@ function ReceiptDetailInfoCard({ receipt }) {
     return Number.isFinite(value) ? sum + value : sum
   }, 0)
   const receiptLevelDiscount = Number(receipt?.discount_total_effective ?? receipt?.discount_total)
-  const visibleNetTotalSum = visibleLineTotalSum + (Number.isFinite(receiptLevelDiscount) ? receiptLevelDiscount : visibleDiscountSum)
+  const effectiveDiscountTotal = Number.isFinite(receiptLevelDiscount) ? receiptLevelDiscount : visibleDiscountSum
+  const visibleNetTotalSum = visibleLineTotalSum + effectiveDiscountTotal
   const detailAmountsMatch = Number.isFinite(Number(receipt?.total_amount)) && lines.length > 0 && Math.abs(Number(receipt?.total_amount) - visibleNetTotalSum) < 0.01
+  const lineColumnDefaults = useMemo(() => ({
+    select: 44,
+    article: 320,
+    quantity: 92,
+    unit: 92,
+    unitPrice: 118,
+    lineTotal: 128,
+    discount: 118,
+  }), [])
+  const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
 
   function toggleLine(lineId) {
     setSelectedLineIds((current) => (
@@ -697,7 +785,6 @@ function ReceiptDetailInfoCard({ receipt }) {
     const exportLines = lines.filter((line) => selectedSet.has(line.id))
     const rows = exportLines.map((line) => [
       line.raw_label || '',
-      line.normalized_label || '',
       line.quantity ?? '',
       line.unit || '',
       line.unit_price ?? '',
@@ -706,7 +793,7 @@ function ReceiptDetailInfoCard({ receipt }) {
       line.barcode || '',
     ])
     const csv = [
-      ['Ruwe regel', 'Genormaliseerd', 'Aantal', 'Eenheid', 'Stukprijs', 'Regelbedrag', 'Korting', 'Barcode'],
+      ['Artikel in bon', 'Aantal', 'Eenheid', 'Stukprijs', 'Regelbedrag', 'Korting', 'Barcode'],
       ...rows,
     ]
       .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
@@ -745,11 +832,11 @@ function ReceiptDetailInfoCard({ receipt }) {
               return (
                 <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
                   <DetailInfoRow label="Winkel" value={receipt?.store_name} />
-                  <DetailInfoRow label="Vestiging" value={receipt?.store_branch} />
+                  <DetailInfoRow label="Adres / plaats" value={receipt?.store_branch} />
                   <DetailInfoRow label="Aankoopmoment" value={formatDateTime(receipt?.purchase_at)} />
                   <DetailInfoRow label="Totaal" value={formatMoney(receipt?.total_amount, receipt?.currency)} />
                   <DetailInfoRow label="Som bonregels" value={formatMoney(visibleLineTotalSum, receipt?.currency)} />
-                  <DetailInfoRow label="Korting" value={formatMoney(receipt?.discount_total_effective ?? receipt?.discount_total ?? visibleDiscountSum, receipt?.currency)} />
+                  <DetailInfoRow label="Korting" value={formatMoney(effectiveDiscountTotal, receipt?.currency)} />
                   <DetailInfoRow label="Netto bonregels" value={formatMoney(visibleNetTotalSum, receipt?.currency)} />
                   <DetailInfoRow label="Valuta" value={receipt?.currency || 'EUR'} />
                   <DetailInfoRow label="Parse-status" value={parseStatusLabel(receipt?.parse_status)} />
@@ -764,6 +851,7 @@ function ReceiptDetailInfoCard({ receipt }) {
                   <DetailInfoRow label="Receipt table ID" value={receipt?.id} />
                   <DetailInfoRow label="Raw receipt ID" value={receipt?.raw_receipt_id} />
                   <DetailInfoRow label="Bron" value={receipt?.source_label || 'Handmatige upload'} />
+                  <DetailInfoRow label="Adres / plaats" value={receipt?.store_branch || '-'} />
                   <DetailInfoRow label="Oorspronkelijk bestand" value={receipt?.original_filename || 'Niet beschikbaar in deze release'} />
                   <DetailInfoRow label="Bestandstype" value={receipt?.mime_type || 'Niet beschikbaar in deze release'} />
                   <DetailInfoRow label="Imported at" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
@@ -786,30 +874,38 @@ function ReceiptDetailInfoCard({ receipt }) {
                     Deze bon heeft nog geen herkende artikelregels. Controleer later opnieuw of upload een beter leesbare bon.
                   </div>
                 ) : null}
-                <div className="rz-table-wrapper" style={{ paddingBottom: '12px', maxWidth: '100%' }}>
-                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'auto', width: 'max-content', minWidth: '100%' }}>
+                <div className="rz-table-wrapper" style={{ paddingBottom: '12px', maxWidth: '100%', overflowX: 'auto' }}>
+                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }}>
+                    <colgroup>
+                      <col style={{ width: `${lineColumnWidths.select}px` }} />
+                      <col style={{ width: `${lineColumnWidths.article}px` }} />
+                      <col style={{ width: `${lineColumnWidths.quantity}px` }} />
+                      <col style={{ width: `${lineColumnWidths.unit}px` }} />
+                      <col style={{ width: `${lineColumnWidths.unitPrice}px` }} />
+                      <col style={{ width: `${lineColumnWidths.lineTotal}px` }} />
+                      <col style={{ width: `${lineColumnWidths.discount}px` }} />
+                    </colgroup>
                     <thead>
                       <tr className="rz-table-header">
-                        <th style={{ width: '44px' }}>
+                        <ResizableHeaderCell columnKey="select" widths={lineColumnWidths} onStartResize={startLineResize} style={{ width: '44px' }}>
                           <input
                             type="checkbox"
                             checked={allSelected}
                             onChange={toggleAll}
                             aria-label="Selecteer alle bonregels"
                           />
-                        </th>
-                        <th>Artikel in bon</th>
-                        <th>Genormaliseerd</th>
-                        <th className="rz-num">Aantal</th>
-                        <th>Eenheid</th>
-                        <th className="rz-num">Stukprijs</th>
-                        <th className="rz-num">Regelbedrag</th>
-                        <th className="rz-num">Korting</th>
+                        </ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="article" widths={lineColumnWidths} onStartResize={startLineResize}>Artikel in bon</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="quantity" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num">Aantal</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="unit" widths={lineColumnWidths} onStartResize={startLineResize}>Eenheid</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="unitPrice" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num">Stukprijs</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="lineTotal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num">Regelbedrag</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="discount" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num">Korting</ResizableHeaderCell>
                       </tr>
                     </thead>
                     <tbody>
                       {lines.length === 0 ? (
-                        <tr><td colSpan={8}>Geen artikelregels beschikbaar.</td></tr>
+                        <tr><td colSpan={7}>Geen artikelregels beschikbaar.</td></tr>
                       ) : lines.map((line) => {
                         const selected = selectedLineIds.includes(line.id)
                         return (
@@ -823,9 +919,8 @@ function ReceiptDetailInfoCard({ receipt }) {
                                 aria-label={`Selecteer regel ${line.raw_label || line.normalized_label || line.id}`}
                               />
                             </td>
-                            <td data-testid={`receipt-line-status-${line.id}`}>{line.raw_label || '-'}</td>
-                            <td>{line.normalized_label || '-'}</td>
-                            <td className="rz-num">{line.quantity ?? '-'}</td>
+                            <td data-testid={`receipt-line-status-${line.id}`} style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{line.raw_label || '-'}</td>
+                            <td className="rz-num">{formatQuantity(line.quantity)}</td>
                             <td>{line.unit || '-'}</td>
                             <td className="rz-num">{formatMoney(line.unit_price, receipt?.currency)}</td>
                             <td className="rz-num">{formatMoney(line.line_total, receipt?.currency)}</td>
@@ -834,6 +929,18 @@ function ReceiptDetailInfoCard({ receipt }) {
                         )
                       })}
                     </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colSpan={5} style={{ fontWeight: 700 }}>Totaal bonregels</td>
+                        <td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(visibleLineTotalSum, receipt?.currency)}</td>
+                        <td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(effectiveDiscountTotal, receipt?.currency)}</td>
+                      </tr>
+                      <tr>
+                        <td colSpan={5} style={{ fontWeight: 700 }}>Netto bonregels</td>
+                        <td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(visibleNetTotalSum, receipt?.currency)}</td>
+                        <td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(receipt?.total_amount, receipt?.currency)}</td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
                 <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
@@ -1263,7 +1370,14 @@ export default function KassaPage() {
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const emailInputRef = useRef(null)
-
+  const inboxColumnDefaults = useMemo(() => ({
+    select: 44,
+    store: 300,
+    date: 170,
+    total: 150,
+    items: 120,
+  }), [])
+  const { widths: inboxColumnWidths, startResize: startInboxResize } = useResizableColumnWidths(inboxColumnDefaults)
 
   useEffect(() => {
     return () => {
@@ -1966,17 +2080,24 @@ export default function KassaPage() {
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
-              <div className="rz-table-wrapper">
-                <table className="rz-table" data-testid="kassa-table">
+              <div className="rz-table-wrapper" style={{ overflowX: 'auto' }}>
+                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
+                  <colgroup>
+                    <col style={{ width: `${inboxColumnWidths.select}px` }} />
+                    <col style={{ width: `${inboxColumnWidths.store}px` }} />
+                    <col style={{ width: `${inboxColumnWidths.date}px` }} />
+                    <col style={{ width: `${inboxColumnWidths.total}px` }} />
+                    <col style={{ width: `${inboxColumnWidths.items}px` }} />
+                  </colgroup>
                   <thead>
                     <tr className="rz-table-header">
-                      <th style={{ width: '44px' }}>
+                      <ResizableHeaderCell columnKey="select" widths={inboxColumnWidths} onStartResize={startInboxResize} style={{ width: '44px' }}>
                         <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare bonnen" />
-                      </th>
-                      <th>Winkel</th>
-                      <th>Datum</th>
-                      <th className="rz-num">Totaal</th>
-                      <th className="rz-num">Artikelen</th>
+                      </ResizableHeaderCell>
+                      <ResizableHeaderCell columnKey="store" widths={inboxColumnWidths} onStartResize={startInboxResize}>Winkel</ResizableHeaderCell>
+                      <ResizableHeaderCell columnKey="date" widths={inboxColumnWidths} onStartResize={startInboxResize}>Datum</ResizableHeaderCell>
+                      <ResizableHeaderCell columnKey="total" widths={inboxColumnWidths} onStartResize={startInboxResize} className="rz-num">Totaal</ResizableHeaderCell>
+                      <ResizableHeaderCell columnKey="items" widths={inboxColumnWidths} onStartResize={startInboxResize} className="rz-num">Artikelen</ResizableHeaderCell>
                     </tr>
                     <tr className="rz-table-filters">
                       <th />
@@ -2034,7 +2155,8 @@ export default function KassaPage() {
                           </td>
                           <td className="rz-receipts-cell">
                             <div style={{ display: 'grid', gap: '4px' }}>
-                              <div>{item.store_name || 'Onbekende winkel'}</div>
+                              <div style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{item.store_name || 'Onbekende winkel'}</div>
+                              <div style={{ fontSize: '12px', color: '#667085' }}>{item.store_branch || '-'}</div>
                               <div style={{ fontSize: '12px', color: '#667085', fontWeight: 700 }}>{item.source_label || 'Handmatige upload'}</div>
                             </div>
                           </td>

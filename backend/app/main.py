@@ -4005,6 +4005,7 @@ def list_receipts(householdId: str = Query(...)):
                     rt.id AS receipt_table_id,
                     rt.raw_receipt_id,
                     rt.store_name,
+                    rt.store_branch,
                     rt.purchase_at,
                     rt.total_amount,
                     rt.discount_total,

@@ -461,6 +461,90 @@ def _store_from_text(lines: Iterable[str], filename: str) -> str | None:
     return None
 
 
+def _looks_like_store_branch_line(value: str) -> bool:
+    candidate = re.sub(r'\s+', ' ', str(value or '')).strip()
+    lowered = candidate.lower()
+    if not candidate or len(candidate) < 4:
+        return False
+    if any(token in lowered for token in ('www.', 'http', '@', 'openingstijden', 'telefoon', 'klantenservice', 'privacy', 'omschrijving', 'bedrag', 'supermarkten')):
+        return False
+    if re.fullmatch(r'\d{6,}', candidate):
+        return False
+    has_postcode = bool(re.search(r'\b\d{4}\s?[A-Z]{2}\b', candidate))
+    has_address_number = bool(re.search(r'\b\d{1,4}[A-Za-z]?\b', candidate)) and bool(re.search(r'[A-Za-z]', candidate))
+    return has_postcode or has_address_number
+
+
+def _store_branch_from_lines(lines: Iterable[str], store_name: str | None) -> str | None:
+    normalized_lines = [re.sub(r'\s+', ' ', str(line or '')).strip() for line in lines]
+    normalized_lines = [line for line in normalized_lines if line]
+    if not normalized_lines:
+        return None
+
+    store_tokens = []
+    if store_name:
+        store_tokens.append(store_name.lower())
+    if store_name and store_name.lower() == 'albert heijn':
+        store_tokens.append('ah')
+
+    explicit_store_index: int | None = None
+    for index, line in enumerate(normalized_lines[:12]):
+        lowered = line.lower()
+        if 'www.' in lowered or '.com' in lowered:
+            continue
+        if any(token and token in lowered for token in store_tokens):
+            explicit_store_index = index
+            break
+
+    def dedupe_candidates(values: list[str]) -> list[str]:
+        result: list[str] = []
+        for value in values:
+            cleaned = re.sub(r'^[^A-Za-z0-9]+', '', str(value or '')).strip()
+            cleaned = re.sub(r'[^A-Za-z0-9]+$', '', cleaned).strip()
+            if not cleaned:
+                continue
+            if cleaned.lower() in {item.lower() for item in result}:
+                continue
+            result.append(cleaned)
+        return result
+
+    if explicit_store_index is not None:
+        candidates: list[str] = []
+        for line in normalized_lines[explicit_store_index + 1: explicit_store_index + 6]:
+            if not _looks_like_store_branch_line(line):
+                if candidates:
+                    break
+                continue
+            candidates.append(line)
+            if len(candidates) >= 2:
+                break
+        candidates = dedupe_candidates(candidates)
+        if candidates:
+            return ', '.join(candidates[:2])[:255]
+
+    postcode_re = re.compile(r'\b\d{4}\s?[A-Z]{2}\b')
+    address_re = re.compile(r'\b\d{1,4}[A-Za-z]?\b')
+    for index, line in enumerate(normalized_lines[:8]):
+        if not postcode_re.search(line):
+            continue
+        candidates: list[str] = []
+        if index > 0 and _looks_like_store_branch_line(normalized_lines[index - 1]) and address_re.search(normalized_lines[index - 1]):
+            candidates.append(normalized_lines[index - 1])
+        candidates.append(line)
+        candidates = dedupe_candidates(candidates)
+        if candidates:
+            return ', '.join(candidates[:2])[:255]
+
+    for index, line in enumerate(normalized_lines[:8]):
+        if not (_looks_like_store_branch_line(line) and address_re.search(line)):
+            continue
+        candidates = [line]
+        if index + 1 < len(normalized_lines) and postcode_re.search(normalized_lines[index + 1]):
+            candidates.append(normalized_lines[index + 1])
+        candidates = dedupe_candidates(candidates)
+        if candidates:
+            return ', '.join(candidates[:2])[:255]
+    return None
 
 def _purchase_at_from_lines(lines: Iterable[str], filename: str) -> str | None:
     patterns = [
@@ -574,7 +658,7 @@ def _extract_discount_entries(lines: list[str]) -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     seen_raw_lines: set[str] = set()
     amount_pattern = re.compile(r'(-?\d{1,6}(?:[\.,]\d{2}))')
-    for raw_line in lines:
+    for index, raw_line in enumerate(lines):
         normalized = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
         if len(normalized) < 2:
             continue
@@ -585,7 +669,7 @@ def _extract_discount_entries(lines: list[str]) -> list[dict[str, Any]]:
         discount_signal = lowered.startswith(('bonus ', 'bbox ', 'korting ', 'actie ')) or any(token in lowered for token in (' korting', 'uw voordeel', 'prijsvoordeel', 'lidl plus'))
         if not discount_signal:
             continue
-        if any(marker in lowered for marker in ('uw voordeel', 'totaal prijsvoordeel', 'bonus box premium')):
+        if any(marker in lowered for marker in ('uw voordeel', 'totaal prijsvoordeel', 'totaal korting', 'bonus box premium')):
             continue
         matches = amount_pattern.findall(normalized)
         if not matches:
@@ -603,6 +687,7 @@ def _extract_discount_entries(lines: list[str]) -> list[dict[str, Any]]:
             'raw_label': label or normalized,
             'normalized_label': _normalize_discount_match_text(label or normalized),
             'amount': amount.quantize(Decimal('0.01')),
+            'source_index': index,
         })
     return entries
 
@@ -634,6 +719,11 @@ def _discount_match_score(discount_label: str | None, line_label: str | None) ->
 def _apply_discount_entries(lines: list[dict[str, Any]], discount_entries: list[dict[str, Any]]) -> Decimal | None:
     if not lines or not discount_entries:
         return None if not discount_entries else sum((entry['amount'] for entry in discount_entries), Decimal('0.00')).quantize(Decimal('0.01'))
+
+    def attach_discount(target_index: int, amount: Decimal) -> None:
+        current = _parse_decimal(str(lines[target_index].get('discount_amount'))) or Decimal('0.00')
+        lines[target_index]['discount_amount'] = _amount_to_float((current + amount).quantize(Decimal('0.01')))
+
     total_discount = Decimal('0.00')
     for entry in discount_entries:
         amount = entry['amount']
@@ -649,10 +739,26 @@ def _apply_discount_entries(lines: list[dict[str, Any]], discount_entries: list[
                 best_index = index
             elif score > second_best:
                 second_best = score
-        if best_index is None or best_score < 20 or best_score == second_best:
+
+        if best_index is not None and best_score >= 20 and best_score != second_best:
+            attach_discount(best_index, amount)
             continue
-        current = _parse_decimal(str(lines[best_index].get('discount_amount'))) or Decimal('0.00')
-        lines[best_index]['discount_amount'] = _amount_to_float((current + amount).quantize(Decimal('0.01')))
+
+        entry_source_index = entry.get('source_index')
+        if entry_source_index is None:
+            continue
+
+        fallback_index = None
+        fallback_source_index = -1
+        for index, line in enumerate(lines):
+            line_source_index = line.get('source_index')
+            if line_source_index is None:
+                continue
+            if line_source_index <= entry_source_index and line_source_index >= fallback_source_index:
+                fallback_index = index
+                fallback_source_index = line_source_index
+        if fallback_index is not None:
+            attach_discount(fallback_index, amount)
     return total_discount.quantize(Decimal('0.01')) if total_discount != Decimal('0.00') else None
 
 def _looks_like_non_receipt(lines: list[str]) -> bool:
@@ -728,28 +834,29 @@ def _extract_receipt_lines(lines: list[str]) -> list[dict[str, Any]]:
         re.IGNORECASE,
     )
     label_first_re = re.compile(
-        r'^(?P<label>[A-Za-z].*?)\s+(?:(?P<qty>\d+(?:[\.,]\d+)?)\s*[xX]\s+)?(?P<amount1>-?\d{1,6}(?:[\.,]\d{2}))'
+        r'^(?P<label>[A-Za-z].*?)\s+(?:(?P<qty>\d+(?:[\.,]\d+)?(?:\s*kg)?)\s*[xX]\s+)?(?P<amount1>-?\d{1,6}(?:[\.,]\d{2}))'
         r'(?:\s+(?P<amount2>-?\d{1,6}(?:[\.,]\d{2})))?(?:\s+(?:EUR|[A-Z]{1,3}))?$',
         re.IGNORECASE,
     )
     detail_only_re = re.compile(
-        r'^(?P<qty>\d+(?:[\.,]\d+)?)\s*(?:kg\s*)?[xX]\s+(?P<amount1>-?\d{1,6}(?:[\.,]\d{2}))'
+        r'^(?P<qty>\d+(?:[\.,]\d+)?(?:\s*kg)?)\s*[xX]\s+(?P<amount1>-?\d{1,6}(?:[\.,]\d{2}))'
         r'(?:\s+(?P<amount2>-?\d{1,6}(?:[\.,]\d{2})))?(?:\s+(?:EUR|[A-Z]{1,3}))?$',
         re.IGNORECASE,
     )
     pending_label: str | None = None
+    pending_line_index: int | None = None
 
-    def append_line(label: str, qty_raw: str | None, amount1_raw: str | None, amount2_raw: str | None) -> None:
+    def append_line(label: str, qty_raw: str | None, amount1_raw: str | None, amount2_raw: str | None, *, source_index: int) -> int | None:
         label_value = _clean_receipt_label(label)
         if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
-            return
+            return None
         quantity = _parse_quantity((qty_raw or '').replace('kg', '').replace('KG', '').strip()) if qty_raw else None
         if quantity is not None and quantity <= 0:
             quantity = None
         amount1 = _parse_decimal(amount1_raw)
         amount2 = _parse_decimal(amount2_raw)
         if amount1 is None and amount2 is None:
-            return
+            return None
         if amount2 is not None:
             unit_price = amount1
             line_total = amount2
@@ -767,10 +874,28 @@ def _extract_receipt_lines(lines: list[str]) -> list[dict[str, Any]]:
                 'discount_amount': None,
                 'barcode': None,
                 'confidence_score': 0.85,
+                'source_index': source_index,
             }
         )
+        return len(extracted) - 1
 
-    for line in lines:
+    def enrich_pending_line(target_index: int, qty_raw: str | None, amount1_raw: str | None, amount2_raw: str | None, *, source_index: int) -> None:
+        if target_index < 0 or target_index >= len(extracted):
+            return
+        quantity = _parse_quantity((qty_raw or '').replace('kg', '').replace('KG', '').strip()) if qty_raw else None
+        if quantity is not None and quantity > 0:
+            extracted[target_index]['quantity'] = _amount_to_float(quantity)
+        if qty_raw and 'kg' in qty_raw.lower():
+            extracted[target_index]['unit'] = 'kg'
+        amount1 = _parse_decimal(amount1_raw)
+        amount2 = _parse_decimal(amount2_raw)
+        if amount1 is not None:
+            extracted[target_index]['unit_price'] = _amount_to_float(amount1)
+        if amount2 is not None:
+            extracted[target_index]['line_total'] = _amount_to_float(amount2)
+        extracted[target_index]['source_index'] = source_index
+
+    for source_index, line in enumerate(lines):
         normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
         normalized = re.sub(r'(?<=\d)/(?!/)(?=\d{2}\b)', ',', normalized)
         normalized = re.sub(r'^[^A-Za-z0-9]+', '', normalized).strip()
@@ -779,32 +904,44 @@ def _extract_receipt_lines(lines: list[str]) -> list[dict[str, Any]]:
             continue
         if _should_skip_receipt_line(normalized):
             pending_label = None
+            pending_line_index = None
             continue
         if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', normalized):
             pending_label = None
+            pending_line_index = None
             continue
 
         detail_match = detail_only_re.match(normalized)
-        if detail_match and pending_label:
-            append_line(pending_label, detail_match.group('qty'), detail_match.group('amount1'), detail_match.group('amount2'))
+        if detail_match and pending_line_index is not None:
+            enrich_pending_line(pending_line_index, detail_match.group('qty'), detail_match.group('amount1'), detail_match.group('amount2'), source_index=source_index)
+            pending_line_index = None
             pending_label = None
+            continue
+        if detail_match and pending_label:
+            append_line(pending_label, detail_match.group('qty'), detail_match.group('amount1'), detail_match.group('amount2'), source_index=source_index)
+            pending_label = None
+            pending_line_index = None
             continue
         if detail_match:
             continue
 
         qty_first_match = qty_first_re.match(normalized)
         if qty_first_match:
-            append_line(qty_first_match.group('label'), qty_first_match.group('qty'), qty_first_match.group('amount1'), qty_first_match.group('amount2'))
+            append_line(qty_first_match.group('label'), qty_first_match.group('qty'), qty_first_match.group('amount1'), qty_first_match.group('amount2'), source_index=source_index)
             pending_label = None
+            pending_line_index = None
             continue
 
         label_first_match = label_first_re.match(normalized)
         if label_first_match:
-            append_line(label_first_match.group('label'), label_first_match.group('qty'), label_first_match.group('amount1'), label_first_match.group('amount2'))
             pending_label = None
+            pending_line_index = append_line(label_first_match.group('label'), label_first_match.group('qty'), label_first_match.group('amount1'), label_first_match.group('amount2'), source_index=source_index)
+            if label_first_match.group('qty') or label_first_match.group('amount2'):
+                pending_line_index = None
             continue
 
         pending_label = normalized if _looks_like_item_label_only(normalized) else None
+        pending_line_index = None
 
     return extracted
 
@@ -836,6 +973,7 @@ def _parse_result_from_text_lines(
         return _failed_receipt_result(0.05)
 
     store_name = _store_from_text(text_lines[:12], filename)
+    store_branch = _store_branch_from_lines(text_lines[:12], store_name)
     purchase_at = _purchase_at_from_lines(text_lines, filename)
     total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
     lines = _extract_receipt_lines(text_lines)
@@ -896,6 +1034,7 @@ def _parse_result_from_text_lines(
         discount_total=discount_total,
         currency='EUR',
         lines=lines,
+        store_branch=store_branch,
     )
 
 
