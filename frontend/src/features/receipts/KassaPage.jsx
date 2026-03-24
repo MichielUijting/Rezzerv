@@ -43,6 +43,15 @@ function parseStatusLabel(value) {
   return value || '-'
 }
 
+function unpackStatusLabel(value) {
+  if (value === 'new') return 'Nieuw'
+  if (value === 'review_needed') return 'Controle nodig'
+  if (value === 'ready_for_unpack') return 'Klaar voor uitpakken'
+  if (value === 'unpack_in_progress') return 'Bezig met uitpakken'
+  if (value === 'unpacked') return 'Uitgepakt'
+  return value || '-'
+}
+
 function emailPartLabel(value) {
   if (value === 'attachment') return 'Bijlage uit e-mail'
   if (value === 'html_body') return 'HTML-body van e-mail'
@@ -842,6 +851,7 @@ function ReceiptDetailInfoCard({ receipt }) {
                   <DetailInfoRow label="Netto bonregels" value={formatMoney(visibleNetTotalSum, receipt?.currency)} />
                   <DetailInfoRow label="Valuta" value={receipt?.currency || 'EUR'} />
                   <DetailInfoRow label="Parse-status" value={parseStatusLabel(receipt?.parse_status)} />
+                  <DetailInfoRow label="Uitpakstatus" value={unpackStatusLabel(receipt?.unpack_status)} />
                   <DetailInfoRow label="Confidence" value={receipt?.confidence_score ?? '-'} />
                   <DetailInfoRow label="Regels" value={String(lines.length)} />
                 </div>
