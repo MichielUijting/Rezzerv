@@ -21,6 +21,12 @@ async function getLatestBatchMeta(connectionId) {
   }
 }
 
+function isMockBatch(batch) {
+  const sourceType = String(batch?.source_type || '').toLowerCase()
+  const sourceReference = String(batch?.source_reference || '').toLowerCase()
+  return sourceType === 'mock' || sourceReference.startsWith('mock:')
+}
+
 export default function ReceiptsPage() {
   const [providers, setProviders] = useState([])
   const [batches, setBatches] = useState([])
@@ -64,7 +70,7 @@ export default function ReceiptsPage() {
         )).filter(Boolean)
 
         if (cancelled) return
-        setBatches(loadedBatches)
+        setBatches(loadedBatches.filter((batch) => !isMockBatch(batch)))
       } catch (err) {
         if (!cancelled) {
           setError(normalizeErrorMessage(err?.message) || 'Kassabonnen konden niet worden geladen.')
