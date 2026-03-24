@@ -241,7 +241,7 @@
     "store_address": null,
     "purchase_datetime": "2026-03-14T17:13:00",
     "total_eur": 49.27,
-    "line_item_count": 22,
+    "line_item_count": 23,
     "status": "baseline_confirmed_from_pdf_text",
     "line_items": [
       {
@@ -386,7 +386,7 @@
     ],
     "notes": [
       "28 SUBTOTAAL is geen bonregel maar quantity-som.",
-      "82 KOOPZEGELS PREMIUM 8,20 is geen bonregel.",
+      "82 KOOPZEGELS PREMIUM 8,20 moet als volwaardige bonregel worden opgenomen.",
       "Tweede TOTAAL in BTW-blok mag niet als receipt total worden genomen."
     ]
   },
@@ -431,7 +431,7 @@
     ],
     "notes": [
       "3 SUBTOTAAL 4,37 is geen bonregel maar quantity-som.",
-      "8 KOOPZEGELS PREMIUM 0,80 is geen bonregel.",
+      "8 KOOPZEGELS PREMIUM 0,80 moet als volwaardige bonregel worden opgenomen.",
       "BTW-TOTAAL 3,87 0,35 mag niet als receipt total worden genomen."
     ]
   },

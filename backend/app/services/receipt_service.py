@@ -784,18 +784,27 @@ def _apply_discount_entries(lines: list[dict[str, Any]], discount_entries: list[
 
 def _extract_savings_action_lines(lines: list[str], store_name: str | None = None) -> list[dict[str, Any]]:
     extracted: list[dict[str, Any]] = []
-    normalized_store = str(store_name or '').strip().lower()
 
     qty_first_re = re.compile(
         r'^(?P<prefix>[^\d-]*)?(?P<qty>\d+(?:[\.,]\d+)?)\s+(?P<label>.+?)\s+(?P<amount>-?\d{1,6}(?:[\.,]\d{2}))(?:\s+(?:EUR|[A-Z]{1,3}))?$',
         re.IGNORECASE,
     )
+    trigger_tokens = (
+        'koopzegel', 'koopzegels',
+        'spaarzegel', 'spaarzegels',
+        'espaarzegel', 'espaarzegels',
+        'spaaractie', 'spaaracties',
+    )
+    skip_tokens = (
+        'uw voordeel', 'totaal prijsvoordeel', 'totaal korting',
+        'betaald met', 'bankpas', 'aantal artikelen',
+    )
     for source_index, raw_line in enumerate(lines):
         normalized = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
         lowered = normalized.lower()
-        if not normalized or not any(token in lowered for token in ('koopzegel', 'koopzegels', 'spaaractie', 'spaaracties')):
+        if not normalized or not any(token in lowered for token in trigger_tokens):
             continue
-        if any(token in lowered for token in ('uw voordeel', 'totaal prijsvoordeel', 'totaal korting', 'betaald met', 'bankpas', 'aantal artikelen')):
+        if any(token in lowered for token in skip_tokens):
             continue
         match = qty_first_re.match(normalized)
         if not match:
@@ -806,14 +815,6 @@ def _extract_savings_action_lines(lines: list[str], store_name: str | None = Non
             continue
         label_value = _clean_receipt_label(match.group('label'))
         if not label_value:
-            continue
-
-        include_line = False
-        if 'jumbo' in normalized_store:
-            include_line = True
-        elif 'albert heijn' in normalized_store or normalized_store == 'ah':
-            include_line = quantity <= Decimal('10') and line_total <= Decimal('1.00')
-        if not include_line:
             continue
 
         unit_price = (line_total / quantity).quantize(Decimal('0.01')) if quantity else line_total
