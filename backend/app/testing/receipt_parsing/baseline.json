@@ -595,5 +595,44 @@
       "Voor Jumbo moeten koopzegels als volwaardige bonregel worden opgenomen.",
       "Deze regressiecase is synthetisch en test expliciet de parser-normalisatie voor koopzegels."
     ]
+  },
+  {
+    "receipt_id": "aldi_2022-09-26_0820_prins_frederiklaan203",
+    "source_file": "ALDI-kassabon-NL-voorbeeld.jpg",
+    "source_type": "image/jpeg",
+    "store_chain": "ALDI",
+    "store_name": "ALDI",
+    "store_address": "Prins Frederiklaan 203",
+    "purchase_datetime": "2022-09-26T08:20:00",
+    "total_eur": 6.55,
+    "line_item_count": 4,
+    "status": "baseline_confirmed_public_example",
+    "line_items": [
+      {
+        "name": "GOUDSE KAAS 48Ü GESN.JONG",
+        "qty": 1,
+        "line_total_eur": 2.39
+      },
+      {
+        "name": "WADDENBOLLEN",
+        "qty": 1,
+        "line_total_eur": 1.5
+      },
+      {
+        "name": "CHOCOPOPS / CHOCO SHELLS",
+        "qty": 1,
+        "line_total_eur": 1.41
+      },
+      {
+        "name": "7-GRANEN ONTBIJT",
+        "qty": 1,
+        "line_total_eur": 1.25
+      }
+    ],
+    "discount_lines": [],
+    "notes": [
+      "Publiek gevonden Nederlandse ALDI-bon gebruikt als eerste baseline.",
+      "Artikelregels tellen per bonregel, niet per stuksregel."
+    ]
   }
 ]

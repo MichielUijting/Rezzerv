@@ -451,13 +451,23 @@ def _normalize_text_lines(text: str) -> list[str]:
 
 def _store_from_text(lines: Iterable[str], filename: str) -> str | None:
     haystack = ' '.join(lines).lower()
+    compact_haystack = re.sub(r'[^a-z0-9]+', '', haystack)
     for store in KNOWN_STORES:
+        normalized_store = 'Albert Heijn' if store == 'AH' else store.title() if store.islower() else store
         if store.lower() in haystack:
-            return 'Albert Heijn' if store == 'AH' else store.title() if store.islower() else store
+            return normalized_store
+        compact_store = re.sub(r'[^a-z0-9]+', '', store.lower())
+        if compact_store and compact_store in compact_haystack:
+            return normalized_store
     lower_filename = filename.lower()
+    compact_filename = re.sub(r'[^a-z0-9]+', '', lower_filename)
     for store in KNOWN_STORES:
+        normalized_store = 'Albert Heijn' if store == 'AH' else store.title() if store.islower() else store
         if store.lower() in lower_filename:
-            return 'Albert Heijn' if store == 'AH' else store.title() if store.islower() else store
+            return normalized_store
+        compact_store = re.sub(r'[^a-z0-9]+', '', store.lower())
+        if compact_store and compact_store in compact_filename:
+            return normalized_store
     return None
 
 
@@ -905,7 +915,7 @@ def _should_skip_receipt_line(line: str) -> bool:
         'totaal korting', 'prijsvoordeel', 'spaaractie', 'spaaracties', 'betaald met', 'bankpas', 'pinnen', 'vpay', 'actie ', 'korting',
         'betaling', 'auth.', 'autorisatie', 'merchant', 'terminal', 'transactie', 'kaartnr', 'kaart:',
         'contactloze', 'contactloos', 'klantticket', 'btw over', 'btw overzicht', 'bedr.excl', 'bedr.incl',
-        'bedrag excl', 'bedrag incl', 'filiaal informatie', 'aantal artikelen', 'aantal papieren',
+        'bedrag excl', 'bedrag incl', 'bedrag euro', 'filiaal informatie', 'aantal artikelen', 'aantal papieren',
         'openingstijden', 'dank u wel', 'aankoop gedaan bij', 'merchant ref', 'v-pay', 'maestro',
         'v pay', 'copy kaarthouder', 'kopie kaarthouder', 'akkoord', 'poi:', 'token', 'period', 'periode:'
     )
@@ -918,6 +928,8 @@ def _should_skip_receipt_line(line: str) -> bool:
     if re.match(r'^(?:\d+%|%)\b', lowered):
         return True
     if re.match(r'^[A-Z]\s+\d{1,2}\s+\d', str(line or '').strip()):
+        return True
+    if re.match(r'^[A-Z]\s+\d{1,2}[\.,]\d{2}%\s+\d', str(line or '').strip()):
         return True
     if re.search(r'\d{1,2}:\d{2}\s+\d{1,2}[/-]\d{1,2}[/-]\d{4}', lowered):
         return True
@@ -943,7 +955,7 @@ def _extract_receipt_lines(lines: list[str]) -> list[dict[str, Any]]:
         re.IGNORECASE,
     )
     label_first_re = re.compile(
-        r'^(?P<label>[A-Za-z].*?)\s+(?:(?P<qty>\d+(?:[\.,]\d+)?(?:\s*kg)?)\s*[xX]\s+)?(?P<amount1>-?\d{1,6}(?:[\.,]\d{2}))'
+        r'^(?P<label>(?=[A-Za-z0-9].*[A-Za-z])[A-Za-z0-9].*?)\s+(?:(?P<qty>\d+(?:[\.,]\d+)?(?:\s*kg)?)\s*[xX]\s+)?(?P<amount1>-?\d{1,6}(?:[\.,]\d{2}))'
         r'(?:\s+(?P<amount2>-?\d{1,6}(?:[\.,]\d{2})))?(?:\s+(?:EUR|[A-Z]{1,3}))?$',
         re.IGNORECASE,
     )
