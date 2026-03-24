@@ -1293,6 +1293,7 @@ def ensure_release_902_schema():
                     store_branch TEXT,
                     purchase_at DATETIME,
                     total_amount NUMERIC(12,2),
+                    discount_total NUMERIC(12,2),
                     currency TEXT NOT NULL DEFAULT 'EUR',
                     parse_status TEXT NOT NULL DEFAULT 'parsed',
                     confidence_score NUMERIC(5,4),
@@ -3641,6 +3642,15 @@ def ensure_household(email: str):
     return households[household_key]
 
 
+def ensure_release_963_schema():
+    with engine.begin() as conn:
+        receipt_columns = {row['name'] for row in conn.execute(text("PRAGMA table_info(receipt_tables)")).mappings().all()}
+        if 'discount_total' not in receipt_columns:
+            conn.execute(text("ALTER TABLE receipt_tables ADD COLUMN discount_total NUMERIC(12,2)"))
+
+
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
@@ -3997,9 +4007,14 @@ def list_receipts(householdId: str = Query(...)):
                     rt.store_name,
                     rt.purchase_at,
                     rt.total_amount,
+                    rt.discount_total,
                     rt.currency,
                     rt.parse_status,
-                    rt.line_count,
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM receipt_table_lines rtl_count
+                        WHERE rtl_count.receipt_table_id = rt.id
+                    ), rt.line_count, 0) AS line_count,
                     COALESCE(rs.label, 'Manual upload') AS source_label,
                     rem.sender_email,
                     rem.sender_name,
@@ -4012,7 +4027,13 @@ def list_receipts(householdId: str = Query(...)):
                         SELECT SUM(COALESCE(rtl.line_total, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                    ), 0) AS line_total_sum
+                    ), 0) AS line_total_sum,
+                    COALESCE(rt.discount_total, 0) AS discount_total_effective,
+                    COALESCE((
+                        SELECT SUM(COALESCE(rtl.line_total, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                    ), 0) + COALESCE(rt.discount_total, 0) AS net_line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
@@ -4118,10 +4139,15 @@ def get_receipt_detail(receipt_table_id: str):
                     rt.store_branch,
                     rt.purchase_at,
                     rt.total_amount,
+                    rt.discount_total,
                     rt.currency,
                     rt.parse_status,
                     rt.confidence_score,
-                    rt.line_count,
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM receipt_table_lines rtl_count
+                        WHERE rtl_count.receipt_table_id = rt.id
+                    ), rt.line_count, 0) AS line_count,
                     rt.created_at,
                     rt.updated_at,
                     COALESCE(rs.label, 'Manual upload') AS source_label,
@@ -4139,7 +4165,13 @@ def get_receipt_detail(receipt_table_id: str):
                         SELECT SUM(COALESCE(rtl.line_total, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
-                    ), 0) AS line_total_sum
+                    ), 0) AS line_total_sum,
+                    COALESCE(rt.discount_total, 0) AS discount_total_effective,
+                    COALESCE((
+                        SELECT SUM(COALESCE(rtl.line_total, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                    ), 0) + COALESCE(rt.discount_total, 0) AS net_line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
@@ -4404,6 +4436,7 @@ ensure_release_932_schema()
 ensure_release_933_schema()
 ensure_release_935_schema()
 ensure_release_940_schema()
+ensure_release_963_schema()
 ensure_receipt_storage_root()
 seed_store_providers()
 admin_household = ensure_household("admin@rezzerv.local")

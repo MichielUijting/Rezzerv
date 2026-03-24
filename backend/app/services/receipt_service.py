@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+import unicodedata
 import mimetypes
 import re
 import shutil
@@ -14,6 +15,7 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from statistics import median
+from difflib import SequenceMatcher
 from typing import Any, Iterable
 
 from sqlalchemy import bindparam, text
@@ -72,8 +74,9 @@ class ReceiptParseResult:
     store_name: str | None
     purchase_at: str | None
     total_amount: Decimal | None
-    currency: str
-    lines: list[dict[str, Any]]
+    discount_total: Decimal | None = None
+    currency: str = 'EUR'
+    lines: list[dict[str, Any]] | None = None
     store_branch: str | None = None
 
 
@@ -553,6 +556,105 @@ def _total_amount_from_lines(lines: list[str], filename: str) -> tuple[Decimal |
     chosen = sorted(valid_candidates or candidates, key=lambda item: (item[0], item[1]))[-1]
     return chosen[2], chosen[3]
 
+
+
+def _strip_accents(value: str | None) -> str:
+    return ''.join(ch for ch in unicodedata.normalize('NFKD', str(value or '')) if not unicodedata.combining(ch))
+
+
+def _normalize_discount_match_text(value: str | None) -> str:
+    normalized = _strip_accents(value).lower()
+    normalized = re.sub(r'(?i)\b(bonus|bbox|actie|korting|prijsvoordeel|uw voordeel|lidl plus|plus korting|deal)\b', ' ', normalized)
+    normalized = re.sub(r'[^a-z0-9]+', ' ', normalized)
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return normalized
+
+
+def _extract_discount_entries(lines: list[str]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    seen_raw_lines: set[str] = set()
+    amount_pattern = re.compile(r'(-?\d{1,6}(?:[\.,]\d{2}))')
+    for raw_line in lines:
+        normalized = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
+        if len(normalized) < 2:
+            continue
+        lowered = normalized.lower()
+        dedupe_key = re.sub(r'\s+', ' ', lowered)
+        if dedupe_key in seen_raw_lines:
+            continue
+        discount_signal = lowered.startswith(('bonus ', 'bbox ', 'korting ', 'actie ')) or any(token in lowered for token in (' korting', 'uw voordeel', 'prijsvoordeel', 'lidl plus'))
+        if not discount_signal:
+            continue
+        if any(marker in lowered for marker in ('uw voordeel', 'totaal prijsvoordeel', 'bonus box premium')):
+            continue
+        matches = amount_pattern.findall(normalized)
+        if not matches:
+            continue
+        amount = _parse_decimal(matches[-1])
+        if amount is None:
+            continue
+        if amount > 0:
+            amount = -amount
+        if amount >= 0:
+            continue
+        label = amount_pattern.sub('', normalized).strip(' -')
+        seen_raw_lines.add(dedupe_key)
+        entries.append({
+            'raw_label': label or normalized,
+            'normalized_label': _normalize_discount_match_text(label or normalized),
+            'amount': amount.quantize(Decimal('0.01')),
+        })
+    return entries
+
+
+def _discount_match_score(discount_label: str | None, line_label: str | None) -> int:
+    discount_normalized = _normalize_discount_match_text(discount_label)
+    line_normalized = _normalize_discount_match_text(line_label)
+    if not discount_normalized or not line_normalized:
+        return 0
+    discount_compact = discount_normalized.replace(' ', '')
+    line_compact = line_normalized.replace(' ', '')
+    score = 0
+    if len(line_compact) >= 4 and line_compact in discount_compact:
+        score += 100 + len(line_compact)
+    if len(discount_compact) >= 4 and discount_compact in line_compact:
+        score += 70 + len(discount_compact)
+    line_tokens = [token for token in line_normalized.split() if len(token) >= 3]
+    discount_tokens = [token for token in discount_normalized.split() if len(token) >= 3]
+    for token in line_tokens:
+        if token in discount_tokens:
+            score += 30 + len(token)
+        elif token in discount_compact:
+            score += 18 + len(token)
+    ratio = SequenceMatcher(None, discount_compact, line_compact).ratio()
+    score += int(round(ratio * 20))
+    return score
+
+
+def _apply_discount_entries(lines: list[dict[str, Any]], discount_entries: list[dict[str, Any]]) -> Decimal | None:
+    if not lines or not discount_entries:
+        return None if not discount_entries else sum((entry['amount'] for entry in discount_entries), Decimal('0.00')).quantize(Decimal('0.01'))
+    total_discount = Decimal('0.00')
+    for entry in discount_entries:
+        amount = entry['amount']
+        total_discount += amount
+        best_index = None
+        best_score = 0
+        second_best = 0
+        for index, line in enumerate(lines):
+            score = _discount_match_score(entry.get('normalized_label') or entry.get('raw_label'), line.get('normalized_label') or line.get('raw_label'))
+            if score > best_score:
+                second_best = best_score
+                best_score = score
+                best_index = index
+            elif score > second_best:
+                second_best = score
+        if best_index is None or best_score < 20 or best_score == second_best:
+            continue
+        current = _parse_decimal(str(lines[best_index].get('discount_amount'))) or Decimal('0.00')
+        lines[best_index]['discount_amount'] = _amount_to_float((current + amount).quantize(Decimal('0.01')))
+    return total_discount.quantize(Decimal('0.01')) if total_discount != Decimal('0.00') else None
+
 def _looks_like_non_receipt(lines: list[str]) -> bool:
     if not lines:
         return True
@@ -714,6 +816,7 @@ def _failed_receipt_result(confidence: float = 0.0) -> ReceiptParseResult:
         store_name=None,
         purchase_at=None,
         total_amount=None,
+        discount_total=None,
         currency='EUR',
         lines=[],
     )
@@ -736,6 +839,7 @@ def _parse_result_from_text_lines(
     purchase_at = _purchase_at_from_lines(text_lines, filename)
     total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
     lines = _extract_receipt_lines(text_lines)
+    discount_total = _apply_discount_entries(lines, _extract_discount_entries(text_lines))
     if total_amount is None and len(lines) >= 2:
         line_sum = Decimal('0.00')
         line_sum_has_value = False
@@ -745,8 +849,12 @@ def _parse_result_from_text_lines(
                 continue
             line_sum += value
             line_sum_has_value = True
-        if line_sum_has_value and _is_plausible_total_amount(line_sum):
-            total_amount = line_sum.quantize(Decimal('0.01'))
+        if line_sum_has_value:
+            candidate_total = line_sum + (discount_total or Decimal('0.00'))
+            if _is_plausible_total_amount(candidate_total):
+                total_amount = candidate_total.quantize(Decimal('0.01'))
+            elif _is_plausible_total_amount(line_sum):
+                total_amount = line_sum.quantize(Decimal('0.01'))
     if total_amount is not None and not _is_plausible_total_amount(total_amount):
         total_amount = None
     if purchase_at and not _is_plausible_purchase_at(purchase_at):
@@ -785,6 +893,7 @@ def _parse_result_from_text_lines(
         store_name=store_name,
         purchase_at=purchase_at,
         total_amount=total_amount,
+        discount_total=discount_total,
         currency='EUR',
         lines=lines,
     )
@@ -1085,6 +1194,7 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
             store_name=store_name,
             purchase_at=purchase_at,
             total_amount=total_amount,
+            discount_total=None,
             currency='EUR',
             lines=[],
         )
@@ -1240,6 +1350,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             table_purchase_at = parse_result.purchase_at if parse_result.is_receipt else failed_purchase_at
             table_total_amount = _amount_to_float(parse_result.total_amount) if parse_result.is_receipt else None
             table_currency = parse_result.currency if parse_result.currency else 'EUR'
+            table_discount_total = _amount_to_float(parse_result.discount_total) if parse_result.is_receipt else None
             table_parse_status = parse_result.parse_status if parse_result.is_receipt else 'failed'
             table_confidence = parse_result.confidence_score
             table_line_count = len(parse_result.lines) if parse_result.is_receipt else 0
@@ -1247,9 +1358,9 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                 text(
                     '''
                     INSERT INTO receipt_tables (
-                        id, raw_receipt_id, household_id, store_name, store_branch, purchase_at, total_amount, currency, parse_status, confidence_score, line_count
+                        id, raw_receipt_id, household_id, store_name, store_branch, purchase_at, total_amount, discount_total, currency, parse_status, confidence_score, line_count
                     ) VALUES (
-                        :id, :raw_receipt_id, :household_id, :store_name, :store_branch, :purchase_at, :total_amount, :currency, :parse_status, :confidence_score, :line_count
+                        :id, :raw_receipt_id, :household_id, :store_name, :store_branch, :purchase_at, :total_amount, :discount_total, :currency, :parse_status, :confidence_score, :line_count
                     )
                     '''
                 ),
@@ -1261,6 +1372,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                     'store_branch': parse_result.store_branch if parse_result.is_receipt else None,
                     'purchase_at': table_purchase_at,
                     'total_amount': table_total_amount,
+                    'discount_total': table_discount_total,
                     'currency': table_currency,
                     'parse_status': table_parse_status,
                     'confidence_score': table_confidence,
@@ -1419,6 +1531,7 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                         store_branch = :store_branch,
                         purchase_at = :purchase_at,
                         total_amount = :total_amount,
+                        discount_total = :discount_total,
                         currency = :currency,
                         parse_status = :parse_status,
                         confidence_score = :confidence_score,
@@ -1433,6 +1546,7 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                     'store_branch': parse_result.store_branch,
                     'purchase_at': parse_result.purchase_at,
                     'total_amount': _amount_to_float(parse_result.total_amount),
+                    'discount_total': _amount_to_float(parse_result.discount_total),
                     'currency': parse_result.currency,
                     'parse_status': parse_result.parse_status,
                     'confidence_score': parse_result.confidence_score,
@@ -1476,6 +1590,7 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                         store_branch = NULL,
                         purchase_at = NULL,
                         total_amount = NULL,
+                        discount_total = NULL,
                         currency = 'EUR',
                         parse_status = 'failed',
                         confidence_score = :confidence_score,

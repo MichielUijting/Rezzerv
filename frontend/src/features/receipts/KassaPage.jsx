@@ -162,11 +162,14 @@ function persistStoredReceiptIds(storageKey, ids) {
 
 function amountsMatch(receipt) {
   const totalAmount = Number(receipt?.total_amount)
-  const lineTotalSum = Number(receipt?.line_total_sum)
+  const netLineTotalSum = Number(
+    receipt?.net_line_total_sum
+      ?? ((Number(receipt?.line_total_sum) || 0) + (Number(receipt?.discount_total_effective ?? receipt?.discount_total) || 0))
+  )
   const lineCount = Number(receipt?.line_count ?? receipt?.lines?.length ?? 0)
-  if (!Number.isFinite(totalAmount) || !Number.isFinite(lineTotalSum)) return false
+  if (!Number.isFinite(totalAmount) || !Number.isFinite(netLineTotalSum)) return false
   if (!Number.isFinite(lineCount) || lineCount <= 0) return false
-  return Math.abs(totalAmount - lineTotalSum) < 0.01
+  return Math.abs(totalAmount - netLineTotalSum) < 0.01
 }
 
 function deriveInboxStatus(receipt) {
@@ -669,7 +672,13 @@ function ReceiptDetailInfoCard({ receipt }) {
     const value = Number(line?.line_total)
     return Number.isFinite(value) ? sum + value : sum
   }, 0)
-  const detailAmountsMatch = Number.isFinite(Number(receipt?.total_amount)) && lines.length > 0 && Math.abs(Number(receipt?.total_amount) - visibleLineTotalSum) < 0.01
+  const visibleDiscountSum = lines.reduce((sum, line) => {
+    const value = Number(line?.discount_amount)
+    return Number.isFinite(value) ? sum + value : sum
+  }, 0)
+  const receiptLevelDiscount = Number(receipt?.discount_total_effective ?? receipt?.discount_total)
+  const visibleNetTotalSum = visibleLineTotalSum + (Number.isFinite(receiptLevelDiscount) ? receiptLevelDiscount : visibleDiscountSum)
+  const detailAmountsMatch = Number.isFinite(Number(receipt?.total_amount)) && lines.length > 0 && Math.abs(Number(receipt?.total_amount) - visibleNetTotalSum) < 0.01
 
   function toggleLine(lineId) {
     setSelectedLineIds((current) => (
@@ -740,6 +749,8 @@ function ReceiptDetailInfoCard({ receipt }) {
                   <DetailInfoRow label="Aankoopmoment" value={formatDateTime(receipt?.purchase_at)} />
                   <DetailInfoRow label="Totaal" value={formatMoney(receipt?.total_amount, receipt?.currency)} />
                   <DetailInfoRow label="Som bonregels" value={formatMoney(visibleLineTotalSum, receipt?.currency)} />
+                  <DetailInfoRow label="Korting" value={formatMoney(receipt?.discount_total_effective ?? receipt?.discount_total ?? visibleDiscountSum, receipt?.currency)} />
+                  <DetailInfoRow label="Netto bonregels" value={formatMoney(visibleNetTotalSum, receipt?.currency)} />
                   <DetailInfoRow label="Valuta" value={receipt?.currency || 'EUR'} />
                   <DetailInfoRow label="Parse-status" value={parseStatusLabel(receipt?.parse_status)} />
                   <DetailInfoRow label="Confidence" value={receipt?.confidence_score ?? '-'} />
