@@ -180,52 +180,6 @@ class TargetLocationRequest(BaseModel):
     target_location_id: Optional[str] = None
 
 
-RECEIPT_UNPACK_STATUSES = {'new', 'review_needed', 'ready_for_unpack', 'unpack_in_progress', 'unpacked'}
-RECEIPT_LINE_UNPACK_STATUSES = {'unlinked', 'article_linked', 'location_linked', 'ready_to_book', 'booked'}
-
-
-class ReceiptStatusUpdateRequest(BaseModel):
-    unpack_status: str
-
-    @field_validator('unpack_status')
-    @classmethod
-    def validate_unpack_status(cls, value):
-        normalized = str(value or '').strip()
-        if normalized not in RECEIPT_UNPACK_STATUSES:
-            raise ValueError('Ongeldige bonstatus')
-        return normalized
-
-
-class ReceiptLineProcessingUpdateRequest(BaseModel):
-    matched_article_id: Optional[str | int] = None
-    target_location_id: Optional[str] = None
-    unpack_status: Optional[str] = None
-
-    @field_validator('matched_article_id', mode='before')
-    @classmethod
-    def normalize_matched_article_id(cls, value):
-        if value is None or str(value).strip() == '':
-            return None
-        return str(value)
-
-    @field_validator('target_location_id', mode='before')
-    @classmethod
-    def normalize_target_location_id(cls, value):
-        if value is None or str(value).strip() == '':
-            return None
-        return str(value)
-
-    @field_validator('unpack_status')
-    @classmethod
-    def validate_line_unpack_status(cls, value):
-        if value is None:
-            return None
-        normalized = str(value or '').strip()
-        if normalized not in RECEIPT_LINE_UNPACK_STATUSES:
-            raise ValueError('Ongeldige bonregelstatus')
-        return normalized
-
-
 class CreateArticleFromLineRequest(BaseModel):
     article_name: str
 
@@ -3695,173 +3649,6 @@ def ensure_release_963_schema():
             conn.execute(text("ALTER TABLE receipt_tables ADD COLUMN discount_total NUMERIC(12,2)"))
 
 
-def ensure_release_972_schema():
-    with engine.begin() as conn:
-        receipt_columns = {row['name'] for row in conn.execute(text("PRAGMA table_info(receipt_tables)")).mappings().all()}
-        line_columns = {row['name'] for row in conn.execute(text("PRAGMA table_info(receipt_table_lines)")).mappings().all()}
-        if 'unpack_status' not in receipt_columns:
-            conn.execute(text("ALTER TABLE receipt_tables ADD COLUMN unpack_status TEXT DEFAULT 'new'"))
-        if 'target_location_id' not in line_columns:
-            conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN target_location_id TEXT"))
-        if 'unpack_status' not in line_columns:
-            conn.execute(text("ALTER TABLE receipt_table_lines ADD COLUMN unpack_status TEXT DEFAULT 'unlinked'"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_tables_unpack_status ON receipt_tables (unpack_status, household_id, created_at DESC)"))
-        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_receipt_table_lines_unpack_status ON receipt_table_lines (receipt_table_id, unpack_status, line_index)"))
-
-
-def resolve_receipt_unpack_status(parse_status: Any, unpack_status: Any) -> str:
-    normalized = str(unpack_status or '').strip()
-    if normalized in RECEIPT_UNPACK_STATUSES:
-        return normalized
-    parse_value = str(parse_status or '').strip()
-    if parse_value in {'review_needed', 'failed'}:
-        return 'review_needed'
-    return 'new'
-
-
-def resolve_receipt_line_unpack_status(unpack_status: Any, matched_article_id: Any, target_location_id: Any) -> str:
-    normalized = str(unpack_status or '').strip()
-    if normalized == 'booked':
-        return 'booked'
-    has_article = bool(str(matched_article_id or '').strip())
-    has_location = bool(str(target_location_id or '').strip())
-    if normalized == 'location_linked' and has_location:
-        return 'location_linked'
-    if has_article and has_location:
-        return 'ready_to_book'
-    if has_article:
-        return 'article_linked'
-    if has_location:
-        return 'location_linked'
-    return 'unlinked'
-
-
-def derive_receipt_unpack_status_from_lines(lines: list[dict[str, Any]], fallback_status: str = 'new') -> str:
-    if not lines:
-        return fallback_status if fallback_status in RECEIPT_UNPACK_STATUSES else 'new'
-    statuses = [str((line or {}).get('unpack_status') or '') for line in lines]
-    if statuses and all(status == 'booked' for status in statuses):
-        return 'unpacked'
-    if statuses and all(status in {'ready_to_book', 'booked'} for status in statuses):
-        return 'ready_for_unpack'
-    if any(status in {'article_linked', 'location_linked', 'ready_to_book', 'booked'} for status in statuses):
-        return 'unpack_in_progress'
-    return fallback_status if fallback_status in {'review_needed', 'new'} else 'new'
-
-
-def get_receipt_processing_context(conn, receipt_table_id: str) -> dict[str, Any] | None:
-    header = conn.execute(
-        text(
-            """
-            SELECT
-                rt.id,
-                rt.raw_receipt_id,
-                rt.household_id,
-                rt.store_name,
-                rt.store_branch,
-                rt.purchase_at,
-                rt.total_amount,
-                rt.discount_total,
-                rt.currency,
-                rt.parse_status,
-                rt.confidence_score,
-                rt.line_count,
-                rt.created_at,
-                rt.updated_at,
-                rt.unpack_status,
-                COALESCE(rs.label, 'Manual upload') AS source_label,
-                rr.original_filename,
-                rr.mime_type,
-                rr.imported_at,
-                rem.sender_email,
-                rem.sender_name,
-                rem.subject AS email_subject,
-                rem.received_at AS email_received_at,
-                rem.selected_part_type,
-                rem.selected_filename AS email_selected_filename,
-                rem.selected_mime_type AS email_selected_mime_type
-            FROM receipt_tables rt
-            JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-            LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
-            LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
-            WHERE rt.id = :receipt_table_id
-              AND rt.deleted_at IS NULL
-              AND rr.deleted_at IS NULL
-            LIMIT 1
-            """
-        ),
-        {'receipt_table_id': receipt_table_id},
-    ).mappings().first()
-    if not header:
-        return None
-    lines = conn.execute(
-        text(
-            """
-            SELECT
-                id,
-                receipt_table_id,
-                line_index,
-                raw_label,
-                normalized_label,
-                quantity,
-                unit,
-                unit_price,
-                line_total,
-                discount_amount,
-                barcode,
-                article_match_status,
-                matched_article_id,
-                target_location_id,
-                unpack_status,
-                confidence_score,
-                created_at,
-                updated_at
-            FROM receipt_table_lines
-            WHERE receipt_table_id = :receipt_table_id
-            ORDER BY line_index ASC, created_at ASC
-            """
-        ),
-        {'receipt_table_id': receipt_table_id},
-    ).mappings().all()
-
-    payload = serialize_receipt_row(dict(header))
-    payload['unpack_status'] = resolve_receipt_unpack_status(header.get('parse_status'), header.get('unpack_status'))
-    normalized_lines = []
-    status_counts = {key: 0 for key in RECEIPT_LINE_UNPACK_STATUSES}
-    for line in lines:
-        serialized_line = serialize_receipt_row(dict(line))
-        effective_line_status = resolve_receipt_line_unpack_status(
-            line.get('unpack_status'),
-            line.get('matched_article_id'),
-            line.get('target_location_id'),
-        )
-        serialized_line['unpack_status'] = effective_line_status
-        serialized_line['matched_household_article_id'] = serialized_line.get('matched_article_id')
-        status_counts[effective_line_status] = status_counts.get(effective_line_status, 0) + 1
-        normalized_lines.append(serialized_line)
-    payload['lines'] = normalized_lines
-    payload['processing_summary'] = {
-        'total': len(normalized_lines),
-        'linked_articles': sum(1 for line in normalized_lines if line.get('matched_household_article_id')),
-        'linked_locations': sum(1 for line in normalized_lines if line.get('target_location_id')),
-        'ready_to_book': status_counts.get('ready_to_book', 0),
-        'booked': status_counts.get('booked', 0),
-        'status_counts': status_counts,
-    }
-    payload['unpack_status'] = derive_receipt_unpack_status_from_lines(normalized_lines, payload['unpack_status'])
-    return payload
-
-
-def persist_receipt_unpack_status(conn, receipt_table_id: str) -> str:
-    context = get_receipt_processing_context(conn, receipt_table_id)
-    if not context:
-        raise HTTPException(status_code=404, detail='Bon niet gevonden')
-    next_status = derive_receipt_unpack_status_from_lines(context.get('lines') or [], str(context.get('unpack_status') or 'new'))
-    conn.execute(
-        text("UPDATE receipt_tables SET unpack_status = :unpack_status, updated_at = CURRENT_TIMESTAMP WHERE id = :receipt_table_id"),
-        {'receipt_table_id': receipt_table_id, 'unpack_status': next_status},
-    )
-    return next_status
 
 
 @app.get("/api/health")
@@ -4224,22 +4011,11 @@ def list_receipts(householdId: str = Query(...)):
                     rt.discount_total,
                     rt.currency,
                     rt.parse_status,
-                    rt.unpack_status,
                     COALESCE((
                         SELECT COUNT(*)
                         FROM receipt_table_lines rtl_count
                         WHERE rtl_count.receipt_table_id = rt.id
                     ), rt.line_count, 0) AS line_count,
-                    COALESCE((
-                        SELECT COUNT(*)
-                        FROM receipt_table_lines rtl_ready
-                        WHERE rtl_ready.receipt_table_id = rt.id
-                          AND COALESCE(rtl_ready.unpack_status, CASE
-                            WHEN COALESCE(rtl_ready.matched_article_id, '') != '' AND COALESCE(rtl_ready.target_location_id, '') != '' THEN 'ready_to_book'
-                            WHEN COALESCE(rtl_ready.matched_article_id, '') != '' THEN 'article_linked'
-                            WHEN COALESCE(rtl_ready.target_location_id, '') != '' THEN 'location_linked'
-                            ELSE 'unlinked' END) IN ('ready_to_book', 'booked')
-                    ), 0) AS ready_to_book_count,
                     COALESCE(rs.label, 'Manual upload') AS source_label,
                     rem.sender_email,
                     rem.sender_name,
@@ -4294,7 +4070,6 @@ def list_receipts(householdId: str = Query(...)):
             continue
         seen_keys.add(dedupe_key)
         serialized = serialize_receipt_row(dict(row))
-        serialized['unpack_status'] = resolve_receipt_unpack_status(row.get('parse_status'), row.get('unpack_status'))
         serialized.pop('original_filename', None)
         serialized.pop('sha256_hash', None)
         deduped_items.append(serialized)
@@ -4355,110 +4130,90 @@ def get_receipt_preview(receipt_table_id: str):
 @app.get("/api/receipts/{receipt_table_id}")
 def get_receipt_detail(receipt_table_id: str):
     with engine.begin() as conn:
-        payload = get_receipt_processing_context(conn, receipt_table_id)
-    if not payload:
-        raise HTTPException(status_code=404, detail="Receipt table niet gevonden")
-    return payload
-
-
-@app.get("/api/receipts/{receipt_table_id}/processing-context")
-def get_receipt_processing_context_endpoint(receipt_table_id: str):
-    with engine.begin() as conn:
-        payload = get_receipt_processing_context(conn, receipt_table_id)
-    if not payload:
-        raise HTTPException(status_code=404, detail="Bon niet gevonden")
-    return payload
-
-
-@app.patch("/api/receipts/{receipt_table_id}/status")
-def update_receipt_unpack_status(receipt_table_id: str, payload: ReceiptStatusUpdateRequest):
-    with engine.begin() as conn:
-        receipt = conn.execute(
-            text("SELECT id, parse_status FROM receipt_tables WHERE id = :id AND deleted_at IS NULL"),
-            {"id": receipt_table_id},
-        ).mappings().first()
-        if not receipt:
-            raise HTTPException(status_code=404, detail="Bon niet gevonden")
-        next_status = payload.unpack_status
-        if next_status == 'new' and str(receipt.get('parse_status') or '') in {'review_needed', 'failed'}:
-            next_status = 'review_needed'
-        conn.execute(
-            text("UPDATE receipt_tables SET unpack_status = :unpack_status, updated_at = CURRENT_TIMESTAMP WHERE id = :id"),
-            {"id": receipt_table_id, "unpack_status": next_status},
-        )
-        updated = get_receipt_processing_context(conn, receipt_table_id)
-    return {
-        "receipt_table_id": receipt_table_id,
-        "unpack_status": next_status,
-        "receipt": updated,
-    }
-
-
-@app.patch("/api/receipt-lines/{line_id}/processing")
-def update_receipt_line_processing(line_id: str, payload: ReceiptLineProcessingUpdateRequest):
-    with engine.begin() as conn:
-        line = conn.execute(
+        header = conn.execute(
             text(
                 """
-                SELECT rtl.id, rtl.receipt_table_id, rt.household_id, rt.parse_status
-                FROM receipt_table_lines rtl
-                JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id
-                WHERE rtl.id = :id AND rt.deleted_at IS NULL
+                SELECT
+                    rt.id,
+                    rt.raw_receipt_id,
+                    rt.store_name,
+                    rt.store_branch,
+                    rt.purchase_at,
+                    rt.total_amount,
+                    rt.discount_total,
+                    rt.currency,
+                    rt.parse_status,
+                    rt.confidence_score,
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM receipt_table_lines rtl_count
+                        WHERE rtl_count.receipt_table_id = rt.id
+                    ), rt.line_count, 0) AS line_count,
+                    rt.created_at,
+                    rt.updated_at,
+                    COALESCE(rs.label, 'Manual upload') AS source_label,
+                    rr.original_filename,
+                    rr.mime_type,
+                    rr.imported_at,
+                    rem.sender_email,
+                    rem.sender_name,
+                    rem.subject AS email_subject,
+                    rem.received_at AS email_received_at,
+                    rem.selected_part_type,
+                    rem.selected_filename AS email_selected_filename,
+                    rem.selected_mime_type AS email_selected_mime_type,
+                    COALESCE((
+                        SELECT SUM(COALESCE(rtl.line_total, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                    ), 0) AS line_total_sum,
+                    COALESCE(rt.discount_total, 0) AS discount_total_effective,
+                    COALESCE((
+                        SELECT SUM(COALESCE(rtl.line_total, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                    ), 0) + COALESCE(rt.discount_total, 0) AS net_line_total_sum
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
+                LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
+                WHERE rt.id = :receipt_table_id
+                  AND rt.deleted_at IS NULL
+                  AND rr.deleted_at IS NULL
                 LIMIT 1
                 """
             ),
-            {"id": line_id},
+            {"receipt_table_id": receipt_table_id},
         ).mappings().first()
-        if not line:
-            raise HTTPException(status_code=404, detail="Bonregel niet gevonden")
-
-        effective_line_status = resolve_receipt_line_unpack_status(
-            payload.unpack_status,
-            payload.matched_article_id,
-            payload.target_location_id,
-        )
-        article_match_status = 'matched' if payload.matched_article_id else 'unmatched'
-        conn.execute(
+        if not header:
+            raise HTTPException(status_code=404, detail="Receipt table niet gevonden")
+        lines = conn.execute(
             text(
                 """
-                UPDATE receipt_table_lines
-                SET matched_article_id = :matched_article_id,
-                    article_match_status = :article_match_status,
-                    target_location_id = :target_location_id,
-                    unpack_status = :unpack_status,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
+                SELECT
+                    id,
+                    line_index,
+                    raw_label,
+                    normalized_label,
+                    quantity,
+                    unit,
+                    unit_price,
+                    line_total,
+                    discount_amount,
+                    barcode,
+                    article_match_status,
+                    matched_article_id,
+                    confidence_score
+                FROM receipt_table_lines
+                WHERE receipt_table_id = :receipt_table_id
+                ORDER BY line_index ASC, created_at ASC
                 """
             ),
-            {
-                "id": line_id,
-                "matched_article_id": payload.matched_article_id,
-                "article_match_status": article_match_status,
-                "target_location_id": payload.target_location_id,
-                "unpack_status": effective_line_status,
-            },
-        )
-        receipt_status = persist_receipt_unpack_status(conn, str(line['receipt_table_id']))
-        updated = get_receipt_processing_context(conn, str(line['receipt_table_id']))
-        updated_line = next((item for item in (updated.get('lines') or []) if str(item.get('id')) == str(line_id)), None)
-    return {
-        "line_id": line_id,
-        "receipt_table_id": line['receipt_table_id'],
-        "unpack_status": effective_line_status,
-        "receipt_unpack_status": receipt_status,
-        "line": updated_line,
-        "receipt": updated,
-    }
-
-
-@app.get("/api/unpack/queue")
-def get_unpack_queue(householdId: str = Query(...), status: str = Query('all')):
-    effective_household_id = str(householdId).strip() or '1'
-    requested_status = str(status or 'all').strip()
-    items = list_receipts(effective_household_id).get('items', [])
-    if requested_status != 'all':
-        items = [item for item in items if str(item.get('unpack_status') or '') == requested_status]
-    return {"items": items}
+            {"receipt_table_id": receipt_table_id},
+        ).mappings().all()
+    payload = serialize_receipt_row(dict(header))
+    payload["lines"] = [serialize_receipt_row(dict(line)) for line in lines]
+    return payload
 
 
 @app.post("/api/receipts/{receipt_table_id}/reparse")
@@ -4683,7 +4438,6 @@ ensure_release_933_schema()
 ensure_release_935_schema()
 ensure_release_940_schema()
 ensure_release_963_schema()
-ensure_release_972_schema()
 ensure_receipt_storage_root()
 seed_store_providers()
 admin_household = ensure_household("admin@rezzerv.local")

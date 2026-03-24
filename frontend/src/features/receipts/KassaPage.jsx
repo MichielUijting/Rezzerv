@@ -43,15 +43,6 @@ function parseStatusLabel(value) {
   return value || '-'
 }
 
-function unpackStatusLabel(value) {
-  if (value === 'new') return 'Nieuw'
-  if (value === 'review_needed') return 'Controle nodig'
-  if (value === 'ready_for_unpack') return 'Klaar voor uitpakken'
-  if (value === 'unpack_in_progress') return 'Bezig met uitpakken'
-  if (value === 'unpacked') return 'Uitgepakt'
-  return value || '-'
-}
-
 function emailPartLabel(value) {
   if (value === 'attachment') return 'Bijlage uit e-mail'
   if (value === 'html_body') return 'HTML-body van e-mail'
@@ -851,7 +842,6 @@ function ReceiptDetailInfoCard({ receipt }) {
                   <DetailInfoRow label="Netto bonregels" value={formatMoney(visibleNetTotalSum, receipt?.currency)} />
                   <DetailInfoRow label="Valuta" value={receipt?.currency || 'EUR'} />
                   <DetailInfoRow label="Parse-status" value={parseStatusLabel(receipt?.parse_status)} />
-                  <DetailInfoRow label="Uitpakstatus" value={unpackStatusLabel(receipt?.unpack_status)} />
                   <DetailInfoRow label="Confidence" value={receipt?.confidence_score ?? '-'} />
                   <DetailInfoRow label="Regels" value={String(lines.length)} />
                 </div>
@@ -2005,28 +1995,6 @@ export default function KassaPage() {
     await processLandingReceiptFile(file)
   }
 
-  async function openSelectedReceiptInUitpakken() {
-    const preferredReceiptId = String(openedReceipt?.id || selectedReceiptIds[0] || '')
-    if (!preferredReceiptId) return
-
-    let receiptContext = openedReceipt
-    if (!receiptContext || String(receiptContext?.id || '') !== preferredReceiptId) {
-      try {
-        receiptContext = await fetchJson(`/api/receipts/${encodeURIComponent(preferredReceiptId)}`)
-      } catch (err) {
-        setError(normalizeErrorMessage(err?.message) || 'De bon kon niet naar Uitpakken worden geopend.')
-        return
-      }
-    }
-
-    navigate(`/kassabonnen?receipt_table_id=${encodeURIComponent(preferredReceiptId)}`, {
-      state: {
-        receiptContext,
-        fromKassa: true,
-      },
-    })
-  }
-
   return (
     <AppShell title={isAddReceiptRoute ? 'Bon toevoegen' : 'Kassa'} showExit={false}>
       <ReceiptUploadInputs
@@ -2067,7 +2035,6 @@ export default function KassaPage() {
                   </div>
                 </div>
                 <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
-                  <Button type="button" variant="secondary" onClick={openSelectedReceiptInUitpakken} disabled={isUploading || (!openedReceipt && selectedReceiptIds.length === 0)} data-testid="kassa-open-uitpakken-button">Naar Uitpakken</Button>
                   <Button type="button" variant="primary" onClick={openSourceHub} disabled={isUploading} data-testid="kassa-add-receipt-button">{isUploading ? 'Uploaden…' : 'Bon toevoegen'}</Button>
                 </div>
               </div>

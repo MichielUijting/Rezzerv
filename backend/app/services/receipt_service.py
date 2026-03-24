@@ -1977,7 +1977,7 @@ def serialize_receipt_row(row: dict[str, Any]) -> dict[str, Any]:
             return float(value)
         return value
 
-    datetime_keys = {'purchase_at', 'created_at', 'updated_at', 'imported_at', 'last_scan_at', 'started_at', 'finished_at', 'email_received_at', 'received_at'}
+    datetime_keys = {'purchase_at', 'created_at', 'updated_at', 'imported_at', 'last_scan_at', 'started_at', 'finished_at'}
     return {
         key: (normalize_datetime(value) if key in datetime_keys else normalize_number(value))
         for key, value in row.items()
