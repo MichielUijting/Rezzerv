@@ -116,7 +116,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     locatie: 220,
     prijs: 100,
   }), [])
-  const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
+  const lineTableWrapperRef = useRef(null)
+  const { widths: lineColumnWidths, startResize: startLineResize, tableWidth: lineTableWidth } = useResizableColumnWidths(lineColumnDefaults, { containerRef: lineTableWrapperRef })
 
   const providersByCode = useMemo(
     () => Object.fromEntries(providers.map((provider) => [provider.code, provider])),
@@ -681,8 +682,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error" data-testid="receipt-feedback">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="receipt-feedback">{status}</div> : null}
-          <div className="rz-table-wrapper rz-store-batch-table-wrapper">
-            <table className="rz-table rz-store-workbench-table" style={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }} data-testid="receipt-lines-table">
+          <div className="rz-table-wrapper rz-store-batch-table-wrapper" ref={lineTableWrapperRef}>
+            <table className="rz-table rz-store-workbench-table" style={{ tableLayout: 'fixed', width: lineTableWidth, minWidth: lineTableWidth }} data-testid="receipt-lines-table">
               <colgroup>
                 <col style={{ width: `${lineColumnWidths.select}px` }} />
                 <col style={{ width: `${lineColumnWidths.bonartikel}px` }} />

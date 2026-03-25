@@ -218,8 +218,13 @@ body {
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 14px;
+  padding: 0 0 18px 0;
+  margin-bottom: 6px;
   scrollbar-gutter: stable both-edges;
+}
+
+.rz-table-wrapper > .rz-table{
+  margin-bottom: 8px;
 }
 
 

@@ -116,6 +116,11 @@ function splitBranchAddressPlace(value) {
 }
 
 function deriveBranchAddressPlace(receipt) {
+  const derivedAddress = String(receipt?.derived_branch_address || '').trim()
+  const derivedCity = String(receipt?.derived_branch_city || '').trim()
+  if (derivedAddress || derivedCity) {
+    return { address: derivedAddress || '-', city: derivedCity || '-' }
+  }
   const storeName = String(receipt?.store_name || '').trim().toLowerCase()
   if (storeName === 'albert heijn') {
     const branchCode = extractAhBranchCode(receipt)
@@ -789,6 +794,7 @@ function ReceiptDetailInfoCard({ receipt }) {
   const visibleNetTotalSum = visibleLineTotalSum + effectiveDiscountTotal
   const detailAmountsMatch = Number.isFinite(Number(receipt?.total_amount)) && lines.length > 0 && Math.abs(Number(receipt?.total_amount) - visibleNetTotalSum) < 0.01
   const branchParts = deriveBranchAddressPlace(receipt)
+  const lineTableWrapperRef = useRef(null)
   const lineColumnDefaults = useMemo(() => ({
     select: 44,
     article: 320,
@@ -798,7 +804,7 @@ function ReceiptDetailInfoCard({ receipt }) {
     lineTotal: 128,
     discount: 118,
   }), [])
-  const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
+  const { widths: lineColumnWidths, startResize: startLineResize, tableWidth: lineTableWidth } = useResizableColumnWidths(lineColumnDefaults, { containerRef: lineTableWrapperRef })
   const [lineSort, setLineSort] = useState({ key: 'lineIndex', direction: 'asc' })
 
   function toggleLine(lineId) {
@@ -898,8 +904,8 @@ function ReceiptDetailInfoCard({ receipt }) {
                     Deze bon heeft nog geen herkende artikelregels. Controleer later opnieuw of upload een beter leesbare bon.
                   </div>
                 ) : null}
-                <div className="rz-table-wrapper">
-                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }}>
+                <div className="rz-table-wrapper" ref={lineTableWrapperRef}>
+                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'fixed', width: lineTableWidth, minWidth: lineTableWidth }}>
                     <colgroup>
                       <col style={{ width: `${lineColumnWidths.select}px` }} />
                       <col style={{ width: `${lineColumnWidths.article}px` }} />
@@ -1404,6 +1410,7 @@ export default function KassaPage() {
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const emailInputRef = useRef(null)
+  const inboxTableWrapperRef = useRef(null)
   const inboxColumnDefaults = useMemo(() => ({
     select: 44,
     store: 300,
@@ -1411,7 +1418,7 @@ export default function KassaPage() {
     total: 150,
     items: 120,
   }), [])
-  const { widths: inboxColumnWidths, startResize: startInboxResize } = useResizableColumnWidths(inboxColumnDefaults)
+  const { widths: inboxColumnWidths, startResize: startInboxResize, tableWidth: inboxTableWidth } = useResizableColumnWidths(inboxColumnDefaults, { containerRef: inboxTableWrapperRef })
   const [inboxSort, setInboxSort] = useState({ key: 'date', direction: 'desc' })
 
   useEffect(() => {
@@ -2133,8 +2140,8 @@ export default function KassaPage() {
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
-              <div className="rz-table-wrapper">
-                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
+              <div className="rz-table-wrapper" ref={inboxTableWrapperRef}>
+                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: inboxTableWidth, minWidth: inboxTableWidth }}>
                   <colgroup>
                     <col style={{ width: `${inboxColumnWidths.select}px` }} />
                     <col style={{ width: `${inboxColumnWidths.store}px` }} />

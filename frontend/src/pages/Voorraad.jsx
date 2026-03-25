@@ -353,7 +353,8 @@ export default function Voorraad() {
     locatie: 220,
     sublocatie: 220,
   }), []);
-  const { widths: inventoryColumnWidths, startResize: startInventoryResize } = useResizableColumnWidths(inventoryColumnDefaults);
+  const inventoryTableWrapperRef = useRef(null);
+  const { widths: inventoryColumnWidths, startResize: startInventoryResize, tableWidth: inventoryTableWidth } = useResizableColumnWidths(inventoryColumnDefaults, { containerRef: inventoryTableWrapperRef });
   const [editingCell, setEditingCell] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [saveState, setSaveState] = useState({});
@@ -645,8 +646,8 @@ export default function Voorraad() {
         <div className="rz-content-inner">
           <div className="rz-card">
             {loadError && <div style={{ marginBottom: "12px", color: "#b42318", fontWeight: 700 }}>{loadError}</div>}
-            <div className="rz-table-wrapper rz-stock-table-wrapper">
-              <table className="rz-table rz-stock-table" data-testid="inventory-table" style={{ tableLayout: 'fixed', width: buildTableWidth(inventoryColumnWidths), minWidth: buildTableWidth(inventoryColumnWidths) }}>
+            <div className="rz-table-wrapper rz-stock-table-wrapper" ref={inventoryTableWrapperRef}>
+              <table className="rz-table rz-stock-table" data-testid="inventory-table" style={{ tableLayout: 'fixed', width: inventoryTableWidth, minWidth: inventoryTableWidth }}>
                 <colgroup>
                   <col style={{ width: `${inventoryColumnWidths.select}px` }} />
                   <col style={{ width: `${inventoryColumnWidths.artikel}px` }} />

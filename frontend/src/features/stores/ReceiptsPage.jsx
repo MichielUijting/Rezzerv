@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -24,7 +24,8 @@ export default function ReceiptsPage() {
     regels: 120,
     status: 300,
   }), [])
-  const { widths: tableWidths, startResize: startTableResize } = useResizableColumnWidths(columnDefaults)
+  const tableWrapperRef = useRef(null)
+  const { widths: tableWidths, startResize: startTableResize, tableWidth } = useResizableColumnWidths(columnDefaults, { containerRef: tableWrapperRef })
 
 
   useEffect(() => {
@@ -147,8 +148,8 @@ export default function ReceiptsPage() {
       <div style={{ display: 'grid', gap: '16px' }} data-testid="receipts-page">
         <ScreenCard>
         {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
-        <div className="rz-table-wrapper">
-          <table className="rz-table" data-testid="receipts-table" style={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
+        <div className="rz-table-wrapper" ref={tableWrapperRef}>
+          <table className="rz-table" data-testid="receipts-table" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: tableWidth }}>
             <colgroup>
               <col style={{ width: `${tableWidths.select}px` }} />
               <col style={{ width: `${tableWidths.winkel}px` }} />
