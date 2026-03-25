@@ -5,6 +5,8 @@ import ScreenCard from '../../ui/ScreenCard'
 import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
+import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
+import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import {
   articleFallbackOptions,
   articleLabel,
@@ -26,18 +28,18 @@ const STATUS_FILTERS = [
 ]
 
 
-const MAPPING_FILTERS = [
+const MAPPING_FILTERS = sortOptionObjects([
   { key: 'all', label: 'Alles' },
   { key: 'known', label: 'Bekende mapping' },
   { key: 'new', label: 'Nieuwe mapping' },
   { key: 'unknown', label: 'Onbekend artikel' },
-]
+])
 
-const LOCATION_FILTERS = [
+const LOCATION_FILTERS = sortOptionObjects([
   { key: 'all', label: 'Alles' },
   { key: 'filled', label: 'Locatie ingevuld' },
   { key: 'missing', label: 'Locatie ontbreekt' },
-]
+])
 
 function countUniqueNewMappings(lines) {
   const ids = new Set()
@@ -52,6 +54,14 @@ function countUniqueNewMappings(lines) {
 function detailValue(value, fallback = 'Niet van toepassing') {
   if (value === undefined || value === null || value === '') return fallback
   return String(value)
+}
+
+function formatReceiptLineLabel(value) {
+  const normalized = String(value || '').trim()
+  if (!normalized) return '-'
+  return normalized
+    .toLocaleLowerCase('nl-NL')
+    .replace(/(^|[\s\-/])(\p{L})/gu, (match, prefix, letter) => `${prefix}${letter.toLocaleUpperCase('nl-NL')}`)
 }
 
 
@@ -95,8 +105,18 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [statusFilter, setStatusFilter] = useState('all')
   const [mappingFilter, setMappingFilter] = useState('all')
   const [locationFilter, setLocationFilter] = useState('all')
+  const [tableSort, setTableSort] = useState({ key: 'bonartikel', direction: 'asc' })
   const [processConfirm, setProcessConfirm] = useState(null)
   const processFeedbackTimer = useRef(null)
+  const lineColumnDefaults = useMemo(() => ({
+    select: 44,
+    bonartikel: 220,
+    aantal: 100,
+    gekoppeld: 260,
+    locatie: 220,
+    prijs: 100,
+  }), [])
+  const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
 
   const providersByCode = useMemo(
     () => Object.fromEntries(providers.map((provider) => [provider.code, provider])),
@@ -170,7 +190,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   async function refreshLocationOptions(householdId) {
     if (!householdId) return []
     const backendLocations = await fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdId)}&_ts=${Date.now()}`, { cache: 'no-store' }).catch(() => [])
-    const nextLocations = Array.isArray(backendLocations) ? backendLocations : []
+    const nextLocations = sortOptionObjects(Array.isArray(backendLocations) ? backendLocations : [], (location) => location?.label || '')
     setLocationOptions(nextLocations)
     return nextLocations
   }
@@ -292,8 +312,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       ])
 
       setProviders(providerData)
-      setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? backendArticles : articleFallbackOptions)
-      setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
+      setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? sortOptionObjects(backendArticles, (article) => articleLabel(article)) : articleFallbackOptions)
+      setLocationOptions(sortOptionObjects(Array.isArray(backendLocations) ? backendLocations : [], (location) => location?.label || ''))
       setBatch(loadedBatch)
       const diagnostics = await fetchJson(`/api/dev/purchase-import-batches/${batchId}/diagnostics`).catch(() => null)
       setBatchDiagnostics(diagnostics)
@@ -388,6 +408,45 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       return
     }
     handleProcessSelected('selected_only')
+  }
+
+
+  function handleExportSelected() {
+    if (!batch || selectedLineIds.length === 0) return
+    const selectedSet = new Set(selectedLineIds.map((id) => String(id)))
+    const rows = lineUiStates.filter((entry) => selectedSet.has(String(entry.line.id)))
+    const header = ['Bonartikel', 'Aantal', 'Gekoppeld artikel', 'Locatie', 'Prijs', 'Status']
+    const csvRows = rows.map((entry) => {
+      const articleName = entry.line.resolved_household_article_name || articleLabel(articleOptions.find((option) => String(option.id) === String(entry.draft.articleId))) || ''
+      const locationLabel = locationOptions.find((location) => String(location.id) === String(entry.draft.locationId))?.label || ''
+      const priceLabel = entry.line.line_price_raw != null ? entry.line.line_price_raw.toFixed(2) : ''
+      return [
+        entry.line.article_name_raw || '',
+        formatQuantity(entry.line.quantity_raw, entry.line.unit_raw),
+        articleName,
+        locationLabel,
+        priceLabel,
+        entry.statusLabel || '',
+      ]
+    })
+    const csv = [header, ...csvRows]
+      .map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';'))
+      .join('\n')
+    window.__rezzervLastDownload = {
+      filename: 'rezzerv-kassabondetail.csv',
+      csv,
+      rowCount: rows.length,
+      source: 'receipt-detail',
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'rezzerv-kassabondetail.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
   }
 
   async function processBatchNow(mode = 'ready_only') {
@@ -550,9 +609,16 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     return lineUiStates.filter((entry) => selectedSet.has(entry.line.id))
   }, [lineUiStates, selectedLineIds])
 
-  const visibleLineUiStates = useMemo(() => (
-    filteredLineUiStates.filter((entry) => entry.processingStatus !== 'processed')
-  ), [filteredLineUiStates])
+  const visibleLineUiStates = useMemo(() => {
+    const visible = filteredLineUiStates.filter((entry) => entry.processingStatus !== 'processed')
+    return sortItems(visible, tableSort, {
+      bonartikel: (entry) => entry.line.article_name_raw || '',
+      aantal: (entry) => Number(entry.line.quantity_raw ?? 0),
+      gekoppeld: (entry) => entry.line.resolved_household_article_name || '',
+      locatie: (entry) => (locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''),
+      prijs: (entry) => Number(entry.line.line_price_raw ?? 0),
+    })
+  }, [filteredLineUiStates, tableSort, locationOptions])
 
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
@@ -602,11 +668,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-detail-page">
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'start' }}>
             <div style={{ display: 'grid', gap: '4px' }}>
-              <div style={{ fontWeight: 700, fontSize: '24px' }}>{batch ? buildBatchTitle(batch) : 'Kassabon'}</div>
-              <div style={{ color: '#2e7d4d' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
+                            <div style={{ color: '#2e7d4d' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
               <div style={{ color: '#2e7d4d' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
               <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch} data-testid="receipt-process-button">Naar voorraad</Button>
             </div>
           </div>
@@ -616,17 +682,25 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error" data-testid="receipt-feedback">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="receipt-feedback">{status}</div> : null}
           <div className="rz-table-wrapper rz-store-batch-table-wrapper">
-            <table className="rz-table rz-store-workbench-table" style={{ minWidth: '860px' }} data-testid="receipt-lines-table">
+            <table className="rz-table rz-store-workbench-table" style={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }} data-testid="receipt-lines-table">
+              <colgroup>
+                <col style={{ width: `${lineColumnWidths.select}px` }} />
+                <col style={{ width: `${lineColumnWidths.bonartikel}px` }} />
+                <col style={{ width: `${lineColumnWidths.aantal}px` }} />
+                <col style={{ width: `${lineColumnWidths.gekoppeld}px` }} />
+                <col style={{ width: `${lineColumnWidths.locatie}px` }} />
+                <col style={{ width: `${lineColumnWidths.prijs}px` }} />
+              </colgroup>
               <thead>
                 <tr className="rz-table-header">
-                  <th style={{ width: '44px' }}>
+                  <ResizableHeaderCell columnKey="select" widths={lineColumnWidths} onStartResize={startLineResize} style={{ width: '44px' }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
-                  </th>
-                  <th className="rz-store-batch-col-item">Bonartikel</th>
-                  <th className="rz-num rz-store-batch-col-quantity">Aantal</th>
-                  <th className="rz-store-batch-col-linked">Gekoppeld artikel</th>
-                  <th className="rz-store-batch-col-location">Locatie</th>
-                  <th className="rz-num rz-store-batch-col-price">Prijs</th>
+                  </ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Bonartikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Aantal</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Gekoppeld artikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Locatie</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="prijs" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-price" sortable isSorted={tableSort.key === 'prijs'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Prijs</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
@@ -668,7 +742,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       <td>
                         <input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} />
                       </td>
-                      <td className="rz-store-batch-col-item"><div className="rz-store-primary">{line.article_name_raw}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
+                      <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td className="rz-store-batch-col-linked">
                         <div data-testid={`receipt-line-article-select-${line.id}`}><StoreArticleSelector
@@ -734,6 +808,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   const content = (
     <ScreenCard>
+      <div data-testid="receipt-detail-title" style={{ display: 'none' }}>
+        {batch ? buildBatchTitle(batch) : 'Kassabon'}
+      </div>
       {isLoading ? (
         <div>Bongegevens laden…</div>
       ) : batch ? (

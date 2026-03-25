@@ -1,38 +1,31 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Button from '../../ui/Button'
 import { StoreBatchDetailContent } from './StoreBatchDetailPage'
-import {
-  batchStatusLabel,
-  deriveBatchUiState,
-  fetchJson,
-  normalizeErrorMessage,
-  providerLabel,
-} from './storeImportShared'
-
-async function getLatestBatchMeta(connectionId) {
-  try {
-    const latest = await fetchJson(`/api/store-connections/${connectionId}/latest-batch`)
-    return latest?.batch_id ? latest : null
-  } catch {
-    return null
-  }
-}
+import { fetchJson, normalizeErrorMessage, providerLabel } from './storeImportShared'
+import { nextSortState, sortItems } from '../../ui/sorting'
+import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 
 export default function ReceiptsPage() {
-  const [providers, setProviders] = useState([])
   const [batches, setBatches] = useState([])
   const [filters, setFilters] = useState({ winkel: '', datum: '', regels: '', status: '' })
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
   const [selectedBatchIds, setSelectedBatchIds] = useState([])
   const [openedBatchId, setOpenedBatchId] = useState('')
+  const [tableSort, setTableSort] = useState({ key: 'datum', direction: 'desc' })
+  const location = useLocation()
+  const columnDefaults = useMemo(() => ({
+    select: 44,
+    winkel: 260,
+    datum: 200,
+    regels: 120,
+    status: 300,
+  }), [])
+  const { widths: tableWidths, startResize: startTableResize } = useResizableColumnWidths(columnDefaults)
 
-  const providersByCode = useMemo(
-    () => Object.fromEntries(providers.map((provider) => [provider.code, provider])),
-    [providers],
-  )
 
   useEffect(() => {
     let cancelled = false
@@ -47,22 +40,9 @@ export default function ReceiptsPage() {
         })
         if (cancelled) return
 
-        const [providerData, connectionData] = await Promise.all([
-          fetchJson('/api/store-providers'),
-          fetchJson(`/api/store-connections?householdId=${encodeURIComponent(householdData.id)}`),
-        ])
+        const unpackData = await fetchJson(`/api/unpack-start-batches?householdId=${encodeURIComponent(householdData.id)}`)
         if (cancelled) return
-        setProviders(providerData || [])
-
-        const latestCandidates = (await Promise.all((connectionData || []).map((connection) => getLatestBatchMeta(connection.id))))
-          .filter((item) => item?.batch_id)
-
-        const loadedBatches = (await Promise.all(
-          latestCandidates.map((item) => fetchJson(`/api/purchase-import-batches/${item.batch_id}`).catch(() => null)),
-        )).filter(Boolean)
-
-        if (cancelled) return
-        setBatches(loadedBatches)
+        setBatches(Array.isArray(unpackData?.items) ? unpackData.items : [])
       } catch (err) {
         if (!cancelled) {
           setError(normalizeErrorMessage(err?.message) || 'Kassabonnen konden niet worden geladen.')
@@ -74,34 +54,30 @@ export default function ReceiptsPage() {
 
     loadData()
     return () => { cancelled = true }
-  }, [])
+  }, [location.search])
 
   const listItems = useMemo(() => {
     const enriched = (batches || []).map((batch) => ({
       ...batch,
-      uiState: deriveBatchUiState(batch),
-      providerName: providerLabel(providersByCode[batch?.store_provider_code] || batch),
+      providerName: providerLabel(batch),
       dateLabel: batch.purchase_date || batch.created_at?.slice(0, 10) || '-',
       totalLines: Number(batch.summary?.total || batch.lines?.length || 0),
-      statusLabel: (() => {
-        const summary = batch.summary || {}
-        const openCount = Number(summary.open || 0)
-        const readyCount = Number(summary.ready || 0)
-        const processedCount = Number(summary.processed || 0)
-        const totalCount = Number(summary.total || batch.lines?.length || 0)
-        if (processedCount > 0 && processedCount >= totalCount && openCount === 0 && readyCount === 0) return 'Volledig verwerkt'
-        if (processedCount > 0 || openCount > 0 || readyCount > 0) return 'Deels verwerkt'
-        return 'Niet verwerkt'
-      })(),
+      statusLabel: batch.inbox_status || 'Nieuw',
     }))
 
-    return enriched
+    const filtered = enriched
       .filter((item) => String(item.providerName || '').toLowerCase().includes(filters.winkel.trim().toLowerCase()))
       .filter((item) => String(item.dateLabel || '').toLowerCase().includes(filters.datum.trim().toLowerCase()))
       .filter((item) => String(item.totalLines).includes(filters.regels.trim()))
       .filter((item) => String(item.statusLabel || '').toLowerCase().includes(filters.status.trim().toLowerCase()))
-      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-  }, [batches, providersByCode, filters])
+
+    return sortItems(filtered, tableSort, {
+      winkel: (item) => item.providerName || '',
+      datum: (item) => item.purchase_date || item.created_at || '',
+      regels: (item) => Number(item.totalLines ?? 0),
+      status: (item) => item.statusLabel || '',
+    })
+  }, [batches, filters, tableSort])
 
   useEffect(() => {
     if (!listItems.length) {
@@ -167,26 +143,33 @@ export default function ReceiptsPage() {
   const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedBatchIds.includes(item.batch_id))
 
   return (
-    <AppShell title="Kassabonnen" showExit={false}>
+    <AppShell title="Uitpakken" showExit={false}>
       <div style={{ display: 'grid', gap: '16px' }} data-testid="receipts-page">
         <ScreenCard>
         {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
         <div className="rz-table-wrapper">
-          <table className="rz-table" data-testid="receipts-table">
+          <table className="rz-table" data-testid="receipts-table" style={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
+            <colgroup>
+              <col style={{ width: `${tableWidths.select}px` }} />
+              <col style={{ width: `${tableWidths.winkel}px` }} />
+              <col style={{ width: `${tableWidths.datum}px` }} />
+              <col style={{ width: `${tableWidths.regels}px` }} />
+              <col style={{ width: `${tableWidths.status}px` }} />
+            </colgroup>
             <thead>
               <tr className="rz-table-header">
-                <th style={{ width: '44px' }}>
+                <ResizableHeaderCell columnKey="select" widths={tableWidths} onStartResize={startTableResize} style={{ width: '44px' }}>
                   <input
                     type="checkbox"
                     checked={allVisibleSelected}
                     onChange={toggleSelectAllVisible}
                     aria-label="Selecteer alle zichtbare kassabonnen"
                   />
-                </th>
-                <th style={{ width: '26.6%' }}>Winkel</th>
-                <th style={{ width: '22%' }}>Datum</th>
-                <th className="rz-num" style={{ width: '12%' }}>Artikelen</th>
-                <th style={{ width: '39.4%' }}>Status</th>
+                </ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="winkel" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'winkel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Winkel</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="datum" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'datum'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Datum</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="regels" widths={tableWidths} onStartResize={startTableResize} className="rz-num" sortable isSorted={tableSort.key === 'regels'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Artikelen</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="status" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'status'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Status</ResizableHeaderCell>
               </tr>
               <tr className="rz-table-filters">
                 <th />

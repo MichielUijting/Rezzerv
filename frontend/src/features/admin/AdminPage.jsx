@@ -11,14 +11,14 @@ import {
   fetchLatestTestStatus,
   runLayer1Tests,
   runLayer2Tests,
-  runRegressionTests,
-  runSmokeTests,
+  runLayer3Tests,
+  runParsingFixtureTests,
+  runParsingRawTests,
   submitTestResults,
 } from "./services/adminTestingService";
-import { runBrowserSmokeTests } from "./lib/browserSmokeRunner";
 import { runLayer1RegressionTests } from "./lib/layer1RegressionRunner";
 import { runLayer2RouteTests } from "./lib/layer2RouteRunner";
-import { runBrowserRegressionTests } from "./lib/browserRegressionRunner";
+import { runLayer3StyleguideTests } from "./lib/layer3StyleguideRunner";
 
 export default function AdminPage() {
   const navigate = useNavigate();
@@ -225,30 +225,56 @@ export default function AdminPage() {
     setInventorySublocationId("");
   }
 
-  async function handleRunLayer1() {
-    setTestMessage("");
-    setShowReport(false);
-    try {
-      const result = await runLayer1Tests();
-      setTestStatus((current) => ({ ...current, ...result }));
-      if (!result.started) {
-        setTestMessage("Er loopt al een test");
-        await refreshTestStatus();
-        return;
-      }
+  async function executeLayerTest({
+    layerId,
+    startFn,
+    runnerFn,
+    startMessage,
+    successMessage,
+    failureMessage,
+    submitIndividualReport = true,
+  }) {
+    const result = await startFn();
+    setTestStatus((current) => ({ ...current, ...result }));
+    if (!result.started) {
+      await refreshTestStatus();
+      const runningError = new Error("Er loopt al een test");
+      runningError.alreadyRunning = true;
+      throw runningError;
+    }
 
-      setTestMessage("Laag-1 kernregressietest gestart");
-      const results = await runLayer1RegressionTests();
-      await submitTestResults('layer1', results);
+    setTestMessage(startMessage);
+    const results = await runnerFn();
+    if (submitIndividualReport) {
+      await submitTestResults(layerId, results);
       await refreshTestStatus();
       const latestReport = await fetchLatestTestReport();
       setTestReport(latestReport);
       setShowReport(true);
-      setTestMessage('Laag-1 kernregressietest afgerond');
+      setTestMessage(successMessage);
+    }
+
+    return results;
+  }
+
+  async function handleRunLayer1() {
+    setTestMessage("");
+    setShowReport(false);
+    try {
+      await executeLayerTest({
+        layerId: 'layer1',
+        startFn: runLayer1Tests,
+        runnerFn: runLayer1RegressionTests,
+        startMessage: 'Laag-1 kernregressietest gestart',
+        successMessage: 'Laag-1 kernregressietest afgerond',
+        failureMessage: 'Laag-1 kernregressietest kon niet worden uitgevoerd',
+      });
     } catch (error) {
       try {
-        await submitTestResults('layer1', [{ name: 'Laag-1 runner', status: 'failed', error: error.message || 'Laag-1 kernregressietest kon niet worden uitgevoerd' }]);
-        await refreshTestStatus();
+        if (!error?.alreadyRunning) {
+          await submitTestResults('layer1', [{ name: 'Laag-1 runner', status: 'failed', error: error.message || 'Laag-1 kernregressietest kon niet worden uitgevoerd' }]);
+          await refreshTestStatus();
+        }
       } catch {
         // negeer secundaire fout
       }
@@ -256,96 +282,170 @@ export default function AdminPage() {
     }
   }
 
-
   async function handleRunLayer2() {
     setTestMessage("");
     setShowReport(false);
     try {
-      const result = await runLayer2Tests();
-      setTestStatus((current) => ({ ...current, ...result }));
-      if (!result.started) {
-        setTestMessage("Er loopt al een test");
-        await refreshTestStatus();
-        return;
-      }
-
-      setTestMessage("Laag-2 route-/schermtest gestart");
-      const results = await runLayer2RouteTests();
-      await submitTestResults('layer2', results);
-      await refreshTestStatus();
-      const latestReport = await fetchLatestTestReport();
-      setTestReport(latestReport);
-      setShowReport(true);
-      setTestMessage('Laag-2 route-/schermtest afgerond');
+      await executeLayerTest({
+        layerId: 'layer2',
+        startFn: runLayer2Tests,
+        runnerFn: runLayer2RouteTests,
+        startMessage: 'Laag-2 route-/schermtest gestart',
+        successMessage: 'Laag-2 route-/schermtest afgerond',
+        failureMessage: 'Laag-2 route-/schermtest kon niet worden uitgevoerd',
+      });
     } catch (error) {
       try {
-        await submitTestResults('layer2', [{ name: 'Laag-2 runner', status: 'failed', error: error.message || 'Laag-2 route-/schermtest kon niet worden uitgevoerd' }]);
-        await refreshTestStatus();
+        if (!error?.alreadyRunning) {
+          await submitTestResults('layer2', [{ name: 'Laag-2 runner', status: 'failed', error: error.message || 'Laag-2 route-/schermtest kon niet worden uitgevoerd' }]);
+          await refreshTestStatus();
+        }
       } catch {
       }
       setTestMessage(error.message || "Laag-2 route-/schermtest kon niet worden gestart");
     }
   }
 
-  async function handleRunSmoke() {
+  async function handleRunLayer3() {
     setTestMessage("");
     setShowReport(false);
     try {
-      const result = await runSmokeTests();
-      setTestStatus((current) => ({ ...current, ...result }));
-      if (!result.started) {
-        setTestMessage("Er loopt al een test");
-        await refreshTestStatus();
-        return;
-      }
-
-      setTestMessage("Smoke test gestart");
-      const results = await runBrowserSmokeTests();
-      await submitTestResults('smoke', results);
-      await refreshTestStatus();
-      const latestReport = await fetchLatestTestReport();
-      setTestReport(latestReport);
-      setShowReport(true);
-      setTestMessage('Smoke test afgerond');
+      await executeLayerTest({
+        layerId: 'layer3',
+        startFn: runLayer3Tests,
+        runnerFn: runLayer3StyleguideTests,
+        startMessage: 'Laag-3 UI/styleguide-test gestart',
+        successMessage: 'Laag-3 UI/styleguide-test afgerond',
+        failureMessage: 'Laag-3 UI/styleguide-test kon niet worden uitgevoerd',
+      });
     } catch (error) {
       try {
-        await submitTestResults('smoke', [{ name: 'Smoke test runner', status: 'failed', error: error.message || 'Smoke test kon niet worden uitgevoerd' }]);
-        await refreshTestStatus();
+        if (!error?.alreadyRunning) {
+          await submitTestResults('layer3', [{ name: 'Laag-3 runner', status: 'failed', error: error.message || 'Laag-3 UI/styleguide-test kon niet worden uitgevoerd' }]);
+          await refreshTestStatus();
+        }
       } catch {
-        // negeer secundaire fout
       }
-      setTestMessage(error.message || "Smoke test kon niet worden gestart");
+      setTestMessage(error.message || "Laag-3 UI/styleguide-test kon niet worden gestart");
     }
   }
 
-  async function handleRunRegression() {
+  async function handleRunAll() {
     setTestMessage("");
     setShowReport(false);
     try {
-      const result = await runRegressionTests();
-      setTestStatus((current) => ({ ...current, ...result }));
-      if (!result.started) {
-        setTestMessage("Er loopt al een test");
-        await refreshTestStatus();
-        return;
+      setTestMessage('Regressietest alles gestart');
+      const combinedResults = [];
+      const suites = [
+        {
+          layerId: 'layer1',
+          startFn: runLayer1Tests,
+          runnerFn: runLayer1RegressionTests,
+          startMessage: 'Regressietest alles: laag 1 gestart',
+          successMessage: 'Regressietest alles: laag 1 afgerond',
+          failureMessage: 'Laag-1 kernregressietest kon niet worden uitgevoerd',
+          prefix: 'Laag 1',
+        },
+        {
+          layerId: 'layer2',
+          startFn: runLayer2Tests,
+          runnerFn: runLayer2RouteTests,
+          startMessage: 'Regressietest alles: laag 2 gestart',
+          successMessage: 'Regressietest alles: laag 2 afgerond',
+          failureMessage: 'Laag-2 route-/schermtest kon niet worden uitgevoerd',
+          prefix: 'Laag 2',
+        },
+        {
+          layerId: 'layer3',
+          startFn: runLayer3Tests,
+          runnerFn: runLayer3StyleguideTests,
+          startMessage: 'Regressietest alles: laag 3 gestart',
+          successMessage: 'Regressietest alles: laag 3 afgerond',
+          failureMessage: 'Laag-3 UI/styleguide-test kon niet worden uitgevoerd',
+          prefix: 'Laag 3',
+        },
+      ];
+
+      for (const suite of suites) {
+        try {
+          const results = await executeLayerTest({
+            layerId: suite.layerId,
+            startFn: suite.startFn,
+            runnerFn: suite.runnerFn,
+            startMessage: suite.startMessage,
+            successMessage: suite.successMessage,
+            failureMessage: suite.failureMessage,
+            submitIndividualReport: true,
+          });
+          combinedResults.push(...results.map((item) => ({ ...item, name: `${suite.prefix} · ${item.name}` })));
+        } catch (error) {
+          if (!error?.alreadyRunning) {
+            try {
+              await submitTestResults(suite.layerId, [{
+                name: `${suite.prefix} · Runner`,
+                status: 'failed',
+                error: error.message || suite.failureMessage,
+              }]);
+              await refreshTestStatus();
+            } catch {
+              // negeer secundaire fout
+            }
+          }
+          combinedResults.push({
+            name: `${suite.prefix} · Runner`,
+            status: 'failed',
+            error: error.message || suite.failureMessage,
+          });
+          break;
+        }
       }
 
-      setTestMessage("Volledige regressietest gestart");
-      const results = await runBrowserRegressionTests();
-      await submitTestResults('regression', results);
+      await submitTestResults('regression_all', combinedResults);
       await refreshTestStatus();
       const latestReport = await fetchLatestTestReport();
       setTestReport(latestReport);
       setShowReport(true);
-      setTestMessage('Volledige regressietest afgerond');
+      const failedCount = combinedResults.filter((item) => item.status === 'failed').length;
+      setTestMessage(failedCount > 0 ? `Regressietest alles afgerond: ${failedCount} fout(en). Bekijk het testrapport voor details.` : 'Regressietest alles geslaagd. Bekijk het testrapport voor details.');
     } catch (error) {
       try {
-        await submitTestResults('regression', [{ name: 'Regressietest runner', status: 'failed', error: error.message || 'Regressietest kon niet worden uitgevoerd' }]);
+        await submitTestResults('regression_all', [{ name: 'Regressietest alles', status: 'failed', error: error.message || 'Regressietest alles kon niet worden uitgevoerd' }]);
         await refreshTestStatus();
       } catch {
         // negeer secundaire fout
       }
-      setTestMessage(error.message || "Regressietest kon niet worden gestart");
+      setTestMessage(error.message || 'Regressietest alles kon niet worden gestart');
+    }
+  }
+
+
+  async function handleRunParsingFixture() {
+    setTestMessage('');
+    setShowReport(false);
+    try {
+      const report = await runParsingFixtureTests();
+      await refreshTestStatus();
+      setTestReport(report);
+      setShowReport(true);
+      const failedCount = report?.results?.filter((item) => item.status === 'failed').length || 0;
+      setTestMessage(failedCount > 0 ? `Parsing fixture-baseline afgerond: ${failedCount} fout(en).` : 'Parsing fixture-baseline geslaagd.');
+    } catch (error) {
+      setTestMessage(error.message || 'Parsing fixture-baseline kon niet worden gestart');
+    }
+  }
+
+  async function handleRunParsingRaw() {
+    setTestMessage('');
+    setShowReport(false);
+    try {
+      const report = await runParsingRawTests();
+      await refreshTestStatus();
+      setTestReport(report);
+      setShowReport(true);
+      const failedCount = report?.results?.filter((item) => item.status === 'failed').length || 0;
+      setTestMessage(failedCount > 0 ? `Parsing raw-baseline afgerond: ${failedCount} fout(en).` : 'Parsing raw-baseline geslaagd.');
+    } catch (error) {
+      setTestMessage(error.message || 'Parsing raw-baseline kon niet worden gestart');
     }
   }
 
@@ -390,16 +490,21 @@ export default function AdminPage() {
           <div className="rz-admin-panel">
             <h3>Testen</h3>
             <p className="rz-admin-muted">
-              Start hier een smoke test, een laag-1 kernregressietest of een volledige regressietest en bekijk de laatste status.
+              Start hier een leidende laag-1, laag-2 of laag-3 regressietest en bekijk de laatste status.
             </p>
             <div data-testid="test-run-panel"><TestRunPanel
               isRunning={testStatus.status === "running"}
-              onRunSmoke={handleRunSmoke}
+              showSuiteNotice
               onRunLayer1={handleRunLayer1}
               onRunLayer2={handleRunLayer2}
-              onRunRegression={handleRunRegression}
+              onRunLayer3={handleRunLayer3}
+              onRunAll={handleRunAll}
               onViewReport={handleViewReport}
             />
+            </div>
+            <div className="rz-admin-actions" style={{ marginTop: '12px' }}>
+              <Button variant="secondary" onClick={handleRunParsingFixture} disabled={testStatus.status === "running"}>Parsing fixtures</Button>
+              <Button variant="secondary" onClick={handleRunParsingRaw} disabled={testStatus.status === "running"}>Parsing raw bestanden</Button>
             </div>
             {testMessage ? <div className="rz-admin-message">{testMessage}</div> : null}
             <TestStatusCard status={testStatus} progress={regressionProgress} />
@@ -408,7 +513,10 @@ export default function AdminPage() {
                 <h4 className="rz-admin-status-title">Laatste testrapport</h4>
                 <div className="rz-admin-report-meta">
                   <div>Testtype: {testReport.test_type || "Onbekend"}</div>
+                  <div>Leidend: laag 1 / laag 2 / laag 3</div>
                   <div>Laatste run: {testReport.last_run_at ? new Date(testReport.last_run_at).toLocaleString("nl-NL") : "Nog geen rapport"}</div>
+                  <div>Geslaagd: {testReport.results?.filter((result) => result.status === "passed").length || 0}</div>
+                  <div>Gefaald: {testReport.results?.filter((result) => result.status === "failed").length || 0}</div>
                 </div>
                 <div className="rz-admin-report-list">
                   {testReport.results?.length ? testReport.results.map((result) => (
@@ -421,6 +529,12 @@ export default function AdminPage() {
                       {result.error ? <div className="rz-admin-report-meta-line">Fout: {result.error}</div> : null}
                       {result.triageRationale ? <div className="rz-admin-report-meta-line">Analyse: {result.triageRationale}</div> : null}
                       {result.triageSuggestedAction ? <div className="rz-admin-report-meta-line">Advies: {result.triageSuggestedAction}</div> : null}
+                      {result.details?.extraction_method ? <div className="rz-admin-report-meta-line">Extractie: {result.details.extraction_method} · tekstlengte {result.details.text_length ?? 0}</div> : null}
+                      {result.details?.store_expected ? <div className="rz-admin-report-meta-line">Winkel: verwacht {result.details.store_expected} · gevonden {result.details.store_found || '-'}</div> : null}
+                      {result.details?.purchase_expected ? <div className="rz-admin-report-meta-line">Datum/tijd: verwacht {result.details.purchase_expected} · gevonden {result.details.purchase_found || '-'}</div> : null}
+                      {result.details?.total_expected ? <div className="rz-admin-report-meta-line">Totaal: verwacht {result.details.total_expected} · gevonden {result.details.total_found || '-'}</div> : null}
+                      {result.details?.line_count_expected !== undefined ? <div className="rz-admin-report-meta-line">Bonregels: verwacht {result.details.line_count_expected} · gevonden {result.details.line_count_found}</div> : null}
+                      {result.details?.attachment_found !== null && result.details?.attachment_found !== undefined ? <div className="rz-admin-report-meta-line">Bijlage gevonden: {result.details.attachment_found ? 'ja' : 'nee'}</div> : null}
                     </div>
                   )) : <div className="rz-admin-muted">Nog geen rapport beschikbaar</div>}
                 </div>
@@ -428,16 +542,16 @@ export default function AdminPage() {
             ) : null}
           </div>
 
-          <div className="rz-admin-panel">
+          <div className="rz-admin-panel" data-testid="admin-runtime-diagnostics-panel">
             <h3>Runtime diagnose winkelkoppeling</h3>
             <p className="rz-admin-muted">
               Draai hier gerichte runtime-checks voor locatie-opties in de kassabon en voor geldige verwerkbaarheid van geselecteerde regels.
             </p>
             <div className="rz-admin-actions">
-              <Button variant="secondary" onClick={handleRunLocationDiagnostic} disabled={isRunningLocationDiagnostic}>
+              <Button variant="secondary" onClick={handleRunLocationDiagnostic} disabled={isRunningLocationDiagnostic} data-testid="admin-diagnostic-location-button">
                 {isRunningLocationDiagnostic ? 'Test draait…' : 'Test dropdown-locaties'}
               </Button>
-              <Button variant="secondary" onClick={handleRunProcessDiagnostic} disabled={isRunningProcessDiagnostic}>
+              <Button variant="secondary" onClick={handleRunProcessDiagnostic} disabled={isRunningProcessDiagnostic} data-testid="admin-diagnostic-process-button">
                 {isRunningProcessDiagnostic ? 'Test draait…' : 'Test verwerkvalidatie'}
               </Button>
             </div>

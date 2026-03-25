@@ -85,6 +85,10 @@ export async function runLayer2Tests() {
   return request('/api/dev/run-layer2-tests', { method: 'POST', body: '{}' })
 }
 
+export async function runLayer3Tests() {
+  return request('/api/dev/run-layer3-tests', { method: 'POST', body: '{}' })
+}
+
 export async function fetchLatestTestStatus() {
   const data = await request('/api/dev/test-status', { method: 'GET' })
   return normalizeStatus(data)
@@ -102,4 +106,12 @@ export async function submitTestResults(testType, results) {
     method: 'POST',
     body: JSON.stringify({ test_type: testType, results }),
   })
+}
+
+export async function runParsingFixtureTests() {
+  return request('/api/dev/run-parsing-fixture-tests', { method: 'POST', body: '{}' })
+}
+
+export async function runParsingRawTests() {
+  return request('/api/dev/run-parsing-raw-tests', { method: 'POST', body: '{}' })
 }

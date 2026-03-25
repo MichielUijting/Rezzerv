@@ -110,6 +110,15 @@ function clickElement(element) {
   element.dispatchEvent(new view.MouseEvent('click', { bubbles: true, cancelable: true, view }))
 }
 
+function nativeClick(element) {
+  if (!element) return
+  if (typeof element.click === 'function') {
+    element.click()
+    return
+  }
+  clickElement(element)
+}
+
 function doubleClickElement(element) {
   const view = element?.ownerDocument?.defaultView || window
   element.dispatchEvent(new view.MouseEvent('dblclick', { bubbles: true, cancelable: true, view }))
@@ -148,6 +157,8 @@ async function requestJson(url, options = {}) {
 async function prepareLayer1ReceiptFixture(frame, fixture) {
   if (fixture.batchId && fixture.completeLineId && fixture.incompleteLineId) {
     const resolved = {
+      connectionId: String(fixture.connectionId || ''),
+      latestBatchId: String(fixture.latestBatchId || fixture.batchId),
       batchId: String(fixture.batchId),
       completeLineId: String(fixture.completeLineId),
       incompleteLineId: String(fixture.incompleteLineId),
@@ -159,6 +170,8 @@ async function prepareLayer1ReceiptFixture(frame, fixture) {
   try {
     const prepared = await requestJson('/api/dev/generate-layer1-receipt-fixture', { method: 'POST', body: '{}' })
     const resolved = {
+      connectionId: String(prepared?.connectionId || prepared?.connection_id || ''),
+      latestBatchId: String(prepared?.latestBatchId || prepared?.latest_batch_id || prepared?.batchId || prepared?.batch_id || ''),
       batchId: String(prepared?.batchId || prepared?.batch_id || ''),
       completeLineId: String(prepared?.completeLineId || prepared?.complete_line_id || ''),
       incompleteLineId: String(prepared?.incompleteLineId || prepared?.incomplete_line_id || ''),
@@ -170,6 +183,27 @@ async function prepareLayer1ReceiptFixture(frame, fixture) {
     return resolved
   } catch (error) {
     throw new Error('Layer1 receipt fixture kon niet worden voorbereid')
+  }
+}
+
+async function prepareReceiptExportFixture(frame) {
+  if (frame.__rezzervReceiptExportFixture) return frame.__rezzervReceiptExportFixture
+  try {
+    const prepared = await requestJson('/api/dev/generate-receipt-export-fixture', { method: 'POST', body: '{}' })
+    const resolved = {
+      connectionId: String(prepared?.connectionId || prepared?.connection_id || ''),
+      batchId: String(prepared?.batchId || prepared?.batch_id || ''),
+      latestBatchId: String(prepared?.latestBatchId || prepared?.latest_batch_id || prepared?.batchId || prepared?.batch_id || ''),
+      exportLineId: String(prepared?.exportLineId || prepared?.export_line_id || ''),
+      exportArticleName: String(prepared?.exportArticleName || prepared?.export_article_name || ''),
+    }
+    if (!resolved.batchId || !resolved.exportLineId) {
+      throw new Error('Export fixture ontbreekt of is incompleet')
+    }
+    frame.__rezzervReceiptExportFixture = resolved
+    return resolved
+  } catch (error) {
+    throw new Error('Export fixture kon niet worden voorbereid')
   }
 }
 
@@ -221,7 +255,8 @@ async function resolveReceiptScenarioByLabels(frame, fixture) {
   for (const row of preferredRows) {
     const batchId = extractIdFromTestId(row, 'receipt-batch-row-')
     if (!batchId) continue
-    await navigateFrame(frame, '/kassabonnen')
+    const batchQuery = `?fixtureBatch=${encodeURIComponent(batchId)}&t=${Date.now()}`
+    await navigateFrame(frame, `/kassabonnen${batchQuery}`)
     const currentDoc = getFrameDocument(frame)
     const openButton = currentDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
     if (!openButton) continue
@@ -253,6 +288,35 @@ function extractIdFromTestId(element, prefix) {
   return value.startsWith(prefix) ? value.slice(prefix.length) : null
 }
 
+
+function openReceiptBatchInline(doc, batchId) {
+  const row = doc?.querySelector(`[data-testid="receipt-batch-row-${batchId}"]`)
+  if (!row) return false
+  clickElement(row)
+  doubleClickElement(row)
+  return true
+}
+
+function getReceiptDetailScope(doc) {
+  const detail = doc?.querySelector('[data-testid="receipt-detail-page"]')
+  if (!detail) return null
+  return detail.closest('.rz-card') || detail
+}
+
+function getReceiptExportButton(doc) {
+  const scope = getReceiptDetailScope(doc) || doc
+  return scope?.querySelector('[data-testid="receipt-export-button"]') || null
+}
+
+function getFirstEnabledReceiptLineSelect(detailDoc) {
+  return [...detailDoc.querySelectorAll('[data-testid^="receipt-line-select-"]')]
+    .find((element) => !element.disabled) || null
+}
+
+function getLastDownload(frame) {
+  return frame?.contentWindow?.__rezzervLastDownload || null
+}
+
 async function openInventoryDetail(frame, articleId = null) {
   const doc = getFrameDocument(frame)
   const trigger = pickByTestIdPrefix(doc, 'inventory-row-', articleId)
@@ -268,74 +332,97 @@ async function openReceiptDetail(frame, preferredBatchId = null) {
     return getFrameDocument(frame)
   }
   const doc = getFrameDocument(frame)
-  const openButton = pickByTestIdPrefix(doc, 'receipt-batch-open-', preferredBatchId)
-  if (!openButton) throw new Error('Geen receipt-batch-open-* gevonden')
-  clickElement(openButton)
+  let opened = false
+  if (preferredBatchId) {
+    opened = openReceiptBatchInline(doc, preferredBatchId)
+  }
+  if (!opened) {
+    const row = preferredBatchId
+      ? doc.querySelector(`[data-testid="receipt-batch-row-${preferredBatchId}"]`)
+      : doc.querySelector('[data-testid^="receipt-batch-row-"]')
+    if (row) {
+      clickElement(row)
+      doubleClickElement(row)
+      opened = true
+    }
+  }
+  if (!opened) {
+    const openButton = pickByTestIdPrefix(doc, 'receipt-batch-open-', preferredBatchId)
+    if (!openButton) throw new Error('Geen receipt-batch-open-* gevonden')
+    clickElement(openButton)
+  }
   await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
   return getFrameDocument(frame)
 }
 
-async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = null) {
-  let detailDoc = getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]') ? getFrameDocument(frame) : null
-  if (!detailDoc) {
-    detailDoc = await openReceiptDetail(frame, preferredBatchId)
-  }
-  let lineSelect = detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
-  if (lineSelect) {
-    return { detailDoc, lineSelect, batchId: preferredBatchId ? String(preferredBatchId) : null }
-  }
-
-  await navigateFrame(frame, '/kassabonnen')
+async function openReceiptBatchWithSelectableLines(frame, preferredBatchId = null, preferredLineId = null) {
+  const fixtureQuery = preferredBatchId ? `?fixtureBatch=${encodeURIComponent(preferredBatchId)}&t=${Date.now()}` : `?t=${Date.now()}`
+  await navigateFrame(frame, `/kassabonnen${fixtureQuery}`)
+  await waitForCondition(() => {
+    const doc = getFrameDocument(frame)
+    const rows = [...(doc?.querySelectorAll('[data-testid^="receipt-batch-row-"]') || [])]
+    return rows.length ? rows : null
+  }, WAIT_TIMEOUT, 'Geen receipt-batch-row-* gevonden')
 
   const candidateIds = []
   const seen = new Set()
+  const doc = getFrameDocument(frame)
 
-  function collectCandidateIds(doc) {
-    if (!doc) return
-    if (preferredBatchId && !seen.has(String(preferredBatchId))) {
-      const preferred = doc.querySelector(`[data-testid="receipt-batch-open-${preferredBatchId}"]`)
-      if (preferred) {
-        candidateIds.push(String(preferredBatchId))
-        seen.add(String(preferredBatchId))
-      }
-    }
-    for (const element of [...doc.querySelectorAll('[data-testid^="receipt-batch-open-"]')]) {
-      const batchId = extractIdFromTestId(element, 'receipt-batch-open-')
-      if (!batchId || seen.has(batchId)) continue
-      candidateIds.push(batchId)
-      seen.add(batchId)
+  if (preferredBatchId) {
+    const preferred = doc?.querySelector(`[data-testid="receipt-batch-row-${preferredBatchId}"]`)
+    if (preferred) {
+      candidateIds.push(String(preferredBatchId))
+      seen.add(String(preferredBatchId))
     }
   }
 
-  collectCandidateIds(getFrameDocument(frame))
+  for (const row of [...(doc?.querySelectorAll('[data-testid^="receipt-batch-row-"]') || [])]) {
+    const batchId = extractIdFromTestId(row, 'receipt-batch-row-')
+    if (!batchId || seen.has(batchId)) continue
+    candidateIds.push(batchId)
+    seen.add(batchId)
+  }
 
   for (const batchId of candidateIds) {
+    const batchQuery = `?fixtureBatch=${encodeURIComponent(batchId)}&t=${Date.now()}`
+    await navigateFrame(frame, `/kassabonnen${batchQuery}`)
     const currentDoc = getFrameDocument(frame)
-    const openButton = currentDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
-    if (!openButton) {
-      await navigateFrame(frame, '/kassabonnen')
-      const refreshedDoc = getFrameDocument(frame)
-      const refreshedButton = refreshedDoc?.querySelector(`[data-testid="receipt-batch-open-${batchId}"]`)
-      if (!refreshedButton) {
-        continue
+    const opened = openReceiptBatchInline(currentDoc, batchId)
+    if (!opened) continue
+
+    const detailDoc = await waitForCondition(() => {
+      const liveDoc = getFrameDocument(frame)
+      const detail = liveDoc?.querySelector('[data-testid="receipt-detail-page"]')
+      if (!detail) return null
+      const scope = getReceiptDetailScope(liveDoc) || detail
+      if (preferredLineId) {
+        const exact = scope.querySelector(`[data-testid="receipt-line-select-${preferredLineId}"]`)
+        return exact && !exact.disabled ? liveDoc : null
       }
-      clickElement(refreshedButton)
-    } else {
-      clickElement(openButton)
-    }
-    await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden')
-    detailDoc = getFrameDocument(frame)
-    lineSelect = detailDoc.querySelector('[data-testid^="receipt-line-select-"]')
-    if (lineSelect) {
+      const selectable = [...scope.querySelectorAll('[data-testid^="receipt-line-select-"]')]
+        .find((element) => !element.disabled)
+      return selectable ? liveDoc : null
+    }, WAIT_TIMEOUT, preferredLineId ? `Fixtureregel receipt-line-select-${preferredLineId} niet selecteerbaar in batch ${batchId}` : 'Geen batch met selecteerbare receipt-line-select-* gevonden')
+
+    const scope = getReceiptDetailScope(detailDoc) || detailDoc
+    const lineSelect = preferredLineId
+      ? scope.querySelector(`[data-testid="receipt-line-select-${preferredLineId}"]`)
+      : getFirstEnabledReceiptLineSelect(scope)
+
+    if (lineSelect && !lineSelect.disabled) {
       return { detailDoc, lineSelect, batchId }
     }
-    await navigateFrame(frame, '/kassabonnen')
   }
-  throw new Error('Geen batch met selecteerbare receipt-line-select-* gevonden')
+
+  const finalDoc = getFrameDocument(frame)
+  const rowIds = [...(finalDoc?.querySelectorAll('[data-testid^="receipt-batch-row-"]') || [])].map((el)=>el.getAttribute('data-testid'))
+  const openIds = [...(finalDoc?.querySelectorAll('[data-testid^="receipt-batch-open-"]') || [])].map((el)=>el.getAttribute('data-testid'))
+  throw new Error(preferredLineId ? `Fixturebatch ${preferredBatchId || 'onbekend'} niet bruikbaar; rowIds=${rowIds.join(',')}; openIds=${openIds.join(',')}; fixtureLine=${preferredLineId}` : 'Geen batch met selecteerbare receipt-line-select-* gevonden')
 }
 
 function getReceiptSelectableLineIds(detailDoc) {
   return [...detailDoc.querySelectorAll('[data-testid^="receipt-line-select-"]')]
+    .filter((element) => !element.disabled)
     .map((element) => extractIdFromTestId(element, 'receipt-line-select-'))
     .filter(Boolean)
 }
@@ -383,6 +470,8 @@ async function resolveReceiptFixture(frame, fixture) {
   const hasExplicitFixtureIds = Boolean(fixture.batchId && fixture.completeLineId && fixture.incompleteLineId)
   if (hasExplicitFixtureIds) {
     const resolved = {
+      connectionId: String(fixture.connectionId || ''),
+      latestBatchId: String(fixture.latestBatchId || fixture.batchId),
       batchId: String(fixture.batchId),
       completeLineId: String(fixture.completeLineId),
       incompleteLineId: String(fixture.incompleteLineId),
@@ -544,6 +633,25 @@ export async function runLayer1RegressionTests() {
       clickElement(analysisTab)
       await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="analysis-page"]'), WAIT_TIMEOUT, 'analysis-page niet gevonden')
     }, results)
+
+    await runScenario('T11 Export-testdataset response levert vaste CSV met kolomtitels', async () => {
+      const exportFixture = await prepareReceiptExportFixture(frame)
+      const targetBatchId = exportFixture.latestBatchId || exportFixture.batchId
+      const response = await fetch(`/api/dev/export-receipt-export-fixture?batchId=${encodeURIComponent(targetBatchId)}&lineId=${encodeURIComponent(exportFixture.exportLineId)}`)
+      if (!response.ok) throw new Error(`Export-testdataset endpoint gaf status ${response.status}`)
+      const contentType = response.headers.get('content-type') || ''
+      if (!contentType.toLowerCase().includes('text/csv')) throw new Error('Export-testdataset response is geen CSV')
+      const rowCountHeader = response.headers.get('x-rezzerv-row-count') || ''
+      const csv = await response.text()
+      if (!csv) throw new Error('Export-testdataset CSV ontbreekt')
+      const firstLine = String(csv || '').split('\n')[0] || ''
+      if (!firstLine.includes('Bonartikel') || !firstLine.includes('Locatie')) throw new Error('Export-testdataset mist kolomtitels')
+      if (rowCountHeader && rowCountHeader !== '1') throw new Error('Export-testdataset moet exact 1 regel exporteren')
+      const dataLines = String(csv || '').trim().split(/\r?\n/)
+      if (dataLines.length !== 2) throw new Error('Export-testdataset moet exact 1 gegevensregel bevatten')
+      if (!String(csv || '').includes(exportFixture.exportArticleName)) throw new Error('Export-testdataset mist de vaste testregel')
+    }, results)
+
   } finally {
     removeExistingFrame()
   }

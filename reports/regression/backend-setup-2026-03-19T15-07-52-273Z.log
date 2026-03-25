@@ -1,0 +1,35 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import fastapi, sqlalchemy, uvicorn
+ModuleNotFoundError: No module named 'fastapi'
+WARNING: The directory '/home/oai/.cache/pip' or its parent directory is not owned or is not writable by the current user. The cache has been disabled. Check the permissions and owner of that directory. If executing pip with sudo, you should use sudo's -H flag.
+Looking in indexes: https://reader:****@packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/simple
+Collecting fastapi==0.115.0 (from -r requirements.txt (line 1))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/06/ab/a1f7eed031aeb1c406a6e9d45ca04bff401c8a25a30dd0e4fd2caae767c3/fastapi-0.115.0-py3-none-any.whl (94 kB)
+Collecting uvicorn==0.30.6 (from -r requirements.txt (line 2))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/f5/8e/cdc7d6263db313030e4c257dd5ba3909ebc4e4fb53ad62d5f09b1a2f5458/uvicorn-0.30.6-py3-none-any.whl (62 kB)
+Collecting sqlalchemy==2.0.36 (from -r requirements.txt (line 3))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/7b/c5/07f18a897b997f6d6b234fab2bf31dccf66d5d16a79fe329aefc95cd7461/SQLAlchemy-2.0.36-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.2 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 33.0 MB/s eta 0:00:00
+Collecting pydantic==2.9.2 (from -r requirements.txt (line 4))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/df/e4/ba44652d562cbf0bf320e0f3810206149c8a4e99cdbf66da82e97ab53a15/pydantic-2.9.2-py3-none-any.whl (434 kB)
+Collecting starlette<0.39.0,>=0.37.2 (from fastapi==0.115.0->-r requirements.txt (line 1))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/b7/9c/93f7bc03ff03199074e81974cc148908ead60dcf189f68ba1761a0ee35cf/starlette-0.38.6-py3-none-any.whl (71 kB)
+Collecting typing-extensions>=4.8.0 (from fastapi==0.115.0->-r requirements.txt (line 1))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl (44 kB)
+Collecting annotated-types>=0.6.0 (from pydantic==2.9.2->-r requirements.txt (line 4))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/78/b6/6307fbef88d9b5ee7421e68d78a9f162e0da4900bc5f5793f6d3d0e34fb8/annotated_types-0.7.0-py3-none-any.whl (13 kB)
+Collecting pydantic-core==2.23.4 (from pydantic==2.9.2->-r requirements.txt (line 4))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/c1/f8/11a9006de4e89d016b8de74ebb1db727dc100608bb1e6bbe9d56a3cbbcce/pydantic_core-2.23.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 30.5 MB/s eta 0:00:00
+Collecting click>=7.0 (from uvicorn==0.30.6->-r requirements.txt (line 2))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/98/78/01c019cdb5d6498122777c1a43056ebb3ebfeef2076d9d026bfe15583b2b/click-8.3.1-py3-none-any.whl (108 kB)
+Collecting h11>=0.8 (from uvicorn==0.30.6->-r requirements.txt (line 2))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl (37 kB)
+Collecting anyio<5,>=3.4.0 (from starlette<0.39.0,>=0.37.2->fastapi==0.115.0->-r requirements.txt (line 1))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/38/0e/27be9fdef66e72d64c0cdc3cc2823101b80585f8119b5c112c2e8f5f7dab/anyio-4.12.1-py3-none-any.whl (113 kB)
+Collecting idna>=2.8 (from anyio<5,>=3.4.0->starlette<0.39.0,>=0.37.2->fastapi==0.115.0->-r requirements.txt (line 1))
+  Downloading https://packages.applied-caas-gateway1.internal.api.openai.org/artifactory/api/pypi/pypi-public/packages/packages/0e/61/66938bbb5fc52dbdf84594873d5b51fb1f7c7794e9c0f5bd885f30bc507b/idna-3.11-py3-none-any.whl (71 kB)
+Installing collected packages: typing-extensions, idna, h11, click, annotated-types, uvicorn, sqlalchemy, pydantic-core, anyio, starlette, pydantic, fastapi
+
+Successfully installed annotated-types-0.7.0 anyio-4.12.1 click-8.3.1 fastapi-0.115.0 h11-0.16.0 idna-3.11 pydantic-2.9.2 pydantic-core-2.23.4 sqlalchemy-2.0.36 starlette-0.38.6 typing-extensions-4.15.0 uvicorn-0.30.6

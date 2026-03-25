@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import Button from '../../ui/Button'
 import demoData from '../../demo-articles.json'
+import { sortOptionObjects } from '../../ui/sorting'
 
 export function normalizeErrorMessage(value) {
   if (!value) return 'Verzoek mislukt'
-  if (typeof value === 'string') return value
+  if (typeof value === 'string') {
+    const normalized = value.trim()
+    if (!normalized) return 'Verzoek mislukt'
+    if (/413\s+Request\s+Entity\s+Too\s+Large/i.test(normalized)) {
+      return "De foto is te groot om te uploaden. Probeer opnieuw; camerafoto's worden in Rezzerv automatisch verkleind."
+    }
+    if (/^<html[\s>]/i.test(normalized) || /^<!doctype\s+html/i.test(normalized)) {
+      return 'De server gaf een onleesbare foutmelding terug.'
+    }
+    return normalized
+  }
   if (Array.isArray(value)) {
     const first = value[0]
     if (typeof first === 'string') return first
@@ -57,11 +68,11 @@ export async function fetchJson(url, options = {}) {
   return data
 }
 
-export const articleFallbackOptions = demoData.articles.map((article) => ({
+export const articleFallbackOptions = sortOptionObjects(demoData.articles.map((article) => ({
   id: String(article.id),
   name: article.name,
   brand: article.brand || '',
-}))
+})), (article) => articleLabel(article))
 
 export function articleLabel(article) {
   return article.brand ? `${article.name} — ${article.brand}` : article.name
@@ -83,6 +94,7 @@ export function StoreArticleSelector({
   const [createArticleError, setCreateArticleError] = useState('')
 
   const showCreateArticleOption = canCreateArticle && typeof onCreateArticle === 'function'
+  const sortedArticleOptions = useMemo(() => sortOptionObjects(articleOptions || [], (article) => articleLabel(article)), [articleOptions])
 
   function openCreateArticleModal() {
     const baseName = lineName || ''
@@ -134,7 +146,7 @@ export function StoreArticleSelector({
         onChange={handleSelectChange}
       >
         <option value="">Kies artikel</option>
-        {articleOptions.map((article) => (
+        {sortedArticleOptions.map((article) => (
           <option key={article.id} value={article.id}>{articleLabel(article)}</option>
         ))}
         {showCreateArticleOption ? <option value="__create__">Nieuw artikel aanmaken</option> : null}

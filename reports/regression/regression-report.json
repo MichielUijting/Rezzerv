@@ -1,0 +1,25 @@
+{
+  "version": "01.09.04",
+  "started_at": "2026-03-19T15:07:52Z",
+  "build": {
+    "status": "passed"
+  },
+  "health": {
+    "status": "passed",
+    "url": "http://127.0.0.1:8001/api/health"
+  },
+  "regression": {
+    "overall_status": "failed",
+    "layers": [],
+    "fatal_error": "Playwright/Chromium in deze sandbox kon de lokale regression-runner route niet betrouwbaar openen. De codebase bevat nu wel de vaste regressierunner en release-gate; voer deze lokaal uit met run-regression.bat of npm run regression."
+  },
+  "overall_status": "failed",
+  "commands": {
+    "canonical": "run-regression.bat"
+  },
+  "artifacts": {
+    "report_json": "reports/regression/regression-report.json",
+    "summary_txt": "reports/regression/regression-summary.txt"
+  },
+  "finished_at": "2026-03-19T15:08:30Z"
+}

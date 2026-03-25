@@ -16,6 +16,8 @@
     </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#166534" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>Rezzerv</title>
     <script>
       (function () {
@@ -108,11 +110,14 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
+      window.__REZZERV_VERSION__ = window.__REZZERV_VERSION__ || null
       fetch('/version.json', { cache: 'no-store' })
         .then((response) => response.ok ? response.json() : null)
         .then((versionInfo) => {
-          if (!versionInfo || !versionInfo.version) return
-          window.__REZZERV_VERSION__ = versionInfo
+          const version = typeof versionInfo?.version === 'string' ? versionInfo.version.trim() : ''
+          if (!version) return
+          window.__REZZERV_VERSION__ = { version }
+          window.dispatchEvent(new CustomEvent('rezzerv-version-ready', { detail: { version } }))
         })
         .catch(() => {})
     </script>

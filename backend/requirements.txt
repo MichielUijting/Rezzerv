@@ -1,4 +1,11 @@
-fastapi
-uvicorn
-pydantic
-sqlalchemy
+fastapi==0.115.0
+uvicorn==0.30.6
+sqlalchemy==2.0.36
+pydantic==2.12.5
+
+pypdf==5.4.0
+python-multipart==0.0.20
+
+ocrmypdf==17.4.0
+paddleocr==3.2.0
+Pillow>=10,<13

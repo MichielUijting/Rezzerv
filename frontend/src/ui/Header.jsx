@@ -12,7 +12,7 @@ export default function Header({ title }) {
     location.pathname !== "/login" && (email || household);
 
   return (
-    <div className="rz-header">
+    <div className="rz-header" data-testid="app-header">
       <div className="rz-header-left">
         <div className="rz-header-title">{title}</div>
       </div>

@@ -1,0 +1,7 @@
+Versie: 01.09.04
+Build: passed
+Health: passed
+Regressie: failed
+Totaaloordeel: failed
+
+Fatale regressiefout: Playwright/Chromium in deze sandbox kon de lokale regression-runner route niet betrouwbaar openen. De codebase bevat nu wel de vaste regressierunner en release-gate; voer deze lokaal uit met run-regression.bat of npm run regression.

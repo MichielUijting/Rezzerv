@@ -1,11 +1,11 @@
 import { useState } from "react";
 
-export default function Tabs({ tabs, defaultTab, children, tabTestIdMap = {} }) {
+export default function Tabs({ tabs, defaultTab, children, tabTestIdMap = {}, activeColor = null }) {
   const [active, setActive] = useState(defaultTab || tabs[0]);
 
   return (
-    <div className="rz-tabs">
-      <div className="rz-tabbar" role="tablist" aria-label="Artikeldetails tabs">
+    <div className="rz-tabs" data-testid="tabs-root">
+      <div className="rz-tabbar" role="tablist" aria-label="Artikeldetails tabs" data-testid="tabs-tablist">
         {tabs.map((t) => {
           const isActive = active === t;
           return (
@@ -17,6 +17,7 @@ export default function Tabs({ tabs, defaultTab, children, tabTestIdMap = {} }) 
               className={isActive ? "rz-tab rz-tab-active" : "rz-tab"}
               onClick={() => setActive(t)}
               data-testid={tabTestIdMap[t]}
+              style={isActive && activeColor ? { borderColor: activeColor, background: "#ffffff", color: activeColor, fontWeight: 700, boxShadow: `inset 0 -2px 0 ${activeColor}` } : undefined}
             >
               {t}
             </button>

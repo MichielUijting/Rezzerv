@@ -1,0 +1,39 @@
+{
+  "name": "Rezzerv",
+  "short_name": "Rezzerv",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#e8f5e9",
+  "theme_color": "#166534",
+  "description": "Rezzerv kassabon-inname en voorraadbeheer",
+  "icons": [
+    {
+      "src": "/rezzerv-share-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "share_target": {
+    "action": "/api/receipts/share-target?household_id=1",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url",
+      "files": [
+        {
+          "name": "receipt",
+          "accept": [
+            "application/pdf",
+            "image/png",
+            "image/jpeg",
+            "image/webp"
+          ]
+        }
+      ]
+    }
+  }
+}
