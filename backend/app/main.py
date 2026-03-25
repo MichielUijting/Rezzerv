@@ -5404,26 +5404,9 @@ def inventory_preview(response: Response, authorization: Optional[str] = Header(
             WHERE i.household_id = :household_id
               AND COALESCE(i.status, 'active') = 'active'
               AND COALESCE(i.aantal, 0) > 0
-              AND (
-                NOT EXISTS (
-                  SELECT 1
-                  FROM inventory_events ie_seed
-                  WHERE ie_seed.household_id = i.household_id
-                    AND lower(trim(COALESCE(ie_seed.article_name, ''))) = lower(trim(COALESCE(i.naam, '')))
-                    AND COALESCE(ie_seed.location_id, '') = COALESCE(i.sublocation_id, i.space_id, '')
-                )
-                OR EXISTS (
-                  SELECT 1
-                  FROM inventory_events ie_real
-                  WHERE ie_real.household_id = i.household_id
-                    AND lower(trim(COALESCE(ie_real.article_name, ''))) = lower(trim(COALESCE(i.naam, '')))
-                    AND COALESCE(ie_real.location_id, '') = COALESCE(i.sublocation_id, i.space_id, '')
-                    AND COALESCE(ie_real.source, '') NOT IN ('seed_demo', 'seed_ui_demo', 'manual_seed')
-                )
-              )
             ORDER BY i.updated_at DESC, i.created_at ASC, i.id ASC
-            """)
-            ,{"household_id": effective_household_id}
+            """),
+            {"household_id": effective_household_id},
         ).mappings().all()
     return {"rows": [dict(r) for r in rows]}
 

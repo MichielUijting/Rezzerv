@@ -808,6 +808,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   const content = (
     <ScreenCard>
+      <div data-testid="receipt-detail-title" style={{ display: 'none' }}>
+        {batch ? buildBatchTitle(batch) : 'Kassabon'}
+      </div>
       {isLoading ? (
         <div>Bongegevens laden…</div>
       ) : batch ? (
