@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Button from '../../ui/Button'
 import Tabs from '../../ui/Tabs'
+import { nextSortState, sortItems } from '../../ui/sorting'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 
 function formatDateTime(value) {
@@ -48,6 +49,25 @@ function emailPartLabel(value) {
   if (value === 'html_body') return 'HTML-body van e-mail'
   if (value === 'text_body') return 'Tekst-body van e-mail'
   return value || '-'
+}
+
+function normalizeReceiptSourceLabel(value) {
+  if (!value) return 'Handmatige upload'
+  if (String(value).toLowerCase() === 'manual upload') return 'Handmatige upload'
+  return String(value)
+}
+
+function splitBranchAddressPlace(value) {
+  const normalized = String(value || '').trim()
+  if (!normalized) return { address: '-', city: '-' }
+  const parts = normalized.split(',').map((part) => part.trim()).filter(Boolean)
+  if (parts.length >= 2) {
+    return {
+      address: parts.slice(0, -1).join(', ') || '-',
+      city: parts.slice(-1)[0] || '-',
+    }
+  }
+  return { address: normalized, city: '-' }
 }
 
 function inboundImportStatusLabel(value) {
@@ -114,10 +134,23 @@ function useResizableColumnWidths(defaultWidths) {
   return { widths, startResize }
 }
 
-function ResizableHeaderCell({ columnKey, widths, onStartResize, className = '', style = {}, children }) {
+function ResizableHeaderCell({ columnKey, widths, onStartResize, className = '', style = {}, children, sortable = false, sortDirection = 'asc', isSorted = false, onSort = null }) {
   return (
     <th className={className} style={{ ...style, position: 'relative', width: widths?.[columnKey] ? `${widths[columnKey]}px` : style.width }}>
-      <div style={{ paddingRight: '10px' }}>{children}</div>
+      {sortable ? (
+        <button
+          type="button"
+          className="rz-sort-button"
+          onClick={() => onSort?.(columnKey)}
+          aria-pressed={isSorted}
+          aria-label={`${typeof children === 'string' ? children : 'Kolom'} sorteren`}
+        >
+          <span>{children}</span>
+          <span className={`rz-sort-indicator${isSorted ? ' is-active' : ''}`} aria-hidden="true">{isSorted ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+        </button>
+      ) : (
+        <div style={{ paddingRight: '10px' }}>{children}</div>
+      )}
       <div
         role="separator"
         aria-orientation="vertical"
@@ -759,6 +792,7 @@ function ReceiptDetailInfoCard({ receipt }) {
     : (Number.isFinite(receiptLevelDiscount) ? receiptLevelDiscount : visibleDiscountSum)
   const visibleNetTotalSum = visibleLineTotalSum + effectiveDiscountTotal
   const detailAmountsMatch = Number.isFinite(Number(receipt?.total_amount)) && lines.length > 0 && Math.abs(Number(receipt?.total_amount) - visibleNetTotalSum) < 0.01
+  const branchParts = splitBranchAddressPlace(receipt?.store_branch)
   const lineColumnDefaults = useMemo(() => ({
     select: 44,
     article: 320,
@@ -769,6 +803,7 @@ function ReceiptDetailInfoCard({ receipt }) {
     discount: 118,
   }), [])
   const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
+  const [lineSort, setLineSort] = useState({ key: 'lineIndex', direction: 'asc' })
 
   function toggleLine(lineId) {
     setSelectedLineIds((current) => (
@@ -834,7 +869,8 @@ function ReceiptDetailInfoCard({ receipt }) {
               return (
                 <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
                   <DetailInfoRow label="Winkel" value={receipt?.store_name} />
-                  <DetailInfoRow label="Adres / plaats" value={receipt?.store_branch} />
+                  <DetailInfoRow label="Adres" value={branchParts.address} />
+                  <DetailInfoRow label="Plaats" value={branchParts.city} />
                   <DetailInfoRow label="Aankoopmoment" value={formatDateTime(receipt?.purchase_at)} />
                   <DetailInfoRow label="Totaal" value={formatMoney(receipt?.total_amount, receipt?.currency)} />
                   <DetailInfoRow label="Som bonregels" value={formatMoney(visibleLineTotalSum, receipt?.currency)} />
@@ -850,22 +886,14 @@ function ReceiptDetailInfoCard({ receipt }) {
             if (activeTab === 'Bron') {
               return (
                 <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-                  <DetailInfoRow label="Receipt table ID" value={receipt?.id} />
-                  <DetailInfoRow label="Raw receipt ID" value={receipt?.raw_receipt_id} />
-                  <DetailInfoRow label="Bron" value={receipt?.source_label || 'Handmatige upload'} />
-                  <DetailInfoRow label="Adres / plaats" value={receipt?.store_branch || '-'} />
+                  <DetailInfoRow label="Bron" value={normalizeReceiptSourceLabel(receipt?.source_label)} />
+                  <DetailInfoRow label="Adres" value={branchParts.address} />
+                  <DetailInfoRow label="Plaats" value={branchParts.city} />
                   <DetailInfoRow label="Oorspronkelijk bestand" value={receipt?.original_filename || 'Niet beschikbaar in deze release'} />
                   <DetailInfoRow label="Bestandstype" value={receipt?.mime_type || 'Niet beschikbaar in deze release'} />
-                  <DetailInfoRow label="Imported at" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
-                  <DetailInfoRow label="Afzender" value={receipt?.sender_name || receipt?.sender_email || '-'} />
-                  <DetailInfoRow label="Afzender e-mail" value={receipt?.sender_email || '-'} />
-                  <DetailInfoRow label="E-mail onderwerp" value={receipt?.email_subject || '-'} />
-                  <DetailInfoRow label="Ontvangen op" value={formatDateTime(receipt?.email_received_at)} />
-                  <DetailInfoRow label="Gekozen e-mailonderdeel" value={emailPartLabel(receipt?.selected_part_type)} />
-                  <DetailInfoRow label="Bestand uit e-mail" value={receipt?.email_selected_filename || '-'} />
-                  <DetailInfoRow label="Duplicate-status" value={receipt?.duplicate ? 'Dubbel bestand' : 'Geen duplicate gemeld'} />
-                  <DetailInfoRow label="Aangemaakt" value={formatDateTime(receipt?.created_at)} />
-                  <DetailInfoRow label="Bijgewerkt" value={formatDateTime(receipt?.updated_at)} />
+                  <DetailInfoRow label="Geïmporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
+                  <DetailInfoRow label="Aangemaakt op" value={formatDateTime(receipt?.created_at)} />
+                  <DetailInfoRow label="Bijgewerkt op" value={formatDateTime(receipt?.updated_at)} />
                 </div>
               )
             }
@@ -897,12 +925,12 @@ function ReceiptDetailInfoCard({ receipt }) {
                             aria-label="Selecteer alle bonregels"
                           />
                         </ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="article" widths={lineColumnWidths} onStartResize={startLineResize}>Artikel in bon</ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="quantity" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num">Aantal</ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="unit" widths={lineColumnWidths} onStartResize={startLineResize}>Eenheid</ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="unitPrice" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num">Stukprijs</ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="lineTotal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num">Regelbedrag</ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="discount" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num">Korting</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="article" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={lineSort.key === 'article'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Artikel in bon</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="quantity" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num" sortable isSorted={lineSort.key === 'quantity'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Aantal</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="unit" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={lineSort.key === 'unit'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Eenheid</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="unitPrice" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num" sortable isSorted={lineSort.key === 'unitPrice'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Stukprijs</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="lineTotal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num" sortable isSorted={lineSort.key === 'lineTotal'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Regelbedrag</ResizableHeaderCell>
+                        <ResizableHeaderCell columnKey="discount" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num" sortable isSorted={lineSort.key === 'discount'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Korting</ResizableHeaderCell>
                       </tr>
                     </thead>
                     <tbody>
@@ -1390,6 +1418,7 @@ export default function KassaPage() {
     items: 120,
   }), [])
   const { widths: inboxColumnWidths, startResize: startInboxResize } = useResizableColumnWidths(inboxColumnDefaults)
+  const [inboxSort, setInboxSort] = useState({ key: 'date', direction: 'desc' })
 
   useEffect(() => {
     return () => {
@@ -1579,13 +1608,19 @@ export default function KassaPage() {
   }, [error, duplicateNotice, status])
 
   const listItems = useMemo(() => {
-    return inboxItems
+    const filteredItems = inboxItems
       .filter((item) => String(item.store_name || '').toLowerCase().includes(filters.winkel.trim().toLowerCase()))
       .filter((item) => formatDateTime(item.purchase_at).toLowerCase().includes(filters.datum.trim().toLowerCase()))
       .filter((item) => formatMoney(item.total_amount, item.currency).toLowerCase().includes(filters.totaal.trim().toLowerCase()))
       .filter((item) => String(item.line_count ?? 0).includes(filters.artikelen.trim()))
       .filter((item) => (filters.status ? item.inbox_status === filters.status : true))
-  }, [inboxItems, filters])
+    return sortItems(filteredItems, inboxSort, {
+      store: (item) => item.store_name || '',
+      date: (item) => item.purchase_at || item.created_at || '',
+      total: (item) => Number(item.total_amount ?? 0),
+      items: (item) => Number(item.line_count ?? 0),
+    })
+  }, [inboxItems, filters, inboxSort])
 
   const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedReceiptIds.includes(item.receipt_table_id))
 
@@ -1764,13 +1799,13 @@ export default function KassaPage() {
 
         if (result?.receipt_table_id) {
           setDuplicateNotice('')
-          setStatus(`Foto verwerkt met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
+          setStatus(`Foto verwerkt met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Kassa.`)
         } else {
           setStatus('Foto opgeslagen, maar nog niet als bruikbare kassabon herkend.')
         }
 
         if (uploadedReceiptId && !receiptExistsInInbox) {
-          setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
+          setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')
         }
 
         setUploadProgressState(true, 'Kassa openen…', 'De nieuwe bon staat klaar in Kassa.', 100)
@@ -1854,13 +1889,13 @@ export default function KassaPage() {
 
         if (result?.receipt_table_id) {
           setDuplicateNotice('')
-          setStatus(`E-mailbon ontvangen met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
+          setStatus(`E-mailbon ontvangen met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Kassa.`)
         } else {
           setStatus('E-mail verwerkt, maar nog niet als bruikbare kassabon herkend.')
         }
 
         if (uploadedReceiptId && !receiptExistsInInbox) {
-          setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
+          setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')
         }
 
         setUploadProgressState(true, 'Kassa openen…', 'De nieuwe e-mailbon staat klaar in Kassa.', 100)
@@ -1932,13 +1967,13 @@ export default function KassaPage() {
 
         if (result?.receipt_table_id) {
           setDuplicateNotice('')
-          setStatus(`Bon toegevoegd met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Bon-inbox.`)
+          setStatus(`Bon toegevoegd met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Kassa.`)
         } else {
           setStatus('Bestand opgeslagen, maar nog niet als bruikbare kassabon herkend.')
         }
 
         if (uploadedReceiptId && !receiptExistsInInbox) {
-          setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Bon-inbox worden geladen.')
+          setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')
         }
 
         setUploadProgressState(true, 'Kassa openen…', 'De nieuwe kassabon staat klaar in Kassa.', 100)
@@ -2037,7 +2072,7 @@ export default function KassaPage() {
             <div style={{ display: 'grid', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: '24px' }}>Bon-inbox</div>
+                  <div style={{ fontWeight: 700, fontSize: '24px' }}>Kassa</div>
                   <div style={{ color: '#667085', marginTop: '4px' }}>
                     Zie direct welke bonnen nieuw zijn, controle nodig hebben of al gecontroleerd zijn.
                   </div>
@@ -2118,10 +2153,10 @@ export default function KassaPage() {
                       <ResizableHeaderCell columnKey="select" widths={inboxColumnWidths} onStartResize={startInboxResize} style={{ width: '44px' }}>
                         <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare bonnen" />
                       </ResizableHeaderCell>
-                      <ResizableHeaderCell columnKey="store" widths={inboxColumnWidths} onStartResize={startInboxResize}>Winkel</ResizableHeaderCell>
-                      <ResizableHeaderCell columnKey="date" widths={inboxColumnWidths} onStartResize={startInboxResize}>Datum</ResizableHeaderCell>
-                      <ResizableHeaderCell columnKey="total" widths={inboxColumnWidths} onStartResize={startInboxResize} className="rz-num">Totaal</ResizableHeaderCell>
-                      <ResizableHeaderCell columnKey="items" widths={inboxColumnWidths} onStartResize={startInboxResize} className="rz-num">Artikelen</ResizableHeaderCell>
+                      <ResizableHeaderCell columnKey="store" widths={inboxColumnWidths} onStartResize={startInboxResize} sortable isSorted={inboxSort.key === 'store'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Winkel</ResizableHeaderCell>
+                      <ResizableHeaderCell columnKey="date" widths={inboxColumnWidths} onStartResize={startInboxResize} sortable isSorted={inboxSort.key === 'date'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Datum</ResizableHeaderCell>
+                      <ResizableHeaderCell columnKey="total" widths={inboxColumnWidths} onStartResize={startInboxResize} className="rz-num" sortable isSorted={inboxSort.key === 'total'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Totaal</ResizableHeaderCell>
+                      <ResizableHeaderCell columnKey="items" widths={inboxColumnWidths} onStartResize={startInboxResize} className="rz-num" sortable isSorted={inboxSort.key === 'items'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Artikelen</ResizableHeaderCell>
                     </tr>
                     <tr className="rz-table-filters">
                       <th />

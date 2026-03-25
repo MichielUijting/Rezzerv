@@ -225,7 +225,7 @@ body {
 }
 
 .rz-inline-feedback--warning {
-  color: var(--color-brand-primary);
+  color: #166534;
   background: #f4fbf6;
   border: 2px solid var(--color-brand-primary);
 }

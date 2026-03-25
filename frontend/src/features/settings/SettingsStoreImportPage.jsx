@@ -9,6 +9,7 @@ import {
   getStoreImportSimplificationSettings,
   saveStoreImportSimplificationSettings,
 } from './services/storeImportSimplificationService'
+import { sortOptionObjects } from '../../ui/sorting'
 
 function stableStringify(value) {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
@@ -119,7 +120,8 @@ export default function SettingsStoreImportPage() {
     if (blocker.state === 'blocked') blocker.proceed()
   }
 
-  const selectedLevel = STORE_IMPORT_SIMPLIFICATION_LEVELS.find((option) => option.value === level)
+  const sortedLevels = useMemo(() => sortOptionObjects(STORE_IMPORT_SIMPLIFICATION_LEVELS, (option) => option.label), [])
+  const selectedLevel = sortedLevels.find((option) => option.value === level)
 
   return (
     <AppShell title="Instellingen" showExit={false}>
@@ -157,7 +159,7 @@ export default function SettingsStoreImportPage() {
                     disabled={!canEdit || isSaving}
                     style={{ width: '100%' }}
                   >
-                    {STORE_IMPORT_SIMPLIFICATION_LEVELS.map((option) => (
+                    {sortedLevels.map((option) => (
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
@@ -177,7 +179,7 @@ export default function SettingsStoreImportPage() {
               <div style={{ display: 'grid', gap: '10px' }}>
                 <div style={{ fontWeight: 600 }}>Niveaus</div>
                 <div style={{ display: 'grid', gap: '10px' }}>
-                  {STORE_IMPORT_SIMPLIFICATION_LEVELS.map((option) => (
+                  {sortedLevels.map((option) => (
                     <div key={option.value} style={{ padding: '14px 16px', border: '1px solid #dfe4ea', borderRadius: '12px' }}>
                       <div style={{ fontWeight: 600 }}>{option.label}</div>
                       <div style={{ color: '#667085', fontSize: '14px' }}>{option.description}</div>

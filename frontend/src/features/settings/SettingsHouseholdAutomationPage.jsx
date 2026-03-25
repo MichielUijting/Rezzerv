@@ -8,6 +8,7 @@ import {
   saveHouseholdAutomationSettings,
   HOUSEHOLD_AUTO_CONSUME_MODES,
 } from './services/householdAutomationService'
+import { sortOptionObjects } from '../../ui/sorting'
 
 function stableStringify(value) {
   if (Array.isArray(value)) {
@@ -46,6 +47,11 @@ export default function SettingsHouseholdAutomationPage() {
     }
   }, [])
 
+  const automationOptions = useMemo(() => sortOptionObjects([
+    { value: HOUSEHOLD_AUTO_CONSUME_MODES.NONE, label: 'Geen automatische afboeking' },
+    { value: HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING, label: 'Boek bestaande voorraad eerst volledig af tot 0' },
+    { value: HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY, label: 'Boek hetzelfde aantal af als gekocht' },
+  ]), [])
   const currentSettings = useMemo(() => ({ mode }), [mode])
   const currentSnapshot = useMemo(() => stableStringify(currentSettings), [currentSettings])
   const isDirty = !isLoading && !!lastSavedSnapshot && currentSnapshot !== lastSavedSnapshot
@@ -168,9 +174,9 @@ export default function SettingsHouseholdAutomationPage() {
                   setMode(event.target.value)
                 }}
               >
-                <option value={HOUSEHOLD_AUTO_CONSUME_MODES.NONE}>Geen automatische afboeking</option>
-                <option value={HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY}>Boek hetzelfde aantal af als gekocht</option>
-                <option value={HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING}>Boek bestaande voorraad eerst volledig af tot 0</option>
+                {automationOptions.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </label>
           </div>

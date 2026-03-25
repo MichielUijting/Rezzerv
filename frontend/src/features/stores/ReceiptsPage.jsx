@@ -5,6 +5,7 @@ import ScreenCard from '../../ui/ScreenCard'
 import Button from '../../ui/Button'
 import { StoreBatchDetailContent } from './StoreBatchDetailPage'
 import { fetchJson, normalizeErrorMessage, providerLabel } from './storeImportShared'
+import { nextSortState, sortItems } from '../../ui/sorting'
 
 export default function ReceiptsPage() {
   const [batches, setBatches] = useState([])
@@ -13,6 +14,7 @@ export default function ReceiptsPage() {
   const [error, setError] = useState('')
   const [selectedBatchIds, setSelectedBatchIds] = useState([])
   const [openedBatchId, setOpenedBatchId] = useState('')
+  const [tableSort, setTableSort] = useState({ key: 'datum', direction: 'desc' })
   const location = useLocation()
 
 
@@ -54,13 +56,19 @@ export default function ReceiptsPage() {
       statusLabel: batch.inbox_status || 'Nieuw',
     }))
 
-    return enriched
+    const filtered = enriched
       .filter((item) => String(item.providerName || '').toLowerCase().includes(filters.winkel.trim().toLowerCase()))
       .filter((item) => String(item.dateLabel || '').toLowerCase().includes(filters.datum.trim().toLowerCase()))
       .filter((item) => String(item.totalLines).includes(filters.regels.trim()))
       .filter((item) => String(item.statusLabel || '').toLowerCase().includes(filters.status.trim().toLowerCase()))
-      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
-  }, [batches, filters])
+
+    return sortItems(filtered, tableSort, {
+      winkel: (item) => item.providerName || '',
+      datum: (item) => item.purchase_date || item.created_at || '',
+      regels: (item) => Number(item.totalLines ?? 0),
+      status: (item) => item.statusLabel || '',
+    })
+  }, [batches, filters, tableSort])
 
   useEffect(() => {
     if (!listItems.length) {
@@ -142,10 +150,10 @@ export default function ReceiptsPage() {
                     aria-label="Selecteer alle zichtbare kassabonnen"
                   />
                 </th>
-                <th style={{ width: '26.6%' }}>Winkel</th>
-                <th style={{ width: '22%' }}>Datum</th>
-                <th className="rz-num" style={{ width: '12%' }}>Artikelen</th>
-                <th style={{ width: '39.4%' }}>Status</th>
+                <th style={{ width: '26.6%' }}><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'winkel', { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}><span>Winkel</span><span className={`rz-sort-indicator${tableSort.key === 'winkel' ? ' is-active' : ''}`} aria-hidden="true">{tableSort.key === 'winkel' ? (tableSort.direction === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>
+                <th style={{ width: '22%' }}><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'datum', { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}><span>Datum</span><span className={`rz-sort-indicator${tableSort.key === 'datum' ? ' is-active' : ''}`} aria-hidden="true">{tableSort.key === 'datum' ? (tableSort.direction === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>
+                <th className="rz-num" style={{ width: '12%' }}><button type="button" className="rz-sort-button rz-sort-button--numeric" onClick={() => setTableSort((current) => nextSortState(current, 'regels', { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}><span>Artikelen</span><span className={`rz-sort-indicator${tableSort.key === 'regels' ? ' is-active' : ''}`} aria-hidden="true">{tableSort.key === 'regels' ? (tableSort.direction === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>
+                <th style={{ width: '39.4%' }}><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'status', { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}><span>Status</span><span className={`rz-sort-indicator${tableSort.key === 'status' ? ' is-active' : ''}`} aria-hidden="true">{tableSort.key === 'status' ? (tableSort.direction === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>
               </tr>
               <tr className="rz-table-filters">
                 <th />

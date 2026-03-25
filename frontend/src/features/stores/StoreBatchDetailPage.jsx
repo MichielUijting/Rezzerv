@@ -5,6 +5,7 @@ import ScreenCard from '../../ui/ScreenCard'
 import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
+import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
 import {
   articleFallbackOptions,
   articleLabel,
@@ -26,18 +27,18 @@ const STATUS_FILTERS = [
 ]
 
 
-const MAPPING_FILTERS = [
+const MAPPING_FILTERS = sortOptionObjects([
   { key: 'all', label: 'Alles' },
   { key: 'known', label: 'Bekende mapping' },
   { key: 'new', label: 'Nieuwe mapping' },
   { key: 'unknown', label: 'Onbekend artikel' },
-]
+])
 
-const LOCATION_FILTERS = [
+const LOCATION_FILTERS = sortOptionObjects([
   { key: 'all', label: 'Alles' },
   { key: 'filled', label: 'Locatie ingevuld' },
   { key: 'missing', label: 'Locatie ontbreekt' },
-]
+])
 
 function countUniqueNewMappings(lines) {
   const ids = new Set()
@@ -95,6 +96,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [statusFilter, setStatusFilter] = useState('all')
   const [mappingFilter, setMappingFilter] = useState('all')
   const [locationFilter, setLocationFilter] = useState('all')
+  const [tableSort, setTableSort] = useState({ key: 'bonartikel', direction: 'asc' })
   const [processConfirm, setProcessConfirm] = useState(null)
   const processFeedbackTimer = useRef(null)
 
@@ -170,7 +172,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   async function refreshLocationOptions(householdId) {
     if (!householdId) return []
     const backendLocations = await fetchJson(`/api/store-location-options?householdId=${encodeURIComponent(householdId)}&_ts=${Date.now()}`, { cache: 'no-store' }).catch(() => [])
-    const nextLocations = Array.isArray(backendLocations) ? backendLocations : []
+    const nextLocations = sortOptionObjects(Array.isArray(backendLocations) ? backendLocations : [], (location) => location?.label || '')
     setLocationOptions(nextLocations)
     return nextLocations
   }
@@ -292,8 +294,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       ])
 
       setProviders(providerData)
-      setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? backendArticles : articleFallbackOptions)
-      setLocationOptions(Array.isArray(backendLocations) ? backendLocations : [])
+      setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? sortOptionObjects(backendArticles, (article) => articleLabel(article)) : articleFallbackOptions)
+      setLocationOptions(sortOptionObjects(Array.isArray(backendLocations) ? backendLocations : [], (location) => location?.label || ''))
       setBatch(loadedBatch)
       const diagnostics = await fetchJson(`/api/dev/purchase-import-batches/${batchId}/diagnostics`).catch(() => null)
       setBatchDiagnostics(diagnostics)
@@ -589,9 +591,16 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     return lineUiStates.filter((entry) => selectedSet.has(entry.line.id))
   }, [lineUiStates, selectedLineIds])
 
-  const visibleLineUiStates = useMemo(() => (
-    filteredLineUiStates.filter((entry) => entry.processingStatus !== 'processed')
-  ), [filteredLineUiStates])
+  const visibleLineUiStates = useMemo(() => {
+    const visible = filteredLineUiStates.filter((entry) => entry.processingStatus !== 'processed')
+    return sortItems(visible, tableSort, {
+      bonartikel: (entry) => entry.line.article_name_raw || '',
+      aantal: (entry) => Number(entry.line.quantity_raw ?? 0),
+      gekoppeld: (entry) => entry.line.resolved_household_article_name || '',
+      locatie: (entry) => (locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''),
+      prijs: (entry) => Number(entry.line.line_price_raw ?? 0),
+    })
+  }, [filteredLineUiStates, tableSort, locationOptions])
 
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
@@ -662,11 +671,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <th style={{ width: '44px' }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
                   </th>
-                  <th className="rz-store-batch-col-item">Bonartikel</th>
-                  <th className="rz-num rz-store-batch-col-quantity">Aantal</th>
-                  <th className="rz-store-batch-col-linked">Gekoppeld artikel</th>
-                  <th className="rz-store-batch-col-location">Locatie</th>
-                  <th className="rz-num rz-store-batch-col-price">Prijs</th>
+                  <th className="rz-store-batch-col-item"><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'bonartikel', { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}><span>Bonartikel</span><span className={`rz-sort-indicator${tableSort.key === 'bonartikel' ? ' is-active' : ''}`} aria-hidden="true">{tableSort.key === 'bonartikel' ? (tableSort.direction === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>
+                  <th className="rz-num rz-store-batch-col-quantity"><button type="button" className="rz-sort-button rz-sort-button--numeric" onClick={() => setTableSort((current) => nextSortState(current, 'aantal', { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}><span>Aantal</span><span className={`rz-sort-indicator${tableSort.key === 'aantal' ? ' is-active' : ''}`} aria-hidden="true">{tableSort.key === 'aantal' ? (tableSort.direction === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>
+                  <th className="rz-store-batch-col-linked"><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'gekoppeld', { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}><span>Gekoppeld artikel</span><span className={`rz-sort-indicator${tableSort.key === 'gekoppeld' ? ' is-active' : ''}`} aria-hidden="true">{tableSort.key === 'gekoppeld' ? (tableSort.direction === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>
+                  <th className="rz-store-batch-col-location"><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'locatie', { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}><span>Locatie</span><span className={`rz-sort-indicator${tableSort.key === 'locatie' ? ' is-active' : ''}`} aria-hidden="true">{tableSort.key === 'locatie' ? (tableSort.direction === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>
+                  <th className="rz-num rz-store-batch-col-price"><button type="button" className="rz-sort-button rz-sort-button--numeric" onClick={() => setTableSort((current) => nextSortState(current, 'prijs', { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}><span>Prijs</span><span className={`rz-sort-indicator${tableSort.key === 'prijs' ? ' is-active' : ''}`} aria-hidden="true">{tableSort.key === 'prijs' ? (tableSort.direction === 'asc' ? '▲' : '▼') : '↕'}</span></button></th>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />

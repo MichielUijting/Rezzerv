@@ -3,6 +3,7 @@ import { getFieldsByTabAndGroup } from '../config/articleFieldHelpers'
 import { ARTICLE_TABS } from '../config/articleFieldConstants'
 import { resolveArticleFieldValue, EMPTY_VALUE } from '../lib/articleFieldValueResolver'
 import { AUTO_CONSUME_MODES, fetchArticleAutoConsumeMode, getArticleAutoConsumeMode, saveArticleAutoConsumeMode } from '../services/articleAutomationOverrideService'
+import { sortOptionObjects } from '../../../ui/sorting'
 
 const GROUP_LABELS = {
   basic: 'Basis',
@@ -32,6 +33,11 @@ function AutomationOverrideCard({ articleData = {} }) {
   const [mode, setMode] = useState(AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD)
   const [saveMessage, setSaveMessage] = useState('')
   const dismissTimerRef = useRef(null)
+  const automationOptions = useMemo(() => sortOptionObjects([
+    { value: AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD, label: 'Huishoudinstelling volgen' },
+    { value: AUTO_CONSUME_MODES.ALWAYS_ON, label: 'Altijd automatisch afboeken' },
+    { value: AUTO_CONSUME_MODES.ALWAYS_OFF, label: 'Nooit automatisch afboeken' },
+  ]), [])
 
   useEffect(() => {
     let cancelled = false
@@ -82,9 +88,9 @@ function AutomationOverrideCard({ articleData = {} }) {
               onChange={handleChange}
               disabled={!consumable}
             >
-              <option value={AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD}>Huishoudinstelling volgen</option>
-              <option value={AUTO_CONSUME_MODES.ALWAYS_ON}>Altijd automatisch afboeken</option>
-              <option value={AUTO_CONSUME_MODES.ALWAYS_OFF}>Nooit automatisch afboeken</option>
+              {automationOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
             </select>
           </label>
 

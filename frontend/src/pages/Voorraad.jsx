@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
 import Button from "../ui/Button";
+import { nextSortState, sortItems, sortStringOptions } from "../ui/sorting";
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase()
@@ -94,8 +95,8 @@ function InlineAutocompleteSelect({
 
   const filteredOptions = useMemo(() => {
     const needle = normalizeText(query)
-    if (!needle) return options
-    return options.filter((option) => normalizeText(option).includes(needle))
+    if (!needle) return sortStringOptions(options)
+    return sortStringOptions(options.filter((option) => normalizeText(option).includes(needle)))
   }, [options, query])
 
   useEffect(() => {
@@ -378,14 +379,20 @@ export default function Voorraad() {
 
   const filteredRows = useMemo(() => {
     const sourceRows = mergeVisibleZeroRows(rows, localZeroRows)
-    return sourceRows.filter((row) =>
+    const filtered = sourceRows.filter((row) =>
       editableColumns.every((column) => {
         const filterValue = String(filters[column.key] ?? "").trim().toLowerCase();
         if (!filterValue) return true;
         return String(row[column.key] ?? "").toLowerCase().includes(filterValue);
       })
     );
-  }, [rows, localZeroRows, filters]);
+    return sortItems(filtered, tableSort, {
+      artikel: (row) => row.artikel || '',
+      aantal: (row) => Number(row.aantal ?? 0),
+      locatie: (row) => row.locatie || '',
+      sublocatie: (row) => row.sublocatie || '',
+    });
+  }, [rows, localZeroRows, filters, tableSort]);
 
   const setRowValue = (rowId, key, value) => {
     setRows((prev) => {
@@ -648,10 +655,10 @@ export default function Voorraad() {
                         aria-label="Selecteer alle zichtbare artikelen"
                       />
                     </th>
-                    <th>Artikel</th>
-                    <th className="rz-num">Aantal</th>
-                    <th>Locatie</th>
-                    <th>Sublocatie</th>
+                    <th><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, "artikel", { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}><span>Artikel</span><span className={`rz-sort-indicator${tableSort.key === "artikel" ? " is-active" : ""}`} aria-hidden="true">{tableSort.key === "artikel" ? (tableSort.direction === "asc" ? "▲" : "▼") : "↕"}</span></button></th>
+                    <th className="rz-num"><button type="button" className="rz-sort-button rz-sort-button--numeric" onClick={() => setTableSort((current) => nextSortState(current, "aantal", { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}><span>Aantal</span><span className={`rz-sort-indicator${tableSort.key === "aantal" ? " is-active" : ""}`} aria-hidden="true">{tableSort.key === "aantal" ? (tableSort.direction === "asc" ? "▲" : "▼") : "↕"}</span></button></th>
+                    <th><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, "locatie", { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}><span>Locatie</span><span className={`rz-sort-indicator${tableSort.key === "locatie" ? " is-active" : ""}`} aria-hidden="true">{tableSort.key === "locatie" ? (tableSort.direction === "asc" ? "▲" : "▼") : "↕"}</span></button></th>
+                    <th><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, "sublocatie", { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}><span>Sublocatie</span><span className={`rz-sort-indicator${tableSort.key === "sublocatie" ? " is-active" : ""}`} aria-hidden="true">{tableSort.key === "sublocatie" ? (tableSort.direction === "asc" ? "▲" : "▼") : "↕"}</span></button></th>
                   </tr>
 
                   <tr className="rz-table-filters">
