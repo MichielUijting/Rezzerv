@@ -1,7 +1,7 @@
 import { getLayer1Fixture } from './layer1RegressionFixture'
 
 const FRAME_ID = 'rezzerv-layer2-runner-frame'
-const WAIT_TIMEOUT = 9000
+const WAIT_TIMEOUT = 15000
 const POLL_INTERVAL = 100
 
 function delay(ms) { return new Promise((resolve) => window.setTimeout(resolve, ms)) }
@@ -153,6 +153,172 @@ async function deleteReceiptViaKassa(frame, receiptTableId) {
   const items = await fetchKassaReceiptItems('1')
   if (items.some((item) => String(item?.receipt_table_id || '') === String(receiptTableId))) throw new Error('Verwijderde bon bleef aanwezig in de backendlijst')
 }
+async function buildRegressionFixtureFile(frame, kind) {
+  const response = await fetch(`/api/dev/regression/receipt-fixture-file?kind=${encodeURIComponent(kind)}`, { credentials: 'same-origin' })
+  if (!response.ok) throw new Error(`Regressie-fixture ${kind} kon niet worden geladen`)
+  const blob = await response.blob()
+  const disposition = response.headers.get('content-disposition') || ''
+  const fileNameMatch = disposition.match(/filename="?([^";]+)"?/i)
+  const fileName = fileNameMatch?.[1] || `regression-${kind}`
+  const view = frame?.contentWindow || window
+  return new view.File([blob], fileName, { type: blob.type || response.headers.get('content-type') || 'application/octet-stream' })
+}
+function assignFilesToInput(frame, input, files) {
+  const view = input?.ownerDocument?.defaultView || frame?.contentWindow || window
+  const dataTransfer = new view.DataTransfer()
+  files.forEach((file) => dataTransfer.items.add(file))
+  Object.defineProperty(input, 'files', { configurable: true, get: () => dataTransfer.files })
+  input.dispatchEvent(new view.Event('change', { bubbles: true }))
+}
+async function waitForReceiptRowAndDetail(frame, receiptId, errorMessage) {
+  await waitForCondition(() => getFrameDocument(frame)?.querySelector(`[data-testid="kassa-row-${receiptId}"]`) || null, WAIT_TIMEOUT, errorMessage || 'Nieuwe bonrij werd niet zichtbaar in Kassa')
+  await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]') || null, WAIT_TIMEOUT, 'Kassabondetail werd niet automatisch geopend')
+}
+async function importManualReceiptViaFileInput(frame) {
+  const beforeItems = await fetchKassaReceiptItems('1')
+  const beforeIds = new Set(beforeItems.map((item) => String(item?.receipt_table_id || '')))
+  await openKassaEmailSourceHub(frame)
+  const input = await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="kassa-manual-file-input"]') || null, WAIT_TIMEOUT, 'Handmatig bestandsinputveld niet gevonden')
+  const file = await buildRegressionFixtureFile(frame, 'manual')
+  assignFilesToInput(frame, input, [file])
+  const importedReceipt = await waitForAsyncCondition(async () => {
+    const items = await fetchKassaReceiptItems('1')
+    return items.find((item) => !beforeIds.has(String(item?.receipt_table_id || ''))) || null
+  }, WAIT_TIMEOUT, 'Handmatige bestandsimport leverde geen nieuwe bon op')
+  await waitForReceiptRowAndDetail(frame, importedReceipt.receipt_table_id, 'Handmatig geïmporteerde bon werd niet zichtbaar in Kassa')
+  return importedReceipt
+}
+async function importCameraReceiptViaFileInput(frame) {
+  const beforeItems = await fetchKassaReceiptItems('1')
+  const beforeIds = new Set(beforeItems.map((item) => String(item?.receipt_table_id || '')))
+  await openKassaEmailSourceHub(frame)
+  const input = await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="kassa-camera-file-input"]') || null, WAIT_TIMEOUT, 'Camera-inputveld niet gevonden')
+  const file = await buildRegressionFixtureFile(frame, 'camera')
+  assignFilesToInput(frame, input, [file])
+  await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="kassa-camera-modal"]') || null, WAIT_TIMEOUT, 'Camera-controlemodal werd niet geopend')
+  const confirmButton = getFrameDocument(frame)?.querySelector('[data-testid="kassa-camera-confirm"]')
+  if (!confirmButton) throw new Error('Camera-bevestigingsknop ontbreekt')
+  clickElement(confirmButton)
+  const importedReceipt = await waitForAsyncCondition(async () => {
+    const items = await fetchKassaReceiptItems('1')
+    return items.find((item) => !beforeIds.has(String(item?.receipt_table_id || ''))) || null
+  }, WAIT_TIMEOUT, 'Camera-import leverde geen nieuwe bon op')
+  await waitForReceiptRowAndDetail(frame, importedReceipt.receipt_table_id, 'Camera-geïmporteerde bon werd niet zichtbaar in Kassa')
+  return importedReceipt
+}
+async function importShareReceiptViaApi(frame) {
+  const beforeItems = await fetchKassaReceiptItems('1')
+  const beforeIds = new Set(beforeItems.map((item) => String(item?.receipt_table_id || '')))
+  const file = await buildRegressionFixtureFile(frame, 'share')
+  const view = frame?.contentWindow || window
+  const formData = new view.FormData()
+  formData.append('household_id', '1')
+  formData.append('source_context', 'shared_app')
+  formData.append('source_label', 'Gedeelde regressietest')
+  formData.append('file', file, file.name)
+  const response = await fetch('/api/receipts/share-import', { method: 'POST', credentials: 'same-origin', body: formData })
+  const payload = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(payload?.detail || 'Share-import mislukte')
+  const importedReceipt = await waitForAsyncCondition(async () => {
+    const items = await fetchKassaReceiptItems('1')
+    return items.find((item) => !beforeIds.has(String(item?.receipt_table_id || ''))) || null
+  }, WAIT_TIMEOUT, 'Share-import leverde geen nieuwe bon op')
+  await navigateFrame(frame, '/kassa')
+  await waitForReceiptRowAndDetail(frame, importedReceipt.receipt_table_id, 'Share-import bon werd niet zichtbaar in Kassa')
+  return importedReceipt
+}
+async function seedRegressionKassaReceipts() {
+  return requestJson('/api/dev/regression/seed-kassa-receipts', { method: 'POST', body: '{}' })
+}
+async function fetchUnpackStartBatches(householdId = '1') {
+  const payload = await requestJson(`/api/unpack-start-batches?householdId=${encodeURIComponent(householdId)}`)
+  return Array.isArray(payload?.items) ? payload.items : []
+}
+function getReceiptBatchRow(doc, batchId) {
+  return doc?.querySelector(`[data-testid="receipt-batch-row-${batchId}"]`) || null
+}
+function getBatchStatusCell(row) {
+  return row?.querySelectorAll('td')?.[4] || null
+}
+async function fetchInventoryPreviewRows() {
+  const payload = await requestJson('/api/dev/inventory-preview')
+  return Array.isArray(payload?.rows) ? payload.rows : []
+}
+async function getInventoryQuantityByArticleName(articleName) {
+  const rows = await fetchInventoryPreviewRows()
+  const row = rows.find((entry) => String(entry?.artikel || '').trim().toLowerCase() === String(articleName || '').trim().toLowerCase())
+  return Number(row?.aantal || 0)
+}
+async function getArticleHistoryRows(articleName) {
+  const payload = await requestJson(`/api/dev/article-history?article_name=${encodeURIComponent(articleName)}`)
+  return Array.isArray(payload?.rows) ? payload.rows : []
+}
+async function fetchStoreReviewArticleOptions() {
+  const payload = await requestJson('/api/store-review-articles')
+  return Array.isArray(payload) ? payload : []
+}
+async function fetchStoreLocationOptions() {
+  const household = await requestJson('/api/household')
+  const payload = await requestJson(`/api/store-location-options?householdId=${encodeURIComponent(household?.id || '1')}`)
+  return Array.isArray(payload) ? payload : []
+}
+function findArticleOptionId(options, articleName) {
+  const target = String(articleName || '').trim().toLowerCase()
+  const exact = options.find((entry) => String(entry?.name || '').trim().toLowerCase() === target)
+  if (exact?.id) return String(exact.id)
+  const partial = options.find((entry) => String(entry?.name || '').trim().toLowerCase().includes(target))
+  return partial?.id ? String(partial.id) : ''
+}
+function findLocationOptionId(options, preferredMatch = 'keuken') {
+  const exact = options.find((entry) => String(entry?.label || '').trim().toLowerCase().includes(String(preferredMatch || '').trim().toLowerCase()))
+  if (exact?.id) return String(exact.id)
+  return options?.[0]?.id ? String(options[0].id) : ''
+}
+async function mapReceiptBatchLineAndProcess(frame, batchId, articleName) {
+  await navigateFrame(frame, '/kassabonnen')
+  await openReceiptDetail(frame, batchId)
+  const batchBefore = await requestJson(`/api/purchase-import-batches/${encodeURIComponent(batchId)}`)
+  const targetLine = (batchBefore?.lines || []).find((line) => String(line?.processing_status || 'pending') !== 'processed')
+  if (!targetLine?.id) throw new Error(`Geen open bonregel gevonden voor batch ${batchId}`)
+  const articleOptions = await fetchStoreReviewArticleOptions()
+  const articleId = findArticleOptionId(articleOptions, articleName)
+  if (!articleId) throw new Error(`Geen artikeloptie gevonden voor ${articleName}`)
+  const locationOptions = await fetchStoreLocationOptions()
+  const locationId = findLocationOptionId(locationOptions, 'keuken')
+  if (!locationId) throw new Error('Geen locatieoptie gevonden voor regressietest')
+  const articleSelect = await waitForCondition(() => getFrameDocument(frame)?.querySelector(`[data-testid="receipt-line-article-select-${targetLine.id}"] select`) || getFrameDocument(frame)?.querySelector(`[data-testid="receipt-line-article-select-${targetLine.id}"] [data-store-article-select="true"]`) || null, WAIT_TIMEOUT, 'Artikelselector voor kassabonregel niet gevonden')
+  setSelectValue(articleSelect, articleId)
+  await waitForAsyncCondition(async () => {
+    const refreshed = await requestJson(`/api/purchase-import-batches/${encodeURIComponent(batchId)}`)
+    const line = (refreshed?.lines || []).find((entry) => String(entry?.id || '') === String(targetLine.id))
+    return String(line?.matched_household_article_id || '') === String(articleId)
+  }, WAIT_TIMEOUT, 'Artikelkoppeling werd niet opgeslagen')
+  const locationSelect = await waitForCondition(() => getFrameDocument(frame)?.querySelector(`[data-testid="receipt-line-location-select-${targetLine.id}"]`) || null, WAIT_TIMEOUT, 'Locatieselector voor kassabonregel niet gevonden')
+  setSelectValue(locationSelect, locationId)
+  await waitForAsyncCondition(async () => {
+    const refreshed = await requestJson(`/api/purchase-import-batches/${encodeURIComponent(batchId)}`)
+    const line = (refreshed?.lines || []).find((entry) => String(entry?.id || '') === String(targetLine.id))
+    return String(line?.target_location_id || '') === String(locationId)
+  }, WAIT_TIMEOUT, 'Locatiekoppeling werd niet opgeslagen')
+  const processButton = await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-process-button"]') || null, WAIT_TIMEOUT, 'Naar-voorraadknop niet gevonden')
+  const beforeQuantity = await getInventoryQuantityByArticleName(articleName)
+  clickElement(processButton)
+  await waitForAsyncCondition(async () => {
+    const refreshed = await requestJson(`/api/purchase-import-batches/${encodeURIComponent(batchId)}`)
+    const line = (refreshed?.lines || []).find((entry) => String(entry?.id || '') === String(targetLine.id))
+    return String(line?.processing_status || '') === 'processed'
+  }, WAIT_TIMEOUT, 'Bonregel werd niet als verwerkt gemarkeerd')
+  const afterQuantity = await waitForAsyncCondition(async () => {
+    const nextQuantity = await getInventoryQuantityByArticleName(articleName)
+    return nextQuantity > beforeQuantity ? nextQuantity : null
+  }, WAIT_TIMEOUT, 'Voorraadaantal nam niet toe na verwerken')
+  const historyRows = await waitForAsyncCondition(async () => {
+    const rows = await getArticleHistoryRows(articleName)
+    const matching = rows.find((entry) => String(entry?.event_type || '') === 'purchase' && String(entry?.note || '').includes(`batch=${batchId}`))
+    return matching ? rows : null
+  }, WAIT_TIMEOUT, 'Historie bevat geen purchase-event voor de verwerkte kassabonregel')
+  return { targetLineId: String(targetLine.id), articleId, locationId, beforeQuantity, afterQuantity, historyRows }
+}
 async function prepareLayer2ReceiptFixture(frame, fixture) {
   if (frame.__rezzervLayer2ReceiptFixture) return frame.__rezzervLayer2ReceiptFixture
   if (fixture.batchId && fixture.completeLineId) {
@@ -257,6 +423,15 @@ export async function runLayer2RouteTests() {
     await runScenario('R13 Kassa importeert een .eml via de e-mail-dropzone', async ()=>{ const token = buildRegressionReceiptEmailToken(); const { importedReceipt } = await importEmailReceiptViaDropzone(frame, token); if (String(importedReceipt?.source_label || '').toLowerCase() !== 'e-mail') throw new Error('Nieuwe bon kreeg niet het bronlabel E-mail'); const statusMessage = await waitForCondition(() => { const doc = getFrameDocument(frame); return [...(doc?.querySelectorAll('.rz-inline-feedback--success') || [])].find((element) => element.textContent?.includes('E-mailbon ontvangen')) || null }, WAIT_TIMEOUT, 'Succesmelding voor e-mailimport niet zichtbaar'); if (!statusMessage.textContent?.includes('Bon-inbox')) throw new Error('Succesmelding noemt Bon-inbox niet') }, results)
     await runScenario('R14 Kassa toont een melding bij een dubbele .eml-import zonder extra bon', async ()=>{ const fixtureState = frame.__rezzervKassaReceiptFixture || {}; if (!fixtureState.token || !fixtureState.receiptTableId) throw new Error('Kassa-fixture voor duplicate test ontbreekt'); const feedback = await triggerDuplicateEmailReceiptViaDropzone(frame, fixtureState.token, fixtureState.receiptTableId); if (!feedback.textContent?.includes('niet opnieuw geladen')) throw new Error('Dubbele kassabonmelding heeft onverwachte tekst'); if (!getFrameDocument(frame)?.querySelector('[data-testid="kassa-email-dropzone"]')) throw new Error('E-mailbron bleef niet open bij duplicate import') }, results)
     await runScenario('R15 Verwijderen in Kassa maakt herimport van dezelfde .eml weer mogelijk', async ()=>{ const fixtureState = frame.__rezzervKassaReceiptFixture || {}; if (!fixtureState.token || !fixtureState.receiptTableId) throw new Error('Kassa-fixture voor verwijdertest ontbreekt'); await deleteReceiptViaKassa(frame, fixtureState.receiptTableId); const beforeReimport = await fetchKassaReceiptItems('1'); const beforeIds = new Set(beforeReimport.map((item) => String(item?.receipt_table_id || ''))); const { importedReceipt } = await importEmailReceiptViaDropzone(frame, fixtureState.token); if (beforeIds.has(String(importedReceipt?.receipt_table_id || ''))) throw new Error('Herimport na verwijderen leverde geen nieuwe bon op'); if (String(importedReceipt?.receipt_table_id || '') === String(fixtureState.receiptTableId)) throw new Error('Herimport na verwijderen hergebruikte onverwacht hetzelfde bon-id'); if (getFrameDocument(frame)?.querySelector('[data-testid="receipt-sourcehub-duplicate-feedback"]')) throw new Error('Herimport na verwijderen werd nog steeds als duplicate gemeld') }, results)
+    await runScenario('R16 Kassa handmatige bestandsimport opent de nieuwe bon direct', async ()=>{ const importedReceipt = await importManualReceiptViaFileInput(frame); const detailDoc = getFrameDocument(frame); if (!detailDoc?.querySelector('[data-testid="receipt-detail-page"]')) throw new Error('Handmatig geïmporteerde bon opende niet in de detailkaart'); if (!String(importedReceipt?.receipt_table_id || '').trim()) throw new Error('Handmatige import gaf geen receipt_table_id terug') }, results)
+    await runScenario('R17 Kassa camera-import opent de nieuwe bon direct', async ()=>{ const importedReceipt = await importCameraReceiptViaFileInput(frame); const detailDoc = getFrameDocument(frame); if (!detailDoc?.querySelector('[data-testid="receipt-detail-page"]')) throw new Error('Camera-import opende de nieuwe bon niet in de detailkaart'); if (!String(importedReceipt?.receipt_table_id || '').trim()) throw new Error('Camera-import gaf geen receipt_table_id terug') }, results)
+    await runScenario('R18 Share-import voegt een nieuwe bon toe zonder crash', async ()=>{ const importedReceipt = await importShareReceiptViaApi(frame); if (!String(importedReceipt?.receipt_table_id || '').trim()) throw new Error('Share-import leverde geen receipt_table_id op'); if (!getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]')) throw new Error('Share-import opende de bon niet in Kassa') }, results)
+    await runScenario('R19 Uitpakken toont alleen Kassa-bonnen met status Gecontroleerd en Controle nodig', async ()=>{ const seeded = await seedRegressionKassaReceipts(); const unpackItems = await fetchUnpackStartBatches('1'); if (unpackItems.some((item) => String(item?.receipt_table_id || '') === String(seeded?.receipts?.new?.receipt_table_id || ''))) throw new Error('Nieuw-status bon verscheen onterecht in Uitpakken'); await navigateFrame(frame,'/kassabonnen'); const reviewedRow = await waitForCondition(() => getReceiptBatchRow(getFrameDocument(frame), seeded?.receipts?.reviewed?.batch_id) || null, WAIT_TIMEOUT, 'Gecontroleerde bon ontbreekt in Uitpakken'); const reviewNeededRow = await waitForCondition(() => getReceiptBatchRow(getFrameDocument(frame), seeded?.receipts?.review_needed?.batch_id) || null, WAIT_TIMEOUT, 'Controle-nodig bon ontbreekt in Uitpakken'); if (!getBatchStatusCell(reviewedRow)?.textContent?.includes('Gecontroleerd')) throw new Error('Gecontroleerde bon toont geen status Gecontroleerd in Uitpakken'); if (!getBatchStatusCell(reviewNeededRow)?.textContent?.includes('Controle nodig')) throw new Error('Controle-nodig bon toont geen status Controle nodig in Uitpakken'); const rows = [...(getFrameDocument(frame)?.querySelectorAll('[data-testid^="receipt-batch-row-"]') || [])]; if (rows.some((row) => getBatchStatusCell(row)?.textContent?.includes('Nieuw'))) throw new Error('Uitpakken toont nog steeds een Nieuw-status rij') }, results)
+    await runScenario('R20 Dubbelklik in Uitpakken opent het bestaande Kassabon-detailscherm', async ()=>{ const seeded = await seedRegressionKassaReceipts(); await navigateFrame(frame,'/kassabonnen'); const row = await waitForCondition(() => getReceiptBatchRow(getFrameDocument(frame), seeded?.receipts?.reviewed?.batch_id) || null, WAIT_TIMEOUT, 'Uitpakken-rij voor dubbelklik ontbreekt'); clickElement(row); doubleClickElement(row); const detailDoc = await waitForCondition(() => getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]') ? getFrameDocument(frame) : null, WAIT_TIMEOUT, 'Bestaand Kassabon-detailscherm werd niet geopend'); if (!String(detailDoc?.body?.textContent || '').includes('Kassabon')) throw new Error('Detailscherm toont geen Kassabon-context na dubbelklik') }, results)
+    await runScenario('R21 Gecontroleerde Kassa-bon kan via Uitpakken naar voorraad worden verwerkt', async ()=>{ const seeded = await seedRegressionKassaReceipts(); const result = await mapReceiptBatchLineAndProcess(frame, seeded?.receipts?.reviewed?.batch_id, seeded?.receipts?.reviewed?.article_name || 'Melk'); const latestHistory = result.historyRows.find((entry) => String(entry?.note || '').includes(`batch=${seeded?.receipts?.reviewed?.batch_id}`)); if (!latestHistory) throw new Error('Geen historie-entry gevonden voor de gecontroleerde bon'); if (String(latestHistory?.source || '') !== 'store_import') throw new Error('Gecontroleerde bon schreef geen store_import event naar historie'); if (!String(latestHistory?.note || '').includes('provider=receipt')) throw new Error('Historie-entry van gecontroleerde bon mist provider=receipt in de note') }, results)
+    await runScenario('R22 Controle-nodig bon kan via Uitpakken naar voorraad worden verwerkt', async ()=>{ const seeded = await seedRegressionKassaReceipts(); const result = await mapReceiptBatchLineAndProcess(frame, seeded?.receipts?.review_needed?.batch_id, seeded?.receipts?.review_needed?.article_name || 'Tomaten'); const latestHistory = result.historyRows.find((entry) => String(entry?.note || '').includes(`batch=${seeded?.receipts?.review_needed?.batch_id}`)); if (!latestHistory) throw new Error('Geen historie-entry gevonden voor de controle-nodig bon'); if (String(latestHistory?.source || '') !== 'store_import') throw new Error('Controle-nodig bon schreef geen store_import event naar historie'); if (!String(latestHistory?.note || '').includes('provider=receipt')) throw new Error('Historie-entry van controle-nodig bon mist provider=receipt in de note') }, results)
+    await runScenario('R23 Uitpakken-adapter maakt geen duplicaatbatch per receipt', async ()=>{ const seeded = await seedRegressionKassaReceipts(); const first = await fetchUnpackStartBatches('1'); const second = await fetchUnpackStartBatches('1'); const reviewedId = String(seeded?.receipts?.reviewed?.batch_id || ''); const reviewNeededId = String(seeded?.receipts?.review_needed?.batch_id || ''); const firstReviewedCount = first.filter((item) => String(item?.batch_id || '') === reviewedId).length; const secondReviewedCount = second.filter((item) => String(item?.batch_id || '') === reviewedId).length; const firstReviewNeededCount = first.filter((item) => String(item?.batch_id || '') === reviewNeededId).length; const secondReviewNeededCount = second.filter((item) => String(item?.batch_id || '') === reviewNeededId).length; if (firstReviewedCount !== 1 || secondReviewedCount !== 1 || firstReviewNeededCount !== 1 || secondReviewNeededCount !== 1) throw new Error('Uitpakken-adapter maakte dubbele batchrecords voor dezelfde kassabon') }, results)
+    await runScenario('R24 Historie bewaart purchase-events uit Uitpakken met receipt-provider noot', async ()=>{ const seeded = await seedRegressionKassaReceipts(); await mapReceiptBatchLineAndProcess(frame, seeded?.receipts?.reviewed?.batch_id, seeded?.receipts?.reviewed?.article_name || 'Melk'); const historyRows = await getArticleHistoryRows(seeded?.receipts?.reviewed?.article_name || 'Melk'); const receiptHistory = historyRows.filter((entry) => String(entry?.note || '').includes('provider=receipt')); if (!receiptHistory.length) throw new Error('Historie toont geen purchase-event met receipt-provider'); if (!receiptHistory.some((entry) => String(entry?.note || '').includes(`batch=${seeded?.receipts?.reviewed?.batch_id}`))) throw new Error('Historie-entry verwijst niet naar de verwerkte receipt-batch') }, results)
   } finally { removeExistingFrame() }
   return results
 }

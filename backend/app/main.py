@@ -26,7 +26,7 @@ from email import policy
 from email.parser import BytesParser
 from email.utils import getaddresses, parsedate_to_datetime
 import logging
-from sqlalchemy import text
+from sqlalchemy import text, bindparam
 
 app = FastAPI()
 logger = logging.getLogger('rezzerv.api')
@@ -7054,6 +7054,223 @@ def reset_regression_fixture_state():
         "dataset": "ui_seed",
         "household_id": str(ensure_household("admin@rezzerv.local").get("id") or "1"),
         "version": version,
+    }
+
+
+@app.get("/api/dev/regression/receipt-fixture-file")
+def get_regression_receipt_fixture_file(kind: str = Query('manual')):
+    fixtures_root = Path(__file__).resolve().parent / 'testing' / 'receipt_parsing' / 'raw'
+    fixture_map = {
+        'manual': {
+            'path': fixtures_root / 'Lidl2.eml',
+            'filename': 'regression-manual.eml',
+            'media_type': 'message/rfc822',
+        },
+        'email': {
+            'path': fixtures_root / 'Lidl3.eml',
+            'filename': 'regression-email.eml',
+            'media_type': 'message/rfc822',
+        },
+        'camera': {
+            'path': fixtures_root / 'ALDI-kassabon-NL-voorbeeld.jpg',
+            'filename': 'regression-camera.jpg',
+            'media_type': 'image/jpeg',
+        },
+        'share': {
+            'path': fixtures_root / 'AH_kassabon_2026-03-14 171300_8770.pdf',
+            'filename': 'regression-share.pdf',
+            'media_type': 'application/pdf',
+        },
+    }
+    selected = fixture_map.get(str(kind or '').strip().lower())
+    if not selected:
+        raise HTTPException(status_code=400, detail='Onbekend regressie-fixturetype')
+    file_path = selected['path']
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail='Regressie-fixturebestand ontbreekt')
+    return FileResponse(path=file_path, filename=selected['filename'], media_type=selected['media_type'])
+
+
+@app.post("/api/dev/regression/seed-kassa-receipts")
+def seed_regression_kassa_receipts():
+    household = ensure_household("admin@rezzerv.local")
+    household_id = str(household.get('id') or '1')
+    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, household_id)
+    fixtures_root = Path(__file__).resolve().parent / 'testing' / 'receipt_parsing' / 'raw'
+    reviewed_storage = str((fixtures_root / 'Lidl2.eml').resolve())
+    review_storage = str((fixtures_root / 'ALDI-kassabon-NL-voorbeeld.jpg').resolve())
+    new_storage = str((fixtures_root / 'Lidl3.eml').resolve())
+
+    with engine.begin() as conn:
+        raw_ids = [
+            str(row['id']) for row in conn.execute(
+                text("SELECT id FROM raw_receipts WHERE household_id = :household_id"),
+                {'household_id': household_id},
+            ).mappings().all()
+        ]
+        if raw_ids:
+            receipt_ids = [
+                str(row['id']) for row in conn.execute(
+                    text("SELECT id FROM receipt_tables WHERE household_id = :household_id"),
+                    {'household_id': household_id},
+                ).mappings().all()
+            ]
+            if receipt_ids:
+                conn.execute(text("DELETE FROM receipt_table_lines WHERE receipt_table_id IN :ids").bindparams(bindparam('ids', expanding=True)), {'ids': receipt_ids})
+                conn.execute(text("DELETE FROM receipt_tables WHERE id IN :ids").bindparams(bindparam('ids', expanding=True)), {'ids': receipt_ids})
+            conn.execute(text("DELETE FROM receipt_email_messages WHERE raw_receipt_id IN :ids").bindparams(bindparam('ids', expanding=True)), {'ids': raw_ids})
+            conn.execute(text("DELETE FROM raw_receipts WHERE id IN :ids").bindparams(bindparam('ids', expanding=True)), {'ids': raw_ids})
+        conn.execute(
+            text("DELETE FROM purchase_import_lines WHERE batch_id IN (SELECT id FROM purchase_import_batches WHERE household_id = :household_id AND source_type = 'receipt')"),
+            {'household_id': household_id},
+        )
+        conn.execute(
+            text("DELETE FROM purchase_import_batches WHERE household_id = :household_id AND source_type = 'receipt'"),
+            {'household_id': household_id},
+        )
+
+        def insert_receipt(*, receipt_id: str, storage_path: str, original_filename: str, mime_type: str, sha_seed: str, store_name: str,
+                           purchase_at: str | None, total_amount: float | None, discount_total: float | None, parse_status: str,
+                           lines: list[dict[str, Any]]):
+            raw_receipt_id = str(uuid.uuid4())
+            conn.execute(
+                text("""
+                INSERT INTO raw_receipts (
+                    id, household_id, source_id, original_filename, mime_type, storage_path, sha256_hash,
+                    duplicate_of_raw_receipt_id, raw_status, imported_at, created_at
+                ) VALUES (
+                    :id, :household_id, NULL, :original_filename, :mime_type, :storage_path, :sha256_hash,
+                    NULL, 'imported', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """),
+                {
+                    'id': raw_receipt_id,
+                    'household_id': household_id,
+                    'original_filename': original_filename,
+                    'mime_type': mime_type,
+                    'storage_path': storage_path,
+                    'sha256_hash': f'regression-seed::{sha_seed}::{receipt_id}',
+                },
+            )
+            conn.execute(
+                text("""
+                INSERT INTO receipt_tables (
+                    id, raw_receipt_id, household_id, store_name, store_branch, purchase_at, total_amount,
+                    discount_total, currency, parse_status, confidence_score, line_count, created_at, updated_at
+                ) VALUES (
+                    :id, :raw_receipt_id, :household_id, :store_name, NULL, :purchase_at, :total_amount,
+                    :discount_total, 'EUR', :parse_status, 0.99, :line_count, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """),
+                {
+                    'id': receipt_id,
+                    'raw_receipt_id': raw_receipt_id,
+                    'household_id': household_id,
+                    'store_name': store_name,
+                    'purchase_at': purchase_at,
+                    'total_amount': total_amount,
+                    'discount_total': discount_total,
+                    'parse_status': parse_status,
+                    'line_count': len(lines),
+                },
+            )
+            for index, line in enumerate(lines, start=1):
+                conn.execute(
+                    text("""
+                    INSERT INTO receipt_table_lines (
+                        id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit,
+                        unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id,
+                        confidence_score, created_at, updated_at
+                    ) VALUES (
+                        :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit,
+                        :unit_price, :line_total, :discount_amount, NULL, 'unmatched', NULL,
+                        0.99, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                    """),
+                    {
+                        'id': str(uuid.uuid4()),
+                        'receipt_table_id': receipt_id,
+                        'line_index': index,
+                        'raw_label': line['raw_label'],
+                        'normalized_label': str(line['raw_label']).strip().lower(),
+                        'quantity': line.get('quantity'),
+                        'unit': line.get('unit') or '',
+                        'unit_price': line.get('unit_price'),
+                        'line_total': line.get('line_total'),
+                        'discount_amount': line.get('discount_amount'),
+                    },
+                )
+            return raw_receipt_id
+
+        reviewed_receipt_id = str(uuid.uuid4())
+        review_receipt_id = str(uuid.uuid4())
+        new_receipt_id = str(uuid.uuid4())
+
+        insert_receipt(
+            receipt_id=reviewed_receipt_id,
+            storage_path=reviewed_storage,
+            original_filename='seed-reviewed.eml',
+            mime_type='message/rfc822',
+            sha_seed='reviewed',
+            store_name='Lidl',
+            purchase_at='2026-03-21T12:34:00',
+            total_amount=2.49,
+            discount_total=0.0,
+            parse_status='parsed',
+            lines=[{'raw_label': 'Melk', 'quantity': 1, 'unit': 'stuk', 'unit_price': 2.49, 'line_total': 2.49, 'discount_amount': 0.0}],
+        )
+        insert_receipt(
+            receipt_id=review_receipt_id,
+            storage_path=review_storage,
+            original_filename='seed-review.jpg',
+            mime_type='image/jpeg',
+            sha_seed='review-needed',
+            store_name='ALDI',
+            purchase_at='2026-03-21T13:15:00',
+            total_amount=1.99,
+            discount_total=0.0,
+            parse_status='review_needed',
+            lines=[{'raw_label': 'Tomaten', 'quantity': 1, 'unit': 'stuk', 'unit_price': 1.99, 'line_total': 1.99, 'discount_amount': 0.0}],
+        )
+        insert_receipt(
+            receipt_id=new_receipt_id,
+            storage_path=new_storage,
+            original_filename='seed-new.eml',
+            mime_type='message/rfc822',
+            sha_seed='new',
+            store_name='Jumbo',
+            purchase_at='2026-03-21T14:00:00',
+            total_amount=None,
+            discount_total=None,
+            parse_status='partial',
+            lines=[],
+        )
+
+        reviewed_batch_id = ensure_unpack_batch_for_receipt(conn, {
+            'receipt_table_id': reviewed_receipt_id,
+            'household_id': household_id,
+            'store_name': 'Lidl',
+            'purchase_at': '2026-03-21T12:34:00',
+            'created_at': '2026-03-21T12:34:00',
+            'currency': 'EUR',
+        })
+        review_batch_id = ensure_unpack_batch_for_receipt(conn, {
+            'receipt_table_id': review_receipt_id,
+            'household_id': household_id,
+            'store_name': 'ALDI',
+            'purchase_at': '2026-03-21T13:15:00',
+            'created_at': '2026-03-21T13:15:00',
+            'currency': 'EUR',
+        })
+
+    return {
+        'status': 'ok',
+        'household_id': household_id,
+        'receipts': {
+            'reviewed': {'receipt_table_id': reviewed_receipt_id, 'batch_id': reviewed_batch_id, 'store_name': 'Lidl', 'inbox_status': 'Gecontroleerd', 'article_name': 'Melk'},
+            'review_needed': {'receipt_table_id': review_receipt_id, 'batch_id': review_batch_id, 'store_name': 'ALDI', 'inbox_status': 'Controle nodig', 'article_name': 'Tomaten'},
+            'new': {'receipt_table_id': new_receipt_id, 'store_name': 'Jumbo', 'inbox_status': 'Nieuw'},
+        },
     }
 
 

@@ -1091,7 +1091,11 @@ function ReceiptSourceHubContent({
       <ScreenCard fullWidth>
           <div style={{ display: 'grid', gap: '18px' }}>
             {feedbackMessage ? (
-              <div className={feedbackClassName} style={{ fontWeight: 700 }} data-testid="receipt-landing-feedback">{feedbackMessage}</div>
+              feedbackVariant === 'warning' ? (
+                <div className={feedbackClassName} style={{ fontWeight: 700 }} data-testid="receipt-duplicate-feedback"><span data-testid="receipt-sourcehub-duplicate-feedback">{feedbackMessage}</span></div>
+              ) : (
+                <div className={feedbackClassName} style={{ fontWeight: 700 }} data-testid="receipt-landing-feedback">{feedbackMessage}</div>
+              )
             ) : null}
             <div
               role="button"
@@ -1130,9 +1134,9 @@ function ReceiptSourceHubContent({
             </div>
 
             <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', alignItems: 'stretch' }}>
-              <Button type="button" variant="primary" onClick={onChooseReceiptFile} disabled={isUploading} style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Bestanden kiezen</Button>
-              <Button type="button" variant="secondary" onClick={onChooseCamera} disabled={isUploading} style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Camera openen</Button>
-              <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isUploading} style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Email inlezen</Button>
+              <Button type="button" variant="primary" onClick={onChooseReceiptFile} disabled={isUploading} data-testid="kassa-choose-file-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Bestanden kiezen</Button>
+              <Button type="button" variant="secondary" onClick={onChooseCamera} disabled={isUploading} data-testid="kassa-open-camera-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Camera openen</Button>
+              <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isUploading} data-testid="kassa-open-email-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Email inlezen</Button>
             </div>
 
             {uploadProgress?.active ? (
@@ -1284,6 +1288,7 @@ function CameraCaptureModal({
     <div className="rz-modal-backdrop" role="presentation" style={{ inset: '56px 0 0 0', alignItems: 'start', justifyItems: 'center', overflowY: 'auto', padding: '16px 20px 20px' }}>
       <div
         className="rz-modal-card"
+        data-testid="kassa-camera-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="kassa-camera-title"
@@ -1294,7 +1299,7 @@ function CameraCaptureModal({
             <h2 id="kassa-camera-title" className="rz-modal-title" style={{ fontSize: '22px' }}>Foto controleren</h2>
             <p className="rz-modal-text">Controleer of de kassabon volledig zichtbaar is voordat je hem opslaat in Kassa.</p>
           </div>
-          <Button type="button" variant="secondary" onClick={onCancel} disabled={isUploading}>Annuleren</Button>
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={isUploading} data-testid="kassa-camera-cancel">Annuleren</Button>
         </div>
 
         {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-camera-duplicate-feedback">{duplicateNotice}</div> : null}
@@ -1309,8 +1314,8 @@ function CameraCaptureModal({
         </div>
 
         <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
-          <Button type="button" variant="secondary" onClick={onRetake} disabled={isUploading}>Opnieuw</Button>
-          <Button type="button" variant="primary" onClick={onConfirm} disabled={isUploading}>{isUploading ? 'Opslaan…' : 'Bevestigen'}</Button>
+          <Button type="button" variant="secondary" onClick={onRetake} disabled={isUploading} data-testid="kassa-camera-retake">Opnieuw</Button>
+          <Button type="button" variant="primary" onClick={onConfirm} disabled={isUploading} data-testid="kassa-camera-confirm">{isUploading ? 'Opslaan…' : 'Bevestigen'}</Button>
         </div>
       </div>
     </div>
@@ -1326,6 +1331,7 @@ function ReceiptUploadInputs({ fileInputRef, cameraInputRef, emailInputRef, onLa
         type="file"
         accept=".eml,message/rfc822,.pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
         style={{ display: 'none' }}
+        data-testid="kassa-manual-file-input"
         onChange={onLandingUploadChange}
       />
       <input
@@ -1334,6 +1340,7 @@ function ReceiptUploadInputs({ fileInputRef, cameraInputRef, emailInputRef, onLa
         accept="image/*"
         capture="environment"
         style={{ display: 'none' }}
+        data-testid="kassa-camera-file-input"
         onChange={onCameraCaptureChange}
       />
       <input
@@ -1341,6 +1348,7 @@ function ReceiptUploadInputs({ fileInputRef, cameraInputRef, emailInputRef, onLa
         type="file"
         accept=".eml,message/rfc822"
         style={{ display: 'none' }}
+        data-testid="kassa-email-file-input"
         onChange={onEmailUploadChange}
       />
     </>
