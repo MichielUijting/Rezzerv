@@ -107,7 +107,6 @@ function dispatchFileDrop(frame, target, file) {
 async function resetRegressionState() {
   await requestJson('/api/dev/regression/reset', { method: 'POST', body: '{}' })
 }
-
 async function fetchKassaReceiptItems(householdId = '1') {
   const data = await requestJson(`/api/receipts?householdId=${encodeURIComponent(householdId)}`)
   return Array.isArray(data?.items) ? data.items : []

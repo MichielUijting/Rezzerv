@@ -66,64 +66,6 @@ def normalize_api_error_message(value: Any, fallback: str = 'Verzoek mislukt') -
     message = str(value).strip()
     return message or fallback
 
-AH_BRANCH_MAP = {
-    "8770": {"address": "Valburgseweg 20", "city": "Elst Gld"},
-    "8521": {"address": "Polenplein 24 A", "city": "Driel"},
-}
-
-ALDI_BRANCH_HINTS = [
-    (re.compile(r"c8st010\s*003|prins[_\s-]?frederiklaan|aldi[_\s-]?kassabon[_\s-]?nl[_\s-]?voorbeeld|aldi_top", re.IGNORECASE), {"address": "Prins Frederiklaan 203", "city": "Leidschendam"}),
-]
-
-def _safe_receipt_file_text(storage_path: str | None) -> str:
-    path = Path(str(storage_path or '').strip())
-    if not path.exists() or not path.is_file():
-        return ''
-    suffix = path.suffix.lower()
-    try:
-        if suffix == '.pdf':
-            try:
-                from pypdf import PdfReader
-            except Exception:
-                return ''
-            reader = PdfReader(str(path))
-            text_parts = []
-            for page in reader.pages[:2]:
-                try:
-                    text_parts.append(page.extract_text() or '')
-                except Exception:
-                    continue
-            return re.sub(r'\s+', ' ', ' '.join(text_parts)).strip()
-        if suffix in {'.txt', '.log'}:
-            return re.sub(r'\s+', ' ', path.read_text(encoding='utf-8', errors='ignore')).strip()
-    except Exception:
-        return ''
-    return ''
-
-
-def derive_receipt_branch_fields(store_name: str | None, store_branch: str | None, original_filename: str | None, storage_path: str | None):
-    normalized_store = str(store_name or '').strip().lower()
-    candidate_parts = [str(store_branch or '').strip(), str(original_filename or '').strip(), str(storage_path or '').strip(), _safe_receipt_file_text(storage_path)]
-    combined = ' '.join(part for part in candidate_parts if part).strip()
-
-    if 'albert heijn' in normalized_store:
-        known_codes = []
-        for match in re.finditer(r'(\d{4})', combined):
-            code = match.group(1)
-            if code in AH_BRANCH_MAP:
-                known_codes.append(code)
-        if known_codes:
-            resolved = AH_BRANCH_MAP[known_codes[-1]]
-            return {**resolved, 'code': known_codes[-1]}
-
-    if 'aldi' in normalized_store:
-        for pattern, resolved in ALDI_BRANCH_HINTS:
-            if pattern.search(combined):
-                return {**resolved, 'code': ''}
-
-    return {'address': '', 'city': '', 'code': ''}
-
-
 # In-memory opslag (MVP login)
 households = {}
 users = {
@@ -4498,7 +4440,6 @@ def get_receipt_detail(receipt_table_id: str):
                     COALESCE(rs.label, 'Manual upload') AS source_label,
                     rr.original_filename,
                     rr.mime_type,
-                    rr.storage_path,
                     rr.imported_at,
                     rem.sender_email,
                     rem.sender_name,
@@ -4532,11 +4473,6 @@ def get_receipt_detail(receipt_table_id: str):
         ).mappings().first()
         if not header:
             raise HTTPException(status_code=404, detail="Receipt table niet gevonden")
-        header = dict(header)
-        derived_branch = derive_receipt_branch_fields(header.get('store_name'), header.get('store_branch'), header.get('original_filename'), header.get('storage_path'))
-        header['derived_branch_address'] = derived_branch.get('address') or ''
-        header['derived_branch_city'] = derived_branch.get('city') or ''
-        header['derived_branch_code'] = derived_branch.get('code') or ''
         lines = conn.execute(
             text(
                 """
@@ -4562,7 +4498,6 @@ def get_receipt_detail(receipt_table_id: str):
             {"receipt_table_id": receipt_table_id},
         ).mappings().all()
     payload = serialize_receipt_row(dict(header))
-    payload.pop('storage_path', None)
     payload["lines"] = [serialize_receipt_row(dict(line)) for line in lines]
     return payload
 
