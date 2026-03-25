@@ -232,7 +232,9 @@ async function importShareReceiptViaApi(frame) {
     const items = await fetchKassaReceiptItems('1')
     return items.find((item) => !beforeIds.has(String(item?.receipt_table_id || ''))) || null
   }, WAIT_TIMEOUT, 'Share-import leverde geen nieuwe bon op')
-  await navigateFrame(frame, '/kassa')
+  const parseStatus = encodeURIComponent(String(payload?.parse_status || importedReceipt?.parse_status || 'partial'))
+  const duplicateFlag = payload?.duplicate ? '1' : '0'
+  await navigateFrame(frame, `/kassa?share_status=success&receipt_table_id=${encodeURIComponent(String(importedReceipt?.receipt_table_id || ''))}&duplicate=${duplicateFlag}&parse_status=${parseStatus}`)
   await waitForReceiptRowAndDetail(frame, importedReceipt.receipt_table_id, 'Share-import bon werd niet zichtbaar in Kassa')
   return importedReceipt
 }
@@ -295,6 +297,8 @@ async function mapReceiptBatchLineAndProcess(frame, batchId, articleName) {
   const locationOptions = await fetchStoreLocationOptions()
   const locationId = findLocationOptionId(locationOptions, 'keuken')
   if (!locationId) throw new Error('Geen locatieoptie gevonden voor regressietest')
+  const lineSelect = await waitForCondition(() => getFrameDocument(frame)?.querySelector(`[data-testid="receipt-line-select-${targetLine.id}"]`) || null, WAIT_TIMEOUT, 'Selectiecheckbox voor kassabonregel niet gevonden')
+  if (!lineSelect.checked) nativeClick(lineSelect)
   const articleSelect = await waitForCondition(() => getFrameDocument(frame)?.querySelector(`[data-testid="receipt-line-article-select-${targetLine.id}"] select`) || getFrameDocument(frame)?.querySelector(`[data-testid="receipt-line-article-select-${targetLine.id}"] [data-store-article-select="true"]`) || null, WAIT_TIMEOUT, 'Artikelselector voor kassabonregel niet gevonden')
   setSelectValue(articleSelect, articleId)
   await waitForAsyncCondition(async () => {
