@@ -160,6 +160,7 @@ body {
 /* --- Structural table row height fix --- */
 .rz-table {
   border-collapse: collapse;
+  margin-bottom: 0;
 }
 
 .rz-table th,
@@ -212,8 +213,13 @@ body {
 }
 
 .rz-table-wrapper{
+  display: block;
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 14px;
+  scrollbar-gutter: stable both-edges;
 }
 
 

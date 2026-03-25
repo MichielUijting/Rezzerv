@@ -65,23 +65,31 @@ const AH_BRANCH_MAP = {
 
 const ALDI_RECEIPT_HINTS = [
   {
-    match: /aldi-kassabon-nl-voorbeeld|prins[_ -]?frederiklaan/i,
+    match: /aldi-kassabon-nl-voorbeeld|prins[_ -]?frederiklaan|c8st010\s*003|aldi_top/i,
     address: 'Prins Frederiklaan 203',
     city: 'Leidschendam',
   },
 ]
 
 function extractAhBranchCode(receipt) {
-  const candidates = [receipt?.store_branch, receipt?.original_filename]
+  const candidates = [
+    receipt?.store_branch,
+    receipt?.original_filename,
+    receipt?.source_label,
+    receipt?.id,
+  ]
+  const matches = []
   for (const candidate of candidates) {
     const normalized = String(candidate || '').trim()
     if (!normalized) continue
     const directMatch = normalized.match(/^\s*(\d{4})\s*$/)
-    if (directMatch) return directMatch[1]
+    if (directMatch) matches.push(directMatch[1])
     const allMatches = Array.from(normalized.matchAll(/(\d{4})/g)).map((match) => match[1]).filter(Boolean)
-    if (allMatches.length) return allMatches[allMatches.length - 1]
+    matches.push(...allMatches)
   }
-  return ''
+  const knownMatches = matches.filter((code) => AH_BRANCH_MAP[code])
+  if (knownMatches.length) return knownMatches[knownMatches.length - 1]
+  return matches.length ? matches[matches.length - 1] : ''
 }
 
 function splitBranchAddressPlace(value) {
@@ -755,6 +763,15 @@ function ReceiptDetailInfoCard({ receipt }) {
 
   const baseLines = receipt?.lines || []
   const lines = baseLines.filter((line) => !hiddenLineIds.includes(line.id))
+  const sortedLines = useMemo(() => sortItems(lines, lineSort, {
+    lineIndex: (line) => Number(line?.line_index ?? 0),
+    article: (line) => line?.raw_label || line?.normalized_label || '',
+    quantity: (line) => Number(line?.quantity ?? 0),
+    unit: (line) => line?.unit || '',
+    unitPrice: (line) => Number(line?.unit_price ?? 0),
+    lineTotal: (line) => Number(line?.line_total ?? 0),
+    discount: (line) => Number(line?.discount_amount ?? 0),
+  }), [lines, lineSort])
   const allSelected = lines.length > 0 && lines.every((line) => selectedLineIds.includes(line.id))
   const visibleLineTotalSum = lines.reduce((sum, line) => {
     const value = Number(line?.line_total)
@@ -881,8 +898,8 @@ function ReceiptDetailInfoCard({ receipt }) {
                     Deze bon heeft nog geen herkende artikelregels. Controleer later opnieuw of upload een beter leesbare bon.
                   </div>
                 ) : null}
-                <div className="rz-table-wrapper" style={{ paddingBottom: '18px', maxWidth: '100%', width: '100%', overflowX: 'auto', overflowY: 'hidden', scrollbarGutter: 'stable both-edges' }}>
-                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'fixed', width: '100%', minWidth: buildTableWidth(lineColumnWidths), marginBottom: '8px' }}>
+                <div className="rz-table-wrapper">
+                  <table className="rz-table" data-testid="receipt-lines-table" style={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }}>
                     <colgroup>
                       <col style={{ width: `${lineColumnWidths.select}px` }} />
                       <col style={{ width: `${lineColumnWidths.article}px` }} />
@@ -913,7 +930,7 @@ function ReceiptDetailInfoCard({ receipt }) {
                     <tbody>
                       {lines.length === 0 ? (
                         <tr><td colSpan={7}>Geen artikelregels beschikbaar.</td></tr>
-                      ) : lines.map((line) => {
+                      ) : sortedLines.map((line) => {
                         const selected = selectedLineIds.includes(line.id)
                         return (
                           <tr key={line.id} data-testid={`receipt-line-row-${line.id}`} className={selected ? 'rz-row-selected' : ''}>
@@ -2116,8 +2133,8 @@ export default function KassaPage() {
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
-              <div className="rz-table-wrapper" style={{ overflowX: 'auto', overflowY: 'hidden', maxWidth: '100%', width: '100%', paddingBottom: '18px', scrollbarGutter: 'stable both-edges' }}>
-                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), marginBottom: '8px' }}>
+              <div className="rz-table-wrapper">
+                <table className="rz-table" data-testid="kassa-table" style={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
                   <colgroup>
                     <col style={{ width: `${inboxColumnWidths.select}px` }} />
                     <col style={{ width: `${inboxColumnWidths.store}px` }} />
