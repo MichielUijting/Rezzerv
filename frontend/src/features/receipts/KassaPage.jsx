@@ -762,6 +762,7 @@ function ReceiptDetailInfoCard({ receipt }) {
   }, [receipt?.id])
 
   const baseLines = receipt?.lines || []
+  const [lineSort, setLineSort] = useState({ key: 'lineIndex', direction: 'asc' })
   const lines = baseLines.filter((line) => !hiddenLineIds.includes(line.id))
   const sortedLines = useMemo(() => sortItems(lines, lineSort, {
     lineIndex: (line) => Number(line?.line_index ?? 0),
@@ -799,7 +800,6 @@ function ReceiptDetailInfoCard({ receipt }) {
     discount: 118,
   }), [])
   const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
-  const [lineSort, setLineSort] = useState({ key: 'lineIndex', direction: 'asc' })
 
   function toggleLine(lineId) {
     setSelectedLineIds((current) => (
