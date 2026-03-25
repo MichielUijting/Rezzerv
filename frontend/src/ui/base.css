@@ -14,6 +14,67 @@ body {
   background: #F5F7F6;
 }
 
+
+.rz-sort-button {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.rz-sort-button--numeric {
+  justify-content: space-between;
+}
+
+.rz-table-header .rz-sort-button,
+.rz-table-header .rz-sort-button span:first-child {
+  color: #ffffff;
+}
+
+.rz-sort-indicator {
+  position: relative;
+  flex: 0 0 14px;
+  width: 14px;
+  height: 12px;
+  color: transparent;
+}
+
+.rz-sort-indicator::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform: translateY(-50%);
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 7px solid rgba(255, 255, 255, 0.72);
+}
+
+.rz-sort-indicator[data-direction='asc']::before {
+  border-top: 0;
+  border-bottom: 7px solid #ffffff;
+}
+
+.rz-sort-indicator[data-direction='desc']::before {
+  border-bottom: 0;
+  border-top: 7px solid #ffffff;
+}
+
+.rz-sort-indicator.is-active::before {
+  opacity: 1;
+}
+
 /* Build tag (version) pill for debugging */
 .rz-buildtag {
   position: fixed;
@@ -393,7 +454,7 @@ button.rz-tab.rz-tab-active {
 
 .rz-modal-title {
   margin: 0;
-  color: var(--color-brand-primary);
+  color: #166534;
   font-size: 18px;
   font-weight: 600;
 }
@@ -871,7 +932,7 @@ button.rz-tab.rz-tab-active {
 }
 
 .rz-analytics-accordion-indicator {
-  color: var(--color-brand-primary);
+  color: #166534;
   font-size: 18px;
   line-height: 1;
   transform: rotate(-90deg);

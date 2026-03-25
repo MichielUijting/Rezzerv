@@ -57,17 +57,57 @@ function normalizeReceiptSourceLabel(value) {
   return String(value)
 }
 
+const AH_BRANCH_MAP = {
+  '8770': { address: 'Valburgseweg 20', city: 'Elst Gld' },
+  '8521': { address: 'Polenplein 24 A', city: 'Driel' },
+}
+
+function extractAhBranchCode(receipt) {
+  const candidates = [
+    receipt?.store_branch,
+    receipt?.original_filename,
+  ]
+  for (const candidate of candidates) {
+    const normalized = String(candidate || '').trim()
+    if (!normalized) continue
+    const directMatch = normalized.match(/^\s*(\d{4})\s*$/)
+    if (directMatch) return directMatch[1]
+    const fileMatch = normalized.match(/(?:^|[^\d])(\d{4})(?:\.[A-Za-z0-9]+$|[^\d]|$)/)
+    if (fileMatch) return fileMatch[1]
+  }
+  return ''
+}
+
 function splitBranchAddressPlace(value) {
   const normalized = String(value || '').trim()
   if (!normalized) return { address: '-', city: '-' }
   const parts = normalized.split(',').map((part) => part.trim()).filter(Boolean)
+  const postcodePattern = /^\d{4}\s?[A-Z]{2}\s+(.+)$/i
   if (parts.length >= 2) {
+    const trailing = parts[parts.length - 1] || ''
+    const postcodeMatch = trailing.match(postcodePattern)
     return {
       address: parts.slice(0, -1).join(', ') || '-',
-      city: parts.slice(-1)[0] || '-',
+      city: (postcodeMatch?.[1] || trailing || '-').trim(),
+    }
+  }
+  const standalonePostcodeMatch = normalized.match(/^(.*?),(?:\s*)?(\d{4}\s?[A-Z]{2})\s+(.+)$/i)
+  if (standalonePostcodeMatch) {
+    return {
+      address: standalonePostcodeMatch[1].trim() || '-',
+      city: standalonePostcodeMatch[3].trim() || '-',
     }
   }
   return { address: normalized, city: '-' }
+}
+
+function deriveBranchAddressPlace(receipt) {
+  const storeName = String(receipt?.store_name || '').trim().toLowerCase()
+  if (storeName === 'albert heijn') {
+    const branchCode = extractAhBranchCode(receipt)
+    if (branchCode && AH_BRANCH_MAP[branchCode]) return AH_BRANCH_MAP[branchCode]
+  }
+  return splitBranchAddressPlace(receipt?.store_branch)
 }
 
 function inboundImportStatusLabel(value) {
@@ -146,7 +186,7 @@ function ResizableHeaderCell({ columnKey, widths, onStartResize, className = '',
           aria-label={`${typeof children === 'string' ? children : 'Kolom'} sorteren`}
         >
           <span>{children}</span>
-          <span className={`rz-sort-indicator${isSorted ? ' is-active' : ''}`} aria-hidden="true">{isSorted ? (sortDirection === 'asc' ? '▲' : '▼') : '↕'}</span>
+          <span className={`rz-sort-indicator${isSorted ? ' is-active' : ''}`} data-direction={isSorted ? sortDirection : 'desc'} aria-hidden="true" />
         </button>
       ) : (
         <div style={{ paddingRight: '10px' }}>{children}</div>
@@ -696,11 +736,11 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
               borderRadius: '8px',
               minHeight: '420px',
               background: '#f8fafc',
-              overflow: 'hidden',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              overflow: 'auto',
+              display: 'block',
               padding: previewState.isImage ? '16px' : '0',
+              height: '72vh',
+              maxHeight: '72vh',
             }}
           >
             {previewState.status === 'loading' ? (
@@ -718,9 +758,9 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
 
             {previewState.status === 'ready' && previewState.isPdf ? (
               <iframe
-                src={previewState.blobUrl}
+                src={`${previewState.blobUrl}#toolbar=1&navpanes=0&scrollbar=1&view=FitH`}
                 title={`Preview van bon ${receipt?.id}`}
-                style={{ width: '100%', minHeight: '560px', border: '0', background: '#fff' }}
+                style={{ display: 'block', width: '100%', height: '100%', minHeight: '560px', border: '0', background: '#fff' }}
                 data-testid="receipt-preview-pdf"
               />
             ) : null}
@@ -729,7 +769,7 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
               <img
                 src={previewState.blobUrl}
                 alt={`Preview van bon ${receipt?.id}`}
-                style={{ width: '100%', maxHeight: '720px', objectFit: 'contain', background: '#fff', borderRadius: '4px' }}
+                style={{ display: 'block', width: '100%', maxWidth: '100%', height: 'auto', background: '#fff', borderRadius: '4px' }}
                 data-testid="receipt-preview-image"
               />
             ) : null}
@@ -738,7 +778,7 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
               <iframe
                 srcDoc={previewState.textContent || '<p>Geen HTML-preview beschikbaar.</p>'}
                 title={`HTML-preview van bon ${receipt?.id}`}
-                style={{ width: '100%', minHeight: '560px', border: '0', background: '#fff' }}
+                style={{ display: 'block', width: '100%', height: '100%', minHeight: '560px', border: '0', background: '#fff' }}
                 sandbox=""
                 data-testid="receipt-preview-html"
               />
@@ -792,7 +832,7 @@ function ReceiptDetailInfoCard({ receipt }) {
     : (Number.isFinite(receiptLevelDiscount) ? receiptLevelDiscount : visibleDiscountSum)
   const visibleNetTotalSum = visibleLineTotalSum + effectiveDiscountTotal
   const detailAmountsMatch = Number.isFinite(Number(receipt?.total_amount)) && lines.length > 0 && Math.abs(Number(receipt?.total_amount) - visibleNetTotalSum) < 0.01
-  const branchParts = splitBranchAddressPlace(receipt?.store_branch)
+  const branchParts = deriveBranchAddressPlace(receipt)
   const lineColumnDefaults = useMemo(() => ({
     select: 44,
     article: 320,
@@ -1004,17 +1044,17 @@ function ReceiptDetailView({ receipt }) {
         maxWidth: '900px',
         margin: '0 auto',
         minWidth: 0,
-        overflow: 'hidden',
+        overflow: 'visible',
       }}
     >
-      <div style={{ minWidth: 0, width: '100%', overflow: 'hidden' }}>
+      <div style={{ minWidth: 0, width: '100%', overflow: 'visible' }}>
         <ReceiptPreviewCard
           receipt={receipt}
           isCollapsed={isPreviewCollapsed}
           onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
         />
       </div>
-      <div style={{ minWidth: 0, width: '100%', overflow: 'hidden' }}>
+      <div style={{ minWidth: 0, width: '100%', overflow: 'visible' }}>
         <ReceiptDetailInfoCard receipt={receipt} />
       </div>
     </div>
