@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
 import Button from "../ui/Button";
 import { nextSortState, sortItems, sortStringOptions } from "../ui/sorting";
+import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from "../ui/resizableTable.jsx";
 
 function normalizeName(value) {
   return String(value || '').trim().toLowerCase()
@@ -344,6 +345,15 @@ export default function Voorraad() {
     locatie: "",
     sublocatie: ""
   });
+  const [tableSort, setTableSort] = useState({ key: "artikel", direction: "asc" });
+  const inventoryColumnDefaults = useMemo(() => ({
+    select: 48,
+    artikel: 320,
+    aantal: 120,
+    locatie: 220,
+    sublocatie: 220,
+  }), []);
+  const { widths: inventoryColumnWidths, startResize: startInventoryResize } = useResizableColumnWidths(inventoryColumnDefaults);
   const [editingCell, setEditingCell] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [saveState, setSaveState] = useState({});
@@ -636,29 +646,29 @@ export default function Voorraad() {
           <div className="rz-card">
             {loadError && <div style={{ marginBottom: "12px", color: "#b42318", fontWeight: 700 }}>{loadError}</div>}
             <div className="rz-table-wrapper rz-stock-table-wrapper">
-              <table className="rz-table rz-stock-table" data-testid="inventory-table">
+              <table className="rz-table rz-stock-table" data-testid="inventory-table" style={{ tableLayout: 'fixed', width: buildTableWidth(inventoryColumnWidths), minWidth: buildTableWidth(inventoryColumnWidths) }}>
                 <colgroup>
-                  <col style={{ width: "48px" }} />
-                  <col style={{ width: "34%" }} />
-                  <col style={{ width: "12%" }} />
-                  <col style={{ width: "24%" }} />
-                  <col style={{ width: "24%" }} />
+                  <col style={{ width: `${inventoryColumnWidths.select}px` }} />
+                  <col style={{ width: `${inventoryColumnWidths.artikel}px` }} />
+                  <col style={{ width: `${inventoryColumnWidths.aantal}px` }} />
+                  <col style={{ width: `${inventoryColumnWidths.locatie}px` }} />
+                  <col style={{ width: `${inventoryColumnWidths.sublocatie}px` }} />
                 </colgroup>
 
                 <thead>
                   <tr className="rz-table-header">
-                    <th>
+                    <ResizableHeaderCell columnKey="select" widths={inventoryColumnWidths} onStartResize={startInventoryResize}>
                       <input
                         type="checkbox"
                         checked={allFilteredChecked}
                         onChange={toggleAllFiltered}
                         aria-label="Selecteer alle zichtbare artikelen"
                       />
-                    </th>
-                    <th><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, "artikel", { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}><span>Artikel</span><span className={`rz-sort-indicator${tableSort.key === "artikel" ? " is-active" : ""}`} data-direction={tableSort.key === "artikel" ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
-                    <th className="rz-num"><button type="button" className="rz-sort-button rz-sort-button--numeric" onClick={() => setTableSort((current) => nextSortState(current, "aantal", { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}><span>Aantal</span><span className={`rz-sort-indicator${tableSort.key === "aantal" ? " is-active" : ""}`} data-direction={tableSort.key === "aantal" ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
-                    <th><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, "locatie", { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}><span>Locatie</span><span className={`rz-sort-indicator${tableSort.key === "locatie" ? " is-active" : ""}`} data-direction={tableSort.key === "locatie" ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
-                    <th><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, "sublocatie", { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}><span>Sublocatie</span><span className={`rz-sort-indicator${tableSort.key === "sublocatie" ? " is-active" : ""}`} data-direction={tableSort.key === "sublocatie" ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
+                    </ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="artikel" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "artikel"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Artikel</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="aantal" widths={inventoryColumnWidths} onStartResize={startInventoryResize} className="rz-num" sortable isSorted={tableSort.key === "aantal"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Aantal</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="locatie" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "locatie"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Locatie</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="sublocatie" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "sublocatie"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { artikel: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Sublocatie</ResizableHeaderCell>
                   </tr>
 
                   <tr className="rz-table-filters">

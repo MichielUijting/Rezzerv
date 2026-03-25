@@ -6,6 +6,7 @@ import Button from '../../ui/Button'
 import { StoreBatchDetailContent } from './StoreBatchDetailPage'
 import { fetchJson, normalizeErrorMessage, providerLabel } from './storeImportShared'
 import { nextSortState, sortItems } from '../../ui/sorting'
+import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 
 export default function ReceiptsPage() {
   const [batches, setBatches] = useState([])
@@ -16,6 +17,14 @@ export default function ReceiptsPage() {
   const [openedBatchId, setOpenedBatchId] = useState('')
   const [tableSort, setTableSort] = useState({ key: 'datum', direction: 'desc' })
   const location = useLocation()
+  const columnDefaults = useMemo(() => ({
+    select: 44,
+    winkel: 260,
+    datum: 200,
+    regels: 120,
+    status: 300,
+  }), [])
+  const { widths: tableWidths, startResize: startTableResize } = useResizableColumnWidths(columnDefaults)
 
 
   useEffect(() => {
@@ -139,21 +148,28 @@ export default function ReceiptsPage() {
         <ScreenCard>
         {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
         <div className="rz-table-wrapper">
-          <table className="rz-table" data-testid="receipts-table">
+          <table className="rz-table" data-testid="receipts-table" style={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
+            <colgroup>
+              <col style={{ width: `${tableWidths.select}px` }} />
+              <col style={{ width: `${tableWidths.winkel}px` }} />
+              <col style={{ width: `${tableWidths.datum}px` }} />
+              <col style={{ width: `${tableWidths.regels}px` }} />
+              <col style={{ width: `${tableWidths.status}px` }} />
+            </colgroup>
             <thead>
               <tr className="rz-table-header">
-                <th style={{ width: '44px' }}>
+                <ResizableHeaderCell columnKey="select" widths={tableWidths} onStartResize={startTableResize} style={{ width: '44px' }}>
                   <input
                     type="checkbox"
                     checked={allVisibleSelected}
                     onChange={toggleSelectAllVisible}
                     aria-label="Selecteer alle zichtbare kassabonnen"
                   />
-                </th>
-                <th style={{ width: '26.6%' }}><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'winkel', { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}><span>Winkel</span><span className={`rz-sort-indicator${tableSort.key === 'winkel' ? ' is-active' : ''}`} data-direction={tableSort.key === 'winkel' ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
-                <th style={{ width: '22%' }}><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'datum', { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}><span>Datum</span><span className={`rz-sort-indicator${tableSort.key === 'datum' ? ' is-active' : ''}`} data-direction={tableSort.key === 'datum' ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
-                <th className="rz-num" style={{ width: '12%' }}><button type="button" className="rz-sort-button rz-sort-button--numeric" onClick={() => setTableSort((current) => nextSortState(current, 'regels', { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}><span>Artikelen</span><span className={`rz-sort-indicator${tableSort.key === 'regels' ? ' is-active' : ''}`} data-direction={tableSort.key === 'regels' ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
-                <th style={{ width: '39.4%' }}><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'status', { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}><span>Status</span><span className={`rz-sort-indicator${tableSort.key === 'status' ? ' is-active' : ''}`} data-direction={tableSort.key === 'status' ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
+                </ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="winkel" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'winkel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Winkel</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="datum" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'datum'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Datum</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="regels" widths={tableWidths} onStartResize={startTableResize} className="rz-num" sortable isSorted={tableSort.key === 'regels'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Artikelen</ResizableHeaderCell>
+                <ResizableHeaderCell columnKey="status" widths={tableWidths} onStartResize={startTableResize} sortable isSorted={tableSort.key === 'status'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { winkel: 'asc', datum: 'desc', regels: 'desc', status: 'asc' }))}>Status</ResizableHeaderCell>
               </tr>
               <tr className="rz-table-filters">
                 <th />

@@ -6,6 +6,7 @@ import Tabs from '../../ui/Tabs'
 import Button from '../../ui/Button'
 import { getStoreImportSimplificationLabel } from '../settings/services/storeImportSimplificationService'
 import { nextSortState, sortItems, sortOptionObjects } from '../../ui/sorting'
+import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import {
   articleFallbackOptions,
   articleLabel,
@@ -55,6 +56,14 @@ function detailValue(value, fallback = 'Niet van toepassing') {
   return String(value)
 }
 
+function formatReceiptLineLabel(value) {
+  const normalized = String(value || '').trim()
+  if (!normalized) return '-'
+  return normalized
+    .toLocaleLowerCase('nl-NL')
+    .replace(/(^|[\s\-/])(\p{L})/gu, (match, prefix, letter) => `${prefix}${letter.toLocaleUpperCase('nl-NL')}`)
+}
+
 
 function deriveLineSelectionState({ draft, validLocationIds, processingStatus }) {
   const effectiveArticleId = String(draft?.articleId || '')
@@ -99,6 +108,15 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [tableSort, setTableSort] = useState({ key: 'bonartikel', direction: 'asc' })
   const [processConfirm, setProcessConfirm] = useState(null)
   const processFeedbackTimer = useRef(null)
+  const lineColumnDefaults = useMemo(() => ({
+    select: 44,
+    bonartikel: 220,
+    aantal: 100,
+    gekoppeld: 260,
+    locatie: 220,
+    prijs: 100,
+  }), [])
+  const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
 
   const providersByCode = useMemo(
     () => Object.fromEntries(providers.map((provider) => [provider.code, provider])),
@@ -650,7 +668,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-detail-page">
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'start' }}>
             <div style={{ display: 'grid', gap: '4px' }}>
-              <div style={{ fontWeight: 700, fontSize: '24px' }}>{batch ? buildBatchTitle(batch) : 'Kassabon'}</div>
+              {embedded ? <div style={{ fontWeight: 700, fontSize: '24px' }}>{batch ? buildBatchTitle(batch) : 'Kassabon'}</div> : null}
               <div style={{ color: '#2e7d4d' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
               <div style={{ color: '#2e7d4d' }}>Status: {batch ? batchStatusLabel(batch.import_status) : 'Laden'} · {summaryCounts.total} regels · Vereenvoudigingsniveau: {simplificationLevelLabel}</div>
             </div>
@@ -665,17 +683,25 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error" data-testid="receipt-feedback">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="receipt-feedback">{status}</div> : null}
           <div className="rz-table-wrapper rz-store-batch-table-wrapper">
-            <table className="rz-table rz-store-workbench-table" style={{ minWidth: '860px' }} data-testid="receipt-lines-table">
+            <table className="rz-table rz-store-workbench-table" style={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }} data-testid="receipt-lines-table">
+              <colgroup>
+                <col style={{ width: `${lineColumnWidths.select}px` }} />
+                <col style={{ width: `${lineColumnWidths.bonartikel}px` }} />
+                <col style={{ width: `${lineColumnWidths.aantal}px` }} />
+                <col style={{ width: `${lineColumnWidths.gekoppeld}px` }} />
+                <col style={{ width: `${lineColumnWidths.locatie}px` }} />
+                <col style={{ width: `${lineColumnWidths.prijs}px` }} />
+              </colgroup>
               <thead>
                 <tr className="rz-table-header">
-                  <th style={{ width: '44px' }}>
+                  <ResizableHeaderCell columnKey="select" widths={lineColumnWidths} onStartResize={startLineResize} style={{ width: '44px' }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
-                  </th>
-                  <th className="rz-store-batch-col-item"><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'bonartikel', { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}><span>Bonartikel</span><span className={`rz-sort-indicator${tableSort.key === 'bonartikel' ? ' is-active' : ''}`} data-direction={tableSort.key === 'bonartikel' ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
-                  <th className="rz-num rz-store-batch-col-quantity"><button type="button" className="rz-sort-button rz-sort-button--numeric" onClick={() => setTableSort((current) => nextSortState(current, 'aantal', { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}><span>Aantal</span><span className={`rz-sort-indicator${tableSort.key === 'aantal' ? ' is-active' : ''}`} data-direction={tableSort.key === 'aantal' ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
-                  <th className="rz-store-batch-col-linked"><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'gekoppeld', { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}><span>Gekoppeld artikel</span><span className={`rz-sort-indicator${tableSort.key === 'gekoppeld' ? ' is-active' : ''}`} data-direction={tableSort.key === 'gekoppeld' ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
-                  <th className="rz-store-batch-col-location"><button type="button" className="rz-sort-button" onClick={() => setTableSort((current) => nextSortState(current, 'locatie', { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}><span>Locatie</span><span className={`rz-sort-indicator${tableSort.key === 'locatie' ? ' is-active' : ''}`} data-direction={tableSort.key === 'locatie' ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
-                  <th className="rz-num rz-store-batch-col-price"><button type="button" className="rz-sort-button rz-sort-button--numeric" onClick={() => setTableSort((current) => nextSortState(current, 'prijs', { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}><span>Prijs</span><span className={`rz-sort-indicator${tableSort.key === 'prijs' ? ' is-active' : ''}`} data-direction={tableSort.key === 'prijs' ? tableSort.direction : 'desc'} aria-hidden="true" /></button></th>
+                  </ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Bonartikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Aantal</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Gekoppeld artikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Locatie</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="prijs" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-price" sortable isSorted={tableSort.key === 'prijs'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Prijs</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
@@ -717,7 +743,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       <td>
                         <input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} />
                       </td>
-                      <td className="rz-store-batch-col-item"><div className="rz-store-primary">{line.article_name_raw}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
+                      <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td className="rz-store-batch-col-linked">
                         <div data-testid={`receipt-line-article-select-${line.id}`}><StoreArticleSelector

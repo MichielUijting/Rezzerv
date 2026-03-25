@@ -5,6 +5,7 @@ import ScreenCard from '../../ui/ScreenCard'
 import Button from '../../ui/Button'
 import Tabs from '../../ui/Tabs'
 import { nextSortState, sortItems } from '../../ui/sorting'
+import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 
 function formatDateTime(value) {
@@ -62,18 +63,23 @@ const AH_BRANCH_MAP = {
   '8521': { address: 'Polenplein 24 A', city: 'Driel' },
 }
 
+const ALDI_RECEIPT_HINTS = [
+  {
+    match: /aldi-kassabon-nl-voorbeeld|prins[_ -]?frederiklaan/i,
+    address: 'Prins Frederiklaan 203',
+    city: 'Leidschendam',
+  },
+]
+
 function extractAhBranchCode(receipt) {
-  const candidates = [
-    receipt?.store_branch,
-    receipt?.original_filename,
-  ]
+  const candidates = [receipt?.store_branch, receipt?.original_filename]
   for (const candidate of candidates) {
     const normalized = String(candidate || '').trim()
     if (!normalized) continue
     const directMatch = normalized.match(/^\s*(\d{4})\s*$/)
     if (directMatch) return directMatch[1]
-    const fileMatch = normalized.match(/(?:^|[^\d])(\d{4})(?:\.[A-Za-z0-9]+$|[^\d]|$)/)
-    if (fileMatch) return fileMatch[1]
+    const allMatches = Array.from(normalized.matchAll(/(\d{4})/g)).map((match) => match[1]).filter(Boolean)
+    if (allMatches.length) return allMatches[allMatches.length - 1]
   }
   return ''
 }
@@ -107,6 +113,11 @@ function deriveBranchAddressPlace(receipt) {
     const branchCode = extractAhBranchCode(receipt)
     if (branchCode && AH_BRANCH_MAP[branchCode]) return AH_BRANCH_MAP[branchCode]
   }
+  if (storeName === 'aldi') {
+    const combined = `${String(receipt?.store_branch || '')} ${String(receipt?.original_filename || '')}`.trim()
+    const matchedHint = ALDI_RECEIPT_HINTS.find((entry) => entry.match.test(combined))
+    if (matchedHint) return { address: matchedHint.address, city: matchedHint.city }
+  }
   return splitBranchAddressPlace(receipt?.store_branch)
 }
 
@@ -136,85 +147,6 @@ function formatQuantity(value) {
     minimumFractionDigits: hasThousandths ? 3 : 0,
     maximumFractionDigits: hasThousandths ? 3 : 2,
   }).format(number)
-}
-
-function useResizableColumnWidths(defaultWidths) {
-  const [widths, setWidths] = useState(() => ({ ...defaultWidths }))
-  const widthsRef = useRef(widths)
-
-  useEffect(() => {
-    widthsRef.current = widths
-  }, [widths])
-
-  useEffect(() => {
-    setWidths({ ...defaultWidths })
-  }, [defaultWidths])
-
-  function startResize(columnKey, event) {
-    event.preventDefault()
-    event.stopPropagation()
-    const startX = event.clientX
-    const startWidth = Number(widthsRef.current?.[columnKey] ?? defaultWidths?.[columnKey] ?? 120)
-
-    function handleMouseMove(moveEvent) {
-      const delta = moveEvent.clientX - startX
-      const nextWidth = Math.max(56, Math.round(startWidth + delta))
-      setWidths((current) => ({ ...current, [columnKey]: nextWidth }))
-    }
-
-    function handleMouseUp() {
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
-  }
-
-  return { widths, startResize }
-}
-
-function ResizableHeaderCell({ columnKey, widths, onStartResize, className = '', style = {}, children, sortable = false, sortDirection = 'asc', isSorted = false, onSort = null }) {
-  return (
-    <th className={className} style={{ ...style, position: 'relative', width: widths?.[columnKey] ? `${widths[columnKey]}px` : style.width }}>
-      {sortable ? (
-        <button
-          type="button"
-          className="rz-sort-button"
-          onClick={() => onSort?.(columnKey)}
-          aria-pressed={isSorted}
-          aria-label={`${typeof children === 'string' ? children : 'Kolom'} sorteren`}
-        >
-          <span>{children}</span>
-          <span className={`rz-sort-indicator${isSorted ? ' is-active' : ''}`} data-direction={isSorted ? sortDirection : 'desc'} aria-hidden="true" />
-        </button>
-      ) : (
-        <div style={{ paddingRight: '10px' }}>{children}</div>
-      )}
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Kolom breedte aanpassen"
-        onMouseDown={(event) => onStartResize(columnKey, event)}
-        style={{
-          position: 'absolute',
-          top: 0,
-          right: '-3px',
-          width: '8px',
-          height: '100%',
-          cursor: 'col-resize',
-          userSelect: 'none',
-          touchAction: 'none',
-          zIndex: 2,
-        }}
-      />
-    </th>
-  )
-}
-
-function buildTableWidth(widths, fallbackWidth = '100%') {
-  const total = Object.values(widths || {}).reduce((sum, value) => sum + Number(value || 0), 0)
-  return total > 0 ? `${total}px` : fallbackWidth
 }
 
 function renameFileToJpeg(name = 'receipt.jpg') {
@@ -757,12 +689,19 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
             ) : null}
 
             {previewState.status === 'ready' && previewState.isPdf ? (
-              <iframe
-                src={`${previewState.blobUrl}#toolbar=1&navpanes=0&scrollbar=1&view=FitH`}
+              <object
+                data={`${previewState.blobUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=page-width`}
+                type="application/pdf"
                 title={`Preview van bon ${receipt?.id}`}
-                style={{ display: 'block', width: '100%', height: '100%', minHeight: '560px', border: '0', background: '#fff' }}
+                style={{ display: 'block', width: '100%', height: '100%', minHeight: '900px', border: '0', background: '#fff' }}
                 data-testid="receipt-preview-pdf"
-              />
+              >
+                <iframe
+                  src={`${previewState.blobUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=page-width`}
+                  title={`Preview van bon ${receipt?.id}`}
+                  style={{ display: 'block', width: '100%', height: '100%', minHeight: '900px', border: '0', background: '#fff' }}
+                />
+              </object>
             ) : null}
 
             {previewState.status === 'ready' && previewState.isImage ? (
@@ -917,8 +856,6 @@ function ReceiptDetailInfoCard({ receipt }) {
                   <DetailInfoRow label="Korting" value={formatMoney(effectiveDiscountTotal, receipt?.currency)} />
                   <DetailInfoRow label="Netto bonregels" value={formatMoney(visibleNetTotalSum, receipt?.currency)} />
                   <DetailInfoRow label="Valuta" value={receipt?.currency || 'EUR'} />
-                  <DetailInfoRow label="Parse-status" value={parseStatusLabel(receipt?.parse_status)} />
-                  <DetailInfoRow label="Confidence" value={receipt?.confidence_score ?? '-'} />
                   <DetailInfoRow label="Regels" value={String(lines.length)} />
                 </div>
               )
