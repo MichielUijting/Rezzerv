@@ -51,11 +51,20 @@ function getFirstEnabledReceiptLineSelect(detailDoc) { return [...(detailDoc?.qu
 async function openInventoryDetail(frame, articleId = null) { const doc=getFrameDocument(frame); const trigger=pickByTestIdPrefix(doc,'inventory-row-',articleId); if(!trigger) throw new Error('Geen inventory-row-* gevonden'); doubleClickElement(trigger); await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="article-detail-page"]'), WAIT_TIMEOUT, 'article-detail-page niet gevonden'); return getFrameDocument(frame) }
 async function openReceiptDetail(frame, preferredBatchId = null) { const doc=getFrameDocument(frame); let opened=false; if(preferredBatchId) opened=openReceiptBatchInline(doc, preferredBatchId); if(!opened){ const row=preferredBatchId?doc?.querySelector(`[data-testid="receipt-batch-row-${preferredBatchId}"]`):doc?.querySelector('[data-testid^="receipt-batch-row-"]'); if(row){ clickElement(row); doubleClickElement(row); opened=true } } if(!opened){ const openButton=pickByTestIdPrefix(doc,'receipt-batch-open-',preferredBatchId); if(!openButton) throw new Error('Geen receipt-batch-open-* gevonden'); clickElement(openButton) } await waitForCondition(()=>getFrameDocument(frame)?.querySelector('[data-testid="receipt-detail-page"]'), WAIT_TIMEOUT, 'receipt-detail-page niet gevonden'); return getFrameDocument(frame) }
 function getLastDownload(frame) { return frame?.contentWindow?.__rezzervLastDownload || null }
+function getRegressionAuthHeaders() {
+  try {
+    const token = window.localStorage.getItem('rezzerv_token') || ''
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  } catch {
+    return {}
+  }
+}
+
 async function requestJson(path, init = {}) {
   const response = await fetch(path, {
     method: init.method || 'GET',
     credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
+    headers: { 'Content-Type': 'application/json', ...getRegressionAuthHeaders(), ...(init.headers || {}) },
     body: init.body,
   })
   if (!response.ok) throw new Error(`Request naar ${path} mislukte met status ${response.status}`)

@@ -5591,96 +5591,202 @@ def generate_demo_data():
 @app.post("/api/dev/generate-layer1-receipt-fixture")
 def generate_layer1_receipt_fixture():
     reset_dev_tables()
-    ensure_ui_test_seed_data()
-
     household = ensure_household("admin@rezzerv.local")
     household_id = str(household.get("id") or "1")
+    clear_regression_receipt_state(household_id)
+    ensure_ui_test_seed_data()
 
     with engine.begin() as conn:
-        connection = conn.execute(
+        kitchen_kast1 = conn.execute(
             text(
                 """
-                SELECT hsc.id AS connection_id
-                FROM household_store_connections hsc
-                JOIN store_providers sp ON sp.id = hsc.store_provider_id
-                WHERE hsc.household_id = :household_id
-                  AND sp.code = 'jumbo'
-                ORDER BY hsc.created_at DESC, hsc.id DESC
+                SELECT sl.id
+                FROM sublocations sl
+                JOIN spaces s ON s.id = sl.space_id
+                WHERE s.household_id = :household_id
+                  AND lower(s.naam) = 'keuken'
+                  AND lower(sl.naam) = 'kast 1'
                 LIMIT 1
                 """
             ),
-            {"household_id": household_id},
-        ).mappings().first()
+            {'household_id': household_id},
+        ).scalar()
+        if not kitchen_kast1:
+            raise HTTPException(status_code=500, detail="Layer1 receipt fixture locatie kon niet worden voorbereid")
 
-        if not connection:
-            raise HTTPException(status_code=500, detail="Layer1 receipt fixture connection kon niet worden voorbereid")
-
-        connection_id = str(connection["connection_id"])
-        batch = conn.execute(
+        raw_receipt_id = str(uuid.uuid4())
+        receipt_table_id = str(uuid.uuid4())
+        conn.execute(
             text(
                 """
-                SELECT pib.id AS batch_id
-                FROM purchase_import_batches pib
-                WHERE pib.connection_id = :connection_id
-                  AND COALESCE(pib.import_status, 'new') != 'processed'
-                ORDER BY pib.created_at DESC, pib.id DESC
-                LIMIT 1
+                INSERT INTO raw_receipts (
+                    id, household_id, source_id, original_filename, mime_type, storage_path, sha256_hash,
+                    duplicate_of_raw_receipt_id, raw_status, imported_at, created_at
+                ) VALUES (
+                    :id, :household_id, NULL, :original_filename, :mime_type, :storage_path, :sha256_hash,
+                    NULL, 'imported', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
                 """
             ),
-            {"connection_id": connection_id},
-        ).mappings().first()
-
-        if not batch:
-            raise HTTPException(status_code=500, detail="Layer1 receipt fixture batch kon niet worden voorbereid")
-
-        batch_id = str(batch["batch_id"])
-        line_rows = conn.execute(
+            {
+                'id': raw_receipt_id,
+                'household_id': household_id,
+                'original_filename': 'layer1-fixture.eml',
+                'mime_type': 'message/rfc822',
+                'storage_path': str((Path(__file__).resolve().parent / 'testing' / 'receipt_parsing' / 'raw' / 'Lidl2.eml').resolve()),
+                'sha256_hash': f'layer1-fixture::{receipt_table_id}',
+            },
+        )
+        conn.execute(
             text(
                 """
-                SELECT id, article_name_raw, matched_household_article_id, target_location_id, processing_status
+                INSERT INTO receipt_tables (
+                    id, raw_receipt_id, household_id, store_name, store_branch, purchase_at, total_amount,
+                    discount_total, currency, parse_status, confidence_score, line_count, created_at, updated_at
+                ) VALUES (
+                    :id, :raw_receipt_id, :household_id, 'Jumbo', 'Regressiefixture', '2026-03-25T09:00:00', 3.58,
+                    0.0, 'EUR', 'parsed', 0.99, 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                'id': receipt_table_id,
+                'raw_receipt_id': raw_receipt_id,
+                'household_id': household_id,
+            },
+        )
+        receipt_lines = [
+            {
+                'id': str(uuid.uuid4()),
+                'line_index': 1,
+                'raw_label': 'Magere yoghurt',
+                'quantity': 1.0,
+                'unit': 'liter',
+                'unit_price': 1.59,
+                'line_total': 1.59,
+                'discount_amount': 0.0,
+            },
+            {
+                'id': str(uuid.uuid4()),
+                'line_index': 2,
+                'raw_label': 'Appelsap',
+                'quantity': 1.0,
+                'unit': 'liter',
+                'unit_price': 1.99,
+                'line_total': 1.99,
+                'discount_amount': 0.0,
+            },
+        ]
+        for line in receipt_lines:
+            conn.execute(
+                text(
+                    """
+                    INSERT INTO receipt_table_lines (
+                        id, receipt_table_id, line_index, raw_label, normalized_label, quantity, unit,
+                        unit_price, line_total, discount_amount, barcode, article_match_status, matched_article_id,
+                        confidence_score, created_at, updated_at
+                    ) VALUES (
+                        :id, :receipt_table_id, :line_index, :raw_label, :normalized_label, :quantity, :unit,
+                        :unit_price, :line_total, :discount_amount, NULL, 'unmatched', NULL,
+                        0.99, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                    )
+                    """
+                ),
+                {
+                    'id': line['id'],
+                    'receipt_table_id': receipt_table_id,
+                    'line_index': line['line_index'],
+                    'raw_label': line['raw_label'],
+                    'normalized_label': str(line['raw_label']).strip().lower(),
+                    'quantity': line['quantity'],
+                    'unit': line['unit'],
+                    'unit_price': line['unit_price'],
+                    'line_total': line['line_total'],
+                    'discount_amount': line['discount_amount'],
+                },
+            )
+
+        batch_id = ensure_unpack_batch_for_receipt(conn, {
+            'receipt_table_id': receipt_table_id,
+            'household_id': household_id,
+            'store_name': 'Jumbo',
+            'purchase_at': '2026-03-25T09:00:00',
+            'created_at': '2026-03-25T09:00:00',
+            'currency': 'EUR',
+        })
+
+        batch_lines = conn.execute(
+            text(
+                """
+                SELECT id, article_name_raw
                 FROM purchase_import_lines
                 WHERE batch_id = :batch_id
-                ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
+                ORDER BY ui_sort_order ASC, created_at ASC, id ASC
                 """
             ),
-            {"batch_id": batch_id},
+            {'batch_id': batch_id},
         ).mappings().all()
-
-        complete_line_id = None
-        incomplete_line_id = None
-
-        for row in line_rows:
-            article_name = str(row.get("article_name_raw") or "").strip().lower()
-            if not complete_line_id and article_name == 'magere yoghurt':
-                complete_line_id = str(row['id'])
-            if not incomplete_line_id and article_name == 'appelsap':
-                incomplete_line_id = str(row['id'])
-
-        if not complete_line_id:
-            for row in line_rows:
-                if row.get('matched_household_article_id') and row.get('target_location_id') and str(row.get('processing_status') or '').lower() == 'pending':
-                    complete_line_id = str(row['id'])
-                    break
-
-        if not incomplete_line_id:
-            for row in line_rows:
-                has_valid_article = bool(row.get('matched_household_article_id'))
-                has_valid_location = bool(row.get('target_location_id'))
-                if (not has_valid_article or not has_valid_location) and str(row.get('processing_status') or '').lower() == 'pending':
-                    incomplete_line_id = str(row['id'])
-                    break
-
-        if not complete_line_id or not incomplete_line_id:
+        complete_line = next((row for row in batch_lines if str(row.get('article_name_raw') or '').strip().lower() == 'magere yoghurt'), None)
+        incomplete_line = next((row for row in batch_lines if str(row.get('article_name_raw') or '').strip().lower() == 'appelsap'), None)
+        if not complete_line or not incomplete_line:
             raise HTTPException(status_code=500, detail="Layer1 receipt fixture lines konden niet worden voorbereid")
 
-        return {
-            "householdId": household_id,
-            "connectionId": connection_id,
-            "batchId": batch_id,
-            "latestBatchId": batch_id,
-            "completeLineId": complete_line_id,
-            "incompleteLineId": incomplete_line_id,
-        }
+        conn.execute(
+            text(
+                """
+                UPDATE purchase_import_lines
+                SET matched_household_article_id = :article_id,
+                    suggested_household_article_id = :article_id,
+                    target_location_id = :target_location_id,
+                    suggested_location_id = :target_location_id,
+                    match_status = 'matched',
+                    review_decision = 'selected',
+                    processing_status = 'pending',
+                    suggestion_confidence = 'high',
+                    suggestion_reason = 'Vaste layer1-regressiefixture',
+                    is_auto_prefilled = 1,
+                    article_override_mode = 'auto',
+                    location_override_mode = 'auto'
+                WHERE id = :line_id
+                """
+            ),
+            {
+                'line_id': str(complete_line['id']),
+                'article_id': build_live_article_option_id('Melk'),
+                'target_location_id': kitchen_kast1,
+            },
+        )
+        conn.execute(
+            text(
+                """
+                UPDATE purchase_import_lines
+                SET matched_household_article_id = NULL,
+                    suggested_household_article_id = NULL,
+                    target_location_id = NULL,
+                    suggested_location_id = NULL,
+                    match_status = 'unmatched',
+                    review_decision = 'selected',
+                    processing_status = 'pending',
+                    suggestion_confidence = NULL,
+                    suggestion_reason = NULL,
+                    is_auto_prefilled = 0,
+                    article_override_mode = 'manual',
+                    location_override_mode = 'manual'
+                WHERE id = :line_id
+                """
+            ),
+            {'line_id': str(incomplete_line['id'])},
+        )
+        update_batch_status(conn, batch_id)
+
+    return {
+        "householdId": household_id,
+        "connectionId": '',
+        "batchId": batch_id,
+        "latestBatchId": batch_id,
+        "completeLineId": str(complete_line['id']),
+        "incompleteLineId": str(incomplete_line['id']),
+    }
 
 
 @app.post("/api/dev/generate-receipt-export-fixture")
@@ -7043,16 +7149,54 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest):
         raise HTTPException(status_code=500, detail=detail)
 
 
+def clear_regression_receipt_state(household_id: str):
+    effective_household_id = str(household_id or '').strip() or '1'
+    with engine.begin() as conn:
+        receipt_ids = [
+            str(row['id'])
+            for row in conn.execute(
+                text("SELECT id FROM receipt_tables WHERE household_id = :household_id"),
+                {'household_id': effective_household_id},
+            ).mappings().all()
+        ]
+        raw_ids = [
+            str(row['id'])
+            for row in conn.execute(
+                text("SELECT id FROM raw_receipts WHERE household_id = :household_id"),
+                {'household_id': effective_household_id},
+            ).mappings().all()
+        ]
+        conn.execute(
+            text("DELETE FROM purchase_import_lines WHERE batch_id IN (SELECT id FROM purchase_import_batches WHERE household_id = :household_id AND source_type = 'receipt')"),
+            {'household_id': effective_household_id},
+        )
+        conn.execute(
+            text("DELETE FROM purchase_import_batches WHERE household_id = :household_id AND source_type = 'receipt'"),
+            {'household_id': effective_household_id},
+        )
+        if receipt_ids:
+            conn.execute(text("DELETE FROM receipt_table_lines WHERE receipt_table_id IN :ids").bindparams(bindparam('ids', expanding=True)), {'ids': receipt_ids})
+            conn.execute(text("DELETE FROM receipt_tables WHERE id IN :ids").bindparams(bindparam('ids', expanding=True)), {'ids': receipt_ids})
+            conn.execute(text("DELETE FROM receipt_inbound_events WHERE receipt_table_id IN :ids").bindparams(bindparam('ids', expanding=True)), {'ids': receipt_ids})
+        if raw_ids:
+            conn.execute(text("DELETE FROM receipt_email_messages WHERE raw_receipt_id IN :ids").bindparams(bindparam('ids', expanding=True)), {'ids': raw_ids})
+            conn.execute(text("DELETE FROM receipt_inbound_events WHERE raw_receipt_id IN :ids").bindparams(bindparam('ids', expanding=True)), {'ids': raw_ids})
+            conn.execute(text("DELETE FROM raw_receipts WHERE id IN :ids").bindparams(bindparam('ids', expanding=True)), {'ids': raw_ids})
+        conn.execute(text("DELETE FROM receipt_gmail_imports WHERE household_id = :household_id"), {'household_id': effective_household_id})
+
+
 @app.post("/api/dev/regression/reset")
 def reset_regression_fixture_state():
     reset_dev_tables()
+    household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
+    clear_regression_receipt_state(household_id)
     ensure_ui_test_seed_data()
     version_path = Path(__file__).resolve().parents[2] / "VERSION.txt"
     version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else None
     return {
         "status": "ok",
         "dataset": "ui_seed",
-        "household_id": str(ensure_household("admin@rezzerv.local").get("id") or "1"),
+        "household_id": household_id,
         "version": version,
     }
 
