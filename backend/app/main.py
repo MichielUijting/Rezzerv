@@ -7206,9 +7206,9 @@ def get_regression_receipt_fixture_file(kind: str = Query('manual')):
     fixtures_root = Path(__file__).resolve().parent / 'testing' / 'receipt_parsing' / 'raw'
     fixture_map = {
         'manual': {
-            'path': fixtures_root / 'AH_kassabon_2026-03-20 162700_8521.pdf',
-            'filename': 'regression-manual.pdf',
-            'media_type': 'application/pdf',
+            'path': fixtures_root / 'Jumbo bon.jpeg',
+            'filename': 'regression-manual.jpg',
+            'media_type': 'image/jpeg',
         },
         'email': {
             'path': fixtures_root / 'Lidl3.eml',
