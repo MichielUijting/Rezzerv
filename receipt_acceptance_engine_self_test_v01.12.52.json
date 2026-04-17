@@ -1,0 +1,9 @@
+{
+  "version": "v01.12.52",
+  "scope": "receipt acceptance engine",
+  "checks": [
+    {"file": "AH App 1.pdf", "expected_parse_status": "parsed"},
+    {"file": "Gamma App 1.pdf", "expected_parse_status": "parsed"},
+    {"file": "Picnic App 1.eml", "expected_parse_status": "review_needed"}
+  ]
+}

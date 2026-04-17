@@ -1,0 +1,9 @@
+{
+  "version": "01.12.41",
+  "tests": [
+    {"name": "jumbo_multiplier_detail_pattern", "input": "2X1,50", "expected": "previous_line_enriched"},
+    {"name": "aldi_payment_meta_filtered", "input": "BEDRAG = EURO", "expected": "filtered"},
+    {"name": "aldi_cash_meta_filtered", "input": "CONTANT", "expected": "filtered"},
+    {"name": "lidl_duplicate_merge", "input": ["Jonge bladsla", "Jonge bladsla"], "expected": "merged"}
+  ]
+}

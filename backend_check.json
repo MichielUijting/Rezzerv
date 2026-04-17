@@ -1,0 +1,92 @@
+{
+  "database": "/tmp/rezz/backend/rezzerv.db",
+  "status": "passed",
+  "failed_count": 0,
+  "checks": [
+    {
+      "name": "table_global_products",
+      "status": "passed",
+      "message": "global_products aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_household_articles",
+      "status": "passed",
+      "message": "household_articles aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_product_identities",
+      "status": "passed",
+      "message": "product_identities aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_product_enrichments",
+      "status": "passed",
+      "message": "product_enrichments aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_product_enrichment_audit",
+      "status": "passed",
+      "message": "product_enrichment_audit aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_product_enrichment_attempts",
+      "status": "passed",
+      "message": "product_enrichment_attempts aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "product_enrichments_global_product_required",
+      "status": "passed",
+      "message": "Alle enrichmentrecords zijn productgericht gekoppeld."
+    },
+    {
+      "name": "product_enrichments_use_global_product_as_storage_anchor",
+      "status": "passed",
+      "message": "Enrichmentopslag gebruikt global_product_id als opslaganker."
+    },
+    {
+      "name": "no_duplicate_global_product_source_rows",
+      "status": "passed",
+      "message": "Per global_product_id + source_name bestaat maximaal één enrichmentrecord."
+    },
+    {
+      "name": "audit_and_attempts_follow_global_product",
+      "status": "passed",
+      "message": "Audit zonder global_product_id=0, attempts zonder global_product_id=0."
+    }
+  ],
+  "notes": [
+    "Release C centraliseert productverrijking op global_products en gebruikt global_product_id als leidende productsleutel.",
+    "household_article_id blijft in audit/attempt-tabellen nog bestaan als contextkolom, maar niet meer als leidende enrichment-opslag."
+  ],
+  "summary": {
+    "global_products": {
+      "column_count": 12,
+      "row_count": 2
+    },
+    "household_articles": {
+      "column_count": 22,
+      "row_count": 1
+    },
+    "product_identities": {
+      "column_count": 10,
+      "row_count": 1
+    },
+    "product_enrichments": {
+      "column_count": 24,
+      "row_count": 3
+    },
+    "product_enrichment_audit": {
+      "column_count": 13,
+      "row_count": 6
+    },
+    "product_enrichment_attempts": {
+      "column_count": 12,
+      "row_count": 6
+    },
+    "product_enrichments_missing_global_product_id": 0,
+    "product_enrichments_noncentral_storage_anchor": 0,
+    "duplicate_global_product_source_rows": 0,
+    "audit_missing_global_product_id": 0,
+    "attempts_missing_global_product_id": 0
+  }
+}

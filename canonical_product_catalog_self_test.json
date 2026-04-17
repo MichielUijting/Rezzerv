@@ -1,0 +1,54 @@
+{
+  "status": "passed",
+  "database_under_test": "/tmp/rezzerv-canonical-catalog-s128pzor/rezzerv.db",
+  "checks": {
+    "same_barcode_maps_to_same_global_product_across_households": {
+      "household_a_article_id": "079b4a03-594d-4b07-bc30-5d6467d22d05",
+      "household_b_article_id": "75ea7e27-b6ac-474a-9788-bf6bc6285743",
+      "global_product_id_household_a": "cb29a104-b131-4735-9a8b-e2dacc1c1cd4",
+      "global_product_id_household_b": "cb29a104-b131-4735-9a8b-e2dacc1c1cd4",
+      "shared_global_product": true
+    },
+    "receipt_import_uses_matched_global_product_id": {
+      "line_id": "78782912-06fa-4f58-874a-313ba9e39632",
+      "sync_result": {
+        "matched_household_article_id": "live::Canonieke Mosterd Test",
+        "matched_global_product_id": "cb29a104-b131-4735-9a8b-e2dacc1c1cd4"
+      },
+      "stored_line": {
+        "id": "78782912-06fa-4f58-874a-313ba9e39632",
+        "matched_global_product_id": "cb29a104-b131-4735-9a8b-e2dacc1c1cd4",
+        "matched_household_article_id": "live::Canonieke Mosterd Test",
+        "match_status": "matched"
+      }
+    },
+    "no_duplicate_global_products_or_enrichments": {
+      "barcode": "8710400131472",
+      "global_product_row_count_for_barcode": 1,
+      "global_enrichment_row_count_for_source": 1,
+      "latest_global_enrichment": {
+        "source_name": "open_food_facts",
+        "source_record_id": null,
+        "title": null,
+        "brand": null,
+        "category": null,
+        "size_value": null,
+        "size_unit": null,
+        "ingredients": [],
+        "allergens": [],
+        "nutrition": {},
+        "image_url": null,
+        "source_url": null,
+        "quality_score": null,
+        "fetched_at": "2026-04-05 18:55:42",
+        "lookup_status": "failed",
+        "last_lookup_at": "2026-04-05 18:55:47",
+        "last_lookup_source": "open_food_facts",
+        "last_lookup_message": "Technische fout bij productlookup: <urlopen error [Errno -3] Temporary failure in name resolution>",
+        "normalized_barcode": "8710400131472"
+      },
+      "article_a_enrichment_status": "failed",
+      "article_b_enrichment_status": "failed"
+    }
+  }
+}

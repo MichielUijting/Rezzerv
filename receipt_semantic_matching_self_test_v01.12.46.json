@@ -1,0 +1,8 @@
+{
+  "version": "v01.12.46",
+  "tests": [
+    {"left": "mexicaanse kruidenm", "right": "mexicaanse kruidenmix", "expected": true},
+    {"left": "jonge bladsla zak", "right": "jonge bladsla", "expected": true},
+    {"left": "myaldi voordeel", "right": "aldi voordeel", "expected": false}
+  ]
+}

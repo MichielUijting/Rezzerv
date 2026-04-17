@@ -1,0 +1,61 @@
+{
+  "bol_html": {
+    "is_receipt": true,
+    "parse_status": "parsed",
+    "store_name": "Bol",
+    "purchase_at": null,
+    "total_amount": "65.00",
+    "line_count": 1,
+    "lines": [
+      {
+        "raw_label": "BLACK+DECKER BEBL185-QS Bladblazer - 1850W - 225 km/h - gesnoerd",
+        "normalized_label": "BLACK+DECKER BEBL185-QS Bladblazer - 1850W - 225 km/h - gesnoerd",
+        "quantity": 1.0,
+        "unit": null,
+        "unit_price": 65.0,
+        "line_total": 65.0,
+        "discount_amount": null,
+        "barcode": null,
+        "confidence_score": 0.86
+      }
+    ]
+  },
+  "picnic_text": {
+    "is_receipt": true,
+    "parse_status": "parsed",
+    "store_name": "Picnic",
+    "purchase_at": "2026-03-22T00:00:00",
+    "total_amount": "10.98",
+    "line_count": 2,
+    "lines": [
+      {
+        "raw_label": "Slagershuys rundergehakt",
+        "normalized_label": "Slagershuys rundergehakt",
+        "quantity": 1.0,
+        "unit": null,
+        "unit_price": 4.99,
+        "line_total": 4.99,
+        "discount_amount": null,
+        "barcode": null,
+        "confidence_score": 0.86
+      },
+      {
+        "raw_label": "Slagershuys kipdijfilet",
+        "normalized_label": "Slagershuys kipdijfilet",
+        "quantity": 1.0,
+        "unit": null,
+        "unit_price": 10.98,
+        "line_total": 10.98,
+        "discount_amount": null,
+        "barcode": null,
+        "confidence_score": 0.86
+      }
+    ]
+  },
+  "assertions": {
+    "bol_has_line": true,
+    "bol_total_65": true,
+    "picnic_has_line": true,
+    "picnic_total_1098": true
+  }
+}

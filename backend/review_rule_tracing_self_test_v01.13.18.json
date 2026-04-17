@@ -1,0 +1,498 @@
+[
+  {
+    "name": "Plus explained 0.28",
+    "recommended_status": "Gecontroleerd",
+    "decision_source": "explained_override",
+    "review_reason_class": "explained_small_difference",
+    "blocking_rules": [],
+    "explained_small_difference": true,
+    "material_unexplained_difference": false,
+    "trace": [
+      {
+        "rule_name": "receipt_header_context",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 1,
+        "details": {
+          "store_name": "Plus",
+          "purchase_at_present": true
+        }
+      },
+      {
+        "rule_name": "valid_line_presence",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 2,
+        "details": {
+          "valid_line_count": 3
+        }
+      },
+      {
+        "rule_name": "total_difference_check",
+        "rule_result": "exact_match",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 3,
+        "details": {
+          "total_diff": 0.0,
+          "basis": "line_discount_added"
+        }
+      },
+      {
+        "rule_name": "line_integrity_check",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 4,
+        "details": {
+          "price_issue_count": 0,
+          "quantity_issue_count": 0,
+          "missing_amount_count": 0
+        }
+      },
+      {
+        "rule_name": "store_adjustment_check",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 5,
+        "details": {
+          "basis": "line_discount_added",
+          "store_adjusted_total": 10.0
+        }
+      },
+      {
+        "rule_name": "difference_classification",
+        "rule_result": "explained_small_difference",
+        "severity": "low",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 6,
+        "details": {
+          "difference_explained": true,
+          "total_diff": 0.0,
+          "auto_accept_threshold": 0.35,
+          "minor_threshold": 0.75,
+          "store_key": "plus"
+        }
+      },
+      {
+        "rule_name": "final_review_decision",
+        "rule_result": "explained_override",
+        "severity": "none",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 7,
+        "details": {
+          "recommended_status": "Gecontroleerd",
+          "review_reason_class": "explained_small_difference"
+        }
+      }
+    ]
+  },
+  {
+    "name": "AH explained 0.30",
+    "recommended_status": "Gecontroleerd",
+    "decision_source": "explained_override",
+    "review_reason_class": "explained_small_difference",
+    "blocking_rules": [],
+    "explained_small_difference": true,
+    "material_unexplained_difference": false,
+    "trace": [
+      {
+        "rule_name": "receipt_header_context",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 1,
+        "details": {
+          "store_name": "Albert Heijn",
+          "purchase_at_present": true
+        }
+      },
+      {
+        "rule_name": "valid_line_presence",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 2,
+        "details": {
+          "valid_line_count": 2
+        }
+      },
+      {
+        "rule_name": "total_difference_check",
+        "rule_result": "exact_match",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 3,
+        "details": {
+          "total_diff": 0.0,
+          "basis": "line_discount_added"
+        }
+      },
+      {
+        "rule_name": "line_integrity_check",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 4,
+        "details": {
+          "price_issue_count": 0,
+          "quantity_issue_count": 0,
+          "missing_amount_count": 0
+        }
+      },
+      {
+        "rule_name": "store_adjustment_check",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 5,
+        "details": {
+          "basis": "line_discount_added",
+          "store_adjusted_total": 15.0
+        }
+      },
+      {
+        "rule_name": "difference_classification",
+        "rule_result": "explained_small_difference",
+        "severity": "low",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 6,
+        "details": {
+          "difference_explained": true,
+          "total_diff": 0.0,
+          "auto_accept_threshold": 0.35,
+          "minor_threshold": 1.25,
+          "store_key": "albert heijn"
+        }
+      },
+      {
+        "rule_name": "final_review_decision",
+        "rule_result": "explained_override",
+        "severity": "none",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 7,
+        "details": {
+          "recommended_status": "Gecontroleerd",
+          "review_reason_class": "explained_small_difference"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Picnic explained price issue",
+    "recommended_status": "Gecontroleerd",
+    "decision_source": "explained_override",
+    "review_reason_class": "explained_small_difference",
+    "blocking_rules": [],
+    "explained_small_difference": true,
+    "material_unexplained_difference": false,
+    "trace": [
+      {
+        "rule_name": "receipt_header_context",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 1,
+        "details": {
+          "store_name": "Picnic",
+          "purchase_at_present": true
+        }
+      },
+      {
+        "rule_name": "valid_line_presence",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 2,
+        "details": {
+          "valid_line_count": 2
+        }
+      },
+      {
+        "rule_name": "total_difference_check",
+        "rule_result": "small_difference",
+        "severity": "low",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 3,
+        "details": {
+          "total_diff": 0.4,
+          "basis": "gross"
+        }
+      },
+      {
+        "rule_name": "line_integrity_check",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 4,
+        "details": {
+          "price_issue_count": 0,
+          "quantity_issue_count": 0,
+          "missing_amount_count": 0
+        }
+      },
+      {
+        "rule_name": "store_adjustment_check",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 5,
+        "details": {
+          "basis": "gross",
+          "store_adjusted_total": 19.6
+        }
+      },
+      {
+        "rule_name": "difference_classification",
+        "rule_result": "explained_small_difference",
+        "severity": "low",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 6,
+        "details": {
+          "difference_explained": true,
+          "total_diff": 0.4,
+          "auto_accept_threshold": 0.45,
+          "minor_threshold": 1.25,
+          "store_key": "picnic"
+        }
+      },
+      {
+        "rule_name": "final_review_decision",
+        "rule_result": "explained_override",
+        "severity": "none",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 7,
+        "details": {
+          "recommended_status": "Gecontroleerd",
+          "review_reason_class": "explained_small_difference"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Jumbo material mismatch",
+    "recommended_status": "Controle nodig",
+    "decision_source": "material_rule",
+    "review_reason_class": "material_total_difference",
+    "blocking_rules": [
+      "total_difference_check",
+      "difference_classification"
+    ],
+    "explained_small_difference": false,
+    "material_unexplained_difference": true,
+    "trace": [
+      {
+        "rule_name": "receipt_header_context",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 1,
+        "details": {
+          "store_name": "Jumbo",
+          "purchase_at_present": true
+        }
+      },
+      {
+        "rule_name": "valid_line_presence",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 2,
+        "details": {
+          "valid_line_count": 2
+        }
+      },
+      {
+        "rule_name": "total_difference_check",
+        "rule_result": "material_difference",
+        "severity": "major",
+        "is_explained": false,
+        "blocks_review": true,
+        "evaluation_order": 3,
+        "details": {
+          "total_diff": 3.0,
+          "basis": "gross"
+        }
+      },
+      {
+        "rule_name": "line_integrity_check",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 4,
+        "details": {
+          "price_issue_count": 0,
+          "quantity_issue_count": 0,
+          "missing_amount_count": 0
+        }
+      },
+      {
+        "rule_name": "store_adjustment_check",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 5,
+        "details": {
+          "basis": "gross",
+          "store_adjusted_total": 7.0
+        }
+      },
+      {
+        "rule_name": "difference_classification",
+        "rule_result": "material_unexplained_difference",
+        "severity": "major",
+        "is_explained": false,
+        "blocks_review": true,
+        "evaluation_order": 6,
+        "details": {
+          "difference_explained": true,
+          "total_diff": 3.0,
+          "auto_accept_threshold": 0.15,
+          "minor_threshold": 1.0,
+          "store_key": "jumbo"
+        }
+      },
+      {
+        "rule_name": "final_review_decision",
+        "rule_result": "material_rule",
+        "severity": "major",
+        "is_explained": false,
+        "blocks_review": true,
+        "evaluation_order": 7,
+        "details": {
+          "recommended_status": "Controle nodig",
+          "review_reason_class": "material_total_difference"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Bol missing total context",
+    "recommended_status": "Controle nodig",
+    "decision_source": "manual_review_rule",
+    "review_reason_class": "missing_total_context",
+    "blocking_rules": [
+      "total_difference_check"
+    ],
+    "explained_small_difference": false,
+    "material_unexplained_difference": false,
+    "trace": [
+      {
+        "rule_name": "receipt_header_context",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 1,
+        "details": {
+          "store_name": "Bol",
+          "purchase_at_present": true
+        }
+      },
+      {
+        "rule_name": "valid_line_presence",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 2,
+        "details": {
+          "valid_line_count": 1
+        }
+      },
+      {
+        "rule_name": "total_difference_check",
+        "rule_result": "not_evaluable",
+        "severity": "major",
+        "is_explained": false,
+        "blocks_review": true,
+        "evaluation_order": 3,
+        "details": {
+          "total_amount_present": false,
+          "store_adjusted_total_present": true,
+          "valid_line_count": 1
+        }
+      },
+      {
+        "rule_name": "line_integrity_check",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 4,
+        "details": {
+          "price_issue_count": 0,
+          "quantity_issue_count": 0,
+          "missing_amount_count": 0
+        }
+      },
+      {
+        "rule_name": "store_adjustment_check",
+        "rule_result": "ok",
+        "severity": "none",
+        "is_explained": true,
+        "blocks_review": false,
+        "evaluation_order": 5,
+        "details": {
+          "basis": "gross",
+          "store_adjusted_total": 65.0
+        }
+      },
+      {
+        "rule_name": "difference_classification",
+        "rule_result": "no_material_difference",
+        "severity": "none",
+        "is_explained": false,
+        "blocks_review": false,
+        "evaluation_order": 6,
+        "details": {
+          "difference_explained": true,
+          "total_diff": null,
+          "auto_accept_threshold": 0.15,
+          "minor_threshold": 1.0,
+          "store_key": "bol"
+        }
+      },
+      {
+        "rule_name": "final_review_decision",
+        "rule_result": "manual_review_rule",
+        "severity": "major",
+        "is_explained": false,
+        "blocks_review": true,
+        "evaluation_order": 7,
+        "details": {
+          "recommended_status": "Controle nodig",
+          "review_reason_class": "missing_total_context"
+        }
+      }
+    ]
+  }
+]

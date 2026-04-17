@@ -1,0 +1,19 @@
+{
+  "version": "01.12.39",
+  "tests": [
+    {
+      "name": "text detail line 2X1,50 merges into previous article",
+      "status": "passed",
+      "quantity": 2.0,
+      "unit_price": 1.5,
+      "line_total": 3.0
+    },
+    {
+      "name": "ocr detail line 3 X 0,99 merges into previous article",
+      "status": "passed",
+      "quantity": 3.0,
+      "unit_price": 0.99,
+      "line_total": 2.97
+    }
+  ]
+}

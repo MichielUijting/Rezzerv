@@ -1,0 +1,15 @@
+{
+  "version": "v01.12.45",
+  "scope": "Receipt quality improvement – OCR supermarktcluster",
+  "checks": [
+    "py_compile receipt_line_classifier.py",
+    "py_compile receipt_store_rules.py",
+    "py_compile receipt_service.py",
+    "version sync updated to v01.12.45"
+  ],
+  "notes": [
+    "store-specific OCR normalization extended for Lidl, Aldi, Plus and Jumbo",
+    "additional skip markers added for supermarket meta lines",
+    "dedup window and similarity threshold tuned for supermarket OCR"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "status": "passed",
+  "database_under_test": "/tmp/rezzerv-target-location-s6dkf58v/rezzerv.db",
+  "checks": {
+    "successful_target_location_save": {
+      "line_id": "5ecaaed330a34915085f50950d3c85d7",
+      "external_line_ref": "seed-jumbo-4",
+      "article_name": "Tomaten",
+      "saved_target_location_id": "369231a95572ed2ad5d069edcd8f9829",
+      "resolved_location": {
+        "location_id": "369231a95572ed2ad5d069edcd8f9829",
+        "space_id": "78f4b61e324f10efbe3b4ca36442ee66",
+        "sublocation_id": "369231a95572ed2ad5d069edcd8f9829",
+        "location_label": "Badkamer / Kast"
+      }
+    },
+    "rejected_invalid_target_location_save": {
+      "line_id": "5ecaaed330a34915085f50950d3c85d7",
+      "external_line_ref": "seed-jumbo-4",
+      "article_name": "Tomaten",
+      "rejected_target_location_id": "invalid-location-for-test",
+      "reason": "invalid_target_location_id",
+      "detail": "Ongeldige target_location_id voor seed-jumbo-4: Tomaten"
+    },
+    "batch_processing_returns_exact_failed_line": {
+      "batch_id": "2c0b5a18-7197-498d-81ee-43d83fca1035",
+      "processed_count": 0,
+      "failed_count": 2,
+      "failed_line": {
+        "line_id": "5ecaaed330a34915085f50950d3c85d7",
+        "batch_id": "2c0b5a18-7197-498d-81ee-43d83fca1035",
+        "external_line_ref": "seed-jumbo-4",
+        "ui_line_number": 5,
+        "article_name": "Tomaten",
+        "target_location_id": "stale-invalid-location-from-db",
+        "review_decision": "selected",
+        "display_label": "seed-jumbo-4: Tomaten"
+      },
+      "failed_error": "Geen geldige locatie gekozen",
+      "processed_line_ids": [],
+      "all_result_statuses": [
+        "failed",
+        "failed"
+      ]
+    }
+  }
+}

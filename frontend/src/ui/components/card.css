@@ -1,0 +1,92 @@
+.rz-card {
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--elevation-2);
+  border: 2px solid var(--color-brand-primary);
+  padding: var(--space-xl);
+}
+
+
+.rz-card-login {
+  max-width: 520px;
+  width: 100%;
+}
+
+
+.rz-card-home {
+  width: 100%;
+  max-width: 1120px;
+}
+
+
+
+
+
+
+.rz-tile-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.rz-tile-label {
+  font-weight: 500;
+}
+
+
+/* Ensure card height is content-driven */
+.rz-card {
+  height: auto;
+}
+
+
+/* Reduce tile dimensions by 30% */
+
+
+.rz-tile-icon {
+  font-size: 20px; /* reduced from 28px approx */
+}
+
+.rz-tile-label {
+  font-size: 0.9rem;
+}
+
+/* Responsive tile grid without shrinking tiles */
+
+
+
+
+
+/* Fixed tile size (-40%) */
+.rz-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, 110px);
+  justify-content: center;
+  gap: 24px;
+}
+
+
+
+.rz-tile {
+  width: 110px;
+  height: 110px;
+  background: #ffffff;
+  border-radius: 16px;
+  border: 2px solid #DCEFE8; /* slightly darker than page background, still light green */
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18); /* darker, clearer elevation */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+
+
+.rz-tile-icon {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.rz-tile-label {
+  font-size: 0.85rem;
+  text-align: center;
+}

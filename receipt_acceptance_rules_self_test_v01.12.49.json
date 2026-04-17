@@ -1,0 +1,11 @@
+{
+  "version": "v01.12.49",
+  "scope": "receipt acceptance rules – go/review",
+  "checks": [
+    "python_compile_receipt_service",
+    "version_sync_updated",
+    "upload_date_fallback_added",
+    "go_review_acceptance_logic_added"
+  ],
+  "result": "pass"
+}

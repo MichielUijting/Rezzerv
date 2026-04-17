@@ -1,0 +1,14 @@
+{
+  "version": "01.12.42",
+  "tests": {
+    "ocr_classify_bedrag_euro": "META",
+    "ocr_classify_contant": "META",
+    "ocr_classify_multiplier": "DETAIL",
+    "text_classify_multiplier": "DETAIL",
+    "jumbo_multiplier_attach_expected_labels": [
+      "PAPRIKA",
+      "BROOD"
+    ],
+    "lidl_duplicate_collapse_expected_count": 1
+  }
+}

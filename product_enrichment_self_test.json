@@ -1,0 +1,103 @@
+{
+  "test_type": "product_enrichment_self_test",
+  "status": "passed",
+  "passed_count": 1,
+  "blocked_count": 0,
+  "failed_count": 0,
+  "results": [
+    {
+      "scenario_id": "product_enrichment_global_source_of_truth",
+      "name": "Barcode lookup wordt centraal opgeslagen op global_products",
+      "status": "passed",
+      "notes": "Controleert centrale enrichment-opslag, global_product-koppeling en audittrail.",
+      "expected_status": "found",
+      "article_enrichment_status": "found",
+      "global_enrichment_status": "found",
+      "global_product_id": "66d0dfa8-4a4c-4b26-9b0e-2a6e92851581",
+      "global_product": {
+        "id": "66d0dfa8-4a4c-4b26-9b0e-2a6e92851581",
+        "primary_gtin": "8076800195057",
+        "name": "Barilla Spaghetti No. 5",
+        "brand": "Barilla",
+        "category": "Pasta",
+        "source": "public_reference"
+      },
+      "article_product_details": {
+        "identity": {
+          "identity_type": "gtin",
+          "identity_value": "8076800195057",
+          "normalized_barcode": "8076800195057",
+          "source": "household",
+          "confidence_score": 1.0,
+          "is_primary": true
+        },
+        "enrichment_status": {
+          "status": "found",
+          "source": "public_reference_catalog",
+          "message": null,
+          "lookup_attempted_at": "2026-04-04 08:24:19",
+          "normalized_barcode": "8076800195057"
+        },
+        "enrichment": {
+          "source_name": "public_reference_catalog",
+          "source_record_id": "8076800195057",
+          "title": "Barilla Spaghetti No. 5",
+          "brand": "Barilla",
+          "category": "Pasta",
+          "size_value": 500.0,
+          "size_unit": "g",
+          "ingredients": [
+            "harde tarwegriesmeel",
+            "water"
+          ],
+          "allergens": [
+            "gluten"
+          ],
+          "nutrition": {
+            "energy-kcal_100g": 359,
+            "fat_100g": 2.0,
+            "carbohydrates_100g": 70.2,
+            "proteins_100g": 13.5,
+            "salt_100g": 0.013,
+            "sugars_100g": 3.5
+          },
+          "image_url": null,
+          "source_url": "https://www.foodmarkt.com/nl/barilla-italiaanse-pasta-spaghetti-500g.html",
+          "quality_score": 0.72,
+          "fetched_at": "2026-04-04 08:24:19",
+          "lookup_status": "found",
+          "last_lookup_at": "2026-04-04 08:24:19",
+          "last_lookup_source": "public_reference_catalog",
+          "last_lookup_message": null,
+          "normalized_barcode": "8076800195057"
+        }
+      },
+      "second_article_id": "e4bbb6b6-d323-4b22-889a-b60277e97aa6",
+      "shared_global_enrichment_row_count": 1,
+      "attempt_count": 2,
+      "attempts": [
+        {
+          "source_name": "public_reference_catalog",
+          "action": "lookup",
+          "status": "found",
+          "message": null,
+          "created_at": "2026-04-04 08:24:19",
+          "normalized_barcode": "8076800195057",
+          "http_status": 200,
+          "response_excerpt": "{\"barcode\": \"8076800195057\", \"title\": \"Barilla Spaghetti No. 5\"}"
+        },
+        {
+          "source_name": "open_food_facts",
+          "action": "lookup",
+          "status": "failed",
+          "message": "Technische fout bij productlookup: <urlopen error [Errno -3] Temporary failure in name resolution>",
+          "created_at": "2026-04-04 08:24:19",
+          "normalized_barcode": "8076800195057",
+          "http_status": null,
+          "response_excerpt": "<urlopen error [Errno -3] Temporary failure in name resolution>"
+        }
+      ],
+      "error": null
+    }
+  ]
+}

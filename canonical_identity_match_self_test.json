@@ -1,0 +1,31 @@
+{
+  "status": "passed",
+  "database_under_test": "/tmp/rezzerv-canonical-identity-_f_pe9t3/rezzerv.db",
+  "checks": {
+    "identity_match_reused_existing_global_product": {
+      "external_article_code_input": "sku 42-test",
+      "normalized_identity_value": "SKU42TEST",
+      "match_method": "identity:external_article_number",
+      "confidence_score": 0.95,
+      "matched_global_product_id": "f4677b55-bb40-49b6-9ede-a39f6d724745",
+      "matched_household_article_id": "live::Canonieke Mosterd",
+      "stored_line": {
+        "id": "c8e76e62-9520-4eaa-98a0-1aa8246a9bc7",
+        "external_article_code": "sku 42-test",
+        "matched_global_product_id": "f4677b55-bb40-49b6-9ede-a39f6d724745",
+        "matched_household_article_id": "live::Canonieke Mosterd",
+        "match_status": "matched"
+      }
+    },
+    "no_new_global_product_created": {
+      "global_product_count_before": 5,
+      "global_product_count_after": 5,
+      "created_new_present": false
+    },
+    "identity_source_record": {
+      "identity_type": "external_article_number",
+      "identity_value": "SKU42TEST",
+      "global_product_id": "f4677b55-bb40-49b6-9ede-a39f6d724745"
+    }
+  }
+}

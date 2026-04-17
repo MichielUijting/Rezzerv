@@ -1,0 +1,88 @@
+{
+  "database": "backend/rezzerv.db",
+  "status": "passed",
+  "failed_count": 0,
+  "checks": [
+    {
+      "name": "table_global_products",
+      "status": "passed",
+      "message": "global_products aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_household_articles",
+      "status": "passed",
+      "message": "household_articles aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_product_identities",
+      "status": "passed",
+      "message": "product_identities aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_product_enrichments",
+      "status": "passed",
+      "message": "product_enrichments aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_product_enrichment_attempts",
+      "status": "passed",
+      "message": "product_enrichment_attempts aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "all_household_articles_linked",
+      "status": "passed",
+      "message": "Alle household_articles hebben een global_product_id-koppeling (1/1)."
+    },
+    {
+      "name": "no_orphan_household_article_links",
+      "status": "passed",
+      "message": "Geen orphan household_articles → global_products koppelingen gevonden."
+    },
+    {
+      "name": "no_duplicate_household_global_product_pairs",
+      "status": "passed",
+      "message": "Geen dubbele household/global_product combinaties gevonden."
+    },
+    {
+      "name": "transition_logic_reduced",
+      "status": "passed",
+      "message": "Transitielogica restant: identities zonder global_product_id=0, enrichments=0, attempts=0."
+    }
+  ],
+  "notes": [
+    "Release B verankert household_articles relationeel op global_products en synchroniseert gekoppelde transitietabellen waar mogelijk.",
+    "household_article_id blijft in transitietabellen nog bestaan als deprecated contextkolom; de leidende productkoppeling is nu global_product_id."
+  ],
+  "summary": {
+    "global_products": {
+      "column_count": 12,
+      "row_count": 2
+    },
+    "household_articles": {
+      "column_count": 22,
+      "row_count": 1
+    },
+    "product_identities": {
+      "column_count": 10,
+      "row_count": 1
+    },
+    "product_enrichments": {
+      "column_count": 24,
+      "row_count": 3
+    },
+    "product_enrichment_attempts": {
+      "column_count": 12,
+      "row_count": 6
+    },
+    "household_articles_total": 1,
+    "household_articles_linked": 1,
+    "household_articles_missing_link": 0,
+    "orphan_household_article_links": 0,
+    "duplicate_household_global_product_pairs": 0,
+    "transition_rows_missing_global_product_id": {
+      "product_identities": 0,
+      "product_enrichments": 0,
+      "product_enrichment_attempts": 0
+    }
+  }
+}

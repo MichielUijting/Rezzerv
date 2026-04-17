@@ -1,0 +1,19 @@
+{
+  "summary": {
+    "lidl_near_duplicate": 1,
+    "keep_separate_far_apart": 2,
+    "plus_variant_prefer_richer": 1
+  },
+  "labels": {
+    "lidl_near_duplicate": [
+      "Croissant boter"
+    ],
+    "keep_separate_far_apart": [
+      "Melk halfvol",
+      "Melk halfvol"
+    ],
+    "plus_variant_prefer_richer": [
+      "Rode paprika"
+    ]
+  }
+}

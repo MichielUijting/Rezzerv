@@ -1,0 +1,433 @@
+[
+  {
+    "receipt_id": "jumbo_2024-05-21_1458_elst_basilica19",
+    "source_file": "Jumbo bon.jpeg",
+    "source_type": "image/jpeg",
+    "store_chain": "Jumbo",
+    "store_name": "Jumbo Elst",
+    "store_address": "Basilica 19, 6661 TT Elst",
+    "purchase_datetime": "2024-05-21T14:58:00",
+    "total_eur": 22.82,
+    "line_item_count": 7,
+    "status": "baseline_confirmed_manual",
+    "line_items": [
+      {
+        "name": "KIPBLOKJE DIJFIL 350",
+        "qty": 2,
+        "unit_price_eur": 4.99,
+        "line_total_eur": 9.98
+      },
+      {
+        "name": "KASTANJE CHAMPIG VD",
+        "qty": 1,
+        "unit_price_eur": 2.79,
+        "line_total_eur": 2.79
+      },
+      {
+        "name": "BIO RODE BIET VACUM",
+        "qty": 1,
+        "unit_price_eur": 1.45,
+        "line_total_eur": 1.45
+      },
+      {
+        "name": "COURGETTE",
+        "qty": 1,
+        "unit_price_eur": 0.69,
+        "line_total_eur": 0.69
+      },
+      {
+        "name": "JUMBO RISOTTO ARBORI",
+        "qty": 1,
+        "unit_price_eur": 1.75,
+        "line_total_eur": 1.75
+      },
+      {
+        "name": "VP ASPERGESOEP",
+        "qty": 1,
+        "unit_price_eur": 6.49,
+        "line_total_eur": 6.49
+      },
+      {
+        "name": "REMIA MOSTERDSAUS",
+        "qty": 1,
+        "unit_price_eur": 2.15,
+        "line_total_eur": 2.15
+      }
+    ],
+    "discount_lines": [
+      {
+        "name": "ACTIE KIP",
+        "amount_eur": -2.48
+      }
+    ],
+    "notes": [
+      "Bonregelcount telt artikelregels, niet stuks.",
+      "Kortingsregel telt niet als bonregel."
+    ]
+  },
+  {
+    "receipt_id": "lidl_2025-11-25_1237_arnhem_fortunastraat44",
+    "source_file": "Lidl3.eml -> 220007428120251125221829 (1).png",
+    "source_type": "email_with_png_attachment",
+    "store_chain": "Lidl",
+    "store_name": "Lidl Arnhem",
+    "store_address": "Fortunastraat 44, 6846 XZ Arnhem",
+    "purchase_datetime": "2025-11-25T12:37:00",
+    "total_eur": 34.14,
+    "line_item_count": 18,
+    "status": "baseline_confirmed_manual_from_attachment",
+    "line_items": [
+      {
+        "name": "Aardappel zoet",
+        "qty": 1.224,
+        "unit_label": "kg",
+        "unit_price_eur": 2.65,
+        "line_total_eur": 3.24
+      },
+      {
+        "name": "Tortilla chips XXL",
+        "qty": 1,
+        "line_total_eur": 1.29
+      },
+      {
+        "name": "Knorr CaS Ch. tomaat",
+        "qty": 1,
+        "line_total_eur": 0.89
+      },
+      {
+        "name": "Knorr CaS kip",
+        "qty": 1,
+        "line_total_eur": 0.89
+      },
+      {
+        "name": "Mexicaanse kruiden",
+        "qty": 1,
+        "line_total_eur": 1.49
+      },
+      {
+        "name": "Verse halfvolle melk",
+        "qty": 1,
+        "line_total_eur": 0.89
+      },
+      {
+        "name": "Gouda belegen gerasp",
+        "qty": 1,
+        "line_total_eur": 2.39
+      },
+      {
+        "name": "Slagersleverworst",
+        "qty": 1,
+        "line_total_eur": 1.49
+      },
+      {
+        "name": "Rundersaucijzen",
+        "qty": 2,
+        "unit_price_eur": 4.99,
+        "line_total_eur": 9.98
+      },
+      {
+        "name": "Kidneybonen",
+        "qty": 1,
+        "line_total_eur": 2.59
+      },
+      {
+        "name": "Snacktomaten",
+        "qty": 1,
+        "line_total_eur": 1.79
+      },
+      {
+        "name": "Komkommer",
+        "qty": 2,
+        "unit_price_eur": 0.79,
+        "line_total_eur": 1.58
+      },
+      {
+        "name": "Duurzame basmati rijst",
+        "qty": 1,
+        "line_total_eur": 1.69
+      },
+      {
+        "name": "Crème fraîche 30%",
+        "qty": 1,
+        "line_total_eur": 0.99
+      },
+      {
+        "name": "Tomatenblokjes",
+        "qty": 2,
+        "unit_price_eur": 0.58,
+        "line_total_eur": 1.16
+      },
+      {
+        "name": "Mexicaanse kruidenm.",
+        "qty": 1,
+        "line_total_eur": 0.49
+      },
+      {
+        "name": "Mexicaanse kruidenm.",
+        "qty": 1,
+        "line_total_eur": 0.49
+      },
+      {
+        "name": "Taco saus",
+        "qty": 2,
+        "unit_price_eur": 0.99,
+        "line_total_eur": 1.98
+      }
+    ],
+    "discount_lines": [
+      {
+        "name": "Lidl Plus korting",
+        "amount_eur": -1.17
+      }
+    ],
+    "notes": [
+      "Aantal 22 art. verwijst naar stuks/hoeveelheden, niet naar bonregels.",
+      "Discount line telt niet als bonregel."
+    ]
+  },
+  {
+    "receipt_id": "lidl_2025-12-09_1321_arnhem_fortunastraat44",
+    "source_file": "Lidl2.eml -> 220007428220251209231057.png",
+    "source_type": "email_with_png_attachment",
+    "store_chain": "Lidl",
+    "store_name": "Lidl Arnhem",
+    "store_address": "Fortunastraat 44, 6846 XZ Arnhem",
+    "purchase_datetime": "2025-12-09T13:21:00",
+    "total_eur": 21.03,
+    "line_item_count": 5,
+    "status": "baseline_confirmed_manual_from_attachment",
+    "line_items": [
+      {
+        "name": "Cabernet Sauvignon",
+        "qty": 2,
+        "unit_price_eur": 3.99,
+        "line_total_eur": 7.98
+      },
+      {
+        "name": "Bananen",
+        "qty": 0.616,
+        "unit_label": "kg",
+        "unit_price_eur": 1.29,
+        "line_total_eur": 0.79
+      },
+      {
+        "name": "Kipfiletblokjes BL",
+        "qty": 1,
+        "line_total_eur": 9.29
+      },
+      {
+        "name": "Snackradijs",
+        "qty": 1,
+        "line_total_eur": 0.99
+      },
+      {
+        "name": "Taugé",
+        "qty": 2,
+        "unit_price_eur": 0.99,
+        "line_total_eur": 1.98
+      }
+    ],
+    "discount_lines": [],
+    "notes": [
+      "Aantal 7 art. verwijst naar stuks/hoeveelheden, niet naar bonregels."
+    ]
+  },
+  {
+    "receipt_id": "ah_2026-03-14_1713_8770",
+    "source_file": "AH_kassabon_2026-03-14 171300_8770.pdf",
+    "source_type": "pdf",
+    "store_chain": "Albert Heijn",
+    "store_name": "Albert Heijn",
+    "store_address": null,
+    "purchase_datetime": "2026-03-14T17:13:00",
+    "total_eur": 49.27,
+    "line_item_count": 22,
+    "status": "baseline_confirmed_from_pdf_text",
+    "line_items": [
+      {
+        "name": "PREI",
+        "qty": 1,
+        "line_total_eur": 1.3
+      },
+      {
+        "name": "KOMKOMMER",
+        "qty": 2,
+        "unit_price_eur": 0.99,
+        "line_total_eur": 1.98
+      },
+      {
+        "name": "DRUIVEN",
+        "qty": 1,
+        "line_total_eur": 2.69
+      },
+      {
+        "name": "KIWI GOLD",
+        "qty": 0.404,
+        "unit_label": "kg",
+        "unit_price_eur": 7.9,
+        "line_total_eur": 3.19
+      },
+      {
+        "name": "WINTERPEEN",
+        "qty": 1,
+        "line_total_eur": 0.7
+      },
+      {
+        "name": "AH GRF ROOKV",
+        "qty": 1,
+        "line_total_eur": 2.12
+      },
+      {
+        "name": "VOLK BOLLEN",
+        "qty": 1,
+        "line_total_eur": 1.99
+      },
+      {
+        "name": "WALDK HALF",
+        "qty": 1,
+        "line_total_eur": 1.35
+      },
+      {
+        "name": "REMIA SAUS",
+        "qty": 1,
+        "line_total_eur": 2.15
+      },
+      {
+        "name": "ZAANS H MAYO",
+        "qty": 1,
+        "line_total_eur": 1.59
+      },
+      {
+        "name": "AH MUFFINS",
+        "qty": 1,
+        "line_total_eur": 1.99
+      },
+      {
+        "name": "AH BOUILLON",
+        "qty": 1,
+        "line_total_eur": 1.65
+      },
+      {
+        "name": "AH BOUILLON",
+        "qty": 2,
+        "unit_price_eur": 0.59,
+        "line_total_eur": 1.18
+      },
+      {
+        "name": "AH BOUILLON",
+        "qty": 1,
+        "line_total_eur": 0.69
+      },
+      {
+        "name": "KATJA SNOEP",
+        "qty": 1,
+        "line_total_eur": 2.69
+      },
+      {
+        "name": "AH HV MELK",
+        "qty": 1,
+        "line_total_eur": 1.29
+      },
+      {
+        "name": "AH TORTILLA",
+        "qty": 1,
+        "line_total_eur": 1.19
+      },
+      {
+        "name": "CHIO CHIPS",
+        "qty": 2,
+        "unit_price_eur": 0.69,
+        "line_total_eur": 1.38
+      },
+      {
+        "name": "AH CHIPS",
+        "qty": 3,
+        "unit_price_eur": 0.39,
+        "line_total_eur": 1.17
+      },
+      {
+        "name": "CHIO CHIPS",
+        "qty": 1,
+        "line_total_eur": 0.69
+      },
+      {
+        "name": "AH MALBEC",
+        "qty": 2,
+        "unit_price_eur": 4.69,
+        "line_total_eur": 9.38
+      },
+      {
+        "name": "TUINERWTEN",
+        "qty": 1,
+        "line_total_eur": 0.99
+      }
+    ],
+    "discount_lines": [
+      {
+        "name": "BONUS MBCHIPS",
+        "amount_eur": -0.54
+      },
+      {
+        "name": "BBOX ELLWaldkorn",
+        "amount_eur": -0.2
+      },
+      {
+        "name": "BONUS AHKOMKOMMERP",
+        "amount_eur": -0.49
+      },
+      {
+        "name": "BONUS ALLEREMIA",
+        "amount_eur": -0.54
+      },
+      {
+        "name": "BONUS AHPREIPERSTU",
+        "amount_eur": -0.51
+      }
+    ],
+    "notes": [
+      "28 SUBTOTAAL is geen bonregel maar quantity-som.",
+      "82 KOOPZEGELS PREMIUM 8,20 is geen bonregel.",
+      "Tweede TOTAAL in BTW-blok mag niet als receipt total worden genomen."
+    ]
+  },
+  {
+    "receipt_id": "ah_2026-03-20_1627_8521",
+    "source_file": "AH_kassabon_2026-03-20 162700_8521.pdf",
+    "source_type": "pdf",
+    "store_chain": "Albert Heijn",
+    "store_name": "Albert Heijn",
+    "store_address": null,
+    "purchase_datetime": "2026-03-20T16:27:00",
+    "total_eur": 5.02,
+    "line_item_count": 3,
+    "status": "baseline_confirmed_from_pdf_text",
+    "line_items": [
+      {
+        "name": "POEDERSUIKER",
+        "qty": 1,
+        "line_total_eur": 1.19
+      },
+      {
+        "name": "CARE INLEGKR",
+        "qty": 1,
+        "line_total_eur": 0.99
+      },
+      {
+        "name": "AH POFFERTJE",
+        "qty": 1,
+        "line_total_eur": 2.19
+      }
+    ],
+    "discount_lines": [
+      {
+        "name": "BBOX Care menstr",
+        "amount_eur": -0.15
+      }
+    ],
+    "notes": [
+      "3 SUBTOTAAL 4,37 is geen bonregel maar quantity-som.",
+      "8 KOOPZEGELS PREMIUM 0,80 is geen bonregel.",
+      "BTW-TOTAAL 3,87 0,35 mag niet als receipt total worden genomen."
+    ]
+  }
+]

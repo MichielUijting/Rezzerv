@@ -1,0 +1,85 @@
+{
+  "database": "/mnt/data/fix65/rezzerv.db",
+  "status": "passed",
+  "failed_count": 0,
+  "checks": [
+    {
+      "name": "table_global_products",
+      "status": "passed",
+      "message": "global_products aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_product_identities",
+      "status": "passed",
+      "message": "product_identities aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_product_enrichments",
+      "status": "passed",
+      "message": "product_enrichments aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_product_enrichment_attempts",
+      "status": "passed",
+      "message": "product_enrichment_attempts aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "table_household_articles",
+      "status": "passed",
+      "message": "household_articles aanwezig met verplichte kolommen."
+    },
+    {
+      "name": "legacy_global_articles",
+      "status": "passed",
+      "message": "Legacy tabel global_articles is niet meer aanwezig; global_products is de actieve productlaag."
+    },
+    {
+      "name": "household_articles_linked_to_global_products",
+      "status": "passed",
+      "message": "1 household_articles hebben al een global_product_id-koppeling."
+    },
+    {
+      "name": "no_orphan_household_article_links",
+      "status": "passed",
+      "message": "Geen orphan global_product_id-koppelingen gevonden."
+    },
+    {
+      "name": "no_duplicate_primary_gtin",
+      "status": "passed",
+      "message": "Geen dubbele primary_gtin-waarden gevonden."
+    }
+  ],
+  "notes": [
+    "product_identities bevat nog transitiekolommen: household_article_id",
+    "product_enrichments bevat nog transitiekolommen: household_article_id",
+    "product_enrichment_attempts bevat nog transitiekolommen: household_article_id",
+    "Release A is geconsolideerd: global_products is actief aanwezig en legacy global_articles ontbreekt al in deze basis.",
+    "Transitie is nog niet volledig afgerond: enrichment- en identity-tabellen dragen nog household_article_id naast global_product_id."
+  ],
+  "summary": {
+    "global_products": {
+      "column_count": 12,
+      "row_count": 2
+    },
+    "product_identities": {
+      "column_count": 10,
+      "row_count": 0
+    },
+    "product_enrichments": {
+      "column_count": 24,
+      "row_count": 0
+    },
+    "product_enrichment_attempts": {
+      "column_count": 12,
+      "row_count": 0
+    },
+    "household_articles": {
+      "column_count": 22,
+      "row_count": 1
+    },
+    "global_articles_present": false,
+    "household_articles_linked": 1,
+    "orphan_global_product_links": 0,
+    "duplicate_primary_gtin_groups": 0
+  }
+}

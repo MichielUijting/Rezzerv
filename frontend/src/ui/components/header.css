@@ -1,0 +1,97 @@
+/* =========================================
+   REZZERV HEADER COMPONENT v1.1
+   Shared header with household context line
+========================================= */
+
+.rz-header {
+  min-height: 56px; /* styleguide baseline */
+  width: 100%;
+  background: var(--color-brand-primary, var(--color-brand-green));
+  position: relative;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 6px var(--space-lg, var(--m-std));
+  gap: 16px;
+}
+
+.rz-header-left {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.rz-header-titleblock {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.rz-header-title {
+  color: #FFFFFF;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.rz-header-subtitle {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.15;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: min(48vw, 520px);
+  margin-top: 2px;
+}
+
+/* Centered userbox */
+.rz-userbox-wrapper {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.rz-userbox {
+  background: #ffffff;
+  border-radius: var(--radius-sm, 4px);
+  padding: 6px 16px;
+  text-align: center;
+  margin: 4px 0;
+  max-width: min(36vw, 420px);
+}
+
+.rz-userbox div {
+  font-size: 14px;
+  font-weight: normal;
+  color: var(--color-text-primary, var(--color-text-default));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rz-header-logo {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.rz-header-logo img {
+  height: 28px !important;
+  width: auto !important;
+}
+
+@media (max-width: 900px) {
+  .rz-userbox {
+    max-width: 28vw;
+    padding: 6px 12px;
+  }
+
+  .rz-header-subtitle {
+    max-width: min(38vw, 300px);
+  }
+}
