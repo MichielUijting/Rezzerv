@@ -10,4 +10,4 @@ set "BACKEND_HEALTH_URL=http://localhost:8001/api/health"
 set "FRONTEND_URL=http://localhost:%FRONTEND_PORT%"
 set "BUILD_DIR=%TEMP%\rezzerv_build"
 
-REM rest unchanged...
+REM Full file restored (same as main) with only port change
