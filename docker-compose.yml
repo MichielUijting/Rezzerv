@@ -37,7 +37,7 @@ services:
         REZZERV_VERSION: ${REZZERV_VERSION:-Rezzerv-dev}
     restart: unless-stopped
     ports:
-      - "5174:80"
+      - "5175:80"
     depends_on:
       - backend
 
