@@ -2,6 +2,11 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
+set "REPO_DIR=%CD%"
+set "TEMP_DIR=%TEMP%\Rezzerv-start-sync"
+set "GIT_BRANCH="
+set "GIT_HEAD_SHA="
+
 for /f "usebackq delims=" %%v in ("VERSION.txt") do set "REZZERV_VERSION=%%v"
 if "%REZZERV_VERSION%"=="" set "REZZERV_VERSION=Rezzerv-unknown"
 
@@ -19,6 +24,18 @@ echo Version: %REZZERV_VERSION%
 echo ========================================
 echo Modus: persistente normale start ^(runtime vanuit projectmap^)
 echo Gebruik hard-reset.bat alleen voor een expliciete schone reset.
+
+echo.
+echo === Rezzerv Git Runtime Sync Start ===
+echo.
+
+call :ValidateGitRepository || exit /b 1
+call :PrepareTempDir || exit /b 1
+call :CaptureGitState || exit /b 1
+call :FetchAndFastForward || exit /b 1
+call :MirrorTrackedFilesToTemp || exit /b 1
+call :ApplyTempToRepo || exit /b 1
+call :CleanupTempDir >nul 2>&1
 
 if exist "validate-version-sync.bat" (
   call validate-version-sync.bat
@@ -150,6 +167,100 @@ echo Starting Cloudflare Quick Tunnel in a separate window...
 call :StartCloudflareTunnel
 
 echo Startup complete.
+exit /b 0
+
+:ValidateGitRepository
+if not exist "%REPO_DIR%\.git" (
+  echo [ERROR] Geen geldige git repository in %REPO_DIR%
+  pause
+  exit /b 1
+)
+git --version >nul 2>&1
+if %errorlevel% neq 0 (
+  echo [ERROR] Git is niet beschikbaar op deze computer.
+  pause
+  exit /b 1
+)
+exit /b 0
+
+:PrepareTempDir
+if exist "%TEMP_DIR%" rmdir /s /q "%TEMP_DIR%"
+mkdir "%TEMP_DIR%" >nul 2>&1
+if not exist "%TEMP_DIR%" (
+  echo [ERROR] Tijdelijke sync-map kon niet worden aangemaakt: %TEMP_DIR%
+  pause
+  exit /b 1
+)
+exit /b 0
+
+:CaptureGitState
+for /f "delims=" %%b in ('git branch --show-current') do set "GIT_BRANCH=%%b"
+if "%GIT_BRANCH%"=="" (
+  echo [ERROR] Huidige git branch kon niet worden bepaald.
+  pause
+  exit /b 1
+)
+for /f "delims=" %%h in ('git rev-parse HEAD 2^>nul') do set "GIT_HEAD_SHA=%%h"
+echo Actieve branch: %GIT_BRANCH%
+echo Lokale HEAD voor sync: %GIT_HEAD_SHA%
+exit /b 0
+
+:FetchAndFastForward
+echo Git fetch uitvoeren...
+git fetch --all --tags --prune
+if %errorlevel% neq 0 (
+  echo [ERROR] git fetch is mislukt.
+  pause
+  exit /b 1
+)
+
+echo Git pull uitvoeren op branch %GIT_BRANCH%...
+git pull --ff-only
+if %errorlevel% neq 0 (
+  echo [ERROR] git pull --ff-only is mislukt. Los lokale branchproblemen eerst op.
+  pause
+  exit /b 1
+)
+
+for /f "delims=" %%h in ('git rev-parse HEAD 2^>nul') do set "GIT_HEAD_SHA=%%h"
+echo Lokale HEAD na sync: %GIT_HEAD_SHA%
+exit /b 0
+
+:MirrorTrackedFilesToTemp
+echo Repository-inhoud spiegelen naar tijdelijke map...
+git archive --format=tar %GIT_HEAD_SHA% -o "%TEMP_DIR%\repo.tar"
+if %errorlevel% neq 0 (
+  echo [ERROR] git archive is mislukt.
+  pause
+  exit /b 1
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "tar -xf '%TEMP_DIR%\repo.tar' -C '%TEMP_DIR%'"
+if %errorlevel% neq 0 (
+  echo [ERROR] Tijdelijke repository-spiegel kon niet worden uitgepakt.
+  pause
+  exit /b 1
+)
+del /q "%TEMP_DIR%\repo.tar" >nul 2>&1
+if not exist "%TEMP_DIR%\docker-compose.yml" (
+  echo [ERROR] Tijdelijke repository-spiegel is ongeldig ^(docker-compose.yml ontbreekt^).
+  pause
+  exit /b 1
+)
+exit /b 0
+
+:ApplyTempToRepo
+echo Bestanden kopieren naar repo ^(zonder .git, zonder runtime-data^)...
+robocopy "%TEMP_DIR%" "%REPO_DIR%" /E /NFL /NDL /NJH /NJS /XD ".git" "backend\data" "frontend\node_modules" "backend\.venv" "Music"
+set "ROBOCODE=%ERRORLEVEL%"
+if %ROBOCODE% GEQ 8 (
+  echo [ERROR] Robocopy sync naar repo is mislukt. Exitcode: %ROBOCODE%
+  pause
+  exit /b 1
+)
+exit /b 0
+
+:CleanupTempDir
+if exist "%TEMP_DIR%" rmdir /s /q "%TEMP_DIR%"
 exit /b 0
 
 :project_error
