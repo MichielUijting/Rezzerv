@@ -3,6 +3,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
 set "REPO_DIR=%CD%"
+set "COMPOSE_ENV="
 set "TEMP_DIR=%TEMP%\Rezzerv-start-sync"
 set "GIT_BRANCH="
 set "GIT_HEAD_SHA="
@@ -29,6 +30,18 @@ echo.
 echo === Rezzerv Git Runtime Sync Start ===
 echo.
 
+call :ResolveProjectRoot || exit /b 1
+set "REPO_DIR=%CD%"
+
+echo.
+echo === DEBUG INFO ===
+echo Huidige directory:
+cd
+echo.
+echo Bestanden:
+dir /b
+echo ==================
+echo.
 call :ValidateGitRepository || exit /b 1
 call :PrepareTempDir || exit /b 1
 call :CaptureGitState || exit /b 1
@@ -49,6 +62,7 @@ if exist "validate-version-sync.bat" (
 )
 
 echo Valideren van projectstructuur...
+if exist ".env" set "COMPOSE_ENV=--env-file .env"
 if not exist "docker-compose.yml" goto :project_error
 if not exist "backend" goto :project_error
 if not exist "frontend" goto :project_error
@@ -98,18 +112,18 @@ if %errorlevel% neq 0 (
 call :EnsureDockerRunning || exit /b 1
 
 echo Validating docker-compose.yml...
-docker compose config >nul 2>&1
+docker compose %COMPOSE_ENV% config >nul 2>&1
 if %errorlevel% neq 0 (
   echo docker-compose.yml is invalid. See errors above.
-  docker compose config
+  docker compose %COMPOSE_ENV% config
   pause
   exit /b 1
 )
 
 echo Sanitizing previous Rezzerv runtime...
 echo [1/8] Stopping existing compose stack and removing orphans...
-docker compose down --remove-orphans >nul 2>&1
-docker compose rm -f -s -v >nul 2>&1
+docker compose %COMPOSE_ENV% down --remove-orphans >nul 2>&1
+docker compose %COMPOSE_ENV% rm -f -s -v >nul 2>&1
 
 echo [1b/8] Removing legacy parallel Rezzerv stacks if present...
 call :CleanupLegacyRezzervStacks || exit /b 1
@@ -128,7 +142,7 @@ echo [3/8] Re-checking Docker availability after cleanup...
 call :EnsureDockerRunning || exit /b 1
 
 echo [4/8] Building updated images from projectmap...
-docker compose build --pull
+docker compose %COMPOSE_ENV% build --pull
 if %errorlevel% neq 0 (
   echo [ERROR] docker compose build failed.
   pause
@@ -136,11 +150,11 @@ if %errorlevel% neq 0 (
 )
 
 echo [5/8] Starting containers without deleting project database...
-docker compose up -d --remove-orphans --force-recreate
+docker compose %COMPOSE_ENV% up -d --remove-orphans --force-recreate
 if %errorlevel% neq 0 (
   echo [ERROR] docker compose up failed.
-  docker compose ps -a
-  docker compose logs --tail 120
+  docker compose %COMPOSE_ENV% ps -a
+  docker compose %COMPOSE_ENV% logs --tail 120
   pause
   exit /b 1
 )
@@ -168,6 +182,22 @@ call :StartCloudflareTunnel
 
 echo Startup complete.
 exit /b 0
+
+:ResolveProjectRoot
+if exist "docker-compose.yml" (
+  exit /b 0
+)
+for /d %%d in (*) do (
+  if exist "%%d\docker-compose.yml" (
+    echo [INFO] Projectroot gevonden in submap %%d
+    cd /d "%%d"
+    exit /b 0
+  )
+)
+echo [ERROR] Geen geldige projectroot gevonden.
+echo Verwacht: docker-compose.yml in de huidige map of in exact één directe submap.
+pause
+exit /b 1
 
 :ValidateGitRepository
 if not exist "%REPO_DIR%\.git" (
@@ -307,7 +337,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-RestMe
 if %errorlevel% equ 0 exit /b 0
 if %BACKEND_HEALTH_ATTEMPTS% GEQ 40 (
   echo [ERROR] Backend healthcheck werd niet op tijd groen.
-  docker compose logs backend --tail 120
+  docker compose %COMPOSE_ENV% logs backend --tail 120
   pause
   exit /b 1
 )
@@ -338,7 +368,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "try { $r = Invoke-WebReq
 if %errorlevel% equ 0 exit /b 0
 if %FRONTEND_WAIT_ATTEMPTS% GEQ 40 (
   echo [ERROR] Frontend werd niet op tijd bereikbaar op %TARGET_FRONTEND_URL%.
-  docker compose logs frontend --tail 120
+  docker compose %COMPOSE_ENV% logs frontend --tail 120
   pause
   exit /b 1
 )
