@@ -1,40 +1,45 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 
-if "%1"=="" (
-  echo Usage: release.bat 01.13.00
-  exit /b 1
-)
+REM Fetch latest tags
+git fetch --tags
 
-set VERSION=%1
+if "%1"=="" (
+  for /f "tokens=1-3 delims=." %%a in ('git describe --tags --abbrev=0 2^>nul') do (
+    set MAJOR=%%a
+    set MINOR=%%b
+    set PATCH=%%c
+  )
+
+  if not defined PATCH (
+    set VERSION=01.13.00
+  ) else (
+    set /a PATCH+=1
+    set VERSION=%MAJOR%.%MINOR%.%PATCH%
+  )
+) else (
+  set VERSION=%1
+)
 
 echo ========================================
 echo Rezzerv Release Flow
 echo Version: %VERSION%
 echo ========================================
 
-REM Step 1: sync version
+REM Sync version
 call sync-version.bat %VERSION% || exit /b 1
 
-REM Step 2: validate git state
-git status --porcelain > temp_git_status.txt
-for /f %%i in (temp_git_status.txt) do (
-  set DIRTY=1
-)
-del temp_git_status.txt
+REM Generate changelog
+powershell -ExecutionPolicy Bypass -File generate-changelog.ps1 -Version %VERSION%
 
-if defined DIRTY (
-  echo [INFO] Changes detected, continuing...
-)
-
-REM Step 3: commit changes
+REM Commit
 git add .
 git commit -m "release: %VERSION%"
 
-REM Step 4: create tag
+REM Tag
 git tag Rezzerv-v%VERSION%
 
-REM Step 5: push everything
+REM Push
 git push origin main
 git push origin Rezzerv-v%VERSION%
 
