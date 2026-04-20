@@ -1,10 +1,4 @@
 // Central place for the build/version label shown in the UI.
-//
-// Preferred flow:
-// - VERSION.txt is the source of truth for a release
-// - start.bat passes VERSION.txt to the frontend build as VITE_REZZERV_VERSION
-// - /version.json exposes the same version in machine-readable form
-// - the UI listens for rezzerv-version-ready so late-loaded version.json stays in sync
 
 function normalizeVersion(value) {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : ""
@@ -26,5 +20,17 @@ export function getRezzervVersionTag() {
   const injected = getInjectedRezzervVersionTag()
   if (injected) return injected
 
-  return "Rezzerv-dev"
+  return "dev"
+}
+
+export function formatRezzervVersionLabel(tag) {
+  const normalized = normalizeVersion(tag)
+  if (!normalized) return "Rezzerv dev"
+
+  // Avoid double prefix like "Rezzerv vRezzerv-MVP..."
+  if (normalized.toLowerCase().startsWith("rezzerv")) {
+    return normalized
+  }
+
+  return `Rezzerv v${normalized}`
 }
