@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import AppRouter from "./app/router/AppRouter.jsx";
-import { getRezzervVersionTag } from "./ui/version";
+import { getRezzervVersionTag, formatRezzervVersionLabel } from "./ui/version";
 
 export default function App() {
   const [buildTag, setBuildTag] = useState(getRezzervVersionTag());
@@ -14,7 +14,9 @@ export default function App() {
   return (
     <>
       <AppRouter />
-      <div className="rz-buildtag" aria-hidden="true" data-testid="build-tag">Rezzerv v{buildTag}</div>
+      <div className="rz-buildtag" aria-hidden="true" data-testid="build-tag">
+        {formatRezzervVersionLabel(buildTag)}
+      </div>
     </>
   );
 }
