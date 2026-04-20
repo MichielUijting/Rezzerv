@@ -21,7 +21,7 @@ for /f "usebackq delims=" %%s in (`powershell -NoProfile -ExecutionPolicy Bypass
   "$major = [int]$match.Groups[1].Value;" ^
   "$minor = [int]$match.Groups[2].Value;" ^
   "$patch = [int]$match.Groups[3].Value;" ^
-  "Write-Output ($major.ToString() + '.' + $minor.ToString() + '.' + $patch.ToString())"`) do set "PACKAGE_VERSION=%%s"
+  "Write-Output ('{0}.{1}.{2}' -f $major, $minor, $patch)"`) do set "PACKAGE_VERSION=%%s"
 
 if "%PACKAGE_VERSION%"=="" (
   echo [ERROR] packageversie kon niet worden bepaald.
