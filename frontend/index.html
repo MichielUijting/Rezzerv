@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <script>
+      (function () {
+        try {
+          if (window.location.pathname === "/reset-session") {
+            try {
+              localStorage.removeItem("rezzerv_token");
+              sessionStorage.clear();
+            } catch (e) {}
+            window.location.replace("/login?reset=1");
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#166534" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <title>Rezzerv</title>
+    <script>
+      (function () {
+        try {
+          const params = new URLSearchParams(window.location.search)
+          const isRegressionMode = params.get('regression_mode') === '1'
+          if (isRegressionMode) {
+            document.documentElement.setAttribute('data-regression-mode', '1')
+            return
+          }
+          const preconnectFonts = document.createElement('link')
+          preconnectFonts.rel = 'preconnect'
+          preconnectFonts.href = 'https://fonts.googleapis.com'
+          document.head.appendChild(preconnectFonts)
+          const preconnectStatic = document.createElement('link')
+          preconnectStatic.rel = 'preconnect'
+          preconnectStatic.href = 'https://fonts.gstatic.com'
+          preconnectStatic.crossOrigin = 'anonymous'
+          document.head.appendChild(preconnectStatic)
+          const fontStylesheet = document.createElement('link')
+          fontStylesheet.rel = 'stylesheet'
+          fontStylesheet.href = 'https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap'
+          document.head.appendChild(fontStylesheet)
+        } catch (e) {}
+      })();
+    </script>
+    <style id="rezzerv-rowheight-fix">
+      table td{
+        padding-top:10px !important;
+        padding-bottom:10px !important;
+      }
+    </style>
+    <style id="rezzerv-table-final-fix">
+      tbody td{
+        padding-top:0px !important;
+        padding-bottom:0px !important;
+        line-height:20px !important;
+      }
+      thead th{
+        padding-top:4px !important;
+        padding-bottom:4px !important;
+      }
+      thead input{
+        padding-top:2px !important;
+        padding-bottom:2px !important;
+        height:auto !important;
+      }
+      tbody tr:first-child td{
+        border-top:none !important;
+      }
+    </style>
+    <style id="rezzerv-ui-tuning-10504">
+      form label{
+        font-weight:700 !important;
+      }
+      button,
+      a[role="button"],
+      .btn{
+        box-shadow:0 2px 6px rgba(0,0,0,0.25) !important;
+      }
+      body{
+        background:#e8f5e9 !important;
+      }
+    </style>
+    <style id="rezzerv-ui-tuning-10505">
+      label,
+      .login label,
+      form div label{
+        font-weight:700 !important;
+      }
+      button,
+      input[type="button"],
+      input[type="submit"],
+      a[role="button"]{
+        box-shadow:0 4px 10px rgba(0,0,0,0.25) !important;
+        border-radius:6px;
+      }
+      button:hover,
+      input[type="submit"]:hover{
+        box-shadow:0 6px 14px rgba(0,0,0,0.30) !important;
+      }
+    </style>
+    <style id="login-label-bold-only">
+      .rz-card-login .rz-label{
+        font-weight:700 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script>
+      window.__REZZERV_VERSION__ = window.__REZZERV_VERSION__ || null
+      const applyRezzervVersion = (version) => {
+        if (typeof version !== 'string') return false
+        const normalized = version.trim()
+        if (!normalized) return false
+        window.__REZZERV_VERSION__ = { version: normalized }
+        window.dispatchEvent(new CustomEvent('rezzerv-version-ready', { detail: { version: normalized } }))
+        return true
+      }
+
+      fetch('/version.json', { cache: 'no-store' })
+        .then((response) => response.ok ? response.json() : null)
+        .then((versionInfo) => applyRezzervVersion(versionInfo?.version) ? true : fetch('/api/version', { cache: 'no-store' })
+          .then((response) => response.ok ? response.json() : null)
+          .then((apiVersionInfo) => { applyRezzervVersion(apiVersionInfo?.version) }))
+        .catch(() => {
+          fetch('/api/version', { cache: 'no-store' })
+            .then((response) => response.ok ? response.json() : null)
+            .then((versionInfo) => { applyRezzervVersion(versionInfo?.version) })
+            .catch(() => {})
+        })
+    </script>
+  </body>
+</html>

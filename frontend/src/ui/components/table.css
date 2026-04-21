@@ -1,0 +1,185 @@
+
+
+:root{
+  --rz-table-visible-row-count: 10;
+  --rz-table-header-row-height: 42px;
+  --rz-table-filter-row-height: 34px;
+  --rz-table-body-row-height: 28px;
+}
+/* REZZERV TABLE COMPONENT v2.0 (spreadsheet matrix) */
+
+.rz-table-wrapper,
+.rz-table-scroll{
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(var(--rz-table-header-row-height) + var(--rz-table-filter-row-height) + (var(--rz-table-body-row-height) * var(--rz-table-visible-row-count)) + 2px);
+  scrollbar-gutter: stable;
+}
+
+table.rz-table{
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: #ffffff;
+}
+
+/* header row */
+.rz-table thead tr.rz-table-header th,
+.rz-table thead tr:first-child th{
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+  font-weight: 600;
+  height: 42px;
+}
+
+/* filter row */
+.rz-table thead tr.rz-table-filter,
+.rz-table thead tr:nth-child(2){
+  background: var(--color-brand-light);
+}
+
+.rz-table th,
+.rz-table td{
+  border: 1px solid var(--color-table-grid);
+  padding: var(--space-md);
+  vertical-align: middle;
+  text-align: left; /* standaard: alle niet-numerieke kolommen links uitlijnen */
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rz-table thead input,
+.rz-table thead select,
+.rz-table tbody input:not([type="checkbox"]),
+.rz-table tbody select,
+.rz-table tbody textarea{
+  text-align: left;
+}
+
+/* inputs inside filter row */
+.rz-table thead input,
+.rz-table thead select{
+  width: 100%;
+  height:20px;
+  padding: 0 var(--space-sm);
+  border: 1px solid var(--color-table-grid);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* checkbox column */
+.rz-table th:first-child,
+.rz-table td:first-child{
+  width: 48px;
+  text-align: center;
+}
+
+
+.rz-store-review-table th:first-child,
+.rz-store-review-table td:first-child{
+  width: auto;
+  text-align: left;
+}
+
+/* numeric alignment helper */
+.rz-num,
+.rz-table td.rz-num,
+.rz-table th.rz-num{
+  text-align: right;
+  padding-right: var(--space-lg);
+}
+
+
+.rz-table th:not(.rz-num),
+.rz-table td:not(.rz-num),
+.rz-table .rz-table-filters th:not(.rz-num),
+.rz-table .rz-table-filters th:not(.rz-num) input,
+.rz-table .rz-table-filters th:not(.rz-num) select,
+.rz-table th:not(.rz-num) .rz-sort-button,
+.rz-table th:not(.rz-num) > div{
+  text-align: left;
+}
+
+.rz-table .rz-table-filters th.rz-num,
+.rz-table .rz-table-filters th.rz-num input,
+.rz-table .rz-table-filters th.rz-num select,
+.rz-table th.rz-num .rz-sort-button,
+.rz-table th.rz-num .rz-sort-button span:first-child,
+.rz-table th.rz-num > div{
+  text-align: right;
+}
+
+.rz-table th.rz-num .rz-sort-button{
+  justify-content: flex-end;
+}
+
+/* row height feel */
+.rz-table tbody td{
+  height: var(--rz-table-body-row-height);
+}
+
+/* hover + subtle zebra */
+.rz-table tbody tr:nth-child(even){
+  background: #fafafa;
+}
+.rz-table tbody tr:hover{
+  background: var(--color-brand-light);
+}
+
+/* checkbox color */
+.rz-table input[type="checkbox"]{
+  accent-color: var(--color-brand-primary);
+}
+
+/* checkbox size normalization */
+.rz-table input[type="checkbox"]{
+  width:16px;
+  height:16px;
+}
+
+
+/* Rezzerv v01.06.04 force row padding */
+.rz-table tbody tr td{
+  padding-top:1px !important;
+  padding-bottom:1px !important;
+}
+
+/* Rezzerv v01.06.05 line-height adjustment */
+.rz-table tbody tr td{
+  line-height: 24px !important;
+}
+
+
+.rz-stock-table th,
+.rz-stock-table td{
+  font-size: 16px;
+  line-height: 1.2 !important;
+}
+
+.rz-stock-table tbody td{
+  font-size: 16px;
+  line-height: 1.2 !important;
+}
+
+
+.rz-table tbody tr.rz-row-selected{
+  background: #eef6f0;
+}
+
+.rz-table tbody tr.rz-row-selected:hover{
+  background: #e6f1e8;
+}
+
+.rz-table-component:focus{
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+}
+
+.rz-table-component:focus-visible{
+  outline: 2px solid var(--color-brand-primary);
+}

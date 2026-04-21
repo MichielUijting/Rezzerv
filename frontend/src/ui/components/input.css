@@ -1,0 +1,29 @@
+.rz-input-field {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+
+.rz-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 8px;
+  border: 2px solid var(--color-brand-primary);
+  font-size: 14px;
+  background: #ffffff;
+  color: var(--color-text-primary);
+  outline: none;
+  box-shadow: none;
+}
+
+.rz-input:focus,
+.rz-input:focus-visible {
+  border-color: var(--color-brand-primary);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(26, 62, 43, 0.16);
+}
+.rz-label {
+  margin-bottom: 0;
+  font-weight: 500;
+}

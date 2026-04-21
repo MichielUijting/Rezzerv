@@ -1,0 +1,218 @@
+.rz-household-page {
+  width: 100%;
+  max-width: 1120px;
+}
+
+.rz-household-layout {
+  display: grid;
+  gap: 20px;
+}
+
+.rz-household-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.rz-household-title,
+.rz-household-section-title {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.rz-household-subtitle,
+.rz-household-section-copy,
+.rz-household-member-meta {
+  margin: 0;
+  color: #667085;
+  font-size: 14px;
+}
+
+.rz-household-summary {
+  margin: 8px 0 0 0;
+  color: #0f5b32;
+  font-weight: 600;
+}
+
+.rz-household-warning {
+  margin: 8px 0 0 0;
+  color: #b54708;
+  font-weight: 600;
+}
+
+.rz-inline-feedback {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.rz-household-back-link {
+  color: #0f5b32;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.rz-household-back-link:hover {
+  text-decoration: underline;
+}
+
+.rz-household-name-section {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+  display: grid;
+  gap: 12px;
+}
+
+.rz-household-permissions-section {
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+  display: grid;
+  gap: 12px;
+}
+
+.rz-household-name-form {
+  width: 100%;
+  max-width: 760px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px 20px;
+  align-items: end;
+}
+
+.rz-household-members-list {
+  display: grid;
+  gap: 12px;
+}
+
+.rz-household-member-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+}
+
+.rz-household-member-content {
+  display: grid;
+  gap: 4px;
+}
+
+.rz-household-member-email {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.rz-household-member-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.rz-household-permissions-form {
+  width: 100%;
+  max-width: 760px;
+  display: grid;
+  gap: 16px;
+}
+
+.rz-household-permission-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.rz-household-permission-toggle input {
+  margin-top: 4px;
+  accent-color: #1f7a3f;
+}
+
+.rz-household-permission-toggle input:focus-visible {
+  outline: 2px solid #1f7a3f;
+  outline-offset: 2px;
+}
+
+.rz-household-permission-toggle span {
+  display: grid;
+  gap: 4px;
+}
+
+.rz-household-permission-toggle small {
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.rz-household-warning--subtle {
+  margin-top: 0;
+}
+
+.rz-household-form-section {
+  padding-top: 8px;
+  border-top: 1px solid #e5e7eb;
+  display: grid;
+  gap: 12px;
+}
+
+.rz-household-form {
+  width: 100%;
+  max-width: 760px;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(220px, 1fr);
+  gap: 16px 20px;
+  align-items: end;
+}
+
+.rz-household-form-field {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+
+.rz-household-form-field--wide {
+  grid-column: 1 / -1;
+}
+
+.rz-household-select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, #1A3E2B 50%), linear-gradient(135deg, #1A3E2B 50%, transparent 50%);
+  background-position: calc(100% - 18px) calc(50% - 3px), calc(100% - 12px) calc(50% - 3px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+  padding-right: 40px;
+}
+
+.rz-household-form-actions {
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .rz-household-name-form {
+    max-width: none;
+    grid-template-columns: 1fr;
+  }
+
+  .rz-household-member-card {
+    grid-template-columns: 1fr;
+  }
+
+  .rz-household-member-actions {
+    justify-content: flex-start;
+  }
+
+  .rz-household-form {
+    max-width: none;
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,107 @@
+import { API_BASE_URL } from '../../../lib/apiClient'
+import { fetchJsonWithAuth, getAuthHeaders } from '../../../lib/authSession'
+
+const STORAGE_KEY = 'rezzerv_household_auto_consume_on_repurchase'
+const EVENT_NAME = 'rezzerv-household-automation-updated'
+
+export const HOUSEHOLD_AUTO_CONSUME_MODES = {
+  NONE: 'none',
+  CONSUME_PURCHASED_QUANTITY: 'consume_purchased_quantity',
+  CONSUME_ALL_EXISTING: 'consume_all_existing_before_purchase',
+}
+
+function normalizeMode(value) {
+  if (value === HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY) return HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY
+  if (value === HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING) return HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_ALL_EXISTING
+  if (value === true) return HOUSEHOLD_AUTO_CONSUME_MODES.CONSUME_PURCHASED_QUANTITY
+  return HOUSEHOLD_AUTO_CONSUME_MODES.NONE
+}
+
+function normalizeSettings(value) {
+  const mode = normalizeMode(value?.mode ?? value?.autoConsumeMode ?? value?.auto_consume_on_repurchase ?? value?.autoConsumeOnRepurchase)
+  return {
+    mode,
+    autoConsumeOnRepurchase: mode !== HOUSEHOLD_AUTO_CONSUME_MODES.NONE,
+    hasExplicitValue: Boolean(value?.hasExplicitValue ?? value?.has_explicit_value),
+    isHouseholdAdmin: Boolean(value?.isHouseholdAdmin ?? value?.is_household_admin),
+  }
+}
+
+function saveLocal(settings) {
+  const normalized = normalizeSettings(settings)
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized))
+  return normalized
+}
+
+export function getHouseholdAutomationSettings() {
+  try {
+    return normalizeSettings(JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}'))
+  } catch {
+    return normalizeSettings({})
+  }
+}
+
+function readLegacyLocalValue() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}')
+    if (Object.prototype.hasOwnProperty.call(parsed || {}, 'autoConsumeOnRepurchase')) {
+      return Boolean(parsed.autoConsumeOnRepurchase)
+    }
+    if (Object.prototype.hasOwnProperty.call(parsed || {}, 'auto_consume_on_repurchase')) {
+      return Boolean(parsed.auto_consume_on_repurchase)
+    }
+  } catch {
+    // ignore legacy parse errors
+  }
+  return null
+}
+
+export async function fetchHouseholdAutomationSettings() {
+  try {
+    const response = await fetchJsonWithAuth(`${API_BASE_URL}/api/household/automation-settings`, {
+      method: 'GET',
+      headers: { Accept: 'application/json', ...getAuthHeaders() },
+      credentials: 'include',
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      throw new Error(data?.detail || 'Instellingen konden niet worden geladen.')
+    }
+    const normalized = normalizeSettings(data)
+    if (!normalized.hasExplicitValue) {
+      const legacyValue = readLegacyLocalValue()
+      if (legacyValue !== null) {
+        return saveHouseholdAutomationSettings({ autoConsumeOnRepurchase: legacyValue })
+      }
+    }
+    return saveLocal(normalized)
+  } catch {
+    return getHouseholdAutomationSettings()
+  }
+}
+
+export async function saveHouseholdAutomationSettings(settings = {}) {
+  const normalized = normalizeSettings(settings)
+  let response
+  try {
+    response = await fetchJsonWithAuth(`${API_BASE_URL}/api/household/automation-settings`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        ...getAuthHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ mode: normalized.mode }),
+    })
+  } catch {
+    throw new Error('Opslaan lukt nu niet. Controleer of de server actief is en probeer opnieuw.')
+  }
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data?.detail || 'Opslaan is niet gelukt.')
+  }
+  const saved = saveLocal({ ...data, has_explicit_value: true })
+  window.dispatchEvent(new CustomEvent(EVENT_NAME, { detail: saved }))
+  return saved
+}

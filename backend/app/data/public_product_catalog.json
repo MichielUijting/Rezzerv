@@ -1,0 +1,36 @@
+{
+  "8076800195057": {
+    "source_name": "public_reference_catalog",
+    "source_record_id": "8076800195057",
+    "title": "Barilla Spaghetti No. 5",
+    "brand": "Barilla",
+    "category": "Pasta",
+    "size_value": 500,
+    "size_unit": "g",
+    "ingredients_json": [
+      "harde tarwegriesmeel",
+      "water"
+    ],
+    "allergens_json": [
+      "gluten"
+    ],
+    "nutrition_json": {
+      "energy-kcal_100g": 359,
+      "fat_100g": 2.0,
+      "carbohydrates_100g": 70.2,
+      "proteins_100g": 13.5,
+      "salt_100g": 0.013,
+      "sugars_100g": 3.5
+    },
+    "image_url": null,
+    "source_url": "https://www.foodmarkt.com/nl/barilla-italiaanse-pasta-spaghetti-500g.html",
+    "quality_score": 0.72,
+    "raw_payload_json": {
+      "provenance": [
+        "public_reference_catalog_seed",
+        "foodmarkt.com"
+      ],
+      "normalized_barcode": "8076800195057"
+    }
+  }
+}

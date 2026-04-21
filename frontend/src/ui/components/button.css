@@ -1,0 +1,82 @@
+/* REZZERV BUTTON COMPONENT v1.1 (token-driven) */
+button.rz-button-primary,
+a.rz-button-primary[role="button"]{
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--elevation-1);
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
+}
+button.rz-button-primary:hover,
+a.rz-button-primary[role="button"]:hover{
+  box-shadow: var(--elevation-1-hover);
+  transform: translateY(-1px);
+}
+button.rz-button-secondary,
+a.rz-button-secondary[role="button"]{
+  background: var(--color-brand-primary);
+  color: var(--color-text-inverse);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--elevation-1);
+  transition: box-shadow 0.15s ease, transform 0.05s ease;
+}
+button.rz-button-secondary:hover,
+a.rz-button-secondary[role="button"]:hover{
+  box-shadow: var(--elevation-1-hover);
+  transform: translateY(-1px);
+}
+
+
+/* Buttons size based on content */
+button.rz-button-primary,
+button.rz-button-secondary {
+  display: inline-block;
+  width: auto;
+}
+
+
+/* Global button behaviour: never stretch */
+button.rz-button-primary,
+button.rz-button-secondary {
+  display: inline-block;
+  width: auto;
+  align-self: flex-start;
+}
+
+
+/* --- Taller buttons + elevation --- */
+button.rz-button-primary,
+button.rz-button-secondary {
+  padding: 12px 20px;   /* approx +20% height */
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
+
+button.rz-button-primary:disabled,
+button.rz-button-secondary:disabled,
+a.rz-button-primary[aria-disabled="true"],
+a.rz-button-secondary[aria-disabled="true"]{
+  background: #d8f3dc;
+  color: #0f5b32;
+  border: 1px solid #0f5b32;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+  transform: none;
+}
+
+button.rz-button-primary:disabled:hover,
+button.rz-button-secondary:disabled:hover,
+a.rz-button-primary[aria-disabled="true"]:hover,
+a.rz-button-secondary[aria-disabled="true"]:hover{
+  box-shadow: none;
+  transform: none;
+}

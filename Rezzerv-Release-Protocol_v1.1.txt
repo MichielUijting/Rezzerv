@@ -1,0 +1,186 @@
+Rezzerv Release Protocol v1.1
+
+DOEL
+Voorkomen dat ongeteste of instabiele releases aan de PO worden geleverd.
+Dit protocol is bindend voor elke release vanaf v01.04.19.
+
+------------------------------------------------------------------------
+
+1. ROLLEN & VERANTWOORDELIJKHEDEN
+
+Architect
+- Bepaalt release scope
+- Beoordeelt impact
+- Keurt technische ontwerpwijziging goed
+- Verifieert dat release binnen mijlpaal past
+
+Engineer
+- Voert wijziging uit
+- Bouwt release
+- Draait lokale validatie
+- Levert release + validatierapport
+
+Release-Coördinator
+- Controleert versiebeheer
+- Controleert zip-structuur
+- Controleert VERSION.txt
+- Controleert changelog
+- Controleert volledige DoD-checklist
+
+PO
+- Functionele validatie
+- Geen technische debug
+- Geen Docker-werk
+
+------------------------------------------------------------------------
+
+2. DEFINITION OF DONE (DoD)
+
+Build
+[ ] docker compose build –no-cache succesvol
+[ ] Geen build errors
+
+Runtime
+[ ] Containers draaien
+[ ] Backend bereikbaar op :8000
+[ ] Frontend bereikbaar op :5173
+[ ] Geen crash bij herstart
+
+Health
+[ ] /api/health retourneert correcte JSON
+[ ] Database status correct (indien actief)
+
+Functioneel
+[ ] Login werkt
+[ ] Geen regressie
+
+Versiebeheer
+[ ] Versienummer correct opgehoogd
+[ ] Geen hergebruik van versienummer
+[ ] VERSION.txt klopt
+[ ] Frontend versie-label klopt
+
+Documentatie
+[ ] Scope benoemd
+[ ] Impact benoemd
+[ ] Niet-aangepaste onderdelen benoemd
+
+Database
+[ ] Runtime database locatie expliciet vastgesteld
+[ ] Docker mount verwijst naar vaste locatie
+[ ] Geen alternatieve database actief
+[ ] Database-inhoud komt overeen met geteste functionaliteit
+
+------------------------------------------------------------------------
+
+3. RELEASE TYPES
+
+Minor Feature
+- Nieuwe endpoint of UI wijziging
+
+Infrastructuur Release
+- Database wijziging
+- Docker wijziging
+- Environment wijziging
+
+Breaking Change
+- API contract wijziging
+- Router wijziging
+- Schema wijziging
+
+------------------------------------------------------------------------
+
+4. PATCH POLICY
+
+- Geen hergebruik van versienummers
+- Geen .1 hotfixes
+- Elke correctie = nieuw versienummer
+- Geen code append zonder oude code te verwijderen
+
+------------------------------------------------------------------------
+
+5. INTEGRATIEBELEID
+
+Per release maximaal:
+- 1 infrastructuurwijziging OF
+- 1 backend feature OF
+- 1 UI feature
+
+------------------------------------------------------------------------
+
+6. RELEASE FLOW
+
+Architect → Engineer → Validatie → Release-Coördinator → PO
+
+PO is laatste schakel, geen technische tester.
+
+------------------------------------------------------------------------
+
+7. STOP-REGEL
+
+Indien twee opeenvolgende releases regressies bevatten:
+→ Technische wijzigingen pauzeren
+→ Architectuur review verplicht
+
+------------------------------------------------------------------------
+
+8. MIJLPAAL DISCIPLINE
+
+Mijlpaal 2 mag alleen doorgaan als:
+- Backend stabiel is
+- Infrastructuur gevalideerd is
+- Releaseproces aantoonbaar werkt
+
+------------------------------------------------------------------------
+
+9. TRANSPARANTIEVERPLICHTING
+
+Bij elke release moet expliciet worden vermeld:
+- Wat is gewijzigd
+- Wat niet is gewijzigd
+- Wat is getest
+- Wat niet is getest
+- Wat het risiconiveau is
+
+------------------------------------------------------------------------
+
+10. RUNTIME DATABASE CONSISTENTIE
+
+Doel:
+Voorkomen dat releases en tests worden uitgevoerd op verschillende of onduidelijke databases.
+
+Kernregel:
+Binnen één actieve omgeving bestaat exact één aangewezen runtime-database.
+
+Verplichtingen:
+- De exacte database-locatie is vastgelegd
+- De koppeling tussen Docker en deze locatie is aantoonbaar
+- Bevestigd is dat geen alternatieve database actief is
+- Bevestigd is dat geen tijdelijke of verborgen database wordt gebruikt
+
+Niet toegestaan:
+- Gebruik van databases in tijdelijke mappen zoals AppData/Temp
+- Gebruik van build/import directories als runtime-basis
+- Ongekoppelde lokale databasebestanden
+- Meerdere sqlite-bestanden als runtime
+- Onduidelijkheid over welke database gebruikt wordt
+
+Architectuurregel:
+De runtime-database bevindt zich op een vaste, reproduceerbare, niet-tijdelijke locatie binnen de projectstructuur.
+
+Voorbeeld:
+/backend/data/rezzerv.db
+
+Stopregel:
+Indien niet aantoonbaar is welke database actief is:
+→ Build ongeldig
+→ Validatie ongeldig
+→ Release blokkeren
+
+------------------------------------------------------------------------
+
+Vanaf v01.04.19 moet elke release starten met:
+
+“Release Protocol v1.1 – Compliance Check:”
+
+En expliciet bevestigen dat alle regels gevolgd zijn.

@@ -1,0 +1,289 @@
+{
+  "articles": [
+    {
+      "id": 1,
+      "name": "Tomaten",
+      "brand": "Mutti",
+      "variant": "Gepeld",
+      "type": "Voedsel & drank",
+      "category": "Groenten",
+      "subcategory": "Tomaten",
+      "barcode": "80042556",
+      "manufacturer": "Mutti",
+      "country": "Italië",
+      "weight": "400 g",
+      "locations": [
+        {
+          "locatie": "Keuken",
+          "sublocatie": "Koelkast",
+          "aantal": 4
+        },
+        {
+          "locatie": "Berging",
+          "sublocatie": "Voorraadkast",
+          "aantal": 2
+        }
+      ],
+      "history": [
+        {
+          "datetime": "2026-03-08T09:10:00",
+          "type": "Aankoop",
+          "old_value": "3",
+          "new_value": "6",
+          "location": "Keuken / Koelkast",
+          "source": "Kassabon",
+          "note": "Voorraad aangevuld na supermarktbezoek.",
+          "store": "Lidl",
+          "price": 1.79,
+          "quantity_change": 3
+        },
+        {
+          "datetime": "2026-03-06T18:25:00",
+          "type": "Verbruik",
+          "old_value": "4",
+          "new_value": "3",
+          "location": "Keuken / Koelkast",
+          "source": "Recept",
+          "note": "Gebruikt voor pastasaus.",
+          "quantity_change": 1
+        },
+        {
+          "datetime": "2026-03-04T18:20:00",
+          "type": "Aankoop",
+          "old_value": "2",
+          "new_value": "4",
+          "location": "Berging / Voorraadkast",
+          "source": "Kassabon",
+          "note": "Mutti tomaten toegevoegd.",
+          "store": "Albert Heijn",
+          "price": 2.19,
+          "quantity_change": 2
+        },
+        {
+          "datetime": "2026-03-03T12:10:00",
+          "type": "Verbruik",
+          "old_value": "3",
+          "new_value": "2",
+          "location": "Keuken / Koelkast",
+          "source": "Handmatig",
+          "note": "Gebruikt voor lunch.",
+          "quantity_change": 1
+        },
+        {
+          "datetime": "2026-02-25T17:40:00",
+          "type": "Aankoop",
+          "old_value": "1",
+          "new_value": "3",
+          "location": "Keuken / Koelkast",
+          "source": "Kassabon",
+          "note": "Aanvulling basisvoorraad.",
+          "store": "Jumbo",
+          "price": 1.99,
+          "quantity_change": 2
+        },
+        {
+          "datetime": "2026-02-20T19:00:00",
+          "type": "Verbruik",
+          "old_value": "2",
+          "new_value": "1",
+          "location": "Keuken / Koelkast",
+          "source": "Recept",
+          "note": "Gebruikt voor chili.",
+          "quantity_change": 1
+        },
+        {
+          "datetime": "2026-02-13T16:15:00",
+          "type": "Aankoop",
+          "old_value": "0",
+          "new_value": "2",
+          "location": "Keuken / Koelkast",
+          "source": "Kassabon",
+          "note": "Eerste aanvulling in periode.",
+          "store": "Lidl",
+          "price": 1.89,
+          "quantity_change": 2
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "Spaghetti",
+      "brand": "Barilla",
+      "variant": "No.5",
+      "type": "Voedsel & drank",
+      "category": "Granen & pasta",
+      "subcategory": "Spaghetti",
+      "barcode": "8076800195057",
+      "manufacturer": "Barilla",
+      "country": "Italië",
+      "weight": "500 g",
+      "locations": [
+        {
+          "locatie": "Keuken",
+          "sublocatie": "Kast 2",
+          "aantal": 3
+        }
+      ],
+      "history": [
+        {
+          "datetime": "2026-03-05T17:45:00",
+          "type": "Aankoop",
+          "old_value": "0",
+          "new_value": "3",
+          "location": "Keuken / Kast 2",
+          "source": "Kassabon",
+          "note": "Nieuwe voorraad spaghetti toegevoegd.",
+          "store": "Albert Heijn",
+          "price": 1.49,
+          "quantity_change": 3
+        },
+        {
+          "datetime": "2026-03-01T18:10:00",
+          "type": "Verbruik",
+          "old_value": "4",
+          "new_value": "0",
+          "location": "Keuken / Kast 2",
+          "source": "Recept",
+          "note": "Pasta-avond met vrienden.",
+          "quantity_change": 4
+        },
+        {
+          "datetime": "2026-02-20T17:15:00",
+          "type": "Aankoop",
+          "old_value": "1",
+          "new_value": "4",
+          "location": "Keuken / Kast 2",
+          "source": "Kassabon",
+          "note": "Aanvulling houdbare voorraad.",
+          "store": "Lidl",
+          "price": 1.19,
+          "quantity_change": 3
+        },
+        {
+          "datetime": "2026-02-12T19:30:00",
+          "type": "Verbruik",
+          "old_value": "2",
+          "new_value": "1",
+          "location": "Keuken / Kast 2",
+          "source": "Recept",
+          "note": "Spaghetti bolognese.",
+          "quantity_change": 1
+        },
+        {
+          "datetime": "2026-02-01T11:05:00",
+          "type": "Aankoop",
+          "old_value": "0",
+          "new_value": "2",
+          "location": "Keuken / Kast 2",
+          "source": "Kassabon",
+          "note": "Voorraad gestart.",
+          "store": "Jumbo",
+          "price": 1.35,
+          "quantity_change": 2
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "Boormachine",
+      "brand": "Bosch",
+      "variant": "EasyDrill",
+      "type": "Gereedschap",
+      "category": "Elektrisch gereedschap",
+      "subcategory": "Boormachine",
+      "barcode": "316514083",
+      "manufacturer": "Bosch",
+      "country": "Duitsland",
+      "weight": "1.2 kg",
+      "locations": [
+        {
+          "locatie": "Schuur",
+          "sublocatie": "Werkbank",
+          "aantal": 1
+        }
+      ],
+      "history": [
+        {
+          "datetime": "2026-03-02T15:00:00",
+          "type": "Uitlenen",
+          "old_value": "1",
+          "new_value": "1",
+          "location": "Schuur / Werkbank",
+          "source": "Handmatig",
+          "note": "Kort uitgeleend aan buurman, daarna retour.",
+          "quantity_change": 0
+        },
+        {
+          "datetime": "2026-02-14T09:10:00",
+          "type": "Gebruik",
+          "old_value": "1",
+          "new_value": "1",
+          "location": "Schuur / Werkbank",
+          "source": "Handmatig",
+          "note": "Gebruikt voor plankmontage.",
+          "quantity_change": 0
+        },
+        {
+          "datetime": "2026-01-15T10:15:00",
+          "type": "Aankoop",
+          "old_value": "0",
+          "new_value": "1",
+          "location": "Schuur / Werkbank",
+          "source": "Handmatig",
+          "note": "Boormachine toegevoegd aan inventaris.",
+          "store": "Gamma",
+          "price": 79.99,
+          "quantity_change": 1
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "Mosterd",
+      "brand": "Maille",
+      "variant": "Dijon",
+      "type": "Voedsel & drank",
+      "consumable": true,
+      "category": "Sauzen",
+      "subcategory": "Mosterd",
+      "barcode": "8723456789012",
+      "manufacturer": "Maille",
+      "country": "Frankrijk",
+      "weight": "200 g",
+      "locations": [
+        {
+          "locatie": "Keuken",
+          "sublocatie": "Koelkast",
+          "aantal": 1
+        }
+      ],
+      "history": [
+        {
+          "datetime": "2026-03-01T10:15:00",
+          "type": "Aankoop",
+          "old_value": "0",
+          "new_value": "1",
+          "location": "Keuken / Koelkast",
+          "source": "Kassabon",
+          "note": "Nieuwe pot mosterd toegevoegd.",
+          "store": "Lidl",
+          "price": 1.49,
+          "quantity_change": 1
+        },
+        {
+          "datetime": "2026-03-07T16:20:00",
+          "type": "Aankoop",
+          "old_value": "0",
+          "new_value": "1",
+          "location": "Keuken / Koelkast",
+          "source": "Kassabon",
+          "note": "Nieuwe pot mosterd gekocht bij herhaalaankoop.",
+          "store": "Albert Heijn",
+          "price": 1.69,
+          "quantity_change": 1,
+          "auto_repurchase_candidate": true
+        }
+      ]
+    }
+  ]
+}

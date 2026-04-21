@@ -1,0 +1,400 @@
+{
+  "version": "v01.12.62",
+  "notes": "Canonical source keys for PO reference comparison. Lowercase + normalized aliases for casing and common extension variants.",
+  "items": [
+    {
+      "source_key": "action app 1.pdf",
+      "canonical_source_file": "Action App 1.pdf",
+      "aliases": [
+        "Action App 1.pdf",
+        "action app 1.jpeg",
+        "action app 1.jpg",
+        "action app 1.pdf",
+        "action app 1.png",
+        "action app 1.webp"
+      ]
+    },
+    {
+      "source_key": "ah app 1.pdf",
+      "canonical_source_file": "AH App 1.pdf",
+      "aliases": [
+        "AH App 1.pdf",
+        "ah app 1.jpeg",
+        "ah app 1.jpg",
+        "ah app 1.pdf",
+        "ah app 1.png",
+        "ah app 1.webp"
+      ]
+    },
+    {
+      "source_key": "ah foto 1.pdf",
+      "canonical_source_file": "AH foto 1.pdf",
+      "aliases": [
+        "AH foto 1.pdf",
+        "ah foto 1.jpeg",
+        "ah foto 1.jpg",
+        "ah foto 1.pdf",
+        "ah foto 1.png",
+        "ah foto 1.webp"
+      ]
+    },
+    {
+      "source_key": "ah foto 2.jpeg",
+      "canonical_source_file": "AH foto 2.jpeg",
+      "aliases": [
+        "AH foto 2.jpeg",
+        "AH foto 2.jpg",
+        "ah foto 2.jpeg",
+        "ah foto 2.jpg",
+        "ah foto 2.png",
+        "ah foto 2.webp"
+      ]
+    },
+    {
+      "source_key": "ah foto 2.pdf",
+      "canonical_source_file": "AH foto 2.pdf",
+      "aliases": [
+        "AH foto 2.pdf",
+        "ah foto 2.jpeg",
+        "ah foto 2.jpg",
+        "ah foto 2.pdf",
+        "ah foto 2.png",
+        "ah foto 2.webp"
+      ]
+    },
+    {
+      "source_key": "ah foto 3.jpg",
+      "canonical_source_file": "AH foto 3.jpg",
+      "aliases": [
+        "AH foto 3.jpg",
+        "ah foto 3.jpeg",
+        "ah foto 3.jpg",
+        "ah foto 3.png",
+        "ah foto 3.webp"
+      ]
+    },
+    {
+      "source_key": "ah foto 3.pdf",
+      "canonical_source_file": "AH foto 3.pdf",
+      "aliases": [
+        "AH foto 3.pdf",
+        "ah foto 3.jpeg",
+        "ah foto 3.jpg",
+        "ah foto 3.pdf",
+        "ah foto 3.png",
+        "ah foto 3.webp"
+      ]
+    },
+    {
+      "source_key": "aldi foto 1.jpg",
+      "canonical_source_file": "Aldi foto 1.jpg",
+      "aliases": [
+        "Aldi foto 1.jpg",
+        "aldi foto 1.jpeg",
+        "aldi foto 1.jpg",
+        "aldi foto 1.png",
+        "aldi foto 1.webp"
+      ]
+    },
+    {
+      "source_key": "aldi foto 2.jpg",
+      "canonical_source_file": "Aldi foto 2.jpg",
+      "aliases": [
+        "Aldi foto 2.jpg",
+        "aldi foto 2.jpeg",
+        "aldi foto 2.jpg",
+        "aldi foto 2.png",
+        "aldi foto 2.webp"
+      ]
+    },
+    {
+      "source_key": "bol app 1.eml",
+      "canonical_source_file": "Bol App 1.eml",
+      "aliases": [
+        "Bol App 1.eml",
+        "bol app 1.eml",
+        "bol app 1.jpeg",
+        "bol app 1.jpg",
+        "bol app 1.png",
+        "bol app 1.webp"
+      ]
+    },
+    {
+      "source_key": "coolblue app 1.webp",
+      "canonical_source_file": "coolblue App 1.png",
+      "aliases": [
+        "coolblue App 1.png",
+        "coolblue App 1.webp",
+        "coolblue app 1.jpeg",
+        "coolblue app 1.jpg",
+        "coolblue app 1.png",
+        "coolblue app 1.webp"
+      ]
+    },
+    {
+      "source_key": "coolblue app 2.webp",
+      "canonical_source_file": "coolblue App 2.png",
+      "aliases": [
+        "coolblue App 2.png",
+        "coolblue App 2.webp",
+        "coolblue app 2.jpeg",
+        "coolblue app 2.jpg",
+        "coolblue app 2.png",
+        "coolblue app 2.webp"
+      ]
+    },
+    {
+      "source_key": "coolblue app 3.webp",
+      "canonical_source_file": "coolblue App 3.png",
+      "aliases": [
+        "coolblue App 3.png",
+        "coolblue App 3.webp",
+        "coolblue app 3.jpeg",
+        "coolblue app 3.jpg",
+        "coolblue app 3.png",
+        "coolblue app 3.webp"
+      ]
+    },
+    {
+      "source_key": "coolblue app 4.webp",
+      "canonical_source_file": "coolblue App 4.png",
+      "aliases": [
+        "coolblue App 4.png",
+        "coolblue App 4.webp",
+        "coolblue app 4.jpeg",
+        "coolblue app 4.jpg",
+        "coolblue app 4.png",
+        "coolblue app 4.webp"
+      ]
+    },
+    {
+      "source_key": "gamma app 1.pdf",
+      "canonical_source_file": "Gamma App 1.pdf",
+      "aliases": [
+        "Gamma App 1.pdf",
+        "gamma app 1.jpeg",
+        "gamma app 1.jpg",
+        "gamma app 1.pdf",
+        "gamma app 1.png",
+        "gamma app 1.webp"
+      ]
+    },
+    {
+      "source_key": "gamma app 2.pdf",
+      "canonical_source_file": "Gamma App 2.pdf",
+      "aliases": [
+        "Gamma App 2.pdf",
+        "gamma app 2.jpeg",
+        "gamma app 2.jpg",
+        "gamma app 2.pdf",
+        "gamma app 2.png",
+        "gamma app 2.webp"
+      ]
+    },
+    {
+      "source_key": "hornbach app 1.pdf",
+      "canonical_source_file": "Hornbach App 1.pdf",
+      "aliases": [
+        "Hornbach App 1.pdf",
+        "hornbach app 1.jpeg",
+        "hornbach app 1.jpg",
+        "hornbach app 1.pdf",
+        "hornbach app 1.png",
+        "hornbach app 1.webp"
+      ]
+    },
+    {
+      "source_key": "jumbo app 1.png",
+      "canonical_source_file": "Jumbo App 1.png",
+      "aliases": [
+        "Jumbo App 1.png",
+        "Jumbo app 1.png",
+        "jumbo app 1.jpeg",
+        "jumbo app 1.jpg",
+        "jumbo app 1.png",
+        "jumbo app 1.webp"
+      ]
+    },
+    {
+      "source_key": "jumbo app 2.png",
+      "canonical_source_file": "Jumbo App 2.png",
+      "aliases": [
+        "Jumbo App 2.png",
+        "jumbo app 2.jpeg",
+        "jumbo app 2.jpg",
+        "jumbo app 2.png",
+        "jumbo app 2.webp"
+      ]
+    },
+    {
+      "source_key": "jumbo foto 1.jpeg",
+      "canonical_source_file": "Jumbo foto 1.jpeg",
+      "aliases": [
+        "Jumbo foto 1.jpeg",
+        "Jumbo foto 1.jpg",
+        "jumbo foto 1.jpeg",
+        "jumbo foto 1.jpg",
+        "jumbo foto 1.png",
+        "jumbo foto 1.webp"
+      ]
+    },
+    {
+      "source_key": "jumbo foto 2.jpeg",
+      "canonical_source_file": "Jumbo foto 2.jpeg",
+      "aliases": [
+        "Jumbo foto 2.jpeg",
+        "Jumbo foto 2.jpg",
+        "jumbo foto 2.jpeg",
+        "jumbo foto 2.jpg",
+        "jumbo foto 2.png",
+        "jumbo foto 2.webp"
+      ]
+    },
+    {
+      "source_key": "jumbo foto 3.jpeg",
+      "canonical_source_file": "Jumbo foto 3.jpeg",
+      "aliases": [
+        "Jumbo foto 3.jpeg",
+        "jumbo foto 3.jpeg",
+        "jumbo foto 3.jpg",
+        "jumbo foto 3.png",
+        "jumbo foto 3.webp"
+      ]
+    },
+    {
+      "source_key": "jumbo foto 3.jpg",
+      "canonical_source_file": "Jumbo foto 3.jpg",
+      "aliases": [
+        "Jumbo foto 3.jpg",
+        "jumbo foto 3.jpeg",
+        "jumbo foto 3.jpg",
+        "jumbo foto 3.png",
+        "jumbo foto 3.webp"
+      ]
+    },
+    {
+      "source_key": "karwei app 1.pdf",
+      "canonical_source_file": "Karwei App 1.pdf",
+      "aliases": [
+        "Karwei App 1.pdf",
+        "karwei app 1.jpeg",
+        "karwei app 1.jpg",
+        "karwei app 1.pdf",
+        "karwei app 1.png",
+        "karwei app 1.webp"
+      ]
+    },
+    {
+      "source_key": "karwei app 1.webp",
+      "canonical_source_file": "Karwei App 1.png",
+      "aliases": [
+        "Karwei App 1.png",
+        "karwei App 1.png",
+        "karwei App 1.webp",
+        "karwei app 1.jpeg",
+        "karwei app 1.jpg",
+        "karwei app 1.png",
+        "karwei app 1.webp"
+      ]
+    },
+    {
+      "source_key": "lidl app 1.png",
+      "canonical_source_file": "Lidl App 1.png",
+      "aliases": [
+        "Lidl App 1.png",
+        "lidl app 1.jpeg",
+        "lidl app 1.jpg",
+        "lidl app 1.png",
+        "lidl app 1.webp"
+      ]
+    },
+    {
+      "source_key": "lidl app 2.png",
+      "canonical_source_file": "Lidl App 2.png",
+      "aliases": [
+        "Lidl App 2.png",
+        "lidl app 2.jpeg",
+        "lidl app 2.jpg",
+        "lidl app 2.png",
+        "lidl app 2.webp"
+      ]
+    },
+    {
+      "source_key": "lidl app 3.png",
+      "canonical_source_file": "Lidl App 3.png",
+      "aliases": [
+        "Lidl App 3.png",
+        "lidl app 3.jpeg",
+        "lidl app 3.jpg",
+        "lidl app 3.png",
+        "lidl app 3.webp"
+      ]
+    },
+    {
+      "source_key": "lidl app 4.pdf",
+      "canonical_source_file": "Lidl App 4.pdf",
+      "aliases": [
+        "Lidl App 4.pdf",
+        "lidl app 4.jpeg",
+        "lidl app 4.jpg",
+        "lidl app 4.pdf",
+        "lidl app 4.png",
+        "lidl app 4.webp"
+      ]
+    },
+    {
+      "source_key": "mediamarkt foto 1.jpg",
+      "canonical_source_file": "mediamarkt foto 1.jpg",
+      "aliases": [
+        "mediamarkt foto 1.jpeg",
+        "mediamarkt foto 1.jpg",
+        "mediamarkt foto 1.png",
+        "mediamarkt foto 1.webp"
+      ]
+    },
+    {
+      "source_key": "mediamarkt foto 1.webp",
+      "canonical_source_file": "mediamarkt foto 1.png",
+      "aliases": [
+        "mediamarkt foto 1.jpeg",
+        "mediamarkt foto 1.jpg",
+        "mediamarkt foto 1.png",
+        "mediamarkt foto 1.webp"
+      ]
+    },
+    {
+      "source_key": "mediamarkt foto 2.webp",
+      "canonical_source_file": "mediamarkt foto 2.png",
+      "aliases": [
+        "mediamarkt foto 2.jpeg",
+        "mediamarkt foto 2.jpg",
+        "mediamarkt foto 2.png",
+        "mediamarkt foto 2.webp"
+      ]
+    },
+    {
+      "source_key": "picnic app 1.eml",
+      "canonical_source_file": "Picnic App 1.eml",
+      "aliases": [
+        "Picnic App 1.eml",
+        "picnic app 1.eml",
+        "picnic app 1.jpeg",
+        "picnic app 1.jpg",
+        "picnic app 1.png",
+        "picnic app 1.webp"
+      ]
+    },
+    {
+      "source_key": "plus foto 1.jpg",
+      "canonical_source_file": "Plus foto 1.jpeg",
+      "aliases": [
+        "Plus foto 1.jpeg",
+        "Plus foto 1.jpg",
+        "plus foto 1.jpeg",
+        "plus foto 1.jpg",
+        "plus foto 1.png",
+        "plus foto 1.webp"
+      ]
+    }
+  ]
+}

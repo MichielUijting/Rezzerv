@@ -1,0 +1,36 @@
+services:
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    ports:
+      - "8011:8000"
+    environment:
+      DATABASE_URL: sqlite:////app/data/rezzerv.db
+      PYTHONUNBUFFERED: "1"
+      # Stel voor automatische e-mailontvangst een echt ontvangstdomein in, bijvoorbeeld jouw Resend domein.
+      REZZERV_RECEIPT_EMAIL_DOMAIN: iogaroulda.resend.app
+      # Vereist voor het ophalen van de ruwe inbound e-mail en attachments via Resend Receiving API.
+      REZZERV_EMAIL_ENABLED: "false"
+      REZZERV_RESEND_API_KEY: ""
+      REZZERV_RESEND_API_BASE_URL: https://api.resend.com
+      REZZERV_NOTIFICATION_FROM_EMAIL: ""
+      REZZERV_NOTIFICATION_FROM_NAME: Rezzerv
+      REZZERV_APP_BASE_URL: http://localhost:5174
+      # Optionele GS1 My Product Manager Share-koppeling voor productverrijking.
+      # Vul deze via een .env bestand of systeemvariabelen om GS1 echt te activeren.
+      REZZERV_GS1_MPM_SHARE_BASE_URL: ${REZZERV_GS1_MPM_SHARE_BASE_URL:-}
+      REZZERV_GS1_MPM_SHARE_API_KEY: ${REZZERV_GS1_MPM_SHARE_API_KEY:-}
+    volumes:
+      - ./backend/data:/app/data
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Provided by start.bat (reads VERSION.txt). Fallback keeps compose usable without the bat.
+        REZZERV_VERSION: ${REZZERV_VERSION:-Rezzerv-dev}
+    restart: unless-stopped
+    ports:
+      - "5174:80"
+    depends_on:
+      - backend
