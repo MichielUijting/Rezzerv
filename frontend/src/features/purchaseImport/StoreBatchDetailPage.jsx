@@ -1,1 +1,1 @@
-export { default } from '../stores/StoreBatchDetailPage';
+export { default, StoreBatchDetailContent } from '../stores/StoreBatchDetailPage';
