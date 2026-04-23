@@ -22,12 +22,13 @@ function buildImageProcessHtml(dataUrl, fileName = 'Kassabon') {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
 body { font-family: sans-serif; background:#f8fafc; margin:0; padding:16px; color:#101828; }
-.toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:16px; }
-.label { font-size:14px; font-weight:700; color:#344054; }
+.toolbar { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin-bottom:16px; }
+.label { font-size:14px; font-weight:700; color:#344054; margin-bottom:6px; }
 .select { padding:8px 12px; border:1px solid #d0d5dd; border-radius:8px; background:#fff; font-size:14px; }
 .meta { font-size:13px; color:#667085; }
 .stage { background:#fff; border:1px solid #d0d5dd; border-radius:12px; padding:12px; }
-.canvas-wrap { display:none; }
+.stage-panel { display:none; }
+.stage-panel.active { display:block; }
 img, canvas { display:block; width:100%; height:auto; border-radius:8px; background:#fff; }
 </style>
 </head>
@@ -45,82 +46,80 @@ img, canvas { display:block; width:100%; height:auto; border-radius:8px; backgro
   </div>
 
   <div class="stage">
-    <img id="visibleImage" src="${safeDataUrl}" alt="Kassabon" />
-    <div class="canvas-wrap"><canvas id="grayCanvas"></canvas></div>
-    <div class="canvas-wrap"><canvas id="thresholdCanvas"></canvas></div>
+    <div id="panel-original" class="stage-panel active">
+      <img id="originalImage" src="${safeDataUrl}" alt="Originele kassabon" />
+    </div>
+    <div id="panel-gray" class="stage-panel">
+      <canvas id="grayCanvas"></canvas>
+    </div>
+    <div id="panel-threshold" class="stage-panel">
+      <canvas id="thresholdCanvas"></canvas>
+    </div>
   </div>
-
-  <img id="sourceImage" src="${safeDataUrl}" alt="Bron" style="display:none;" />
 
 <script>
 const select = document.getElementById('stepSelect')
-const visibleImage = document.getElementById('visibleImage')
-const sourceImage = document.getElementById('sourceImage')
+const originalImage = document.getElementById('originalImage')
 const grayCanvas = document.getElementById('grayCanvas')
 const thresholdCanvas = document.getElementById('thresholdCanvas')
-let grayReady = false
-let thresholdReady = false
-
-function renderStage(stage) {
-  if (stage === 'original') {
-    visibleImage.style.display = 'block'
-    visibleImage.src = sourceImage.src
-    return
-  }
-  if (stage === 'gray' && grayReady) {
-    visibleImage.style.display = 'block'
-    visibleImage.src = grayCanvas.toDataURL('image/png')
-    return
-  }
-  if (stage === 'threshold' && thresholdReady) {
-    visibleImage.style.display = 'block'
-    visibleImage.src = thresholdCanvas.toDataURL('image/png')
-    return
-  }
-  visibleImage.style.display = 'block'
-  visibleImage.src = sourceImage.src
+const panels = {
+  original: document.getElementById('panel-original'),
+  gray: document.getElementById('panel-gray'),
+  threshold: document.getElementById('panel-threshold'),
 }
 
-sourceImage.onload = () => {
-  const w = sourceImage.naturalWidth || sourceImage.width
-  const h = sourceImage.naturalHeight || sourceImage.height
-  if (!w || !h) {
-    renderStage(select.value)
-    return
-  }
+function showStage(stage) {
+  Object.entries(panels).forEach(([key, panel]) => {
+    if (!panel) return
+    panel.className = key === stage ? 'stage-panel active' : 'stage-panel'
+  })
+}
 
-  grayCanvas.width = w
-  grayCanvas.height = h
-  thresholdCanvas.width = w
-  thresholdCanvas.height = h
+function renderDerivedStages() {
+  const width = originalImage.naturalWidth || originalImage.width
+  const height = originalImage.naturalHeight || originalImage.height
+  if (!width || !height) return
+
+  grayCanvas.width = width
+  grayCanvas.height = height
+  thresholdCanvas.width = width
+  thresholdCanvas.height = height
 
   const grayCtx = grayCanvas.getContext('2d')
   const thresholdCtx = thresholdCanvas.getContext('2d')
-  grayCtx.drawImage(sourceImage, 0, 0, w, h)
-  const grayData = grayCtx.getImageData(0, 0, w, h)
-  for (let i = 0; i < grayData.data.length; i += 4) {
-    const avg = (grayData.data[i] + grayData.data[i + 1] + grayData.data[i + 2]) / 3
-    grayData.data[i] = avg
-    grayData.data[i + 1] = avg
-    grayData.data[i + 2] = avg
+  grayCtx.drawImage(originalImage, 0, 0, width, height)
+  const grayData = grayCtx.getImageData(0, 0, width, height)
+  for (let index = 0; index < grayData.data.length; index += 4) {
+    const avg = (grayData.data[index] + grayData.data[index + 1] + grayData.data[index + 2]) / 3
+    grayData.data[index] = avg
+    grayData.data[index + 1] = avg
+    grayData.data[index + 2] = avg
   }
   grayCtx.putImageData(grayData, 0, 0)
-  grayReady = true
 
-  const thresholdData = grayCtx.getImageData(0, 0, w, h)
-  for (let i = 0; i < thresholdData.data.length; i += 4) {
-    const value = thresholdData.data[i] > 150 ? 255 : 0
-    thresholdData.data[i] = value
-    thresholdData.data[i + 1] = value
-    thresholdData.data[i + 2] = value
+  const thresholdData = grayCtx.getImageData(0, 0, width, height)
+  for (let index = 0; index < thresholdData.data.length; index += 4) {
+    const value = thresholdData.data[index] > 150 ? 255 : 0
+    thresholdData.data[index] = value
+    thresholdData.data[index + 1] = value
+    thresholdData.data[index + 2] = value
   }
   thresholdCtx.putImageData(thresholdData, 0, 0)
-  thresholdReady = true
-  renderStage(select.value)
 }
 
-select.addEventListener('change', (event) => renderStage(event.target.value))
-renderStage('original')
+originalImage.addEventListener('load', () => {
+  renderDerivedStages()
+  showStage(select.value || 'original')
+})
+
+select.addEventListener('change', (event) => {
+  showStage(event.target.value || 'original')
+})
+
+showStage('original')
+if (originalImage.complete) {
+  renderDerivedStages()
+}
 </script>
 </body>
 </html>`
@@ -136,8 +135,8 @@ function buildPdfProcessHtml(blobUrl, fileName = 'Kassabon') {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
 body { font-family: sans-serif; background:#f8fafc; margin:0; padding:16px; color:#101828; }
-.toolbar { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-bottom:16px; }
-.label { font-size:14px; font-weight:700; color:#344054; }
+.toolbar { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin-bottom:16px; }
+.label { font-size:14px; font-weight:700; color:#344054; margin-bottom:6px; }
 .select { padding:8px 12px; border:1px solid #d0d5dd; border-radius:8px; background:#fff; font-size:14px; }
 .meta { font-size:13px; color:#667085; }
 .stage { background:#fff; border:1px solid #d0d5dd; border-radius:12px; overflow:hidden; }
@@ -166,9 +165,13 @@ function removeLocalPreview() {
   if (existing) existing.remove()
 }
 
-function mountLocalPreview(file) {
-  const cardRoot = document.querySelector('[data-testid="receipt-preview-card"] > div')
-  if (!cardRoot || !file) return
+function getPreviewCardRoot() {
+  return document.querySelector('[data-testid="receipt-preview-card"] > div')
+}
+
+function insertPreviewIntoCard(srcdoc) {
+  const cardRoot = getPreviewCardRoot()
+  if (!cardRoot) return false
 
   removeLocalPreview()
 
@@ -193,6 +196,7 @@ function mountLocalPreview(file) {
   frame.style.border = '1px solid #d0d5dd'
   frame.style.borderRadius = '12px'
   frame.style.background = '#fff'
+  frame.srcdoc = srcdoc
 
   container.appendChild(helper)
   container.appendChild(frame)
@@ -200,20 +204,31 @@ function mountLocalPreview(file) {
   const anchor = cardRoot.firstElementChild?.nextElementSibling
   if (anchor) cardRoot.insertBefore(container, anchor)
   else cardRoot.appendChild(container)
+  return true
+}
 
-  if (String(file.type || '').startsWith('image/')) {
-    const reader = new FileReader()
-    reader.onload = () => {
-      frame.srcdoc = buildImageProcessHtml(String(reader.result || ''), file.name || 'Kassabon')
+function buildPreviewSrcdocFromFile(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error('Geen bestand beschikbaar voor preview.'))
+      return
     }
-    reader.readAsDataURL(file)
-    return
-  }
-
-  if (String(file.type || '').includes('pdf') || String(file.name || '').toLowerCase().endsWith('.pdf')) {
-    const blobUrl = URL.createObjectURL(file)
-    frame.srcdoc = buildPdfProcessHtml(blobUrl, file.name || 'Kassabon')
-  }
+    const fileType = String(file.type || '').toLowerCase()
+    const fileName = String(file.name || 'Kassabon')
+    if (fileType.startsWith('image/')) {
+      const reader = new FileReader()
+      reader.onload = () => resolve(buildImageProcessHtml(String(reader.result || ''), fileName))
+      reader.onerror = () => reject(new Error('Lokale afbeelding kon niet worden gelezen.'))
+      reader.readAsDataURL(file)
+      return
+    }
+    if (fileType.includes('pdf') || fileName.toLowerCase().endsWith('.pdf')) {
+      const blobUrl = URL.createObjectURL(file)
+      resolve(buildPdfProcessHtml(blobUrl, fileName))
+      return
+    }
+    reject(new Error('Bestandstype wordt niet ondersteund voor lokale preview.'))
+  })
 }
 
 function findSupportedReceiptFileFromEventTarget(target) {
@@ -228,10 +243,28 @@ function findSupportedReceiptFileFromEventTarget(target) {
 export default function KassaPageProcessAware() {
   useEffect(() => {
     const originalFetch = window.fetch
+    let pendingPreviewSrcdoc = ''
 
-    const onFileInputChange = (event) => {
+    const tryMountPendingPreview = () => {
+      if (!pendingPreviewSrcdoc) return
+      const mounted = insertPreviewIntoCard(pendingPreviewSrcdoc)
+      if (mounted) pendingPreviewSrcdoc = ''
+    }
+
+    const mutationObserver = new MutationObserver(() => {
+      tryMountPendingPreview()
+    })
+    mutationObserver.observe(document.body, { childList: true, subtree: true })
+
+    const onFileInputChange = async (event) => {
       const file = findSupportedReceiptFileFromEventTarget(event.target)
-      if (file) mountLocalPreview(file)
+      if (!file) return
+      try {
+        pendingPreviewSrcdoc = await buildPreviewSrcdocFromFile(file)
+        tryMountPendingPreview()
+      } catch {
+        pendingPreviewSrcdoc = ''
+      }
     }
 
     window.fetch = async (input, init) => {
@@ -241,6 +274,7 @@ export default function KassaPageProcessAware() {
       try {
         if (response.ok && url.includes('/api/receipts/') && url.endsWith('/preview')) {
           removeLocalPreview()
+          pendingPreviewSrcdoc = ''
           const contentType = response.headers.get('content-type') || ''
           if (contentType.startsWith('image/')) {
             const blob = await response.blob()
@@ -276,6 +310,8 @@ export default function KassaPageProcessAware() {
     return () => {
       window.fetch = originalFetch
       document.removeEventListener('change', onFileInputChange, true)
+      mutationObserver.disconnect()
+      pendingPreviewSrcdoc = ''
       removeLocalPreview()
     }
   }, [])
