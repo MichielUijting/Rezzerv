@@ -5,7 +5,7 @@ import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
-import KassaPage from '../../features/receipts/KassaPage'
+import KassaPageProcessAware from '../../features/receipts/KassaPageProcessAware.jsx'
 import StoreBatchDetailPage from '../../features/purchaseImport/StoreBatchDetailPage'
 import SettingsPage from '../../features/settings/SettingsPage'
 import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFieldsPage'
@@ -70,8 +70,8 @@ const router = createBrowserRouter([
   { path: '/voorraad/incidentele-aankoop', element: <Protected><IncidentalPurchasePage /></Protected> },
   { path: '/dev/scanner-lab', element: <Protected><ScannerLabPage /></Protected> },
   { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
-  { path: '/kassa', element: <Protected><KassaPage /></Protected> },
-  { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
+  { path: '/kassa', element: <Protected><KassaPageProcessAware /></Protected> },
+  { path: '/kassa/nieuw', element: <Protected><KassaPageProcessAware /></Protected> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><StoreBatchDetailPage /></Protected> },
