@@ -146,104 +146,6 @@ function formatDuplicateImportMessage(result) {
   return normalizeErrorMessage(result?.duplicate_message || result?.message) || 'Deze kassabon is al eerder toegevoegd en is niet opnieuw geladen.'
 }
 
-function buildReceiptLivePreviewStageLabel(mode) {
-  if (mode === 'gray') return 'Genormaliseerd'
-  if (mode === 'ocr') return 'OCR-ready'
-  return 'Origineel'
-}
-
-function ReceiptLivePreviewImage({ src, mode, alt }) {
-  const canvasRef = useRef(null)
-
-  useEffect(() => {
-    if (!src || mode === 'original') return
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const image = new Image()
-    image.onload = () => {
-      const width = image.naturalWidth || image.width || 0
-      const height = image.naturalHeight || image.height || 0
-      if (!width || !height) return
-      canvas.width = width
-      canvas.height = height
-      const context = canvas.getContext('2d', { willReadFrequently: true })
-      if (!context) return
-      context.drawImage(image, 0, 0, width, height)
-      const imageData = context.getImageData(0, 0, width, height)
-      for (let index = 0; index < imageData.data.length; index += 4) {
-        const gray = Math.round((imageData.data[index] + imageData.data[index + 1] + imageData.data[index + 2]) / 3)
-        const value = mode === 'ocr' ? (gray > 165 ? 255 : 0) : gray
-        imageData.data[index] = value
-        imageData.data[index + 1] = value
-        imageData.data[index + 2] = value
-      }
-      context.putImageData(imageData, 0, 0)
-    }
-    image.src = src
-  }, [src, mode])
-
-  if (mode === 'original') {
-    return <img src={src} alt={alt} style={{ display: 'block', width: '100%', maxWidth: '100%', height: 'auto', background: '#fff', borderRadius: '4px' }} />
-  }
-
-  return <canvas ref={canvasRef} aria-label={alt} style={{ display: 'block', width: '100%', maxWidth: '100%', height: 'auto', background: '#fff', borderRadius: '4px' }} />
-}
-
-function ReceiptLivePreviewCard({ previewAsset, previewMode, onPreviewModeChange }) {
-  if (!previewAsset?.url) return null
-
-  const isPdf = previewAsset.kind === 'pdf'
-  const currentMode = isPdf ? 'original' : (previewMode || 'original')
-
-  return (
-    <ScreenCard fullWidth>
-      <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-live-preview">
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: '22px' }}>Originele kassabon</div>
-            <div style={{ color: '#667085', fontSize: '13px', fontWeight: 600 }}>Direct zichtbaar vanaf start van het inlezen.</div>
-          </div>
-          <div style={{ display: 'grid', gap: '6px', minWidth: '220px' }}>
-            <label htmlFor="receipt-live-preview-mode" style={{ fontSize: '13px', fontWeight: 700, color: '#667085' }}>Weergave</label>
-            <select
-              id="receipt-live-preview-mode"
-              value={currentMode}
-              onChange={(event) => onPreviewModeChange?.(event.target.value)}
-              disabled={isPdf}
-              style={{ minHeight: '40px', borderRadius: '8px', border: '1px solid #D0D5DD', background: '#fff', padding: '0 12px', fontWeight: 700 }}
-            >
-              <option value="original">Origineel</option>
-              <option value="gray">Genormaliseerd</option>
-              <option value="ocr">OCR-ready</option>
-            </select>
-          </div>
-        </div>
-
-        {previewAsset.fileName ? <div style={{ color: '#667085', fontSize: '13px' }}>{previewAsset.fileName}</div> : null}
-
-        <div style={{ border: '1px solid #d0d5dd', borderRadius: '8px', minHeight: '420px', background: '#f8fafc', overflow: 'auto', display: 'block', padding: isPdf ? '0' : '16px', height: '72vh', maxHeight: '72vh' }}>
-          {isPdf ? (
-            <object
-              data={`${previewAsset.url}#toolbar=1&navpanes=0&scrollbar=1&zoom=page-width`}
-              type="application/pdf"
-              title="Live preview van kassabon"
-              style={{ display: 'block', width: '100%', height: '100%', minHeight: '900px', border: '0', background: '#fff' }}
-            >
-              <iframe
-                src={`${previewAsset.url}#toolbar=1&navpanes=0&scrollbar=1&zoom=page-width`}
-                title="Live preview van kassabon"
-                style={{ display: 'block', width: '100%', height: '100%', minHeight: '900px', border: '0', background: '#fff' }}
-              />
-            </object>
-          ) : (
-            <ReceiptLivePreviewImage src={previewAsset.url} mode={currentMode} alt={`Live preview kassabon (${buildReceiptLivePreviewStageLabel(currentMode)})`} />
-          )}
-        </div>
-      </div>
-    </ScreenCard>
-  )
-}
-
 
 const receiptLineTableColumns = [
   { key: 'select', width: 44 },
@@ -1264,7 +1166,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   )
 }
 
-function ReceiptDetailView({ receipt, canEdit = false, onReceiptUpdated, onFeedback }) {
+function ReceiptDetailView({ receipt, canEdit = false, onReceiptUpdated, onFeedback, livePreviewAsset = null, livePreviewMode = 'original', onLivePreviewModeChange }) {
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 
   useEffect(() => {
@@ -1286,11 +1188,19 @@ function ReceiptDetailView({ receipt, canEdit = false, onReceiptUpdated, onFeedb
       }}
     >
       <div style={{ minWidth: 0, width: '100%', overflow: 'visible' }}>
-        <ReceiptPreviewCard
-          receipt={receipt}
-          isCollapsed={isPreviewCollapsed}
-          onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
-        />
+        {livePreviewAsset ? (
+          <ReceiptLivePreviewCard
+            previewAsset={livePreviewAsset}
+            previewMode={livePreviewMode}
+            onPreviewModeChange={onLivePreviewModeChange}
+          />
+        ) : (
+          <ReceiptPreviewCard
+            receipt={receipt}
+            isCollapsed={isPreviewCollapsed}
+            onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
+          />
+        )}
       </div>
       <div style={{ minWidth: 0, width: '100%', overflow: 'visible' }}>
         <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} />
@@ -1312,9 +1222,6 @@ function ReceiptSourceHubContent({
   feedbackVariant = 'success',
   isUploading,
   uploadProgress,
-  previewAsset = null,
-  previewMode = 'original',
-  onPreviewModeChange,
   showHeading = true,
   showSupportPanels = true,
 }) {
@@ -1447,8 +1354,6 @@ function ReceiptSourceHubContent({
               <Button type="button" variant="secondary" onClick={onChooseCamera} disabled={isUploading} data-testid="kassa-open-camera-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Camera openen</Button>
               <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isUploading} data-testid="kassa-open-email-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Email inlezen</Button>
             </div>
-
-            <ReceiptLivePreviewCard previewAsset={previewAsset} previewMode={previewMode} onPreviewModeChange={onPreviewModeChange} />
 
             {uploadProgress?.active ? (
               <div
@@ -1686,8 +1591,6 @@ export default function KassaPage() {
   const [deletedReceiptIds, setDeletedReceiptIds] = useState(() => loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY))
   const [uploadMode, setUploadMode] = useState('manual')
   const [cameraDraft, setCameraDraft] = useState(null)
-  const [livePreviewAsset, setLivePreviewAsset] = useState(null)
-  const [livePreviewMode, setLivePreviewMode] = useState('original')
   const [cameraError, setCameraError] = useState('')
   const [emailRoute, setEmailRoute] = useState(null)
   const [isEmailRouteLoading, setIsEmailRouteLoading] = useState(false)
@@ -1711,14 +1614,6 @@ export default function KassaPage() {
       }
     }
   }, [cameraDraft])
-
-  useEffect(() => {
-    return () => {
-      if (livePreviewAsset?.url) {
-        window.URL.revokeObjectURL(livePreviewAsset.url)
-      }
-    }
-  }, [livePreviewAsset])
 
   useEffect(() => {
     return () => {
@@ -1811,29 +1706,6 @@ export default function KassaPage() {
     resetUploadProgress()
     ensureEmailRouteLoaded().catch(() => {})
   }, [isAddReceiptRoute])
-
-  function clearLivePreview() {
-    setLivePreviewAsset((current) => {
-      if (current?.url) window.URL.revokeObjectURL(current.url)
-      return null
-    })
-    setLivePreviewMode('original')
-  }
-
-  function setLivePreviewFromFile(file) {
-    if (!file) return
-    const kind = isSupportedReceiptDocumentFile(file) ? 'pdf' : isSupportedReceiptImageFile(file) ? 'image' : ''
-    if (!kind) return
-    setLivePreviewAsset((current) => {
-      if (current?.url) window.URL.revokeObjectURL(current.url)
-      return {
-        kind,
-        url: window.URL.createObjectURL(file),
-        fileName: String(file.name || 'Kassabon'),
-      }
-    })
-    setLivePreviewMode('original')
-  }
 
   async function deleteSelectedReceipts() {
     if (selectedReceiptIds.length === 0) return
@@ -2333,7 +2205,6 @@ export default function KassaPage() {
       return
     }
 
-    setLivePreviewFromFile(file)
     setIsUploading(true)
     setUploadProgressState(true, 'Kassabon verwerken…', 'Rezzerv verwerkt het bestand en bereidt Kassa voor.', 20)
     setError('')
@@ -2477,9 +2348,6 @@ export default function KassaPage() {
             feedbackVariant={landingFeedback?.variant || 'success'}
             isUploading={isUploading}
             uploadProgress={uploadProgress}
-            previewAsset={livePreviewAsset}
-            previewMode={livePreviewMode}
-            onPreviewModeChange={setLivePreviewMode}
           />
         </div>
       ) : (
@@ -2511,9 +2379,6 @@ export default function KassaPage() {
                 feedbackVariant={landingFeedback?.variant || 'success'}
                 isUploading={isUploading}
                 uploadProgress={uploadProgress}
-                previewAsset={livePreviewAsset}
-                previewMode={livePreviewMode}
-                onPreviewModeChange={setLivePreviewMode}
                 showHeading={false}
                 showSupportPanels={false}
               />
@@ -2646,7 +2511,7 @@ export default function KassaPage() {
             </div>
           </ScreenCard>
 
-          {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => { setOpenedReceipt(updated); loadReceipts(householdId, { openReceiptId: updated?.id || openedReceiptId, prefetchedDetail: updated }).catch(() => {}) }} onFeedback={(variant, message) => { if (variant === 'error') { setError(message); setStatus('') } else { setStatus(message); setError('') } }} /> : null}
+          {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => { setOpenedReceipt(updated); loadReceipts(householdId, { openReceiptId: updated?.id || openedReceiptId, prefetchedDetail: updated }).catch(() => {}) }} onFeedback={(variant, message) => { if (variant === 'error') { setError(message); setStatus('') } else { setStatus(message); setError('') } }} livePreviewAsset={livePreviewAsset} livePreviewMode={livePreviewMode} onLivePreviewModeChange={setLivePreviewMode} /> : null}
         </div>
       )}
 
