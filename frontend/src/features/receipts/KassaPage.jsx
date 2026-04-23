@@ -1166,7 +1166,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   )
 }
 
-function ReceiptDetailView({ receipt, canEdit = false, onReceiptUpdated, onFeedback, livePreviewAsset = null, livePreviewMode = 'original', onLivePreviewModeChange }) {
+function ReceiptDetailView({ receipt, canEdit = false, onReceiptUpdated, onFeedback }) {
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 
   useEffect(() => {
@@ -1188,19 +1188,11 @@ function ReceiptDetailView({ receipt, canEdit = false, onReceiptUpdated, onFeedb
       }}
     >
       <div style={{ minWidth: 0, width: '100%', overflow: 'visible' }}>
-        {livePreviewAsset ? (
-          <ReceiptLivePreviewCard
-            previewAsset={livePreviewAsset}
-            previewMode={livePreviewMode}
-            onPreviewModeChange={onLivePreviewModeChange}
-          />
-        ) : (
-          <ReceiptPreviewCard
-            receipt={receipt}
-            isCollapsed={isPreviewCollapsed}
-            onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
-          />
-        )}
+        <ReceiptPreviewCard
+          receipt={receipt}
+          isCollapsed={isPreviewCollapsed}
+          onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
+        />
       </div>
       <div style={{ minWidth: 0, width: '100%', overflow: 'visible' }}>
         <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} />
@@ -2511,7 +2503,7 @@ export default function KassaPage() {
             </div>
           </ScreenCard>
 
-          {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => { setOpenedReceipt(updated); loadReceipts(householdId, { openReceiptId: updated?.id || openedReceiptId, prefetchedDetail: updated }).catch(() => {}) }} onFeedback={(variant, message) => { if (variant === 'error') { setError(message); setStatus('') } else { setStatus(message); setError('') } }} livePreviewAsset={livePreviewAsset} livePreviewMode={livePreviewMode} onLivePreviewModeChange={setLivePreviewMode} /> : null}
+          {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => { setOpenedReceipt(updated); loadReceipts(householdId, { openReceiptId: updated?.id || openedReceiptId, prefetchedDetail: updated }).catch(() => {}) }} onFeedback={(variant, message) => { if (variant === 'error') { setError(message); setStatus('') } else { setStatus(message); setError('') } }} /> : null}
         </div>
       )}
 
