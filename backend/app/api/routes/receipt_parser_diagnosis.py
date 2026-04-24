@@ -19,6 +19,22 @@ STATUS_LABELS_NL = {
     "manual": "Handmatig",
 }
 
+LINE_FIELDS = (
+    "id",
+    "receipt_table_id",
+    "article_name",
+    "parsed_name",
+    "raw_text",
+    "description",
+    "quantity",
+    "unit",
+    "unit_price",
+    "line_total",
+    "discount_amount",
+    "confidence_score",
+    "is_deleted",
+)
+
 
 def _json_value(value: Any) -> Any:
     if isinstance(value, Decimal):
@@ -30,6 +46,20 @@ def _json_value(value: Any) -> Any:
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
     return {key: _json_value(value) for key, value in dict(row).items()}
+
+
+def _table_columns(conn: Any, table_name: str) -> set[str]:
+    return {str(row[1]) for row in conn.execute(text(f"PRAGMA table_info({table_name})")).fetchall()}
+
+
+def _line_select(columns: set[str]) -> str:
+    parts: list[str] = []
+    for field in LINE_FIELDS:
+        if field in columns:
+            parts.append(field)
+        else:
+            parts.append(f"null as {field}")
+    return ",\n                        ".join(parts)
 
 
 def _sum_values(rows: list[dict[str, Any]], key: str) -> float:
@@ -48,6 +78,14 @@ def _difference(total_amount: Any, line_sum: float) -> float | None:
             return round(float(total_amount) - float(line_sum), 2)
     except (TypeError, ValueError):
         return None
+    return None
+
+
+def _best_line_text(line: dict[str, Any]) -> str | None:
+    for key in ("article_name", "parsed_name", "raw_text", "description"):
+        value = line.get(key)
+        if value not in (None, ""):
+            return str(value)
     return None
 
 
@@ -85,24 +123,18 @@ def build_receipt_parser_diagnosis(include_deleted: bool = False, limit: int = 5
                 {"limit": safe_limit},
             ).mappings()
         ]
+        line_columns = _table_columns(conn, "receipt_table_lines")
+        order_column = "id" if "id" in line_columns else "receipt_table_id"
+        line_select = _line_select(line_columns)
         lines = [
             _row_to_dict(row)
             for row in conn.execute(
                 text(
-                    """
+                    f"""
                     select
-                        id,
-                        receipt_table_id,
-                        article_name,
-                        quantity,
-                        unit,
-                        unit_price,
-                        line_total,
-                        discount_amount,
-                        confidence_score,
-                        is_deleted
+                        {line_select}
                     from receipt_table_lines
-                    order by receipt_table_id, id
+                    order by receipt_table_id, {order_column}
                     """
                 )
             ).mappings()
@@ -123,11 +155,12 @@ def build_receipt_parser_diagnosis(include_deleted: bool = False, limit: int = 5
         accepted_lines = []
         rejected_lines = []
         for index, line in enumerate(receipt_lines, start=1):
+            line_text = _best_line_text(line)
             item = {
                 "id": line.get("id"),
                 "line_number": index,
-                "text": line.get("article_name"),
-                "article_name": line.get("article_name"),
+                "text": line_text,
+                "article_name": line.get("article_name") or line.get("parsed_name") or line_text,
                 "quantity": line.get("quantity"),
                 "unit": line.get("unit"),
                 "unit_price": line.get("unit_price"),
@@ -153,7 +186,7 @@ def build_receipt_parser_diagnosis(include_deleted: bool = False, limit: int = 5
                 "status_label_nl": status_label,
                 "confidence_score": receipt.get("confidence_score"),
                 "ocr_lines": [],
-                "normalized_lines": [line.get("article_name") for line in accepted_lines if line.get("article_name")],
+                "normalized_lines": [line.get("text") for line in accepted_lines if line.get("text")],
                 "accepted_lines": accepted_lines,
                 "rejected_lines": rejected_lines,
                 "financials": {
@@ -173,6 +206,7 @@ def build_receipt_parser_diagnosis(include_deleted: bool = False, limit: int = 5
                 "diagnosis_notes": [
                     "Read-only diagnose: parser, OCR, statusclassificatie en UI worden niet gewijzigd.",
                     "Ruwe OCR-regels en parser-afwijzingsredenen zijn alleen beschikbaar als ze al in de database worden opgeslagen.",
+                    f"Gevonden receipt_table_lines-kolommen: {', '.join(sorted(line_columns))}",
                 ],
             }
         )
