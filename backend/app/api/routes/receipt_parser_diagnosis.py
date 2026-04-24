@@ -93,7 +93,6 @@ def build_receipt_parser_diagnosis(include_deleted: bool = False, limit: int = 5
                     select
                         id,
                         receipt_table_id,
-                        line_number,
                         article_name,
                         quantity,
                         unit,
@@ -103,7 +102,7 @@ def build_receipt_parser_diagnosis(include_deleted: bool = False, limit: int = 5
                         confidence_score,
                         is_deleted
                     from receipt_table_lines
-                    order by receipt_table_id, line_number
+                    order by receipt_table_id, id
                     """
                 )
             ).mappings()
@@ -123,10 +122,10 @@ def build_receipt_parser_diagnosis(include_deleted: bool = False, limit: int = 5
         receipt_lines = lines_by_receipt.get(receipt_id, [])
         accepted_lines = []
         rejected_lines = []
-        for line in receipt_lines:
+        for index, line in enumerate(receipt_lines, start=1):
             item = {
                 "id": line.get("id"),
-                "line_number": line.get("line_number"),
+                "line_number": index,
                 "text": line.get("article_name"),
                 "article_name": line.get("article_name"),
                 "quantity": line.get("quantity"),
