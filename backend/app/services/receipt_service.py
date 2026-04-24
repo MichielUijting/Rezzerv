@@ -245,7 +245,7 @@ def _is_plausible_total_amount(value: Decimal | None) -> bool:
         amount = Decimal(value).quantize(Decimal('0.01'))
     except Exception:
         return False
-    return Decimal('0.00') < amount <= Decimal('10000.00')
+    return Decimal('0.00') <= amount <= Decimal('10000.00')
 
 
 def _build_receipt_fingerprint(store_name: str | None, purchase_at: str | None, total_amount: Decimal | None, lines: list[dict[str, Any]]) -> str:
@@ -1054,6 +1054,96 @@ def _should_skip_receipt_line(line: str, *, store_name: str | None = None, filen
     return False
 
 
+
+RECEIPT_NON_PRODUCT_LABEL_TOKENS = (
+    'btw', 'vat', 'totaal', 'subtotaal', 'netto', 'bruto', 'bedrag', 'betaling',
+    'betaald', 'bankpas', 'pin', 'pinnen', 'vpay', 'v-pay', 'maestro', 'terminal',
+    'transactie', 'autorisatie', 'auth', 'kaart', 'kaartserienummer', 'datum', 'tijd',
+    'groep', 'incl', 'excl', 'periode', 'leesmethod', 'contactloos', 'klantticket',
+    'kopie', 'bonnummer', 'kassanr', 'kassa', 'filiaal', 'openingstijden', 'www.',
+    'http', 'welkom', 'bedankt', 'dank u', 'tot ziens', 'coupon', 'actiecode',
+    'zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'spaarkaart',
+)
+
+
+def _looks_like_non_product_receipt_label(label: str | None) -> bool:
+    """Return True for OCR lines that should never become inventory articles."""
+    candidate = re.sub(r'\s+', ' ', str(label or '')).strip(' .:-')
+    if not candidate:
+        return True
+    lowered = candidate.lower()
+    if re.fullmatch(r'[-+]?\d+(?:[\.,]\d+)?(?:\s+[-+]?\d+(?:[\.,]\d+)?)*', candidate):
+        return True
+    if re.fullmatch(r'[\d\s,\.:%/\-+xX]+', candidate):
+        return True
+    if any(token in lowered for token in RECEIPT_NON_PRODUCT_LABEL_TOKENS):
+        return True
+    if re.search(r'\b\d{1,2}:\d{2}\b', lowered):
+        return True
+    if re.search(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b', lowered):
+        return True
+    letters = re.findall(r'[A-Za-zÀ-ÖØ-öø-ÿ]', candidate)
+    digits = re.findall(r'\d', candidate)
+    if len(letters) < 2 and len(digits) >= 2:
+        return True
+    if len(candidate) > 80 and sum(ch.isdigit() for ch in candidate) > 10:
+        return True
+    return False
+
+
+def _filter_non_product_receipt_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    filtered: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for line in lines or []:
+        label = str(line.get('raw_label') or line.get('normalized_label') or '').strip()
+        if _looks_like_non_product_receipt_label(label):
+            continue
+        key = (
+            re.sub(r'\s+', ' ', label).strip().lower(),
+            str(line.get('line_total') or ''),
+            str(line.get('source_index') or ''),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        filtered.append(line)
+    return filtered
+
+
+def _receipt_line_financials(lines: list[dict[str, Any]], discount_total: Decimal | None = None) -> tuple[Decimal, Decimal, Decimal]:
+    gross_sum = Decimal('0.00')
+    line_discount_sum = Decimal('0.00')
+    for line in lines or []:
+        gross_sum += _parse_decimal(str(line.get('line_total'))) or Decimal('0.00')
+        line_discount_sum += _parse_decimal(str(line.get('discount_amount'))) or Decimal('0.00')
+    effective_discount = discount_total if discount_total is not None else line_discount_sum
+    if effective_discount is None:
+        effective_discount = Decimal('0.00')
+    net_sum = (gross_sum + effective_discount).quantize(Decimal('0.01'))
+    return gross_sum.quantize(Decimal('0.01')), effective_discount.quantize(Decimal('0.01')), net_sum
+
+
+def _totals_match_receipt_lines(total_amount: Decimal | None, lines: list[dict[str, Any]], discount_total: Decimal | None = None, tolerance: Decimal = Decimal('0.05')) -> bool:
+    if total_amount is None or not lines:
+        return False
+    _, _, net_sum = _receipt_line_financials(lines, discount_total)
+    try:
+        return abs(net_sum - Decimal(total_amount).quantize(Decimal('0.01'))) <= tolerance
+    except Exception:
+        return False
+
+
+def _discount_or_free_total_zero_case(total_amount: Decimal | None, lines: list[dict[str, Any]], discount_total: Decimal | None = None) -> bool:
+    if total_amount is None:
+        return False
+    try:
+        if Decimal(total_amount).quantize(Decimal('0.01')) != Decimal('0.00'):
+            return False
+    except Exception:
+        return False
+    gross_sum, effective_discount, net_sum = _receipt_line_financials(lines, discount_total)
+    return bool(lines) and gross_sum >= Decimal('0.00') and abs(net_sum) <= Decimal('0.05')
+
 def _looks_like_item_label_only(line: str, *, store_name: str | None = None, filename: str | None = None) -> bool:
     candidate = re.sub(r'\s+', ' ', str(line or '')).strip()
     if not candidate or _should_skip_receipt_line(candidate, store_name=store_name, filename=filename):
@@ -1088,6 +1178,8 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
     def append_line(label: str, qty_raw: str | None, amount1_raw: str | None, amount2_raw: str | None, *, source_index: int) -> int | None:
         label_value = _clean_receipt_label(label)
         if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
+            return None
+        if _looks_like_non_product_receipt_label(label_value):
             return None
         if _is_aldi_context(store_name=store_name, filename=filename) and _is_invalid_aldi_article_candidate(label_value):
             return None
@@ -1255,6 +1347,8 @@ def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: s
             continue
         if label.replace(' ', '').isdigit():
             continue
+        if _looks_like_non_product_receipt_label(label):
+            continue
         if len(label.split()) > 12:
             continue
         extracted.append({
@@ -1328,7 +1422,9 @@ def _parse_result_from_text_lines(
             lines.append(extra_line)
             existing_keys.add(extra_key)
         lines.sort(key=lambda item: int(item.get('source_index') or 0))
+    lines = _filter_non_product_receipt_lines(lines)
     discount_total = _apply_discount_entries(lines, _extract_discount_entries(text_lines))
+    lines = _filter_non_product_receipt_lines(lines)
     if (filename or '').strip().lower() == 'jumbo foto 3.jpg' and not lines:
         lines = [{
             'raw_label': 'Jumbo stroopwafels',
@@ -1372,13 +1468,19 @@ def _parse_result_from_text_lines(
     suspicious_filename_signal = bool(re.search(r'(?i)regressie[-_ ]?bon|receipt|mosterd', filename)) and len(lines) <= 1
     _ = _build_receipt_fingerprint(store_name, purchase_at, total_amount, lines)
 
+    totals_match = _totals_match_receipt_lines(total_amount, lines, discount_total)
+    zero_discount_case = _discount_or_free_total_zero_case(total_amount, lines, discount_total)
+
     if lines:
-        if explicit_total_found and total_amount is not None and len(lines) >= 2 and (store_name or purchase_at):
-            confidence = rich_confidence if store_name else partial_confidence
-            parse_status = 'parsed'
-        elif total_amount is not None and len(lines) >= 2 and (store_name or purchase_at):
+        if total_amount is not None and totals_match and len(lines) >= 2 and (store_name or purchase_at):
+            confidence = rich_confidence if (explicit_total_found and store_name) else partial_confidence
+            parse_status = 'parsed' if explicit_total_found and (store_name or purchase_at) else 'partial'
+        elif total_amount is not None and zero_discount_case and (store_name or purchase_at):
             confidence = partial_confidence
             parse_status = 'partial'
+        elif total_amount is not None and len(lines) >= 2 and (store_name or purchase_at):
+            confidence = min(partial_confidence, review_confidence)
+            parse_status = 'review_needed'
         else:
             confidence = review_confidence
             parse_status = 'review_needed'
@@ -1387,6 +1489,10 @@ def _parse_result_from_text_lines(
         parse_status = 'review_needed'
 
     if suspicious_single_line or suspicious_filename_signal or not purchase_at:
+        confidence = min(confidence, review_confidence)
+        parse_status = 'review_needed'
+
+    if total_amount is not None and lines and not (totals_match or zero_discount_case):
         confidence = min(confidence, review_confidence)
         parse_status = 'review_needed'
 
@@ -2469,7 +2575,7 @@ def repair_receipts_for_household(engine, receipt_storage_root: Path, household_
                     OR (rt.parse_status = 'parsed' AND COALESCE(rt.line_count, 0) <= 1)
                     OR rt.purchase_at IS NULL
                     OR rt.total_amount IS NULL
-                    OR rt.total_amount <= 0
+
                     OR rt.purchase_at LIKE '21__-%'
                   )
                 ORDER BY rt.updated_at DESC, rt.created_at DESC

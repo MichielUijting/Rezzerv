@@ -496,9 +496,12 @@ async function createReceiptSource(payload) {
   })
 }
 
-async function fetchReceiptPreview(receiptTableId) {
+async function fetchReceiptPreview(receiptTableId, variant = 'original') {
   const token = localStorage.getItem('rezzerv_token') || ''
-  const response = await fetch(`/api/receipts/${encodeURIComponent(receiptTableId)}/preview`, {
+  const params = new URLSearchParams()
+  if (variant && variant !== 'original') params.set('variant', variant)
+  const querySuffix = params.toString() ? `?${params.toString()}` : ''
+  const response = await fetch(`/api/receipts/${encodeURIComponent(receiptTableId)}/preview${querySuffix}`, {
     method: 'GET',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
@@ -514,7 +517,7 @@ async function fetchReceiptPreview(receiptTableId) {
         // ignore
       }
     }
-    throw new Error(normalizeErrorMessage(detail) || 'Preview van de originele bon kon niet worden geladen.')
+    throw new Error(normalizeErrorMessage(detail) || (variant === 'processed' ? 'Bewerkte bonpreview kon niet worden geladen.' : 'Preview van de originele bon kon niet worden geladen.'))
   }
 
   const blob = await response.blob()
@@ -536,6 +539,75 @@ async function fetchReceiptPreview(receiptTableId) {
   }
 }
 
+function buildTransientProcessedPreview(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('Preview van bewerkte bon kon niet worden opgebouwd.'))
+    reader.onload = () => {
+      const image = new Image()
+      image.onload = () => {
+        try {
+          let width = Number(image.naturalWidth || image.width || 0)
+          let height = Number(image.naturalHeight || image.height || 0)
+          if (!width || !height) throw new Error('Afbeeldingsafmetingen ontbreken.')
+          const canvas = document.createElement('canvas')
+          const context = canvas.getContext('2d', { alpha: false })
+          if (!context) throw new Error('Canvas context ontbreekt.')
+
+          const shouldRotate = width > height
+          canvas.width = shouldRotate ? height : width
+          canvas.height = shouldRotate ? width : height
+          context.fillStyle = '#ffffff'
+          context.fillRect(0, 0, canvas.width, canvas.height)
+          if (shouldRotate) {
+            context.translate(canvas.width, 0)
+            context.rotate(Math.PI / 2)
+          }
+          context.drawImage(image, 0, 0, width, height)
+          if (shouldRotate) {
+            context.setTransform(1, 0, 0, 1, 0, 0)
+          }
+
+          const frame = context.getImageData(0, 0, canvas.width, canvas.height)
+          const pixels = frame.data
+          for (let index = 0; index < pixels.length; index += 4) {
+            const gray = Math.round((pixels[index] * 0.299) + (pixels[index + 1] * 0.587) + (pixels[index + 2] * 0.114))
+            const threshold = gray > 168 ? 255 : 0
+            pixels[index] = threshold
+            pixels[index + 1] = threshold
+            pixels[index + 2] = threshold
+            pixels[index + 3] = 255
+          }
+          context.putImageData(frame, 0, 0)
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              reject(new Error('Preview van bewerkte bon kon niet worden opgebouwd.'))
+              return
+            }
+            resolve(window.URL.createObjectURL(blob))
+          }, 'image/png')
+        } catch (error) {
+          reject(error)
+        }
+      }
+      image.onerror = () => reject(new Error('Afbeelding kon niet worden geladen voor preview.'))
+      image.src = String(reader.result || '')
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+async function createTransientReceiptPreview(file) {
+  if (!file || !isSupportedReceiptImageFile(file)) return null
+  const originalUrl = window.URL.createObjectURL(file)
+  const processedUrl = await buildTransientProcessedPreview(file)
+  return {
+    originalUrl,
+    processedUrl,
+    filename: String(file.name || 'Kassabon'),
+    isImage: true,
+  }
+}
 
 function clearShareQueryParams() {
   try {
@@ -578,23 +650,40 @@ function DetailInfoRow({ label, value }) {
   )
 }
 
-function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
+function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onToggleCollapse }) {
+  const [selectedVariant, setSelectedVariant] = useState('original')
   const [previewState, setPreviewState] = useState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: '' })
+  const hasTransientPreview = Boolean(transientPreview?.originalUrl)
+  const supportsProcessedPreview = hasTransientPreview || (receipt?.mime_type ? String(receipt.mime_type).toLowerCase().startsWith('image/') : false)
+  const previewTitle = selectedVariant === 'processed' ? 'Bewerkte kassabon' : 'Originele kassabon'
+
+  useEffect(() => {
+    setSelectedVariant('original')
+  }, [receipt?.id, transientPreview?.originalUrl, transientPreview?.processedUrl])
 
   useEffect(() => {
     let cancelled = false
     let activeUrl = ''
 
     async function loadPreview() {
+      if (hasTransientPreview) {
+        const transientUrl = selectedVariant === 'processed' ? transientPreview?.processedUrl : transientPreview?.originalUrl
+        if (!transientUrl) {
+          setPreviewState({ status: 'error', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: 'Bewerkte bonpreview is nog niet beschikbaar.' })
+          return
+        }
+        setPreviewState({ status: 'ready', blobUrl: transientUrl, contentType: 'image/png', isPdf: false, isImage: true, isHtml: false, isText: false, textContent: '', error: '' })
+        return
+      }
       if (!receipt?.id) {
         setPreviewState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: '' })
         return
       }
       setPreviewState({ status: 'loading', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: '' })
       try {
-        const result = await fetchReceiptPreview(receipt.id)
+        const result = await fetchReceiptPreview(receipt.id, selectedVariant === 'processed' ? 'processed' : 'original')
         if (cancelled) {
-          window.URL.revokeObjectURL(result.blobUrl)
+          if (result.blobUrl) window.URL.revokeObjectURL(result.blobUrl)
           return
         }
         activeUrl = result.blobUrl
@@ -609,10 +698,9 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
     loadPreview()
     return () => {
       cancelled = true
-      if (activeUrl) window.URL.revokeObjectURL(activeUrl)
+      if (!hasTransientPreview && activeUrl) window.URL.revokeObjectURL(activeUrl)
     }
-  }, [receipt?.id])
-
+  }, [receipt?.id, receipt?.mime_type, selectedVariant, transientPreview?.originalUrl, transientPreview?.processedUrl, hasTransientPreview])
 
   return (
     <ScreenCard>
@@ -630,7 +718,7 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
             type="button"
             onClick={onToggleCollapse}
             data-testid="receipt-preview-toggle"
-            aria-label="Originele kassabon uitklappen"
+            aria-label="Kassabon uitklappen"
             title="Uitklappen"
             className="rz-expand-chip"
             style={{ width: '32px', height: '32px' }}
@@ -641,15 +729,19 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
       ) : (
         <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-preview-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '22px' }}>Originele kassabon</div>
+            <div style={{ display: 'grid', gap: '8px' }}>
+              <div style={{ fontWeight: 700, fontSize: '22px' }}>{previewTitle}</div>
+              <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start', gap: '8px' }}>
+                <Button type="button" variant={selectedVariant === 'original' ? 'primary' : 'secondary'} onClick={() => setSelectedVariant('original')} style={{ padding: '8px 14px', minWidth: '110px' }}>Origineel</Button>
+                <Button type="button" variant={selectedVariant === 'processed' ? 'primary' : 'secondary'} onClick={() => setSelectedVariant('processed')} disabled={!supportsProcessedPreview} style={{ padding: '8px 14px', minWidth: '110px' }}>Bewerkt</Button>
+              </div>
             </div>
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
               <button
                 type="button"
                 onClick={onToggleCollapse}
                 data-testid="receipt-preview-toggle"
-                aria-label="Originele kassabon inklappen"
+                aria-label="Kassabon inklappen"
                 title="Inklappen"
                 className="rz-expand-chip"
                 style={{ width: '32px', height: '32px' }}
@@ -673,13 +765,13 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
             }}
           >
             {previewState.status === 'loading' ? (
-              <div style={{ color: '#475467', fontWeight: 600 }}>Preview laden…</div>
+              <div style={{ color: '#475467', fontWeight: 600, padding: '16px' }}>Preview laden…</div>
             ) : null}
 
             {previewState.status === 'error' ? (
-              <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-fallback" style={{ maxWidth: '560px' }}>
+              <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-fallback" style={{ maxWidth: '560px', margin: '16px' }}>
                 <div style={{ display: 'grid', gap: '12px' }}>
-                  <div>De preview van deze bon kon niet worden geladen.</div>
+                  <div>{selectedVariant === 'processed' ? 'De bewerkte preview van deze bon kon niet worden geladen.' : 'De preview van deze bon kon niet worden geladen.'}</div>
                   <div style={{ color: '#667085' }}>{previewState.error || 'De bonpreview is momenteel niet beschikbaar.'}</div>
                 </div>
               </div>
@@ -689,13 +781,13 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
               <object
                 data={`${previewState.blobUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=page-width`}
                 type="application/pdf"
-                title={`Preview van bon ${receipt?.id}`}
+                title={`Preview van bon ${receipt?.id || transientPreview?.filename || ''}`}
                 style={{ display: 'block', width: '100%', height: '100%', minHeight: '900px', border: '0', background: '#fff' }}
                 data-testid="receipt-preview-pdf"
               >
                 <iframe
                   src={`${previewState.blobUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=page-width`}
-                  title={`Preview van bon ${receipt?.id}`}
+                  title={`Preview van bon ${receipt?.id || transientPreview?.filename || ''}`}
                   style={{ display: 'block', width: '100%', height: '100%', minHeight: '900px', border: '0', background: '#fff' }}
                 />
               </object>
@@ -704,7 +796,7 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
             {previewState.status === 'ready' && previewState.isImage ? (
               <img
                 src={previewState.blobUrl}
-                alt={`Preview van bon ${receipt?.id}`}
+                alt={selectedVariant === 'processed' ? 'Bewerkte kassabon' : 'Originele kassabon'}
                 style={{ display: 'block', width: '100%', maxWidth: '100%', height: 'auto', background: '#fff', borderRadius: '4px' }}
                 data-testid="receipt-preview-image"
               />
@@ -730,13 +822,39 @@ function ReceiptPreviewCard({ receipt, isCollapsed, onToggleCollapse }) {
             ) : null}
 
             {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage && !previewState.isHtml && !previewState.isText ? (
-              <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-unsupported" style={{ maxWidth: '560px' }}>
+              <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-unsupported" style={{ maxWidth: '560px', margin: '16px' }}>
                 Voor dit bestandstype is geen ingebedde preview beschikbaar.
               </div>
             ) : null}
           </div>
         </div>
       )}
+    </ScreenCard>
+  )
+}
+
+function ReceiptProcessingInfoCard({ transientPreview, uploadProgress }) {
+  return (
+    <ScreenCard fullWidth>
+      <div style={{ display: 'grid', gap: '18px' }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: '24px' }}>OCR-voorbereiding</div>
+          <div style={{ color: '#667085', marginTop: '4px' }}>
+            Rezzerv verwerkt deze bon nu en zet daarna de detailweergave klaar.
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+          <DetailInfoRow label="Bestand" value={transientPreview?.filename || '-'} />
+          <DetailInfoRow label="Weergaven" value="Origineel / Bewerkt" />
+          <DetailInfoRow label="Status" value={uploadProgress?.label || 'Kassabon verwerken…'} />
+          <DetailInfoRow label="Voortgang" value={`${Math.max(5, Math.min(100, Math.round(uploadProgress?.percent || 0)))}%`} />
+        </div>
+
+        <div className="rz-inline-feedback rz-inline-feedback--success" style={{ maxWidth: '100%' }}>
+          {uploadProgress?.detail || 'De bewerkte weergave toont de actuele preprocess-versie die richting OCR gaat.'}
+        </div>
+      </div>
     </ScreenCard>
   )
 }
@@ -1166,12 +1284,12 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   )
 }
 
-function ReceiptDetailView({ receipt, canEdit = false, onReceiptUpdated, onFeedback }) {
+function ReceiptDetailView({ receipt = null, transientPreview = null, uploadProgress = null, canEdit = false, onReceiptUpdated, onFeedback }) {
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 
   useEffect(() => {
     setIsPreviewCollapsed(false)
-  }, [receipt?.id])
+  }, [receipt?.id, transientPreview?.originalUrl])
 
   return (
     <div
@@ -1190,12 +1308,17 @@ function ReceiptDetailView({ receipt, canEdit = false, onReceiptUpdated, onFeedb
       <div style={{ minWidth: 0, width: '100%', overflow: 'visible' }}>
         <ReceiptPreviewCard
           receipt={receipt}
+          transientPreview={transientPreview}
           isCollapsed={isPreviewCollapsed}
           onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
         />
       </div>
       <div style={{ minWidth: 0, width: '100%', overflow: 'visible' }}>
-        <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} />
+        {receipt ? (
+          <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} />
+        ) : (
+          <ReceiptProcessingInfoCard transientPreview={transientPreview} uploadProgress={uploadProgress} />
+        )}
       </div>
     </div>
   )
@@ -1588,6 +1711,7 @@ export default function KassaPage() {
   const [isEmailRouteLoading, setIsEmailRouteLoading] = useState(false)
   const [emailRouteError, setEmailRouteError] = useState('')
   const [receiptInboxFocusId, setReceiptInboxFocusId] = useState('')
+  const [transientReceiptPreview, setTransientReceiptPreview] = useState(null)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const emailInputRef = useRef(null)
@@ -1609,12 +1733,27 @@ export default function KassaPage() {
 
   useEffect(() => {
     return () => {
+      if (transientReceiptPreview?.originalUrl) window.URL.revokeObjectURL(transientReceiptPreview.originalUrl)
+      if (transientReceiptPreview?.processedUrl) window.URL.revokeObjectURL(transientReceiptPreview.processedUrl)
+    }
+  }, [transientReceiptPreview])
+
+  useEffect(() => {
+    return () => {
       if (uploadBatchPollerRef.current) {
         window.clearInterval(uploadBatchPollerRef.current)
         uploadBatchPollerRef.current = null
       }
     }
   }, [])
+
+  function clearTransientReceiptPreview() {
+    setTransientReceiptPreview((current) => {
+      if (current?.originalUrl) window.URL.revokeObjectURL(current.originalUrl)
+      if (current?.processedUrl) window.URL.revokeObjectURL(current.processedUrl)
+      return null
+    })
+  }
 
   function stopReceiptImportBatchPolling() {
     if (uploadBatchPollerRef.current) {
@@ -1733,10 +1872,15 @@ export default function KassaPage() {
       setReceipts(items)
       const activeReceiptId = String(options?.openReceiptId || openedReceiptId || '')
       if (activeReceiptId) {
-        const detail = options?.prefetchedDetail || await fetchJson(`/api/receipts/${encodeURIComponent(activeReceiptId)}`)
         const sourceItem = items.find((item) => String(item.receipt_table_id) === activeReceiptId) || null
-        setOpenedReceiptId(activeReceiptId)
-        setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
+        if (!sourceItem && !options?.prefetchedDetail) {
+          setOpenedReceiptId('')
+          setOpenedReceipt(null)
+        } else {
+          const detail = options?.prefetchedDetail || await fetchJson(`/api/receipts/${encodeURIComponent(activeReceiptId)}`)
+          setOpenedReceiptId(activeReceiptId)
+          setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
+        }
       }
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Kassabonnen konden niet worden geladen.')
@@ -2054,6 +2198,7 @@ export default function KassaPage() {
         if (uploadedReceiptId && receiptExistsInInbox) {
           setSelectedReceiptIds([uploadedReceiptId])
           await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
         }
@@ -2144,6 +2289,7 @@ export default function KassaPage() {
         if (uploadedReceiptId && receiptExistsInInbox) {
           setSelectedReceiptIds([uploadedReceiptId])
           await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
         }
@@ -2186,6 +2332,20 @@ export default function KassaPage() {
   }
 
   async function processReceiptFileImport(file) {
+    if (isSupportedReceiptImageFile(file)) {
+      try {
+        const nextTransientPreview = await createTransientReceiptPreview(file)
+        setTransientReceiptPreview((current) => {
+          if (current?.originalUrl) window.URL.revokeObjectURL(current.originalUrl)
+          if (current?.processedUrl) window.URL.revokeObjectURL(current.processedUrl)
+          return nextTransientPreview
+        })
+      } catch {
+        clearTransientReceiptPreview()
+      }
+    } else {
+      clearTransientReceiptPreview()
+    }
     if (!file) {
       setEmailRouteError('Kies een .pdf, .zip, ondersteunde bonafbeelding of gebruik .eml voor een e-mailbestand.')
       setError('')
@@ -2233,6 +2393,7 @@ export default function KassaPage() {
         if (uploadedReceiptId && receiptExistsInInbox) {
           setSelectedReceiptIds([uploadedReceiptId])
           await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
         }
@@ -2503,7 +2664,7 @@ export default function KassaPage() {
             </div>
           </ScreenCard>
 
-          {openedReceipt ? <ReceiptDetailView receipt={openedReceipt} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => { setOpenedReceipt(updated); loadReceipts(householdId, { openReceiptId: updated?.id || openedReceiptId, prefetchedDetail: updated }).catch(() => {}) }} onFeedback={(variant, message) => { if (variant === 'error') { setError(message); setStatus('') } else { setStatus(message); setError('') } }} /> : null}
+          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} uploadProgress={uploadProgress} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => { setOpenedReceipt(updated); loadReceipts(householdId, { openReceiptId: updated?.id || openedReceiptId, prefetchedDetail: updated }).catch(() => {}) }} onFeedback={(variant, message) => { if (variant === 'error') { setError(message); setStatus('') } else { setStatus(message); setError('') } }} /> : null}
         </div>
       )}
 
