@@ -8936,6 +8936,14 @@ def derive_unpack_receipt_status(receipt):
     criteria = evaluate_receipt_unpack_criteria(receipt)
     return str(criteria.get('inbox_status') or 'Handmatig')
 
+def map_parse_status_to_ui(parse_status):
+    status = str(parse_status or '').strip().lower()
+    if status in {'approved', 'parsed', 'approved_override'}:
+        return 'Gecontroleerd'
+    if status in {'review_needed', 'partial'}:
+        return 'Controle nodig'
+    return 'Handmatig'
+
 
 def ensure_receipt_unpack_provider(conn):
     provider = conn.execute(
@@ -11745,7 +11753,7 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
             continue
         seen_keys.add(dedupe_key)
         serialized = serialize_receipt_row(dict(row))
-        serialized['inbox_status'] = derive_unpack_receipt_status(serialized)
+        serialized['inbox_status'] = map_parse_status_to_ui(serialized.get('parse_status'))
         serialized.pop('original_filename', None)
         serialized.pop('sha256_hash', None)
         deduped_items.append(serialized)
@@ -11947,7 +11955,7 @@ def get_receipt_detail(receipt_table_id: str, authorization: Optional[str] = Hea
             {"receipt_table_id": receipt_table_id},
         ).mappings().all()
     payload = serialize_receipt_row(dict(header))
-    payload['inbox_status'] = derive_unpack_receipt_status(payload)
+    payload['inbox_status'] = map_parse_status_to_ui(payload.get('parse_status'))
     payload["lines"] = [serialize_receipt_row(dict(line)) for line in lines]
     return payload
 
