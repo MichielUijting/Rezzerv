@@ -32,4 +32,5 @@ COPY VERSION.txt ./VERSION.txt
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use wrapper that maps inbox_status from parse_status
+CMD ["uvicorn", "app.main_status_source:app", "--host", "0.0.0.0", "--port", "8000"]
