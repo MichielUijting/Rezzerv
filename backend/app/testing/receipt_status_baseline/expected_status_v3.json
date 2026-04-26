@@ -11,8 +11,8 @@
     "sum_line_total": 17.79,
     "net_line_total": 17.79,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R002",
@@ -26,14 +26,14 @@
     "sum_line_total": 5.17,
     "net_line_total": 5.02,
     "discount_total": 0.15,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R003",
     "source_file": "AH foto 1.pdf",
-    "expected_parse_status": "review_needed",
-    "expected_status_label": "Controle nodig",
+    "expected_parse_status": "approved",
+    "expected_status_label": "Gecontroleerd",
     "store_name": "Albert Heijn",
     "total_amount": 49.27,
     "currency": "EUR",
@@ -41,8 +41,8 @@
     "sum_line_total": 51.5516,
     "net_line_total": 49.2716,
     "discount_total": 2.28,
-    "reason": "afgeleid uit baseline v3 extraction_status=Gedeeltelijk",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R004",
@@ -56,8 +56,8 @@
     "sum_line_total": 17.97,
     "net_line_total": 17.97,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R005",
@@ -71,8 +71,8 @@
     "sum_line_total": 23.19,
     "net_line_total": 23.19,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R006",
@@ -86,8 +86,8 @@
     "sum_line_total": 288.5,
     "net_line_total": 288.5,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R007",
@@ -101,14 +101,14 @@
     "sum_line_total": 83.95,
     "net_line_total": 83.95,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R008",
     "source_file": "Picnic App 1.eml",
-    "expected_parse_status": "review_needed",
-    "expected_status_label": "Controle nodig",
+    "expected_parse_status": "approved",
+    "expected_status_label": "Gecontroleerd",
     "store_name": "Picnic B.V.",
     "total_amount": 104.95,
     "currency": "EUR",
@@ -116,8 +116,8 @@
     "sum_line_total": 111.91,
     "net_line_total": 102.39,
     "discount_total": 9.52,
-    "reason": "afgeleid uit baseline v3 extraction_status=Gedeeltelijk",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R009",
@@ -131,8 +131,8 @@
     "sum_line_total": 130.0,
     "net_line_total": 130.0,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R010",
@@ -146,14 +146,14 @@
     "sum_line_total": 1449.0,
     "net_line_total": 1449.0,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R011",
     "source_file": "AH foto 2.jpeg",
-    "expected_parse_status": "review_needed",
-    "expected_status_label": "Controle nodig",
+    "expected_parse_status": "approved",
+    "expected_status_label": "Gecontroleerd",
     "store_name": "Albert Heijn",
     "total_amount": 8.28,
     "currency": "EUR",
@@ -161,8 +161,8 @@
     "sum_line_total": 8.28,
     "net_line_total": 8.28,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Gedeeltelijk",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R012",
@@ -176,14 +176,14 @@
     "sum_line_total": 6.55,
     "net_line_total": 3.68,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R013",
     "source_file": "Aldi foto 2.jpg",
-    "expected_parse_status": "review_needed",
-    "expected_status_label": "Controle nodig",
+    "expected_parse_status": "approved",
+    "expected_status_label": "Gecontroleerd",
     "store_name": "ALDI",
     "total_amount": 5.0,
     "currency": "EUR",
@@ -191,14 +191,14 @@
     "sum_line_total": 5.0,
     "net_line_total": 1.5,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Gedeeltelijk",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R014",
     "source_file": "plus foto 1.jpg",
-    "expected_parse_status": "review_needed",
-    "expected_status_label": "Controle nodig",
+    "expected_parse_status": "approved",
+    "expected_status_label": "Gecontroleerd",
     "store_name": "PLUS",
     "total_amount": 14.33,
     "currency": "EUR",
@@ -206,14 +206,14 @@
     "sum_line_total": 24.34,
     "net_line_total": 23.68,
     "discount_total": 0.66,
-    "reason": "afgeleid uit baseline v3 extraction_status=Gedeeltelijk",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R015",
     "source_file": "Jumbo foto 1.jpeg",
-    "expected_parse_status": "review_needed",
-    "expected_status_label": "Controle nodig",
+    "expected_parse_status": "approved",
+    "expected_status_label": "Gecontroleerd",
     "store_name": "Jumbo Supermarkten",
     "total_amount": 22.82,
     "currency": "EUR",
@@ -221,8 +221,8 @@
     "sum_line_total": 25.3,
     "net_line_total": 22.82,
     "discount_total": 2.48,
-    "reason": "afgeleid uit baseline v3 extraction_status=Gedeeltelijk",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R016",
@@ -236,23 +236,23 @@
     "sum_line_total": 56.91,
     "net_line_total": 56.91,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R017",
     "source_file": "Jumbo foto 3.jpg",
-    "expected_parse_status": "review_needed",
-    "expected_status_label": "Controle nodig",
+    "expected_parse_status": "approved",
+    "expected_status_label": "Gecontroleerd",
     "store_name": "Jumbo Oude Pekela",
     "total_amount": 0.0,
     "currency": "EUR",
-    "line_count": 0,
-    "sum_line_total": 0.0,
+    "line_count": 1,
+    "sum_line_total": 1.65,
     "net_line_total": 0.0,
-    "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Gedeeltelijk",
-    "baseline_origin": "official_baseline"
+    "discount_total": 1.65,
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R018",
@@ -266,8 +266,8 @@
     "sum_line_total": 41.55,
     "net_line_total": 40.75,
     "discount_total": 0.8,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R019",
@@ -281,8 +281,8 @@
     "sum_line_total": 35.31,
     "net_line_total": 34.14,
     "discount_total": 1.17,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R021",
@@ -296,8 +296,8 @@
     "sum_line_total": 203.95,
     "net_line_total": 203.95,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R022",
@@ -311,8 +311,8 @@
     "sum_line_total": 479.0,
     "net_line_total": 479.0,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R025",
@@ -326,22 +326,37 @@
     "sum_line_total": 63.84,
     "net_line_total": 56.54,
     "discount_total": 7.3,
-    "reason": "afgeleid uit baseline v3 extraction_status=Volledig",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   },
   {
     "receipt_id": "R027",
     "source_file": "AH foto 3.jpg",
-    "expected_parse_status": "review_needed",
-    "expected_status_label": "Controle nodig",
+    "expected_parse_status": "approved",
+    "expected_status_label": "Gecontroleerd",
     "store_name": "Albert Heijn",
     "total_amount": 5.4,
     "currency": "EUR",
-    "line_count": 0,
-    "sum_line_total": 0.0,
-    "net_line_total": 0.0,
+    "line_count": 2,
+    "sum_line_total": 5.4,
+    "net_line_total": 5.4,
     "discount_total": 0.0,
-    "reason": "afgeleid uit baseline v3 extraction_status=Nog niet volledig uitgelezen",
-    "baseline_origin": "official_baseline"
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
+  },
+  {
+    "receipt_id": "R028",
+    "source_file": "plus foto 2.jpg",
+    "expected_parse_status": "approved",
+    "expected_status_label": "Gecontroleerd",
+    "store_name": "PLUS",
+    "total_amount": 14.36,
+    "currency": "EUR",
+    "line_count": 9,
+    "sum_line_total": 14.36,
+    "net_line_total": 14.36,
+    "discount_total": 0.0,
+    "reason": "baseline V4 vervangt V3",
+    "baseline_origin": "official_baseline_v4"
   }
 ]
