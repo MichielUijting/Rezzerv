@@ -456,6 +456,56 @@ def _amount_to_float(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
 
 
+def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
+    """Bepaalt de definitieve database-status voor een kassabon.
+
+    De parser mag intern streng blijven voor diagnose, maar de database moet
+    weergeven of een bon voor de gebruiker bruikbaar is. Daarom wordt een bon
+    als 'parsed' opgeslagen zodra de essentiële kopgegevens betrouwbaar zijn:
+    winkelnaam en totaalbedrag. Waar mogelijk controleren we daarnaast of de
+    netto regelsom binnen tolerantie klopt, maar een imperfecte artikel-extractie
+    mag een verder bruikbare bon niet onnodig op 'review_needed' houden.
+    """
+    if not parse_result or not parse_result.is_receipt:
+        return 'failed'
+
+    has_store = bool(str(parse_result.store_name or '').strip())
+    has_total = parse_result.total_amount is not None
+
+    if not has_store or not has_total:
+        return 'review_needed'
+
+    lines = parse_result.lines or []
+    if not lines:
+        return 'parsed'
+
+    try:
+        line_sum = Decimal('0')
+        line_discount_sum = Decimal('0')
+        for line in lines:
+            if not isinstance(line, dict):
+                continue
+            line_total = line.get('line_total')
+            if line_total is not None:
+                line_sum += Decimal(str(line_total))
+            discount_amount = line.get('discount_amount')
+            if discount_amount is not None:
+                line_discount_sum += Decimal(str(discount_amount))
+        discount_total = parse_result.discount_total if parse_result.discount_total is not None else line_discount_sum
+        net_line_sum = line_sum - Decimal(str(discount_total or 0))
+        diff = abs(net_line_sum - Decimal(str(parse_result.total_amount)))
+        if diff <= Decimal('0.25'):
+            return 'parsed'
+    except Exception:
+        # Als de totaalcontrole niet uitgevoerd kan worden, blijven winkel en
+        # totaalbedrag leidend voor de database-classificatie.
+        return 'parsed'
+
+    # Essentiële kopgegevens zijn aanwezig; artikelregels kunnen later handmatig
+    # worden verbeterd zonder dat de hele bon in de controlebak hoeft te blijven.
+    return 'parsed'
+
+
 def _extract_pdf_text(file_bytes: bytes) -> str:
     if PdfReader is None:
         return ''
@@ -2468,7 +2518,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             table_total_amount = _amount_to_float(parse_result.total_amount) if parse_result.is_receipt else None
             table_currency = parse_result.currency if parse_result.currency else 'EUR'
             table_discount_total = _amount_to_float(parse_result.discount_total) if parse_result.is_receipt else None
-            table_parse_status = parse_result.parse_status if parse_result.is_receipt else 'failed'
+            table_parse_status = determine_final_parse_status(parse_result)
             table_confidence = parse_result.confidence_score
             table_line_count = len(parse_result.lines) if parse_result.is_receipt else 0
             conn.execute(
@@ -2529,7 +2579,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             'raw_receipt_id': raw_receipt_id,
             'receipt_table_id': receipt_table_id,
             'duplicate': False,
-            'parse_status': parse_result.parse_status if parse_result.is_receipt else 'failed',
+            'parse_status': determine_final_parse_status(parse_result),
         }
 
 
@@ -2665,7 +2715,7 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                     'total_amount': _amount_to_float(parse_result.total_amount),
                     'discount_total': _amount_to_float(parse_result.discount_total),
                     'currency': parse_result.currency,
-                    'parse_status': parse_result.parse_status,
+                    'parse_status': determine_final_parse_status(parse_result),
                     'confidence_score': parse_result.confidence_score,
                     'line_count': len(parse_result.lines),
                 },
@@ -2718,7 +2768,7 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                 ),
                 {'id': receipt_table_id, 'confidence_score': parse_result.confidence_score},
             )
-    return {'receipt_table_id': receipt_table_id, 'parse_status': parse_result.parse_status if parse_result.is_receipt else 'failed', 'line_count': len(parse_result.lines), 'deleted': False}
+    return {'receipt_table_id': receipt_table_id, 'parse_status': determine_final_parse_status(parse_result), 'line_count': len(parse_result.lines), 'deleted': False}
 
 
 def scan_receipt_source(engine, receipt_storage_root: Path, source_id: str) -> dict[str, Any] | None:
