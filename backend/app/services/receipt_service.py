@@ -459,12 +459,12 @@ def _amount_to_float(value: Decimal | None) -> float | None:
 def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
     """Bepaalt de definitieve database-status voor een kassabon.
 
-    De parser mag intern streng blijven voor diagnose, maar de database moet
-    weergeven of een bon voor de gebruiker bruikbaar is. Daarom wordt een bon
-    als 'parsed' opgeslagen zodra de essentiële kopgegevens betrouwbaar zijn:
-    winkelnaam en totaalbedrag. Waar mogelijk controleren we daarnaast of de
-    netto regelsom binnen tolerantie klopt, maar een imperfecte artikel-extractie
-    mag een verder bruikbare bon niet onnodig op 'review_needed' houden.
+    Businessregel PO:
+    - een bon mag alleen als 'parsed' / Gecontroleerd worden opgeslagen als
+      winkelnaam en totaalbedrag herkend zijn én de financiële controle klopt;
+    - de som van de artikelregels moet gelijk zijn aan het totaalbedrag;
+    - kortingen mogen alleen meetellen als ze expliciet als korting zijn herkend
+      en de netto artikelsom daardoor alsnog aansluit op het totaalbedrag.
     """
     if not parse_result or not parse_result.is_receipt:
         return 'failed'
@@ -477,34 +477,40 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
 
     lines = parse_result.lines or []
     if not lines:
-        return 'parsed'
+        return 'review_needed'
 
     try:
         line_sum = Decimal('0')
         line_discount_sum = Decimal('0')
+        priced_line_count = 0
         for line in lines:
             if not isinstance(line, dict):
                 continue
             line_total = line.get('line_total')
             if line_total is not None:
                 line_sum += Decimal(str(line_total))
+                priced_line_count += 1
             discount_amount = line.get('discount_amount')
             if discount_amount is not None:
                 line_discount_sum += Decimal(str(discount_amount))
-        discount_total = parse_result.discount_total if parse_result.discount_total is not None else line_discount_sum
-        net_line_sum = line_sum - Decimal(str(discount_total or 0))
-        diff = abs(net_line_sum - Decimal(str(parse_result.total_amount)))
-        if diff <= Decimal('0.25'):
+
+        if priced_line_count == 0:
+            return 'review_needed'
+
+        total_amount = Decimal(str(parse_result.total_amount))
+        if abs(line_sum - total_amount) <= Decimal('0.01'):
             return 'parsed'
+
+        discount_total = parse_result.discount_total if parse_result.discount_total is not None else line_discount_sum
+        discount_total = Decimal(str(discount_total or 0))
+        if discount_total != 0:
+            net_line_sum = line_sum - discount_total
+            if abs(net_line_sum - total_amount) <= Decimal('0.01'):
+                return 'parsed'
     except Exception:
-        # Als de totaalcontrole niet uitgevoerd kan worden, blijven winkel en
-        # totaalbedrag leidend voor de database-classificatie.
-        return 'parsed'
+        return 'review_needed'
 
-    # Essentiële kopgegevens zijn aanwezig; artikelregels kunnen later handmatig
-    # worden verbeterd zonder dat de hele bon in de controlebak hoeft te blijven.
-    return 'parsed'
-
+    return 'review_needed'
 
 def _extract_pdf_text(file_bytes: bytes) -> str:
     if PdfReader is None:
