@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import json
+import traceback
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from fastapi import Response
 from sqlalchemy import text
+
+from app.services.receipt_service import parse_receipt_content
 
 
 def _status_label(parse_status: Any) -> str:
@@ -27,6 +31,35 @@ def _to_number(value: Any) -> float | int | None:
     if abs(number - int(number)) < 0.000001:
         return int(number)
     return round(number, 4)
+
+
+def _parse_result_to_dict(result: Any) -> dict[str, Any]:
+    parsed_lines: list[dict[str, Any]] = []
+    for line in list(getattr(result, 'lines', None) or []):
+        parsed_lines.append({
+            'raw_label': line.get('raw_label'),
+            'normalized_label': line.get('normalized_label'),
+            'quantity': _to_number(line.get('quantity')),
+            'unit': line.get('unit'),
+            'unit_price': _to_number(line.get('unit_price')),
+            'line_total': _to_number(line.get('line_total')),
+            'discount_amount': _to_number(line.get('discount_amount')),
+            'barcode': line.get('barcode'),
+            'confidence_score': _to_number(line.get('confidence_score')),
+            'source_index': line.get('source_index'),
+        })
+    return {
+        'is_receipt': bool(getattr(result, 'is_receipt', False)),
+        'parse_status': getattr(result, 'parse_status', None),
+        'confidence_score': _to_number(getattr(result, 'confidence_score', None)),
+        'store_name': getattr(result, 'store_name', None),
+        'store_branch': getattr(result, 'store_branch', None),
+        'purchase_at': getattr(result, 'purchase_at', None),
+        'total_amount': _to_number(getattr(result, 'total_amount', None)),
+        'discount_total': _to_number(getattr(result, 'discount_total', None)),
+        'currency': getattr(result, 'currency', 'EUR'),
+        'lines': parsed_lines,
+    }
 
 
 def _receipt_line_dict(row: dict[str, Any]) -> dict[str, Any]:
@@ -54,6 +87,23 @@ def _receipt_line_dict(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _build_reparse_from_source(row: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    storage_path = str(row.get('storage_path') or '').strip()
+    filename = str(row.get('filename') or row.get('original_filename') or 'receipt').strip() or 'receipt'
+    mime_type = str(row.get('mime_type') or '').strip() or None
+    if not storage_path:
+        return None, 'storage_path_missing'
+    path = Path(storage_path)
+    if not path.exists():
+        return None, f'storage_file_missing:{storage_path}'
+    try:
+        file_bytes = path.read_bytes()
+        parse_result = parse_receipt_content(file_bytes, filename, mime_type or '')
+        return _parse_result_to_dict(parse_result), None
+    except Exception as exc:  # pragma: no cover - diagnostic endpoint must stay read-only and resilient
+        return None, f'{exc.__class__.__name__}: {exc}'
+
+
 def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str, Any]:
     with engine.begin() as conn:
         datastore = conn.execute(text('PRAGMA database_list')).mappings().all()
@@ -70,6 +120,9 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
                     rt.id AS receipt_table_id,
                     rt.raw_receipt_id,
                     rr.original_filename AS filename,
+                    rr.original_filename,
+                    rr.mime_type,
+                    rr.storage_path,
                     rt.household_id,
                     rt.store_name,
                     rt.store_branch,
@@ -124,6 +177,7 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
 
     receipts: list[dict[str, Any]] = []
     status_counts: dict[str, int] = {}
+    parse_status_counts: dict[str, int] = {}
     total_lines = 0
     lines_with_label = 0
 
@@ -143,13 +197,20 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
         line_sum = round(sum(float(line.get('line_total') or 0) for line in accepted_lines), 2)
         discount_sum = round(sum(float(line.get('discount_amount') or 0) for line in accepted_lines), 2)
         total_amount = _to_number(row_dict.get('total_amount'))
-        difference = None
+        net_line_sum = round(line_sum + discount_sum, 2)
+        gross_difference = None
+        net_difference = None
         if total_amount is not None:
-            difference = round(float(total_amount) - line_sum, 2)
+            gross_difference = round(float(total_amount) - line_sum, 2)
+            net_difference = round(float(total_amount) - net_line_sum, 2)
 
+        reparse_payload, reparse_error = _build_reparse_from_source(row_dict)
         label = _status_label(row_dict.get('parse_status'))
+        parse_status = str(row_dict.get('parse_status') or 'unknown')
         status_counts[label] = status_counts.get(label, 0) + 1
-        receipts.append({
+        parse_status_counts[parse_status] = parse_status_counts.get(parse_status, 0) + 1
+
+        receipt_payload = {
             'filename': row_dict.get('filename'),
             'receipt_table_id': receipt_id,
             'raw_receipt_id': row_dict.get('raw_receipt_id'),
@@ -168,7 +229,10 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
                 'total_amount': total_amount,
                 'line_sum': line_sum,
                 'discount_sum': discount_sum,
-                'difference': difference,
+                'net_line_sum': net_line_sum,
+                'gross_difference': gross_difference,
+                'net_difference': net_difference,
+                'difference': net_difference,
                 'line_count_reported': _to_number(row_dict.get('line_count')),
                 'line_count_actual': len(accepted_lines),
             },
@@ -181,13 +245,19 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
             'diagnosis_notes': [
                 'Read-only diagnose: parser, OCR, statusclassificatie en UI worden niet gewijzigd.',
                 'Ruwe OCR-regels en parser-afwijzingsredenen zijn alleen beschikbaar als ze al in de database worden opgeslagen.',
+                'reparsed_from_source is een live herparse van het opgeslagen bronbestand voor analyse; de database wordt niet aangepast.',
                 'Gevonden receipt_table_lines-kolommen: ' + ', '.join(line_columns),
             ],
-        })
+        }
+        if reparse_payload is not None:
+            receipt_payload['reparsed_from_source'] = reparse_payload
+        if reparse_error is not None:
+            receipt_payload['reparse_error'] = reparse_error
+        receipts.append(receipt_payload)
 
     return {
         'generated_at': datetime.now(timezone.utc).isoformat(),
-        'purpose': 'Rezzerv receipt parser diagnose voor generieke parserverbetering zonder bonspecifieke fixes.',
+        'purpose': 'Rezzerv receipt parser diagnose v3 met per bon een read-only herparse van het opgeslagen bronbestand.',
         'runtime_datastore': {
             'datastore': 'sqlite',
             'database_url': 'sqlite:////app/data/rezzerv.db',
@@ -197,6 +267,8 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
         'summary': {
             'returned_receipts': len(receipts),
             'status_counts_nl': status_counts,
+            'parse_status_counts': parse_status_counts,
+            'status_source': 'receipt_tables.parse_status',
             'accepted_lines_total': total_lines,
             'accepted_lines_with_label': lines_with_label,
         },
@@ -212,9 +284,13 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
     }
 
 
+def _replace_existing_routes(app, paths: set[str]) -> None:
+    app.router.routes = [route for route in app.router.routes if getattr(route, 'path', None) not in paths]
+
+
 def install_receipt_parser_diagnosis_routes(app, engine) -> None:
-    if getattr(app.state, 'receipt_parser_diagnosis_routes_installed', False):
-        return
+    paths = {'/api/testing/receipt-parser-diagnosis', '/api/testing/receipt-parser-diagnosis/download'}
+    _replace_existing_routes(app, paths)
     app.state.receipt_parser_diagnosis_routes_installed = True
 
     @app.get('/api/testing/receipt-parser-diagnosis')
