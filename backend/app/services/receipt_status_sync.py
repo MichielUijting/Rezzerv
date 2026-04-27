@@ -12,6 +12,18 @@ KNOWN_STORE_TOKENS = (
     'gamma', 'hornbach', 'picnic', 'bol', 'coolblue', 'karwei', 'mediamarkt',
 )
 
+ACTIVE_RECEIPT_WHERE_SQL = """
+    (rt.deleted_at IS NULL OR TRIM(CAST(rt.deleted_at AS TEXT)) = '')
+    AND (rr.deleted_at IS NULL OR TRIM(CAST(rr.deleted_at AS TEXT)) = '')
+"""
+
+DELETED_RECEIPT_WHERE_SQL = """
+    NOT (
+        (rt.deleted_at IS NULL OR TRIM(CAST(rt.deleted_at AS TEXT)) = '')
+        AND (rr.deleted_at IS NULL OR TRIM(CAST(rr.deleted_at AS TEXT)) = '')
+    )
+"""
+
 
 def _store_name_is_usable(value: Any) -> bool:
     normalized = str(value or '').strip().lower()
@@ -63,13 +75,27 @@ def derive_parse_status_from_row(row: dict[str, Any]) -> str:
 
 
 def sync_receipt_statuses(engine, household_id: str | None = None) -> dict[str, int]:
-    where_parts = ['rt.deleted_at IS NULL', 'rr.deleted_at IS NULL']
+    where_parts = [ACTIVE_RECEIPT_WHERE_SQL]
+    deleted_where_parts = [DELETED_RECEIPT_WHERE_SQL]
     params: dict[str, Any] = {}
     if household_id is not None:
         where_parts.append('rt.household_id = :household_id')
+        deleted_where_parts.append('rt.household_id = :household_id')
         params['household_id'] = str(household_id)
 
     with engine.begin() as conn:
+        skipped_deleted = int(conn.execute(
+            text(
+                f"""
+                SELECT COUNT(1)
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                WHERE {' AND '.join(deleted_where_parts)}
+                """
+            ),
+            params,
+        ).scalar() or 0)
+
         rows = conn.execute(
             text(
                 f"""
@@ -106,7 +132,14 @@ def sync_receipt_statuses(engine, household_id: str | None = None) -> dict[str, 
             params,
         ).mappings().all()
 
-        counts = {'checked': 0, 'updated': 0, 'approved': 0, 'review_needed': 0, 'manual': 0}
+        counts = {
+            'checked': 0,
+            'updated': 0,
+            'skipped_deleted': skipped_deleted,
+            'approved': 0,
+            'review_needed': 0,
+            'manual': 0,
+        }
         updates: list[dict[str, Any]] = []
         for row in rows:
             row_dict = dict(row)
