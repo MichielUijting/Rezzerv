@@ -2,13 +2,12 @@
 
 Release focus:
 - keep Kassa/database behaviour unchanged;
-- improve article-line recognition during receipt ingestion;
+- improve article-line count recognition during receipt ingestion;
 - do not use baseline as production truth;
 - do not approve receipts by tolerance.
 
-The app still contains a large legacy receipt service. This module is loaded by
-Python at backend startup and patches that legacy service in a narrow way until
-receipt parsing is fully moved into smaller domain services.
+This module is loaded by Python at backend startup and patches the legacy
+receipt service narrowly until parsing is moved into smaller domain services.
 """
 
 from __future__ import annotations
@@ -16,23 +15,29 @@ from __future__ import annotations
 from decimal import Decimal
 import builtins
 import functools
-import inspect
 import re
 import sys
 from typing import Any
 
 
+# Accept normal Dutch prices, negative prices and OCR price-only fragments such
+# as ',95'. This is intentionally about line recognition, not status approval.
 MONEY_RE = re.compile(r"(?<!\d)-?(?:\d{1,5}[\.,]\d{2}|[\.,]\d{2})(?!\d)")
 
+# Only skip lines that are clearly not article rows. This list is deliberately
+# conservative: discounts, stamps, deposits and other financial rows must remain
+# visible as receipt lines because the PO uses them in baseline V4.
 SKIP_LINE_TOKENS = (
     "totaal", "te betalen", "subtotaal", "subtotal", "btw", "waarvan",
     "bankpas", "pin", "pinnen", "betaling", "betaald", "wisselgeld",
     "kassa", "bonnr", "transactie", "datum", "tijd", "filiaal", "adres",
 )
 
-FINANCIAL_PRODUCT_TOKENS = (
+COUNTABLE_FINANCIAL_TOKENS = (
     "koopzegel", "koopzegels", "spaarzegel", "spaarzegels", "pluspunten",
-    "plus punten", "statiegeld", "emballage",
+    "plus punten", "statiegeld", "emballage", "korting", "bonus",
+    "prijsvoordeel", "actiebon", "actie bon", "coupon", "lidl plus",
+    "uw voordeel", "gratis",
 )
 
 
@@ -65,7 +70,7 @@ def _line_type(label: str | None, amount=None) -> str:
     amt = _dec(amount)
     if not text:
         return "noise"
-    if any(t in text for t in FINANCIAL_PRODUCT_TOKENS):
+    if any(t in text for t in ("koopzegel", "koopzegels", "spaarzegel", "spaarzegels", "pluspunten", "plus punten", "statiegeld", "emballage")):
         return "stamp_or_points"
     if any(t in text for t in ("korting", "bonus", "prijsvoordeel", "actiebon", "actie bon", "coupon", "lidl plus", "uw voordeel", "gratis")):
         return "discount" if amt is None or amt <= 0 else "financial_correction"
@@ -80,13 +85,21 @@ def _should_skip_candidate(label: str) -> bool:
     text = _norm(label)
     if not text or len(text) < 2:
         return True
-    if any(token in text for token in FINANCIAL_PRODUCT_TOKENS):
+    if any(token in text for token in COUNTABLE_FINANCIAL_TOKENS):
         return False
     if any(token in text for token in SKIP_LINE_TOKENS):
         return True
     if re.fullmatch(r"[0-9\s.,:+\-]+", text):
         return True
     return False
+
+
+def _clean_label_before_price(line: str, match: re.Match[str]) -> str:
+    label = line[:match.start()].strip(" -:;€")
+    label = re.sub(r"\b\d+\s*[xX]\b", "", label).strip(" -:;€")
+    # Remove common quantity/unit price fragments while keeping the product name.
+    label = re.sub(r"\b\d+[\.,]?\d*\s*(?:kg|g|l|ml|st)\b", "", label, flags=re.IGNORECASE).strip(" -:;€")
+    return label
 
 
 def _candidate_lines_from_text(text: str) -> list[dict[str, Any]]:
@@ -98,25 +111,23 @@ def _candidate_lines_from_text(text: str) -> list[dict[str, Any]]:
     for line in raw_lines:
         matches = list(MONEY_RE.finditer(line))
         if not matches:
-            # Keep a possible article label for the common OCR pattern where the
-            # price is printed on the next line, e.g. AH photo receipts.
+            # Keep a possible article label for OCR patterns where the price is
+            # printed on the next line, e.g. photo receipts.
             if not _should_skip_candidate(line):
                 previous_label = line
             continue
 
+        # Use the last amount on a line as the line total. Earlier amounts on the
+        # same line are usually quantity/unit-price fragments.
         match = matches[-1]
         amount = _dec(match.group(0))
         if amount is None:
             previous_label = ""
             continue
 
-        label = line[:match.start()].strip(" -:;€")
-        # If the line contains only a price such as ',95', combine it with the
-        # preceding label line. This specifically fixes photo receipts where OCR
-        # splits article and price over two lines.
+        label = _clean_label_before_price(line, match)
         if not label and previous_label:
             label = previous_label
-        label = re.sub(r"\b\d+\s*[xX]\b", "", label).strip(" -:;€")
         if _should_skip_candidate(label):
             previous_label = ""
             continue
@@ -131,40 +142,36 @@ def _candidate_lines_from_text(text: str) -> list[dict[str, Any]]:
             "quantity": 1.0,
             "line_total": float(amount),
             "line_type": kind,
-            "source": "receipt_line_repair",
+            "source": "receipt_article_count_repair",
         })
         previous_label = ""
     return candidates
 
 
-def _similarity(a: Any, b: Any) -> float:
-    try:
-        from difflib import SequenceMatcher
-        return SequenceMatcher(None, _norm(a), _norm(b)).ratio()
-    except Exception:
-        return 0.0
+def _same_line_identity(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    a_label = _norm(a.get("normalized_label") or a.get("raw_label"))
+    b_label = _norm(b.get("normalized_label") or b.get("raw_label"))
+    if not a_label or not b_label:
+        return False
+    return a_label == b_label and _dec(a.get("line_total")) == _dec(b.get("line_total"))
 
 
 def _merge_missing_lines(existing: list[dict[str, Any]], candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Append only truly missing lines.
+
+    Earlier versions used fuzzy similarity to avoid duplicates. That was too
+    aggressive for the PO's current test: first make the article count equal to
+    baseline V4. Therefore we now only suppress exact same label+amount lines.
+    Similar labels with different prices are kept, because they may be separate
+    receipt rows.
+    """
     merged = list(existing or [])
     for candidate in candidates:
         label = candidate.get("normalized_label") or candidate.get("raw_label")
         amount = _dec(candidate.get("line_total"))
         if not label or amount is None:
             continue
-        duplicate = False
-        for line in merged:
-            current_label = line.get("normalized_label") or line.get("raw_label")
-            current_amount = _dec(line.get("line_total"))
-            if current_amount == amount and _similarity(current_label, label) >= 0.72:
-                duplicate = True
-                break
-            # Do not add a second copy of the same label with a different price;
-            # price-correction is a separate next step requested by the PO.
-            if _similarity(current_label, label) >= 0.88:
-                duplicate = True
-                break
-        if duplicate:
+        if any(_same_line_identity(line, candidate) for line in merged):
             continue
         merged.append(candidate)
     return merged
@@ -214,26 +221,22 @@ def _repair_parse_result(rs, result, args: tuple[Any, ...], kwargs: dict[str, An
 
 
 def _install_line_recognition_patch(rs) -> None:
-    if getattr(rs, "_rezzerv_line_recognition_patch_installed", False):
+    if getattr(rs, "_rezzerv_article_count_patch_installed", False):
         return
 
-    # Keep stamp/points lines in the parser output instead of filtering them as
-    # non-products. This is article-line recognition, not approval logic.
     old_non_product = getattr(rs, "_looks_like_non_product_receipt_label", lambda label: False)
 
     def looks_like_non_product(label):
         text = _norm(label)
-        if any(token in text for token in FINANCIAL_PRODUCT_TOKENS):
+        if any(token in text for token in COUNTABLE_FINANCIAL_TOKENS):
             return False
         return old_non_product(label)
 
     rs._looks_like_non_product_receipt_label = looks_like_non_product
     rs._line_type_for_label = _line_type
 
-    # Wrap parser-like functions generically. We only modify return values that
-    # look like ReceiptParseResult, so normal helper functions are left alone.
     for name, fn in list(vars(rs).items()):
-        if not callable(fn) or getattr(fn, "_rezzerv_line_repair_wrapped", False):
+        if not callable(fn) or getattr(fn, "_rezzerv_article_count_wrapped", False):
             continue
         lowered = name.lower()
         if "parse" not in lowered and "receipt" not in lowered:
@@ -246,13 +249,13 @@ def _install_line_recognition_patch(rs) -> None:
             result = __fn(*args, **kwargs)
             return _repair_parse_result(rs, result, args, kwargs)
 
-        wrapper._rezzerv_line_repair_wrapped = True
+        wrapper._rezzerv_article_count_wrapped = True
         try:
             setattr(rs, name, wrapper)
         except Exception:
             pass
 
-    rs._rezzerv_line_recognition_patch_installed = True
+    rs._rezzerv_article_count_patch_installed = True
 
 
 def _install_receipt_service_patch() -> None:
