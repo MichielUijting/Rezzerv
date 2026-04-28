@@ -4,21 +4,17 @@ Release focus:
 - keep Kassa/database behaviour unchanged;
 - improve article-line recognition during receipt ingestion;
 - do not use baseline as production truth;
-- do not approve receipts by tolerance.
-
-The app still contains a large legacy receipt service. This module is loaded by
-Python at backend startup and patches that legacy service in a narrow way until
-receipt parsing is fully moved into smaller domain services.
+- do not approve receipts by tolerance;
+- harden receipt status baseline diagnostics so status mismatches are never counted as correct.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from decimal import Decimal
 import builtins
 import functools
-import inspect
 import re
-import sys
 from typing import Any
 
 
@@ -98,8 +94,6 @@ def _candidate_lines_from_text(text: str) -> list[dict[str, Any]]:
     for line in raw_lines:
         matches = list(MONEY_RE.finditer(line))
         if not matches:
-            # Keep a possible article label for the common OCR pattern where the
-            # price is printed on the next line, e.g. AH photo receipts.
             if not _should_skip_candidate(line):
                 previous_label = line
             continue
@@ -111,9 +105,6 @@ def _candidate_lines_from_text(text: str) -> list[dict[str, Any]]:
             continue
 
         label = line[:match.start()].strip(" -:;€")
-        # If the line contains only a price such as ',95', combine it with the
-        # preceding label line. This specifically fixes photo receipts where OCR
-        # splits article and price over two lines.
         if not label and previous_label:
             label = previous_label
         label = re.sub(r"\b\d+\s*[xX]\b", "", label).strip(" -:;€")
@@ -159,8 +150,6 @@ def _merge_missing_lines(existing: list[dict[str, Any]], candidates: list[dict[s
             if current_amount == amount and _similarity(current_label, label) >= 0.72:
                 duplicate = True
                 break
-            # Do not add a second copy of the same label with a different price;
-            # price-correction is a separate next step requested by the PO.
             if _similarity(current_label, label) >= 0.88:
                 duplicate = True
                 break
@@ -217,8 +206,6 @@ def _install_line_recognition_patch(rs) -> None:
     if getattr(rs, "_rezzerv_line_recognition_patch_installed", False):
         return
 
-    # Keep stamp/points lines in the parser output instead of filtering them as
-    # non-products. This is article-line recognition, not approval logic.
     old_non_product = getattr(rs, "_looks_like_non_product_receipt_label", lambda label: False)
 
     def looks_like_non_product(label):
@@ -230,8 +217,6 @@ def _install_line_recognition_patch(rs) -> None:
     rs._looks_like_non_product_receipt_label = looks_like_non_product
     rs._line_type_for_label = _line_type
 
-    # Wrap parser-like functions generically. We only modify return values that
-    # look like ReceiptParseResult, so normal helper functions are left alone.
     for name, fn in list(vars(rs).items()):
         if not callable(fn) or getattr(fn, "_rezzerv_line_repair_wrapped", False):
             continue
@@ -255,6 +240,125 @@ def _install_line_recognition_patch(rs) -> None:
     rs._rezzerv_line_recognition_patch_installed = True
 
 
+def _canonical_parse_status(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"approved", "parsed", "approved_override"}:
+        return "approved"
+    if normalized in {"review_needed", "partial"}:
+        return "review_needed"
+    if normalized in {"manual", "failed"}:
+        return "manual"
+    return normalized
+
+
+def _status_label(value: Any) -> str:
+    canonical = _canonical_parse_status(value)
+    if canonical == "approved":
+        return "Gecontroleerd"
+    if canonical == "review_needed":
+        return "Controle nodig"
+    if canonical == "manual":
+        return "Handmatig"
+    return str(value or "") or "-"
+
+
+def _scope_key(value: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").strip().lower())
+
+
+def _recount_baseline_details(result: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(result, dict):
+        return result
+    details = result.get("details")
+    if not isinstance(details, list):
+        return result
+
+    scope_rows = result.get("included_receipt_scope") or []
+    scope_by_id = {str(row.get("receipt_table_id") or ""): row for row in scope_rows if isinstance(row, dict) and row.get("receipt_table_id")}
+    scope_by_file = {
+        _scope_key(row.get("source_file") or row.get("original_filename")): row
+        for row in scope_rows
+        if isinstance(row, dict) and (row.get("source_file") or row.get("original_filename"))
+    }
+
+    counts = Counter()
+    for item in details:
+        if not isinstance(item, dict):
+            continue
+        receipt_table_id = str(item.get("receipt_table_id") or "")
+        actual_row = scope_by_id.get(receipt_table_id)
+        if actual_row is None:
+            actual_row = scope_by_file.get(_scope_key(item.get("matched_original_filename") or item.get("source_file")))
+        if actual_row and actual_row.get("parse_status") is not None:
+            real_actual_status = str(actual_row.get("parse_status") or "").strip()
+            item["actual_parse_status"] = real_actual_status
+            item["actual_status_label"] = _status_label(real_actual_status)
+        expected = _canonical_parse_status(item.get("expected_parse_status"))
+        actual = _canonical_parse_status(item.get("actual_parse_status"))
+
+        if item.get("result") not in {"missing", "extra"} and expected and actual and expected != actual:
+            existing_type = item.get("difference_type")
+            if existing_type not in {"mapping_mismatch", "extraction_mismatch"}:
+                item["result"] = "different"
+                item["reason"] = "Actuele backendstatus wijkt af van de baseline."
+                item["difference_type"] = "status_logic_mismatch"
+                item["difference_reason"] = "status wijkt af terwijl mapping en extractie voldoende overeenkomen"
+                item["status_reason"] = item["difference_reason"]
+
+        result_key = item.get("result")
+        if result_key == "correct":
+            counts["correct"] += 1
+        elif result_key == "missing":
+            counts["missing"] += 1
+            counts["mapping_mismatch"] += 1
+        elif result_key == "extra":
+            counts["extra"] += 1
+            counts["mapping_mismatch"] += 1
+        else:
+            counts["different"] += 1
+            dtype = item.get("difference_type") or "different"
+            counts[dtype] += 1
+
+    summary = dict(result.get("summary") or result.get("validation_summary") or {})
+    for key in ("correct", "different", "missing", "extra", "mapping_mismatch", "extraction_mismatch", "status_logic_mismatch"):
+        summary[key] = counts[key]
+    mismatch_breakdown = Counter()
+    for item in details:
+        if isinstance(item, dict) and item.get("result") == "different":
+            mismatch_breakdown[item.get("difference_type") or "different"] += 1
+    summary["mismatch_breakdown"] = dict(sorted(mismatch_breakdown.items()))
+    if "summary" in result:
+        result["summary"] = summary
+    if "validation_summary" in result:
+        result["validation_summary"] = summary
+    return result
+
+
+def _install_receipt_status_baseline_patch() -> None:
+    try:
+        from app.services import receipt_status_baseline_service as svc
+    except Exception:
+        return
+    if getattr(svc, "_rezzerv_strict_status_diagnosis_patch_installed", False):
+        return
+
+    old_validate = getattr(svc, "validate_receipt_status_baseline", None)
+    if callable(old_validate):
+        @functools.wraps(old_validate)
+        def validate_wrapper(*args, **kwargs):
+            return _recount_baseline_details(old_validate(*args, **kwargs))
+        svc.validate_receipt_status_baseline = validate_wrapper
+
+    old_diagnose = getattr(svc, "diagnose_receipt_status_baseline", None)
+    if callable(old_diagnose):
+        @functools.wraps(old_diagnose)
+        def diagnose_wrapper(*args, **kwargs):
+            return _recount_baseline_details(old_diagnose(*args, **kwargs))
+        svc.diagnose_receipt_status_baseline = diagnose_wrapper
+
+    svc._rezzerv_strict_status_diagnosis_patch_installed = True
+
+
 def _install_receipt_service_patch() -> None:
     try:
         from app.services import receipt_service as rs
@@ -269,6 +373,7 @@ def _try_patch_main() -> None:
         _install_line_recognition_patch(rs)
     except Exception:
         pass
+    _install_receipt_status_baseline_patch()
 
 
 _original_import = builtins.__import__
@@ -276,11 +381,17 @@ _original_import = builtins.__import__
 
 def _import_hook(name, globals=None, locals=None, fromlist=(), level=0):
     module = _original_import(name, globals, locals, fromlist, level)
-    if name.startswith("app.services.receipt_service") or name == "app.main" or (name == "app" and "main" in (fromlist or ())):
+    if (
+        name.startswith("app.services.receipt_service")
+        or name.startswith("app.services.receipt_status_baseline_service")
+        or name == "app.main"
+        or (name == "app" and "main" in (fromlist or ()))
+    ):
         _try_patch_main()
     return module
 
 
 builtins.__import__ = _import_hook
 _install_receipt_service_patch()
+_install_receipt_status_baseline_patch()
 _try_patch_main()
