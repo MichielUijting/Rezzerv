@@ -1,9 +1,8 @@
 """Single source of truth for receipt status classification.
 
-This module deliberately contains the only canonical mapping between technical
-parse statuses and the user-facing Kassa categories. Baseline diagnostics,
-admin recompute endpoints and API serializers should depend on this policy
-instead of duplicating status/category logic.
+Architecture rule for the receipt test phase:
+OCR/parsing and baseline comparison produce facts. This policy only decides the
+category from those facts. It must not perform OCR/parsing interpretation itself.
 """
 from __future__ import annotations
 
@@ -25,7 +24,13 @@ APPROVED_ALIASES = {"approved", "parsed", "approved_override", "gecontroleerd", 
 REVIEW_NEEDED_ALIASES = {"review_needed", "partial", "controle nodig", "gedeeltelijk herkend", "niet herkend"}
 MANUAL_ALIASES = {"manual", "handmatig", "failed", "nieuw"}
 
-INVALID_STORE_NAMES = {"", "onbekend", "unknown", "n.v.t.", "nvt", "onbekende winkel"}
+
+@dataclass(frozen=True)
+class ReceiptStatusFacts:
+    store_name_matches_baseline: bool | None
+    total_amount_matches_baseline: bool | None
+    article_count_matches_baseline: bool | None
+    line_sum_matches_total: bool | None
 
 
 @dataclass(frozen=True)
@@ -33,10 +38,22 @@ class ReceiptStatusDecision:
     parse_status: str
     inbox_status: str
     reason: str
-    store_name_ok: bool
-    total_amount_ok: bool
-    article_count_ok: bool
-    line_sum_matches_total: bool
+    store_name_matches_baseline: bool | None = None
+    total_amount_matches_baseline: bool | None = None
+    article_count_matches_baseline: bool | None = None
+    line_sum_matches_total: bool | None = None
+
+    @property
+    def store_name_ok(self) -> bool:
+        return bool(self.store_name_matches_baseline)
+
+    @property
+    def total_amount_ok(self) -> bool:
+        return bool(self.total_amount_matches_baseline)
+
+    @property
+    def article_count_ok(self) -> bool:
+        return bool(self.article_count_matches_baseline)
 
 
 def to_decimal(value: Any) -> Decimal | None:
@@ -72,7 +89,6 @@ def inbox_status_label(value: Any) -> str:
 
 
 def normalize_receipt_status_fields(row: dict[str, Any]) -> dict[str, Any]:
-    """Return a copy with parse_status and inbox_status derived from one policy."""
     normalized = dict(row or {})
     canonical = canonical_parse_status(normalized.get("parse_status") or normalized.get("status") or normalized.get("inbox_status"))
     normalized["parse_status"] = canonical
@@ -81,54 +97,83 @@ def normalize_receipt_status_fields(row: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
-def decide_receipt_status(
+def decide_receipt_status_from_facts(
     *,
-    store_name: Any,
-    total_amount: Any,
-    article_count: Any,
-    line_total_sum: Any,
-    discount_total: Any = None,
-    totals_overridden: Any = False,
+    store_name_matches_baseline: bool | None,
+    total_amount_matches_baseline: bool | None,
+    article_count_matches_baseline: bool | None,
+    line_sum_matches_total: bool | None,
 ) -> ReceiptStatusDecision:
-    """Classify a receipt without consulting UI, baseline files or PO criteria docs."""
-    store_name_text = str(store_name or "").strip().lower()
-    store_name_ok = store_name_text not in INVALID_STORE_NAMES
-    total_dec = to_decimal(total_amount)
-    total_amount_ok = total_dec is not None
-    try:
-        article_count_ok = int(article_count or 0) > 0
-    except (ValueError, TypeError):
-        article_count_ok = False
-
-    line_sum = to_decimal(line_total_sum) or Decimal("0.00")
-    discount = to_decimal(discount_total) or Decimal("0.00")
-    net_line_sum = line_sum + discount
-    line_sum_matches_total = total_amount_ok and amount_matches(total_dec, net_line_sum)
-
-    if bool(totals_overridden):
-        parse_status = APPROVED
-        reason = "approved: totalen zijn handmatig gecorrigeerd"
-    elif not store_name_ok or not total_amount_ok or not article_count_ok:
+    facts = ReceiptStatusFacts(
+        store_name_matches_baseline=store_name_matches_baseline,
+        total_amount_matches_baseline=total_amount_matches_baseline,
+        article_count_matches_baseline=article_count_matches_baseline,
+        line_sum_matches_total=line_sum_matches_total,
+    )
+    if any(value is None for value in facts.__dict__.values()):
         parse_status = MANUAL
-        if not store_name_ok:
-            reason = "manual: winkelnaam ontbreekt of is ongeldig"
-        elif not total_amount_ok:
-            reason = "manual: totaalprijs ontbreekt of is ongeldig"
-        else:
-            reason = "manual: geen geldige artikellijnen gevonden"
-    elif line_sum_matches_total:
+        reason = "manual: baselinevergelijking is niet volledig mogelijk"
+    elif all(facts.__dict__.values()):
         parse_status = APPROVED
-        reason = "approved: winkelnaam, totaalprijs en regelsom sluiten volgens centrale policy"
+        reason = "approved: winkel, totaal, artikelaantal en regelsom voldoen aan de baseline-policy"
     else:
         parse_status = REVIEW_NEEDED
-        reason = "review_needed: regelsom sluit niet op totaalprijs volgens centrale policy"
-
+        failed = [
+            name for name, value in facts.__dict__.items()
+            if value is False
+        ]
+        reason = "review_needed: baseline-policy faalt op " + ", ".join(failed)
     return ReceiptStatusDecision(
         parse_status=parse_status,
         inbox_status=STATUS_LABELS[parse_status],
         reason=reason,
-        store_name_ok=store_name_ok,
-        total_amount_ok=total_amount_ok,
-        article_count_ok=article_count_ok,
-        line_sum_matches_total=bool(line_sum_matches_total),
+        store_name_matches_baseline=facts.store_name_matches_baseline,
+        total_amount_matches_baseline=facts.total_amount_matches_baseline,
+        article_count_matches_baseline=facts.article_count_matches_baseline,
+        line_sum_matches_total=facts.line_sum_matches_total,
+    )
+
+
+def decide_receipt_status(
+    *,
+    store_name_matches_baseline: bool | None = None,
+    total_amount_matches_baseline: bool | None = None,
+    article_count_matches_baseline: bool | None = None,
+    line_sum_matches_total: bool | None = None,
+    store_name: Any = None,
+    total_amount: Any = None,
+    article_count: Any = None,
+    line_total_sum: Any = None,
+    discount_total: Any = None,
+    totals_overridden: Any = False,
+) -> ReceiptStatusDecision:
+    """Compatibility entrypoint.
+
+    Preferred use is facts-only. Legacy runtime callers without baseline facts are
+    intentionally mapped to manual instead of silently making a category decision.
+    """
+    if any(
+        value is not None
+        for value in (
+            store_name_matches_baseline,
+            total_amount_matches_baseline,
+            article_count_matches_baseline,
+            line_sum_matches_total,
+        )
+    ):
+        return decide_receipt_status_from_facts(
+            store_name_matches_baseline=store_name_matches_baseline,
+            total_amount_matches_baseline=total_amount_matches_baseline,
+            article_count_matches_baseline=article_count_matches_baseline,
+            line_sum_matches_total=line_sum_matches_total,
+        )
+
+    return ReceiptStatusDecision(
+        parse_status=MANUAL,
+        inbox_status=STATUS_LABELS[MANUAL],
+        reason="manual: geen baselinevergelijkingsfeiten aangeleverd aan centrale policy",
+        store_name_matches_baseline=None,
+        total_amount_matches_baseline=None,
+        article_count_matches_baseline=None,
+        line_sum_matches_total=None,
     )
