@@ -32,6 +32,31 @@ export function normalizeErrorMessage(value) {
   return 'Verzoek mislukt'
 }
 
+function canonicalReceiptInboxStatus(item) {
+  const parseStatus = String(item?.parse_status || '').trim().toLowerCase()
+  if (['approved', 'parsed', 'approved_override'].includes(parseStatus)) return 'Gecontroleerd'
+  if (['review_needed', 'partial'].includes(parseStatus)) return 'Controle nodig'
+  if (parseStatus === 'manual') return 'Handmatig'
+
+  const inboxStatus = String(item?.inbox_status || '').trim()
+  if (inboxStatus === 'Gecontroleerd' || inboxStatus === 'Controle nodig' || inboxStatus === 'Handmatig') return inboxStatus
+  if (inboxStatus === 'Goedgekeurd' || inboxStatus === 'Geparsed' || inboxStatus.toLowerCase() === 'approved') return 'Gecontroleerd'
+  if (inboxStatus.toLowerCase() === 'review_needed') return 'Controle nodig'
+  return 'Handmatig'
+}
+
+function normalizeReceiptListPayload(url, data) {
+  if (!data || typeof url !== 'string' || !url.startsWith('/api/receipts?')) return data
+  if (!Array.isArray(data.items)) return data
+  return {
+    ...data,
+    items: data.items.map((item) => ({
+      ...item,
+      inbox_status: canonicalReceiptInboxStatus(item),
+    })),
+  }
+}
+
 export async function fetchJson(url, options = {}) {
   const response = await fetchJsonWithAuth(url, {
     headers: {
@@ -67,7 +92,7 @@ export async function fetchJson(url, options = {}) {
     throw new Error(normalizeErrorMessage(data?.detail || data || responseText))
   }
 
-  return data
+  return normalizeReceiptListPayload(url, data)
 }
 
 export const articleFallbackOptions = sortOptionObjects(demoData.articles.map((article) => ({
