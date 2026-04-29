@@ -74,7 +74,6 @@ def _as_float(value: Decimal | None) -> float | None:
 
 
 def merge_lines(lines: list[str]) -> list[str]:
-    """Merge detached OCR product labels with following price-only lines before parsing."""
     merged: list[str] = []
     buffer: str | None = None
     amount_at_end = re.compile(r'-?\d{1,6}[\.,]\d{2}\s*(?:eur)?\s*$', re.IGNORECASE)
@@ -84,7 +83,6 @@ def merge_lines(lines: list[str]) -> list[str]:
         text = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
         if not text:
             continue
-
         if amount_at_end.search(text):
             if buffer and price_only.match(text):
                 merged.append(f'{buffer} {text}')
@@ -95,11 +93,9 @@ def merge_lines(lines: list[str]) -> list[str]:
                     buffer = None
                 merged.append(text)
             continue
-
         if buffer:
             merged.append(buffer)
         buffer = text
-
     if buffer:
         merged.append(buffer)
     return merged
@@ -242,10 +238,22 @@ def _zero_discount_case(total_amount: Decimal | None, lines: list[dict[str, Any]
     return gross_sum >= Decimal('0.00') and abs(net_sum) <= Decimal('0.05')
 
 
+def _contains_savings_line(lines: list[dict[str, Any]]) -> bool:
+    for line in lines or []:
+        label = str(line.get('raw_label') or line.get('normalized_label') or '')
+        if _is_savings_or_points_line(f"{label} {line.get('line_total') or ''}"):
+            return True
+    return False
+
+
 def _choose_better_lines(existing_lines: list[dict[str, Any]], fallback_lines: list[dict[str, Any]], total_amount: Decimal | None, discount_total: Decimal | None) -> list[dict[str, Any]]:
     if not fallback_lines:
         return existing_lines
     if not existing_lines:
+        return fallback_lines
+    existing_has_savings = _contains_savings_line(existing_lines)
+    fallback_has_savings = _contains_savings_line(fallback_lines)
+    if fallback_has_savings and not existing_has_savings and len(fallback_lines) >= len(existing_lines):
         return fallback_lines
     if _totals_match(total_amount, fallback_lines, discount_total) and not _totals_match(total_amount, existing_lines, discount_total):
         return fallback_lines
@@ -257,22 +265,18 @@ def _choose_better_lines(existing_lines: list[dict[str, Any]], fallback_lines: l
 def _reclassify_result(result: Any) -> Any:
     if result is None or not getattr(result, 'is_receipt', False):
         return result
-
     result.lines = _normalize_receipt_lines(getattr(result, 'lines', None))
     total_amount = getattr(result, 'total_amount', None)
     discount_total = getattr(result, 'discount_total', None)
     if discount_total is not None:
         discount_total = _parse_decimal(discount_total)
         result.discount_total = discount_total
-
     if not result.lines:
         result.parse_status = 'manual'
         result.confidence_score = min(float(result.confidence_score or 0.36), 0.36)
         return result
-
     totals_match = _totals_match(total_amount, result.lines, discount_total)
     zero_discount_case = _zero_discount_case(total_amount, result.lines, discount_total)
-
     if total_amount is not None and totals_match:
         result.parse_status = 'parsed'
         result.confidence_score = max(float(result.confidence_score or 0.0), 0.82)
@@ -282,7 +286,6 @@ def _reclassify_result(result: Any) -> Any:
     else:
         result.parse_status = 'review_needed'
         result.confidence_score = min(float(result.confidence_score or 0.36), 0.48)
-
     return result
 
 
@@ -305,5 +308,17 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str):
     return _reclassify_result(_ORIGINAL_PARSE_RECEIPT_CONTENT(file_bytes, filename, mime_type))
 
 
-_receipt_service._parse_result_from_text_lines = _parse_result_from_text_lines_with_merge
-_receipt_service.parse_receipt_content = parse_receipt_content
+def install_parser_quality_patch(main_module: Any | None = None) -> bool:
+    if getattr(_receipt_service, '_rezzerv_parser_quality_patch_installed', False):
+        if main_module is not None:
+            main_module.parse_receipt_content = _receipt_service.parse_receipt_content
+        return False
+    _receipt_service._parse_result_from_text_lines = _parse_result_from_text_lines_with_merge
+    _receipt_service.parse_receipt_content = parse_receipt_content
+    _receipt_service._rezzerv_parser_quality_patch_installed = True
+    if main_module is not None:
+        main_module.parse_receipt_content = parse_receipt_content
+    return True
+
+
+install_parser_quality_patch()
