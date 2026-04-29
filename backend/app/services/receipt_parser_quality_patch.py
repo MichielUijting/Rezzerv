@@ -46,30 +46,54 @@ def _as_float(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
 
 
+def _is_savings_label_without_amount(text: str) -> bool:
+    candidate = re.sub(r'\s+', ' ', str(text or '')).strip()
+    if not candidate:
+        return False
+    lowered = candidate.lower()
+    if any(marker in lowered for marker in SAVINGS_LINE_EXCLUDE_TOKENS):
+        return False
+    if not any(token in lowered for token in SAVINGS_LINE_TOKENS):
+        return False
+    return not bool(re.search(r'-?\d{1,6}[\.,]\d{2}', candidate))
+
+
 def merge_lines(lines: list[str]) -> list[str]:
+    """Merge detached OCR/PDF labels with following price-only lines.
+
+    Safe targeted case:
+      KOOPZEGELS PREMIUM
+      0,80
+    becomes:
+      KOOPZEGELS PREMIUM 0,80
+
+    Metadata labels such as subtotaal, btw, pin and betaling remain excluded.
+    """
+    normalized_lines = [re.sub(r'\s+', ' ', str(line or '')).strip() for line in lines or []]
+    normalized_lines = [line for line in normalized_lines if line]
     merged: list[str] = []
-    buffer: str | None = None
+    i = 0
     amount_at_end = re.compile(r'-?\d{1,6}[\.,]\d{2}\s*(?:eur)?\s*$', re.IGNORECASE)
     price_only = re.compile(r'^-?\d{1,6}[\.,]\d{2}\s*(?:eur)?$', re.IGNORECASE)
-    for raw_line in lines or []:
-        text = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
-        if not text:
+
+    while i < len(normalized_lines):
+        text = normalized_lines[i]
+        next_text = normalized_lines[i + 1] if i + 1 < len(normalized_lines) else ''
+
+        if _is_savings_label_without_amount(text) and price_only.match(next_text):
+            merged.append(f'{text} {next_text}')
+            i += 2
             continue
-        if amount_at_end.search(text):
-            if buffer and price_only.match(text):
-                merged.append(f'{buffer} {text}')
-                buffer = None
-            else:
-                if buffer:
-                    merged.append(buffer)
-                    buffer = None
-                merged.append(text)
-            continue
-        if buffer:
-            merged.append(buffer)
-        buffer = text
-    if buffer:
-        merged.append(buffer)
+
+        if not amount_at_end.search(text) and price_only.match(next_text):
+            lowered = text.lower()
+            if not any(marker in lowered for marker in PRODUCT_LINE_BLACKLIST):
+                merged.append(f'{text} {next_text}')
+                i += 2
+                continue
+
+        merged.append(text)
+        i += 1
     return merged
 
 
@@ -113,8 +137,6 @@ def _generic_product_line_from_text(text: str, source_index: int) -> dict[str, A
     if not label and _is_savings_or_points_line(text):
         label = text[text.find(prices[0]) + len(prices[0]):].strip(' .:-')
     label = re.sub(r'\b\d+\s*[xX]\s*$', '', label).strip(' .:-')
-    # AH app PDFs may include the number of savings stamps before the label:
-    # "8 KOOPZEGELS PREMIUM 0,80". That leading count is quantity, not label text.
     leading_savings_qty = None
     if _is_savings_or_points_line(text):
         qty_prefix = re.match(r'^(\d+(?:[\.,]\d+)?)\s+(.+)$', label)
