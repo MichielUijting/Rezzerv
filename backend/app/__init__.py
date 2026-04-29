@@ -18,9 +18,14 @@ def _install_when_ready() -> None:
             except Exception:
                 pass
             try:
-                # NEW: patch recompute endpoint to use central policy
+                # Patch recompute endpoint
                 from .receipt_recompute_policy_patch import install_recompute_policy_patch
                 install_recompute_policy_patch(module)
+            except Exception:
+                pass
+            try:
+                # NEW: activate parser quality patch (koopzegels / punten als artikel)
+                from .services import receipt_parser_quality_patch  # noqa: F401
             except Exception:
                 pass
             return
