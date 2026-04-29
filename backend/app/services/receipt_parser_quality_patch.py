@@ -46,30 +46,58 @@ def _as_float(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
 
 
+def _amount_token_re() -> re.Pattern[str]:
+    return re.compile(r'-?\d{1,6}[\.,]\d{2}\s*(?:eur)?$', re.IGNORECASE)
+
+
+def _price_only_re() -> re.Pattern[str]:
+    return re.compile(r'^-?\d{1,6}[\.,]\d{2}\s*(?:eur)?$', re.IGNORECASE)
+
+
+def _is_savings_label_without_amount(text: str) -> bool:
+    candidate = re.sub(r'\s+', ' ', str(text or '')).strip()
+    if not candidate:
+        return False
+    lowered = candidate.lower()
+    if any(marker in lowered for marker in SAVINGS_LINE_EXCLUDE_TOKENS):
+        return False
+    if not any(token in lowered for token in SAVINGS_LINE_TOKENS):
+        return False
+    return not bool(re.search(r'-?\d{1,6}[\.,]\d{2}', candidate))
+
+
 def merge_lines(lines: list[str]) -> list[str]:
+    """Merge split OCR/PDF lines before parsing.
+
+    Crucial case for AH App PDFs:
+      KOOPZEGELS PREMIUM
+      0,80
+    must become:
+      KOOPZEGELS PREMIUM 0,80
+    while subtotaal/btw/pin/totaal blijven gefilterd by the normal parser.
+    """
+    normalized_lines = [re.sub(r'\s+', ' ', str(line or '')).strip() for line in lines or []]
+    normalized_lines = [line for line in normalized_lines if line]
     merged: list[str] = []
-    buffer: str | None = None
-    amount_at_end = re.compile(r'-?\d{1,6}[\.,]\d{2}\s*(?:eur)?\s*$', re.IGNORECASE)
-    price_only = re.compile(r'^-?\d{1,6}[\.,]\d{2}\s*(?:eur)?$', re.IGNORECASE)
-    for raw_line in lines or []:
-        text = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
-        if not text:
+    i = 0
+    amount_at_end = _amount_token_re()
+    price_only = _price_only_re()
+    while i < len(normalized_lines):
+        text = normalized_lines[i]
+        next_text = normalized_lines[i + 1] if i + 1 < len(normalized_lines) else ''
+        if _is_savings_label_without_amount(text) and price_only.match(next_text or ''):
+            merged.append(f'{text} {next_text}')
+            i += 2
             continue
-        if amount_at_end.search(text):
-            if buffer and price_only.match(text):
-                merged.append(f'{buffer} {text}')
-                buffer = None
-            else:
-                if buffer:
-                    merged.append(buffer)
-                    buffer = None
-                merged.append(text)
-            continue
-        if buffer:
-            merged.append(buffer)
-        buffer = text
-    if buffer:
-        merged.append(buffer)
+        # Generic detached-label merge, but do not merge metadata headings into prices.
+        if not amount_at_end.search(text) and price_only.match(next_text or ''):
+            lowered = text.lower()
+            if not any(marker in lowered for marker in PRODUCT_LINE_BLACKLIST):
+                merged.append(f'{text} {next_text}')
+                i += 2
+                continue
+        merged.append(text)
+        i += 1
     return merged
 
 
@@ -113,8 +141,6 @@ def _generic_product_line_from_text(text: str, source_index: int) -> dict[str, A
     if not label and _is_savings_or_points_line(text):
         label = text[text.find(prices[0]) + len(prices[0]):].strip(' .:-')
     label = re.sub(r'\b\d+\s*[xX]\s*$', '', label).strip(' .:-')
-    # AH app PDFs may include the number of savings stamps before the label:
-    # "8 KOOPZEGELS PREMIUM 0,80". That leading count is quantity, not label text.
     leading_savings_qty = None
     if _is_savings_or_points_line(text):
         qty_prefix = re.match(r'^(\d+(?:[\.,]\d+)?)\s+(.+)$', label)
@@ -300,8 +326,43 @@ def _parse_result_from_text_lines_with_merge(text_lines: list[str], filename: st
     return _reclassify_result(result)
 
 
+def _parse_pdf_text_with_quality_patch(file_bytes: bytes, filename: str, mime_type: str):
+    if not (str(mime_type or '').lower() == 'application/pdf' or str(filename or '').lower().endswith('.pdf')):
+        return None
+    extract = getattr(_receipt_service, '_extract_pdf_text', None)
+    preprocess = getattr(_receipt_service, '_preprocess_pdf_text', None)
+    normalize = getattr(_receipt_service, '_normalize_text_lines', None)
+    if not callable(extract) or not callable(normalize):
+        return None
+    text = extract(file_bytes)
+    if not text:
+        return None
+    if callable(preprocess):
+        text = preprocess(text)
+    text_lines = normalize(text)
+    if not text_lines:
+        return None
+    return _parse_result_from_text_lines_with_merge(text_lines, filename, mime_type=mime_type)
+
+
+def _should_use_patched_result(original_result: Any, patched_result: Any) -> bool:
+    if patched_result is None or not getattr(patched_result, 'is_receipt', False):
+        return False
+    original_lines = _normalize_receipt_lines(getattr(original_result, 'lines', None)) if original_result is not None else []
+    patched_lines = _normalize_receipt_lines(getattr(patched_result, 'lines', None))
+    if len(patched_lines) > len(original_lines) and _contains_savings_line(patched_lines):
+        return True
+    if _totals_match(getattr(patched_result, 'total_amount', None), patched_lines, _parse_decimal(getattr(patched_result, 'discount_total', None))) and not _totals_match(getattr(original_result, 'total_amount', None), original_lines, _parse_decimal(getattr(original_result, 'discount_total', None))):
+        return True
+    return False
+
+
 def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str):
-    return _reclassify_result(_ORIGINAL_PARSE_RECEIPT_CONTENT(file_bytes, filename, mime_type))
+    original_result = _reclassify_result(_ORIGINAL_PARSE_RECEIPT_CONTENT(file_bytes, filename, mime_type))
+    patched_pdf_result = _parse_pdf_text_with_quality_patch(file_bytes, filename, mime_type)
+    if _should_use_patched_result(original_result, patched_pdf_result):
+        return _reclassify_result(patched_pdf_result)
+    return original_result
 
 
 def install_parser_quality_patch(main_module: Any | None = None) -> bool:
