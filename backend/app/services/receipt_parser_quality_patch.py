@@ -10,46 +10,19 @@ _ORIGINAL_PARSE_RECEIPT_CONTENT = _receipt_service.parse_receipt_content
 _ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES = _receipt_service._parse_result_from_text_lines
 
 PRODUCT_LINE_BLACKLIST = (
-    'totaal',
-    'btw',
-    'betaling',
-    'betaald',
-    'pin',
-    'pinnen',
-    'bankpas',
-    'kaart',
-    'terminal',
-    'transactie',
-    'autorisatie',
-    'subtotaal',
-    'wisselgeld',
+    'totaal', 'btw', 'betaling', 'betaald', 'pin', 'pinnen', 'bankpas', 'kaart',
+    'terminal', 'transactie', 'autorisatie', 'subtotaal', 'wisselgeld',
 )
 
 SAVINGS_LINE_TOKENS = (
-    'koopzegel',
-    'koopzegels',
-    'spaarzegel',
-    'spaarzegels',
-    'e-spaarzegel',
-    'e-spaarzegels',
-    'espaarzegel',
-    'espaarzegels',
-    'pluspunt',
-    'pluspunten',
-    'spaarpunt',
-    'spaarpunten',
+    'koopzegel', 'koopzegels', 'spaarzegel', 'spaarzegels', 'e-spaarzegel',
+    'e-spaarzegels', 'espaarzegel', 'espaarzegels', 'pluspunt', 'pluspunten',
+    'spaarpunt', 'spaarpunten',
 )
 
 SAVINGS_LINE_EXCLUDE_TOKENS = (
-    'totaal',
-    'subtotaal',
-    'btw',
-    'betaling',
-    'betaald',
-    'bankpas',
-    'pin',
-    'pinnen',
-    'aantal artikelen',
+    'totaal', 'subtotaal', 'btw', 'betaling', 'betaald', 'bankpas', 'pin',
+    'pinnen', 'aantal artikelen',
 )
 
 
@@ -78,7 +51,6 @@ def merge_lines(lines: list[str]) -> list[str]:
     buffer: str | None = None
     amount_at_end = re.compile(r'-?\d{1,6}[\.,]\d{2}\s*(?:eur)?\s*$', re.IGNORECASE)
     price_only = re.compile(r'^-?\d{1,6}[\.,]\d{2}\s*(?:eur)?$', re.IGNORECASE)
-
     for raw_line in lines or []:
         text = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
         if not text:
@@ -141,12 +113,22 @@ def _generic_product_line_from_text(text: str, source_index: int) -> dict[str, A
     if not label and _is_savings_or_points_line(text):
         label = text[text.find(prices[0]) + len(prices[0]):].strip(' .:-')
     label = re.sub(r'\b\d+\s*[xX]\s*$', '', label).strip(' .:-')
+    # AH app PDFs may include the number of savings stamps before the label:
+    # "8 KOOPZEGELS PREMIUM 0,80". That leading count is quantity, not label text.
+    leading_savings_qty = None
+    if _is_savings_or_points_line(text):
+        qty_prefix = re.match(r'^(\d+(?:[\.,]\d+)?)\s+(.+)$', label)
+        if qty_prefix:
+            leading_savings_qty = _parse_decimal(qty_prefix.group(1))
+            label = qty_prefix.group(2).strip(' .:-')
     if not label or len(label) < 2:
         return None
     quantity = None
     qty_match = re.search(r'\b(\d+(?:[\.,]\d+)?)\s*[xX]\b', text)
     if qty_match:
         quantity = _as_float(_parse_decimal(qty_match.group(1)))
+    elif leading_savings_qty is not None:
+        quantity = _as_float(leading_savings_qty)
     elif _is_savings_or_points_line(text):
         quantity = 1.0
     return {
@@ -163,15 +145,18 @@ def _generic_product_line_from_text(text: str, source_index: int) -> dict[str, A
     }
 
 
+def _line_key(line: dict[str, Any]) -> tuple[str, str]:
+    return (
+        re.sub(r'\s+', ' ', str(line.get('normalized_label') or line.get('raw_label') or '')).strip().lower(),
+        str(line.get('line_total') or ''),
+    )
+
+
 def _dedupe_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     deduped: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
     for line in lines or []:
-        key = (
-            re.sub(r'\s+', ' ', str(line.get('normalized_label') or line.get('raw_label') or '')).strip().lower(),
-            str(line.get('line_total') or ''),
-            str(line.get('source_index') or ''),
-        )
+        key = (_line_key(line)[0], _line_key(line)[1], str(line.get('source_index') or ''))
         if key in seen:
             continue
         seen.add(key)
@@ -239,11 +224,21 @@ def _zero_discount_case(total_amount: Decimal | None, lines: list[dict[str, Any]
 
 
 def _contains_savings_line(lines: list[dict[str, Any]]) -> bool:
-    for line in lines or []:
-        label = str(line.get('raw_label') or line.get('normalized_label') or '')
-        if _is_savings_or_points_line(f"{label} {line.get('line_total') or ''}"):
-            return True
-    return False
+    return any(_is_savings_or_points_line(f"{line.get('raw_label') or line.get('normalized_label') or ''} {line.get('line_total') or ''}") for line in lines or [])
+
+
+def _merge_missing_savings_lines(existing_lines: list[dict[str, Any]], fallback_lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    merged = list(existing_lines or [])
+    existing_keys = {_line_key(line) for line in merged}
+    for line in fallback_lines or []:
+        if not _is_savings_or_points_line(f"{line.get('raw_label') or line.get('normalized_label') or ''} {line.get('line_total') or ''}"):
+            continue
+        key = _line_key(line)
+        if key in existing_keys:
+            continue
+        merged.append(line)
+        existing_keys.add(key)
+    return _dedupe_lines(merged)
 
 
 def _choose_better_lines(existing_lines: list[dict[str, Any]], fallback_lines: list[dict[str, Any]], total_amount: Decimal | None, discount_total: Decimal | None) -> list[dict[str, Any]]:
@@ -251,9 +246,10 @@ def _choose_better_lines(existing_lines: list[dict[str, Any]], fallback_lines: l
         return existing_lines
     if not existing_lines:
         return fallback_lines
-    existing_has_savings = _contains_savings_line(existing_lines)
-    fallback_has_savings = _contains_savings_line(fallback_lines)
-    if fallback_has_savings and not existing_has_savings and len(fallback_lines) >= len(existing_lines):
+    merged_with_savings = _merge_missing_savings_lines(existing_lines, fallback_lines)
+    if len(merged_with_savings) > len(existing_lines):
+        return merged_with_savings
+    if _contains_savings_line(fallback_lines) and not _contains_savings_line(existing_lines) and len(fallback_lines) >= len(existing_lines):
         return fallback_lines
     if _totals_match(total_amount, fallback_lines, discount_total) and not _totals_match(total_amount, existing_lines, discount_total):
         return fallback_lines
