@@ -12,20 +12,23 @@ def _install_when_ready() -> None:
         module = sys.modules.get('app.main')
         if module is not None and hasattr(module, 'app') and hasattr(module, 'engine'):
             try:
-                # Existing testing routes
                 from .testing_receipt_parser_diagnosis_routes import install_receipt_parser_diagnosis_routes
                 install_receipt_parser_diagnosis_routes(module.app, module.engine)
             except Exception:
                 pass
             try:
-                # Patch recompute endpoint
                 from .receipt_recompute_policy_patch import install_recompute_policy_patch
                 install_recompute_policy_patch(module)
             except Exception:
                 pass
             try:
-                # NEW: activate parser quality patch (koopzegels / punten als artikel)
-                from .services import receipt_parser_quality_patch  # noqa: F401
+                from .services.receipt_parser_quality_patch import install_parser_quality_patch
+                install_parser_quality_patch(module)
+            except Exception:
+                pass
+            try:
+                from .services.receipt_central_status_patch import install_central_status_patch
+                install_central_status_patch(module)
             except Exception:
                 pass
             return
