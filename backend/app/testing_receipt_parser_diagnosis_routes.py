@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import Response
 from sqlalchemy import text
 
-from app.services.receipt_service import parse_receipt_content
+from app.services import receipt_service
 
 
 def _status_label(parse_status: Any) -> str:
@@ -98,9 +98,9 @@ def _build_reparse_from_source(row: dict[str, Any]) -> tuple[dict[str, Any] | No
         return None, f'storage_file_missing:{storage_path}'
     try:
         file_bytes = path.read_bytes()
-        parse_result = parse_receipt_content(file_bytes, filename, mime_type or '')
+        parse_result = receipt_service.parse_receipt_content(file_bytes, filename, mime_type or '')
         return _parse_result_to_dict(parse_result), None
-    except Exception as exc:  # pragma: no cover - diagnostic endpoint must stay read-only and resilient
+    except Exception as exc:
         return None, f'{exc.__class__.__name__}: {exc}'
 
 
@@ -112,66 +112,33 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
             if row.get('name') == 'main':
                 database_path = str(row.get('file') or '')
                 break
-
-        receipt_rows = conn.execute(
-            text(
-                '''
-                SELECT
-                    rt.id AS receipt_table_id,
-                    rt.raw_receipt_id,
-                    rr.original_filename AS filename,
-                    rr.original_filename,
-                    rr.mime_type,
-                    rr.storage_path,
-                    rt.household_id,
-                    rt.store_name,
-                    rt.store_branch,
-                    rt.purchase_at,
-                    rt.total_amount,
-                    rt.discount_total,
-                    rt.currency,
-                    rt.parse_status,
-                    rt.confidence_score,
-                    rt.line_count,
-                    rt.created_at,
-                    rt.updated_at,
-                    rr.raw_status
-                FROM receipt_tables rt
-                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-                WHERE rt.household_id = :household_id
-                  AND rt.deleted_at IS NULL
-                  AND rr.deleted_at IS NULL
-                ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
-                '''
-            ),
-            {'household_id': str(household_id)},
-        ).mappings().all()
-
+        receipt_rows = conn.execute(text('''
+            SELECT rt.id AS receipt_table_id, rt.raw_receipt_id, rr.original_filename AS filename,
+                   rr.original_filename, rr.mime_type, rr.storage_path, rt.household_id, rt.store_name,
+                   rt.store_branch, rt.purchase_at, rt.total_amount, rt.discount_total, rt.currency,
+                   rt.parse_status, rt.confidence_score, rt.line_count, rt.created_at, rt.updated_at,
+                   rr.raw_status
+            FROM receipt_tables rt
+            JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+            WHERE rt.household_id = :household_id AND rt.deleted_at IS NULL AND rr.deleted_at IS NULL
+            ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
+        '''), {'household_id': str(household_id)}).mappings().all()
         receipt_ids = [str(row['receipt_table_id']) for row in receipt_rows]
         line_map: dict[str, list[dict[str, Any]]] = {receipt_id: [] for receipt_id in receipt_ids}
         if receipt_ids:
             placeholders = ','.join(f':id_{index}' for index, _ in enumerate(receipt_ids))
             params = {f'id_{index}': receipt_id for index, receipt_id in enumerate(receipt_ids)}
-            line_rows = conn.execute(
-                text(
-                    f'''
-                    SELECT
-                        id, receipt_table_id, line_index,
-                        raw_label, normalized_label, corrected_raw_label,
-                        quantity, corrected_quantity, unit, corrected_unit,
-                        unit_price, corrected_unit_price, line_total, corrected_line_total,
-                        discount_amount, barcode, matched_article_id, matched_global_product_id,
-                        article_match_status, confidence_score, is_deleted, is_validated
-                    FROM receipt_table_lines
-                    WHERE receipt_table_id IN ({placeholders})
-                    ORDER BY receipt_table_id, line_index, id
-                    '''
-                ),
-                params,
-            ).mappings().all()
+            line_rows = conn.execute(text(f'''
+                SELECT id, receipt_table_id, line_index, raw_label, normalized_label, corrected_raw_label,
+                       quantity, corrected_quantity, unit, corrected_unit, unit_price, corrected_unit_price,
+                       line_total, corrected_line_total, discount_amount, barcode, matched_article_id,
+                       matched_global_product_id, article_match_status, confidence_score, is_deleted, is_validated
+                FROM receipt_table_lines
+                WHERE receipt_table_id IN ({placeholders})
+                ORDER BY receipt_table_id, line_index, id
+            '''), params).mappings().all()
             for row in line_rows:
                 line_map.setdefault(str(row['receipt_table_id']), []).append(dict(row))
-
         column_rows = conn.execute(text('PRAGMA table_info(receipt_table_lines)')).mappings().all()
         line_columns = [str(row.get('name')) for row in column_rows]
 
@@ -180,7 +147,6 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
     parse_status_counts: dict[str, int] = {}
     total_lines = 0
     lines_with_label = 0
-
     for row in receipt_rows:
         row_dict = dict(row)
         receipt_id = str(row_dict['receipt_table_id'])
@@ -193,23 +159,17 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
             total_lines += 1
             if parsed_line.get('raw_label') or parsed_line.get('normalized_label') or parsed_line.get('corrected_raw_label') or parsed_line.get('article_name'):
                 lines_with_label += 1
-
         line_sum = round(sum(float(line.get('line_total') or 0) for line in accepted_lines), 2)
         discount_sum = round(sum(float(line.get('discount_amount') or 0) for line in accepted_lines), 2)
         total_amount = _to_number(row_dict.get('total_amount'))
         net_line_sum = round(line_sum + discount_sum, 2)
-        gross_difference = None
-        net_difference = None
-        if total_amount is not None:
-            gross_difference = round(float(total_amount) - line_sum, 2)
-            net_difference = round(float(total_amount) - net_line_sum, 2)
-
+        gross_difference = round(float(total_amount) - line_sum, 2) if total_amount is not None else None
+        net_difference = round(float(total_amount) - net_line_sum, 2) if total_amount is not None else None
         reparse_payload, reparse_error = _build_reparse_from_source(row_dict)
         label = _status_label(row_dict.get('parse_status'))
         parse_status = str(row_dict.get('parse_status') or 'unknown')
         status_counts[label] = status_counts.get(label, 0) + 1
         parse_status_counts[parse_status] = parse_status_counts.get(parse_status, 0) + 1
-
         receipt_payload = {
             'filename': row_dict.get('filename'),
             'receipt_table_id': receipt_id,
@@ -258,28 +218,9 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
     return {
         'generated_at': datetime.now(timezone.utc).isoformat(),
         'purpose': 'Rezzerv receipt parser diagnose v3 met per bon een read-only herparse van het opgeslagen bronbestand.',
-        'runtime_datastore': {
-            'datastore': 'sqlite',
-            'database_url': 'sqlite:////app/data/rezzerv.db',
-            'database': database_path or '/app/data/rezzerv.db',
-            'storage': 'sqlite_data',
-        },
-        'summary': {
-            'returned_receipts': len(receipts),
-            'status_counts_nl': status_counts,
-            'parse_status_counts': parse_status_counts,
-            'status_source': 'receipt_tables.parse_status',
-            'accepted_lines_total': total_lines,
-            'accepted_lines_with_label': lines_with_label,
-        },
-        'diagnosis_scope': {
-            'read_only': True,
-            'parser_changed': False,
-            'ocr_changed': False,
-            'status_classification_changed': False,
-            'ui_changed': False,
-            'bonspecific_fixes': False,
-        },
+        'runtime_datastore': {'datastore': 'sqlite', 'database_url': 'sqlite:////app/data/rezzerv.db', 'database': database_path or '/app/data/rezzerv.db', 'storage': 'sqlite_data'},
+        'summary': {'returned_receipts': len(receipts), 'status_counts_nl': status_counts, 'parse_status_counts': parse_status_counts, 'status_source': 'receipt_tables.parse_status', 'accepted_lines_total': total_lines, 'accepted_lines_with_label': lines_with_label},
+        'diagnosis_scope': {'read_only': True, 'parser_changed': False, 'ocr_changed': False, 'status_classification_changed': False, 'ui_changed': False, 'bonspecific_fixes': False},
         'receipts': receipts,
     }
 
@@ -302,8 +243,4 @@ def install_receipt_parser_diagnosis_routes(app, engine) -> None:
         payload = build_receipt_parser_diagnosis(engine, householdId)
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         filename = f'rezzerv_receipt_parser_diagnosis_{timestamp}.json'
-        return Response(
-            content=json.dumps(payload, ensure_ascii=False, indent=2),
-            media_type='application/json',
-            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
-        )
+        return Response(content=json.dumps(payload, ensure_ascii=False, indent=2), media_type='application/json', headers={'Content-Disposition': f'attachment; filename="{filename}"'})
