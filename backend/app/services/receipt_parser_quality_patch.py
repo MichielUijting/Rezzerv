@@ -25,6 +25,33 @@ PRODUCT_LINE_BLACKLIST = (
     'wisselgeld',
 )
 
+SAVINGS_LINE_TOKENS = (
+    'koopzegel',
+    'koopzegels',
+    'spaarzegel',
+    'spaarzegels',
+    'e-spaarzegel',
+    'e-spaarzegels',
+    'espaarzegel',
+    'espaarzegels',
+    'pluspunt',
+    'pluspunten',
+    'spaarpunt',
+    'spaarpunten',
+)
+
+SAVINGS_LINE_EXCLUDE_TOKENS = (
+    'totaal',
+    'subtotaal',
+    'btw',
+    'betaling',
+    'betaald',
+    'bankpas',
+    'pin',
+    'pinnen',
+    'aantal artikelen',
+)
+
 
 def _parse_decimal(value: Any) -> Decimal | None:
     if value is None:
@@ -78,6 +105,18 @@ def merge_lines(lines: list[str]) -> list[str]:
     return merged
 
 
+def _is_savings_or_points_line(text: str) -> bool:
+    candidate = re.sub(r'\s+', ' ', str(text or '')).strip()
+    if len(candidate) < 4:
+        return False
+    lowered = candidate.lower()
+    if not any(token in lowered for token in SAVINGS_LINE_TOKENS):
+        return False
+    if any(marker in lowered for marker in SAVINGS_LINE_EXCLUDE_TOKENS):
+        return False
+    return bool(re.search(r'-?\d{1,6}[\.,]\d{2}', candidate))
+
+
 def is_product_line(text: str) -> bool:
     candidate = re.sub(r'\s+', ' ', str(text or '')).strip()
     if len(candidate) < 4:
@@ -85,7 +124,7 @@ def is_product_line(text: str) -> bool:
     if not re.search(r'-?\d{1,6}[\.,]\d{2}', candidate):
         return False
     lowered = candidate.lower()
-    if any(marker in lowered for marker in PRODUCT_LINE_BLACKLIST):
+    if any(marker in lowered for marker in PRODUCT_LINE_BLACKLIST) and not _is_savings_or_points_line(candidate):
         return False
     if re.fullmatch(r'[-+]?\d+[\.,]\d{2}(?:\s+[-+]?\d+[\.,]\d{2})*', candidate):
         return False
@@ -103,6 +142,8 @@ def _generic_product_line_from_text(text: str, source_index: int) -> dict[str, A
     if line_total is None:
         return None
     label = text[: text.rfind(prices[-1])].strip(' .:-')
+    if not label and _is_savings_or_points_line(text):
+        label = text[text.find(prices[0]) + len(prices[0]):].strip(' .:-')
     label = re.sub(r'\b\d+\s*[xX]\s*$', '', label).strip(' .:-')
     if not label or len(label) < 2:
         return None
@@ -110,6 +151,8 @@ def _generic_product_line_from_text(text: str, source_index: int) -> dict[str, A
     qty_match = re.search(r'\b(\d+(?:[\.,]\d+)?)\s*[xX]\b', text)
     if qty_match:
         quantity = _as_float(_parse_decimal(qty_match.group(1)))
+    elif _is_savings_or_points_line(text):
+        quantity = 1.0
     return {
         'raw_label': label[:255],
         'normalized_label': label[:255],
