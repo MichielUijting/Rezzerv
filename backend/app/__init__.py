@@ -27,6 +27,11 @@ def _install_when_ready() -> None:
             except Exception:
                 pass
             try:
+                from .services.receipt_savings_filter_patch import install_receipt_savings_filter_patch
+                install_receipt_savings_filter_patch()
+            except Exception:
+                pass
+            try:
                 from .services.receipt_central_status_patch import install_central_status_patch
                 install_central_status_patch(module)
             except Exception:
