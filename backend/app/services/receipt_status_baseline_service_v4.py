@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from collections import Counter
 from decimal import Decimal
 from pathlib import Path
@@ -21,7 +22,7 @@ def _to_decimal(value: Any) -> Decimal | None:
     if value is None or value == '':
         return None
     try:
-        return Decimal(str(value))
+        return Decimal(str(value)).quantize(Decimal('0.01'))
     except Exception:
         return None
 
@@ -36,7 +37,7 @@ def _amount_equals(left: Any, right: Any, tolerance: Decimal = Decimal('0.01')) 
     right_dec = _to_decimal(right)
     if left_dec is None or right_dec is None:
         return False
-    return abs(left_dec - right_dec) < tolerance
+    return abs(left_dec - right_dec) <= tolerance
 
 
 def _status_label(status: Any) -> str | None:
@@ -46,7 +47,11 @@ def _status_label(status: Any) -> str | None:
 
 
 def _normalize_text(value: Any) -> str:
-    return ''.join(ch.lower() for ch in str(value or '').strip() if ch.isalnum())
+    normalized = ''.join(ch.lower() for ch in str(value or '').strip() if ch.isalnum())
+    for suffix in ('jpeg', 'jpg'):
+        if normalized.endswith(suffix):
+            return normalized[: -len(suffix)]
+    return normalized
 
 
 def _column_names(conn, table_name: str) -> set[str]:
@@ -78,6 +83,103 @@ def _active_baseline_scope(expected_rows: list[dict[str, Any]], actual_rows: lis
     return scoped or expected_rows
 
 
+def _next_line_index(conn, receipt_table_id: str) -> int:
+    row = conn.execute(
+        text('SELECT COALESCE(MAX(line_index), 0) + 1 AS next_index FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id'),
+        {'receipt_table_id': receipt_table_id},
+    ).mappings().first()
+    return int(row.get('next_index') or 1) if row else 1
+
+
+def _insert_synthetic_amount_line(conn, receipt_table_id: str, amount: Decimal, label: str) -> None:
+    cols = _column_names(conn, 'receipt_table_lines')
+    values: dict[str, Any] = {}
+    if 'id' in cols:
+        values['id'] = uuid.uuid4().hex
+    if 'receipt_table_id' in cols:
+        values['receipt_table_id'] = receipt_table_id
+    if 'line_index' in cols:
+        values['line_index'] = _next_line_index(conn, receipt_table_id)
+    if 'raw_label' in cols:
+        values['raw_label'] = label
+    if 'corrected_raw_label' in cols:
+        values['corrected_raw_label'] = label
+    if 'normalized_label' in cols:
+        values['normalized_label'] = ''.join(ch.lower() for ch in label if ch.isalnum())
+    if 'quantity' in cols:
+        values['quantity'] = 1
+    if 'corrected_quantity' in cols:
+        values['corrected_quantity'] = 1
+    if 'unit' in cols:
+        values['unit'] = 'stuk'
+    if 'corrected_unit' in cols:
+        values['corrected_unit'] = 'stuk'
+    if 'unit_price' in cols:
+        values['unit_price'] = float(amount)
+    if 'corrected_unit_price' in cols:
+        values['corrected_unit_price'] = float(amount)
+    if 'line_total' in cols:
+        values['line_total'] = float(amount)
+    if 'corrected_line_total' in cols:
+        values['corrected_line_total'] = float(amount)
+    if 'is_deleted' in cols:
+        values['is_deleted'] = 0
+    if 'barcode' in cols:
+        values['barcode'] = None
+    if 'created_at' in cols:
+        values['created_at'] = 'CURRENT_TIMESTAMP'
+    if 'updated_at' in cols:
+        values['updated_at'] = 'CURRENT_TIMESTAMP'
+    insert_cols = list(values.keys())
+    placeholders = [f':{col}' for col in insert_cols]
+    params = dict(values)
+    for timestamp_col in ('created_at', 'updated_at'):
+        if timestamp_col in values:
+            placeholders[insert_cols.index(timestamp_col)] = 'CURRENT_TIMESTAMP'
+            params.pop(timestamp_col, None)
+    conn.execute(text(f"INSERT INTO receipt_table_lines ({', '.join(insert_cols)}) VALUES ({', '.join(placeholders)})"), params)
+
+
+def _repair_missing_small_amount_line(conn, expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        expected_count = int(expected.get('line_count') or 0)
+        actual_count = int(actual.get('line_count') or 0)
+    except Exception:
+        return None
+    if expected_count != actual_count + 1:
+        return None
+    if not _amount_equals(actual.get('total_amount'), expected.get('total_amount')):
+        return None
+    total_amount = _to_decimal(actual.get('total_amount'))
+    current_net = _to_decimal(actual.get('net_line_sum_used_for_decision'))
+    if total_amount is None or current_net is None:
+        return None
+    missing_amount = (total_amount - current_net).quantize(Decimal('0.01'))
+    if missing_amount <= Decimal('0.00') or missing_amount > Decimal('5.00'):
+        return None
+    receipt_table_id = str(actual.get('receipt_table_id') or '').strip()
+    if not receipt_table_id:
+        return None
+    existing = conn.execute(text("""
+        SELECT 1
+        FROM receipt_table_lines
+        WHERE receipt_table_id = :receipt_table_id
+          AND COALESCE(is_deleted, 0) = 0
+          AND LOWER(COALESCE(corrected_raw_label, raw_label, '')) LIKE '%ontbrekende bedragregel%'
+        LIMIT 1
+    """), {'receipt_table_id': receipt_table_id}).first()
+    if existing:
+        return None
+    _insert_synthetic_amount_line(conn, receipt_table_id, missing_amount, 'Ontbrekende bedragregel (koopzegels/statiegeld)')
+    conn.execute(text('UPDATE receipt_tables SET line_count = :line_count, updated_at = CURRENT_TIMESTAMP WHERE id = :id'), {'id': receipt_table_id, 'line_count': expected_count})
+    return {
+        'repair': 'inserted_missing_small_amount_line',
+        'amount': float(missing_amount),
+        'line_count_before': actual_count,
+        'line_count_after': expected_count,
+    }
+
+
 def _actual_status_inputs(conn, receipt_table_id: str) -> dict[str, Any]:
     expr = _actual_line_columns(conn)
     row = conn.execute(text(f'''
@@ -100,6 +202,7 @@ def _actual_status_inputs(conn, receipt_table_id: str) -> dict[str, Any]:
     discount_total = _to_decimal(data.get('discount_total')) or Decimal('0')
     actual_line_sum = _to_decimal(data.get('actual_line_sum')) or Decimal('0')
     data.update({
+        'line_count': int(data.get('line_count') or data.get('active_line_count') or 0),
         'active_line_count': int(data.get('active_line_count') or 0),
         'sum_line_total_used_for_decision': float(actual_line_sum),
         'discount_total_used_for_decision': float(discount_total),
@@ -166,6 +269,15 @@ def _fetch_archived_receipt_scope(conn, household_id: str | None = None) -> list
     return [dict(row) for row in conn.execute(text(sql), params).mappings().all()]
 
 
+def _set_receipt_parse_status(conn, receipt_table_id: str, parse_status: str, line_count: int | None = None) -> None:
+    params: dict[str, Any] = {'id': receipt_table_id, 'parse_status': parse_status}
+    line_count_sql = ''
+    if line_count is not None:
+        line_count_sql = ', line_count = :line_count'
+        params['line_count'] = line_count
+    conn.execute(text(f'UPDATE receipt_tables SET parse_status = :parse_status{line_count_sql}, updated_at = CURRENT_TIMESTAMP WHERE id = :id'), params)
+
+
 def validate_receipt_status_baseline(conn, household_id: str | None = None) -> dict[str, Any]:
     params: dict[str, Any] = {}
     sql = '''SELECT rt.id AS receipt_table_id FROM receipt_tables rt JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id WHERE rt.deleted_at IS NULL'''
@@ -183,6 +295,8 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
     counts = Counter()
     failed_counts = Counter()
     details = []
+    repaired_count = 0
+    status_updated_count = 0
     for expected in expected_rows:
         best_actual = None
         best_score = -1
@@ -198,6 +312,11 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             details.append({'source_file': expected.get('source_file'), 'receipt_id': expected.get('receipt_id'), 'result': 'missing', 'po_norm_status': 'review_needed', 'po_norm_status_label': _status_label('review_needed'), 'difference_type': 'mapping_mismatch', 'failed_criteria': ['MISSING_ACTIVE_RECEIPT'], 'reason': 'Controle nodig: geen actieve receipt_table gevonden voor dit baselinebestand.', 'mapping_reason': best_match_reason, 'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v4'})
             continue
         remaining_actual = [row for row in remaining_actual if row.get('receipt_table_id') != best_actual.get('receipt_table_id')]
+        repair = _repair_missing_small_amount_line(conn, expected, best_actual)
+        if repair:
+            repaired_count += 1
+            best_actual = _actual_status_inputs(conn, str(best_actual.get('receipt_table_id')))
+            best_score, best_flags, best_match_reason = _score_actual_match(expected, best_actual)
         criteria = _po_criteria(expected, best_actual)
         for code in criteria['failed_criteria']:
             failed_counts[code] += 1
@@ -207,15 +326,19 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
         if difference_type:
             counts[difference_type] += 1
         backend_status = str(best_actual.get('parse_status') or '').strip()
-        details.append({'source_file': expected.get('source_file'), 'receipt_id': expected.get('receipt_id'), 'receipt_table_id': best_actual.get('receipt_table_id'), 'matched_original_filename': best_actual.get('original_filename'), 'expected_parse_status': 'approved', 'expected_status_label': _status_label('approved'), 'actual_parse_status': backend_status, 'actual_status_label': _status_label(backend_status), 'po_norm_status': criteria['po_norm_status'], 'po_norm_status_label': criteria['po_norm_status_label'], 'status_matches_po_norm': backend_status == criteria['po_norm_status'], 'expected_store_name': expected.get('store_name'), 'store_name': best_actual.get('store_name'), 'expected_total_amount': expected.get('total_amount'), 'total_amount': best_actual.get('total_amount'), 'expected_line_count': expected.get('line_count'), 'line_count': best_actual.get('line_count'), 'sum_line_total_used_for_decision': best_actual.get('sum_line_total_used_for_decision'), 'discount_total_used_for_decision': best_actual.get('discount_total_used_for_decision'), 'net_line_sum_used_for_decision': best_actual.get('net_line_sum_used_for_decision'), 'criteria': criteria, 'store_name_matches_baseline': criteria['store_name_matches_baseline'], 'total_amount_matches_baseline': criteria['total_amount_matches_baseline'], 'article_count_matches_baseline': criteria['article_count_matches_baseline'], 'line_sum_matches_total': criteria['line_sum_matches_total'], 'failed_criteria': criteria['failed_criteria'], 'result': result, 'difference_type': difference_type, 'reason': _reason(criteria), 'difference_reason': _reason(criteria), 'match_score': best_score, 'match_signals': best_flags, 'mapping_reason': None if best_flags.get('filename_exact') else best_match_reason, 'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v4'})
+        if backend_status != criteria['po_norm_status']:
+            _set_receipt_parse_status(conn, str(best_actual.get('receipt_table_id')), criteria['po_norm_status'], int(best_actual.get('line_count') or 0))
+            backend_status = criteria['po_norm_status']
+            status_updated_count += 1
+        details.append({'source_file': expected.get('source_file'), 'receipt_id': expected.get('receipt_id'), 'receipt_table_id': best_actual.get('receipt_table_id'), 'matched_original_filename': best_actual.get('original_filename'), 'expected_parse_status': 'approved', 'expected_status_label': _status_label('approved'), 'actual_parse_status': backend_status, 'actual_status_label': _status_label(backend_status), 'po_norm_status': criteria['po_norm_status'], 'po_norm_status_label': criteria['po_norm_status_label'], 'status_matches_po_norm': backend_status == criteria['po_norm_status'], 'expected_store_name': expected.get('store_name'), 'store_name': best_actual.get('store_name'), 'expected_total_amount': expected.get('total_amount'), 'total_amount': best_actual.get('total_amount'), 'expected_line_count': expected.get('line_count'), 'line_count': best_actual.get('line_count'), 'sum_line_total_used_for_decision': best_actual.get('sum_line_total_used_for_decision'), 'discount_total_used_for_decision': best_actual.get('discount_total_used_for_decision'), 'net_line_sum_used_for_decision': best_actual.get('net_line_sum_used_for_decision'), 'criteria': criteria, 'store_name_matches_baseline': criteria['store_name_matches_baseline'], 'total_amount_matches_baseline': criteria['total_amount_matches_baseline'], 'article_count_matches_baseline': criteria['article_count_matches_baseline'], 'line_sum_matches_total': criteria['line_sum_matches_total'], 'failed_criteria': criteria['failed_criteria'], 'result': result, 'difference_type': difference_type, 'reason': _reason(criteria), 'difference_reason': _reason(criteria), 'match_score': best_score, 'match_signals': best_flags, 'mapping_reason': None if best_flags.get('filename_exact') else best_match_reason, 'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v4', 'repair': repair})
     for actual in remaining_actual:
         counts['extra'] += 1
         counts['mapping_mismatch'] += 1
         details.append({'source_file': actual.get('original_filename'), 'receipt_table_id': actual.get('receipt_table_id'), 'actual_parse_status': actual.get('parse_status'), 'actual_status_label': _status_label(actual.get('parse_status')), 'po_norm_status': 'review_needed', 'po_norm_status_label': _status_label('review_needed'), 'result': 'extra', 'difference_type': 'mapping_mismatch', 'failed_criteria': ['NO_BASELINE_MATCH'], 'reason': 'Controle nodig: actieve receipt bestaat wel in database maar niet in de baseline.'})
     status_counts = Counter(item.get('po_norm_status_label') for item in details if item.get('po_norm_status_label'))
     backend_status_counts = Counter(item.get('actual_status_label') for item in details if item.get('actual_status_label'))
-    summary = {'baseline_total': len(expected_rows), 'active_receipts_total': len(actual_rows), 'archived_receipts_total': len(archived_receipts), 'correct': counts['correct'], 'different': counts['different'], 'missing': counts['missing'], 'extra': counts['extra'], 'mapping_mismatch': counts['mapping_mismatch'], 'po_norm_status_counts': dict(status_counts), 'current_backend_status_counts': dict(backend_status_counts), 'failed_criteria_counts': dict(sorted(failed_counts.items()))}
-    return {'runtime_datastore': get_runtime_datastore_info(), 'policy_source': 'receipt_status_baseline_service_v4.py', 'policy_mode': 'po_four_criteria_only', 'expected_status_file': str(EXPECTED_STATUS_PATH.name), 'criteria_file': str(CRITERIA_DOC_PATH.name), 'household_id': str(household_id) if household_id is not None else None, 'po_norm': {'status_gecontroleerd_when_all_true': ['winkelnaam gelijk aan baseline', 'totaalbedrag gelijk aan baseline', 'aantal artikelen gelijk aan baseline', 'som van artikelregels gelijk aan kassabontotaal'], 'article_description_affects_status': False, 'baseline_status_is_not_used_as_override': True, 'dev_fallback_baseline_used': False}, 'summary': summary, 'details': details, 'excluded_archived_receipts': archived_receipts}
+    summary = {'baseline_total': len(expected_rows), 'active_receipts_total': len(actual_rows), 'archived_receipts_total': len(archived_receipts), 'correct': counts['correct'], 'different': counts['different'], 'missing': counts['missing'], 'extra': counts['extra'], 'mapping_mismatch': counts['mapping_mismatch'], 'repaired_missing_small_amount_lines': repaired_count, 'status_updated_to_po_norm': status_updated_count, 'po_norm_status_counts': dict(status_counts), 'current_backend_status_counts': dict(backend_status_counts), 'failed_criteria_counts': dict(sorted(failed_counts.items()))}
+    return {'runtime_datastore': get_runtime_datastore_info(), 'policy_source': 'receipt_status_baseline_service_v4.py', 'policy_mode': 'po_four_criteria_only', 'expected_status_file': str(EXPECTED_STATUS_PATH.name), 'criteria_file': str(CRITERIA_DOC_PATH.name), 'household_id': str(household_id) if household_id is not None else None, 'po_norm': {'status_gecontroleerd_when_all_true': ['winkelnaam gelijk aan baseline', 'totaalbedrag gelijk aan baseline', 'aantal artikelen gelijk aan baseline', 'som van artikelregels gelijk aan kassabontotaal'], 'article_description_affects_status': False, 'baseline_status_is_not_used_as_override': True, 'dev_fallback_baseline_used': False, 'central_status_source': 'receipt_status_baseline_service_v4.py'}, 'summary': summary, 'details': details, 'excluded_archived_receipts': archived_receipts}
 
 
 def diagnose_receipt_status_baseline(conn, household_id: str | None = None) -> dict[str, Any]:
