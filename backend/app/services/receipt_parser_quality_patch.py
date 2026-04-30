@@ -11,10 +11,7 @@ _ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES = _receipt_service._parse_result_from_tex
 
 PRODUCT_LINE_BLACKLIST = (
     'totaal', 'btw', 'betaling', 'betaald', 'pin', 'pinnen', 'bankpas', 'kaart',
-    'terminal', 'transactie', 'autorisatie', 'subtotaal', 'wisselgeld', 'contant',
-    'bedrag', 'bedrag euro', 'bonnr', 'bon nr', 'factuur', 'klantbon', 'saldo',
-    'koopavond', 'te betalen', 'wissel', 'voordeel', 'korting', 'bonus', 'coupon',
-    'lidl plus', 'lidlplus', 'actieprijs', 'actie', 'retour', 'retouremballage',
+    'terminal', 'transactie', 'autorisatie', 'subtotaal', 'wisselgeld',
 )
 
 SAVINGS_LINE_TOKENS = (
@@ -27,8 +24,6 @@ SAVINGS_LINE_EXCLUDE_TOKENS = (
     'totaal', 'subtotaal', 'btw', 'betaling', 'betaald', 'bankpas', 'pin',
     'pinnen', 'aantal artikelen',
 )
-
-_AMOUNT_RE = re.compile(r'-?\d{1,6}[\.,]\d{2}')
 
 
 def _parse_decimal(value: Any) -> Decimal | None:
@@ -51,14 +46,6 @@ def _as_float(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
 
 
-def _amounts_close(left: Any, right: Any, tolerance: Decimal = Decimal('0.03')) -> bool:
-    left_dec = _parse_decimal(left)
-    right_dec = _parse_decimal(right)
-    if left_dec is None or right_dec is None:
-        return False
-    return abs(left_dec - right_dec) <= tolerance
-
-
 def _is_savings_label_without_amount(text: str) -> bool:
     candidate = re.sub(r'\s+', ' ', str(text or '')).strip()
     if not candidate:
@@ -68,39 +55,20 @@ def _is_savings_label_without_amount(text: str) -> bool:
         return False
     if not any(token in lowered for token in SAVINGS_LINE_TOKENS):
         return False
-    return not bool(_AMOUNT_RE.search(candidate))
-
-
-def _split_compound_product_lines(line: str) -> list[str]:
-    """Split OCR lines that contain multiple product/price pairs.
-
-    Example:
-      MELK 1,29 BROOD 2,49
-    becomes two product lines. Quantity patterns such as "2 x 1,25 2,50" are not split.
-    """
-    text = re.sub(r'\s+', ' ', str(line or '')).strip()
-    matches = list(_AMOUNT_RE.finditer(text))
-    if len(matches) <= 1:
-        return [text] if text else []
-    lowered = text.lower()
-    if re.search(r'\b\d+(?:[\.,]\d+)?\s*[xX]\b', text):
-        return [text]
-    if any(marker in lowered for marker in ('totaal', 'subtotaal', 'btw', 'betaling', 'pin', 'bankpas')):
-        return [text]
-    segments: list[str] = []
-    start = 0
-    for match in matches:
-        segment = text[start:match.end()].strip(' .;|')
-        if segment and re.search(r'[A-Za-zÀ-ÿ]', segment):
-            segments.append(segment)
-        start = match.end()
-    trailing = text[start:].strip(' .;|')
-    if trailing and segments:
-        segments[-1] = f'{segments[-1]} {trailing}'.strip()
-    return segments or [text]
+    return not bool(re.search(r'-?\d{1,6}[\.,]\d{2}', candidate))
 
 
 def merge_lines(lines: list[str]) -> list[str]:
+    """Merge detached OCR/PDF labels with following price-only lines.
+
+    Safe targeted case:
+      KOOPZEGELS PREMIUM
+      0,80
+    becomes:
+      KOOPZEGELS PREMIUM 0,80
+
+    Metadata labels such as subtotaal, btw, pin and betaling remain excluded.
+    """
     normalized_lines = [re.sub(r'\s+', ' ', str(line or '')).strip() for line in lines or []]
     normalized_lines = [line for line in normalized_lines if line]
     merged: list[str] = []
@@ -113,18 +81,18 @@ def merge_lines(lines: list[str]) -> list[str]:
         next_text = normalized_lines[i + 1] if i + 1 < len(normalized_lines) else ''
 
         if _is_savings_label_without_amount(text) and price_only.match(next_text):
-            merged.extend(_split_compound_product_lines(f'{text} {next_text}'))
+            merged.append(f'{text} {next_text}')
             i += 2
             continue
 
         if not amount_at_end.search(text) and price_only.match(next_text):
             lowered = text.lower()
             if not any(marker in lowered for marker in PRODUCT_LINE_BLACKLIST):
-                merged.extend(_split_compound_product_lines(f'{text} {next_text}'))
+                merged.append(f'{text} {next_text}')
                 i += 2
                 continue
 
-        merged.extend(_split_compound_product_lines(text))
+        merged.append(text)
         i += 1
     return merged
 
@@ -138,21 +106,19 @@ def _is_savings_or_points_line(text: str) -> bool:
         return False
     if any(marker in lowered for marker in SAVINGS_LINE_EXCLUDE_TOKENS):
         return False
-    return bool(_AMOUNT_RE.search(candidate))
+    return bool(re.search(r'-?\d{1,6}[\.,]\d{2}', candidate))
 
 
 def is_product_line(text: str) -> bool:
     candidate = re.sub(r'\s+', ' ', str(text or '')).strip()
     if len(candidate) < 4:
         return False
-    if not _AMOUNT_RE.search(candidate):
+    if not re.search(r'-?\d{1,6}[\.,]\d{2}', candidate):
         return False
     lowered = candidate.lower()
     if any(marker in lowered for marker in PRODUCT_LINE_BLACKLIST) and not _is_savings_or_points_line(candidate):
         return False
     if re.fullmatch(r'[-+]?\d+[\.,]\d{2}(?:\s+[-+]?\d+[\.,]\d{2})*', candidate):
-        return False
-    if not re.search(r'[A-Za-zÀ-ÿ]', candidate):
         return False
     return True
 
@@ -160,7 +126,7 @@ def is_product_line(text: str) -> bool:
 def _generic_product_line_from_text(text: str, source_index: int) -> dict[str, Any] | None:
     if not is_product_line(text):
         return None
-    prices = _AMOUNT_RE.findall(text)
+    prices = re.findall(r'-?\d{1,6}[\.,]\d{2}', text)
     if not prices:
         return None
     unit_price = _parse_decimal(prices[0])
@@ -220,34 +186,13 @@ def _dedupe_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return deduped
 
 
-def _expand_quantity_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    expanded: list[dict[str, Any]] = []
-    for line in lines or []:
-        quantity = _parse_decimal(line.get('quantity'))
-        unit_price = _parse_decimal(line.get('unit_price'))
-        line_total = _parse_decimal(line.get('line_total'))
-        if quantity is not None and unit_price is not None and line_total is not None:
-            if quantity == quantity.to_integral_value() and Decimal('2') <= quantity <= Decimal('6'):
-                if _amounts_close(unit_price * quantity, line_total):
-                    for copy_index in range(int(quantity)):
-                        item = dict(line)
-                        item['quantity'] = 1.0
-                        item['line_total'] = float(unit_price)
-                        item['unit_price'] = float(unit_price)
-                        item['source_index'] = f"{line.get('source_index')}.{copy_index + 1}"
-                        expanded.append(item)
-                    continue
-        expanded.append(line)
-    return expanded
-
-
 def _generic_lines_from_merged_text(text_lines: list[str]) -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for index, line in enumerate(merge_lines(text_lines)):
         parsed = _generic_product_line_from_text(line, index)
         if parsed is not None:
             result.append(parsed)
-    return _dedupe_lines(_expand_quantity_lines(result))
+    return _dedupe_lines(result)
 
 
 def _normalize_receipt_lines(lines: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
@@ -258,13 +203,11 @@ def _normalize_receipt_lines(lines: list[dict[str, Any]] | None) -> list[dict[st
         label = str(line.get('normalized_label') or line.get('raw_label') or '').strip()
         if not label:
             continue
-        if not is_product_line(f"{label} {line.get('line_total')}"):
-            continue
         cleaned = dict(line)
         cleaned['normalized_label'] = label
         cleaned['raw_label'] = str(cleaned.get('raw_label') or label).strip()
         normalized.append(cleaned)
-    return _dedupe_lines(_expand_quantity_lines(normalized))
+    return _dedupe_lines(normalized)
 
 
 def _line_financials(lines: list[dict[str, Any]], discount_total: Decimal | None) -> tuple[Decimal, Decimal, Decimal]:
@@ -326,7 +269,7 @@ def _choose_better_lines(existing_lines: list[dict[str, Any]], fallback_lines: l
     if not existing_lines:
         return fallback_lines
     merged_with_savings = _merge_missing_savings_lines(existing_lines, fallback_lines)
-    if _totals_match(total_amount, merged_with_savings, discount_total) and len(merged_with_savings) >= len(existing_lines):
+    if len(merged_with_savings) > len(existing_lines):
         return merged_with_savings
     if _contains_savings_line(fallback_lines) and not _contains_savings_line(existing_lines) and len(fallback_lines) >= len(existing_lines):
         return fallback_lines
