@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import traceback
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -10,6 +9,7 @@ from fastapi import Response
 from sqlalchemy import text
 
 from app.services import receipt_service
+from app.services.receipt_status_baseline_service import diagnose_receipt_status_baseline
 
 
 def _status_label(parse_status: Any) -> str:
@@ -31,6 +31,14 @@ def _to_number(value: Any) -> float | int | None:
     if abs(number - int(number)) < 0.000001:
         return int(number)
     return round(number, 4)
+
+
+def _normal_key(value: Any) -> str:
+    text_value = ''.join(ch.lower() for ch in str(value or '').strip() if ch.isalnum())
+    for suffix in ('jpeg', 'jpg'):
+        if text_value.endswith(suffix):
+            return text_value[: -len(suffix)]
+    return text_value
 
 
 def _parse_result_to_dict(result: Any) -> dict[str, Any]:
@@ -104,8 +112,51 @@ def _build_reparse_from_source(row: dict[str, Any]) -> tuple[dict[str, Any] | No
         return None, f'{exc.__class__.__name__}: {exc}'
 
 
+def _criteria_index(conn, household_id: str) -> dict[str, dict[str, Any]]:
+    diagnosis = diagnose_receipt_status_baseline(conn, household_id=household_id)
+    result: dict[str, dict[str, Any]] = {}
+    for item in diagnosis.get('criterion_mismatches', []) + diagnosis.get('backend_status_mismatches', []) + diagnosis.get('mapping_mismatches', []):
+        key = _normal_key(item.get('matched_original_filename') or item.get('source_file'))
+        if key:
+            result[key] = item
+    # diagnose only exposes mismatches in top-level arrays, so also reconstruct from validation endpoint when available is not needed.
+    return result
+
+
+def _baseline_detail_for_receipt(criteria_by_file: dict[str, dict[str, Any]], filename: Any) -> dict[str, Any] | None:
+    return criteria_by_file.get(_normal_key(filename))
+
+
+def _criteria_summary_from_detail(detail: dict[str, Any] | None, accepted_lines: list[dict[str, Any]], financials: dict[str, Any]) -> dict[str, Any]:
+    if not detail:
+        return {
+            'available': False,
+            'message': 'Geen baseline-afwijking gevonden in diagnose-index; bon is waarschijnlijk Gecontroleerd of niet in baseline-scope.',
+        }
+    return {
+        'available': True,
+        'expected_store_name': detail.get('expected_store_name'),
+        'actual_store_name': detail.get('store_name'),
+        'store_name_matches_baseline': detail.get('store_name_matches_baseline'),
+        'expected_total_amount': detail.get('expected_total_amount'),
+        'actual_total_amount': detail.get('total_amount'),
+        'total_amount_matches_baseline': detail.get('total_amount_matches_baseline'),
+        'expected_line_count': detail.get('expected_line_count'),
+        'actual_line_count': detail.get('line_count') if detail.get('line_count') is not None else len(accepted_lines),
+        'article_count_matches_baseline': detail.get('article_count_matches_baseline'),
+        'expected_sum_relation': 'som artikelen = totaalprijs',
+        'actual_line_sum': detail.get('sum_line_total_used_for_decision') if detail.get('sum_line_total_used_for_decision') is not None else financials.get('line_sum'),
+        'actual_net_line_sum': detail.get('net_line_sum_used_for_decision') if detail.get('net_line_sum_used_for_decision') is not None else financials.get('net_line_sum'),
+        'line_sum_matches_total': detail.get('line_sum_matches_total'),
+        'failed_criteria': detail.get('failed_criteria') or [],
+        'status_by_four_criteria': detail.get('po_norm_status_label') or detail.get('actual_status_label'),
+        'reason': detail.get('reason') or detail.get('difference_reason'),
+    }
+
+
 def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str, Any]:
     with engine.begin() as conn:
+        criteria_by_file = _criteria_index(conn, str(household_id))
         datastore = conn.execute(text('PRAGMA database_list')).mappings().all()
         database_path = ''
         for row in datastore:
@@ -165,6 +216,19 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
         net_line_sum = round(line_sum + discount_sum, 2)
         gross_difference = round(float(total_amount) - line_sum, 2) if total_amount is not None else None
         net_difference = round(float(total_amount) - net_line_sum, 2) if total_amount is not None else None
+        financials = {
+            'total_amount': total_amount,
+            'line_sum': line_sum,
+            'discount_sum': discount_sum,
+            'net_line_sum': net_line_sum,
+            'gross_difference': gross_difference,
+            'net_difference': net_difference,
+            'difference': net_difference,
+            'line_count_reported': _to_number(row_dict.get('line_count')),
+            'line_count_actual': len(accepted_lines),
+        }
+        baseline_detail = _baseline_detail_for_receipt(criteria_by_file, row_dict.get('filename'))
+        baseline_criteria = _criteria_summary_from_detail(baseline_detail, accepted_lines, financials)
         reparse_payload, reparse_error = _build_reparse_from_source(row_dict)
         label = _status_label(row_dict.get('parse_status'))
         parse_status = str(row_dict.get('parse_status') or 'unknown')
@@ -185,17 +249,8 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
             'normalized_lines': [],
             'accepted_lines': accepted_lines,
             'rejected_lines': [],
-            'financials': {
-                'total_amount': total_amount,
-                'line_sum': line_sum,
-                'discount_sum': discount_sum,
-                'net_line_sum': net_line_sum,
-                'gross_difference': gross_difference,
-                'net_difference': net_difference,
-                'difference': net_difference,
-                'line_count_reported': _to_number(row_dict.get('line_count')),
-                'line_count_actual': len(accepted_lines),
-            },
+            'baseline_v4_criteria': baseline_criteria,
+            'financials': financials,
             'status_decision': {
                 'parse_status': row_dict.get('parse_status'),
                 'status_label_nl': label,
@@ -204,7 +259,7 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
             },
             'diagnosis_notes': [
                 'Read-only diagnose: parser, OCR, statusclassificatie en UI worden niet gewijzigd.',
-                'Ruwe OCR-regels en parser-afwijzingsredenen zijn alleen beschikbaar als ze al in de database worden opgeslagen.',
+                'baseline_v4_criteria toont per bon de vier harde PO-criteria wanneer er een afwijking is.',
                 'reparsed_from_source is een live herparse van het opgeslagen bronbestand voor analyse; de database wordt niet aangepast.',
                 'Gevonden receipt_table_lines-kolommen: ' + ', '.join(line_columns),
             ],
@@ -217,7 +272,7 @@ def build_receipt_parser_diagnosis(engine, household_id: str = '1') -> dict[str,
 
     return {
         'generated_at': datetime.now(timezone.utc).isoformat(),
-        'purpose': 'Rezzerv receipt parser diagnose v3 met per bon een read-only herparse van het opgeslagen bronbestand.',
+        'purpose': 'Rezzerv parser diagnose v4: per bon parserregels naast Baseline V4-criteria, read-only.',
         'runtime_datastore': {'datastore': 'sqlite', 'database_url': 'sqlite:////app/data/rezzerv.db', 'database': database_path or '/app/data/rezzerv.db', 'storage': 'sqlite_data'},
         'summary': {'returned_receipts': len(receipts), 'status_counts_nl': status_counts, 'parse_status_counts': parse_status_counts, 'status_source': 'receipt_tables.parse_status', 'accepted_lines_total': total_lines, 'accepted_lines_with_label': lines_with_label},
         'diagnosis_scope': {'read_only': True, 'parser_changed': False, 'ocr_changed': False, 'status_classification_changed': False, 'ui_changed': False, 'bonspecific_fixes': False},
