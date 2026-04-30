@@ -6,6 +6,7 @@ from typing import Any
 
 from app.services import receipt_service
 
+# Keep a stable reference to the original filter after the core token list is corrected.
 _ORIGINAL_FILTER = receipt_service._filter_non_product_receipt_lines
 
 SAVINGS_WORDS = ('koopzegel', 'koopzegels', 'spaarzegel', 'spaarzegels', 'pluspunt', 'pluspunten')
@@ -32,6 +33,23 @@ def _key(line: dict[str, Any]) -> tuple[str, str, str]:
     return (label, str(line.get('line_total') or ''), str(line.get('source_index') or ''))
 
 
+def _install_core_savings_tokens() -> None:
+    """Correct the core parser's non-product label list.
+
+    The core parser already detects lines such as `8 KOOPZEGELS PREMIUM 0,80`,
+    but the shared non-product label check rejects the cleaned label
+    `KOOPZEGELS PREMIUM`. That prevents the line from ever becoming a receipt
+    item. Remove only priced-savings words from the general non-product token
+    tuple; metadata words such as totaal, subtotaal, btw and betaling stay in
+    place.
+    """
+    current = tuple(getattr(receipt_service, 'RECEIPT_NON_PRODUCT_LABEL_TOKENS', ()))
+    allow_as_priced_items = {'zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunt', 'pluspunten', 'spaarzegel', 'spaarzegels'}
+    receipt_service.RECEIPT_NON_PRODUCT_LABEL_TOKENS = tuple(
+        token for token in current if str(token).strip().lower() not in allow_as_priced_items
+    )
+
+
 def _filter_with_savings(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     keep = [line for line in (lines or []) if _is_priced_savings(line)]
     rest = [line for line in (lines or []) if not _is_priced_savings(line)]
@@ -46,6 +64,7 @@ def _filter_with_savings(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def install_receipt_savings_filter_patch() -> bool:
+    _install_core_savings_tokens()
     if getattr(receipt_service, '_rezzerv_savings_filter_patch_installed', False):
         return False
     receipt_service._filter_non_product_receipt_lines = _filter_with_savings
