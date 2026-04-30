@@ -12,6 +12,8 @@ _ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES = _receipt_service._parse_result_from_tex
 PRODUCT_LINE_BLACKLIST = (
     'totaal', 'btw', 'betaling', 'betaald', 'pin', 'pinnen', 'bankpas', 'kaart',
     'terminal', 'transactie', 'autorisatie', 'subtotaal', 'wisselgeld',
+    'bonus', 'korting', 'coupon', 'lidl plus', 'lidlplus', 'voordeel',
+    'retour', 'retouremballage', 'statiegeld retour', 'actieprijs',
 )
 
 SAVINGS_LINE_TOKENS = (
