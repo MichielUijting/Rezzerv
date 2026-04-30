@@ -161,60 +161,6 @@ def _score_actual_match(expected: dict[str, Any], actual: dict[str, Any]) -> tup
     return score, flags, '; '.join(reasons)
 
 
-def _apply_supermarket_baseline_reconciliation(conn, expected: dict[str, Any], actual: dict[str, Any], match_flags: dict[str, bool]) -> dict[str, Any]:
-    """Reconcile supermarket receipts after parsing, without touching archived receipts.
-
-    This is intentionally strict: it only applies when the source file is the same and the
-    kassabontotaal already matches the PO baseline. It does not invent receipts or override
-    mappings; it normalizes the parsed header fields that are known to be unstable in OCR
-    output for supermarket receipts: filiaalnaam, article count and balancing discount/fee.
-    """
-    if not match_flags.get('filename_exact') or not match_flags.get('total_match'):
-        return actual
-    receipt_table_id = str(actual.get('receipt_table_id') or '').strip()
-    if not receipt_table_id:
-        return actual
-    expected_total = _to_decimal(expected.get('total_amount'))
-    actual_line_sum = _to_decimal(actual.get('sum_line_total_used_for_decision')) or Decimal('0.00')
-    if expected_total is None:
-        return actual
-    balancing_discount = (expected_total - actual_line_sum).quantize(Decimal('0.01'))
-    expected_line_count = int(expected.get('line_count') or actual.get('line_count') or 0)
-    expected_store = expected.get('store_name') or actual.get('store_name')
-    conn.execute(
-        text('''
-            UPDATE receipt_tables
-            SET store_name = :store_name,
-                line_count = :line_count,
-                total_amount = :total_amount,
-                discount_total = :discount_total,
-                parse_status = 'approved',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-              AND deleted_at IS NULL
-        '''),
-        {
-            'id': receipt_table_id,
-            'store_name': expected_store,
-            'line_count': expected_line_count,
-            'total_amount': float(expected_total),
-            'discount_total': float(balancing_discount),
-        },
-    )
-    reconciled = dict(actual)
-    reconciled.update({
-        'store_name': expected_store,
-        'line_count': expected_line_count,
-        'total_amount': float(expected_total),
-        'discount_total': float(balancing_discount),
-        'parse_status': 'approved',
-        'discount_total_used_for_decision': float(balancing_discount),
-        'net_line_sum_used_for_decision': float((actual_line_sum + balancing_discount).quantize(Decimal('0.01'))),
-        'baseline_reconciliation_applied': True,
-    })
-    return reconciled
-
-
 def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
     store_ok = _store_matches_baseline(expected.get('store_name'), actual.get('store_name'))
     total_ok = _amount_equals(actual.get('total_amount'), expected.get('total_amount'))
@@ -277,7 +223,6 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
     failed_counts = Counter()
     details = []
     status_updated_count = 0
-    reconciliation_count = 0
     for expected in expected_rows:
         best_actual = None
         best_score = -1
@@ -293,10 +238,6 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             details.append({'source_file': expected.get('source_file'), 'receipt_id': expected.get('receipt_id'), 'result': 'missing', 'po_norm_status': 'review_needed', 'po_norm_status_label': _status_label('review_needed'), 'difference_type': 'mapping_mismatch', 'failed_criteria': ['MISSING_ACTIVE_RECEIPT'], 'reason': 'Controle nodig: geen actieve receipt_table gevonden voor dit baselinebestand.', 'mapping_reason': best_match_reason, 'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v4'})
             continue
         remaining_actual = [row for row in remaining_actual if row.get('receipt_table_id') != best_actual.get('receipt_table_id')]
-        before_reconciled = bool(best_actual.get('baseline_reconciliation_applied'))
-        best_actual = _apply_supermarket_baseline_reconciliation(conn, expected, best_actual, best_flags)
-        if best_actual.get('baseline_reconciliation_applied') and not before_reconciled:
-            reconciliation_count += 1
         criteria = _po_criteria(expected, best_actual)
         for code in criteria['failed_criteria']:
             failed_counts[code] += 1
@@ -310,15 +251,15 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             _set_receipt_parse_status(conn, str(best_actual.get('receipt_table_id')), criteria['po_norm_status'], int(best_actual.get('line_count') or 0))
             backend_status = criteria['po_norm_status']
             status_updated_count += 1
-        details.append({'source_file': expected.get('source_file'), 'receipt_id': expected.get('receipt_id'), 'receipt_table_id': best_actual.get('receipt_table_id'), 'matched_original_filename': best_actual.get('original_filename'), 'expected_parse_status': 'approved', 'expected_status_label': _status_label('approved'), 'actual_parse_status': backend_status, 'actual_status_label': _status_label(backend_status), 'po_norm_status': criteria['po_norm_status'], 'po_norm_status_label': criteria['po_norm_status_label'], 'status_matches_po_norm': backend_status == criteria['po_norm_status'], 'expected_store_name': expected.get('store_name'), 'store_name': best_actual.get('store_name'), 'expected_total_amount': expected.get('total_amount'), 'total_amount': best_actual.get('total_amount'), 'expected_line_count': expected.get('line_count'), 'line_count': best_actual.get('line_count'), 'sum_line_total_used_for_decision': best_actual.get('sum_line_total_used_for_decision'), 'discount_total_used_for_decision': best_actual.get('discount_total_used_for_decision'), 'net_line_sum_used_for_decision': best_actual.get('net_line_sum_used_for_decision'), 'baseline_reconciliation_applied': bool(best_actual.get('baseline_reconciliation_applied')), 'criteria': criteria, 'store_name_matches_baseline': criteria['store_name_matches_baseline'], 'total_amount_matches_baseline': criteria['total_amount_matches_baseline'], 'article_count_matches_baseline': criteria['article_count_matches_baseline'], 'line_sum_matches_total': criteria['line_sum_matches_total'], 'failed_criteria': criteria['failed_criteria'], 'result': result, 'difference_type': difference_type, 'reason': _reason(criteria), 'difference_reason': _reason(criteria), 'match_score': best_score, 'match_signals': best_flags, 'mapping_reason': None if best_flags.get('filename_exact') else best_match_reason, 'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v4'})
+        details.append({'source_file': expected.get('source_file'), 'receipt_id': expected.get('receipt_id'), 'receipt_table_id': best_actual.get('receipt_table_id'), 'matched_original_filename': best_actual.get('original_filename'), 'expected_parse_status': 'approved', 'expected_status_label': _status_label('approved'), 'actual_parse_status': backend_status, 'actual_status_label': _status_label(backend_status), 'po_norm_status': criteria['po_norm_status'], 'po_norm_status_label': criteria['po_norm_status_label'], 'status_matches_po_norm': backend_status == criteria['po_norm_status'], 'expected_store_name': expected.get('store_name'), 'store_name': best_actual.get('store_name'), 'expected_total_amount': expected.get('total_amount'), 'total_amount': best_actual.get('total_amount'), 'expected_line_count': expected.get('line_count'), 'line_count': best_actual.get('line_count'), 'sum_line_total_used_for_decision': best_actual.get('sum_line_total_used_for_decision'), 'discount_total_used_for_decision': best_actual.get('discount_total_used_for_decision'), 'net_line_sum_used_for_decision': best_actual.get('net_line_sum_used_for_decision'), 'baseline_reconciliation_applied': False, 'criteria': criteria, 'store_name_matches_baseline': criteria['store_name_matches_baseline'], 'total_amount_matches_baseline': criteria['total_amount_matches_baseline'], 'article_count_matches_baseline': criteria['article_count_matches_baseline'], 'line_sum_matches_total': criteria['line_sum_matches_total'], 'failed_criteria': criteria['failed_criteria'], 'result': result, 'difference_type': difference_type, 'reason': _reason(criteria), 'difference_reason': _reason(criteria), 'match_score': best_score, 'match_signals': best_flags, 'mapping_reason': None if best_flags.get('filename_exact') else best_match_reason, 'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v4'})
     for actual in remaining_actual:
         counts['extra'] += 1
         counts['mapping_mismatch'] += 1
         details.append({'source_file': actual.get('original_filename'), 'receipt_table_id': actual.get('receipt_table_id'), 'actual_parse_status': actual.get('parse_status'), 'actual_status_label': _status_label(actual.get('parse_status')), 'po_norm_status': 'review_needed', 'po_norm_status_label': _status_label('review_needed'), 'result': 'extra', 'difference_type': 'mapping_mismatch', 'failed_criteria': ['NO_BASELINE_MATCH'], 'reason': 'Controle nodig: actieve receipt bestaat wel in database maar niet in de baseline.'})
     status_counts = Counter(item.get('po_norm_status_label') for item in details if item.get('po_norm_status_label'))
     backend_status_counts = Counter(item.get('actual_status_label') for item in details if item.get('actual_status_label'))
-    summary = {'baseline_total': len(expected_rows), 'active_receipts_total': len(actual_rows), 'archived_receipts_total': len(archived_receipts), 'correct': counts['correct'], 'different': counts['different'], 'missing': counts['missing'], 'extra': counts['extra'], 'mapping_mismatch': counts['mapping_mismatch'], 'status_updated_to_po_norm': status_updated_count, 'baseline_reconciliation_applied': reconciliation_count, 'po_norm_status_counts': dict(status_counts), 'current_backend_status_counts': dict(backend_status_counts), 'failed_criteria_counts': dict(sorted(failed_counts.items()))}
-    return {'runtime_datastore': get_runtime_datastore_info(), 'policy_source': 'receipt_status_baseline_service_v4.py', 'policy_mode': 'po_four_criteria_with_supermarket_reconciliation', 'expected_status_file': str(EXPECTED_STATUS_PATH.name), 'criteria_file': str(CRITERIA_DOC_PATH.name), 'household_id': str(household_id) if household_id is not None else None, 'po_norm': {'status_gecontroleerd_when_all_true': ['bestandsnaam exact gekoppeld', 'totaalbedrag gelijk aan baseline', 'winkelketen genormaliseerd gelijk aan baseline', 'artikelcount en regelsom na supermarkt-reconciliatie gelijk aan kassabontotaal'], 'article_description_affects_status': False, 'baseline_status_is_not_used_as_override': True, 'dev_fallback_baseline_used': False, 'central_status_source': 'receipt_status_baseline_service_v4.py'}, 'summary': summary, 'details': details, 'excluded_archived_receipts': archived_receipts}
+    summary = {'baseline_total': len(expected_rows), 'active_receipts_total': len(actual_rows), 'archived_receipts_total': len(archived_receipts), 'correct': counts['correct'], 'different': counts['different'], 'missing': counts['missing'], 'extra': counts['extra'], 'mapping_mismatch': counts['mapping_mismatch'], 'status_updated_to_po_norm': status_updated_count, 'baseline_reconciliation_applied': 0, 'po_norm_status_counts': dict(status_counts), 'current_backend_status_counts': dict(backend_status_counts), 'failed_criteria_counts': dict(sorted(failed_counts.items()))}
+    return {'runtime_datastore': get_runtime_datastore_info(), 'policy_source': 'receipt_status_baseline_service_v4.py', 'policy_mode': 'po_four_criteria_no_reconciliation', 'expected_status_file': str(EXPECTED_STATUS_PATH.name), 'criteria_file': str(CRITERIA_DOC_PATH.name), 'household_id': str(household_id) if household_id is not None else None, 'po_norm': {'status_gecontroleerd_when_all_true': ['winkelnaam gelijk aan baseline', 'totaalbedrag gelijk aan baseline', 'aantal artikelen gelijk aan baseline', 'som van artikelregels gelijk aan kassabontotaal'], 'article_description_affects_status': False, 'baseline_status_is_not_used_as_override': True, 'dev_fallback_baseline_used': False, 'central_status_source': 'receipt_status_baseline_service_v4.py', 'reconciliation_allowed': False}, 'summary': summary, 'details': details, 'excluded_archived_receipts': archived_receipts}
 
 
 def diagnose_receipt_status_baseline(conn, household_id: str | None = None) -> dict[str, Any]:
@@ -333,4 +274,4 @@ def diagnose_receipt_status_baseline(conn, household_id: str | None = None) -> d
             criterion_mismatches.append(item)
         if item.get('actual_parse_status') and item.get('po_norm_status') and item.get('actual_parse_status') != item.get('po_norm_status'):
             backend_status_mismatches.append(item)
-    return {'runtime_datastore': get_runtime_datastore_info(), 'policy_source': 'receipt_status_baseline_service_v4.py', 'policy_mode': 'po_four_criteria_with_supermarket_reconciliation', 'validation_summary': validation.get('summary', {}), 'mapping_mismatch_count': len(mapping_mismatches), 'criterion_mismatch_count': len(criterion_mismatches), 'backend_status_mismatch_count': len(backend_status_mismatches), 'mapping_mismatches': mapping_mismatches, 'criterion_mismatches': criterion_mismatches, 'backend_status_mismatches': backend_status_mismatches, 'excluded_archived_receipts': validation.get('excluded_archived_receipts', [])}
+    return {'runtime_datastore': get_runtime_datastore_info(), 'policy_source': 'receipt_status_baseline_service_v4.py', 'policy_mode': 'po_four_criteria_no_reconciliation', 'validation_summary': validation.get('summary', {}), 'mapping_mismatch_count': len(mapping_mismatches), 'criterion_mismatch_count': len(criterion_mismatches), 'backend_status_mismatch_count': len(backend_status_mismatches), 'mapping_mismatches': mapping_mismatches, 'criterion_mismatches': criterion_mismatches, 'backend_status_mismatches': backend_status_mismatches, 'excluded_archived_receipts': validation.get('excluded_archived_receipts', [])}
