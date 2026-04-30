@@ -9,11 +9,11 @@ from app.services import receipt_service as _receipt_service
 _ORIGINAL_PARSE_RECEIPT_CONTENT = _receipt_service.parse_receipt_content
 _ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES = _receipt_service._parse_result_from_text_lines
 
+# Conservative parser quality layer.
+# Principle: preserve possible article lines first; status remains governed by Baseline V4.
 PRODUCT_LINE_BLACKLIST = (
     'totaal', 'btw', 'betaling', 'betaald', 'pin', 'pinnen', 'bankpas', 'kaart',
-    'terminal', 'transactie', 'autorisatie', 'subtotaal', 'sub totaal', 'wisselgeld',
-    'bonus', 'korting', 'coupon', 'lidl plus', 'lidlplus', 'voordeel',
-    'retour', 'retouremballage', 'statiegeld retour', 'actieprijs',
+    'terminal', 'transactie', 'autorisatie', 'subtotaal', 'wisselgeld',
 )
 
 SAVINGS_LINE_TOKENS = (
@@ -23,18 +23,8 @@ SAVINGS_LINE_TOKENS = (
 )
 
 SAVINGS_LINE_EXCLUDE_TOKENS = (
-    'totaal', 'subtotaal', 'sub totaal', 'btw', 'betaling', 'betaald', 'bankpas', 'pin',
+    'totaal', 'subtotaal', 'btw', 'betaling', 'betaald', 'bankpas', 'pin',
     'pinnen', 'aantal artikelen',
-)
-
-LOYALTY_NON_ARTICLE_TOKENS = (
-    'pluspunt', 'pluspunten', 'pluspunten digitaal', 'digital', 'digitaal',
-    'zegel', 'zegels', 'messen digitaal', 'spaar', 'spaarpunten', 'spaarpunt',
-)
-
-NEGATIVE_ADJUSTMENT_TOKENS = (
-    'korting', 'lidl plus', 'lidlplus', 'gratis', 'voordeel', 'coupon',
-    'actie', 'actieprijs', 'retour', 'retouremballage', 'statiegeld retour',
 )
 
 _AMOUNT_PATTERN = r'-?\d{1,6}[\.,]\d{2}'
@@ -60,44 +50,6 @@ def _as_float(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
 
 
-def _line_text(line: dict[str, Any]) -> str:
-    return re.sub(
-        r'\s+',
-        ' ',
-        f"{line.get('raw_label') or ''} {line.get('normalized_label') or ''} {line.get('corrected_raw_label') or ''} {line.get('line_total') or ''}",
-    ).strip()
-
-
-def _is_loyalty_non_article_text(text: str) -> bool:
-    candidate = re.sub(r'\s+', ' ', str(text or '')).strip().lower()
-    if not candidate:
-        return False
-    if any(exclude in candidate for exclude in ('totaal punten', 'aantal artikelen')):
-        return False
-    return any(token in candidate for token in LOYALTY_NON_ARTICLE_TOKENS)
-
-
-def _is_negative_adjustment_text(text: str) -> bool:
-    candidate = re.sub(r'\s+', ' ', str(text or '')).strip().lower()
-    if not candidate:
-        return False
-    amounts = re.findall(_AMOUNT_PATTERN, candidate)
-    if not amounts:
-        return False
-    has_negative_amount = any((_parse_decimal(amount) or Decimal('0.00')) < Decimal('0.00') for amount in amounts)
-    return has_negative_amount and any(token in candidate for token in NEGATIVE_ADJUSTMENT_TOKENS)
-
-
-def _is_subtotal_text(text: str) -> bool:
-    lowered = re.sub(r'\s+', ' ', str(text or '')).strip().lower()
-    compact = ''.join(ch for ch in lowered if ch.isalnum())
-    return 'subtotaal' in compact or 'subtotaal' in lowered or 'sub totaal' in lowered
-
-
-def _is_non_article_text(text: str) -> bool:
-    return _is_subtotal_text(text) or _is_loyalty_non_article_text(text) or _is_negative_adjustment_text(text)
-
-
 def _is_savings_label_without_amount(text: str) -> bool:
     candidate = re.sub(r'\s+', ' ', str(text or '')).strip()
     if not candidate:
@@ -113,13 +65,8 @@ def _is_savings_label_without_amount(text: str) -> bool:
 def merge_lines(lines: list[str]) -> list[str]:
     """Merge detached OCR/PDF labels with following price-only lines.
 
-    Safe targeted case:
-      KOOPZEGELS PREMIUM
-      0,80
-    becomes:
-      KOOPZEGELS PREMIUM 0,80
-
-    Metadata labels such as subtotaal, btw, pin and betaling remain excluded.
+    This is intentionally conservative: it only joins a text label followed by a
+    standalone price, and it does not split or drop potential product lines.
     """
     normalized_lines = [re.sub(r'\s+', ' ', str(line or '')).strip() for line in lines or []]
     normalized_lines = [line for line in normalized_lines if line]
@@ -133,23 +80,18 @@ def merge_lines(lines: list[str]) -> list[str]:
         next_text = normalized_lines[i + 1] if i + 1 < len(normalized_lines) else ''
 
         if _is_savings_label_without_amount(text) and price_only.match(next_text):
-            merged_text = f'{text} {next_text}'
-            if not _is_non_article_text(merged_text):
-                merged.append(merged_text)
+            merged.append(f'{text} {next_text}')
             i += 2
             continue
 
         if not amount_at_end.search(text) and price_only.match(next_text):
             lowered = text.lower()
             if not any(marker in lowered for marker in PRODUCT_LINE_BLACKLIST):
-                merged_text = f'{text} {next_text}'
-                if not _is_non_article_text(merged_text):
-                    merged.append(merged_text)
+                merged.append(f'{text} {next_text}')
                 i += 2
                 continue
 
-        if not _is_non_article_text(text):
-            merged.append(text)
+        merged.append(text)
         i += 1
     return merged
 
@@ -169,8 +111,6 @@ def _is_savings_or_points_line(text: str) -> bool:
 def is_product_line(text: str) -> bool:
     candidate = re.sub(r'\s+', ' ', str(text or '')).strip()
     if len(candidate) < 4:
-        return False
-    if _is_non_article_text(candidate):
         return False
     if not re.search(_AMOUNT_PATTERN, candidate):
         return False
@@ -254,32 +194,19 @@ def _generic_lines_from_merged_text(text_lines: list[str]) -> list[dict[str, Any
     return _dedupe_lines(result)
 
 
-def _normalize_receipt_lines_with_adjustments(lines: list[dict[str, Any]] | None) -> tuple[list[dict[str, Any]], Decimal]:
+def _normalize_receipt_lines(lines: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
     normalized: list[dict[str, Any]] = []
-    excluded_adjustment_sum = Decimal('0.00')
     for line in lines or []:
-        line_total = _parse_decimal(line.get('line_total'))
-        if line_total is None:
+        if line.get('line_total') is None:
             continue
         label = str(line.get('normalized_label') or line.get('raw_label') or '').strip()
         if not label:
-            continue
-        text = _line_text(line)
-        if _is_negative_adjustment_text(text):
-            excluded_adjustment_sum += line_total
-            continue
-        if _is_loyalty_non_article_text(text) or _is_subtotal_text(text):
             continue
         cleaned = dict(line)
         cleaned['normalized_label'] = label
         cleaned['raw_label'] = str(cleaned.get('raw_label') or label).strip()
         normalized.append(cleaned)
-    return _dedupe_lines(normalized), excluded_adjustment_sum.quantize(Decimal('0.01'))
-
-
-def _normalize_receipt_lines(lines: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    normalized, _ = _normalize_receipt_lines_with_adjustments(lines)
-    return normalized
+    return _dedupe_lines(normalized)
 
 
 def _line_financials(lines: list[dict[str, Any]], discount_total: Decimal | None) -> tuple[Decimal, Decimal, Decimal]:
@@ -327,8 +254,6 @@ def _merge_missing_savings_lines(existing_lines: list[dict[str, Any]], fallback_
     for line in fallback_lines or []:
         if not _is_savings_or_points_line(f"{line.get('raw_label') or line.get('normalized_label') or ''} {line.get('line_total') or ''}"):
             continue
-        if _is_loyalty_non_article_text(f"{line.get('raw_label') or line.get('normalized_label') or ''} {line.get('line_total') or ''}"):
-            continue
         key = _line_key(line)
         if key in existing_keys:
             continue
@@ -354,27 +279,15 @@ def _choose_better_lines(existing_lines: list[dict[str, Any]], fallback_lines: l
     return existing_lines
 
 
-def _choose_discount_total(total_amount: Decimal | None, lines: list[dict[str, Any]], current_discount: Decimal | None, excluded_adjustments: Decimal) -> Decimal | None:
-    current = current_discount if current_discount is not None else Decimal('0.00')
-    with_excluded = (current + excluded_adjustments).quantize(Decimal('0.01'))
-    if _totals_match(total_amount, lines, current):
-        return current
-    if excluded_adjustments != Decimal('0.00') and _totals_match(total_amount, lines, with_excluded):
-        return with_excluded
-    return current_discount
-
-
 def _reclassify_result(result: Any) -> Any:
     if result is None or not getattr(result, 'is_receipt', False):
         return result
-    normalized_lines, excluded_adjustments = _normalize_receipt_lines_with_adjustments(getattr(result, 'lines', None))
-    result.lines = normalized_lines
+    result.lines = _normalize_receipt_lines(getattr(result, 'lines', None))
     total_amount = getattr(result, 'total_amount', None)
     discount_total = getattr(result, 'discount_total', None)
     if discount_total is not None:
         discount_total = _parse_decimal(discount_total)
-    discount_total = _choose_discount_total(total_amount, result.lines, discount_total, excluded_adjustments)
-    result.discount_total = discount_total
+        result.discount_total = discount_total
     if not result.lines:
         result.parse_status = 'manual'
         result.confidence_score = min(float(result.confidence_score or 0.36), 0.36)
