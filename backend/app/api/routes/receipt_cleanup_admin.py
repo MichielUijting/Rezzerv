@@ -8,12 +8,48 @@ from sqlalchemy import bindparam, text
 
 from app.db import engine
 from app.main import require_household_admin_context
+from app.services.receipt_status_baseline_service_v4 import validate_receipt_status_baseline
 
 router = APIRouter(prefix="/api/dev/receipts", tags=["admin", "receipts"])
 
 
 class PurgeDeletedReceiptsRequest(BaseModel):
     household_id: Optional[str] = None
+
+
+@router.get("/po-status-labels")
+def get_po_status_labels(household_id: Optional[str] = None, authorization: Optional[str] = Header(None)):
+    """Statusmap voor Kassa volgens de PO-norm.
+
+    Dit endpoint bepaalt geen status zelf. Het exposeert uitsluitend de uitkomst
+    van receipt_status_baseline_service_v4.py zodat UI/API dezelfde bron gebruiken.
+    """
+    context = require_household_admin_context(authorization, household_id)
+    effective_household_id = str(context.get("active_household_id") or household_id or "").strip() or None
+    with engine.connect() as conn:
+        validation = validate_receipt_status_baseline(conn, household_id=effective_household_id)
+    labels = {}
+    for item in validation.get("details", []) or []:
+        receipt_table_id = str(item.get("receipt_table_id") or "").strip()
+        if not receipt_table_id:
+            continue
+        labels[receipt_table_id] = {
+            "po_norm_status": item.get("po_norm_status") or "review_needed",
+            "po_norm_status_label": item.get("po_norm_status_label") or "Controle nodig",
+            "failed_criteria": item.get("failed_criteria") or [],
+            "result": item.get("result"),
+            "reason": item.get("reason"),
+        }
+    po_counts = validation.get("summary", {}).get("po_norm_status_counts", {}) or {}
+    return {
+        "policy_source": "receipt_status_baseline_service_v4.py",
+        "status_source": "po_norm_status_label",
+        "household_id": effective_household_id,
+        "labels": labels,
+        "po_norm_status_counts": po_counts,
+        "backend_status_counts": po_counts,
+        "difference": 0,
+    }
 
 
 @router.post("/purge-deleted")
