@@ -9,7 +9,12 @@ from typing import Any
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 
 from . import receipt_service as _receipt_service
-from .receipt_v4_classifier_overrides import has_price, is_payment_or_total_line
+from .receipt_v4_classifier_overrides import (
+    has_price,
+    is_discount_line,
+    is_payment_or_total_line,
+    normalize_discount_line,
+)
 
 LOGGER = logging.getLogger(__name__)
 RECEIPT_PHOTO_NORMALIZATION_ENABLED = True
@@ -19,11 +24,12 @@ _ORIGINAL_PARSE_RECEIPT_CONTENT = _receipt_service.parse_receipt_content
 _ORIGINAL_SHOULD_SKIP_RECEIPT_LINE = getattr(_receipt_service, "_should_skip_receipt_line", None)
 _ORIGINAL_LOOKS_LIKE_NON_PRODUCT_RECEIPT_LABEL = getattr(_receipt_service, "_looks_like_non_product_receipt_label", None)
 _ORIGINAL_FILTER_NON_PRODUCT_RECEIPT_LINES = getattr(_receipt_service, "_filter_non_product_receipt_lines", None)
+_ORIGINAL_APPLY_DISCOUNT_ENTRIES = getattr(_receipt_service, "_apply_discount_entries", None)
 
 
 def _v4_keep_priced_receipt_candidate(value: Any) -> bool:
     text = str(value or "").strip()
-    return bool(text and has_price(text) and not is_payment_or_total_line(text))
+    return bool(text and has_price(text) and not is_payment_or_total_line(text) and not is_discount_line(text))
 
 
 def _v4_should_skip_receipt_line(line: str, *args, **kwargs) -> bool:
@@ -59,6 +65,35 @@ def _v4_filter_non_product_receipt_lines(lines: list[dict[str, Any]]) -> list[di
         seen.add(key)
         filtered.append(line)
     return filtered
+
+
+def _v4_apply_discount_entries(lines: list[dict[str, Any]], discount_entries: list[dict[str, Any]]):
+    result = _ORIGINAL_APPLY_DISCOUNT_ENTRIES(lines, discount_entries) if callable(_ORIGINAL_APPLY_DISCOUNT_ENTRIES) else None
+    if not lines or not discount_entries:
+        return result
+
+    discount_by_source_index = {
+        int(entry.get("source_index")): entry
+        for entry in discount_entries
+        if entry.get("source_index") is not None
+    }
+    if not discount_by_source_index:
+        return result
+
+    for line in lines:
+        source_index = line.get("source_index")
+        if source_index is None:
+            continue
+        entry = discount_by_source_index.get(int(source_index))
+        if not entry:
+            continue
+        raw_label = str(entry.get("raw_label") or line.get("raw_label") or "")
+        normalized = normalize_discount_line(raw_label)
+        if not normalized:
+            continue
+        line["line_total"] = normalized.get("line_total")
+        line["discount_amount"] = normalized.get("discount_amount")
+    return result
 
 
 def _looks_like_photo_mime(mime_type: Any) -> bool:
@@ -140,4 +175,5 @@ def parse_receipt_content(*args, **kwargs):
 _receipt_service._should_skip_receipt_line = _v4_should_skip_receipt_line
 _receipt_service._looks_like_non_product_receipt_label = _v4_looks_like_non_product_receipt_label
 _receipt_service._filter_non_product_receipt_lines = _v4_filter_non_product_receipt_lines
+_receipt_service._apply_discount_entries = _v4_apply_discount_entries
 _receipt_service.parse_receipt_content = parse_receipt_content
