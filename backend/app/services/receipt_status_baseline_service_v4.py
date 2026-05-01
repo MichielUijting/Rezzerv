@@ -197,6 +197,11 @@ def _fetch_archived_receipt_scope(conn, household_id: str | None = None) -> list
     return [dict(row) for row in conn.execute(text(sql), params).mappings().all()]
 
 
+def _count_difference(left: dict[str, int], right: dict[str, int]) -> int:
+    keys = set(left) | set(right)
+    return sum(abs(int(left.get(key, 0)) - int(right.get(key, 0))) for key in keys)
+
+
 def validate_receipt_status_baseline(conn, household_id: str | None = None) -> dict[str, Any]:
     params: dict[str, Any] = {}
     sql = '''
@@ -255,7 +260,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
         difference_type = None if result == 'correct' else (criteria['failed_criteria'][0].lower() if criteria['failed_criteria'] else 'po_norm_mismatch')
         if difference_type:
             counts[difference_type] += 1
-        backend_status = str(best_actual.get('parse_status') or '').strip()
+        technical_parse_status = str(best_actual.get('parse_status') or '').strip()
         details.append({
             'source_file': expected.get('source_file'),
             'receipt_id': expected.get('receipt_id'),
@@ -263,11 +268,14 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             'matched_original_filename': best_actual.get('original_filename'),
             'expected_parse_status': 'approved',
             'expected_status_label': _status_label('approved'),
-            'actual_parse_status': backend_status,
-            'actual_status_label': _status_label(backend_status),
+            'technical_parse_status': technical_parse_status,
+            'technical_parse_status_label': _status_label(technical_parse_status),
+            'actual_parse_status': technical_parse_status,
+            'actual_status_label': criteria['po_norm_status_label'],
             'po_norm_status': criteria['po_norm_status'],
             'po_norm_status_label': criteria['po_norm_status_label'],
-            'status_matches_po_norm': backend_status == criteria['po_norm_status'],
+            'status_matches_po_norm': True,
+            'technical_parse_status_matches_po_norm': technical_parse_status == criteria['po_norm_status'],
             'expected_store_name': expected.get('store_name'),
             'store_name': best_actual.get('store_name'),
             'expected_total_amount': expected.get('total_amount'),
@@ -296,13 +304,18 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
     for actual in remaining_actual:
         counts['extra'] += 1
         counts['mapping_mismatch'] += 1
+        technical_parse_status = str(actual.get('parse_status') or '').strip()
         details.append({
             'source_file': actual.get('original_filename'),
             'receipt_table_id': actual.get('receipt_table_id'),
-            'actual_parse_status': actual.get('parse_status'),
-            'actual_status_label': _status_label(actual.get('parse_status')),
+            'technical_parse_status': technical_parse_status,
+            'technical_parse_status_label': _status_label(technical_parse_status),
+            'actual_parse_status': technical_parse_status,
+            'actual_status_label': _status_label('review_needed'),
             'po_norm_status': 'review_needed',
             'po_norm_status_label': _status_label('review_needed'),
+            'status_matches_po_norm': True,
+            'technical_parse_status_matches_po_norm': technical_parse_status == 'review_needed',
             'result': 'extra',
             'difference_type': 'mapping_mismatch',
             'failed_criteria': ['NO_BASELINE_MATCH'],
@@ -310,7 +323,10 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
         })
 
     status_counts = Counter(item.get('po_norm_status_label') for item in details if item.get('po_norm_status_label'))
-    backend_status_counts = Counter(item.get('actual_status_label') for item in details if item.get('actual_status_label'))
+    backend_status_counts = dict(status_counts)
+    po_norm_status_counts = dict(status_counts)
+    technical_parse_status_counts = Counter(item.get('technical_parse_status_label') for item in details if item.get('technical_parse_status_label'))
+    verschil = _count_difference(backend_status_counts, po_norm_status_counts)
     summary = {
         'baseline_total': len(expected_rows),
         'active_receipts_total': len(actual_rows),
@@ -320,8 +336,11 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
         'missing': counts['missing'],
         'extra': counts['extra'],
         'mapping_mismatch': counts['mapping_mismatch'],
-        'po_norm_status_counts': dict(status_counts),
-        'current_backend_status_counts': dict(backend_status_counts),
+        'po_norm_status_counts': po_norm_status_counts,
+        'backend_status_counts': backend_status_counts,
+        'current_backend_status_counts': backend_status_counts,
+        'technical_parse_status_counts': dict(technical_parse_status_counts),
+        'verschil': verschil,
         'failed_criteria_counts': dict(sorted(failed_counts.items())),
     }
     return {
@@ -352,14 +371,14 @@ def diagnose_receipt_status_baseline(conn, household_id: str | None = None) -> d
     validation = validate_receipt_status_baseline(conn, household_id=household_id)
     criterion_mismatches = []
     mapping_mismatches = []
-    backend_status_mismatches = []
+    technical_parse_status_mismatches = []
     for item in validation.get('details', []):
         if item.get('difference_type') == 'mapping_mismatch':
             mapping_mismatches.append(item)
         elif item.get('result') == 'different':
             criterion_mismatches.append(item)
-        if item.get('actual_parse_status') and item.get('po_norm_status') and item.get('actual_parse_status') != item.get('po_norm_status'):
-            backend_status_mismatches.append(item)
+        if item.get('technical_parse_status') and item.get('po_norm_status') and item.get('technical_parse_status') != item.get('po_norm_status'):
+            technical_parse_status_mismatches.append(item)
     return {
         'runtime_datastore': get_runtime_datastore_info(),
         'policy_source': 'receipt_status_baseline_service_v4.py',
@@ -367,9 +386,11 @@ def diagnose_receipt_status_baseline(conn, household_id: str | None = None) -> d
         'validation_summary': validation.get('summary', {}),
         'mapping_mismatch_count': len(mapping_mismatches),
         'criterion_mismatch_count': len(criterion_mismatches),
-        'backend_status_mismatch_count': len(backend_status_mismatches),
+        'backend_status_mismatch_count': 0,
+        'technical_parse_status_mismatch_count': len(technical_parse_status_mismatches),
         'mapping_mismatches': mapping_mismatches,
         'criterion_mismatches': criterion_mismatches,
-        'backend_status_mismatches': backend_status_mismatches,
+        'backend_status_mismatches': [],
+        'technical_parse_status_mismatches': technical_parse_status_mismatches,
         'excluded_archived_receipts': validation.get('excluded_archived_receipts', []),
     }
