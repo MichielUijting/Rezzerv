@@ -10,6 +10,7 @@ from typing import Any
 from app.db import engine
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 from app.services.receipt_status_baseline_service_v4 import validate_receipt_status_baseline
+from app.services.receipt_ssot_status import apply_po_norm_status
 
 from . import receipt_service as _receipt_service
 from .receipt_v4_classifier_overrides import (
@@ -127,14 +128,7 @@ def _v4_serialize_receipt_row(*args, **kwargs):
     payload = _ORIGINAL_SERIALIZE_RECEIPT_ROW(*args, **kwargs) if callable(_ORIGINAL_SERIALIZE_RECEIPT_ROW) else {}
     if not isinstance(payload, dict):
         return payload
-    receipt_table_id = str(payload.get("id") or payload.get("receipt_table_id") or "").strip()
-    po_norm_label = _load_po_norm_status_labels().get(receipt_table_id) if receipt_table_id else None
-    if not po_norm_label:
-        po_norm_label = "Controle nodig"
-    payload["po_norm_status_label"] = po_norm_label
-    payload["inbox_status"] = po_norm_label
-    payload["status"] = po_norm_label
-    return payload
+    return apply_po_norm_status(payload)
 
 
 def _looks_like_photo_mime(mime_type: Any) -> bool:
