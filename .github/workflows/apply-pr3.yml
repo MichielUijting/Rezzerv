@@ -1,0 +1,21 @@
+name: Apply PR3 normalization
+on:
+  push:
+    branches: [automation/receipt-normalization-pr3]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - run: python tools/apply_pr3_normalization.py
+      - run: |
+          git config user.name 'rezzerv-bot'
+          git config user.email 'bot@rezzerv.local'
+          git add -A
+          git commit -m "PR3: Apply normalization (SSOT-safe)" || echo "no changes"
+          git push
