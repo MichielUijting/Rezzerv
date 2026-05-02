@@ -10,6 +10,7 @@ import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { mapReceiptsForKassaInbox, buildKassaInboxSummary } from './services/KassaInboxLogic.js'
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -274,16 +275,6 @@ function persistStoredReceiptIds(storageKey, ids) {
   }
 }
 
-function normalizeInboxStatus(value) {
-  const normalized = String(value || '').trim()
-  if (normalized === 'Gecontroleerd' || normalized === 'Controle nodig' || normalized === 'Handmatig') {
-    return normalized
-  }
-  if (normalized === 'Nieuw' || normalized.toLowerCase() === 'manual') {
-    return 'Handmatig'
-  }
-  return 'Handmatig'
-}
 
 function inboxStatusStyle(value) {
   if (value === 'Gecontroleerd') {
@@ -1992,10 +1983,9 @@ export default function KassaPage() {
   }, [receipts])
 
   const inboxItems = useMemo(() => {
-    return receipts
-      .filter((item) => !deletedReceiptIds.includes(String(item?.receipt_table_id || '')))
-      .map((item) => ({ ...item, inbox_status: normalizeInboxStatus(item?.inbox_status) }))
-      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
+    return mapReceiptsForKassaInbox(
+      receipts.filter((item) => !deletedReceiptIds.includes(String(item?.receipt_table_id || '')))
+    ).sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
   }, [receipts, deletedReceiptIds])
 
   const inboxSummary = useMemo(() => ({
