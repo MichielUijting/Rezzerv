@@ -1561,7 +1561,7 @@ def _parse_result_from_text_lines(
         total_amount=total_amount,
         discount_total=discount_total,
         currency='EUR',
-        lines=lines,
+        lines=_apply_savings_stamp_fix(lines),
         store_branch=store_branch,
     )
 
@@ -1904,7 +1904,7 @@ def _receipt_result_from_manual(store_name: str | None, purchase_at: str | None,
         total_amount=total_amount,
         discount_total=None,
         currency='EUR',
-        lines=lines,
+        lines=_apply_savings_stamp_fix(lines),
         store_branch=store_branch,
     )
 
@@ -2886,3 +2886,21 @@ def _canonicalize_store(store: str | None, text: str, filename: str) -> str | No
             return "Jumbo Supermarkten"
         return "Jumbo"
     return store
+
+
+def _apply_savings_stamp_fix(lines):
+    fixed = []
+    for line in lines or []:
+        if not isinstance(line, dict):
+            fixed.append(line)
+            continue
+        label = str(line.get('normalized_label') or line.get('raw_label') or '').lower()
+        if any(k in label for k in ['koopzegel', 'spaarzegel', 'pluspunt']):
+            qty_match = re.match(r"^(\d+)", label)
+            if qty_match:
+                qty = int(qty_match.group(1))
+                # default 0.10 per zegel (AH/Plus common)
+                derived = Decimal(qty) * Decimal('0.10')
+                line['line_total'] = float(derived)
+        fixed.append(line)
+    return fixed
