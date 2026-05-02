@@ -110,11 +110,14 @@ def _actual_status_inputs(conn, receipt_table_id: str) -> dict[str, Any]:
     data = dict(row)
     discount_total = _to_decimal(data.get('discount_total')) or Decimal('0')
     actual_line_sum = _to_decimal(data.get('actual_line_sum')) or Decimal('0')
+    total_amount = _to_decimal(data.get('total_amount')) or Decimal('0')
+    net_candidates = [actual_line_sum, actual_line_sum + discount_total, actual_line_sum - discount_total]
+    net_line_sum = min(net_candidates, key=lambda candidate: abs(candidate - total_amount))
     data.update({
         'active_line_count': int(data.get('active_line_count') or 0),
         'sum_line_total_used_for_decision': float(actual_line_sum),
         'discount_total_used_for_decision': float(discount_total),
-        'net_line_sum_used_for_decision': float(actual_line_sum + discount_total),
+        'net_line_sum_used_for_decision': float(net_line_sum),
     })
     return data
 
