@@ -4,11 +4,15 @@ from .base import BaseReceiptProfile
 from .ah import AlbertHeijnReceiptProfile
 from .jumbo import JumboReceiptProfile
 from .lidl import LidlReceiptProfile
+from .aldi import AldiReceiptProfile
+from .plus import PlusReceiptProfile
 
 _PROFILES = [
     AlbertHeijnReceiptProfile(),
     JumboReceiptProfile(),
     LidlReceiptProfile(),
+    AldiReceiptProfile(),
+    PlusReceiptProfile(),
 ]
 
 _GENERIC_PROFILE = BaseReceiptProfile()
