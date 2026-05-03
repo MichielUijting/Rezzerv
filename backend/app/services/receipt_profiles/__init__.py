@@ -1,11 +1,16 @@
 import re
 
-from .base import BaseReceiptProfile, ReceiptProfileContext
+from .base import BaseReceiptProfile
+from .ah import AlbertHeijnReceiptProfile
+from .jumbo import JumboReceiptProfile
+from .lidl import LidlReceiptProfile
 
-class DummyProfile(BaseReceiptProfile):
-    profile_id = "dummy"
+_PROFILES = [
+    AlbertHeijnReceiptProfile(),
+    JumboReceiptProfile(),
+    LidlReceiptProfile(),
+]
 
-_PROFILES = []
 _GENERIC_PROFILE = BaseReceiptProfile()
 
 
