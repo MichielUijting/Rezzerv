@@ -1599,9 +1599,9 @@ def _get_paddle_ocr():
 
     constructors = [
         {
-            'use_doc_orientation_classify': False,
-            'use_doc_unwarping': False,
-            'use_textline_orientation': False,
+            'use_doc_orientation_classify': True,
+            'use_doc_unwarping': True,
+            'use_textline_orientation': True,
             'lang': 'en',
         },
         {
