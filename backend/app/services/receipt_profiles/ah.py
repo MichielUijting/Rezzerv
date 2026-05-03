@@ -73,6 +73,7 @@ class AlbertHeijnReceiptProfile(BaseReceiptProfile):
         if discount_total is None:
             return total_amount, discount_total
         try:
-            return total_amount, abs(float(discount_total))
+            from decimal import Decimal
+            return total_amount, abs(Decimal(str(discount_total)))
         except Exception:
             return total_amount, discount_total
