@@ -23,6 +23,9 @@ from typing import Any, Iterable
 
 from sqlalchemy import bindparam, text
 
+from app.services.receipt_profiles import select_receipt_profile
+from app.services.receipt_profiles.base import ReceiptProfileContext
+
 try:
     from pypdf import PdfReader
 except Exception:  # pragma: no cover
