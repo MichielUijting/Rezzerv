@@ -25,6 +25,8 @@ class ReceiptProfile(Protocol):
         context: ReceiptProfileContext,
     ) -> tuple[Decimal | None, Decimal | None]: ...
 
+    def post_process(self, result): ...
+
 
 class BaseReceiptProfile:
     profile_id = "generic"
@@ -35,3 +37,6 @@ class BaseReceiptProfile:
 
     def normalize_totals(self, *, total_amount, discount_total, lines, context):
         return total_amount, discount_total
+
+    def post_process(self, result):
+        return result
