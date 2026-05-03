@@ -1488,21 +1488,6 @@ def _parse_result_from_text_lines(
     lines = _filter_non_product_receipt_lines(lines)
     lines = profile.normalize_lines(lines, profile_context)
     total_amount, discount_total = profile.normalize_totals(total_amount=total_amount, discount_total=discount_total, lines=lines, context=profile_context)
-    if (filename or '').strip().lower() == 'jumbo foto 3.jpg' and not lines:
-        lines = [{
-            'raw_label': 'Jumbo stroopwafels',
-            'normalized_label': 'Jumbo stroopwafels',
-            'quantity': 1.0,
-            'unit': None,
-            'unit_price': 0.0,
-            'line_total': 0.0,
-            'discount_amount': None,
-            'barcode': None,
-            'confidence_score': 0.8,
-            'source_index': 0,
-        }]
-        if total_amount is None:
-            total_amount = Decimal('0.00')
     if total_amount is None and len(lines) >= 2:
         line_sum = Decimal('0.00')
         line_sum_has_value = False
