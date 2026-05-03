@@ -1454,6 +1454,8 @@ def _parse_result_from_text_lines(
         return _failed_receipt_result(0.05)
 
     store_name = _store_from_text(text_lines[:12], filename)
+    profile = select_receipt_profile(store_name)
+    profile_context = ReceiptProfileContext(store_name=store_name, filename=filename, raw_lines=text_lines)
     store_branch = _store_branch_from_lines(text_lines[:12], store_name)
     purchase_at = _purchase_at_from_lines(text_lines, filename)
     total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
@@ -1484,6 +1486,8 @@ def _parse_result_from_text_lines(
     lines = _filter_non_product_receipt_lines(lines)
     discount_total = _apply_discount_entries(lines, _extract_discount_entries(text_lines))
     lines = _filter_non_product_receipt_lines(lines)
+    lines = profile.normalize_lines(lines, profile_context)
+    total_amount, discount_total = profile.normalize_totals(total_amount=total_amount, discount_total=discount_total, lines=lines, context=profile_context)
     if (filename or '').strip().lower() == 'jumbo foto 3.jpg' and not lines:
         lines = [{
             'raw_label': 'Jumbo stroopwafels',
