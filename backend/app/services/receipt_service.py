@@ -25,6 +25,7 @@ from sqlalchemy import bindparam, text
 
 from app.services.receipt_profiles import select_receipt_profile
 from app.services.receipt_profiles.base import ReceiptProfileContext
+from app.services.receipt_image_preprocessing import preprocess_receipt_image_for_ocr
 
 try:
     from pypdf import PdfReader
@@ -1743,7 +1744,7 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
     try:
         with tempfile.TemporaryDirectory(prefix='rezzerv-paddleocr-') as temp_dir:
             image_path = Path(temp_dir) / f'image{suffix}'
-            image_path.write_bytes(file_bytes)
+            image_path.write_bytes(preprocess_receipt_image_for_ocr(file_bytes))
             result = model.predict(str(image_path))
     except Exception as exc:  # pragma: no cover - runtime dependency/model download issue
         LOGGER.warning('PaddleOCR verwerking mislukt voor %s: %s', filename, exc)
@@ -1783,7 +1784,7 @@ def _ocr_image_text_with_tesseract(file_bytes: bytes, filename: str) -> tuple[li
     try:
         with tempfile.TemporaryDirectory(prefix='rezzerv-tesseract-') as temp_dir:
             image_path = Path(temp_dir) / f'image{suffix}'
-            image_path.write_bytes(file_bytes)
+            image_path.write_bytes(preprocess_receipt_image_for_ocr(file_bytes))
             command = ['tesseract', str(image_path), 'stdout', '-l', language, '--psm', '6']
             completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=90)
             if completed.returncode != 0:
