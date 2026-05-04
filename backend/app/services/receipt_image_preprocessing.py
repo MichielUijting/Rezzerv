@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+import math
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -93,118 +94,149 @@ def _valid_warp(warped, allow_forced: bool = False) -> bool:
             LOGGER.warning('Receipt preprocessing: forced warp rejected mean=%.2f std=%.2f dark=%.3f light=%.3f', mean, std, dark_ratio, light_ratio)
             return False
         return True
-    if mean < 40 or mean > 248 or std < 8 or dark_ratio > 0.85 or light_ratio < 0.04:
-        LOGGER.warning('Receipt preprocessing: scanner warp rejected mean=%.2f std=%.2f dark=%.3f light=%.3f', mean, std, dark_ratio, light_ratio)
+    if mean < 40 or mean > 248 or std < 8 or dark_ratio > 0.85 or light_ratio < 0.025:
+        LOGGER.warning('Receipt preprocessing: hough warp rejected mean=%.2f std=%.2f dark=%.3f light=%.3f', mean, std, dark_ratio, light_ratio)
         return False
     return True
 
 
-def _contour_to_points(contour):
-    peri = cv2.arcLength(contour, True)
-    for eps in (0.015, 0.02, 0.025, 0.03, 0.04, 0.06, 0.08):
-        approx = cv2.approxPolyDP(contour, eps * peri, True)
-        if len(approx) == 4:
-            return approx.reshape(4, 2).astype('float32'), 'approx4'
-    return cv2.boxPoints(cv2.minAreaRect(contour)).astype('float32'), 'minAreaRect'
+def _line_angle(line):
+    x1, y1, x2, y2 = line
+    return math.degrees(math.atan2(y2 - y1, x2 - x1))
 
 
-def _score_candidate(points, contour, image_shape):
-    h, w = image_shape[:2]
-    image_area = float(h * w)
-    area = float(abs(cv2.contourArea(points.astype('float32'))))
-    contour_area = float(cv2.contourArea(contour))
-    area_ratio = max(area, contour_area) / image_area if image_area else 0.0
-    if area_ratio < 0.01 or area_ratio > 0.96:
+def _line_length(line):
+    x1, y1, x2, y2 = line
+    return math.hypot(x2 - x1, y2 - y1)
+
+
+def _intersect_lines(line_a, line_b):
+    x1, y1, x2, y2 = map(float, line_a)
+    x3, y3, x4, y4 = map(float, line_b)
+    denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
+    if abs(denom) < 1e-6:
         return None
-    x, y, bw, bh = cv2.boundingRect(points.astype('int32'))
-    if bw < 80 or bh < 80:
-        return None
-    aspect = max(float(bw) / float(bh), float(bh) / float(bw))
-    if aspect < 1.05 or aspect > 10.0:
-        return None
-    center_x = x + bw / 2.0
-    center_y = y + bh / 2.0
-    center_penalty = abs(center_x - w / 2.0) / w + abs(center_y - h / 2.0) / h
-    return area_ratio * 2.0 + min(aspect, 4.0) * 0.12 - center_penalty * 0.25
+    px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom
+    py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom
+    return np.array([px, py], dtype='float32')
 
 
-def _scanner_contours(work_rgb):
+def _hough_edges(work_rgb):
     gray = cv2.cvtColor(work_rgb, cv2.COLOR_RGB2GRAY)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    gray = clahe.apply(gray)
-    blur = cv2.bilateralFilter(gray, 9, 75, 75)
+    gray = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
     median = float(np.median(blur))
-    lower = int(max(0, 0.66 * median))
-    upper = int(min(255, 1.33 * median))
+    lower = int(max(0, 0.60 * median))
+    upper = int(min(255, 1.40 * median))
     edges = cv2.Canny(blur, lower, upper)
-    close_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
-    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, close_kernel, iterations=2)
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    LOGGER.warning('Receipt preprocessing: scanner edge contours=%s thresholds=%s/%s', len(contours), lower, upper)
-    return contours
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=1)
+    return edges, lower, upper
 
 
-def _scanner_mask_contours(work_rgb):
-    gray = cv2.cvtColor(work_rgb, cv2.COLOR_RGB2GRAY)
-    lab = cv2.cvtColor(work_rgb, cv2.COLOR_RGB2LAB)
-    l_chan = lab[:, :, 0]
-    threshold_gray = max(90, int(np.percentile(gray, 62)))
-    threshold_l = max(105, int(np.percentile(l_chan, 60)))
-    mask = cv2.bitwise_or(cv2.inRange(gray, threshold_gray, 255), cv2.inRange(l_chan, threshold_l, 255))
-    close_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (17, 17))
-    open_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, close_kernel, iterations=2)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, open_kernel, iterations=1)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    LOGGER.warning('Receipt preprocessing: scanner mask contours=%s thresholds=%s/%s', len(contours), threshold_gray, threshold_l)
-    return contours
-
-
-def _forced_min_area_rect(arr, work, scale):
-    all_contours = []
-    for contours in (_scanner_contours(work), _scanner_mask_contours(work)):
-        all_contours.extend(contours)
-    if not all_contours:
-        return None
-    contours = sorted(all_contours, key=cv2.contourArea, reverse=True)
-    for index, contour in enumerate(contours[:8]):
-        if cv2.contourArea(contour) < 50:
+def _select_hough_lines(lines, width, height):
+    if lines is None:
+        return []
+    min_len = max(width, height) * 0.18
+    selected = []
+    for raw in lines[:, 0, :]:
+        line = tuple(int(v) for v in raw)
+        if _line_length(line) < min_len:
             continue
-        points = cv2.boxPoints(cv2.minAreaRect(contour)).astype('float32') / scale
-        warped = _four_point_transform(arr, points)
-        if _valid_warp(warped, allow_forced=True):
-            LOGGER.warning('Receipt preprocessing: FORCED minAreaRect fallback used index=%s', index)
-            return _enhance_for_ocr(warped)
-    return None
+        angle = _line_angle(line)
+        selected.append((line, angle, _line_length(line)))
+    selected.sort(key=lambda item: item[2], reverse=True)
+    return selected[:60]
 
 
-def _rectify_with_scanner_pattern(arr):
+def _line_family_candidates(selected):
+    families = []
+    for base_index, (base_line, base_angle, _) in enumerate(selected[:20]):
+        parallel = []
+        perpendicular = []
+        for line, angle, length in selected:
+            delta = abs(((angle - base_angle + 90) % 180) - 90)
+            perp_delta = abs(delta - 90)
+            if delta < 18:
+                parallel.append((line, length))
+            elif perp_delta < 18:
+                perpendicular.append((line, length))
+        if len(parallel) >= 2 and len(perpendicular) >= 2:
+            families.append((base_index, parallel[:8], perpendicular[:8]))
+    return families[:8]
+
+
+def _quad_from_line_pair(group_a, group_b, width, height):
+    best = None
+    for i in range(len(group_a)):
+        for j in range(i + 1, len(group_a)):
+            a1, a2 = group_a[i][0], group_a[j][0]
+            for k in range(len(group_b)):
+                for l in range(k + 1, len(group_b)):
+                    b1, b2 = group_b[k][0], group_b[l][0]
+                    pts = [_intersect_lines(a1, b1), _intersect_lines(a1, b2), _intersect_lines(a2, b1), _intersect_lines(a2, b2)]
+                    if any(p is None for p in pts):
+                        continue
+                    pts = np.array(pts, dtype='float32')
+                    margin_x = width * 0.08
+                    margin_y = height * 0.08
+                    if np.any(pts[:, 0] < -margin_x) or np.any(pts[:, 0] > width + margin_x) or np.any(pts[:, 1] < -margin_y) or np.any(pts[:, 1] > height + margin_y):
+                        continue
+                    area = abs(cv2.contourArea(_order_points(pts)))
+                    area_ratio = area / float(width * height)
+                    if area_ratio < 0.04 or area_ratio > 0.92:
+                        continue
+                    x, y, bw, bh = cv2.boundingRect(_order_points(pts).astype('int32'))
+                    aspect = max(float(bw) / float(bh), float(bh) / float(bw)) if bw and bh else 0
+                    if aspect < 1.15 or aspect > 8.5:
+                        continue
+                    score = area_ratio * 2.0 + min(aspect, 4.0) * 0.10
+                    if best is None or score > best[0]:
+                        best = (score, _order_points(pts))
+    return best
+
+
+def _rectify_with_hough(arr):
     work, scale = _resize_for_work(arr)
-    candidates = []
-    for source_name, contours in (('edges', _scanner_contours(work)), ('mask', _scanner_mask_contours(work))):
-        for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:30]:
-            points, method = _contour_to_points(contour)
-            score = _score_candidate(points, contour, work.shape)
-            if score is None:
-                score = 0.01
-            full_points = points / scale
-            candidates.append((score, source_name, method, full_points))
-    candidates.sort(key=lambda item: item[0], reverse=True)
-    LOGGER.warning('Receipt preprocessing: scanner candidates=%s', len(candidates))
-    for score, source_name, method, points in candidates[:15]:
-        warped = _four_point_transform(arr, points)
-        if not _valid_warp(warped):
-            continue
-        LOGGER.warning('Receipt preprocessing: scanner contour selected source=%s method=%s score=%.3f', source_name, method, score)
-        return _enhance_for_ocr(warped)
-    forced = _forced_min_area_rect(arr, work, scale)
-    if forced is not None:
-        return forced
-    return None
+    height, width = work.shape[:2]
+    edges, lower, upper = _hough_edges(work)
+    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=80, minLineLength=int(max(width, height) * 0.16), maxLineGap=45)
+    selected = _select_hough_lines(lines, width, height)
+    LOGGER.warning('Receipt preprocessing: hough lines=%s selected=%s thresholds=%s/%s', 0 if lines is None else len(lines), len(selected), lower, upper)
+    families = _line_family_candidates(selected)
+    LOGGER.warning('Receipt preprocessing: hough line families=%s', len(families))
+
+    best = None
+    for _, parallel, perpendicular in families:
+        candidate = _quad_from_line_pair(parallel, perpendicular, width, height)
+        if candidate and (best is None or candidate[0] > best[0]):
+            best = candidate
+    if best is None:
+        return None
+
+    score, points = best
+    full_points = points / scale
+    warped = _four_point_transform(arr, full_points)
+    if not _valid_warp(warped):
+        return None
+    LOGGER.warning('Receipt preprocessing: hough quad selected score=%.3f points=%s', score, np.round(full_points, 1).tolist())
+    return _enhance_for_ocr(warped)
+
+
+def _fallback_center_crop(arr):
+    h, w = arr.shape[:2]
+    # Laatste redmiddel: centrale 80% behouden, zodat OCR in elk geval minder achtergrond ziet.
+    x1, x2 = int(w * 0.10), int(w * 0.90)
+    y1, y2 = int(h * 0.05), int(h * 0.95)
+    crop = arr[y1:y2, x1:x2]
+    if crop.size == 0:
+        return None
+    LOGGER.warning('Receipt preprocessing: fallback center crop used')
+    return _enhance_for_ocr(crop)
 
 
 def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
-    LOGGER.warning('Receipt preprocessing: module entered (opencv scanner pattern)')
+    LOGGER.warning('Receipt preprocessing: module entered (hough scanner)')
     if cv2 is None or np is None:
         LOGGER.warning('Receipt preprocessing: cv2/np missing')
         _save_debug_image(file_bytes, 'fallback-dependencies-missing')
@@ -213,15 +245,17 @@ def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
         image = Image.open(io.BytesIO(file_bytes))
         image = ImageOps.exif_transpose(image).convert('RGB')
         arr = np.array(image)
-        warped = _rectify_with_scanner_pattern(arr)
+        warped = _rectify_with_hough(arr)
+        if warped is None:
+            warped = _fallback_center_crop(arr)
         if warped is not None:
             result = _encode_png(warped)
-            _save_debug_image(result, 'rectified-opencv-scanner-pattern')
+            _save_debug_image(result, 'rectified-hough-scanner')
             return result
-        LOGGER.warning('Receipt preprocessing: fallback (no valid scanner contour)')
-        _save_debug_image(file_bytes, 'fallback-no-valid-scanner-contour')
+        LOGGER.warning('Receipt preprocessing: fallback original (hough failed)')
+        _save_debug_image(file_bytes, 'fallback-hough-original')
         return file_bytes
     except Exception as exc:
-        LOGGER.warning('OpenCV scanner preprocessing failed: %s', exc)
+        LOGGER.warning('Hough scanner preprocessing failed: %s', exc)
         _save_debug_image(file_bytes, 'fallback-exception')
         return file_bytes
