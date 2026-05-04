@@ -38,7 +38,11 @@ def _rotate_image(arr, angle):
 
 
 def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
+    LOGGER.warning("Receipt preprocessing: module entered")
+
     if cv2 is None or np is None or determine_skew is None:
+        LOGGER.warning(f"Receipt preprocessing: dependencies missing cv2={cv2 is not None}, np={np is not None}, deskew={determine_skew is not None}")
+
         return file_bytes
 
     try:
@@ -49,9 +53,13 @@ def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
         gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
 
         angle = determine_skew(gray)
+        LOGGER.warning(f"Receipt preprocessing: detected angle={angle}")
+
         LOGGER.info("Deskew angle detected: %s", angle)
 
         if angle is None or abs(angle) < 1.0:
+            LOGGER.warning("Receipt preprocessing: skipped (angle too small or None)")
+
             return file_bytes
 
         rotated = _rotate_image(arr, angle)
@@ -59,7 +67,9 @@ def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
         if rotated is None:
             return file_bytes
 
+        LOGGER.warning("Receipt preprocessing: applied rotation")
         return _encode_png(rotated)
+
 
     except Exception as exc:
         LOGGER.warning("Deskew preprocessing skipped: %s", exc)
