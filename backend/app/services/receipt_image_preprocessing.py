@@ -48,62 +48,83 @@ def _order_points(pts):
 def _four_point_transform(image, pts):
     rect = _order_points(pts)
     (tl, tr, br, bl) = rect
+    max_width = int(max(np.linalg.norm(br - bl), np.linalg.norm(tr - tl)))
+    max_height = int(max(np.linalg.norm(tr - br), np.linalg.norm(tl - bl)))
+    if max_width < 300 or max_height < 300:
+        return None
+    dst = np.array([[0, 0], [max_width - 1, 0], [max_width - 1, max_height - 1], [0, max_height - 1]], dtype="float32")
+    matrix = cv2.getPerspectiveTransform(rect, dst)
+    return cv2.warpPerspective(image, matrix, (max_width, max_height), borderValue=(255, 255, 255))
 
-    widthA = np.linalg.norm(br - bl)
-    widthB = np.linalg.norm(tr - tl)
-    maxWidth = int(max(widthA, widthB))
 
-    heightA = np.linalg.norm(tr - br)
-    heightB = np.linalg.norm(tl - bl)
-    maxHeight = int(max(heightA, heightB))
+def _valid_contour(contour, approx, image_shape) -> bool:
+    ih, iw = image_shape[:2]
+    image_area = float(iw * ih)
+    area = float(cv2.contourArea(contour))
+    ratio_area = area / image_area if image_area else 0.0
+    if ratio_area < 0.08 or ratio_area > 0.95:
+        LOGGER.warning("Receipt preprocessing: contour rejected area_ratio=%.3f", ratio_area)
+        return False
+    x, y, w, h = cv2.boundingRect(approx)
+    if w < 300 or h < 300:
+        LOGGER.warning("Receipt preprocessing: contour rejected box=%sx%s", w, h)
+        return False
+    aspect = max(float(w) / float(h), float(h) / float(w))
+    if aspect < 1.4:
+        LOGGER.warning("Receipt preprocessing: contour rejected aspect=%.3f", aspect)
+        return False
+    return True
 
-    dst = np.array([
-        [0, 0],
-        [maxWidth - 1, 0],
-        [maxWidth - 1, maxHeight - 1],
-        [0, maxHeight - 1]], dtype="float32")
 
-    M = cv2.getPerspectiveTransform(rect, dst)
-    warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
-
-    return warped
+def _valid_warp(warped) -> bool:
+    if warped is None:
+        return False
+    h, w = warped.shape[:2]
+    if w < 300 or h < 300:
+        return False
+    gray = cv2.cvtColor(warped, cv2.COLOR_RGB2GRAY)
+    mean = float(np.mean(gray))
+    std = float(np.std(gray))
+    dark_ratio = float(np.mean(gray < 50))
+    light_ratio = float(np.mean(gray > 180))
+    if mean < 45 or mean > 245 or std < 10 or dark_ratio > 0.80 or light_ratio < 0.05:
+        LOGGER.warning("Receipt preprocessing: warp rejected mean=%.2f std=%.2f dark=%.3f light=%.3f", mean, std, dark_ratio, light_ratio)
+        return False
+    return True
 
 
 def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
     LOGGER.warning("Receipt preprocessing: module entered (rectifier)")
-
     if cv2 is None or np is None:
         LOGGER.warning("Receipt preprocessing: cv2/np missing")
         _save_debug_image(file_bytes, 'fallback-dependencies-missing')
         return file_bytes
-
     try:
         image = Image.open(io.BytesIO(file_bytes))
         image = ImageOps.exif_transpose(image).convert("RGB")
         arr = np.array(image)
-
         gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
         blur = cv2.GaussianBlur(gray, (5, 5), 0)
         edged = cv2.Canny(blur, 50, 150)
-
         contours, _ = cv2.findContours(edged, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
         contours = sorted(contours, key=cv2.contourArea, reverse=True)
-
-        for c in contours[:5]:
-            peri = cv2.arcLength(c, True)
-            approx = cv2.approxPolyDP(c, 0.02 * peri, True)
-
-            if len(approx) == 4:
-                LOGGER.warning("Receipt preprocessing: 4-point contour found")
-                warped = _four_point_transform(arr, approx.reshape(4, 2))
-                result = _encode_png(warped)
-                _save_debug_image(result, 'rectified-4-point-contour')
-                return result
-
-        LOGGER.warning("Receipt preprocessing: fallback (no contour)")
-        _save_debug_image(file_bytes, 'fallback-no-contour')
+        for index, contour in enumerate(contours[:12]):
+            peri = cv2.arcLength(contour, True)
+            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+            if len(approx) != 4:
+                continue
+            if not _valid_contour(contour, approx, arr.shape):
+                continue
+            warped = _four_point_transform(arr, approx.reshape(4, 2))
+            if not _valid_warp(warped):
+                continue
+            LOGGER.warning("Receipt preprocessing: valid 4-point contour selected index=%s", index)
+            result = _encode_png(warped)
+            _save_debug_image(result, 'rectified-validated-4-point-contour')
+            return result
+        LOGGER.warning("Receipt preprocessing: fallback (no valid contour)")
+        _save_debug_image(file_bytes, 'fallback-no-valid-contour')
         return file_bytes
-
     except Exception as exc:
         LOGGER.warning("Rectifier preprocessing failed: %s", exc)
         _save_debug_image(file_bytes, 'fallback-exception')
