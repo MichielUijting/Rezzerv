@@ -10,6 +10,5 @@ ocrmypdf==17.4.0
 paddleocr==3.2.0
 Pillow>=10,<13
 opencv-python-headless>=4.9,<5
-deskew>=1.5,<2
 
 beautifulsoup4==4.12.3
