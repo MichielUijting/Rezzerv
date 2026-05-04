@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
+from pathlib import Path
 
 from PIL import Image, ImageOps
 
@@ -14,12 +15,23 @@ except Exception:
     cv2 = None
     np = None
 
+DEBUG_OUTPUT_PATH = Path('/app/data/receipts/debug/latest-ocr-preprocessed.png')
+
 
 def _encode_png(arr) -> bytes:
     out = Image.fromarray(arr)
     buffer = io.BytesIO()
     out.save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+def _save_debug_image(image_bytes: bytes, reason: str) -> None:
+    try:
+        DEBUG_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        DEBUG_OUTPUT_PATH.write_bytes(image_bytes)
+        LOGGER.warning("Receipt preprocessing: debug image saved path=%s reason=%s", DEBUG_OUTPUT_PATH, reason)
+    except Exception as exc:
+        LOGGER.warning("Receipt preprocessing: debug image save failed: %s", exc)
 
 
 def _order_points(pts):
@@ -62,6 +74,7 @@ def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
 
     if cv2 is None or np is None:
         LOGGER.warning("Receipt preprocessing: cv2/np missing")
+        _save_debug_image(file_bytes, 'fallback-dependencies-missing')
         return file_bytes
 
     try:
@@ -83,11 +96,15 @@ def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
             if len(approx) == 4:
                 LOGGER.warning("Receipt preprocessing: 4-point contour found")
                 warped = _four_point_transform(arr, approx.reshape(4, 2))
-                return _encode_png(warped)
+                result = _encode_png(warped)
+                _save_debug_image(result, 'rectified-4-point-contour')
+                return result
 
         LOGGER.warning("Receipt preprocessing: fallback (no contour)")
+        _save_debug_image(file_bytes, 'fallback-no-contour')
         return file_bytes
 
     except Exception as exc:
         LOGGER.warning("Rectifier preprocessing failed: %s", exc)
+        _save_debug_image(file_bytes, 'fallback-exception')
         return file_bytes
