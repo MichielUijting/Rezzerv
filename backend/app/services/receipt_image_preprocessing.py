@@ -57,25 +57,6 @@ def _four_point_transform(image, pts):
     return cv2.warpPerspective(image, matrix, (max_width, max_height), borderValue=(255, 255, 255))
 
 
-def _valid_contour(contour, approx, image_shape) -> bool:
-    ih, iw = image_shape[:2]
-    image_area = float(iw * ih)
-    area = float(cv2.contourArea(contour))
-    ratio_area = area / image_area if image_area else 0.0
-    if ratio_area < 0.08 or ratio_area > 0.95:
-        LOGGER.warning("Receipt preprocessing: contour rejected area_ratio=%.3f", ratio_area)
-        return False
-    x, y, w, h = cv2.boundingRect(approx)
-    if w < 300 or h < 300:
-        LOGGER.warning("Receipt preprocessing: contour rejected box=%sx%s", w, h)
-        return False
-    aspect = max(float(w) / float(h), float(h) / float(w))
-    if aspect < 1.4:
-        LOGGER.warning("Receipt preprocessing: contour rejected aspect=%.3f", aspect)
-        return False
-    return True
-
-
 def _valid_warp(warped) -> bool:
     if warped is None:
         return False
@@ -86,15 +67,82 @@ def _valid_warp(warped) -> bool:
     mean = float(np.mean(gray))
     std = float(np.std(gray))
     dark_ratio = float(np.mean(gray < 50))
-    light_ratio = float(np.mean(gray > 180))
-    if mean < 45 or mean > 245 or std < 10 or dark_ratio > 0.80 or light_ratio < 0.05:
+    light_ratio = float(np.mean(gray > 175))
+    if mean < 45 or mean > 245 or std < 8 or dark_ratio > 0.80 or light_ratio < 0.05:
         LOGGER.warning("Receipt preprocessing: warp rejected mean=%.2f std=%.2f dark=%.3f light=%.3f", mean, std, dark_ratio, light_ratio)
         return False
     return True
 
 
+def _paper_mask(rgb):
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
+    l_chan = lab[:, :, 0]
+
+    # Papier is in bonfoto's meestal de relatief lichtste regio, ook bij schaduw.
+    gray_threshold = max(105, int(np.percentile(gray, 68)))
+    l_threshold = max(120, int(np.percentile(l_chan, 65)))
+    mask = cv2.inRange(gray, gray_threshold, 255)
+    mask_l = cv2.inRange(l_chan, l_threshold, 255)
+    mask = cv2.bitwise_or(mask, mask_l)
+
+    kernel_close = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 25))
+    kernel_open = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close, iterations=2)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open, iterations=1)
+    return mask
+
+
+def _candidate_points_from_contour(contour):
+    peri = cv2.arcLength(contour, True)
+    for epsilon in (0.015, 0.02, 0.03, 0.04, 0.06):
+        approx = cv2.approxPolyDP(contour, epsilon * peri, True)
+        if len(approx) == 4:
+            return approx.reshape(4, 2).astype("float32")
+    rect = cv2.minAreaRect(contour)
+    return cv2.boxPoints(rect).astype("float32")
+
+
+def _candidate_is_plausible(points, contour, image_shape) -> bool:
+    ih, iw = image_shape[:2]
+    image_area = float(iw * ih)
+    area = float(cv2.contourArea(points.astype("float32")))
+    contour_area = float(cv2.contourArea(contour))
+    ratio_area = max(area, contour_area) / image_area if image_area else 0.0
+    if ratio_area < 0.05 or ratio_area > 0.90:
+        LOGGER.warning("Receipt preprocessing: paper candidate rejected area_ratio=%.3f", ratio_area)
+        return False
+    x, y, w, h = cv2.boundingRect(points.astype("int32"))
+    if w < 300 or h < 300:
+        LOGGER.warning("Receipt preprocessing: paper candidate rejected box=%sx%s", w, h)
+        return False
+    aspect = max(float(w) / float(h), float(h) / float(w))
+    if aspect < 1.25:
+        LOGGER.warning("Receipt preprocessing: paper candidate rejected aspect=%.3f", aspect)
+        return False
+    return True
+
+
+def _rectify_from_paper_mask(arr):
+    mask = _paper_mask(arr)
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
+    LOGGER.warning("Receipt preprocessing: paper-mask contours=%s", len(contours))
+
+    for index, contour in enumerate(contours[:10]):
+        points = _candidate_points_from_contour(contour)
+        if not _candidate_is_plausible(points, contour, arr.shape):
+            continue
+        warped = _four_point_transform(arr, points)
+        if not _valid_warp(warped):
+            continue
+        LOGGER.warning("Receipt preprocessing: paper-mask contour selected index=%s", index)
+        return warped
+    return None
+
+
 def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
-    LOGGER.warning("Receipt preprocessing: module entered (rectifier)")
+    LOGGER.warning("Receipt preprocessing: module entered (paper-mask rectifier)")
     if cv2 is None or np is None:
         LOGGER.warning("Receipt preprocessing: cv2/np missing")
         _save_debug_image(file_bytes, 'fallback-dependencies-missing')
@@ -103,29 +151,17 @@ def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
         image = Image.open(io.BytesIO(file_bytes))
         image = ImageOps.exif_transpose(image).convert("RGB")
         arr = np.array(image)
-        gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        edged = cv2.Canny(blur, 50, 150)
-        contours, _ = cv2.findContours(edged, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        contours = sorted(contours, key=cv2.contourArea, reverse=True)
-        for index, contour in enumerate(contours[:12]):
-            peri = cv2.arcLength(contour, True)
-            approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
-            if len(approx) != 4:
-                continue
-            if not _valid_contour(contour, approx, arr.shape):
-                continue
-            warped = _four_point_transform(arr, approx.reshape(4, 2))
-            if not _valid_warp(warped):
-                continue
-            LOGGER.warning("Receipt preprocessing: valid 4-point contour selected index=%s", index)
+
+        warped = _rectify_from_paper_mask(arr)
+        if warped is not None:
             result = _encode_png(warped)
-            _save_debug_image(result, 'rectified-validated-4-point-contour')
+            _save_debug_image(result, 'rectified-paper-mask')
             return result
-        LOGGER.warning("Receipt preprocessing: fallback (no valid contour)")
-        _save_debug_image(file_bytes, 'fallback-no-valid-contour')
+
+        LOGGER.warning("Receipt preprocessing: fallback (no valid paper-mask contour)")
+        _save_debug_image(file_bytes, 'fallback-no-valid-paper-mask-contour')
         return file_bytes
     except Exception as exc:
-        LOGGER.warning("Rectifier preprocessing failed: %s", exc)
+        LOGGER.warning("Paper-mask rectifier preprocessing failed: %s", exc)
         _save_debug_image(file_bytes, 'fallback-exception')
         return file_bytes
