@@ -15,6 +15,47 @@ except Exception:
     np = None
 
 
+def _encode_png(arr) -> bytes:
+    out = Image.fromarray(arr)
+    buffer = io.BytesIO()
+    out.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def _looks_safe_for_ocr(original_arr, candidate_arr) -> bool:
+    if cv2 is None or np is None:
+        return False
+
+    try:
+        original_area = int(original_arr.shape[0]) * int(original_arr.shape[1])
+        candidate_area = int(candidate_arr.shape[0]) * int(candidate_arr.shape[1])
+        if original_area <= 0 or candidate_area <= 0:
+            return False
+
+        # Een te agressieve crop levert vaak een klein, donker fragment op.
+        if candidate_area < original_area * 0.20:
+            return False
+
+        if min(candidate_arr.shape[0], candidate_arr.shape[1]) < 300:
+            return False
+
+        gray = cv2.cvtColor(candidate_arr, cv2.COLOR_RGB2GRAY)
+        mean_brightness = float(np.mean(gray))
+        white_ratio = float(np.mean(gray > 180))
+        dark_ratio = float(np.mean(gray < 35))
+
+        if mean_brightness < 70:
+            return False
+        if white_ratio < 0.15:
+            return False
+        if dark_ratio > 0.70:
+            return False
+
+        return True
+    except Exception:
+        return False
+
+
 def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
     if cv2 is None or np is None:
         return file_bytes
@@ -70,10 +111,11 @@ def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
             if width > height:
                 warped = cv2.rotate(warped, cv2.ROTATE_90_CLOCKWISE)
 
-            out = Image.fromarray(warped)
-            buffer = io.BytesIO()
-            out.save(buffer, format="PNG")
-            return buffer.getvalue()
+            if not _looks_safe_for_ocr(arr, warped):
+                LOGGER.info("Receipt image preprocessing fallback: candidate failed quality checks")
+                return file_bytes
+
+            return _encode_png(warped)
 
         return file_bytes
     except Exception as exc:
