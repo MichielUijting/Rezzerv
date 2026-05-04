@@ -1841,6 +1841,12 @@ export default function KassaPage() {
       })
       persistStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY, [])
       setDeletedReceiptIds([])
+      stopReceiptImportBatchPolling()
+      setIsUploading(false)
+      resetUploadProgress()
+      clearTransientReceiptPreview()
+      setReceiptInboxFocusId('')
+      setUploadMode('manual')
       if (openedReceiptId && deletedIds.includes(String(openedReceiptId))) {
         setOpenedReceiptId('')
         setOpenedReceipt(null)
