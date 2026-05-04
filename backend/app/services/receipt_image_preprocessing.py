@@ -61,7 +61,7 @@ def _four_point_transform(image, pts):
     tl, tr, br, bl = rect
     max_width = int(max(np.linalg.norm(br - bl), np.linalg.norm(tr - tl)))
     max_height = int(max(np.linalg.norm(tr - br), np.linalg.norm(tl - bl)))
-    if max_width < 300 or max_height < 300:
+    if max_width < 180 or max_height < 180:
         return None
     dst = np.array([[0, 0], [max_width - 1, 0], [max_width - 1, max_height - 1], [0, max_height - 1]], dtype='float32')
     matrix = cv2.getPerspectiveTransform(rect, dst)
@@ -77,17 +77,22 @@ def _enhance_for_ocr(rgb):
     return cv2.cvtColor(enhanced, cv2.COLOR_LAB2RGB)
 
 
-def _valid_warp(warped) -> bool:
+def _valid_warp(warped, allow_forced: bool = False) -> bool:
     if warped is None:
         return False
     h, w = warped.shape[:2]
-    if w < 300 or h < 300:
+    if w < 180 or h < 180:
         return False
     gray = cv2.cvtColor(warped, cv2.COLOR_RGB2GRAY)
     mean = float(np.mean(gray))
     std = float(np.std(gray))
     dark_ratio = float(np.mean(gray < 55))
     light_ratio = float(np.mean(gray > 170))
+    if allow_forced:
+        if mean < 25 or mean > 252 or std < 4 or dark_ratio > 0.92:
+            LOGGER.warning('Receipt preprocessing: forced warp rejected mean=%.2f std=%.2f dark=%.3f light=%.3f', mean, std, dark_ratio, light_ratio)
+            return False
+        return True
     if mean < 40 or mean > 248 or std < 8 or dark_ratio > 0.85 or light_ratio < 0.04:
         LOGGER.warning('Receipt preprocessing: scanner warp rejected mean=%.2f std=%.2f dark=%.3f light=%.3f', mean, std, dark_ratio, light_ratio)
         return False
@@ -109,13 +114,13 @@ def _score_candidate(points, contour, image_shape):
     area = float(abs(cv2.contourArea(points.astype('float32'))))
     contour_area = float(cv2.contourArea(contour))
     area_ratio = max(area, contour_area) / image_area if image_area else 0.0
-    if area_ratio < 0.035 or area_ratio > 0.92:
+    if area_ratio < 0.01 or area_ratio > 0.96:
         return None
     x, y, bw, bh = cv2.boundingRect(points.astype('int32'))
-    if bw < 120 or bh < 120:
+    if bw < 80 or bh < 80:
         return None
     aspect = max(float(bw) / float(bh), float(bh) / float(bw))
-    if aspect < 1.15 or aspect > 8.0:
+    if aspect < 1.05 or aspect > 10.0:
         return None
     center_x = x + bw / 2.0
     center_y = y + bh / 2.0
@@ -155,25 +160,46 @@ def _scanner_mask_contours(work_rgb):
     return contours
 
 
+def _forced_min_area_rect(arr, work, scale):
+    all_contours = []
+    for contours in (_scanner_contours(work), _scanner_mask_contours(work)):
+        all_contours.extend(contours)
+    if not all_contours:
+        return None
+    contours = sorted(all_contours, key=cv2.contourArea, reverse=True)
+    for index, contour in enumerate(contours[:8]):
+        if cv2.contourArea(contour) < 50:
+            continue
+        points = cv2.boxPoints(cv2.minAreaRect(contour)).astype('float32') / scale
+        warped = _four_point_transform(arr, points)
+        if _valid_warp(warped, allow_forced=True):
+            LOGGER.warning('Receipt preprocessing: FORCED minAreaRect fallback used index=%s', index)
+            return _enhance_for_ocr(warped)
+    return None
+
+
 def _rectify_with_scanner_pattern(arr):
     work, scale = _resize_for_work(arr)
     candidates = []
     for source_name, contours in (('edges', _scanner_contours(work)), ('mask', _scanner_mask_contours(work))):
-        for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:20]:
+        for contour in sorted(contours, key=cv2.contourArea, reverse=True)[:30]:
             points, method = _contour_to_points(contour)
             score = _score_candidate(points, contour, work.shape)
             if score is None:
-                continue
+                score = 0.01
             full_points = points / scale
             candidates.append((score, source_name, method, full_points))
     candidates.sort(key=lambda item: item[0], reverse=True)
     LOGGER.warning('Receipt preprocessing: scanner candidates=%s', len(candidates))
-    for score, source_name, method, points in candidates[:10]:
+    for score, source_name, method, points in candidates[:15]:
         warped = _four_point_transform(arr, points)
         if not _valid_warp(warped):
             continue
         LOGGER.warning('Receipt preprocessing: scanner contour selected source=%s method=%s score=%.3f', source_name, method, score)
         return _enhance_for_ocr(warped)
+    forced = _forced_min_area_rect(arr, work, scale)
+    if forced is not None:
+        return forced
     return None
 
 
