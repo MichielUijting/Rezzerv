@@ -10,11 +10,9 @@ LOGGER = logging.getLogger(__name__)
 try:
     import cv2
     import numpy as np
-    from deskew import determine_skew
 except Exception:
     cv2 = None
     np = None
-    determine_skew = None
 
 
 def _encode_png(arr) -> bytes:
@@ -24,24 +22,46 @@ def _encode_png(arr) -> bytes:
     return buffer.getvalue()
 
 
-def _rotate_image(arr, angle):
-    if cv2 is None or np is None:
-        return arr
-    try:
-        (h, w) = arr.shape[:2]
-        center = (w // 2, h // 2)
-        matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
-        rotated = cv2.warpAffine(arr, matrix, (w, h), borderValue=(255, 255, 255))
-        return rotated
-    except Exception:
-        return arr
+def _order_points(pts):
+    rect = np.zeros((4, 2), dtype="float32")
+    s = pts.sum(axis=1)
+    rect[0] = pts[np.argmin(s)]
+    rect[2] = pts[np.argmax(s)]
+    diff = np.diff(pts, axis=1)
+    rect[1] = pts[np.argmin(diff)]
+    rect[3] = pts[np.argmax(diff)]
+    return rect
+
+
+def _four_point_transform(image, pts):
+    rect = _order_points(pts)
+    (tl, tr, br, bl) = rect
+
+    widthA = np.linalg.norm(br - bl)
+    widthB = np.linalg.norm(tr - tl)
+    maxWidth = int(max(widthA, widthB))
+
+    heightA = np.linalg.norm(tr - br)
+    heightB = np.linalg.norm(tl - bl)
+    maxHeight = int(max(heightA, heightB))
+
+    dst = np.array([
+        [0, 0],
+        [maxWidth - 1, 0],
+        [maxWidth - 1, maxHeight - 1],
+        [0, maxHeight - 1]], dtype="float32")
+
+    M = cv2.getPerspectiveTransform(rect, dst)
+    warped = cv2.warpPerspective(image, M, (maxWidth, maxHeight))
+
+    return warped
 
 
 def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
-    LOGGER.warning("Receipt preprocessing: module entered")
+    LOGGER.warning("Receipt preprocessing: module entered (rectifier)")
 
-    if cv2 is None or np is None or determine_skew is None:
-        LOGGER.warning(f"Receipt preprocessing: dependencies missing cv2={cv2 is not None}, np={np is not None}, deskew={determine_skew is not None}")
+    if cv2 is None or np is None:
+        LOGGER.warning("Receipt preprocessing: cv2/np missing")
         return file_bytes
 
     try:
@@ -50,22 +70,24 @@ def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
         arr = np.array(image)
 
         gray = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
-        angle = determine_skew(gray)
-        LOGGER.warning(f"Receipt preprocessing: detected angle={angle}")
+        blur = cv2.GaussianBlur(gray, (5, 5), 0)
+        edged = cv2.Canny(blur, 50, 150)
 
-        if angle is None or abs(angle) < 1.0:
-            LOGGER.warning("Receipt preprocessing: skipped (angle too small or None)")
-            return file_bytes
+        contours, _ = cv2.findContours(edged, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)
 
-        applied_angle = -float(angle)
-        rotated = _rotate_image(arr, applied_angle)
+        for c in contours[:5]:
+            peri = cv2.arcLength(c, True)
+            approx = cv2.approxPolyDP(c, 0.02 * peri, True)
 
-        if rotated is None:
-            return file_bytes
+            if len(approx) == 4:
+                LOGGER.warning("Receipt preprocessing: 4-point contour found")
+                warped = _four_point_transform(arr, approx.reshape(4, 2))
+                return _encode_png(warped)
 
-        LOGGER.warning(f"Receipt preprocessing: applied rotation angle={applied_angle}")
-        return _encode_png(rotated)
+        LOGGER.warning("Receipt preprocessing: fallback (no contour)")
+        return file_bytes
 
     except Exception as exc:
-        LOGGER.warning("Deskew preprocessing skipped: %s", exc)
+        LOGGER.warning("Rectifier preprocessing failed: %s", exc)
         return file_bytes
