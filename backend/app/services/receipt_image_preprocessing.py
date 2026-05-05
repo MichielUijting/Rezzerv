@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import io
 import logging
-import math
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -17,23 +16,77 @@ except Exception:
     np = None
 
 DEBUG_OUTPUT_PATH = Path('/app/data/receipts/debug/latest-ocr-preprocessed.png')
-MAX_WORK_SIDE = 1600
 
 
-def _encode_png(arr) -> bytes:
-    out = Image.fromarray(arr)
+def _encode_png(rgb) -> bytes:
+    image = Image.fromarray(rgb)
     buffer = io.BytesIO()
-    out.save(buffer, format='PNG')
+    image.save(buffer, format='PNG')
     return buffer.getvalue()
 
 
-def _save_debug_image(image_bytes: bytes, reason: str) -> None:
+def _save_debug_image(rgb, reason: str) -> None:
     try:
         DEBUG_OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
-        DEBUG_OUTPUT_PATH.write_bytes(image_bytes)
+        DEBUG_OUTPUT_PATH.write_bytes(_encode_png(rgb))
         LOGGER.warning('Receipt preprocessing: debug image saved path=%s reason=%s', DEBUG_OUTPUT_PATH, reason)
     except Exception as exc:
         LOGGER.warning('Receipt preprocessing: debug image save failed: %s', exc)
+
+
+def _rotate_keep_bounds(rgb, angle: float):
+    height, width = rgb.shape[:2]
+    center = (width / 2.0, height / 2.0)
+    matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+    cos = abs(matrix[0, 0])
+    sin = abs(matrix[0, 1])
+    new_width = int((height * sin) + (width * cos))
+    new_height = int((height * cos) + (width * sin))
+    matrix[0, 2] += (new_width / 2.0) - center[0]
+    matrix[1, 2] += (new_height / 2.0) - center[1]
+    return cv2.warpAffine(rgb, matrix, (new_width, new_height), flags=cv2.INTER_LINEAR, borderValue=(255, 255, 255))
+
+
+def _dominant_text_angle(rgb) -> float:
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
+    gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(gray, 50, 150)
+    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=80, minLineLength=max(80, max(rgb.shape[:2]) // 8), maxLineGap=40)
+    if lines is None:
+        LOGGER.warning('Receipt preprocessing: rotation skipped no hough lines')
+        return 0.0
+
+    angles = []
+    for raw in lines[:, 0, :]:
+        x1, y1, x2, y2 = [int(v) for v in raw]
+        length = float(np.hypot(x2 - x1, y2 - y1))
+        if length < 80:
+            continue
+        angle = float(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
+        while angle <= -90:
+            angle += 180
+        while angle > 90:
+            angle -= 180
+        if abs(angle) <= 60:
+            angles.append(angle)
+
+    if not angles:
+        LOGGER.warning('Receipt preprocessing: rotation skipped no usable line angles')
+        return 0.0
+
+    median_angle = float(np.median(angles))
+    LOGGER.warning('Receipt preprocessing: detected rotation angle=%.2f line_count=%s', median_angle, len(angles))
+    return median_angle
+
+
+def _correct_rotation(rgb):
+    angle = _dominant_text_angle(rgb)
+    if abs(angle) < 2.0:
+        LOGGER.warning('Receipt preprocessing: rotation not applied angle=%.2f', angle)
+        return rgb
+    applied_angle = -angle
+    LOGGER.warning('Receipt preprocessing: rotation applied angle=%.2f', applied_angle)
+    return _rotate_keep_bounds(rgb, applied_angle)
 
 
 def _order_points(pts):
@@ -47,215 +100,53 @@ def _order_points(pts):
     return rect
 
 
-def _resize_for_work(rgb):
-    height, width = rgb.shape[:2]
-    largest = max(height, width)
-    if largest <= MAX_WORK_SIDE:
-        return rgb, 1.0
-    scale = MAX_WORK_SIDE / float(largest)
-    resized = cv2.resize(rgb, (int(width * scale), int(height * scale)), interpolation=cv2.INTER_AREA)
-    return resized, scale
-
-
-def _four_point_transform(image, pts):
-    rect = _order_points(pts.astype('float32'))
-    tl, tr, br, bl = rect
-    max_width = int(max(np.linalg.norm(br - bl), np.linalg.norm(tr - tl)))
-    max_height = int(max(np.linalg.norm(tr - br), np.linalg.norm(tl - bl)))
-    if max_width < 180 or max_height < 180:
-        return None
-    dst = np.array([[0, 0], [max_width - 1, 0], [max_width - 1, max_height - 1], [0, max_height - 1]], dtype='float32')
-    matrix = cv2.getPerspectiveTransform(rect, dst)
-    return cv2.warpPerspective(image, matrix, (max_width, max_height), borderValue=(255, 255, 255))
-
-
-def _enhance_for_ocr(rgb):
-    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
-    l_chan, a_chan, b_chan = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-    l_chan = clahe.apply(l_chan)
-    enhanced = cv2.merge((l_chan, a_chan, b_chan))
-    return cv2.cvtColor(enhanced, cv2.COLOR_LAB2RGB)
-
-
-def _valid_warp(warped, allow_forced: bool = False) -> bool:
-    if warped is None:
-        return False
-    h, w = warped.shape[:2]
-    if w < 180 or h < 180:
-        return False
-    gray = cv2.cvtColor(warped, cv2.COLOR_RGB2GRAY)
-    mean = float(np.mean(gray))
-    std = float(np.std(gray))
-    dark_ratio = float(np.mean(gray < 55))
-    light_ratio = float(np.mean(gray > 170))
-    if allow_forced:
-        if mean < 25 or mean > 252 or std < 4 or dark_ratio > 0.92:
-            LOGGER.warning('Receipt preprocessing: forced warp rejected mean=%.2f std=%.2f dark=%.3f light=%.3f', mean, std, dark_ratio, light_ratio)
-            return False
-        return True
-    if mean < 40 or mean > 248 or std < 8 or dark_ratio > 0.85 or light_ratio < 0.025:
-        LOGGER.warning('Receipt preprocessing: hough warp rejected mean=%.2f std=%.2f dark=%.3f light=%.3f', mean, std, dark_ratio, light_ratio)
-        return False
-    return True
-
-
-def _line_angle(line):
-    x1, y1, x2, y2 = line
-    return math.degrees(math.atan2(y2 - y1, x2 - x1))
-
-
-def _line_length(line):
-    x1, y1, x2, y2 = line
-    return math.hypot(x2 - x1, y2 - y1)
-
-
-def _intersect_lines(line_a, line_b):
-    x1, y1, x2, y2 = map(float, line_a)
-    x3, y3, x4, y4 = map(float, line_b)
-    denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
-    if abs(denom) < 1e-6:
-        return None
-    px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom
-    py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom
-    return np.array([px, py], dtype='float32')
-
-
-def _hough_edges(work_rgb):
-    gray = cv2.cvtColor(work_rgb, cv2.COLOR_RGB2GRAY)
-    gray = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(gray)
+def _warp_if_receipt_detected(rgb):
+    gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
-    median = float(np.median(blur))
-    lower = int(max(0, 0.60 * median))
-    upper = int(min(255, 1.40 * median))
-    edges = cv2.Canny(blur, lower, upper)
-    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
-    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel, iterations=1)
-    return edges, lower, upper
+    edges = cv2.Canny(blur, 50, 150)
+    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
 
-
-def _select_hough_lines(lines, width, height):
-    if lines is None:
-        return []
-    min_len = max(width, height) * 0.18
-    selected = []
-    for raw in lines[:, 0, :]:
-        line = tuple(int(v) for v in raw)
-        if _line_length(line) < min_len:
+    for contour in contours:
+        peri = cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, 0.02 * peri, True)
+        if len(approx) != 4:
             continue
-        angle = _line_angle(line)
-        selected.append((line, angle, _line_length(line)))
-    selected.sort(key=lambda item: item[2], reverse=True)
-    return selected[:60]
 
+        points = approx.reshape(4, 2).astype('float32')
+        rect = _order_points(points)
+        tl, tr, br, bl = rect
+        max_width = int(max(np.linalg.norm(br - bl), np.linalg.norm(tr - tl)))
+        max_height = int(max(np.linalg.norm(tr - br), np.linalg.norm(tl - bl)))
+        if max_width < 250 or max_height < 250:
+            continue
 
-def _line_family_candidates(selected):
-    families = []
-    for base_index, (base_line, base_angle, _) in enumerate(selected[:20]):
-        parallel = []
-        perpendicular = []
-        for line, angle, length in selected:
-            delta = abs(((angle - base_angle + 90) % 180) - 90)
-            perp_delta = abs(delta - 90)
-            if delta < 18:
-                parallel.append((line, length))
-            elif perp_delta < 18:
-                perpendicular.append((line, length))
-        if len(parallel) >= 2 and len(perpendicular) >= 2:
-            families.append((base_index, parallel[:8], perpendicular[:8]))
-    return families[:8]
+        dst = np.array([[0, 0], [max_width - 1, 0], [max_width - 1, max_height - 1], [0, max_height - 1]], dtype='float32')
+        matrix = cv2.getPerspectiveTransform(rect, dst)
+        warped = cv2.warpPerspective(rgb, matrix, (max_width, max_height), borderValue=(255, 255, 255))
+        LOGGER.warning('Receipt preprocessing: perspective warp applied width=%s height=%s', max_width, max_height)
+        return warped
 
-
-def _quad_from_line_pair(group_a, group_b, width, height):
-    best = None
-    for i in range(len(group_a)):
-        for j in range(i + 1, len(group_a)):
-            a1, a2 = group_a[i][0], group_a[j][0]
-            for k in range(len(group_b)):
-                for l in range(k + 1, len(group_b)):
-                    b1, b2 = group_b[k][0], group_b[l][0]
-                    pts = [_intersect_lines(a1, b1), _intersect_lines(a1, b2), _intersect_lines(a2, b1), _intersect_lines(a2, b2)]
-                    if any(p is None for p in pts):
-                        continue
-                    pts = np.array(pts, dtype='float32')
-                    margin_x = width * 0.08
-                    margin_y = height * 0.08
-                    if np.any(pts[:, 0] < -margin_x) or np.any(pts[:, 0] > width + margin_x) or np.any(pts[:, 1] < -margin_y) or np.any(pts[:, 1] > height + margin_y):
-                        continue
-                    area = abs(cv2.contourArea(_order_points(pts)))
-                    area_ratio = area / float(width * height)
-                    if area_ratio < 0.04 or area_ratio > 0.92:
-                        continue
-                    x, y, bw, bh = cv2.boundingRect(_order_points(pts).astype('int32'))
-                    aspect = max(float(bw) / float(bh), float(bh) / float(bw)) if bw and bh else 0
-                    if aspect < 1.15 or aspect > 8.5:
-                        continue
-                    score = area_ratio * 2.0 + min(aspect, 4.0) * 0.10
-                    if best is None or score > best[0]:
-                        best = (score, _order_points(pts))
-    return best
-
-
-def _rectify_with_hough(arr):
-    work, scale = _resize_for_work(arr)
-    height, width = work.shape[:2]
-    edges, lower, upper = _hough_edges(work)
-    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=80, minLineLength=int(max(width, height) * 0.16), maxLineGap=45)
-    selected = _select_hough_lines(lines, width, height)
-    LOGGER.warning('Receipt preprocessing: hough lines=%s selected=%s thresholds=%s/%s', 0 if lines is None else len(lines), len(selected), lower, upper)
-    families = _line_family_candidates(selected)
-    LOGGER.warning('Receipt preprocessing: hough line families=%s', len(families))
-
-    best = None
-    for _, parallel, perpendicular in families:
-        candidate = _quad_from_line_pair(parallel, perpendicular, width, height)
-        if candidate and (best is None or candidate[0] > best[0]):
-            best = candidate
-    if best is None:
-        return None
-
-    score, points = best
-    full_points = points / scale
-    warped = _four_point_transform(arr, full_points)
-    if not _valid_warp(warped):
-        return None
-    LOGGER.warning('Receipt preprocessing: hough quad selected score=%.3f points=%s', score, np.round(full_points, 1).tolist())
-    return _enhance_for_ocr(warped)
-
-
-def _fallback_center_crop(arr):
-    h, w = arr.shape[:2]
-    # Laatste redmiddel: centrale 80% behouden, zodat OCR in elk geval minder achtergrond ziet.
-    x1, x2 = int(w * 0.10), int(w * 0.90)
-    y1, y2 = int(h * 0.05), int(h * 0.95)
-    crop = arr[y1:y2, x1:x2]
-    if crop.size == 0:
-        return None
-    LOGGER.warning('Receipt preprocessing: fallback center crop used')
-    return _enhance_for_ocr(crop)
+    LOGGER.warning('Receipt preprocessing: perspective warp skipped no receipt contour')
+    return rgb
 
 
 def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
-    LOGGER.warning('Receipt preprocessing: module entered (hough scanner)')
+    LOGGER.warning('Receipt preprocessing: module entered (clean rotation-first)')
     if cv2 is None or np is None:
         LOGGER.warning('Receipt preprocessing: cv2/np missing')
-        _save_debug_image(file_bytes, 'fallback-dependencies-missing')
         return file_bytes
+
     try:
         image = Image.open(io.BytesIO(file_bytes))
         image = ImageOps.exif_transpose(image).convert('RGB')
-        arr = np.array(image)
-        warped = _rectify_with_hough(arr)
-        if warped is None:
-            warped = _fallback_center_crop(arr)
-        if warped is not None:
-            result = _encode_png(warped)
-            _save_debug_image(result, 'rectified-hough-scanner')
-            return result
-        LOGGER.warning('Receipt preprocessing: fallback original (hough failed)')
-        _save_debug_image(file_bytes, 'fallback-hough-original')
-        return file_bytes
+        rgb = np.array(image)
+
+        rotated = _correct_rotation(rgb)
+        result = _warp_if_receipt_detected(rotated)
+
+        _save_debug_image(result, 'clean-rotation-first')
+        return _encode_png(result)
     except Exception as exc:
-        LOGGER.warning('Hough scanner preprocessing failed: %s', exc)
-        _save_debug_image(file_bytes, 'fallback-exception')
+        LOGGER.warning('Clean rotation-first preprocessing failed: %s', exc)
         return file_bytes
