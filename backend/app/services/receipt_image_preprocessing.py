@@ -16,6 +16,7 @@ except Exception:
     np = None
 
 DEBUG_OUTPUT_PATH = Path('/app/data/receipts/debug/latest-ocr-preprocessed.png')
+MAX_OCR_SIDE = 2600
 
 
 def _encode_png(rgb) -> bytes:
@@ -34,6 +35,17 @@ def _save_debug_image(rgb, reason: str) -> None:
         LOGGER.warning('Receipt preprocessing: debug image save failed: %s', exc)
 
 
+def _resize_max_side(rgb, max_side: int = MAX_OCR_SIDE):
+    height, width = rgb.shape[:2]
+    largest = max(height, width)
+    if largest <= max_side:
+        return rgb
+    scale = max_side / float(largest)
+    resized = cv2.resize(rgb, (int(width * scale), int(height * scale)), interpolation=cv2.INTER_AREA)
+    LOGGER.warning('Receipt preprocessing: resized for OCR from %sx%s to %sx%s', width, height, resized.shape[1], resized.shape[0])
+    return resized
+
+
 def _rotate_keep_bounds(rgb, angle: float):
     height, width = rgb.shape[:2]
     center = (width / 2.0, height / 2.0)
@@ -45,6 +57,18 @@ def _rotate_keep_bounds(rgb, angle: float):
     matrix[0, 2] += (new_width / 2.0) - center[0]
     matrix[1, 2] += (new_height / 2.0) - center[1]
     return cv2.warpAffine(rgb, matrix, (new_width, new_height), flags=cv2.INTER_LINEAR, borderValue=(255, 255, 255))
+
+
+def _normalize_line_angle(angle: float) -> float:
+    while angle <= -90:
+        angle += 180
+    while angle > 90:
+        angle -= 180
+    if angle > 45:
+        angle -= 90
+    elif angle < -45:
+        angle += 90
+    return float(angle)
 
 
 def _dominant_text_angle(rgb) -> float:
@@ -62,12 +86,9 @@ def _dominant_text_angle(rgb) -> float:
         length = float(np.hypot(x2 - x1, y2 - y1))
         if length < 80:
             continue
-        angle = float(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
-        while angle <= -90:
-            angle += 180
-        while angle > 90:
-            angle -= 180
-        if abs(angle) <= 60:
+        raw_angle = float(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
+        angle = _normalize_line_angle(raw_angle)
+        if abs(angle) <= 45:
             angles.append(angle)
 
     if not angles:
@@ -144,8 +165,9 @@ def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
 
         rotated = _correct_rotation(rgb)
         result = _warp_if_receipt_detected(rotated)
+        result = _resize_max_side(result)
 
-        _save_debug_image(result, 'clean-rotation-first')
+        _save_debug_image(result, 'clean-rotation-first-normalized')
         return _encode_png(result)
     except Exception as exc:
         LOGGER.warning('Clean rotation-first preprocessing failed: %s', exc)
