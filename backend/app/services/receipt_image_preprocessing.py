@@ -18,7 +18,7 @@ except Exception:
 DEBUG_DIR = Path('/app/data/receipts/debug')
 DEBUG_OUTPUT_PATH = DEBUG_DIR / 'latest-ocr-preprocessed.png'
 DEBUG_ORIGINAL_PATH = DEBUG_DIR / 'latest-ocr-00-original.png'
-DEBUG_ROTATED_PATH = DEBUG_DIR / 'latest-ocr-01-rectified.png'
+DEBUG_ROTATED_PATH = DEBUG_DIR / 'latest-ocr-01-rotated.png'
 DEBUG_FINAL_PATH = DEBUG_DIR / 'latest-ocr-02-final.png'
 MAX_OCR_SIDE = 2600
 
@@ -59,9 +59,9 @@ def _write_debug_png(path: Path, rgb, reason: str) -> None:
         LOGGER.warning('Receipt preprocessing DEBUG_WRITE_FAILED path=%s reason=%s error=%s', path, reason, exc)
 
 
-def _save_all_debug_images(original, rectified, final, reason: str) -> None:
+def _save_all_debug_images(original, rotated, final, reason: str) -> None:
     _write_debug_png(DEBUG_ORIGINAL_PATH, original, f'{reason}:original')
-    _write_debug_png(DEBUG_ROTATED_PATH, rectified, f'{reason}:rectified')
+    _write_debug_png(DEBUG_ROTATED_PATH, rotated, f'{reason}:rotated')
     _write_debug_png(DEBUG_FINAL_PATH, final, f'{reason}:final')
     _write_debug_png(DEBUG_OUTPUT_PATH, final, f'{reason}:ocr-input-alias')
 
@@ -78,134 +78,117 @@ def _resize_max_side(rgb, max_side: int = MAX_OCR_SIDE):
     return resized
 
 
-def _order_points(pts):
-    rect = np.zeros((4, 2), dtype='float32')
-    s = pts.sum(axis=1)
-    rect[0] = pts[np.argmin(s)]
-    rect[2] = pts[np.argmax(s)]
-    diff = np.diff(pts, axis=1)
-    rect[1] = pts[np.argmin(diff)]
-    rect[3] = pts[np.argmax(diff)]
-    return rect
-
-
-def _four_point_transform(rgb, pts):
-    rect = _order_points(pts.astype('float32'))
-    tl, tr, br, bl = rect
-    max_width = int(max(np.linalg.norm(br - bl), np.linalg.norm(tr - tl)))
-    max_height = int(max(np.linalg.norm(tr - br), np.linalg.norm(tl - bl)))
-    LOGGER.warning('Receipt preprocessing RECTIFY_TARGET width=%s height=%s ordered_points=%s', max_width, max_height, np.round(rect, 1).tolist())
-    if max_width < 250 or max_height < 250:
-        LOGGER.warning('Receipt preprocessing RECTIFY_REJECT reason=too_small width=%s height=%s', max_width, max_height)
-        return None
-    dst = np.array([[0, 0], [max_width - 1, 0], [max_width - 1, max_height - 1], [0, max_height - 1]], dtype='float32')
-    matrix = cv2.getPerspectiveTransform(rect, dst)
-    warped = cv2.warpPerspective(rgb, matrix, (max_width, max_height), borderValue=(255, 255, 255))
-    LOGGER.warning('Receipt preprocessing RECTIFY_APPLIED output_shape=%s stats=%s matrix=%s', _shape_text(warped), _image_stats(warped), np.round(matrix, 3).tolist())
-    return warped
-
-
-def _normalize_portrait(rgb):
+def _rotate_keep_bounds(rgb, angle: float):
     height, width = rgb.shape[:2]
-    rotated = False
-    if width > height:
-        rgb = cv2.rotate(rgb, cv2.ROTATE_90_CLOCKWISE)
-        rotated = True
-    LOGGER.warning('Receipt preprocessing ORIENTATION_NORMALIZE input_width=%s input_height=%s rotated_to_portrait=%s output_shape=%s', width, height, rotated, _shape_text(rgb))
-    return rgb
+    center = (width / 2.0, height / 2.0)
+    matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+    cos = abs(matrix[0, 0])
+    sin = abs(matrix[0, 1])
+    new_width = int((height * sin) + (width * cos))
+    new_height = int((height * cos) + (width * sin))
+    matrix[0, 2] += (new_width / 2.0) - center[0]
+    matrix[1, 2] += (new_height / 2.0) - center[1]
+    LOGGER.warning(
+        'Receipt preprocessing ROTATE_EXEC input_shape=%s angle=%.2f output_size=%sx%s matrix=%s',
+        _shape_text(rgb),
+        angle,
+        new_width,
+        new_height,
+        np.round(matrix, 3).tolist(),
+    )
+    rotated = cv2.warpAffine(rgb, matrix, (new_width, new_height), flags=cv2.INTER_LINEAR, borderValue=(255, 255, 255))
+    LOGGER.warning('Receipt preprocessing ROTATE_RESULT output_shape=%s stats=%s', _shape_text(rotated), _image_stats(rotated))
+    return rotated
 
 
-def _build_paper_mask(rgb):
+def _normalize_line_angle(angle: float) -> float:
+    original = angle
+    while angle <= -90:
+        angle += 180
+    while angle > 90:
+        angle -= 180
+    if angle > 45:
+        angle -= 90
+    elif angle < -45:
+        angle += 90
+    normalized = float(angle)
+    LOGGER.warning('Receipt preprocessing ANGLE_NORMALIZE raw=%.2f normalized=%.2f', original, normalized)
+    return normalized
+
+
+def _dominant_text_angle(rgb) -> float:
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-    lab = cv2.cvtColor(rgb, cv2.COLOR_RGB2LAB)
-    l_chan = lab[:, :, 0]
-    gray_threshold = max(95, int(np.percentile(gray, 63)))
-    l_threshold = max(110, int(np.percentile(l_chan, 61)))
-    mask = cv2.bitwise_or(cv2.inRange(gray, gray_threshold, 255), cv2.inRange(l_chan, l_threshold, 255))
-    close_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (21, 21))
-    open_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, close_kernel, iterations=2)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, open_kernel, iterations=1)
-    LOGGER.warning('Receipt preprocessing MASK thresholds gray=%s lab_l=%s white_ratio=%.4f', gray_threshold, l_threshold, float(np.mean(mask > 0)))
-    return mask
+    gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(gray, 50, 150)
+    nonzero_edges = int(np.count_nonzero(edges))
+    min_line_length = max(80, max(rgb.shape[:2]) // 8)
+    LOGGER.warning('Receipt preprocessing ANGLE_INPUT shape=%s stats=%s edge_pixels=%s minLineLength=%s', _shape_text(rgb), _image_stats(rgb), nonzero_edges, min_line_length)
+
+    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=80, minLineLength=min_line_length, maxLineGap=40)
+    if lines is None:
+        LOGGER.warning('Receipt preprocessing ANGLE_DECISION skipped reason=no_hough_lines')
+        return 0.0
+
+    accepted_angles = []
+    rejected_count = 0
+    raw_line_count = int(len(lines))
+    LOGGER.warning('Receipt preprocessing ANGLE_LINES raw_line_count=%s', raw_line_count)
+
+    for index, raw in enumerate(lines[:, 0, :]):
+        x1, y1, x2, y2 = [int(v) for v in raw]
+        length = float(np.hypot(x2 - x1, y2 - y1))
+        raw_angle = float(np.degrees(np.arctan2(y2 - y1, x2 - x1)))
+        normalized_angle = _normalize_line_angle(raw_angle)
+        accepted = length >= 80 and abs(normalized_angle) <= 45
+        if accepted:
+            accepted_angles.append(normalized_angle)
+        else:
+            rejected_count += 1
+        if index < 20:
+            LOGGER.warning(
+                'Receipt preprocessing ANGLE_LINE index=%s p1=(%s,%s) p2=(%s,%s) length=%.2f raw_angle=%.2f normalized=%.2f accepted=%s',
+                index,
+                x1,
+                y1,
+                x2,
+                y2,
+                length,
+                raw_angle,
+                normalized_angle,
+                accepted,
+            )
+
+    if not accepted_angles:
+        LOGGER.warning('Receipt preprocessing ANGLE_DECISION skipped reason=no_usable_line_angles raw_line_count=%s rejected=%s', raw_line_count, rejected_count)
+        return 0.0
+
+    median_angle = float(np.median(accepted_angles))
+    mean_angle = float(np.mean(accepted_angles))
+    LOGGER.warning(
+        'Receipt preprocessing ANGLE_DECISION detected median=%.2f mean=%.2f accepted=%s rejected=%s all_accepted=%s',
+        median_angle,
+        mean_angle,
+        len(accepted_angles),
+        rejected_count,
+        [round(a, 2) for a in accepted_angles[:30]],
+    )
+    return median_angle
 
 
-def _candidate_score(points, contour, image_shape):
-    height, width = image_shape[:2]
-    image_area = float(height * width)
-    area = float(abs(cv2.contourArea(points.astype('float32'))))
-    contour_area = float(cv2.contourArea(contour))
-    area_ratio = max(area, contour_area) / image_area if image_area else 0.0
-    x, y, bw, bh = cv2.boundingRect(points.astype('int32'))
-    aspect = max(float(bw) / float(bh), float(bh) / float(bw)) if bw and bh else 0.0
-    center_x = x + bw / 2.0
-    center_y = y + bh / 2.0
-    center_penalty = abs(center_x - width / 2.0) / width + abs(center_y - height / 2.0) / height
-    plausible = 0.03 <= area_ratio <= 0.85 and 1.25 <= aspect <= 8.0 and bw >= 200 and bh >= 200
-    score = area_ratio * 2.0 + min(aspect, 5.0) * 0.12 - center_penalty * 0.20
-    return plausible, score, area_ratio, aspect, (x, y, bw, bh)
-
-
-def _detect_receipt_rectangle(rgb):
-    LOGGER.warning('Receipt preprocessing RECT_DETECT start input_shape=%s stats=%s', _shape_text(rgb), _image_stats(rgb))
-    mask = _build_paper_mask(rgb)
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:20]
-    LOGGER.warning('Receipt preprocessing RECT_CONTOURS count=%s', len(contours))
-
-    best = None
-    for index, contour in enumerate(contours):
-        if cv2.contourArea(contour) < 100:
-            continue
-        rect = cv2.minAreaRect(contour)
-        box = cv2.boxPoints(rect).astype('float32')
-        plausible, score, area_ratio, aspect, bbox = _candidate_score(box, contour, rgb.shape)
-        (cx, cy), (rw, rh), rect_angle = rect
-        LOGGER.warning(
-            'Receipt preprocessing RECT_CANDIDATE index=%s contour_area=%.2f center=(%.1f,%.1f) rect_size=(%.1f,%.1f) rect_angle=%.2f area_ratio=%.4f aspect=%.3f bbox=%s plausible=%s score=%.4f box=%s',
-            index,
-            float(cv2.contourArea(contour)),
-            cx,
-            cy,
-            rw,
-            rh,
-            rect_angle,
-            area_ratio,
-            aspect,
-            bbox,
-            plausible,
-            score,
-            np.round(box, 1).tolist(),
-        )
-        if not plausible:
-            continue
-        if best is None or score > best[0]:
-            best = (score, box, rect)
-
-    if best is None:
-        LOGGER.warning('Receipt preprocessing RECT_DETECT result=none')
-        return None
-
-    score, box, rect = best
-    LOGGER.warning('Receipt preprocessing RECT_DETECT selected score=%.4f rect=%s box=%s', score, rect, np.round(box, 1).tolist())
-    return box
-
-
-def _rectify_receipt_document(rgb):
-    points = _detect_receipt_rectangle(rgb)
-    if points is None:
-        LOGGER.warning('Receipt preprocessing RECTIFY skipped reason=no_document_rectangle')
-        return rgb, False
-    warped = _four_point_transform(rgb, points)
-    if warped is None:
-        LOGGER.warning('Receipt preprocessing RECTIFY skipped reason=transform_failed')
-        return rgb, False
-    normalized = _normalize_portrait(warped)
-    return normalized, True
+def _correct_rotation(rgb):
+    LOGGER.warning('Receipt preprocessing ROTATION_STAGE start input_shape=%s', _shape_text(rgb))
+    angle = _dominant_text_angle(rgb)
+    if abs(angle) < 2.0:
+        LOGGER.warning('Receipt preprocessing ROTATION_STAGE not_applied detected_angle=%.2f threshold=2.0', angle)
+        return rgb, angle, 0.0, False
+    applied_angle = -angle
+    LOGGER.warning('Receipt preprocessing ROTATION_STAGE applying detected_angle=%.2f applied_angle=%.2f', angle, applied_angle)
+    rotated = _rotate_keep_bounds(rgb, applied_angle)
+    return rotated, angle, applied_angle, True
 
 
 def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
-    LOGGER.warning('Receipt preprocessing PIPELINE_ENTER variant=document-rectangle-rectifier bytes=%s', len(file_bytes) if file_bytes else 0)
+    LOGGER.warning('Receipt preprocessing PIPELINE_ENTER variant=rotation-only-stable bytes=%s', len(file_bytes) if file_bytes else 0)
     if cv2 is None or np is None:
         LOGGER.warning('Receipt preprocessing PIPELINE_ABORT reason=cv2_or_np_missing cv2=%s np=%s', cv2 is not None, np is not None)
         return file_bytes
@@ -217,13 +200,21 @@ def preprocess_receipt_image_for_ocr(file_bytes: bytes) -> bytes:
         original = np.array(image)
         LOGGER.warning('Receipt preprocessing LOAD_RESULT original_shape=%s stats=%s', _shape_text(original), _image_stats(original))
 
-        rectified, rectified_applied = _rectify_receipt_document(original)
-        LOGGER.warning('Receipt preprocessing AFTER_RECTIFY original_shape=%s rectified_shape=%s rectified_applied=%s same_object=%s', _shape_text(original), _shape_text(rectified), rectified_applied, rectified is original)
+        rotated, detected_angle, applied_angle, rotation_applied = _correct_rotation(original)
+        LOGGER.warning(
+            'Receipt preprocessing AFTER_ROTATION original_shape=%s rotated_shape=%s detected_angle=%.2f applied_angle=%.2f rotation_applied=%s same_object=%s',
+            _shape_text(original),
+            _shape_text(rotated),
+            detected_angle,
+            applied_angle,
+            rotation_applied,
+            rotated is original,
+        )
 
-        final = _resize_max_side(rectified)
-        LOGGER.warning('Receipt preprocessing FINAL original_shape=%s rectified_shape=%s final_shape=%s', _shape_text(original), _shape_text(rectified), _shape_text(final))
+        final = _resize_max_side(rotated)
+        LOGGER.warning('Receipt preprocessing FINAL original_shape=%s rotated_shape=%s final_shape=%s warp_disabled=True', _shape_text(original), _shape_text(rotated), _shape_text(final))
 
-        _save_all_debug_images(original, rectified, final, 'document-rectangle-rectifier')
+        _save_all_debug_images(original, rotated, final, 'rotation-only-stable')
         output = _encode_png(final)
         LOGGER.warning('Receipt preprocessing PIPELINE_EXIT output_bytes=%s debug_alias=%s', len(output), DEBUG_OUTPUT_PATH)
         return output
