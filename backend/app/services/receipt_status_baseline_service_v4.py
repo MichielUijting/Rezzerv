@@ -15,6 +15,37 @@ EXPECTED_STATUS_PATH = BASELINE_DIR / 'expected_status_v4.json'
 CRITERIA_DOC_PATH = BASELINE_DIR / 'Categorie_kassabon_v1.1.docx'
 
 STATUS_LABELS = {'approved': 'Gecontroleerd', 'review_needed': 'Controle nodig', 'manual': 'Handmatig'}
+STORE_CHAIN_LABELS = {
+    'albertheijn': 'Albert Heijn',
+    'ah': 'Albert Heijn',
+    'jumbo': 'Jumbo',
+    'lidl': 'Lidl',
+    'plus': 'PLUS',
+    'aldi': 'ALDI',
+    'action': 'Action',
+    'gamma': 'Gamma',
+    'hornbach': 'Hornbach',
+    'picnic': 'Picnic',
+    'bol': 'Bol',
+    'coolblue': 'Coolblue',
+    'karwei': 'Karwei',
+    'mediamarkt': 'MediaMarkt',
+}
+STORE_CHAIN_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ('Albert Heijn', ('albertheijn', 'ah')), 
+    ('Jumbo', ('jumbo',)),
+    ('Lidl', ('lidl',)),
+    ('PLUS', ('plus',)),
+    ('ALDI', ('aldi',)),
+    ('Action', ('action',)),
+    ('Gamma', ('gamma',)),
+    ('Hornbach', ('hornbach',)),
+    ('Picnic', ('picnic',)),
+    ('Bol', ('bolcom', 'bol')), 
+    ('Coolblue', ('coolblue',)),
+    ('Karwei', ('karwei',)),
+    ('MediaMarkt', ('mediamarkt', 'mediamarkt')), 
+)
 
 
 def _to_decimal(value: Any) -> Decimal | None:
@@ -49,8 +80,42 @@ def _normalize_text(value: Any) -> str:
     return ''.join(ch.lower() for ch in str(value or '').strip() if ch.isalnum())
 
 
+def normalize_store_chain(value: Any) -> str | None:
+    normalized = _normalize_text(value)
+    if not normalized:
+        return None
+    for label, tokens in STORE_CHAIN_PATTERNS:
+        if any(token and token in normalized for token in tokens):
+            return label
+    return None
+
+
+def _store_chain_match(expected: dict[str, Any], actual: dict[str, Any]) -> bool:
+    expected_chain = normalize_store_chain(expected.get('store_chain') or expected.get('store_name'))
+    actual_chain = normalize_store_chain(actual.get('store_chain') or actual.get('store_name'))
+    if expected_chain and actual_chain:
+        return expected_chain == actual_chain
+    return _normalize_text(expected.get('store_name')) == _normalize_text(actual.get('store_name'))
+
+
 def _column_names(conn, table_name: str) -> set[str]:
     return {str(row[1]) for row in conn.execute(text(f'PRAGMA table_info({table_name})')).fetchall()}
+
+
+def _ensure_receipt_store_chain_schema(conn) -> None:
+    columns = _column_names(conn, 'receipt_tables')
+    if 'store_chain' not in columns:
+        conn.execute(text('ALTER TABLE receipt_tables ADD COLUMN store_chain TEXT'))
+        columns.add('store_chain')
+    rows = conn.execute(text('SELECT id, store_name, store_chain FROM receipt_tables')).mappings().all()
+    updates: list[dict[str, Any]] = []
+    for row in rows:
+        current_chain = str(row.get('store_chain') or '').strip()
+        derived_chain = normalize_store_chain(current_chain or row.get('store_name'))
+        if derived_chain and current_chain != derived_chain:
+            updates.append({'id': row.get('id'), 'store_chain': derived_chain})
+    if updates:
+        conn.execute(text('UPDATE receipt_tables SET store_chain = :store_chain WHERE id = :id'), updates)
 
 
 def _actual_line_columns(conn) -> dict[str, str]:
@@ -88,6 +153,7 @@ def _actual_status_inputs(conn, receipt_table_id: str) -> dict[str, Any]:
             rt.raw_receipt_id,
             rt.household_id,
             rt.store_name,
+            rt.store_chain,
             rt.total_amount,
             rt.discount_total,
             rt.line_count,
@@ -101,13 +167,14 @@ def _actual_status_inputs(conn, receipt_table_id: str) -> dict[str, Any]:
         JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
         LEFT JOIN receipt_table_lines rtl ON rtl.receipt_table_id = rt.id
         WHERE rt.id = :receipt_table_id
-        GROUP BY rt.id, rt.raw_receipt_id, rt.household_id, rt.store_name, rt.total_amount, rt.discount_total,
+        GROUP BY rt.id, rt.raw_receipt_id, rt.household_id, rt.store_name, rt.store_chain, rt.total_amount, rt.discount_total,
                  rt.line_count, rt.parse_status, rt.deleted_at, rt.totals_overridden, rr.original_filename
         LIMIT 1
     '''), {'receipt_table_id': receipt_table_id}).mappings().first()
     if not row:
         return {}
     data = dict(row)
+    data['store_chain'] = normalize_store_chain(data.get('store_chain') or data.get('store_name'))
     discount_total = _to_decimal(data.get('discount_total')) or Decimal('0')
     actual_line_sum = _to_decimal(data.get('actual_line_sum')) or Decimal('0')
     total_amount = _to_decimal(data.get('total_amount')) or Decimal('0')
@@ -115,6 +182,7 @@ def _actual_status_inputs(conn, receipt_table_id: str) -> dict[str, Any]:
     net_line_sum = min(net_candidates, key=lambda candidate: abs(candidate - total_amount))
     data.update({
         'active_line_count': int(data.get('active_line_count') or 0),
+        'line_count': int(data.get('active_line_count') or 0),
         'sum_line_total_used_for_decision': float(actual_line_sum),
         'discount_total_used_for_decision': float(discount_total),
         'net_line_sum_used_for_decision': float(net_line_sum),
@@ -123,17 +191,18 @@ def _actual_status_inputs(conn, receipt_table_id: str) -> dict[str, Any]:
 
 
 def _score_actual_match(expected: dict[str, Any], actual: dict[str, Any]) -> tuple[int, dict[str, bool], str]:
-    flags = {'filename_exact': False, 'store_match': False, 'total_match': False, 'line_count_match': False}
+    flags = {'filename_exact': False, 'store_match': False, 'store_chain_match': False, 'total_match': False, 'line_count_match': False}
     score = 0
     reasons = []
     if _normalize_text(expected.get('source_file')) == _normalize_text(actual.get('original_filename')):
         score += 100
         flags['filename_exact'] = True
         reasons.append('bestandsnaam exact')
-    if _normalize_text(expected.get('store_name')) == _normalize_text(actual.get('store_name')):
+    if _store_chain_match(expected, actual):
         score += 30
         flags['store_match'] = True
-        reasons.append('winkelnaam exact genormaliseerd')
+        flags['store_chain_match'] = True
+        reasons.append('winkelketen komt overeen')
     if _amount_equals(expected.get('total_amount'), actual.get('total_amount')):
         score += 20
         flags['total_match'] = True
@@ -146,13 +215,13 @@ def _score_actual_match(expected: dict[str, Any], actual: dict[str, Any]) -> tup
 
 
 def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
-    store_ok = _normalize_text(expected.get('store_name')) == _normalize_text(actual.get('store_name'))
+    store_ok = _store_chain_match(expected, actual)
     total_ok = _amount_equals(actual.get('total_amount'), expected.get('total_amount'))
     count_ok = str(expected.get('line_count')) == str(actual.get('line_count'))
     sum_ok = _amount_equals(actual.get('net_line_sum_used_for_decision'), actual.get('total_amount'))
     failed = []
     if not store_ok:
-        failed.append('STORE_NAME_MISMATCH')
+        failed.append('STORE_CHAIN_MISMATCH')
     if not total_ok:
         failed.append('TOTAL_AMOUNT_MISMATCH')
     if not count_ok:
@@ -160,8 +229,13 @@ def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, 
     if not sum_ok:
         failed.append('LINE_SUM_TOTAL_MISMATCH')
     all_ok = store_ok and total_ok and count_ok and sum_ok
+    expected_chain = normalize_store_chain(expected.get('store_chain') or expected.get('store_name'))
+    actual_chain = normalize_store_chain(actual.get('store_chain') or actual.get('store_name'))
     return {
         'store_name_matches_baseline': store_ok,
+        'store_chain_matches_baseline': store_ok,
+        'expected_store_chain': expected_chain,
+        'actual_store_chain': actual_chain,
         'total_amount_matches_baseline': total_ok,
         'article_count_matches_baseline': count_ok,
         'line_sum_matches_total': sum_ok,
@@ -174,8 +248,9 @@ def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, 
 
 def _reason(criteria: dict[str, Any]) -> str:
     if criteria['all_criteria_pass']:
-        return 'Gecontroleerd: winkelnaam, totaalbedrag, artikelcount en regelsom voldoen aan de PO-norm.'
+        return 'Gecontroleerd: winkelketen, totaalbedrag, artikelcount en regelsom voldoen aan de PO-norm.'
     labels = {
+        'STORE_CHAIN_MISMATCH': 'winkelketen wijkt af van baseline',
         'STORE_NAME_MISMATCH': 'winkelnaam wijkt af van baseline',
         'TOTAL_AMOUNT_MISMATCH': 'totaalbedrag wijkt af van baseline',
         'ARTICLE_COUNT_MISMATCH': 'artikelcount wijkt af van baseline',
@@ -187,7 +262,7 @@ def _reason(criteria: dict[str, Any]) -> str:
 def _fetch_archived_receipt_scope(conn, household_id: str | None = None) -> list[dict[str, Any]]:
     params: dict[str, Any] = {}
     sql = '''
-        SELECT rt.id AS receipt_table_id, rr.original_filename, rt.store_name, rt.purchase_at,
+        SELECT rt.id AS receipt_table_id, rr.original_filename, rt.store_name, rt.store_chain, rt.purchase_at,
                rt.total_amount, rt.parse_status, rt.line_count, rt.deleted_at
         FROM receipt_tables rt
         JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
@@ -197,7 +272,10 @@ def _fetch_archived_receipt_scope(conn, household_id: str | None = None) -> list
         sql += ' AND rt.household_id = :household_id'
         params['household_id'] = str(household_id)
     sql += ' ORDER BY rt.deleted_at DESC, rt.created_at DESC'
-    return [dict(row) for row in conn.execute(text(sql), params).mappings().all()]
+    rows = [dict(row) for row in conn.execute(text(sql), params).mappings().all()]
+    for row in rows:
+        row['store_chain'] = normalize_store_chain(row.get('store_chain') or row.get('store_name'))
+    return rows
 
 
 def _count_difference(left: dict[str, int], right: dict[str, int]) -> int:
@@ -206,6 +284,7 @@ def _count_difference(left: dict[str, int], right: dict[str, int]) -> int:
 
 
 def validate_receipt_status_baseline(conn, household_id: str | None = None) -> dict[str, Any]:
+    _ensure_receipt_store_chain_schema(conn)
     params: dict[str, Any] = {}
     sql = '''
         SELECT rt.id AS receipt_table_id
@@ -232,7 +311,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
     for expected in expected_rows:
         best_actual = None
         best_score = -1
-        best_flags = {'filename_exact': False, 'store_match': False, 'total_match': False, 'line_count_match': False}
+        best_flags = {'filename_exact': False, 'store_match': False, 'store_chain_match': False, 'total_match': False, 'line_count_match': False}
         best_match_reason = ''
         for actual in remaining_actual:
             score, flags, match_reason = _score_actual_match(expected, actual)
@@ -244,6 +323,8 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             details.append({
                 'source_file': expected.get('source_file'),
                 'receipt_id': expected.get('receipt_id'),
+                'expected_store_name': expected.get('store_name'),
+                'expected_store_chain': normalize_store_chain(expected.get('store_name')),
                 'result': 'missing',
                 'po_norm_status': 'review_needed',
                 'po_norm_status_label': _status_label('review_needed'),
@@ -280,7 +361,9 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             'status_matches_po_norm': True,
             'technical_parse_status_matches_po_norm': technical_parse_status == criteria['po_norm_status'],
             'expected_store_name': expected.get('store_name'),
+            'expected_store_chain': criteria.get('expected_store_chain'),
             'store_name': best_actual.get('store_name'),
+            'store_chain': criteria.get('actual_store_chain'),
             'expected_total_amount': expected.get('total_amount'),
             'total_amount': best_actual.get('total_amount'),
             'expected_line_count': expected.get('line_count'),
@@ -290,6 +373,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             'net_line_sum_used_for_decision': best_actual.get('net_line_sum_used_for_decision'),
             'criteria': criteria,
             'store_name_matches_baseline': criteria['store_name_matches_baseline'],
+            'store_chain_matches_baseline': criteria['store_chain_matches_baseline'],
             'total_amount_matches_baseline': criteria['total_amount_matches_baseline'],
             'article_count_matches_baseline': criteria['article_count_matches_baseline'],
             'line_sum_matches_total': criteria['line_sum_matches_total'],
@@ -311,6 +395,8 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
         details.append({
             'source_file': actual.get('original_filename'),
             'receipt_table_id': actual.get('receipt_table_id'),
+            'store_name': actual.get('store_name'),
+            'store_chain': actual.get('store_chain'),
             'technical_parse_status': technical_parse_status,
             'technical_parse_status_label': _status_label(technical_parse_status),
             'actual_parse_status': technical_parse_status,
@@ -349,17 +435,19 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
     return {
         'runtime_datastore': get_runtime_datastore_info(),
         'policy_source': 'receipt_status_baseline_service_v4.py',
-        'policy_mode': 'po_four_criteria_only',
+        'policy_mode': 'po_four_criteria_store_chain',
         'expected_status_file': str(EXPECTED_STATUS_PATH.name),
         'criteria_file': str(CRITERIA_DOC_PATH.name),
         'household_id': str(household_id) if household_id is not None else None,
         'po_norm': {
             'status_gecontroleerd_when_all_true': [
-                'winkelnaam gelijk aan baseline',
+                'winkelketen gelijk aan baseline',
                 'totaalbedrag gelijk aan baseline',
                 'aantal artikelen gelijk aan baseline',
                 'som van artikelregels gelijk aan kassabontotaal',
             ],
+            'store_name_is_display_field': True,
+            'store_chain_is_status_field': True,
             'article_description_affects_status': False,
             'baseline_status_is_not_used_as_override': True,
             'dev_fallback_baseline_used': False,
@@ -385,7 +473,7 @@ def diagnose_receipt_status_baseline(conn, household_id: str | None = None) -> d
     return {
         'runtime_datastore': get_runtime_datastore_info(),
         'policy_source': 'receipt_status_baseline_service_v4.py',
-        'policy_mode': 'po_four_criteria_only',
+        'policy_mode': 'po_four_criteria_store_chain',
         'validation_summary': validation.get('summary', {}),
         'mapping_mismatch_count': len(mapping_mismatches),
         'criterion_mismatch_count': len(criterion_mismatches),
