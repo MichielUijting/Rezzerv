@@ -1,0 +1,16 @@
+[
+  {
+    "receipt_id": "R002",
+    "source_file": "AH App 1.pdf",
+    "line_number": 1,
+    "product_name": "Poedersuiker",
+    "brand_or_variant": null,
+    "quantity": 1,
+    "unit_size": null,
+    "unit_price": 1.19,
+    "line_total": 1.19,
+    "discount_info": null,
+    "net_price": 1.19,
+    "notes": null
+  }
+]
