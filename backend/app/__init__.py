@@ -6,8 +6,8 @@ import sys
 import threading
 import time
 
-# G1 moet actief zijn voordat app.main parse_receipt_content direct importeert.
-# Dit raakt alleen parserdata en niet de PO-statusbron.
+# G1 mag alleen parserdata aanpassen. De PO-statusbron blijft receipt_status_baseline_service_v4.py.
+# We installeren vroeg zodat app.main geen ongepatchte parserbinding vasthoudt.
 try:
     from .services.receipt_chain_duplicate_merge_patch import install_receipt_chain_duplicate_merge_patch
     install_receipt_chain_duplicate_merge_patch()
@@ -19,16 +19,7 @@ def _install_when_ready() -> None:
     for _ in range(200):
         module = sys.modules.get('app.main')
         if module is not None and hasattr(module, 'app') and hasattr(module, 'engine'):
-            try:
-                from .testing_receipt_parser_diagnosis_routes import install_receipt_parser_diagnosis_routes
-                install_receipt_parser_diagnosis_routes(module.app, module.engine)
-            except Exception:
-                pass
-            try:
-                from .testing_receipt_line_diagnosis_routes import install_receipt_line_diagnosis_routes
-                install_receipt_line_diagnosis_routes(module.app, module.engine)
-            except Exception:
-                pass
+            # Eerst parser- en runtimepatches installeren.
             try:
                 from .receipt_recompute_policy_patch import install_recompute_policy_patch
                 install_recompute_policy_patch(module)
@@ -37,11 +28,6 @@ def _install_when_ready() -> None:
             try:
                 from .services.receipt_parser_quality_patch import install_parser_quality_patch
                 install_parser_quality_patch(module)
-            except Exception:
-                pass
-            try:
-                from .services.receipt_chain_duplicate_merge_patch import install_receipt_chain_duplicate_merge_patch
-                install_receipt_chain_duplicate_merge_patch(module)
             except Exception:
                 pass
             try:
@@ -57,6 +43,23 @@ def _install_when_ready() -> None:
             try:
                 from .services.receipt_ocr_preprocessing_patch import install_receipt_ocr_preprocessing_patch
                 install_receipt_ocr_preprocessing_patch(module)
+            except Exception:
+                pass
+            try:
+                from .services.receipt_chain_duplicate_merge_patch import install_receipt_chain_duplicate_merge_patch
+                install_receipt_chain_duplicate_merge_patch(module)
+            except Exception:
+                pass
+
+            # Diagnose-routes pas registreren nadat de definitieve parserbinding actief is.
+            try:
+                from .testing_receipt_parser_diagnosis_routes import install_receipt_parser_diagnosis_routes
+                install_receipt_parser_diagnosis_routes(module.app, module.engine)
+            except Exception:
+                pass
+            try:
+                from .testing_receipt_line_diagnosis_routes import install_receipt_line_diagnosis_routes
+                install_receipt_line_diagnosis_routes(module.app, module.engine)
             except Exception:
                 pass
             return
