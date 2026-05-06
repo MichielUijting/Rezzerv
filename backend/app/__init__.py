@@ -51,7 +51,7 @@ def _install_when_ready() -> None:
             except Exception:
                 pass
 
-            # Diagnose-routes pas registreren nadat de definitieve parserbinding actief is.
+            # Diagnose- en adminroutes pas registreren nadat de definitieve parserbinding actief is.
             try:
                 from .testing_receipt_parser_diagnosis_routes import install_receipt_parser_diagnosis_routes
                 install_receipt_parser_diagnosis_routes(module.app, module.engine)
@@ -60,6 +60,11 @@ def _install_when_ready() -> None:
             try:
                 from .testing_receipt_line_diagnosis_routes import install_receipt_line_diagnosis_routes
                 install_receipt_line_diagnosis_routes(module.app, module.engine)
+            except Exception:
+                pass
+            try:
+                from .testing_receipt_archive_cleanup_routes import install_receipt_archive_cleanup_routes
+                install_receipt_archive_cleanup_routes(module.app, module.engine)
             except Exception:
                 pass
             return
