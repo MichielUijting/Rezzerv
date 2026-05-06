@@ -36,6 +36,11 @@ def _install_when_ready() -> None:
                 install_central_status_patch(module)
             except Exception:
                 pass
+            try:
+                from .services.receipt_ocr_preprocessing_patch import install_receipt_ocr_preprocessing_patch
+                install_receipt_ocr_preprocessing_patch(module)
+            except Exception:
+                pass
             return
         time.sleep(0.1)
 
