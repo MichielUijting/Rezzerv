@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import re
+import sys
 from decimal import Decimal, InvalidOperation
+from difflib import SequenceMatcher
 from typing import Any
 
 from app.services import receipt_service as _receipt_service
 
 _ORIGINAL_PARSE_RECEIPT_CONTENT = _receipt_service.parse_receipt_content
 _ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES = _receipt_service._parse_result_from_text_lines
+_PATCH_MARKER = '__rezzerv_chain_duplicate_merge_patch_v2__'
 
 
 def _normalize_text(value: Any) -> str:
@@ -57,63 +60,42 @@ def _store_chain(store_name: Any, filename: str = '') -> str:
     return ''
 
 
-def _is_weight_or_unit_price_companion(line: dict[str, Any]) -> bool:
-    label = _normalize_text(_line_label(line))
-    compact = _normalize_label(label)
-    if not label:
+def _similar_label(left: Any, right: Any, *, threshold: float = 0.92) -> bool:
+    left_norm = _normalize_label(left)
+    right_norm = _normalize_label(right)
+    if not left_norm or not right_norm:
         return False
-    if re.search(r'\b\d+[\.,]\d+\s*kg\b', label):
+    if left_norm == right_norm:
         return True
-    if 'kg' in compact and re.search(r'\d', label):
-        return True
-    if re.search(r'\b\d+[\.,]\d{2}\s*/\s*kg\b', label):
-        return True
-    if re.fullmatch(r'[0-9,.x ×*/kg]+', label):
-        return True
-    return False
+    if abs(len(left_norm) - len(right_norm)) > 1:
+        return False
+    return SequenceMatcher(None, left_norm, right_norm).ratio() >= threshold
 
 
-def _merge_aldi_adjacent_duplicate_products(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    merged: list[dict[str, Any]] = []
-    index = 0
-    while index < len(lines):
-        current = dict(lines[index])
-        current_label = _normalize_label(_line_label(current))
-        next_line = lines[index + 1] if index + 1 < len(lines) else None
-        if next_line is not None:
-            next_label = _normalize_label(_line_label(next_line))
-            if current_label and current_label == next_label and _same_amount(_line_total(current), _line_total(next_line)):
-                quantity = current.get('quantity')
-                try:
-                    current['quantity'] = float(quantity or 1) + 1
-                except Exception:
-                    current['quantity'] = 2
-                current['confidence_score'] = max(float(current.get('confidence_score') or 0), 0.72)
-                current['duplicate_merge_applied'] = 'aldi_adjacent_same_label_same_amount'
-                merged.append(current)
-                index += 2
-                continue
-        merged.append(current)
-        index += 1
-    return merged
-
-
-def _merge_lidl_weight_companion_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _merge_adjacent_duplicate_products(
+    lines: list[dict[str, Any]],
+    *,
+    marker: str,
+    allow_near_match: bool = False,
+) -> list[dict[str, Any]]:
     merged: list[dict[str, Any]] = []
     index = 0
     while index < len(lines):
         current = dict(lines[index])
         next_line = lines[index + 1] if index + 1 < len(lines) else None
         if next_line is not None and _same_amount(_line_total(current), _line_total(next_line)):
-            current_is_weight = _is_weight_or_unit_price_companion(current)
-            next_is_weight = _is_weight_or_unit_price_companion(next_line)
-            if current_is_weight != next_is_weight:
-                product_line = dict(next_line if current_is_weight else current)
-                companion_line = current if current_is_weight else next_line
-                product_line['confidence_score'] = max(float(product_line.get('confidence_score') or 0), 0.72)
-                product_line['duplicate_merge_applied'] = 'lidl_weight_companion_same_amount'
-                product_line['merged_companion_label'] = _line_label(companion_line)
-                merged.append(product_line)
+            current_label = _line_label(current)
+            next_label = _line_label(next_line)
+            labels_match = _similar_label(current_label, next_label) if allow_near_match else (_normalize_label(current_label) == _normalize_label(next_label))
+            if labels_match:
+                try:
+                    current['quantity'] = float(current.get('quantity') or 1) + 1
+                except Exception:
+                    current['quantity'] = 2
+                current['confidence_score'] = max(float(current.get('confidence_score') or 0), 0.72)
+                current['duplicate_merge_applied'] = marker
+                current['merged_companion_label'] = next_label
+                merged.append(current)
                 index += 2
                 continue
         merged.append(current)
@@ -129,9 +111,17 @@ def _apply_chain_specific_duplicate_merge(result: Any, filename: str = '') -> An
         return result
     chain = _store_chain(getattr(result, 'store_name', None), filename)
     if chain == 'aldi':
-        result.lines = _merge_aldi_adjacent_duplicate_products(lines)
+        result.lines = _merge_adjacent_duplicate_products(
+            lines,
+            marker='aldi_adjacent_near_duplicate_same_amount',
+            allow_near_match=True,
+        )
     elif chain == 'lidl':
-        result.lines = _merge_lidl_weight_companion_lines(lines)
+        result.lines = _merge_adjacent_duplicate_products(
+            lines,
+            marker='lidl_adjacent_duplicate_same_amount',
+            allow_near_match=False,
+        )
     return result
 
 
@@ -143,9 +133,22 @@ def _parse_result_from_text_lines_with_chain_duplicate_merge(text_lines: list[st
     return _apply_chain_specific_duplicate_merge(_ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES(text_lines, filename, **kwargs), filename)
 
 
-def install_receipt_chain_duplicate_merge_patch(*_: Any) -> bool:
+def install_receipt_chain_duplicate_merge_patch(module: Any = None) -> bool:
+    if getattr(_receipt_service.parse_receipt_content, _PATCH_MARKER, False):
+        return True
+
+    setattr(parse_receipt_content, _PATCH_MARKER, True)
+    setattr(_parse_result_from_text_lines_with_chain_duplicate_merge, _PATCH_MARKER, True)
     _receipt_service.parse_receipt_content = parse_receipt_content
     _receipt_service._parse_result_from_text_lines = _parse_result_from_text_lines_with_chain_duplicate_merge
+
+    target_module = module or sys.modules.get('app.main')
+    if target_module is not None:
+        # app.main imports parse_receipt_content directly, so update that binding too.
+        try:
+            target_module.parse_receipt_content = parse_receipt_content
+        except Exception:
+            pass
     return True
 
 
