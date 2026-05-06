@@ -10,7 +10,7 @@ from app.services import receipt_service as _receipt_service
 
 _ORIGINAL_PARSE_RECEIPT_CONTENT = _receipt_service.parse_receipt_content
 _ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES = _receipt_service._parse_result_from_text_lines
-_PATCH_MARKER = '__rezzerv_chain_duplicate_merge_patch_v2__'
+_PATCH_MARKER = '__rezzerv_chain_duplicate_merge_patch_v3__'
 
 
 def _normalize_text(value: Any) -> str:
@@ -103,7 +103,12 @@ def _merge_adjacent_duplicate_products(
     return merged
 
 
-def _apply_chain_specific_duplicate_merge(result: Any, filename: str = '') -> Any:
+def apply_chain_specific_line_postprocessing(result: Any, filename: str = '') -> Any:
+    """SSOT-safe parser postprocessing: improve article lines only.
+
+    This function does not classify receipts and does not touch PO norm status.
+    It only merges chain-specific adjacent duplicate article lines in parser output.
+    """
     if result is None or not getattr(result, 'is_receipt', False):
         return result
     lines = list(getattr(result, 'lines', None) or [])
@@ -126,29 +131,36 @@ def _apply_chain_specific_duplicate_merge(result: Any, filename: str = '') -> An
 
 
 def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str):
-    return _apply_chain_specific_duplicate_merge(_ORIGINAL_PARSE_RECEIPT_CONTENT(file_bytes, filename, mime_type), filename)
+    return apply_chain_specific_line_postprocessing(_ORIGINAL_PARSE_RECEIPT_CONTENT(file_bytes, filename, mime_type), filename)
 
 
 def _parse_result_from_text_lines_with_chain_duplicate_merge(text_lines: list[str], filename: str, **kwargs: Any):
-    return _apply_chain_specific_duplicate_merge(_ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES(text_lines, filename, **kwargs), filename)
+    return apply_chain_specific_line_postprocessing(_ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES(text_lines, filename, **kwargs), filename)
+
+
+def _bind_parser_references(module: Any = None) -> None:
+    target_module = module or sys.modules.get('app.main')
+    if target_module is not None:
+        try:
+            target_module.parse_receipt_content = _receipt_service.parse_receipt_content
+        except Exception:
+            pass
+        try:
+            target_module._parse_result_from_text_lines = _receipt_service._parse_result_from_text_lines
+        except Exception:
+            pass
 
 
 def install_receipt_chain_duplicate_merge_patch(module: Any = None) -> bool:
-    if getattr(_receipt_service.parse_receipt_content, _PATCH_MARKER, False):
-        return True
+    already_installed = getattr(_receipt_service.parse_receipt_content, _PATCH_MARKER, False)
+    if not already_installed:
+        setattr(parse_receipt_content, _PATCH_MARKER, True)
+        setattr(_parse_result_from_text_lines_with_chain_duplicate_merge, _PATCH_MARKER, True)
+        _receipt_service.parse_receipt_content = parse_receipt_content
+        _receipt_service._parse_result_from_text_lines = _parse_result_from_text_lines_with_chain_duplicate_merge
 
-    setattr(parse_receipt_content, _PATCH_MARKER, True)
-    setattr(_parse_result_from_text_lines_with_chain_duplicate_merge, _PATCH_MARKER, True)
-    _receipt_service.parse_receipt_content = parse_receipt_content
-    _receipt_service._parse_result_from_text_lines = _parse_result_from_text_lines_with_chain_duplicate_merge
-
-    target_module = module or sys.modules.get('app.main')
-    if target_module is not None:
-        # app.main imports parse_receipt_content directly, so update that binding too.
-        try:
-            target_module.parse_receipt_content = parse_receipt_content
-        except Exception:
-            pass
+    # Always rebind modules that imported parser functions directly, even when already installed.
+    _bind_parser_references(module)
     return True
 
 
