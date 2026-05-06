@@ -6,19 +6,22 @@ import "./ui/components/header.css";
 import "./ui/components/table.css";
 import "./styles.css";
 
-// Admin-sidecars
-import './features/admin/archiveCleanupButton.js'
-
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
+import AdminArchiveCleanupButton from './features/admin/AdminArchiveCleanupButton.jsx'
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-)
+function Root() {
+  const isAdmin = typeof window !== 'undefined' && window.location.pathname === '/admin'
+  return (
+    <React.StrictMode>
+      <App />
+      {isAdmin ? <AdminArchiveCleanupButton /> : null}
+    </React.StrictMode>
+  )
+}
 
+ReactDOM.createRoot(document.getElementById('root')).render(<Root />)
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
