@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -8,7 +9,6 @@ from typing import Any
 from fastapi import Response
 from sqlalchemy import text
 
-from app.services.receipt_service import parse_receipt_content
 from app.services.receipt_status_baseline_service_v4 import validate_receipt_status_baseline
 
 TARGET_FILENAMES = ('Aldi foto 2.jpg', 'Lidl App 2.png')
@@ -28,6 +28,32 @@ def _to_number(value: Any) -> float | int | None:
 
 def _normalize_filename(value: Any) -> str:
     return ''.join(ch.lower() for ch in str(value or '').strip() if ch.isalnum())
+
+
+def _function_trace(fn: Any) -> dict[str, Any]:
+    return {
+        'module': getattr(fn, '__module__', None),
+        'name': getattr(fn, '__name__', None),
+        'qualname': getattr(fn, '__qualname__', None),
+        'id': id(fn),
+        'marker_v2': bool(getattr(fn, '__rezzerv_chain_duplicate_merge_patch_v2__', False)),
+        'marker_v3': bool(getattr(fn, '__rezzerv_chain_duplicate_merge_patch_v3__', False)),
+    }
+
+
+def _runtime_parser_trace() -> dict[str, Any]:
+    from app.services import receipt_service
+    main_module = sys.modules.get('app.main')
+    chain_module = sys.modules.get('app.services.receipt_chain_duplicate_merge_patch')
+    service_fn = getattr(receipt_service, 'parse_receipt_content', None)
+    main_fn = getattr(main_module, 'parse_receipt_content', None) if main_module is not None else None
+    return {
+        'receipt_service_parse_receipt_content': _function_trace(service_fn),
+        'app_main_parse_receipt_content': _function_trace(main_fn) if main_fn else None,
+        'same_function_object': bool(service_fn is not None and main_fn is not None and service_fn is main_fn),
+        'chain_patch_module_loaded': chain_module is not None,
+        'chain_patch_has_apply_function': bool(chain_module is not None and hasattr(chain_module, 'apply_chain_specific_line_postprocessing')),
+    }
 
 
 def _receipt_line_dict(row: dict[str, Any]) -> dict[str, Any]:
@@ -70,19 +96,38 @@ def _reparse_line_dict(line: dict[str, Any], fallback_index: int) -> dict[str, A
 
 
 def _build_live_reparse(row: dict[str, Any]) -> dict[str, Any]:
+    from app.services import receipt_service
     storage_path = str(row.get('storage_path') or '').strip()
     filename = str(row.get('original_filename') or 'receipt').strip() or 'receipt'
     mime_type = str(row.get('mime_type') or '').strip()
     if not storage_path:
-        return {'available': False, 'error': 'storage_path_missing'}
+        return {'available': False, 'error': 'storage_path_missing', 'runtime_trace': _runtime_parser_trace()}
     path = Path(storage_path)
     if not path.exists():
-        return {'available': False, 'error': f'storage_file_missing:{storage_path}'}
+        return {'available': False, 'error': f'storage_file_missing:{storage_path}', 'runtime_trace': _runtime_parser_trace()}
+    runtime_trace_before = _runtime_parser_trace()
     try:
-        result = parse_receipt_content(path.read_bytes(), filename, mime_type)
+        result = receipt_service.parse_receipt_content(path.read_bytes(), filename, mime_type)
+        before_line_count = len(list(getattr(result, 'lines', None) or []))
+        postprocess_probe = {'available': False}
+        chain_module = sys.modules.get('app.services.receipt_chain_duplicate_merge_patch')
+        if chain_module is not None and hasattr(chain_module, 'apply_chain_specific_line_postprocessing'):
+            probe_result = chain_module.apply_chain_specific_line_postprocessing(result, filename)
+            probe_lines = list(getattr(probe_result, 'lines', None) or [])
+            postprocess_probe = {
+                'available': True,
+                'before_line_count': before_line_count,
+                'after_line_count': len(probe_lines),
+                'changed': len(probe_lines) != before_line_count,
+                'markers': [line.get('duplicate_merge_applied') for line in probe_lines if line.get('duplicate_merge_applied')],
+            }
+            result = probe_result
         lines = [_reparse_line_dict(line, index) for index, line in enumerate(list(getattr(result, 'lines', None) or []))]
         return {
             'available': True,
+            'runtime_trace_before_parse': runtime_trace_before,
+            'runtime_trace_after_parse': _runtime_parser_trace(),
+            'postprocess_probe': postprocess_probe,
             'store_name': getattr(result, 'store_name', None),
             'total_amount': _to_number(getattr(result, 'total_amount', None)),
             'discount_total': _to_number(getattr(result, 'discount_total', None)),
@@ -90,7 +135,7 @@ def _build_live_reparse(row: dict[str, Any]) -> dict[str, Any]:
             'lines': lines,
         }
     except Exception as exc:  # pragma: no cover - diagnostic endpoint must be resilient
-        return {'available': False, 'error': f'{exc.__class__.__name__}: {exc}'}
+        return {'available': False, 'error': f'{exc.__class__.__name__}: {exc}', 'runtime_trace': _runtime_parser_trace()}
 
 
 def _baseline_detail_map(conn, household_id: str | None = None) -> dict[str, dict[str, Any]]:
@@ -116,20 +161,9 @@ def build_receipt_line_diagnosis(engine, household_id: str = '1', filenames: lis
         receipt_rows = conn.execute(
             text(
                 '''
-                SELECT
-                    rt.id AS receipt_table_id,
-                    rt.raw_receipt_id,
-                    rr.original_filename,
-                    rr.mime_type,
-                    rr.storage_path,
-                    rt.household_id,
-                    rt.store_name,
-                    rt.store_chain,
-                    rt.total_amount,
-                    rt.discount_total,
-                    rt.line_count,
-                    rt.deleted_at,
-                    rr.deleted_at AS raw_deleted_at
+                SELECT rt.id AS receipt_table_id, rt.raw_receipt_id, rr.original_filename, rr.mime_type, rr.storage_path,
+                       rt.household_id, rt.store_name, rt.store_chain, rt.total_amount, rt.discount_total, rt.line_count,
+                       rt.deleted_at, rr.deleted_at AS raw_deleted_at
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 WHERE rt.household_id = :household_id
@@ -153,27 +187,11 @@ def build_receipt_line_diagnosis(engine, household_id: str = '1', filenames: lis
             line_rows = conn.execute(
                 text(
                     f'''
-                    SELECT
-                        rtl.id,
-                        rtl.receipt_table_id,
-                        rtl.line_index,
-                        rtl.raw_label,
-                        rtl.normalized_label,
-                        rtl.corrected_raw_label,
-                        rtl.quantity,
-                        rtl.corrected_quantity,
-                        rtl.unit,
-                        rtl.corrected_unit,
-                        rtl.unit_price,
-                        rtl.corrected_unit_price,
-                        rtl.line_total,
-                        rtl.corrected_line_total,
-                        rtl.discount_amount,
-                        rtl.barcode,
-                        rtl.confidence_score,
-                        rtl.is_deleted,
-                        rtl.is_validated
-                        {source_index_select}
+                    SELECT rtl.id, rtl.receipt_table_id, rtl.line_index, rtl.raw_label, rtl.normalized_label,
+                           rtl.corrected_raw_label, rtl.quantity, rtl.corrected_quantity, rtl.unit, rtl.corrected_unit,
+                           rtl.unit_price, rtl.corrected_unit_price, rtl.line_total, rtl.corrected_line_total,
+                           rtl.discount_amount, rtl.barcode, rtl.confidence_score, rtl.is_deleted, rtl.is_validated
+                           {source_index_select}
                     FROM receipt_table_lines rtl
                     WHERE rtl.receipt_table_id = :receipt_table_id
                     ORDER BY rtl.line_index, rtl.id
@@ -205,7 +223,7 @@ def build_receipt_line_diagnosis(engine, household_id: str = '1', filenames: lis
 
     return {
         'generated_at': datetime.now(timezone.utc).isoformat(),
-        'purpose': 'Read-only line-level diagnose voor G1: ALDI duplicate merge en Lidl weighted-product merge.',
+        'purpose': 'Read-only line-level diagnose voor G1 met runtime parsertrace.',
         'scope': {
             'read_only': True,
             'active_receipts_only': True,
@@ -215,6 +233,7 @@ def build_receipt_line_diagnosis(engine, household_id: str = '1', filenames: lis
             'target_filenames': requested,
             'status_source': 'receipt_status_baseline_service_v4.py via po_norm_status_label',
         },
+        'runtime_parser_trace': _runtime_parser_trace(),
         'summary': {
             'requested': len(requested),
             'returned': len(receipts),
