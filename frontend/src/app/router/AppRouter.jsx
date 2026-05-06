@@ -1,6 +1,7 @@
 import React from 'react'
 import { Navigate, RouterProvider, createBrowserRouter, useNavigate } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
+import AdminArchiveCleanupButton from '../../features/admin/AdminArchiveCleanupButton.jsx'
 import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
@@ -59,6 +60,15 @@ function ProtectedSettings({ children, allowViewer = true }) {
   return <AuthGuard><SettingsGuard allowViewer={allowViewer}>{children}</SettingsGuard></AuthGuard>
 }
 
+function AdminRoute() {
+  return (
+    <ProtectedAdmin>
+      <AdminPage />
+      <AdminArchiveCleanupButton />
+    </ProtectedAdmin>
+  )
+}
+
 const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
   { path: '/reset-session', element: <ResetSessionRoute /> },
@@ -86,7 +96,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/locaties', element: <ProtectedSettings allowViewer={false}><SettingsLocationsPage /></ProtectedSettings> },
   { path: '/instellingen/ruimtes', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
   { path: '/instellingen/sublocaties', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
-  { path: '/admin', element: <ProtectedAdmin><AdminPage /></ProtectedAdmin> },
+  { path: '/admin', element: <AdminRoute /> },
   { path: '*', element: <Navigate to="/login" replace /> },
 ])
 
