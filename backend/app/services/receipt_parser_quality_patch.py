@@ -23,6 +23,21 @@ PRODUCT_LINE_BLACKLIST = (
     'autorisatie',
     'subtotaal',
     'wisselgeld',
+    'omschrijving',
+    'aantal omschrijving',
+    'artikel in bon',
+    'app deals',
+    'bonus',
+    'korting',
+    'voordeel',
+)
+
+NON_PRODUCT_LABEL_PATTERNS = (
+    re.compile(r'^\s*aantal\s+omschrijving\s*$', re.IGNORECASE),
+    re.compile(r'^\s*omschrijving\s*$', re.IGNORECASE),
+    re.compile(r'^\s*artikel\s+in\s+bon\s*$', re.IGNORECASE),
+    re.compile(r'^\s*app\s+deals?\s*$', re.IGNORECASE),
+    re.compile(r'^\s*(bonus|korting|voordeel)\b', re.IGNORECASE),
 )
 
 
@@ -46,6 +61,20 @@ def _as_float(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
 
 
+def _clean_label(value: Any) -> str:
+    return re.sub(r'\s+', ' ', str(value or '')).strip()
+
+
+def _is_non_product_label(value: Any) -> bool:
+    label = _clean_label(value)
+    lowered = label.lower()
+    if not label:
+        return True
+    if any(pattern.search(label) for pattern in NON_PRODUCT_LABEL_PATTERNS):
+        return True
+    return any(marker in lowered for marker in PRODUCT_LINE_BLACKLIST if marker not in {'bonus', 'korting', 'voordeel'})
+
+
 def merge_lines(lines: list[str]) -> list[str]:
     """Merge detached OCR product labels with following price-only lines before parsing."""
     merged: list[str] = []
@@ -57,7 +86,11 @@ def merge_lines(lines: list[str]) -> list[str]:
         text = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
         if not text:
             continue
-
+        if _is_non_product_label(text) and not re.search(r'-?\d{1,6}[\.,]\d{2}', text):
+            if buffer:
+                merged.append(buffer)
+                buffer = None
+            continue
         if amount_at_end.search(text):
             if buffer and price_only.match(text):
                 merged.append(f'{buffer} {text}')
@@ -104,7 +137,7 @@ def _generic_product_line_from_text(text: str, source_index: int) -> dict[str, A
         return None
     label = text[: text.rfind(prices[-1])].strip(' .:-')
     label = re.sub(r'\b\d+\s*[xX]\s*$', '', label).strip(' .:-')
-    if not label or len(label) < 2:
+    if not label or len(label) < 2 or _is_non_product_label(label):
         return None
     quantity = None
     qty_match = re.search(r'\b(\d+(?:[\.,]\d+)?)\s*[xX]\b', text)
@@ -155,7 +188,7 @@ def _normalize_receipt_lines(lines: list[dict[str, Any]] | None) -> list[dict[st
         if line.get('line_total') is None:
             continue
         label = str(line.get('normalized_label') or line.get('raw_label') or '').strip()
-        if not label:
+        if not label or _is_non_product_label(label):
             continue
         cleaned = dict(line)
         cleaned['normalized_label'] = label
@@ -262,5 +295,10 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str):
     return _reclassify_result(_ORIGINAL_PARSE_RECEIPT_CONTENT(file_bytes, filename, mime_type))
 
 
-_receipt_service._parse_result_from_text_lines = _parse_result_from_text_lines_with_merge
-_receipt_service.parse_receipt_content = parse_receipt_content
+def install_parser_quality_patch(*_: Any) -> bool:
+    _receipt_service._parse_result_from_text_lines = _parse_result_from_text_lines_with_merge
+    _receipt_service.parse_receipt_content = parse_receipt_content
+    return True
+
+
+install_parser_quality_patch()
