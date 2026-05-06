@@ -6,6 +6,14 @@ import sys
 import threading
 import time
 
+# G1 moet actief zijn voordat app.main parse_receipt_content direct importeert.
+# Dit raakt alleen parserdata en niet de PO-statusbron.
+try:
+    from .services.receipt_chain_duplicate_merge_patch import install_receipt_chain_duplicate_merge_patch
+    install_receipt_chain_duplicate_merge_patch()
+except Exception:
+    pass
+
 
 def _install_when_ready() -> None:
     for _ in range(200):
