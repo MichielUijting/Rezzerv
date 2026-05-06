@@ -66,7 +66,7 @@ export default function ReceiptsPage() {
       providerName: providerLabel(batch),
       dateLabel: batch.purchase_date || batch.created_at?.slice(0, 10) || '-',
       totalLines: Number(batch.summary?.total || batch.lines?.length || 0),
-      statusLabel: batch.inbox_status || 'Nieuw',
+      statusLabel: batch.po_norm_status_label || 'Controle nodig',
     }))
 
     const filtered = enriched
