@@ -17,6 +17,11 @@ def _install_when_ready() -> None:
             except Exception:
                 pass
             try:
+                from .testing_receipt_line_diagnosis_routes import install_receipt_line_diagnosis_routes
+                install_receipt_line_diagnosis_routes(module.app, module.engine)
+            except Exception:
+                pass
+            try:
                 from .receipt_recompute_policy_patch import install_recompute_policy_patch
                 install_recompute_policy_patch(module)
             except Exception:
@@ -24,6 +29,11 @@ def _install_when_ready() -> None:
             try:
                 from .services.receipt_parser_quality_patch import install_parser_quality_patch
                 install_parser_quality_patch(module)
+            except Exception:
+                pass
+            try:
+                from .services.receipt_chain_duplicate_merge_patch import install_receipt_chain_duplicate_merge_patch
+                install_receipt_chain_duplicate_merge_patch(module)
             except Exception:
                 pass
             try:
