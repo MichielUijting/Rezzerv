@@ -6,6 +6,9 @@ import "./ui/components/header.css";
 import "./ui/components/table.css";
 import "./styles.css";
 
+// Admin-sidecars
+import './features/admin/archiveCleanupButton.js'
+
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
