@@ -8937,13 +8937,15 @@ def derive_unpack_receipt_status(receipt):
     return str(criteria.get('inbox_status') or 'Handmatig')
 
 def map_parse_status_to_ui(parse_status):
-    status = str(parse_status or '').strip().lower()
-    if status in {'approved', 'parsed', 'approved_override'}:
-        return 'Gecontroleerd'
-    if status in {'review_needed', 'partial'}:
-        return 'Controle nodig'
-    return 'Handmatig'
+    from app.services.receipt_ssot_status import apply_po_norm_status
 
+    normalized = apply_po_norm_status({'parse_status': parse_status})
+    return str(
+        normalized.get('actual_status_label')
+        or normalized.get('po_norm_status_label')
+        or normalized.get('inbox_status')
+        or 'Handmatig'
+    )
 
 def ensure_receipt_unpack_provider(conn):
     provider = conn.execute(
