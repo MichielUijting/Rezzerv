@@ -205,9 +205,15 @@ def install_receipt_line_diagnosis_routes(app, engine) -> None:
     def receipt_line_diagnosis_download(householdId: str = '1', filenames: str | None = None):
         payload = build_receipt_line_diagnosis(engine, household_id=householdId, filenames=None)
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-        filename = f'rezzerv_receipt_line_diagnosis_{timestamp}.json'
+        filename = f'rezzerv_receipt_line_diagnosis_all_active_{timestamp}.json'
         return Response(
             content=json.dumps(payload, ensure_ascii=False, indent=2),
-            media_type='application/json',
-            headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+            media_type='application/json; charset=utf-8',
+            headers={
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'X-Rezzerv-Diagnosis-Selection': 'all_active_receipts',
+            },
         )
