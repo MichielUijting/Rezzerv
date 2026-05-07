@@ -66,6 +66,7 @@ export default function AdminPage() {
   const [diagnostics, setDiagnostics] = useState({ location: null, process: null });
   const [regressionProgress, setRegressionProgress] = useState({ status: 'idle', activeScenario: null, activeStep: null, completedScenario: null, lastError: null, updatedAt: null });
   const [diagnosticMessage, setDiagnosticMessage] = useState("");
+  const [isPurgingArchivedReceipts, setIsPurgingArchivedReceipts] = useState(false);
 
   useDismissOnComponentClick([() => setMessage(""), () => setTestMessage(""), () => setDiagnosticMessage("")], Boolean(message || testMessage || diagnosticMessage));
   const [isRunningLocationDiagnostic, setIsRunningLocationDiagnostic] = useState(false);
@@ -196,6 +197,31 @@ export default function AdminPage() {
 
   async function handleReset() {
     await postJson("/api/dev/reset-data", {}, "Demo data verwijderd");
+  }
+
+  async function handlePurgeArchivedReceipts() {
+    setMessage("");
+    const confirmed = window.confirm("Gearchiveerde kassabonnen definitief verwijderen? Actieve bonnen blijven behouden.");
+    if (!confirmed) return;
+    setIsPurgingArchivedReceipts(true);
+    try {
+      const res = await fetch("/api/admin/receipts/purge-archived", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: JSON.stringify({ household_id: householdId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.detail || "Gearchiveerde bonnen definitief verwijderen mislukt");
+        return;
+      }
+      setMessage(`${data.purged_receipt_count || 0} gearchiveerde bon(nen) definitief verwijderd`);
+      await fetchStatus();
+    } catch {
+      setMessage("Gearchiveerde bonnen definitief verwijderen mislukt");
+    } finally {
+      setIsPurgingArchivedReceipts(false);
+    }
   }
 
   async function handleCreateSpace() {
@@ -507,6 +533,9 @@ export default function AdminPage() {
               <Button variant="primary" onClick={handleGenerateDemo}>Genereer demo data</Button>
               <Button variant="secondary" onClick={handleResetGenerate}>Reset + Demo data</Button>
               <Button variant="secondary" onClick={handleReset}>Reset demo data</Button>
+              <Button variant="secondary" onClick={handlePurgeArchivedReceipts} disabled={isPurgingArchivedReceipts}>
+                {isPurgingArchivedReceipts ? "Verwijderen…" : "Gearchiveerde bonnen definitief verwijderen"}
+              </Button>
               <Button variant="secondary" onClick={async ()=>{await fetch("/api/dev/generate-article-testdata",{method:"POST", headers: getAuthHeaders()});navigate("/voorraad", { replace: false });}}>Artikel testdata</Button>
             </div>
           </div>
