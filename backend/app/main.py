@@ -8933,19 +8933,16 @@ def recompute_receipt_review_state(conn, receipt_table_id: str):
     )
 
 def derive_unpack_receipt_status(receipt):
-    criteria = evaluate_receipt_unpack_criteria(receipt)
-    return str(criteria.get('inbox_status') or 'Handmatig')
-
-def map_parse_status_to_ui(parse_status):
     from app.services.receipt_ssot_status import apply_po_norm_status
 
-    normalized = apply_po_norm_status({'parse_status': parse_status})
-    return str(
-        normalized.get('actual_status_label')
-        or normalized.get('po_norm_status_label')
-        or normalized.get('inbox_status')
-        or 'Handmatig'
-    )
+    normalized = apply_po_norm_status(dict(receipt or {}))
+    return str(normalized.get('po_norm_status_label') or normalized.get('inbox_status') or 'Controle nodig')
+
+
+def map_parse_status_to_ui(parse_status):
+    # Legacy fallback: Kassa-status mag niet uit parse_status worden afgeleid.
+    # Volledige receipt-payloads moeten via apply_po_norm_status(payload) lopen.
+    return 'Controle nodig'
 
 def ensure_receipt_unpack_provider(conn):
     provider = conn.execute(
@@ -11754,8 +11751,8 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
         if dedupe_key in seen_keys:
             continue
         seen_keys.add(dedupe_key)
-        serialized = serialize_receipt_row(dict(row))
-        serialized['inbox_status'] = map_parse_status_to_ui(serialized.get('parse_status'))
+        from app.services.receipt_ssot_status import apply_po_norm_status
+        serialized = apply_po_norm_status(serialize_receipt_row(dict(row)))
         serialized.pop('original_filename', None)
         serialized.pop('sha256_hash', None)
         deduped_items.append(serialized)
@@ -11956,8 +11953,8 @@ def get_receipt_detail(receipt_table_id: str, authorization: Optional[str] = Hea
             ),
             {"receipt_table_id": receipt_table_id},
         ).mappings().all()
-    payload = serialize_receipt_row(dict(header))
-    payload['inbox_status'] = map_parse_status_to_ui(payload.get('parse_status'))
+    from app.services.receipt_ssot_status import apply_po_norm_status
+    payload = apply_po_norm_status(serialize_receipt_row(dict(header)))
     payload["lines"] = [serialize_receipt_row(dict(line)) for line in lines]
     return payload
 
