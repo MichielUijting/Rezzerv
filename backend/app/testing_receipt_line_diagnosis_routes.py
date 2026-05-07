@@ -11,8 +11,6 @@ from sqlalchemy import text
 from app.services.receipt_service import parse_receipt_content
 from app.services.receipt_status_baseline_service_v4 import validate_receipt_status_baseline
 
-TARGET_FILENAMES = ('Aldi foto 2.jpg', 'Lidl App 2.png')
-
 
 def _to_number(value: Any) -> float | int | None:
     if value is None:
@@ -107,8 +105,9 @@ def _baseline_detail_map(conn, household_id: str | None = None) -> dict[str, dic
 
 
 def build_receipt_line_diagnosis(engine, household_id: str = '1', filenames: list[str] | None = None) -> dict[str, Any]:
-    requested = filenames or list(TARGET_FILENAMES)
-    requested_keys = {_normalize_filename(name) for name in requested if _normalize_filename(name)}
+    # SSOT: line-level diagnosis must analyse all active receipts by default.
+    # The filenames argument is kept for backward-compatible callers but is deliberately ignored.
+    requested: list[str] = []
     with engine.begin() as conn:
         baseline_map = _baseline_detail_map(conn, household_id=str(household_id) if household_id is not None else None)
         line_columns = {str(row.get('name')) for row in conn.execute(text('PRAGMA table_info(receipt_table_lines)')).mappings().all()}
@@ -132,8 +131,6 @@ def build_receipt_line_diagnosis(engine, household_id: str = '1', filenames: lis
         receipts: list[dict[str, Any]] = []
         for row in receipt_rows:
             row_dict = dict(row)
-            if _normalize_filename(row_dict.get('original_filename')) not in requested_keys:
-                continue
             receipt_id = str(row_dict.get('receipt_table_id'))
             line_rows = conn.execute(
                 text(f'''
@@ -172,7 +169,7 @@ def build_receipt_line_diagnosis(engine, household_id: str = '1', filenames: lis
 
     return {
         'generated_at': datetime.now(timezone.utc).isoformat(),
-        'purpose': 'Read-only line-level diagnose; gebruikt alleen actieve kassabonnen.',
+        'purpose': 'Read-only line-level diagnose; gebruikt alle actieve kassabonnen.',
         'scope': {
             'read_only': True,
             'active_receipts_only': True,
@@ -180,9 +177,10 @@ def build_receipt_line_diagnosis(engine, household_id: str = '1', filenames: lis
             'status_classification_changed': False,
             'ui_changed': False,
             'target_filenames': requested,
+            'selection': 'all_active_receipts',
             'status_source': 'receipt_status_baseline_service_v4.py via po_norm_status_label',
         },
-        'summary': {'requested': len(requested), 'returned': len(receipts)},
+        'summary': {'requested': 'all_active_receipts', 'returned': len(receipts)},
         'receipts': receipts,
     }
 
@@ -201,11 +199,11 @@ def install_receipt_line_diagnosis_routes(app, engine) -> None:
 
     @app.get('/api/testing/receipt-line-diagnosis')
     def receipt_line_diagnosis(householdId: str = '1', filenames: str | None = None):
-        return build_receipt_line_diagnosis(engine, household_id=householdId, filenames=_parse_filename_query(filenames))
+        return build_receipt_line_diagnosis(engine, household_id=householdId, filenames=None)
 
     @app.get('/api/testing/receipt-line-diagnosis/download')
     def receipt_line_diagnosis_download(householdId: str = '1', filenames: str | None = None):
-        payload = build_receipt_line_diagnosis(engine, household_id=householdId, filenames=_parse_filename_query(filenames))
+        payload = build_receipt_line_diagnosis(engine, household_id=householdId, filenames=None)
         timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
         filename = f'rezzerv_receipt_line_diagnosis_{timestamp}.json'
         return Response(
