@@ -17,6 +17,11 @@ def _install_when_ready() -> None:
             except Exception:
                 pass
             try:
+                from .testing_receipt_line_diagnosis_routes import install_receipt_line_diagnosis_routes
+                install_receipt_line_diagnosis_routes(module.app, module.engine)
+            except Exception:
+                pass
+            try:
                 from .receipt_recompute_policy_patch import install_recompute_policy_patch
                 install_recompute_policy_patch(module)
             except Exception:
