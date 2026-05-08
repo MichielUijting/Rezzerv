@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
@@ -32,6 +32,7 @@ import tempfile
 import cv2
 
 from app.db import engine, get_runtime_datastore_info
+from app.api.receipt_diagnosis_routes import router as receipt_diagnosis_router
 from app.services.receipt_baseline_service import run_receipt_parsing_baseline_suite
 from app.services.receipt_status_baseline_service import diagnose_receipt_status_baseline, validate_receipt_status_baseline
 from datetime import datetime, date, timedelta, timezone
@@ -231,6 +232,8 @@ DEFAULT_AUTH_USERS = {
 households = {}
 users = {email: dict(profile) for email, profile in DEFAULT_AUTH_USERS.items()}
 
+
+app.include_router(receipt_diagnosis_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
