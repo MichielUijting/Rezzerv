@@ -33,6 +33,7 @@ import cv2
 
 from app.db import engine, get_runtime_datastore_info
 from app.api.receipt_diagnosis_routes import router as receipt_diagnosis_router
+from app.api.receipt_preview_routes import router as receipt_preview_router, configure_receipt_preview_routes
 from app.services.receipt_baseline_service import run_receipt_parsing_baseline_suite
 from app.services.receipt_status_baseline_service import diagnose_receipt_status_baseline, validate_receipt_status_baseline
 from datetime import datetime, date, timedelta, timezone
@@ -7014,7 +7015,14 @@ def require_entity_household_access(conn, table_name: str, entity_id: str, autho
     return require_household_context(authorization, household_id)
 
 
+configure_receipt_preview_routes(
+    engine=engine,
+    receipt_storage_root=RECEIPT_STORAGE_ROOT,
+    receipt_preview_normalizer=RECEIPT_PREVIEW_NORMALIZER,
+    require_entity_household_access=require_entity_household_access,
+)
 
+app.include_router(receipt_preview_router)
 def require_receipt_write_context(conn, receipt_table_id: str, authorization: str | None) -> dict:
     context = require_entity_household_access(conn, 'receipt_tables', receipt_table_id, authorization, admin_only=False)
     display_role = str(context.get('display_role') or '').strip().lower()
