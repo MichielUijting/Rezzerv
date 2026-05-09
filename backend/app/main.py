@@ -10046,18 +10046,6 @@ def import_email_receipt_payload(household_id: str, email_bytes: bytes, fallback
     return result
 
 
-configure_gmail_sync_service(
-    engine=engine,
-    logger=logger,
-    text=text,
-    upsert_receipt_gmail_account=upsert_receipt_gmail_account,
-    get_receipt_gmail_account=get_receipt_gmail_account,
-    store_gmail_import_result=store_gmail_import_result,
-    import_email_receipt_payload=import_email_receipt_payload,
-    has_processed_gmail_message=has_processed_gmail_message,
-    ensure_household_gmail_source=ensure_household_gmail_source,
-)
-
 
 def ensure_household(email: str):
     user = get_user_record(email) or {}
@@ -16819,4 +16807,16 @@ def generate_article_testdata(authorization: Optional[str] = Header(None)):
 
 from app.api.router import api_router
 app.include_router(api_router)
+
+configure_gmail_sync_service(
+    engine=engine,
+    logger=logger,
+    text=text,
+    upsert_receipt_gmail_account=upsert_receipt_gmail_account,
+    get_receipt_gmail_account=get_receipt_gmail_account,
+    store_gmail_import_result=store_gmail_import_result,
+    import_email_receipt_payload=import_email_receipt_payload,
+    has_processed_gmail_message=has_processed_gmail_message,
+    ensure_household_gmail_source=ensure_household_gmail_source,
+)
 
