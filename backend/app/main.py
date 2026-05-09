@@ -24,6 +24,14 @@ import mimetypes
 from typing import Any, List, Mapping, Optional
 from dataclasses import dataclass
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
+from app.schemas.inventory import (
+    SpaceCreate,
+    SpaceUpdateRequest,
+    SublocationCreate,
+    SublocationUpdateRequest,
+    InventoryCreate,
+    InventoryUpdate,
+)
 from app.schemas.receipts import (
     ReceiptDeleteRequest,
     ReceiptPurgeArchivedRequest,
@@ -318,80 +326,6 @@ class HouseholdNameUpdateRequest(BaseModel):
 
 class HouseholdPermissionPolicyUpdateRequest(BaseModel):
     member_allowed: bool = False
-
-class SpaceCreate(BaseModel):
-    naam: str
-    household_id: Optional[str] = None
-    active: bool = True
-
-    @field_validator("naam")
-    @classmethod
-    def validate_naam(cls, value):
-        normalized = ' '.join(str(value or '').strip().split())
-        if not normalized:
-            raise ValueError("Ruimtenaam is verplicht")
-        if len(normalized) > 120:
-            raise ValueError("Ruimtenaam mag maximaal 120 tekens bevatten")
-        return normalized
-
-class SpaceUpdateRequest(BaseModel):
-    naam: str
-    active: bool = True
-
-    @field_validator("naam")
-    @classmethod
-    def validate_naam(cls, value):
-        normalized = ' '.join(str(value or '').strip().split())
-        if not normalized:
-            raise ValueError("Ruimtenaam is verplicht")
-        if len(normalized) > 120:
-            raise ValueError("Ruimtenaam mag maximaal 120 tekens bevatten")
-        return normalized
-
-class SublocationCreate(BaseModel):
-    naam: str
-    space_id: str
-    active: bool = True
-
-    @field_validator("naam")
-    @classmethod
-    def validate_naam(cls, value):
-        normalized = ' '.join(str(value or '').strip().split())
-        if not normalized:
-            raise ValueError("Sublocatienaam is verplicht")
-        if len(normalized) > 120:
-            raise ValueError("Sublocatienaam mag maximaal 120 tekens bevatten")
-        return normalized
-
-class SublocationUpdateRequest(BaseModel):
-    naam: str
-    space_id: str
-    active: bool = True
-
-    @field_validator("naam")
-    @classmethod
-    def validate_naam(cls, value):
-        normalized = ' '.join(str(value or '').strip().split())
-        if not normalized:
-            raise ValueError("Sublocatienaam is verplicht")
-        if len(normalized) > 120:
-            raise ValueError("Sublocatienaam mag maximaal 120 tekens bevatten")
-        return normalized
-
-class InventoryCreate(BaseModel):
-    naam: str
-    aantal: int
-    space_id: str
-    sublocation_id: Optional[str] = None
-
-
-class InventoryUpdate(BaseModel):
-    naam: str
-    aantal: int
-    space_id: Optional[str] = None
-    sublocation_id: Optional[str] = None
-    space_name: Optional[str] = None
-    sublocation_name: Optional[str] = None
 
 
 class ManualPurchaseCreateRequest(BaseModel):
