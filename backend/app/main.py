@@ -24,6 +24,13 @@ import mimetypes
 from typing import Any, List, Mapping, Optional
 from dataclasses import dataclass
 from app.schemas.testing import TestStartResponse, TestStatusResponse, TestReportResponse, TestCompleteRequest
+from app.schemas.receipts import (
+    ReceiptDeleteRequest,
+    ReceiptPurgeArchivedRequest,
+    ReceiptHeaderUpdateRequest,
+    ReceiptLineUpdateRequest,
+    ReceiptLineCreateRequest,
+)
 from app.services.testing_service import testing_service
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, parse_receipt_content, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
@@ -739,52 +746,6 @@ class ReceiptSourceCreateRequest(BaseModel):
     external_reference: Optional[str] = None
     is_active: bool = True
 
-
-class ReceiptDeleteRequest(BaseModel):
-    receipt_table_ids: List[str] = Field(default_factory=list)
-
-
-class ReceiptPurgeArchivedRequest(BaseModel):
-    household_id: str
-
-
-class ReceiptHeaderUpdateRequest(BaseModel):
-    store_name: Optional[str] = None
-    purchase_at: Optional[str] = None
-    total_amount: Optional[float] = None
-    reference: Optional[str] = None
-    notes: Optional[str] = None
-
-
-class ReceiptLineUpdateRequest(BaseModel):
-    article_name: Optional[str] = None
-    quantity: Optional[float] = None
-    unit: Optional[str] = None
-    unit_price: Optional[float] = None
-    line_total: Optional[float] = None
-    matched_article_id: Optional[str] = None
-    is_validated: Optional[bool] = None
-    is_deleted: Optional[bool] = None
-
-
-class ReceiptLineCreateRequest(BaseModel):
-    article_name: str
-    quantity: Optional[float] = 1.0
-    unit: Optional[str] = None
-    unit_price: Optional[float] = None
-    line_total: Optional[float] = None
-    matched_article_id: Optional[str] = None
-    is_validated: bool = True
-
-    @field_validator('article_name')
-    @classmethod
-    def validate_article_name(cls, value):
-        normalized = ' '.join(str(value or '').strip().split())
-        if not normalized:
-            raise ValueError('Artikelnaam is verplicht')
-        if len(normalized) > 180:
-            raise ValueError('Artikelnaam mag maximaal 180 tekens bevatten')
-        return normalized
 
 
 STORE_PROVIDER_DEFINITIONS = {
