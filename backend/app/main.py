@@ -51,6 +51,21 @@ from app.api.receipt_diagnosis_routes import router as receipt_diagnosis_router
 from app.api.receipt_preview_routes import router as receipt_preview_router, configure_receipt_preview_routes
 from app.services.receipt_baseline_service import run_receipt_parsing_baseline_suite
 from app.services.receipt_status_baseline_service import diagnose_receipt_status_baseline, validate_receipt_status_baseline
+from app.services.receipt_gmail_helper_service import (
+    gmail_is_configured,
+    resolve_gmail_redirect_uri,
+    sign_gmail_state,
+    verify_gmail_state,
+    gmail_datetime_from_timestamp,
+    parse_gmail_token_expiry,
+)
+from app.services.receipt_source_helper_service import (
+    configure_receipt_source_helper_service,
+    is_public_receipt_email_domain,
+    build_household_email_address,
+    ensure_household_email_source,
+    ensure_household_gmail_source,
+)
 from app.services.email_config_service import (
     GMAIL_OAUTH_CLIENT_ID,
     GMAIL_OAUTH_CLIENT_SECRET,
@@ -9193,208 +9208,6 @@ def create_receipt_source(payload: ReceiptSourceCreateRequest):
             {'id': source_id},
         ).mappings().first()
     return build_receipt_source_response(row)
-
-
-def is_public_receipt_email_domain(domain: str) -> bool:
-    domain_value = str(domain or '').strip().lower()
-    if not domain_value:
-        return False
-    if domain_value in {'localhost', 'rezzerv.local'}:
-        return False
-    if domain_value.endswith('.local') or domain_value.endswith('.localhost') or domain_value.endswith('.invalid'):
-        return False
-    return '.' in domain_value
-
-
-def build_household_email_address(household_id: str) -> str:
-    normalized_household_id = sanitize_source_slug(str(household_id or '1'))
-    return f"bon+{normalized_household_id}@{RECEIPT_EMAIL_DOMAIN}"
-
-
-def ensure_household_email_source(household_id: str):
-    effective_household_id = str(household_id or '1').strip() or '1'
-    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
-    route_address = build_household_email_address(effective_household_id)
-    source_id = f'{effective_household_id}-email-route'
-    with engine.begin() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
-                FROM receipt_sources
-                WHERE household_id = :household_id AND type = 'email'
-                ORDER BY CASE WHEN id = :preferred_id THEN 0 ELSE 1 END, created_at ASC
-                LIMIT 1
-                """
-            ),
-            {'household_id': effective_household_id, 'preferred_id': source_id},
-        ).mappings().first()
-        if row:
-            source_id = row['id']
-            conn.execute(
-                text(
-                    """
-                    UPDATE receipt_sources
-                    SET label = :label, source_path = :source_path, is_active = 1, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :id
-                    """
-                ),
-                {'id': source_id, 'label': 'E-mail', 'source_path': route_address},
-            )
-        else:
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
-                    VALUES (:id, :household_id, 'email', :label, :source_path, 1)
-                    """
-                ),
-                {'id': source_id, 'household_id': effective_household_id, 'label': 'E-mail', 'source_path': route_address},
-            )
-        refreshed = conn.execute(
-            text(
-                """
-                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
-                FROM receipt_sources
-                WHERE id = :id
-                LIMIT 1
-                """
-            ),
-            {'id': source_id},
-        ).mappings().first()
-    item = build_receipt_source_response(refreshed)
-    item['route_address'] = route_address
-    item['route_domain'] = RECEIPT_EMAIL_DOMAIN
-    item['route_is_public'] = is_public_receipt_email_domain(RECEIPT_EMAIL_DOMAIN)
-    item['delivery_mode'] = 'forwarding_ready' if item['route_is_public'] else 'local_demo'
-    item.update(build_receipt_inbound_status(effective_household_id))
-    return item
-
-
-def ensure_household_gmail_source(household_id: str):
-    effective_household_id = str(household_id or '1').strip() or '1'
-    ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, effective_household_id)
-    label_name = GMAIL_DEFAULT_LABEL_NAME
-    source_id = f'{effective_household_id}-gmail-label'
-    with engine.begin() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
-                FROM receipt_sources
-                WHERE household_id = :household_id AND type = 'gmail_label'
-                ORDER BY CASE WHEN id = :preferred_id THEN 0 ELSE 1 END, created_at ASC
-                LIMIT 1
-                """
-            ),
-            {'household_id': effective_household_id, 'preferred_id': source_id},
-        ).mappings().first()
-        if row:
-            source_id = row['id']
-            conn.execute(
-                text(
-                    """
-                    UPDATE receipt_sources
-                    SET label = :label, source_path = :source_path, is_active = 1, updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :id
-                    """
-                ),
-                {'id': source_id, 'label': 'E-mail', 'source_path': label_name},
-            )
-        else:
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active)
-                    VALUES (:id, :household_id, 'gmail_label', :label, :source_path, 1)
-                    """
-                ),
-                {'id': source_id, 'household_id': effective_household_id, 'label': 'E-mail', 'source_path': label_name},
-            )
-        refreshed = conn.execute(
-            text(
-                """
-                SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at
-                FROM receipt_sources
-                WHERE id = :id
-                LIMIT 1
-                """
-            ),
-            {'id': source_id},
-        ).mappings().first()
-    item = build_receipt_source_response(refreshed)
-    item['gmail_label_name'] = label_name
-    return item
-
-
-def gmail_is_configured() -> bool:
-    return bool(GMAIL_OAUTH_CLIENT_ID and GMAIL_OAUTH_CLIENT_SECRET)
-
-
-def resolve_gmail_redirect_uri(request: Request | None = None) -> str:
-    if GMAIL_OAUTH_REDIRECT_URI:
-        return GMAIL_OAUTH_REDIRECT_URI
-    if request is None:
-        raise HTTPException(status_code=503, detail='De Gmail redirect-URI is nog niet geconfigureerd.')
-    return f"{str(request.base_url).rstrip('/')}/api/receipts/gmail/callback"
-
-
-def sign_gmail_state(payload: dict[str, Any]) -> str:
-    serialized = json.dumps(payload, separators=(',', ':'), sort_keys=True).encode('utf-8')
-    signature = hmac.new(GMAIL_STATE_SECRET, serialized, hashlib.sha256).hexdigest()
-    encoded = base64.urlsafe_b64encode(serialized).decode('ascii').rstrip('=')
-    return f'{encoded}.{signature}'
-
-
-def verify_gmail_state(state_token: str) -> dict[str, Any]:
-    if not state_token or '.' not in state_token:
-        raise HTTPException(status_code=400, detail='Ongeldige Gmail-state ontvangen.')
-    encoded, provided_signature = state_token.rsplit('.', 1)
-    padding = '=' * (-len(encoded) % 4)
-    try:
-        serialized = base64.urlsafe_b64decode(f'{encoded}{padding}'.encode('ascii'))
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail='Gmail-state kon niet worden gelezen.') from exc
-    expected_signature = hmac.new(GMAIL_STATE_SECRET, serialized, hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(provided_signature, expected_signature):
-        raise HTTPException(status_code=400, detail='Gmail-state is ongeldig of verlopen.')
-    try:
-        payload = json.loads(serialized.decode('utf-8'))
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail='Gmail-state bevat ongeldige gegevens.') from exc
-    if str(payload.get('provider') or '') != 'gmail':
-        raise HTTPException(status_code=400, detail='Onbekende OAuth-provider.')
-    return payload
-
-
-def gmail_datetime_from_timestamp(value: Any) -> str | None:
-    try:
-        if value is None or value == '':
-            return None
-        if isinstance(value, (int, float)):
-            dt = datetime.fromtimestamp(float(value), tz=timezone.utc)
-        else:
-            value_str = str(value).strip()
-            if not value_str:
-                return None
-            if value_str.isdigit():
-                dt = datetime.fromtimestamp(int(value_str) / 1000, tz=timezone.utc)
-            else:
-                dt = datetime.fromisoformat(value_str.replace('Z', '+00:00'))
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat()
-    except Exception:
-        return None
-
-
-def parse_gmail_token_expiry(expires_in: Any) -> str | None:
-    try:
-        seconds = int(expires_in)
-    except Exception:
-        return None
-    dt = datetime.now(timezone.utc) + timedelta(seconds=max(0, seconds - 60))
-    return dt.replace(microsecond=0).isoformat()
 
 
 def gmail_json_request(url: str, method: str = 'GET', *, headers: Optional[dict[str, str]] = None, data: Any = None, timeout: float = 30.0) -> dict[str, Any]:
