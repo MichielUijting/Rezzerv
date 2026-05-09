@@ -9223,18 +9223,6 @@ def create_receipt_source(payload: ReceiptSourceCreateRequest):
     return build_receipt_source_response(row)
 
 
-configure_gmail_sync_service(
-    engine=engine,
-    logger=logger,
-    text=text,
-    upsert_receipt_gmail_account=upsert_receipt_gmail_account,
-    get_receipt_gmail_account=get_receipt_gmail_account,
-    store_gmail_import_result=store_gmail_import_result,
-    import_email_receipt_payload=import_email_receipt_payload,
-    has_processed_gmail_message=has_processed_gmail_message,
-    ensure_household_gmail_source=ensure_household_gmail_source,
-)
-
 
 def resend_is_configured() -> bool:
     return resend_api_key_ready()
@@ -10056,6 +10044,19 @@ def import_email_receipt_payload(household_id: str, email_bytes: bytes, fallback
     result['subject'] = payload.get('subject')
     result['received_at'] = payload.get('received_at')
     return result
+
+
+configure_gmail_sync_service(
+    engine=engine,
+    logger=logger,
+    text=text,
+    upsert_receipt_gmail_account=upsert_receipt_gmail_account,
+    get_receipt_gmail_account=get_receipt_gmail_account,
+    store_gmail_import_result=store_gmail_import_result,
+    import_email_receipt_payload=import_email_receipt_payload,
+    has_processed_gmail_message=has_processed_gmail_message,
+    ensure_household_gmail_source=ensure_household_gmail_source,
+)
 
 
 def ensure_household(email: str):
