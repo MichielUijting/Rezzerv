@@ -153,7 +153,7 @@ def refresh_gmail_access_token(account: dict[str, Any]) -> dict[str, Any]:
             'grant_type': 'refresh_token',
         },
     )
-    updated = _upsert_receipt_gmail_account(
+    return _upsert_receipt_gmail_account(
         account['household_id'],
         {
             'access_token': tokens.get('access_token'),
@@ -162,7 +162,6 @@ def refresh_gmail_access_token(account: dict[str, Any]) -> dict[str, Any]:
             'last_error': None,
         },
     )
-    return updated
 
 
 def get_valid_gmail_access_token(account: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -237,3 +236,97 @@ def decode_gmail_raw_message(raw_value: str) -> bytes:
         return base64.urlsafe_b64decode(f'{value}{padding}'.encode('ascii'))
     except Exception as exc:
         raise ValueError('De Gmail-API gaf ongeldige e-mailinhoud terug.') from exc
+
+
+def sync_gmail_receipts(household_id: str) -> dict[str, Any]:
+    _require_configured()
+    effective_household_id = str(household_id or '1').strip() or '1'
+    account = _get_receipt_gmail_account(effective_household_id, create_if_missing=True)
+    if not GMAIL_OAUTH_CLIENT_ID or not GMAIL_OAUTH_CLIENT_SECRET:
+        raise HTTPException(status_code=503, detail='De Gmail-koppeling is nog niet geconfigureerd in Rezzerv.')
+    if not str(account.get('refresh_token') or '').strip():
+        raise HTTPException(status_code=400, detail='Gmail is nog niet gekoppeld voor dit huishouden.')
+
+    label_id, account = ensure_gmail_label(account)
+    messages_payload, account = gmail_api_request(
+        account,
+        'users/me/messages',
+        params={'labelIds': [label_id], 'maxResults': GMAIL_SYNC_BATCH_SIZE},
+    )
+    messages = messages_payload.get('messages') or []
+    imported = []
+    skipped = []
+    failed = []
+
+    for message_item in messages:
+        gmail_message_id = str(message_item.get('id') or '').strip()
+        if not gmail_message_id:
+            continue
+        if _has_processed_gmail_message(effective_household_id, gmail_message_id):
+            skipped.append({'gmail_message_id': gmail_message_id, 'reason': 'already_processed'})
+            continue
+        try:
+            gmail_message_payload, account = gmail_api_request(
+                account,
+                f'users/me/messages/{urllib.parse.quote(gmail_message_id)}',
+                params={'format': 'raw'},
+            )
+            email_bytes = decode_gmail_raw_message(str(gmail_message_payload.get('raw') or ''))
+            result = _import_email_receipt_payload(
+                effective_household_id,
+                email_bytes,
+                fallback_filename=f'gmail-{gmail_message_id}.eml',
+                source_id=account.get('source_id'),
+            )
+            _store_gmail_import_result(
+                effective_household_id,
+                gmail_message_id,
+                {
+                    'gmail_thread_id': gmail_message_payload.get('threadId'),
+                    'gmail_history_id': gmail_message_payload.get('historyId'),
+                    'gmail_internal_date': gmail_datetime_from_timestamp(gmail_message_payload.get('internalDate')),
+                    'import_status': 'imported',
+                    'raw_receipt_id': result.get('raw_receipt_id'),
+                    'receipt_table_id': result.get('receipt_table_id'),
+                    'error_message': None,
+                },
+            )
+            imported.append({'gmail_message_id': gmail_message_id, 'result': result})
+        except Exception as exc:
+            error_message = normalize_api_error_message(str(exc) or 'Gmail-bericht kon niet worden geïmporteerd')
+            _store_gmail_import_result(
+                effective_household_id,
+                gmail_message_id,
+                {
+                    'gmail_thread_id': message_item.get('threadId'),
+                    'gmail_history_id': message_item.get('historyId'),
+                    'gmail_internal_date': gmail_datetime_from_timestamp(message_item.get('internalDate')),
+                    'import_status': 'failed',
+                    'raw_receipt_id': None,
+                    'receipt_table_id': None,
+                    'error_message': error_message,
+                },
+            )
+            failed.append({'gmail_message_id': gmail_message_id, 'error': error_message})
+
+    _upsert_receipt_gmail_account(
+        effective_household_id,
+        {
+            'label_name': account.get('label_name') or GMAIL_DEFAULT_LABEL_NAME,
+            'label_id': label_id,
+            'sync_status': 'connected',
+            'last_error': None if not failed else failed[-1].get('error'),
+        },
+    )
+    return {
+        'household_id': effective_household_id,
+        'label_id': label_id,
+        'label_name': account.get('label_name') or GMAIL_DEFAULT_LABEL_NAME,
+        'scanned': len(messages),
+        'imported_count': len(imported),
+        'skipped_count': len(skipped),
+        'failed_count': len(failed),
+        'imported': imported,
+        'skipped': skipped,
+        'failed': failed,
+    }
