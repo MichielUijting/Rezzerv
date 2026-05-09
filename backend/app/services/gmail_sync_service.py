@@ -65,7 +65,7 @@ def configure_gmail_sync_service(
     _ensure_household_gmail_source = ensure_household_gmail_source
 
 
-def _require_configured():
+def _require_configured() -> None:
     if (
         _logger is None
         or _upsert_receipt_gmail_account is None
@@ -137,3 +137,103 @@ def exchange_gmail_code_for_tokens(code: str, redirect_uri: str) -> dict[str, An
             'redirect_uri': redirect_uri,
         },
     )
+
+
+def refresh_gmail_access_token(account: dict[str, Any]) -> dict[str, Any]:
+    _require_configured()
+    refresh_token = str(account.get('refresh_token') or '').strip()
+    if not refresh_token:
+        raise HTTPException(status_code=400, detail='Deze Gmail-koppeling heeft geen refresh-token. Koppel Gmail opnieuw.')
+    tokens = gmail_form_request(
+        'https://oauth2.googleapis.com/token',
+        {
+            'client_id': GMAIL_OAUTH_CLIENT_ID,
+            'client_secret': GMAIL_OAUTH_CLIENT_SECRET,
+            'refresh_token': refresh_token,
+            'grant_type': 'refresh_token',
+        },
+    )
+    updated = _upsert_receipt_gmail_account(
+        account['household_id'],
+        {
+            'access_token': tokens.get('access_token'),
+            'token_expires_at': parse_gmail_token_expiry(tokens.get('expires_in')),
+            'sync_status': 'connected',
+            'last_error': None,
+        },
+    )
+    return updated
+
+
+def get_valid_gmail_access_token(account: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    token = str(account.get('access_token') or '').strip()
+    expires_at = gmail_datetime_from_timestamp(account.get('token_expires_at'))
+    expired = True
+    if expires_at:
+        try:
+            from datetime import datetime, timezone
+            expires_dt = datetime.fromisoformat(str(expires_at).replace('Z', '+00:00'))
+            if expires_dt.tzinfo is None:
+                expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+            expired = expires_dt <= datetime.now(timezone.utc)
+        except Exception:
+            expired = True
+    if token and not expired:
+        return token, account
+    refreshed = refresh_gmail_access_token(account)
+    refreshed_token = str(refreshed.get('access_token') or '').strip()
+    if not refreshed_token:
+        raise HTTPException(status_code=400, detail='De Gmail access-token ontbreekt na verversen. Koppel Gmail opnieuw.')
+    return refreshed_token, refreshed
+
+
+def gmail_api_request(account: dict[str, Any], path: str, *, method: str = 'GET', params: Optional[dict[str, Any]] = None, data: Any = None, retry_on_unauthorized: bool = True) -> tuple[dict[str, Any], dict[str, Any]]:
+    token, current_account = get_valid_gmail_access_token(account)
+    url = f"https://gmail.googleapis.com/gmail/v1/{path.lstrip('/')}"
+    if params:
+        url = f"{url}?{urllib.parse.urlencode(params, doseq=True)}"
+    try:
+        response = gmail_json_request(url, method=method, headers={'Authorization': f'Bearer {token}'}, data=data)
+        return response, current_account
+    except HTTPException as exc:
+        if retry_on_unauthorized and exc.status_code == 502 and '401' in str(exc.detail):
+            refreshed = refresh_gmail_access_token(current_account)
+            return gmail_api_request(refreshed, path, method=method, params=params, data=data, retry_on_unauthorized=False)
+        raise
+
+
+def gmail_get_profile(account: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    return gmail_api_request(account, 'users/me/profile')
+
+
+def ensure_gmail_label(account: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    _require_configured()
+    label_name = str(account.get('label_name') or GMAIL_DEFAULT_LABEL_NAME).strip() or GMAIL_DEFAULT_LABEL_NAME
+    labels_payload, current_account = gmail_api_request(account, 'users/me/labels')
+    for label in labels_payload.get('labels') or []:
+        if str(label.get('name') or '').strip() == label_name:
+            label_id = str(label.get('id') or '').strip()
+            updated = _upsert_receipt_gmail_account(current_account['household_id'], {'label_name': label_name, 'label_id': label_id})
+            return label_id, updated
+    created_label, updated_account = gmail_api_request(
+        current_account,
+        'users/me/labels',
+        method='POST',
+        data={'name': label_name, 'labelListVisibility': 'labelShow', 'messageListVisibility': 'show'},
+    )
+    label_id = str(created_label.get('id') or '').strip()
+    if not label_id:
+        raise HTTPException(status_code=502, detail='Gmail-label kon niet worden aangemaakt.')
+    updated = _upsert_receipt_gmail_account(updated_account['household_id'], {'label_name': label_name, 'label_id': label_id})
+    return label_id, updated
+
+
+def decode_gmail_raw_message(raw_value: str) -> bytes:
+    value = str(raw_value or '').strip()
+    if not value:
+        raise ValueError('De Gmail-API gaf geen ruwe e-mailinhoud terug.')
+    padding = '=' * (-len(value) % 4)
+    try:
+        return base64.urlsafe_b64decode(f'{value}{padding}'.encode('ascii'))
+    except Exception as exc:
+        raise ValueError('De Gmail-API gaf ongeldige e-mailinhoud terug.') from exc
