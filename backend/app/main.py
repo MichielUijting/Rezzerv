@@ -48,7 +48,6 @@ import cv2
 
 from app.db import engine, get_runtime_datastore_info
 from app.api.system_routes import router as system_router
-from app.api.dev_system_routes import create_dev_system_router
 from app.api.receipt_diagnosis_routes import router as receipt_diagnosis_router
 from app.api.receipt_preview_routes import router as receipt_preview_router, configure_receipt_preview_routes
 from app.services.receipt_baseline_service import run_receipt_parsing_baseline_suite
@@ -169,10 +168,6 @@ users = {email: dict(profile) for email, profile in DEFAULT_AUTH_USERS.items()}
 
 
 app.include_router(system_router)
-app.include_router(create_dev_system_router(
-    require_platform_admin_user=require_platform_admin_user,
-    count_table=count_table,
-))
 app.include_router(receipt_diagnosis_router)
 app.add_middleware(
     CORSMiddleware,
@@ -13136,6 +13131,15 @@ def reset_dev_tables():
 def count_table(table_name: str) -> int:
     with engine.begin() as conn:
         return conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar() or 0
+
+@app.get("/api/dev/status")
+def get_dev_status(authorization: Optional[str] = Header(None)):
+    require_platform_admin_user(authorization)
+    return {
+        "spaces": count_table("spaces"),
+        "sublocations": count_table("sublocations"),
+        "inventory": count_table("inventory"),
+    }
 
 @app.post("/api/dev/browser-regression/reset-fixture")
 def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)):
