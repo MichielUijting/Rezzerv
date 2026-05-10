@@ -50,6 +50,7 @@ from app.db import engine, get_runtime_datastore_info
 from app.api.system_routes import router as system_router
 from app.api.receipt_diagnosis_routes import router as receipt_diagnosis_router
 from app.api.receipt_preview_routes import router as receipt_preview_router, configure_receipt_preview_routes
+from app.api.dev_test_routes import create_dev_test_router
 from app.services.receipt_baseline_service import run_receipt_parsing_baseline_suite
 from app.services.receipt_status_baseline_service import diagnose_receipt_status_baseline, validate_receipt_status_baseline
 from app.services.receipt_gmail_helper_service import (
@@ -6837,6 +6838,12 @@ configure_receipt_preview_routes(
 )
 
 app.include_router(receipt_preview_router)
+
+app.include_router(create_dev_test_router(
+    require_platform_admin_user=require_platform_admin_user,
+    testing_service=testing_service,
+    run_receipt_parsing_baseline_suite=run_receipt_parsing_baseline_suite,
+))
 def require_receipt_write_context(conn, receipt_table_id: str, authorization: str | None) -> dict:
     context = require_entity_household_access(conn, 'receipt_tables', receipt_table_id, authorization, admin_only=False)
     display_role = str(context.get('display_role') or '').strip().lower()
@@ -17020,68 +17027,6 @@ def seed_regression_kassa_receipts(authorization: Optional[str] = Header(None)):
         },
     }
 
-
-@app.post("/api/dev/run-smoke-tests", response_model=TestStartResponse)
-def run_smoke_tests(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
-    return testing_service.start_external_test("smoke")
-
-
-@app.post("/api/dev/run-regression-tests", response_model=TestStartResponse)
-def run_regression_tests(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
-    return testing_service.start_external_test("regression")
-
-@app.post("/api/dev/run-layer1-tests", response_model=TestStartResponse)
-def run_layer1_tests(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
-    return testing_service.start_external_test("layer1")
-
-@app.post("/api/dev/run-layer2-tests", response_model=TestStartResponse)
-def run_layer2_tests(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
-    return testing_service.start_external_test("layer2")
-
-@app.post("/api/dev/run-layer3-tests", response_model=TestStartResponse)
-def run_layer3_tests(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
-    return testing_service.start_external_test("layer3")
-
-@app.post("/api/dev/run-parsing-fixture-tests")
-def run_parsing_fixture_tests(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
-    started = testing_service.start_external_test("parsing_fixture")
-    if not started.get("started"):
-        raise HTTPException(status_code=409, detail="Er loopt al een andere test")
-    results = run_receipt_parsing_baseline_suite("fixture")
-    testing_service.complete_external_test("parsing_fixture", results)
-    return testing_service.get_report()
-
-@app.post("/api/dev/run-parsing-raw-tests")
-def run_parsing_raw_tests(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
-    started = testing_service.start_external_test("parsing_raw")
-    if not started.get("started"):
-        raise HTTPException(status_code=409, detail="Er loopt al een andere test")
-    results = run_receipt_parsing_baseline_suite("raw")
-    testing_service.complete_external_test("parsing_raw", results)
-    return testing_service.get_report()
-
-
-@app.post("/api/dev/test-report", response_model=TestStatusResponse)
-def complete_test_report(payload: TestCompleteRequest):
-    results = [item.model_dump() for item in payload.results]
-    return testing_service.complete_external_test(payload.test_type, results)
-
-
-@app.get("/api/dev/test-status", response_model=TestStatusResponse)
-def get_test_status():
-    return testing_service.get_status()
-
-
-@app.get("/api/dev/test-report/latest", response_model=TestReportResponse)
-def get_latest_test_report():
-    return testing_service.get_report()
 
 @app.post("/api/dev/generate-large-dataset")
 def generate_large_dataset(authorization: Optional[str] = Header(None)):
