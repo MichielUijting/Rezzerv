@@ -47,6 +47,7 @@ import tempfile
 import cv2
 
 from app.db import engine, get_runtime_datastore_info
+from app.api.system_routes import router as system_router
 from app.api.receipt_diagnosis_routes import router as receipt_diagnosis_router
 from app.api.receipt_preview_routes import router as receipt_preview_router, configure_receipt_preview_routes
 from app.services.receipt_baseline_service import run_receipt_parsing_baseline_suite
@@ -166,6 +167,7 @@ households = {}
 users = {email: dict(profile) for email, profile in DEFAULT_AUTH_USERS.items()}
 
 
+app.include_router(system_router)
 app.include_router(receipt_diagnosis_router)
 app.add_middleware(
     CORSMiddleware,
@@ -10780,26 +10782,6 @@ async def log_runtime_datastore_configuration():
 
 
 ensure_release_1221_schema()
-
-
-@app.get("/api/health")
-def health():
-    datastore_info = get_runtime_datastore_info()
-    payload = {"status": "ok", "datastore": datastore_info.get('datastore', 'onbekend')}
-    if datastore_info.get('database'):
-        payload['database'] = datastore_info['database']
-    if datastore_info.get('storage'):
-        payload['storage'] = datastore_info['storage']
-    return payload
-
-
-@app.get("/api/version")
-def api_version():
-    return {
-        "version": VERSION_TAG,
-        "source": "VERSION.txt",
-    }
-
 
 @app.post("/api/admin/backfill-purchase-import-live-aliases")
 def run_purchase_import_live_alias_backfill(household_id: Optional[str] = None, limit: Optional[int] = None):
