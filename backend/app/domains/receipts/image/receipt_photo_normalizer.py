@@ -17,35 +17,58 @@ MIN_RECEIPT_AREA_RATIO = 0.08
 class ReceiptPhotoNormalizer:
     def normalize(self, image_path: str, mime_type: str | None = None) -> ReceiptNormalizationResult:
         original_path = image_path
+        diagnostics: dict[str, object] = {
+            'normalization_pipeline': 'receipt_photo_normalizer_v2',
+        }
 
         if not image_path or not Path(image_path).exists():
-            return ReceiptNormalizationResult(False, True, 0.0, "file_not_found", False, original_path, None, None)
+            return ReceiptNormalizationResult(False, True, 0.0, "file_not_found", False, original_path, None, None, diagnostics)
 
         detected_as_photo = mime_type in PHOTO_MIME_TYPES if mime_type else image_path.lower().endswith((".jpg", ".jpeg", ".png"))
+        diagnostics['detected_as_photo'] = detected_as_photo
 
         if not detected_as_photo:
-            return ReceiptNormalizationResult(False, True, 0.0, "not_photo", False, original_path, None, None)
+            return ReceiptNormalizationResult(False, True, 0.0, "not_photo", False, original_path, None, None, diagnostics)
 
         try:
             image = cv2.imread(image_path)
             if image is None:
-                return ReceiptNormalizationResult(False, True, 0.0, "cv2_read_failed", True, original_path, None, None)
+                return ReceiptNormalizationResult(False, True, 0.0, "cv2_read_failed", True, original_path, None, None, diagnostics)
 
+            diagnostics['original_shape'] = tuple(int(v) for v in image.shape[:2])
             working, scale = self._resize_for_processing(image)
-            warped, contour_confidence, contour_reason = self._try_perspective_crop(working)
+            diagnostics['resize_scale'] = round(float(scale), 5)
+            diagnostics['working_shape'] = tuple(int(v) for v in working.shape[:2])
+
+            warped, contour_confidence, contour_reason, contour_diagnostics = self._try_perspective_crop(working)
+            diagnostics.update(contour_diagnostics)
             used_fallback = False
 
             if warped is None:
                 used_fallback = True
-                warped, fallback_confidence, fallback_reason = self._deskew_fallback(working)
+                diagnostics['fallback_triggered'] = True
+                warped, fallback_confidence, fallback_reason, fallback_diagnostics = self._smart_text_perspective_fallback(working)
+                diagnostics.update(fallback_diagnostics)
                 contour_confidence = fallback_confidence
                 contour_reason = fallback_reason
 
             if warped is None:
-                return ReceiptNormalizationResult(False, True, 0.15, contour_reason or "normalization_failed", True, original_path, None, None)
+                used_fallback = True
+                diagnostics['fallback_triggered'] = True
+                warped, fallback_confidence, fallback_reason = self._deskew_fallback(working)
+                diagnostics['fallback_method'] = 'deskew_rotation'
+                contour_confidence = fallback_confidence
+                contour_reason = fallback_reason
+
+            if warped is None:
+                return ReceiptNormalizationResult(False, True, 0.15, contour_reason or "normalization_failed", True, original_path, None, None, diagnostics)
+
+            warped = self._trim_receipt_margins(warped)
+            diagnostics['trimmed_shape'] = tuple(int(v) for v in warped.shape[:2])
 
             if warped.shape[0] < warped.shape[1]:
                 warped = cv2.rotate(warped, cv2.ROTATE_90_CLOCKWISE)
+                diagnostics['rotated_portrait'] = True
 
             enhanced = self._enhance_for_storage(warped)
             ocr_ready = self._make_ocr_ready(warped)
@@ -59,6 +82,9 @@ class ReceiptPhotoNormalizer:
 
             confidence = max(0.25, min(0.92, contour_confidence))
             reason = contour_reason if used_fallback else None
+            diagnostics['final_confidence'] = round(float(confidence), 4)
+            diagnostics['used_fallback'] = used_fallback
+            diagnostics['normalization_reason'] = reason
 
             return ReceiptNormalizationResult(
                 True,
@@ -69,10 +95,12 @@ class ReceiptPhotoNormalizer:
                 original_path,
                 normalized_path,
                 ocr_ready_path,
+                diagnostics,
             )
 
         except Exception as e:
-            return ReceiptNormalizationResult(False, True, 0.0, f"exception:{e}", True, original_path, None, None)
+            diagnostics['exception'] = str(e)
+            return ReceiptNormalizationResult(False, True, 0.0, f"exception:{e}", True, original_path, None, None, diagnostics)
 
     def _resize_for_processing(self, image):
         height, width = image.shape[:2]
@@ -84,6 +112,9 @@ class ReceiptPhotoNormalizer:
         return resized, scale
 
     def _try_perspective_crop(self, image):
+        diagnostics: dict[str, object] = {
+            'primary_method': 'contour_perspective_crop',
+        }
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = self._shadow_correct(gray)
         blurred = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -91,8 +122,10 @@ class ReceiptPhotoNormalizer:
         edged = cv2.dilate(edged, np.ones((3, 3), np.uint8), iterations=1)
 
         contours, _ = cv2.findContours(edged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        diagnostics['contour_count'] = len(contours)
         if not contours:
-            return None, 0.2, "no_contours"
+            diagnostics['contour_failure_reason'] = 'no_contours'
+            return None, 0.2, "no_contours", diagnostics
 
         image_area = float(image.shape[0] * image.shape[1])
         contours = sorted(contours, key=cv2.contourArea, reverse=True)[:12]
@@ -129,12 +162,75 @@ class ReceiptPhotoNormalizer:
                 best_rect = ordered
 
         if best_rect is None:
-            return None, 0.25, "no_receipt_contour"
+            diagnostics['contour_failure_reason'] = 'no_receipt_contour'
+            return None, 0.25, "no_receipt_contour", diagnostics
 
         warped = self._four_point_transform(image, best_rect)
         area_ratio = best_area / image_area
+        diagnostics['receipt_area_ratio'] = round(float(area_ratio), 5)
+        diagnostics['perspective_corrected'] = True
         confidence = 0.58 + min(0.3, area_ratio)
-        return warped, confidence, None
+        return warped, confidence, None, diagnostics
+
+    def _smart_text_perspective_fallback(self, image):
+        diagnostics: dict[str, object] = {
+            'fallback_method': 'text_mask_perspective',
+        }
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        corrected = self._shadow_correct(gray)
+        binary = cv2.adaptiveThreshold(
+            corrected,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY_INV,
+            41,
+            9,
+        )
+
+        horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (25, 3))
+        merged = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, horizontal_kernel, iterations=2)
+
+        contours, _ = cv2.findContours(merged, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        diagnostics['text_mask_contours'] = len(contours)
+        if not contours:
+            return None, 0.25, 'text_mask_no_contours', diagnostics
+
+        contour = max(contours, key=cv2.contourArea)
+        rect = cv2.minAreaRect(contour)
+        box = cv2.boxPoints(rect).astype('float32')
+
+        width = max(rect[1])
+        height = min(rect[1])
+        diagnostics['text_mask_rect'] = [round(float(v), 2) for v in (*rect[0], *rect[1], rect[2])]
+
+        if width < 120 or height < 120:
+            return None, 0.28, 'text_mask_too_small', diagnostics
+
+        ordered = self._order_points(box)
+        warped = self._four_point_transform(image, ordered)
+        warped = self._crop_foreground(warped)
+        diagnostics['perspective_corrected'] = True
+        diagnostics['text_based_correction'] = True
+        return warped, 0.56, 'text_mask_perspective', diagnostics
+
+    def _trim_receipt_margins(self, image):
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        corrected = self._shadow_correct(gray)
+        binary = cv2.threshold(corrected, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+        foreground = 255 - binary
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 9))
+        foreground = cv2.morphologyEx(foreground, cv2.MORPH_CLOSE, kernel)
+        coords = cv2.findNonZero(foreground)
+        if coords is None:
+            return image
+        x, y, w, h = cv2.boundingRect(coords)
+        margin = max(8, int(min(image.shape[:2]) * 0.015))
+        x0 = max(0, x - margin)
+        y0 = max(0, y - margin)
+        x1 = min(image.shape[1], x + w + margin)
+        y1 = min(image.shape[0], y + h + margin)
+        cropped = image[y0:y1, x0:x1]
+        return cropped if cropped.size else image
 
     def _deskew_fallback(self, image):
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
