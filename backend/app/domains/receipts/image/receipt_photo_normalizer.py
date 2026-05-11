@@ -12,13 +12,15 @@ from .receipt_photo_types import ReceiptNormalizationResult
 PHOTO_MIME_TYPES = {"image/jpeg", "image/jpg", "image/png"}
 MAX_WORKING_DIMENSION = 1800
 MIN_RECEIPT_AREA_RATIO = 0.08
+MAX_RECEIPT_AREA_RATIO_FOR_BACKGROUND = 0.92
+MIN_RECEIPT_CONTINUITY_SCORE = 0.34
 
 
 class ReceiptPhotoNormalizer:
     def normalize(self, image_path: str, mime_type: str | None = None) -> ReceiptNormalizationResult:
         original_path = image_path
         diagnostics: dict[str, object] = {
-            'normalization_pipeline': 'receipt_photo_normalizer_v2',
+            'normalization_pipeline': 'receipt_photo_normalizer_v2_ws1_region_isolation',
         }
 
         if not image_path or not Path(image_path).exists():
@@ -40,14 +42,21 @@ class ReceiptPhotoNormalizer:
             diagnostics['resize_scale'] = round(float(scale), 5)
             diagnostics['working_shape'] = tuple(int(v) for v in working.shape[:2])
 
-            warped, contour_confidence, contour_reason, contour_diagnostics = self._try_perspective_crop(working)
+            tmp_dir = tempfile.mkdtemp(prefix="rezzerv_norm_")
+            tmp_path = Path(tmp_dir)
+
+            region_image, region_confidence, region_reason, region_diagnostics = self._isolate_receipt_region(working, tmp_path)
+            diagnostics.update(region_diagnostics)
+            region_source = region_image if region_image is not None else working
+
+            warped, contour_confidence, contour_reason, contour_diagnostics = self._try_perspective_crop(region_source)
             diagnostics.update(contour_diagnostics)
             used_fallback = False
 
             if warped is None:
                 used_fallback = True
                 diagnostics['fallback_triggered'] = True
-                warped, fallback_confidence, fallback_reason, fallback_diagnostics = self._smart_text_perspective_fallback(working)
+                warped, fallback_confidence, fallback_reason, fallback_diagnostics = self._smart_text_perspective_fallback(region_source)
                 diagnostics.update(fallback_diagnostics)
                 contour_confidence = fallback_confidence
                 contour_reason = fallback_reason
@@ -55,13 +64,13 @@ class ReceiptPhotoNormalizer:
             if warped is None:
                 used_fallback = True
                 diagnostics['fallback_triggered'] = True
-                warped, fallback_confidence, fallback_reason = self._deskew_fallback(working)
+                warped, fallback_confidence, fallback_reason = self._deskew_fallback(region_source)
                 diagnostics['fallback_method'] = 'deskew_rotation'
                 contour_confidence = fallback_confidence
                 contour_reason = fallback_reason
 
             if warped is None:
-                return ReceiptNormalizationResult(False, True, 0.15, contour_reason or "normalization_failed", True, original_path, None, None, diagnostics)
+                return ReceiptNormalizationResult(False, True, 0.15, contour_reason or region_reason or "normalization_failed", True, original_path, None, None, diagnostics)
 
             warped = self._trim_receipt_margins(warped)
             diagnostics['trimmed_shape'] = tuple(int(v) for v in warped.shape[:2])
@@ -73,15 +82,17 @@ class ReceiptPhotoNormalizer:
             enhanced = self._enhance_for_storage(warped)
             ocr_ready = self._make_ocr_ready(warped)
 
-            tmp_dir = tempfile.mkdtemp(prefix="rezzerv_norm_")
-            normalized_path = str(Path(tmp_dir) / "normalized.png")
-            ocr_ready_path = str(Path(tmp_dir) / "ocr_ready.png")
+            normalized_path = str(tmp_path / "normalized.png")
+            ocr_ready_path = str(tmp_path / "ocr_ready.png")
 
             cv2.imwrite(normalized_path, enhanced)
             cv2.imwrite(ocr_ready_path, ocr_ready)
 
-            confidence = max(0.25, min(0.92, contour_confidence))
+            combined_confidence = max(contour_confidence, region_confidence if region_image is not None else 0.0)
+            confidence = max(0.25, min(0.92, combined_confidence))
             reason = contour_reason if used_fallback else None
+            if region_reason and region_image is None:
+                reason = reason or region_reason
             diagnostics['final_confidence'] = round(float(confidence), 4)
             diagnostics['used_fallback'] = used_fallback
             diagnostics['normalization_reason'] = reason
@@ -111,6 +122,114 @@ class ReceiptPhotoNormalizer:
         resized = cv2.resize(image, (int(width * scale), int(height * scale)), interpolation=cv2.INTER_AREA)
         return resized, scale
 
+    def _isolate_receipt_region(self, image, tmp_path: Path):
+        diagnostics: dict[str, object] = {
+            'region_isolation_method': 'paper_mask_vertical_continuity_v1',
+            'receipt_mask_path': None,
+            'receipt_contours': [],
+            'selected_receipt_region': None,
+            'background_rejection_score': 0.0,
+        }
+        height, width = image.shape[:2]
+        image_area = float(height * width)
+        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+        lightness = lab[:, :, 0]
+        saturation = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)[:, :, 1]
+        corrected = self._shadow_correct(lightness)
+
+        # Paper is generally light and low-saturation; this rejects wood/table texture.
+        paper_mask = cv2.inRange(corrected, 132, 255)
+        low_sat_mask = cv2.inRange(saturation, 0, 92)
+        mask = cv2.bitwise_and(paper_mask, low_sat_mask)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)), iterations=1)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, cv2.getStructuringElement(cv2.MORPH_RECT, (23, 23)), iterations=2)
+
+        mask_path = str(tmp_path / 'receipt_mask.png')
+        cv2.imwrite(mask_path, mask)
+        diagnostics['receipt_mask_path'] = mask_path
+
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        diagnostics['receipt_region_candidate_count'] = len(contours)
+        if not contours:
+            diagnostics['region_isolation_reason'] = 'no_mask_contours'
+            return None, 0.0, 'region_isolation_no_mask_contours', diagnostics
+
+        candidates: list[tuple[float, tuple[int, int, int, int], float, float, float]] = []
+        for contour in contours:
+            area = float(cv2.contourArea(contour))
+            area_ratio = area / image_area
+            if area_ratio < 0.05:
+                continue
+            x, y, w, h = cv2.boundingRect(contour)
+            if w < 100 or h < 180:
+                continue
+            aspect = max(w, h) / max(1.0, min(w, h))
+            if aspect < 1.25:
+                continue
+            roi_mask = mask[y:y + h, x:x + w]
+            vertical_profile = (roi_mask > 0).mean(axis=1)
+            horizontal_profile = (roi_mask > 0).mean(axis=0)
+            vertical_continuity = float((vertical_profile > 0.18).mean())
+            horizontal_coverage = float((horizontal_profile > 0.08).mean())
+            fill_ratio = float((roi_mask > 0).mean())
+            score = (area_ratio * 0.45) + (vertical_continuity * 0.30) + (horizontal_coverage * 0.15) + (fill_ratio * 0.10)
+            candidates.append((score, (x, y, w, h), area_ratio, vertical_continuity, fill_ratio))
+
+        diagnostics['receipt_contours'] = [
+            {
+                'x': int(box[0]),
+                'y': int(box[1]),
+                'w': int(box[2]),
+                'h': int(box[3]),
+                'score': round(float(score), 4),
+                'area_ratio': round(float(area_ratio), 5),
+                'vertical_continuity': round(float(continuity), 4),
+                'fill_ratio': round(float(fill_ratio), 4),
+            }
+            for score, box, area_ratio, continuity, fill_ratio in sorted(candidates, key=lambda item: item[0], reverse=True)[:8]
+        ]
+
+        if not candidates:
+            diagnostics['region_isolation_reason'] = 'no_receipt_like_mask_contour'
+            return None, 0.0, 'region_isolation_no_receipt_like_mask_contour', diagnostics
+
+        best_score, (x, y, w, h), best_area_ratio, best_continuity, best_fill = sorted(candidates, key=lambda item: item[0], reverse=True)[0]
+        background_rejection_score = max(0.0, min(1.0, 1.0 - best_area_ratio))
+        diagnostics['background_rejection_score'] = round(float(background_rejection_score), 4)
+        diagnostics['selected_receipt_region'] = {
+            'x': int(x),
+            'y': int(y),
+            'w': int(w),
+            'h': int(h),
+            'score': round(float(best_score), 4),
+            'area_ratio': round(float(best_area_ratio), 5),
+            'vertical_continuity': round(float(best_continuity), 4),
+            'fill_ratio': round(float(best_fill), 4),
+        }
+
+        # Keep near-full-frame good receipts intact, but reject a full-frame background masquerading as a receipt.
+        if best_area_ratio > MAX_RECEIPT_AREA_RATIO_FOR_BACKGROUND and best_continuity < 0.82:
+            diagnostics['region_isolation_reason'] = 'mask_too_large_without_continuity'
+            return None, best_score, 'region_isolation_mask_too_large', diagnostics
+        if best_continuity < MIN_RECEIPT_CONTINUITY_SCORE:
+            diagnostics['region_isolation_reason'] = 'low_vertical_continuity'
+            return None, best_score, 'region_isolation_low_vertical_continuity', diagnostics
+
+        margin_x = max(8, int(w * 0.025))
+        margin_y = max(10, int(h * 0.025))
+        x0 = max(0, x - margin_x)
+        y0 = max(0, y - margin_y)
+        x1 = min(width, x + w + margin_x)
+        y1 = min(height, y + h + margin_y)
+        cropped = image[y0:y1, x0:x1]
+        if cropped.size == 0 or cropped.shape[0] < 180 or cropped.shape[1] < 100:
+            diagnostics['region_isolation_reason'] = 'selected_region_too_small'
+            return None, best_score, 'region_isolation_selected_region_too_small', diagnostics
+
+        diagnostics['region_isolated'] = True
+        diagnostics['region_isolated_shape'] = tuple(int(v) for v in cropped.shape[:2])
+        return cropped, min(0.84, 0.42 + best_score), None, diagnostics
+
     def _try_perspective_crop(self, image):
         diagnostics: dict[str, object] = {
             'primary_method': 'contour_perspective_crop',
@@ -128,13 +247,18 @@ class ReceiptPhotoNormalizer:
             return None, 0.2, "no_contours", diagnostics
 
         image_area = float(image.shape[0] * image.shape[1])
-        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:12]
+        contours = sorted(contours, key=cv2.contourArea, reverse=True)[:16]
 
         best_rect = None
         best_area = 0.0
+        best_aspect = 0.0
         for contour in contours:
             area = cv2.contourArea(contour)
-            if area / image_area < MIN_RECEIPT_AREA_RATIO:
+            area_ratio = area / image_area
+            if area_ratio < MIN_RECEIPT_AREA_RATIO:
+                continue
+            if area_ratio > 0.985:
+                # A nearly full-frame contour is usually the photo boundary, not the receipt.
                 continue
 
             peri = cv2.arcLength(contour, True)
@@ -157,17 +281,21 @@ class ReceiptPhotoNormalizer:
             aspect = max(max_width, max_height) / max(1.0, min(max_width, max_height))
             if aspect < 1.5:
                 continue
-            if area > best_area:
-                best_area = area
+            score = area * min(2.4, aspect)
+            if score > best_area:
+                best_area = score
                 best_rect = ordered
+                best_aspect = aspect
 
         if best_rect is None:
             diagnostics['contour_failure_reason'] = 'no_receipt_contour'
             return None, 0.25, "no_receipt_contour", diagnostics
 
         warped = self._four_point_transform(image, best_rect)
-        area_ratio = best_area / image_area
+        contour_area = cv2.contourArea(best_rect.astype(np.float32))
+        area_ratio = contour_area / image_area
         diagnostics['receipt_area_ratio'] = round(float(area_ratio), 5)
+        diagnostics['receipt_aspect_ratio'] = round(float(best_aspect), 4)
         diagnostics['perspective_corrected'] = True
         confidence = 0.58 + min(0.3, area_ratio)
         return warped, confidence, None, diagnostics
