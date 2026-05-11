@@ -13,10 +13,13 @@ from fastapi.encoders import jsonable_encoder
 from sqlalchemy import text
 
 from app.db import engine
+from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 from app.main import get_receipt_detail, require_entity_household_access
 from app.services.receipt_service import parse_receipt_content, serialize_receipt_row
 
 router = APIRouter()
+_NORMALIZER = ReceiptPhotoNormalizer()
+_PHOTO_MIME_TYPES = {"image/jpeg", "image/jpg", "image/png"}
 
 
 def _debug_json_safe(value: Any):
@@ -47,6 +50,45 @@ def _debug_json_safe(value: Any):
         except Exception:
             return str(value)
     return str(value)
+
+
+def _is_photo_mime(mime_type: Any) -> bool:
+    return str(mime_type or "").strip().lower() in _PHOTO_MIME_TYPES
+
+
+def _photo_normalization_debug(storage_path: Path | None, mime_type: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "applicable": _is_photo_mime(mime_type),
+        "mime_type": mime_type,
+        "executed": False,
+        "success": False,
+        "reason": None,
+        "error": None,
+    }
+    if not payload["applicable"]:
+        payload["reason"] = "not_photo_mime"
+        return payload
+    if not storage_path or not storage_path.exists() or not storage_path.is_file():
+        payload["reason"] = "source_missing"
+        return payload
+    try:
+        result = _NORMALIZER.normalize(str(storage_path), mime_type)
+        payload.update({
+            "executed": True,
+            "success": result.success,
+            "used_fallback": result.used_fallback,
+            "confidence": result.confidence,
+            "reason": result.reason,
+            "detected_as_photo": result.detected_as_photo,
+            "original_path": result.original_path,
+            "normalized_path": result.normalized_path,
+            "ocr_ready_path": result.ocr_ready_path,
+            "diagnostics": getattr(result, "diagnostics", {}) or {},
+            "inspection_hint": "Open normalized_path and ocr_ready_path inside the backend container to inspect the preprocessed receipt image.",
+        })
+    except Exception as exc:
+        payload.update({"executed": True, "success": False, "reason": "normalization_exception", "error": str(exc)})
+    return payload
 
 
 @router.get("/api/receipts/{receipt_table_id}/debug-export")
@@ -144,6 +186,7 @@ def export_receipt_debug(receipt_table_id: str, authorization: Optional[str] = H
         detail_traceback = traceback.format_exc()
     storage_path = Path(str(record.get("storage_path") or "")).resolve() if record.get("storage_path") else None
     source_exists = bool(storage_path and storage_path.exists() and storage_path.is_file())
+    photo_normalization = _photo_normalization_debug(storage_path, str(record.get("mime_type") or "application/octet-stream"))
     reparsed = None
     source_excerpt = None
     source_error = None
@@ -185,6 +228,7 @@ def export_receipt_debug(receipt_table_id: str, authorization: Optional[str] = H
             "imported_at": record.get("imported_at"),
             "raw_status": record.get("raw_status"),
         },
+        "photo_normalization": photo_normalization,
         "email_message": {
             "sender_email": record.get("sender_email"),
             "sender_name": record.get("sender_name"),
