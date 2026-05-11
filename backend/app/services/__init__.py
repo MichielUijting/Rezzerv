@@ -94,8 +94,12 @@ def parse_receipt_content(*args, **kwargs):
 
 _receipt_service.parse_receipt_content = parse_receipt_content
 
-# Ensure explicit filename supermarket hints win over loose OCR tokens such as "AH".
 try:
     from . import receipt_store_detection_patch  # noqa: F401
 except Exception as exc:  # pragma: no cover - defensive startup guard
     LOGGER.warning("receipt_store_detection_patch_failed error=%s", exc)
+
+try:
+    from . import receipt_ah_logo_detection_patch  # noqa: F401
+except Exception as exc:  # pragma: no cover - defensive startup guard
+    LOGGER.warning("receipt_ah_logo_detection_patch_failed error=%s", exc)
