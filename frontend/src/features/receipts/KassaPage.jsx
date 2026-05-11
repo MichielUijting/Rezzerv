@@ -10,6 +10,7 @@ import { nextSortState, sortItems } from '../../ui/sorting'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import ReceiptStatusBadge from '../kassa/components/ReceiptStatusBadge.jsx'
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -285,27 +286,6 @@ function normalizeInboxStatus(value) {
   return 'Handmatig'
 }
 
-function inboxStatusStyle(value) {
-  if (value === 'Gecontroleerd') {
-    return {
-      background: '#ECFDF3',
-      color: '#027A48',
-      border: '1px solid #ABEFC6',
-    }
-  }
-  if (value === 'Controle nodig') {
-    return {
-      background: '#FFFAEB',
-      color: '#166534',
-      border: '1px solid #FEDF89',
-    }
-  }
-  return {
-    background: '#FFF7ED',
-    color: '#166534',
-    border: '1px solid #F9DBAF',
-  }
-}
 
 function inboxStatusAccentColor(value) {
   if (value === 'Gecontroleerd') return '#12B76A'
@@ -313,26 +293,6 @@ function inboxStatusAccentColor(value) {
   return '#B54708'
 }
 
-function ReceiptStatusBadge({ value }) {
-  return (
-    <span
-      data-testid={`receipt-inbox-status-${String(value || '').toLowerCase().replace(/\s+/g, '-')}`}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '4px 10px',
-        borderRadius: '999px',
-        fontSize: '13px',
-        fontWeight: 700,
-        whiteSpace: 'nowrap',
-        ...inboxStatusStyle(value),
-      }}
-    >
-      {value || '-'}
-    </span>
-  )
-}
 
 async function fetchReceiptImportBatchStatus(householdId, batchId) {
   return fetchJson(`/api/receipts/import-batches/${encodeURIComponent(batchId)}?householdId=${encodeURIComponent(householdId)}`)
