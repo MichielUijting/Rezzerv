@@ -38,12 +38,7 @@ def _has_competing_strong_store(text: str, store: str) -> bool:
 
 
 def _has_aldi_context(text: str, lines: list[str]) -> bool:
-    """Detect ALDI from content only, including common OCR logo variants.
-
-    Photo OCR regularly confuses the ALDI logo as ALD1, A1DI, ALDl or AIDI.
-    These variants are only accepted near the receipt header and only when no
-    other strong supermarket chain is present.
-    """
+    """Detect ALDI from content only, including common OCR logo variants."""
     if _has_pattern(r'\baldi\b', text):
         return True
     if _has_competing_strong_store(text, 'ALDI'):
@@ -51,7 +46,7 @@ def _has_aldi_context(text: str, lines: list[str]) -> bool:
 
     header = _first_lines(lines, 8)
     header_compact_lines = [_compact(line) for line in lines[:8]]
-    aldi_logo_variants = {'aldi', 'ald1', 'a1di', 'aldl', 'aidi', 'aidi'}
+    aldi_logo_variants = {'aldi', 'ald1', 'a1di', 'aldl', 'aidi'}
     if any(value in aldi_logo_variants for value in header_compact_lines):
         return True
     if any(re.search(r'\b(?:aldi|ald1|a1di|aldl|aidi)\b', line, flags=re.IGNORECASE) for line in lines[:8]):
@@ -68,16 +63,44 @@ def _has_aldi_context(text: str, lines: list[str]) -> bool:
     return has_logo_like and has_receipt_context
 
 
-def _has_ah_context(text: str, lines: list[str]) -> bool:
-    """Return True only for strong Albert Heijn signals in receipt content.
+def _has_ah_private_label_cluster(text: str, lines: list[str]) -> bool:
+    """Detect AH from repeated AH private-label/product lines.
 
-    A loose token such as "AH" is accepted only near the receipt header or with
-    AH-specific receipt context. Strong competing store names win first, so a
-    PLUS receipt with OCR noise cannot become Albert Heijn.
+    Some scanned AH receipts have weak or missing header OCR. In that case the
+    product block can still be decisive: multiple AH-prefixed private label
+    products and/or KOOPZEGELS PREMIUM are strong Albert Heijn content signals.
+    This remains filename-independent and is rejected when another chain is
+    explicitly present.
     """
+    if _has_competing_strong_store(text, 'Albert Heijn'):
+        return False
+
+    ah_product_patterns = (
+        r'\bah\s+(?:m|grf|hv|poffertje|chips|bouillon|tortilla|malbec|muffins?|melk|rookv)\b',
+        r'\bzaans\s+h\s+mayo\b',
+        r'\bkoopzegels?\s+premium\b',
+    )
+    ah_signal_count = 0
+    for line in lines:
+        lowered = line.lower()
+        if any(_has_pattern(pattern, lowered) for pattern in ah_product_patterns):
+            ah_signal_count += 1
+    if ah_signal_count >= 2:
+        return True
+
+    # KOOPZEGELS PREMIUM plus an AH article line is also decisive.
+    has_koopzegels_premium = _has_pattern(r'\bkoopzegels?\s+premium\b', text)
+    has_ah_article = any(_has_pattern(r'\bah\s+[a-z0-9]', line.lower()) for line in lines)
+    return has_koopzegels_premium and has_ah_article
+
+
+def _has_ah_context(text: str, lines: list[str]) -> bool:
+    """Return True only for strong Albert Heijn signals in receipt content."""
     if _has_pattern(r'\balbert\s*heijn\b', text):
         return True
     if _has_pattern(r'\bah\.nl\b|\bwww\.ah\.nl\b', text):
+        return True
+    if _has_ah_private_label_cluster(text, lines):
         return True
     if _has_competing_strong_store(text, 'Albert Heijn'):
         return False
@@ -129,7 +152,8 @@ def _store_from_text_content_only(lines: Iterable[str], filename: str) -> str | 
     if _has_aldi_context(haystack, normalized_lines):
         return 'ALDI'
 
-    # Short/weak chain signals only after strong chains are ruled out.
+    # AH can also be proven by a cluster of AH private-label lines in the
+    # product block, which is common when a scanned header/logo is OCR-poor.
     if _has_ah_context(haystack, normalized_lines):
         return 'Albert Heijn'
 
