@@ -11,6 +11,7 @@ import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 import ReceiptStatusBadge from '../kassa/components/ReceiptStatusBadge.jsx'
+import DetailInfoRow from '../kassa/components/DetailInfoRow.jsx'
 
 function formatDateTime(value) {
   if (!value) return '-'
@@ -601,14 +602,6 @@ function readShareQueryParams() {
   }
 }
 
-function DetailInfoRow({ label, value }) {
-  return (
-    <div style={{ display: 'grid', gap: '4px' }}>
-      <div style={{ fontSize: '13px', fontWeight: 700, color: '#667085' }}>{label}</div>
-      <div style={{ fontSize: '15px' }}>{value || '-'}</div>
-    </div>
-  )
-}
 
 function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onToggleCollapse }) {
   const [selectedVariant, setSelectedVariant] = useState('original')
