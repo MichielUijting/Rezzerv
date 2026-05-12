@@ -7,6 +7,11 @@ from typing import Any
 from app.services import receipt_parser_quality_patch as qpatch
 from app.services.store_profiles.base import should_include_loyalty_line_for_store
 
+_ORIGINAL_QPATCH_IS_PRODUCT_LINE = qpatch.is_product_line
+_ORIGINAL_QPATCH_GENERIC_PRODUCT_LINE_FROM_TEXT = qpatch._generic_product_line_from_text
+_ORIGINAL_QPATCH_GENERIC_LINES_FROM_MERGED_TEXT = qpatch._generic_lines_from_merged_text
+_ORIGINAL_QPATCH_NORMALIZE_RECEIPT_LINES = qpatch._normalize_receipt_lines
+
 GENERIC_LOYALTY_PATTERNS = (
     'koopzegel',
     'koopzegels',
@@ -109,7 +114,7 @@ def is_product_line(text: str, store_name: Any = None, filename: Any = None) -> 
         return False
     if is_loyalty_line_text(candidate, store_name=store_name, filename=filename):
         return True
-    return qpatch.is_product_line(candidate, store_name=str(store_name or ''), filename=str(filename or ''))
+    return _ORIGINAL_QPATCH_IS_PRODUCT_LINE(candidate, store_name=str(store_name or ''), filename=str(filename or ''))
 
 
 def _build_loyalty_line(text: str, source_index: int, store_name: Any = None, filename: Any = None) -> dict[str, Any] | None:
@@ -149,7 +154,7 @@ def _generic_product_line_from_text(text: str, source_index: int, store_name: An
     loyalty_line = _build_loyalty_line(text, source_index, store_name=store_name, filename=filename)
     if loyalty_line is not None:
         return loyalty_line
-    return qpatch._generic_product_line_from_text(text, source_index, store_name=str(store_name or ''), filename=str(filename or ''))
+    return _ORIGINAL_QPATCH_GENERIC_PRODUCT_LINE_FROM_TEXT(text, source_index, store_name=str(store_name or ''), filename=str(filename or ''))
 
 
 def _generic_lines_from_merged_text(text_lines: list[str], store_name: Any = None, filename: Any = None) -> list[dict[str, Any]]:
@@ -196,10 +201,6 @@ def _normalize_receipt_lines(lines: list[dict[str, Any]] | None, store_name: Any
             cleaned['is_loyalty_line'] = True
         normalized.append(cleaned)
     return qpatch._dedupe_lines(normalized)
-
-
-def _reclassify_result(result: Any) -> Any:
-    return qpatch._reclassify_result(result)
 
 
 def _parse_result_from_text_lines_with_merge(text_lines: list[str], filename: str, **kwargs: Any):
