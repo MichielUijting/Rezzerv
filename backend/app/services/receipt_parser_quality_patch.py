@@ -5,6 +5,13 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.services import receipt_service as _receipt_service
+from app.services.receipt_line_classifier import (
+    LINE_CATEGORY_ITEM,
+    LINE_CATEGORY_ITEM_LABEL,
+    classify_receipt_line,
+    extract_amount_tokens,
+    normalize_ocr_line,
+)
 
 _ORIGINAL_PARSE_RECEIPT_CONTENT = _receipt_service.parse_receipt_content
 _ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES = _receipt_service._parse_result_from_text_lines
@@ -67,12 +74,14 @@ def _clean_label(value: Any) -> str:
 
 def _is_non_product_label(value: Any) -> bool:
     label = _clean_label(value)
-    lowered = label.lower()
     if not label:
         return True
-    if any(pattern.search(label) for pattern in NON_PRODUCT_LABEL_PATTERNS):
-        return True
-    return any(marker in lowered for marker in PRODUCT_LINE_BLACKLIST if marker not in {'bonus', 'korting', 'voordeel'})
+    category = classify_receipt_line(label)
+    if category == LINE_CATEGORY_ITEM_LABEL:
+        return False
+    if category == LINE_CATEGORY_ITEM:
+        return False
+    return True
 
 
 def merge_lines(lines: list[str]) -> list[str]:
@@ -86,7 +95,7 @@ def merge_lines(lines: list[str]) -> list[str]:
         text = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
         if not text:
             continue
-        if _is_non_product_label(text) and not re.search(r'-?\d{1,6}[\.,]\d{2}', text):
+        if _is_non_product_label(text) and not extract_amount_tokens(text):
             if buffer:
                 merged.append(buffer)
                 buffer = None
@@ -115,10 +124,7 @@ def is_product_line(text: str) -> bool:
     candidate = re.sub(r'\s+', ' ', str(text or '')).strip()
     if len(candidate) < 4:
         return False
-    if not re.search(r'-?\d{1,6}[\.,]\d{2}', candidate):
-        return False
-    lowered = candidate.lower()
-    if any(marker in lowered for marker in PRODUCT_LINE_BLACKLIST):
+    if classify_receipt_line(candidate) != LINE_CATEGORY_ITEM:
         return False
     if re.fullmatch(r'[-+]?\d+[\.,]\d{2}(?:\s+[-+]?\d+[\.,]\d{2})*', candidate):
         return False
@@ -128,14 +134,15 @@ def is_product_line(text: str) -> bool:
 def _generic_product_line_from_text(text: str, source_index: int) -> dict[str, Any] | None:
     if not is_product_line(text):
         return None
-    prices = re.findall(r'-?\d{1,6}[\.,]\d{2}', text)
+    prices = extract_amount_tokens(text)
     if not prices:
         return None
     unit_price = _parse_decimal(prices[0])
     line_total = _parse_decimal(prices[-1])
     if line_total is None:
         return None
-    label = text[: text.rfind(prices[-1])].strip(' .:-')
+    normalized_text = normalize_ocr_line(text)
+    label = normalized_text[: normalized_text.rfind(prices[-1])].strip(' .:-')
     label = re.sub(r'\b\d+\s*[xX]\s*$', '', label).strip(' .:-')
     if not label or len(label) < 2 or _is_non_product_label(label):
         return None
