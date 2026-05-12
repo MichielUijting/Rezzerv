@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from app.services.receipt_line_classifier import (
     LINE_CATEGORY_DISCOUNT,
+    LINE_CATEGORY_ITEM,
     LINE_CATEGORY_LOYALTY,
     classify_receipt_line,
     normalized_skip_text,
@@ -27,6 +28,7 @@ class StoreProfile:
     loyalty_patterns: tuple[str, ...] = ()
     discount_patterns: tuple[str, ...] = ()
     meta_patterns: tuple[str, ...] = ()
+    receipt_line_loyalty_patterns: tuple[str, ...] = ()
 
     def matches_store(self, store_name: str | None, filename: str | None = None) -> bool:
         haystack = f'{store_name or ""} {filename or ""}'.lower()
@@ -34,11 +36,17 @@ class StoreProfile:
 
     def classify_line(self, line: str) -> str:
         normalized = normalized_skip_text(line)
+        if self._matches_any(normalized, self.receipt_line_loyalty_patterns):
+            return LINE_CATEGORY_ITEM
         if self._matches_any(normalized, self.loyalty_patterns):
             return LINE_CATEGORY_LOYALTY
         if self._matches_any(normalized, self.discount_patterns):
             return LINE_CATEGORY_DISCOUNT
         return classify_receipt_line(line)
+
+    def should_include_loyalty_as_receipt_line(self, line: str) -> bool:
+        normalized = normalized_skip_text(line)
+        return self._matches_any(normalized, self.receipt_line_loyalty_patterns)
 
     @staticmethod
     def _matches_any(value: str, patterns: tuple[str, ...]) -> bool:
@@ -63,3 +71,7 @@ def get_store_profile(store_name: str | None = None, filename: str | None = None
 
 def classify_line_for_store(line: str, store_name: str | None = None, filename: str | None = None) -> str:
     return get_store_profile(store_name, filename).classify_line(line)
+
+
+def should_include_loyalty_line_for_store(line: str, store_name: str | None = None, filename: str | None = None) -> bool:
+    return get_store_profile(store_name, filename).should_include_loyalty_as_receipt_line(line)
