@@ -4,6 +4,14 @@ import re
 import unicodedata
 
 
+LINE_CATEGORY_META = 'META'
+LINE_CATEGORY_DETAIL = 'DETAIL'
+LINE_CATEGORY_ITEM_LABEL = 'ITEM_LABEL'
+LINE_CATEGORY_ITEM = 'ITEM'
+LINE_CATEGORY_DISCOUNT = 'DISCOUNT'
+LINE_CATEGORY_LOYALTY = 'LOYALTY'
+
+
 def normalize_ocr_line(line: str) -> str:
     normalized = str(line or '').replace('|', ' ')
     normalized = normalized.replace('€', ' € ')
@@ -34,7 +42,7 @@ def looks_like_ocr_noise_label(line: str) -> bool:
     long_tokens = sum(1 for token in alpha_tokens if len(token) >= 4)
     if len(alpha_tokens) >= 8 and short_tokens >= 5 and short_tokens > long_tokens:
         return True
-    if len(alpha_tokens) >= 6 and re.search(r'(?:[a-z]{1,2}\s+){4,}', normalized):
+    if len(alpha_tokens) >= 6 and re.search(r'(?:\b[a-z]{1,2}\b\s+){4,}', normalized):
         return True
     return False
 
@@ -77,19 +85,43 @@ def extract_dominant_amount(line: str) -> str | None:
 def _looks_like_contact_or_reference_line(lowered: str) -> bool:
     if re.search(r'https?://|www\.|@', lowered):
         return True
-    if re.search(r'(?:tel|telefoon|klantenservice|contact|servicepunt|openingstijden|webshop|website)', lowered):
+    if re.search(r'\b(?:tel|telefoon|klantenservice|contact|servicepunt|openingstijden|webshop|website)\b', lowered):
         return True
-    if re.search(r'(?:ordernummer|bestelnummer|factuurnummer|transactie|terminal|merchant|auth|autorisatie|kaartnr|iban|kvk|btwnr)', lowered):
+    if re.search(r'\b(?:ordernummer|bestelnummer|factuurnummer|transactie|terminal|merchant|auth|autorisatie|kaartnr|iban|kvk|btwnr)\b', lowered):
         return True
-    if re.search(r'\d{4}\s?[a-z]{2}', lowered) and re.search(r'(?:straat|laan|weg|plein|markt|dreef|gld|arnhem|nijmegen|utrecht|amsterdam|rotterdam|eindhoven|tilburg)', lowered):
+    if re.search(r'\b\d{4}\s?[a-z]{2}\b', lowered) and re.search(r'\b(?:straat|laan|weg|plein|markt|dreef|gld|arnhem|nijmegen|utrecht|amsterdam|rotterdam|eindhoven|tilburg)\b', lowered):
         return True
     return False
 
 
+def looks_like_loyalty_line(line: str | None) -> bool:
+    lowered = normalized_skip_text(line)
+    if not lowered:
+        return False
+    return bool(
+        re.search(
+            r'\b(?:koopzegel|koopzegels|zegel|zegels|spaarpunt|spaarpunten|pluspunt|pluspunten|loyalty|loyaliteit)\b',
+            lowered,
+        )
+    )
+
+
+def looks_like_discount_line(line: str | None) -> bool:
+    lowered = normalized_skip_text(line)
+    if not lowered:
+        return False
+    return bool(
+        re.search(
+            r'\b(?:korting|actie|bonus|bonus box|prijsvoordeel|voordeel|bij u bespaard|u bespaarde|totaal voordeel)\b',
+            lowered,
+        )
+    )
+
+
 def _looks_like_discount_or_summary_line(lowered: str) -> bool:
-    if re.match(r'^(?:\d+\s*[x×]\s*)?(?:actie|korting|bonus|voordeel|spaar|zegel)', lowered):
+    if re.match(r'^(?:\d+\s*[x×]\s*)?(?:actie|korting|bonus|voordeel|spaar|zegel)\b', lowered):
         return True
-    if re.search(r'(?:uw voordeel|totaal voordeel|bij u bespaard|u bespaarde|korting|spaarpunten|koopzegel|bonus box|bonuskaart|klantenkaart)', lowered):
+    if re.search(r'\b(?:uw voordeel|totaal voordeel|bij u bespaard|u bespaarde|korting|spaarpunten|koopzegel|bonus box|bonuskaart|klantenkaart)\b', lowered):
         return True
     return False
 
@@ -100,11 +132,11 @@ def _looks_like_payment_or_total_line(lowered: str, raw_line: str) -> bool:
         'btw', 'wisselgeld', 'retourpin', 'pinbetaling', 'ideal', 'vpay', 'maestro'
     )):
         return True
-    if re.search(r'datum', lowered) and re.search(r'\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?', lowered):
+    if re.search(r'\bdatum\b', lowered) and re.search(r'\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?', lowered):
         return True
     if re.search(r'\d{1,2}:\d{2}(?::\d{2})?', lowered) and re.search(r'\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?', lowered):
         return True
-    if re.search(r'(?:contant|pin|bankpas|kaart)', lowered) and re.search(r'-?\d+[\.,]\d{2}', lowered):
+    if re.search(r'\b(?:contant|pin|bankpas|kaart)\b', lowered) and re.search(r'-?\d+[\.,]\d{2}', lowered):
         return True
     if re.fullmatch(r'(?:bedrag\s*=\s*euro|contant|pin|bankpas)\s*-?\d+[\.,]\d{2}', lowered):
         return True
@@ -140,7 +172,7 @@ def should_skip_receipt_line(line: str) -> bool:
         return True
     if 'totaal' in lowered:
         return True
-    if re.match(r'^(?:\d+%|%)', lowered):
+    if re.match(r'^(?:\d+%|%)\b', lowered):
         return True
     if _looks_like_contact_or_reference_line(lowered) or _looks_like_discount_or_summary_line(lowered) or _looks_like_payment_or_total_line(lowered, raw_line):
         return True
@@ -159,24 +191,36 @@ def looks_like_item_label_only(line: str) -> bool:
 
 
 def classify_receipt_line(line: str) -> str:
+    """Classify one OCR line without applying store-specific receipt rules.
+
+    The classifier is deliberately generic: it only decides whether a line is
+    an item candidate, a detached item label, quantity/detail information,
+    discount information, loyalty/stamp information, or receipt metadata.
+    It never determines PO status and never decides whether a loyalty line
+    must be counted for a specific store/baseline.
+    """
     normalized = normalize_ocr_line(str(line or '')).strip()
     normalized = re.sub(r'^[^A-Za-z0-9]+', '', normalized).strip()
     normalized = re.sub(r'[^A-Za-z0-9]+$', '', normalized).strip()
     if not normalized:
-        return 'META'
+        return LINE_CATEGORY_META
     if looks_like_multiplier_detail_label(normalized):
-        return 'DETAIL'
+        return LINE_CATEGORY_DETAIL
+    if looks_like_loyalty_line(normalized):
+        return LINE_CATEGORY_LOYALTY
+    if looks_like_discount_line(normalized):
+        return LINE_CATEGORY_DISCOUNT
     if should_skip_receipt_line(normalized):
-        return 'META'
+        return LINE_CATEGORY_META
     if TOTAL_WORD_RE.search(normalized):
-        return 'META'
+        return LINE_CATEGORY_META
     if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}', normalized):
-        return 'META'
+        return LINE_CATEGORY_META
     if looks_like_item_label_only(normalized):
-        return 'ITEM_LABEL'
+        return LINE_CATEGORY_ITEM_LABEL
     if re.search(r'[A-Za-z]', normalized) and has_amount(normalized):
-        return 'ITEM'
-    return 'META'
+        return LINE_CATEGORY_ITEM
+    return LINE_CATEGORY_META
 
 
 def is_ocr_non_item_line(line: str) -> bool:
@@ -210,7 +254,7 @@ def is_ocr_non_item_line(line: str) -> bool:
                 return True
         except Exception:
             return True
-    if re.search(r'(?:store|pos|trans|selfpay|acme|smc)', lowered):
+    if re.search(r'\b(?:store|pos|trans|selfpay|acme|smc)\b', lowered):
         return True
     if re.match(r'^[A-Z]\s+\d{1,2}\s+\d', raw_line):
         return True
@@ -218,17 +262,16 @@ def is_ocr_non_item_line(line: str) -> bool:
 
 
 def classify_ocr_receipt_line(line: str) -> str:
-    normalized = normalize_ocr_line(str(line or '')).strip()
-    if not normalized:
-        return 'META'
-    if looks_like_multiplier_detail_label(normalized):
-        return 'DETAIL'
-    if should_skip_receipt_line(normalized):
-        return 'META'
-    if TOTAL_WORD_RE.search(normalized):
-        return 'META'
-    if looks_like_item_label_only(normalized):
-        return 'ITEM_LABEL'
-    if re.search(r'[A-Za-z]', normalized) and has_amount(normalized):
-        return 'ITEM'
-    return 'META'
+    return classify_receipt_line(line)
+
+
+def is_generic_receipt_item_line(line: str) -> bool:
+    return classify_receipt_line(line) == LINE_CATEGORY_ITEM
+
+
+def is_generic_receipt_non_product_line(line: str) -> bool:
+    return classify_receipt_line(line) in {
+        LINE_CATEGORY_META,
+        LINE_CATEGORY_DISCOUNT,
+        LINE_CATEGORY_LOYALTY,
+    }
