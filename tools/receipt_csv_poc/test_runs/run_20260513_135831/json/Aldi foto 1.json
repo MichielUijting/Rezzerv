@@ -1,0 +1,402 @@
+{
+  "schema_version": "receipt-ocr-poc-v3-product-block",
+  "metadata": {
+    "source_file": "Aldi foto 1.jpg",
+    "created_at": "2026-05-13T11:59:03.454050+00:00",
+    "store_hint": "aldi",
+    "ocr_variant": "adaptive_threshold",
+    "ocr_psm": 6,
+    "ocr_score": 89,
+    "ocr_attempts": [
+      {
+        "variant": "adaptive_threshold",
+        "psm": 6,
+        "score": 89
+      },
+      {
+        "variant": "adaptive_threshold",
+        "psm": 4,
+        "score": 89
+      },
+      {
+        "variant": "normalized",
+        "psm": 6,
+        "score": 84
+      },
+      {
+        "variant": "normalized",
+        "psm": 4,
+        "score": 84
+      },
+      {
+        "variant": "gray",
+        "psm": 6,
+        "score": 83
+      },
+      {
+        "variant": "gray",
+        "psm": 4,
+        "score": 83
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 6,
+        "score": 83
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 4,
+        "score": 83
+      }
+    ],
+    "total_amount_hint": "6.55",
+    "detected_rows": 4,
+    "parse_confidence_avg": 0.615,
+    "warnings": [
+      "ocr_noise"
+    ],
+    "line_type_counts": {
+      "discount_line": 1,
+      "metadata_line": 13,
+      "noise_line": 1,
+      "payment_line": 4,
+      "product_line": 4,
+      "quantity_line": 0,
+      "total_line": 2,
+      "unknown_line": 9,
+      "vat_line": 2
+    },
+    "ignored_line_count": 32,
+    "product_block": {
+      "start_line": 5,
+      "end_line": 8,
+      "reason": "fallback_first_parseable_line",
+      "line_count": 4
+    },
+    "outside_block_parseable_count": 0
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "& LOD I",
+      "normalized_line": "& LOD I",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "PRINS FREDERIKLAAN 203 .",
+      "normalized_line": "PRINS FREDERIKLAAN 203 .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "OPENINGSTIJDEN: MA TM ZAT 08.00-20.00",
+      "normalized_line": "OPENINGSTIJDEN: MA TM ZAT 08.00-20.00",
+      "line_type": "metadata_line",
+      "reason": "opening_hours"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "ZON 10,00~18.00",
+      "normalized_line": "ZON 10,00~18.00",
+      "line_type": "metadata_line",
+      "reason": "opening_hours"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "GOUDSE KAAS 48i} GESN, JONG 2,39",
+      "normalized_line": "GOUDSE KAAS 48i} GESN, JONG 2,39",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "WADDENBOLLEN ; 1,50",
+      "normalized_line": "WADDENBOLLEN ; 1,50",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "CHOCOPOPS / CHOCO SHELLS. ° 1,41",
+      "normalized_line": "CHOCOPOPS / CHOCO SHELLS. ° 1,41",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "7-GRANEN ONTBIJT ~ . 1,25",
+      "normalized_line": "7-GRANEN ONTBIJT ~ . 1,25",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "BEDRAG EURO 6,55",
+      "normalized_line": "BEDRAG EURO 6,55",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "POI: 50095966",
+      "normalized_line": "POI: 50095966",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "KLANTTICKET",
+      "normalized_line": "KLANTTICKET",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "Terminal: Q60DW7",
+      "normalized_line": "Terminal: Q60DW7",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "Merchant: 3009020",
+      "normalized_line": "Merchant: 3009020",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "Periode: 2269",
+      "normalized_line": "Periode: 2269",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "Transactie: 02752097",
+      "normalized_line": "Transactie: 02752097",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "MAESTRO",
+      "normalized_line": "MAESTRO",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "(40000000043060)",
+      "normalized_line": "(40000000043060)",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "MAESTRO:",
+      "normalized_line": "MAESTRO:",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "Kaart: 673706XXXXXXXXX5385",
+      "normalized_line": "Kaart: 673706XXXXXXXXX5385",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "Kaartserienummer : 0",
+      "normalized_line": "Kaartserienummer : 0",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "BETALING",
+      "normalized_line": "BETALING",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "Datum: . 26/09/2022 08:20",
+      "normalized_line": "Datum: . 26/09/2022 08:20",
+      "line_type": "metadata_line",
+      "reason": "date_like"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "Autorisatiecode: *  N2K7V4",
+      "normalized_line": "Autorisatiecode: * N2K7V4",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "Totaal: an 6,55 EUR",
+      "normalized_line": "Totaal: an 6,55 EUR",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "Contact less",
+      "normalized_line": "Contact less",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "Leesmethode: CHIP",
+      "normalized_line": "Leesmethode: CHIP",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "PINNEN 6,55",
+      "normalized_line": "PINNEN 6,55",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "BTW NETTO BTW-BEDRAG BRUTO",
+      "normalized_line": "BTW NETTO BTW-BEDRAG BRUTO",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "B 9,00% 6,01 0,54 6,55",
+      "normalized_line": "B 9,00% 6,01 0,54 6,55",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "AANTAL ARTIKELEN 4",
+      "normalized_line": "AANTAL ARTIKELEN 4",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "BESPAAR HET HELE JAAR HONDERDEN EURO'S",
+      "normalized_line": "BESPAAR HET HELE JAAR HONDERDEN EURO'S",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "MP WTF NAGE) T.AKSF RANNSPHAPPFN RT. ADT.",
+      "normalized_line": "MP WTF NAGE) T.AKSF RANNSPHAPPFN RT. ADT.",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "EN DAT KUN JE JUIST NU WEL GEBRUTKEN,",
+      "normalized_line": "EN DAT KUN JE JUIST NU WEL GEBRUTKEN,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "ALDI GEEFT JE KOOPKRACHT.",
+      "normalized_line": "ALDI GEEFT JE KOOPKRACHT.",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "04(3)038 3235 & 08:28 26.09.2022",
+      "normalized_line": "04(3)038 3235 & 08:28 26.09.2022",
+      "line_type": "metadata_line",
+      "reason": "date_like"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "ae:",
+      "normalized_line": "ae:",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    }
+  ],
+  "lines": [
+    {
+      "source_file": "Aldi foto 1.jpg",
+      "store_hint": "aldi",
+      "line_no": 5,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "in_product_block": true,
+      "item_text": "GOUDSE KAAS 48i} GESN, JONG",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "2.39",
+      "currency": "EUR",
+      "parser_confidence": 0.45,
+      "raw_line": "GOUDSE KAAS 48i} GESN, JONG 2,39",
+      "warning": "ocr_noise"
+    },
+    {
+      "source_file": "Aldi foto 1.jpg",
+      "store_hint": "aldi",
+      "line_no": 6,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "in_product_block": true,
+      "item_text": "WADDENBOLLEN ;",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.50",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "WADDENBOLLEN ; 1,50",
+      "warning": ""
+    },
+    {
+      "source_file": "Aldi foto 1.jpg",
+      "store_hint": "aldi",
+      "line_no": 7,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "in_product_block": true,
+      "item_text": "CHOCOPOPS / CHOCO SHELLS. °",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.41",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "CHOCOPOPS / CHOCO SHELLS. ° 1,41",
+      "warning": ""
+    },
+    {
+      "source_file": "Aldi foto 1.jpg",
+      "store_hint": "aldi",
+      "line_no": 8,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "in_product_block": true,
+      "item_text": "7-GRANEN ONTBIJT ~",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.25",
+      "currency": "EUR",
+      "parser_confidence": 0.45,
+      "raw_line": "7-GRANEN ONTBIJT ~ . 1,25",
+      "warning": "ocr_noise"
+    }
+  ]
+}
