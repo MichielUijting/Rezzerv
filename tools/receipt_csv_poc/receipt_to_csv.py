@@ -2,7 +2,6 @@ import argparse
 import json
 import re
 import shutil
-import subprocess
 import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
@@ -14,6 +13,8 @@ import numpy as np
 import pandas as pd
 import pytesseract
 
+from line_classifier import classify_lines, summarize_line_types
+
 
 AMOUNT_PATTERN = re.compile(r"(?<!\d)(-?\d{1,4}[\.,]\d{2})(?!\d)")
 QUANTITY_MULTIPLIER_PATTERN = re.compile(
@@ -23,37 +24,6 @@ WEIGHT_PRICE_PATTERN = re.compile(
     r"(?P<quantity>\d+[\.,]\d{3})\s*(?P<unit>kg|g|l|ml)\s*[xX]\s*(?P<unit_price>\d+[\.,]\d{2})",
     re.IGNORECASE,
 )
-
-IGNORE_PATTERNS = [
-    "totaal",
-    "subtotaal",
-    "btw",
-    "pin",
-    "pinnen",
-    "bankpas",
-    "visa",
-    "maestro",
-    "mastercard",
-    "betaling",
-    "betaald",
-    "wisselgeld",
-    "bonus box",
-    "koopzegel",
-    "gespaard",
-    "ingewisseld",
-    "nieuw saldo",
-    "oud saldo",
-    "terminal",
-    "merchant",
-    "transactie",
-    "contactless",
-    "kaart",
-    "autorisatie",
-    "klantticket",
-    "kopie kaarthouder",
-    "aantal artikelen",
-    "aantal art",
-]
 
 DISCOUNT_PATTERNS = [
     "korting",
@@ -77,6 +47,8 @@ CSV_COLUMNS = [
     "source_file",
     "store_hint",
     "line_no",
+    "line_type",
+    "classifier_reason",
     "item_text",
     "quantity",
     "unit",
@@ -88,12 +60,16 @@ CSV_COLUMNS = [
     "warning",
 ]
 
+PARSEABLE_LINE_TYPES = {"product_line", "quantity_line"}
+
 
 @dataclass
 class ReceiptLine:
     source_file: str
     store_hint: str
     line_no: int
+    line_type: str
+    classifier_reason: str
     item_text: str
     quantity: str
     unit: str
@@ -115,6 +91,8 @@ class ReceiptResult:
     total_amount_hint: str
     parse_confidence_avg: float
     warnings: list[str]
+    line_type_counts: dict[str, int]
+    ignored_line_count: int
     error: str = ""
 
 
@@ -127,11 +105,11 @@ def normalize_decimal(value: str) -> str:
 def detect_store_hint(text: str, filename: str) -> str:
     combined = f"{filename}\n{text}".lower()
     candidates = {
+        "plus": ["plus", "pluspunten", "pluspunten digital", "plussen digital"],
         "albert_heijn": ["albert heijn", "ah ", "bonus box"],
         "jumbo": ["jumbo"],
         "lidl": ["lidl", "lidl plus"],
         "aldi": ["aldi", "alot"],
-        "plus": ["plus"],
     }
 
     for store, markers in candidates.items():
@@ -144,12 +122,6 @@ def detect_store_hint(text: str, filename: str) -> str:
 def is_discount_line(line: str) -> bool:
     lowered = line.lower()
     return any(pattern in lowered for pattern in DISCOUNT_PATTERNS)
-
-
-
-def should_ignore(line: str) -> bool:
-    lowered = line.lower()
-    return any(pattern in lowered for pattern in IGNORE_PATTERNS)
 
 
 
@@ -332,20 +304,44 @@ def parse_quantity_and_unit(line: str):
 
 
 
-def parse_receipt_lines(text: str, source_file: str, store_hint: str) -> list[ReceiptLine]:
-    rows: list[ReceiptLine] = []
+def warning_for_line(line: str, line_type: str, amount_count: int) -> tuple[str, float]:
+    warning = ""
+    confidence = 0.78
 
-    for idx, raw_line in enumerate(text.splitlines(), start=1):
-        line = raw_line.strip()
+    if amount_count > 1:
+        warning = "multiple_amounts_detected"
+        confidence = 0.62
+
+    if line_type == "quantity_line":
+        warning = f"{warning};quantity_line_requires_merge" if warning else "quantity_line_requires_merge"
+        confidence = min(confidence, 0.55)
+
+    if is_discount_line(line):
+        warning = f"{warning};discount_keyword" if warning else "discount_keyword"
+        confidence = min(confidence, 0.58)
+
+    if any(char in line for char in "{}[]~^_"):
+        warning = f"{warning};ocr_noise" if warning else "ocr_noise"
+        confidence = min(confidence, 0.45)
+
+    return warning, confidence
+
+
+
+def parse_receipt_lines(text: str, source_file: str, store_hint: str, classified_lines=None) -> list[ReceiptLine]:
+    rows: list[ReceiptLine] = []
+    classified_lines = classified_lines or classify_lines(text)
+
+    for classified in classified_lines:
+        line = classified.normalized_line
         if not line:
+            continue
+
+        if classified.line_type not in PARSEABLE_LINE_TYPES:
             continue
 
         amounts = AMOUNT_PATTERN.findall(line)
         if not amounts:
-            continue
-
-        lowered = line.lower()
-        if should_ignore(line) and not is_discount_line(line):
             continue
 
         last_amount = amounts[-1]
@@ -355,28 +351,16 @@ def parse_receipt_lines(text: str, source_file: str, store_hint: str) -> list[Re
         if len(item_text) < 2:
             continue
 
-        warning = ""
-        confidence = 0.78
-
-        if len(amounts) > 1:
-            warning = "multiple_amounts_detected"
-            confidence = 0.62
-
-        if is_discount_line(line):
-            warning = "discount_or_loyalty_line"
-            confidence = min(confidence, 0.58)
-
-        if any(char in item_text for char in "{}[]~^_"):
-            warning = f"{warning};ocr_noise" if warning else "ocr_noise"
-            confidence = min(confidence, 0.45)
-
+        warning, confidence = warning_for_line(line, classified.line_type, len(amounts))
         quantity, unit, unit_price = parse_quantity_and_unit(line)
 
         rows.append(
             ReceiptLine(
                 source_file=source_file,
                 store_hint=store_hint,
-                line_no=idx,
+                line_no=classified.line_no,
+                line_type=classified.line_type,
+                classifier_reason=classified.reason,
                 item_text=item_text,
                 quantity=quantity,
                 unit=unit,
@@ -384,7 +368,7 @@ def parse_receipt_lines(text: str, source_file: str, store_hint: str) -> list[Re
                 line_total=normalize_decimal(last_amount),
                 currency="EUR",
                 parser_confidence=round(confidence, 3),
-                raw_line=raw_line,
+                raw_line=classified.raw_line,
                 warning=warning,
             )
         )
@@ -403,11 +387,12 @@ def write_rows_csv(rows: Iterable[ReceiptLine], csv_path: Path):
 
 
 
-def write_rows_json(rows: Iterable[ReceiptLine], json_path: Path, metadata: dict):
+def write_rows_json(rows: Iterable[ReceiptLine], json_path: Path, metadata: dict, classified_lines):
     json_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema_version": "receipt-ocr-poc-v1",
+        "schema_version": "receipt-ocr-poc-v2-line-classifier",
         "metadata": metadata,
+        "classified_lines": [asdict(line) for line in classified_lines],
         "lines": [asdict(row) for row in rows],
     }
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -446,8 +431,15 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         attempt_file = attempts_dir / f"{image_path.stem}_{attempt['variant']}_psm{attempt['psm']}.txt"
         attempt_file.write_text(attempt["text"], encoding="utf-8")
 
+    classified_lines = classify_lines(text)
+    line_type_counts = summarize_line_types(classified_lines)
+    ignored_line_count = sum(
+        count for line_type, count in line_type_counts.items()
+        if line_type not in PARSEABLE_LINE_TYPES
+    )
+
     store_hint = detect_store_hint(text, image_path.name)
-    rows = parse_receipt_lines(text, image_path.name, store_hint)
+    rows = parse_receipt_lines(text, image_path.name, store_hint, classified_lines)
 
     receipt_csv = per_receipt_dir / f"{image_path.stem}.csv"
     write_rows_csv(rows, receipt_csv)
@@ -467,9 +459,11 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         "detected_rows": len(rows),
         "parse_confidence_avg": confidence_avg,
         "warnings": warnings,
+        "line_type_counts": line_type_counts,
+        "ignored_line_count": ignored_line_count,
     }
 
-    write_rows_json(rows, json_dir / f"{image_path.stem}.json", metadata)
+    write_rows_json(rows, json_dir / f"{image_path.stem}.json", metadata, classified_lines)
 
     result = ReceiptResult(
         source_file=image_path.name,
@@ -480,6 +474,8 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         total_amount_hint=metadata["total_amount_hint"],
         parse_confidence_avg=confidence_avg,
         warnings=warnings,
+        line_type_counts=line_type_counts,
+        ignored_line_count=ignored_line_count,
     )
 
     return rows, result
@@ -495,25 +491,41 @@ def list_image_files(input_dir: Path) -> list[Path]:
 
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
+    all_line_type_counts = {}
+    for row in report_rows:
+        for line_type, count in row.line_type_counts.items():
+            all_line_type_counts[line_type] = all_line_type_counts.get(line_type, 0) + count
+
     summary = {
-        "schema_version": "receipt-ocr-benchmark-v1",
+        "schema_version": "receipt-ocr-benchmark-v2-line-classifier",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "total_receipts": len(report_rows),
         "success_count": sum(1 for row in report_rows if row.status == "success"),
         "error_count": sum(1 for row in report_rows if row.status == "error"),
         "total_detected_rows": sum(row.detected_rows for row in report_rows),
+        "total_ignored_lines": sum(row.ignored_line_count for row in report_rows),
+        "line_type_counts": all_line_type_counts,
         "by_store_hint": {},
     }
 
     for row in report_rows:
         bucket = summary["by_store_hint"].setdefault(
             row.store_hint,
-            {"receipts": 0, "detected_rows": 0, "avg_confidence_values": []},
+            {
+                "receipts": 0,
+                "detected_rows": 0,
+                "ignored_lines": 0,
+                "avg_confidence_values": [],
+                "line_type_counts": {},
+            },
         )
         bucket["receipts"] += 1
         bucket["detected_rows"] += row.detected_rows
+        bucket["ignored_lines"] += row.ignored_line_count
         if row.parse_confidence_avg:
             bucket["avg_confidence_values"].append(row.parse_confidence_avg)
+        for line_type, count in row.line_type_counts.items():
+            bucket["line_type_counts"][line_type] = bucket["line_type_counts"].get(line_type, 0) + count
 
     for bucket in summary["by_store_hint"].values():
         values = bucket.pop("avg_confidence_values")
@@ -562,8 +574,9 @@ def main():
             all_rows.extend(rows)
             report_rows.append(result)
             print(
-                f"[OK] {image_file.name}: {len(rows)} rows, "
-                f"store={result.store_hint}, confidence={result.parse_confidence_avg}"
+                f"[OK] {image_file.name}: {len(rows)} product/quantity rows, "
+                f"ignored={result.ignored_line_count}, store={result.store_hint}, "
+                f"confidence={result.parse_confidence_avg}"
             )
 
         except Exception as exc:
@@ -576,6 +589,8 @@ def main():
                 total_amount_hint="",
                 parse_confidence_avg=0.0,
                 warnings=[],
+                line_type_counts={},
+                ignored_line_count=0,
                 error=str(exc),
             )
             report_rows.append(result)
