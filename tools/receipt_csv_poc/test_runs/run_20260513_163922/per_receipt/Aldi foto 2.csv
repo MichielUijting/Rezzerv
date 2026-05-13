@@ -1,0 +1,4 @@
+source_file,store_hint,profile_name,line_no,line_type,classifier_reason,in_product_block,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
+Aldi foto 2.jpg,aldi,aldi,7,product_line,amount_and_text,True,MELKCHOCOLADE,,,,2.56,EUR,0.78,"MELKCHOCOLADE 2,56",
+Aldi foto 2.jpg,aldi,aldi,8,product_line,amount_and_text,True,EAPDAPPELSCHIUFJE Seek,,,,1.22,EUR,0.78,"EAPDAPPELSCHIUFJE Seek . 1,22.",
+Aldi foto 2.jpg,aldi,aldi,9,product_line,amount_and_text,True,a alee SPEK-UL,,,,1.22,EUR,0.78,"a alee SPEK-UL- 1,22",

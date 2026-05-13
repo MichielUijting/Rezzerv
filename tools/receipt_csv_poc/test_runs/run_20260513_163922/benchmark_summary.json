@@ -1,0 +1,216 @@
+{
+  "schema_version": "receipt-ocr-benchmark-v4-store-profiles",
+  "created_at": "2026-05-13T14:41:40.063095+00:00",
+  "total_receipts": 11,
+  "success_count": 11,
+  "error_count": 0,
+  "total_detected_rows": 76,
+  "total_ignored_lines": 645,
+  "line_type_counts": {
+    "discount_line": 18,
+    "metadata_line": 65,
+    "noise_line": 80,
+    "payment_line": 29,
+    "product_line": 85,
+    "quantity_line": 6,
+    "total_line": 13,
+    "unknown_line": 419,
+    "vat_line": 21
+  },
+  "profiles_used": {
+    "AH foto 2.jpeg": "generic",
+    "AH foto 3.jpg": "generic",
+    "Aldi foto 1.jpg": "aldi",
+    "Aldi foto 2.jpg": "aldi",
+    "Jumbo App 1.png": "jumbo",
+    "Jumbo foto 1.jpeg": "jumbo",
+    "Jumbo foto 3.jpg": "jumbo",
+    "Lidl App 1.png": "lidl",
+    "Lidl App 2.png": "lidl",
+    "plus foto 1.jpg": "generic",
+    "Plus foto 2.jpeg": "generic"
+  },
+  "product_blocks": {
+    "AH foto 2.jpeg": {
+      "start_line": 6,
+      "end_line": 7,
+      "reason": "header_keyword",
+      "line_count": 2,
+      "profile": "generic"
+    },
+    "AH foto 3.jpg": {
+      "start_line": null,
+      "end_line": null,
+      "reason": "no_parseable_lines",
+      "line_count": 0,
+      "profile": "generic"
+    },
+    "Aldi foto 1.jpg": {
+      "start_line": 5,
+      "end_line": 8,
+      "reason": "fallback_first_parseable_line",
+      "line_count": 4,
+      "profile": "aldi"
+    },
+    "Aldi foto 2.jpg": {
+      "start_line": 7,
+      "end_line": 9,
+      "reason": "fallback_first_parseable_line",
+      "line_count": 3,
+      "profile": "aldi"
+    },
+    "Jumbo App 1.png": {
+      "start_line": 7,
+      "end_line": 26,
+      "reason": "header_keyword",
+      "line_count": 20,
+      "profile": "jumbo"
+    },
+    "Jumbo foto 1.jpeg": {
+      "start_line": 10,
+      "end_line": 19,
+      "reason": "header_keyword",
+      "line_count": 10,
+      "profile": "jumbo"
+    },
+    "Jumbo foto 3.jpg": {
+      "start_line": null,
+      "end_line": null,
+      "reason": "no_parseable_lines",
+      "line_count": 0,
+      "profile": "jumbo"
+    },
+    "Lidl App 1.png": {
+      "start_line": 5,
+      "end_line": 25,
+      "reason": "header_keyword",
+      "line_count": 21,
+      "profile": "lidl"
+    },
+    "Lidl App 2.png": {
+      "start_line": 5,
+      "end_line": 25,
+      "reason": "header_keyword",
+      "line_count": 21,
+      "profile": "lidl"
+    },
+    "plus foto 1.jpg": {
+      "start_line": 29,
+      "end_line": 112,
+      "reason": "fallback_first_parseable_line",
+      "line_count": 84,
+      "profile": "generic"
+    },
+    "Plus foto 2.jpeg": {
+      "start_line": 99,
+      "end_line": 99,
+      "reason": "header_keyword",
+      "line_count": 1,
+      "profile": "generic"
+    }
+  },
+  "by_store_hint": {
+    "albert_heijn": {
+      "receipts": 4,
+      "detected_rows": 9,
+      "ignored_lines": 335,
+      "line_type_counts": {
+        "discount_line": 5,
+        "metadata_line": 13,
+        "noise_line": 50,
+        "payment_line": 8,
+        "product_line": 18,
+        "quantity_line": 0,
+        "total_line": 5,
+        "unknown_line": 250,
+        "vat_line": 4
+      },
+      "profiles": {
+        "generic": 4
+      },
+      "avg_parse_confidence": 0.745
+    },
+    "aldi": {
+      "receipts": 2,
+      "detected_rows": 7,
+      "ignored_lines": 46,
+      "line_type_counts": {
+        "discount_line": 1,
+        "metadata_line": 19,
+        "noise_line": 2,
+        "payment_line": 5,
+        "product_line": 10,
+        "quantity_line": 0,
+        "total_line": 2,
+        "unknown_line": 14,
+        "vat_line": 3
+      },
+      "profiles": {
+        "aldi": 2
+      },
+      "avg_parse_confidence": 0.698
+    },
+    "jumbo": {
+      "receipts": 3,
+      "detected_rows": 23,
+      "ignored_lines": 199,
+      "line_type_counts": {
+        "discount_line": 5,
+        "metadata_line": 15,
+        "noise_line": 28,
+        "payment_line": 6,
+        "product_line": 19,
+        "quantity_line": 5,
+        "total_line": 3,
+        "unknown_line": 130,
+        "vat_line": 12
+      },
+      "profiles": {
+        "jumbo": 3
+      },
+      "avg_parse_confidence": 0.735
+    },
+    "lidl": {
+      "receipts": 2,
+      "detected_rows": 37,
+      "ignored_lines": 65,
+      "line_type_counts": {
+        "discount_line": 7,
+        "metadata_line": 18,
+        "noise_line": 0,
+        "payment_line": 10,
+        "product_line": 38,
+        "quantity_line": 1,
+        "total_line": 3,
+        "unknown_line": 25,
+        "vat_line": 2
+      },
+      "profiles": {
+        "lidl": 2
+      },
+      "avg_parse_confidence": 0.748
+    }
+  },
+  "by_profile": {
+    "generic": {
+      "receipts": 4,
+      "detected_rows": 9,
+      "ignored_lines": 335
+    },
+    "aldi": {
+      "receipts": 2,
+      "detected_rows": 7,
+      "ignored_lines": 46
+    },
+    "jumbo": {
+      "receipts": 3,
+      "detected_rows": 23,
+      "ignored_lines": 199
+    },
+    "lidl": {
+      "receipts": 2,
+      "detected_rows": 37,
+      "ignored_lines": 65
+    }
+  }
+}
