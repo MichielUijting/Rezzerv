@@ -19,8 +19,9 @@ from profiles.base import PARSEABLE_LINE_TYPES
 AMOUNT_PATTERN = re.compile(r'(?<!\d)(-?\d+[\.,]\d{2})(?!\d)')
 SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
 DISCOUNT_KEYWORDS = ('korting', 'voordeel', 'lidl plus', 'bonus')
-TOTAL_KEYWORDS = ('totaal', 'te betalen')
-RECONCILIATION_TOLERANCE = Decimal('0.02')
+TOTAL_KEYWORDS = ('totaal', 'te betalen', 'kaartbetaling')
+TOTAL_HINT_EXCLUDE_KEYWORDS = ('prijsvoordeel', 'totaal korting', 'btw totaal', 'biw totaal')
+SUMMARY_DISCOUNT_KEYWORDS = ('totaal prijsvoordeel', 'totaal korting')
 
 
 @dataclass
@@ -43,7 +44,7 @@ class ReceiptLine:
 @dataclass
 class ReceiptResult:
     source_file: str
-    status: str
+    run_result: str
     store_hint: str
     profile_name: str
     detected_rows: int
@@ -151,19 +152,53 @@ def extract_amounts(line: str) -> list[Decimal]:
     return [to_decimal(amount) for amount in AMOUNT_PATTERN.findall(line)]
 
 
-def _reconciliation_status(diff: Decimal, total_hint: str, discount_count: int) -> tuple[str, float, list[str]]:
-    warnings: list[str] = []
-    if not total_hint:
-        warnings.append('missing_total_hint')
-    if diff.copy_abs() <= RECONCILIATION_TOLERANCE and total_hint:
-        confidence = 0.95 if discount_count else 0.90
-        return 'balanced', confidence, warnings
-    if total_hint and diff.copy_abs() <= Decimal('0.10'):
-        warnings.append('small_rounding_or_ocr_difference')
-        return 'near_balance', 0.72, warnings
-    if total_hint:
-        warnings.append('gross_discount_net_mismatch')
-    return 'needs_review', 0.35, warnings
+def _candidate(line, amount: Decimal, reason: str) -> dict:
+    return {
+        'line_no': line.line_no,
+        'amount': money(amount),
+        'raw_line': line.raw_line,
+        'reason': reason,
+    }
+
+
+def select_total_hint(total_candidates: list[dict]) -> tuple[dict | None, list[dict]]:
+    selected = None
+    excluded = []
+    for candidate in total_candidates:
+        lowered = str(candidate.get('raw_line', '')).lower()
+        if any(keyword in lowered for keyword in TOTAL_HINT_EXCLUDE_KEYWORDS):
+            excluded.append({**candidate, 'excluded_reason': 'summary_or_tax_total_not_payable_total'})
+            continue
+        if selected is None:
+            selected = {**candidate, 'selected_total_hint_reason': 'first_payable_total_like_line'}
+        else:
+            previous_amount = to_decimal(selected.get('amount'))
+            current_amount = to_decimal(candidate.get('amount'))
+            if current_amount == previous_amount:
+                selected = {**candidate, 'selected_total_hint_reason': 'later_matching_payable_total_like_line'}
+            else:
+                excluded.append({**candidate, 'excluded_reason': 'conflicting_total_hint_after_selection'})
+    return selected, excluded
+
+
+def select_discount_total(discount_candidates: list[dict]) -> tuple[Decimal, str, list[dict], list[dict]]:
+    summary_candidates = []
+    individual_candidates = []
+    for candidate in discount_candidates:
+        lowered = str(candidate.get('raw_line', '')).lower()
+        if any(keyword in lowered for keyword in SUMMARY_DISCOUNT_KEYWORDS):
+            summary_candidates.append(candidate)
+        else:
+            individual_candidates.append(candidate)
+
+    if summary_candidates:
+        selected = summary_candidates[-1]
+        excluded = [{**candidate, 'excluded_reason': 'summary_discount_total_selected'} for candidate in individual_candidates]
+        return to_decimal(selected.get('amount')), 'summary_discount_total', [selected], excluded
+
+    selected_candidates = individual_candidates
+    selected_total = sum((to_decimal(item['amount']) for item in selected_candidates), Decimal('0'))
+    return selected_total, 'sum_individual_discount_lines', selected_candidates, []
 
 
 def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, store_hint: str) -> dict:
@@ -179,42 +214,34 @@ def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, 
             continue
         last_amount = amounts[-1]
         if any(keyword in lowered for keyword in DISCOUNT_KEYWORDS):
-            discount_candidates.append({
-                'line_no': line.line_no,
-                'amount': money(abs(last_amount)),
-                'raw_line': line.raw_line,
-                'reason': 'discount_keyword',
-            })
+            discount_candidates.append(_candidate(line, abs(last_amount), 'discount_keyword'))
         if any(keyword in lowered for keyword in TOTAL_KEYWORDS):
-            total_candidates.append({
-                'line_no': line.line_no,
-                'amount': money(last_amount),
-                'raw_line': line.raw_line,
-                'reason': 'total_keyword',
-            })
+            total_candidates.append(_candidate(line, last_amount, 'total_keyword'))
 
-    discount_total = sum((to_decimal(item['amount']) for item in discount_candidates), Decimal('0'))
+    selected_total_hint, excluded_total_hints = select_total_hint(total_candidates)
+    discount_total, selected_discount_strategy, selected_discount_candidates, excluded_discount_candidates = select_discount_total(discount_candidates)
     net_candidate = gross_sum - discount_total
-    best_total_hint = total_candidates[-1]['amount'] if total_candidates else ''
-    hinted_total = to_decimal(best_total_hint)
-    difference = net_candidate - hinted_total if best_total_hint else net_candidate
-    status, confidence, warnings = _reconciliation_status(difference, best_total_hint, len(discount_candidates))
+    selected_total_amount = selected_total_hint.get('amount') if selected_total_hint else ''
+    selected_total_decimal = to_decimal(selected_total_amount)
+    difference = net_candidate - selected_total_decimal if selected_total_hint else net_candidate
 
     return {
         'store_hint': store_hint,
         'gross_line_sum': money(gross_sum),
         'discount_total_detected': money(discount_total),
         'net_total_candidate': money(net_candidate),
-        'total_amount_hints': total_candidates,
-        'best_total_amount_hint': best_total_hint,
-        'net_vs_best_total_difference': money(difference),
-        'financial_reconciliation_status': status,
-        'financial_reconciliation_confidence': confidence,
-        'financial_reconciliation_warnings': warnings,
-        'discount_candidates': discount_candidates,
+        'selected_total_hint': selected_total_hint,
+        'selected_total_hint_reason': selected_total_hint.get('selected_total_hint_reason') if selected_total_hint else '',
+        'net_vs_selected_total_difference': money(difference),
+        'all_total_hints': total_candidates,
+        'excluded_total_hints': excluded_total_hints,
+        'selected_discount_strategy': selected_discount_strategy,
+        'selected_discount_candidates': selected_discount_candidates,
+        'excluded_discount_candidates': excluded_discount_candidates,
+        'all_discount_candidates': discount_candidates,
         'discount_candidate_count': len(discount_candidates),
         'line_count_after_merge': len(rows),
-        'totals_strategy': 'gross_minus_detected_discounts_vs_best_total_hint',
+        'totals_strategy': 'diagnostic_gross_minus_selected_discount_vs_selected_total_hint',
     }
 
 
@@ -261,7 +288,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     json_payload = {
-        'schema_version': 'receipt-ocr-poc-v8-financial-reconciliation',
+        'schema_version': 'receipt-ocr-poc-v9-ssot-diagnostic-financials',
         'metadata': metadata,
         'classified_lines': [asdict(line) for line in classified_lines],
         'lines': [asdict(row) for row in merged_rows],
@@ -279,7 +306,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
 
     return merged_rows, ReceiptResult(
         source_file=image_path.name,
-        status='success',
+        run_result='success',
         store_hint=store_hint,
         profile_name=profile.profile_name,
         detected_rows=len(merged_rows),
@@ -296,19 +323,13 @@ def list_image_files(input_dir: Path):
 
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
-    status_counts: dict[str, int] = {}
-    for row in report_rows:
-        status = row.totals_diagnostics.get('financial_reconciliation_status', 'unknown')
-        status_counts[status] = status_counts.get(status, 0) + 1
-
     summary = {
-        'schema_version': 'receipt-ocr-benchmark-v8-financial-reconciliation',
+        'schema_version': 'receipt-ocr-benchmark-v9-ssot-diagnostic-financials',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
-        'success_count': sum(1 for row in report_rows if row.status == 'success'),
-        'error_count': sum(1 for row in report_rows if row.status == 'error'),
+        'run_success_count': sum(1 for row in report_rows if row.run_result == 'success'),
+        'run_error_count': sum(1 for row in report_rows if row.run_result == 'error'),
         'total_detected_rows': sum(row.detected_rows for row in report_rows),
-        'financial_reconciliation_status_counts': status_counts,
         'profiles_used': {},
         'merge_diagnostics': {},
         'refinement_diagnostics': {},
@@ -350,8 +371,9 @@ def main():
             merged = result.merge_diagnostics.get('merged_quantity_lines_count', 0)
             gross = result.totals_diagnostics.get('gross_line_sum', '0.00')
             net = result.totals_diagnostics.get('net_total_candidate', '0.00')
-            recon = result.totals_diagnostics.get('financial_reconciliation_status', 'unknown')
-            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} gross={gross} net={net} recon={recon} profile={result.profile_name}')
+            selected_total = result.totals_diagnostics.get('selected_total_hint') or {}
+            selected_total_amount = selected_total.get('amount', '')
+            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} gross={gross} net={net} selected_total={selected_total_amount} profile={result.profile_name}')
         except Exception as exc:
             print(f'[ERROR] {image_file.name}: {exc}')
 
