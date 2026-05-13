@@ -9,7 +9,15 @@ echo ==============================================
 echo.
 
 if not exist input_receipts mkdir input_receipts
-if not exist output_csv mkdir output_csv
+if not exist test_runs mkdir test_runs
+
+for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"') do set RUN_ID=%%i
+set OUTPUT_DIR=test_runs\run_%RUN_ID%
+mkdir "%OUTPUT_DIR%"
+
+echo [INFO] Deze run wordt opgeslagen in:
+echo %~dp0%OUTPUT_DIR%
+echo.
 
 where python >nul 2>nul
 if errorlevel 1 (
@@ -33,13 +41,13 @@ echo.
 echo [INFO] Start OCR verwerking...
 echo.
 
-python receipt_to_csv.py --input input_receipts --output output_csv --lang eng
+python receipt_to_csv.py --input input_receipts --output "%OUTPUT_DIR%" --lang eng
 
 echo.
 echo ==============================================
 echo Gereed.
 echo Output map:
-echo %~dp0output_csv
+echo %~dp0%OUTPUT_DIR%
 echo ==============================================
 echo.
 pause
