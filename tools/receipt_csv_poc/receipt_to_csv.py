@@ -46,6 +46,7 @@ class ReceiptResult:
     ignored_line_count: int
     line_type_counts: dict
     merge_diagnostics: dict
+    refinement_diagnostics: dict
 
 
 def normalize_decimal(value: str) -> str:
@@ -85,7 +86,7 @@ def parse_quantity(line: str):
     return quantity, unit, unit_price
 
 
-def parse_receipt_lines(text: str, source_file: str, profile_name: str, classified_lines, product_block):
+def parse_receipt_lines(text: str, source_file: str, store_hint: str, profile_name: str, classified_lines, product_block):
     rows = []
 
     for classified in classified_lines:
@@ -110,7 +111,7 @@ def parse_receipt_lines(text: str, source_file: str, profile_name: str, classifi
         rows.append(
             ReceiptLine(
                 source_file=source_file,
-                store_hint=profile_name,
+                store_hint=store_hint,
                 profile_name=profile_name,
                 line_no=classified.line_no,
                 line_type=classified.line_type,
@@ -131,17 +132,19 @@ def parse_receipt_lines(text: str, source_file: str, profile_name: str, classifi
 def process_receipt(image_path: Path, output_dir: Path, lang: str):
     text = pytesseract.image_to_string(Image.open(image_path), lang=lang)
 
-    classified_lines = classify_lines(text)
-    line_type_counts = summarize_line_types(classified_lines)
-
     store_hint = detect_store_hint(text, image_path.name)
     profile = get_profile_for_store(store_hint)
+
+    classified_lines = classify_lines(text)
+    classified_lines, refinement_diagnostics = profile.refine_classified_lines(classified_lines)
+    line_type_counts = summarize_line_types(classified_lines)
 
     product_block = profile.detect_product_block(classified_lines)
 
     rows = parse_receipt_lines(
         text,
         image_path.name,
+        store_hint,
         profile.profile_name,
         classified_lines,
         product_block,
@@ -158,6 +161,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         'line_type_counts': line_type_counts,
         'product_block': product_block,
         'merge_diagnostics': merge_diagnostics,
+        'refinement_diagnostics': refinement_diagnostics,
     }
 
     json_dir = output_dir / 'json'
@@ -166,7 +170,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     json_payload = {
-        'schema_version': 'receipt-ocr-poc-v5-quantity-merge',
+        'schema_version': 'receipt-ocr-poc-v6-profile-refinement',
         'metadata': metadata,
         'classified_lines': [asdict(line) for line in classified_lines],
         'lines': [asdict(row) for row in merged_rows],
@@ -191,6 +195,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         ignored_line_count=sum(v for k, v in line_type_counts.items() if k not in PARSEABLE_LINE_TYPES),
         line_type_counts=line_type_counts,
         merge_diagnostics=merge_diagnostics,
+        refinement_diagnostics=refinement_diagnostics,
     )
 
 
@@ -200,7 +205,7 @@ def list_image_files(input_dir: Path):
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
     summary = {
-        'schema_version': 'receipt-ocr-benchmark-v5-quantity-merge',
+        'schema_version': 'receipt-ocr-benchmark-v6-profile-refinement',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
         'success_count': sum(1 for row in report_rows if row.status == 'success'),
@@ -208,11 +213,13 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         'total_detected_rows': sum(row.detected_rows for row in report_rows),
         'profiles_used': {},
         'merge_diagnostics': {},
+        'refinement_diagnostics': {},
     }
 
     for row in report_rows:
         summary['profiles_used'][row.source_file] = row.profile_name
         summary['merge_diagnostics'][row.source_file] = row.merge_diagnostics
+        summary['refinement_diagnostics'][row.source_file] = row.refinement_diagnostics
 
     (output_dir / 'benchmark_summary.json').write_text(
         json.dumps(summary, ensure_ascii=False, indent=2),
@@ -239,7 +246,9 @@ def main():
             rows, result = process_receipt(image_file, output_dir, args.lang)
             all_rows.extend(rows)
             report_rows.append(result)
-            print(f'[OK] {image_file.name}: {len(rows)} rows merged={result.merge_diagnostics.get("merged_quantity_lines_count",0)} profile={result.profile_name}')
+            refined = result.refinement_diagnostics.get('refined_lines_count', 0)
+            merged = result.merge_diagnostics.get('merged_quantity_lines_count', 0)
+            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} profile={result.profile_name}')
         except Exception as exc:
             print(f'[ERROR] {image_file.name}: {exc}')
 
