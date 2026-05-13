@@ -1,0 +1,254 @@
+{
+  "schema_version": "receipt-ocr-benchmark-v6-profile-refinement",
+  "created_at": "2026-05-13T20:50:44.136530+00:00",
+  "total_receipts": 11,
+  "success_count": 11,
+  "error_count": 0,
+  "total_detected_rows": 58,
+  "profiles_used": {
+    "AH foto 2.jpeg": "generic",
+    "AH foto 3.jpg": "generic",
+    "Aldi foto 1.jpg": "aldi",
+    "Aldi foto 2.jpg": "aldi",
+    "Jumbo App 1.png": "jumbo",
+    "Jumbo foto 1.jpeg": "jumbo",
+    "Jumbo foto 3.jpg": "jumbo",
+    "Lidl App 1.png": "lidl",
+    "Lidl App 2.png": "lidl",
+    "plus foto 1.jpg": "generic",
+    "Plus foto 2.jpeg": "generic"
+  },
+  "merge_diagnostics": {
+    "AH foto 2.jpeg": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "AH foto 3.jpg": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "Aldi foto 1.jpg": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 3,
+      "output_rows_count": 3
+    },
+    "Aldi foto 2.jpg": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "Jumbo App 1.png": {
+      "merge_strategy": "safe_previous_product_jumbo",
+      "merge_candidates_count": 4,
+      "merged_quantity_lines_count": 3,
+      "unmerged_quantity_lines_count": 1,
+      "rejected_quantity_lines_count": 1,
+      "rejection_reasons": {
+        "line_distance_too_large": 1
+      },
+      "merged_pairs": [
+        {
+          "product_line_no": 7,
+          "quantity_line_no": 9
+        },
+        {
+          "product_line_no": 13,
+          "quantity_line_no": 15
+        },
+        {
+          "product_line_no": 24,
+          "quantity_line_no": 26
+        }
+      ],
+      "input_rows_count": 16,
+      "output_rows_count": 13
+    },
+    "Jumbo foto 1.jpeg": {
+      "merge_strategy": "safe_previous_product_jumbo",
+      "merge_candidates_count": 1,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 1,
+      "rejected_quantity_lines_count": 1,
+      "rejection_reasons": {
+        "no_previous_product": 1
+      },
+      "merged_pairs": [],
+      "input_rows_count": 5,
+      "output_rows_count": 5
+    },
+    "Jumbo foto 3.jpg": {
+      "merge_strategy": "safe_previous_product_jumbo",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "Lidl App 1.png": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 18,
+      "output_rows_count": 18
+    },
+    "Lidl App 2.png": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 1,
+      "merged_quantity_lines_count": 1,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [
+        {
+          "product_line_no": 6,
+          "quantity_line_no": 7
+        }
+      ],
+      "input_rows_count": 19,
+      "output_rows_count": 18
+    },
+    "plus foto 1.jpg": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "Plus foto 2.jpeg": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 1,
+      "output_rows_count": 1
+    }
+  },
+  "refinement_diagnostics": {
+    "AH foto 2.jpeg": {
+      "profile": "generic",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "AH foto 3.jpg": {
+      "profile": "generic",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "Aldi foto 1.jpg": {
+      "profile": "aldi",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "Aldi foto 2.jpg": {
+      "profile": "aldi",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "Jumbo App 1.png": {
+      "profile": "jumbo",
+      "refined_lines_count": 7,
+      "refinement_reasons": {
+        "jumbo_unknown_product_context": 7
+      },
+      "refined_line_numbers": [
+        3,
+        8,
+        10,
+        14,
+        25,
+        29,
+        31
+      ]
+    },
+    "Jumbo foto 1.jpeg": {
+      "profile": "jumbo",
+      "refined_lines_count": 1,
+      "refinement_reasons": {
+        "jumbo_unknown_product_context": 1
+      },
+      "refined_line_numbers": [
+        7
+      ]
+    },
+    "Jumbo foto 3.jpg": {
+      "profile": "jumbo",
+      "refined_lines_count": 3,
+      "refinement_reasons": {
+        "jumbo_unknown_product_context": 3
+      },
+      "refined_line_numbers": [
+        16,
+        34,
+        43
+      ]
+    },
+    "Lidl App 1.png": {
+      "profile": "lidl",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "Lidl App 2.png": {
+      "profile": "lidl",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "plus foto 1.jpg": {
+      "profile": "generic",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "Plus foto 2.jpeg": {
+      "profile": "generic",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    }
+  }
+}

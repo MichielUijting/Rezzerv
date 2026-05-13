@@ -1,0 +1,491 @@
+{
+  "schema_version": "receipt-ocr-poc-v6-profile-refinement",
+  "metadata": {
+    "source_file": "Plus foto 2.jpeg",
+    "created_at": "2026-05-13T20:50:44.116962+00:00",
+    "store_hint": "plus",
+    "profile_name": "generic",
+    "detected_rows": 1,
+    "line_type_counts": {
+      "discount_line": 0,
+      "metadata_line": 4,
+      "noise_line": 2,
+      "payment_line": 5,
+      "product_line": 2,
+      "quantity_line": 0,
+      "total_line": 0,
+      "unknown_line": 47,
+      "vat_line": 1
+    },
+    "product_block": {
+      "start_line": 28,
+      "end_line": 34,
+      "reason": "fallback_first_parseable_line",
+      "line_count": 7,
+      "profile": "generic"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 1,
+      "output_rows_count": 1
+    },
+    "refinement_diagnostics": {
+      "profile": "generic",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    }
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": ". spaatkaart geregistreerd",
+      "normalized_line": ". spaatkaart geregistreerd",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "BIO DADELTJES",
+      "normalized_line": "BIO DADELTJES",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "DKK RIUSTWAFEL.",
+      "normalized_line": "DKK RIUSTWAFEL.",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "LAMA PUFFS PIZZA",
+      "normalized_line": "LAMA PUFFS PIZZA",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "WELTY VEGGIE STICKS",
+      "normalized_line": "WELTY VEGGIE STICKS",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "4+ CARROTS, APPLES +",
+      "normalized_line": "4+ CARROTS, APPLES +",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "APPLE PEACH MANGO",
+      "normalized_line": "APPLE PEACH MANGO",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "APPLE QUINOA",
+      "normalized_line": "APPLE QUINOA",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "GROENTE RINGEN +12M",
+      "normalized_line": "GROENTE RINGEN +12M",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "Subtotaa",
+      "normalized_line": "Subtotaa",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "pLusPunten DIGITAA",
+      "normalized_line": "pLusPunten DIGITAA",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "Visa Debit",
+      "normalized_line": "Visa Debit",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "(4000000003 1010)",
+      "normalized_line": "(4000000003 1010)",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "VISA DEBIT",
+      "normalized_line": "VISA DEBIT",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "Kaart",
+      "normalized_line": "Kaart",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "kaartserienumnes",
+      "normalized_line": "kaartserienumnes",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "BETALING",
+      "normalized_line": "BETALING",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "Datun",
+      "normalized_line": "Datun",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "Autorisatiecode",
+      "normalized_line": "Autorisatiecode",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "14,36 EUR",
+      "normalized_line": "14,36 EUR",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "iG",
+      "normalized_line": "iG",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "DR KLANTAPPARAAT",
+      "normalized_line": "DR KLANTAPPARAAT",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "€14,36",
+      "normalized_line": "€14,36",
+      "line_type": "unknown_line",
+      "reason": "fallback"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "PIN",
+      "normalized_line": "PIN",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "Wisselgeld (Content) €0,00",
+      "normalized_line": "Wisselgeld (Content) €0,00",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "DIGITALE ZEGELS",
+      "normalized_line": "DIGITALE ZEGELS",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 40,
+      "raw_line": "pLuspunten",
+      "normalized_line": "pLuspunten",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "475 zegels + £30.00 teg",
+      "normalized_line": "475 zegels + £30.00 teg",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 43,
+      "raw_line": "Campagne zegel",
+      "normalized_line": "Campagne zegel",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 44,
+      "raw_line": "Kijk voor. deal",
+      "normalized_line": "Kijk voor. deal",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 45,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 46,
+      "raw_line": "op plu:",
+      "normalized_line": "op plu:",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 47,
+      "raw_line": "1",
+      "normalized_line": "1",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 48,
+      "raw_line": "BTW ype 4,08",
+      "normalized_line": "BTW ype 4,08",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 49,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 50,
+      "raw_line": "qOF 144",
+      "normalized_line": "qOF 144",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 51,
+      "raw_line": "Ave",
+      "normalized_line": "Ave",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 52,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 53,
+      "raw_line": "prettige dag gewenst!",
+      "normalized_line": "prettige dag gewenst!",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 54,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 55,
+      "raw_line": "J bent genoipen door Sel fPayteht 6 (1008)",
+      "normalized_line": "J bent genoipen door Sel fPayteht 6 (1008)",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 56,
+      "raw_line": "44.2026 11:40 Kassa 6 Bonne 6757",
+      "normalized_line": "44.2026 11:40 Kassa 6 Bonne 6757",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 57,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 58,
+      "raw_line": "He doen net je me,",
+      "normalized_line": "He doen net je me,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 59,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 60,
+      "raw_line": "wii PLUS «Dl.",
+      "normalized_line": "wii PLUS «Dl.",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 61,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    }
+  ],
+  "lines": [
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "plus",
+      "profile_name": "generic",
+      "line_no": 28,
+      "line_type": "product_line",
+      "item_text": "EUR",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "14.36",
+      "parser_confidence": 0.75,
+      "raw_line": "14,36 EUR",
+      "warning": ""
+    }
+  ]
+}
