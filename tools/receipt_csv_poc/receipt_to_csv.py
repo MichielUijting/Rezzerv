@@ -5,6 +5,7 @@ import json
 import re
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
 import pandas as pd
@@ -17,6 +18,8 @@ from profiles.base import PARSEABLE_LINE_TYPES
 
 AMOUNT_PATTERN = re.compile(r'(?<!\d)(-?\d+[\.,]\d{2})(?!\d)')
 SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
+DISCOUNT_KEYWORDS = ('korting', 'voordeel', 'lidl plus', 'bonus')
+TOTAL_KEYWORDS = ('totaal', 'te betalen')
 
 
 @dataclass
@@ -47,10 +50,24 @@ class ReceiptResult:
     line_type_counts: dict
     merge_diagnostics: dict
     refinement_diagnostics: dict
+    totals_diagnostics: dict
 
 
 def normalize_decimal(value: str) -> str:
     return value.replace(',', '.').strip()
+
+
+def to_decimal(value: str | int | float | Decimal | None) -> Decimal:
+    if value is None or value == '':
+        return Decimal('0')
+    try:
+        return Decimal(str(value).replace(',', '.'))
+    except (InvalidOperation, ValueError):
+        return Decimal('0')
+
+
+def money(value: Decimal) -> str:
+    return str(value.quantize(Decimal('0.01')))
 
 
 def detect_store_hint(text: str, filename: str) -> str:
@@ -129,6 +146,55 @@ def parse_receipt_lines(text: str, source_file: str, store_hint: str, profile_na
     return rows
 
 
+def extract_amounts(line: str) -> list[Decimal]:
+    return [to_decimal(amount) for amount in AMOUNT_PATTERN.findall(line)]
+
+
+def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, store_hint: str) -> dict:
+    gross_sum = sum((to_decimal(row.line_total) for row in rows), Decimal('0'))
+    discount_candidates = []
+    total_candidates = []
+
+    for line in classified_lines:
+        normalized = line.normalized_line or ''
+        lowered = normalized.lower()
+        amounts = extract_amounts(normalized)
+        if not amounts:
+            continue
+        last_amount = amounts[-1]
+        if any(keyword in lowered for keyword in DISCOUNT_KEYWORDS):
+            discount_candidates.append({
+                'line_no': line.line_no,
+                'amount': money(abs(last_amount)),
+                'raw_line': line.raw_line,
+                'reason': 'discount_keyword',
+            })
+        if any(keyword in lowered for keyword in TOTAL_KEYWORDS):
+            total_candidates.append({
+                'line_no': line.line_no,
+                'amount': money(last_amount),
+                'raw_line': line.raw_line,
+                'reason': 'total_keyword',
+            })
+
+    discount_total = sum((to_decimal(item['amount']) for item in discount_candidates), Decimal('0'))
+    net_candidate = gross_sum - discount_total
+    best_total_hint = total_candidates[-1]['amount'] if total_candidates else ''
+
+    return {
+        'store_hint': store_hint,
+        'gross_line_sum': money(gross_sum),
+        'discount_total_detected': money(discount_total),
+        'net_total_candidate': money(net_candidate),
+        'total_amount_hints': total_candidates,
+        'best_total_amount_hint': best_total_hint,
+        'discount_candidates': discount_candidates,
+        'discount_candidate_count': len(discount_candidates),
+        'line_count_after_merge': len(rows),
+        'totals_strategy': 'gross_minus_detected_discounts',
+    }
+
+
 def process_receipt(image_path: Path, output_dir: Path, lang: str):
     text = pytesseract.image_to_string(Image.open(image_path), lang=lang)
 
@@ -151,6 +217,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     )
 
     merged_rows, merge_diagnostics = profile.merge_quantity_lines(rows, classified_lines)
+    totals_diagnostics = compute_totals_diagnostics(merged_rows, classified_lines, store_hint)
 
     metadata = {
         'source_file': image_path.name,
@@ -162,6 +229,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         'product_block': product_block,
         'merge_diagnostics': merge_diagnostics,
         'refinement_diagnostics': refinement_diagnostics,
+        'totals_diagnostics': totals_diagnostics,
     }
 
     json_dir = output_dir / 'json'
@@ -170,7 +238,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     json_payload = {
-        'schema_version': 'receipt-ocr-poc-v6-profile-refinement',
+        'schema_version': 'receipt-ocr-poc-v7-lidl-totals',
         'metadata': metadata,
         'classified_lines': [asdict(line) for line in classified_lines],
         'lines': [asdict(row) for row in merged_rows],
@@ -196,6 +264,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         line_type_counts=line_type_counts,
         merge_diagnostics=merge_diagnostics,
         refinement_diagnostics=refinement_diagnostics,
+        totals_diagnostics=totals_diagnostics,
     )
 
 
@@ -205,7 +274,7 @@ def list_image_files(input_dir: Path):
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
     summary = {
-        'schema_version': 'receipt-ocr-benchmark-v6-profile-refinement',
+        'schema_version': 'receipt-ocr-benchmark-v7-lidl-totals',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
         'success_count': sum(1 for row in report_rows if row.status == 'success'),
@@ -214,12 +283,14 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         'profiles_used': {},
         'merge_diagnostics': {},
         'refinement_diagnostics': {},
+        'totals_diagnostics': {},
     }
 
     for row in report_rows:
         summary['profiles_used'][row.source_file] = row.profile_name
         summary['merge_diagnostics'][row.source_file] = row.merge_diagnostics
         summary['refinement_diagnostics'][row.source_file] = row.refinement_diagnostics
+        summary['totals_diagnostics'][row.source_file] = row.totals_diagnostics
 
     (output_dir / 'benchmark_summary.json').write_text(
         json.dumps(summary, ensure_ascii=False, indent=2),
@@ -248,7 +319,9 @@ def main():
             report_rows.append(result)
             refined = result.refinement_diagnostics.get('refined_lines_count', 0)
             merged = result.merge_diagnostics.get('merged_quantity_lines_count', 0)
-            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} profile={result.profile_name}')
+            gross = result.totals_diagnostics.get('gross_line_sum', '0.00')
+            net = result.totals_diagnostics.get('net_total_candidate', '0.00')
+            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} gross={gross} net={net} profile={result.profile_name}')
         except Exception as exc:
             print(f'[ERROR] {image_file.name}: {exc}')
 
