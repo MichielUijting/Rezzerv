@@ -1,0 +1,5 @@
+source_file,store_hint,profile_name,line_no,line_type,item_text,quantity,unit,unit_price,line_total,parser_confidence,raw_line,warning
+Jumbo foto 1.jpeg,jumbo,jumbo,15,product_line,BIO RODE BIET VACUM,2,stuk,4.99,4.99,0.75,"BIO RODE BIET VACUM 1,45 | 2X 4,99",quantity_line_merged
+Jumbo foto 1.jpeg,jumbo,jumbo,16,product_line,COURGETTE,,,,0.69,0.75,"COURGETTE 0,69",
+Jumbo foto 1.jpeg,jumbo,jumbo,17,product_line,JUMBO RISOTTO ARBORT,,,,1.75,0.75,"JUMBO RISOTTO ARBORT 1,75",
+Jumbo foto 1.jpeg,jumbo,jumbo,18,product_line,VP ASPERGESOEP,,,,6.49,0.75,"VP ASPERGESOEP 6,49",
