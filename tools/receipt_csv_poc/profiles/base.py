@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 PARSEABLE_LINE_TYPES = {"product_line", "quantity_line"}
+PROTECTED_LINE_TYPES = {"metadata_line", "payment_line", "vat_line", "total_line", "discount_line", "noise_line"}
 
 
 @dataclass
@@ -55,6 +56,23 @@ class ReceiptProfile:
     def line_contains_any(self, line: str, keywords: list[str]) -> bool:
         lowered = line.lower()
         return any(keyword in lowered for keyword in keywords)
+
+    def refine_classified_lines(self, classified_lines: list) -> tuple[list, dict[str, object]]:
+        return classified_lines, {
+            "profile": self.profile_name,
+            "refined_lines_count": 0,
+            "refinement_reasons": {},
+            "refined_line_numbers": [],
+        }
+
+    def _replace_classification(self, line, line_type: str, reason: str):
+        return replace(line, line_type=line_type, reason=reason)
+
+    def _record_refinement(self, diagnostics: dict[str, object], line_no: int, reason: str) -> None:
+        diagnostics["refined_lines_count"] = int(diagnostics.get("refined_lines_count", 0)) + 1
+        diagnostics.setdefault("refined_line_numbers", []).append(int(line_no))
+        reasons = diagnostics.setdefault("refinement_reasons", {})
+        reasons[reason] = reasons.get(reason, 0) + 1
 
     def detect_product_block(self, classified_lines) -> dict[str, object]:
         non_empty = [line for line in classified_lines if line.normalized_line]
