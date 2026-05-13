@@ -3,7 +3,8 @@ from .base import ReceiptProfile
 
 class JumboProfile(ReceiptProfile):
     profile_name = "jumbo"
-    merge_strategy = "previous_or_next_product"
+    merge_strategy = "safe_previous_product_jumbo"
+    max_quantity_merge_distance = 2
 
     product_block_start_keywords = [
         "omschrijving",
@@ -17,8 +18,7 @@ class JumboProfile(ReceiptProfile):
         "pinbetaling",
     ]
 
-    def _target_product_index(self, rows: list, quantity_index: int) -> int | None:
-        previous_index = self._find_previous_product_index(rows, quantity_index)
-        if previous_index is not None:
-            return previous_index
-        return self._find_next_product_index(rows, quantity_index)
+    def _target_product_index(self, rows: list, quantity_index: int):
+        # Conservative Jumbo rule: only merge with a nearby previous product.
+        # Never scan further back across other product rows.
+        return self._find_safe_previous_product_index(rows, quantity_index)
