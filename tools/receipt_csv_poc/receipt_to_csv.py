@@ -14,6 +14,8 @@ import pandas as pd
 import pytesseract
 
 from line_classifier import classify_lines, summarize_line_types
+from profiles import get_profile_for_store
+from profiles.base import PARSEABLE_LINE_TYPES
 
 
 AMOUNT_PATTERN = re.compile(r"(?<!\d)(-?\d{1,4}[\.,]\d{2})(?!\d)")
@@ -46,6 +48,7 @@ SUPPORTED_EXTENSIONS = {
 CSV_COLUMNS = [
     "source_file",
     "store_hint",
+    "profile_name",
     "line_no",
     "line_type",
     "classifier_reason",
@@ -61,45 +64,12 @@ CSV_COLUMNS = [
     "warning",
 ]
 
-PARSEABLE_LINE_TYPES = {"product_line", "quantity_line"}
-PRODUCT_BLOCK_START_KEYWORDS = [
-    "omschrijving",
-    "prijs bedrag",
-    "aantal omschrijving",
-    "producten",
-]
-PRODUCT_BLOCK_END_KEYWORDS = [
-    "aantal art",
-    "aantal artikelen",
-    "subtotaal",
-    "sub tota",
-    "bedrag euro",
-    "bedrag = euro",
-    "totaal",
-    "bankpas",
-    "pin",
-    "pinnen",
-    "betaling",
-    "contant",
-    "visa",
-    "vpay",
-    "v pay",
-    "maestro",
-    "mastercard",
-    "contactless",
-    "terminal",
-    "merchant",
-    "transactie",
-    "btw",
-    "bedr.excl",
-    "bedr.incl",
-]
-
 
 @dataclass
 class ReceiptLine:
     source_file: str
     store_hint: str
+    profile_name: str
     line_no: int
     line_type: str
     classifier_reason: str
@@ -120,6 +90,7 @@ class ReceiptResult:
     source_file: str
     status: str
     store_hint: str
+    profile_name: str
     detected_rows: int
     ocr_line_count: int
     total_amount_hint: str
@@ -230,7 +201,6 @@ def preprocess_variants(image_path: Path, debug_dir: Path) -> dict[str, np.ndarr
     cropped, did_crop = crop_to_largest_receipt_like_contour(gray_initial, image)
     gray = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
 
-    # Upscale improves OCR for small receipt fonts.
     scale = 2 if max(gray.shape[:2]) < 2200 else 1
     if scale > 1:
         gray = cv2.resize(gray, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
@@ -342,68 +312,6 @@ def parse_quantity_and_unit(line: str):
 
 
 
-def line_contains_any(line: str, keywords: list[str]) -> bool:
-    lowered = line.lower()
-    return any(keyword in lowered for keyword in keywords)
-
-
-
-def detect_product_block(classified_lines) -> dict[str, object]:
-    """Detects the likely receipt item block. Diagnostic only; does not set status."""
-    non_empty = [line for line in classified_lines if line.normalized_line]
-    start_line = None
-    end_line = None
-    reason = "fallback_first_parseable_line"
-
-    for line in non_empty:
-        if line_contains_any(line.normalized_line, PRODUCT_BLOCK_START_KEYWORDS):
-            start_line = line.line_no + 1
-            reason = "header_keyword"
-            break
-
-    if start_line is None:
-        for line in non_empty:
-            if line.line_type in PARSEABLE_LINE_TYPES:
-                start_line = line.line_no
-                break
-
-    if start_line is None:
-        return {
-            "start_line": None,
-            "end_line": None,
-            "reason": "no_parseable_lines",
-            "line_count": 0,
-        }
-
-    parseable_seen = 0
-    for line in non_empty:
-        if line.line_no < start_line:
-            continue
-        if line.line_type in PARSEABLE_LINE_TYPES:
-            parseable_seen += 1
-        if parseable_seen > 0 and (
-            line.line_type in {"total_line", "payment_line", "vat_line"}
-            or line_contains_any(line.normalized_line, PRODUCT_BLOCK_END_KEYWORDS)
-        ):
-            end_line = max(start_line, line.line_no - 1)
-            break
-
-    if end_line is None:
-        parseable_lines = [
-            line.line_no for line in non_empty
-            if line.line_no >= start_line and line.line_type in PARSEABLE_LINE_TYPES
-        ]
-        end_line = max(parseable_lines) if parseable_lines else start_line
-
-    return {
-        "start_line": start_line,
-        "end_line": end_line,
-        "reason": reason,
-        "line_count": max(0, end_line - start_line + 1),
-    }
-
-
-
 def is_in_product_block(line_no: int, product_block: dict[str, object]) -> bool:
     start_line = product_block.get("start_line")
     end_line = product_block.get("end_line")
@@ -445,12 +353,13 @@ def parse_receipt_lines(
     text: str,
     source_file: str,
     store_hint: str,
+    profile_name: str,
     classified_lines=None,
     product_block=None,
 ) -> list[ReceiptLine]:
     rows: list[ReceiptLine] = []
     classified_lines = classified_lines or classify_lines(text)
-    product_block = product_block or detect_product_block(classified_lines)
+    product_block = product_block or get_profile_for_store(store_hint).detect_product_block(classified_lines)
 
     for classified in classified_lines:
         line = classified.normalized_line
@@ -487,6 +396,7 @@ def parse_receipt_lines(
             ReceiptLine(
                 source_file=source_file,
                 store_hint=store_hint,
+                profile_name=profile_name,
                 line_no=classified.line_no,
                 line_type=classified.line_type,
                 classifier_reason=classified.reason,
@@ -520,7 +430,7 @@ def write_rows_csv(rows: Iterable[ReceiptLine], csv_path: Path):
 def write_rows_json(rows: Iterable[ReceiptLine], json_path: Path, metadata: dict, classified_lines):
     json_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema_version": "receipt-ocr-poc-v3-product-block",
+        "schema_version": "receipt-ocr-poc-v4-store-profiles",
         "metadata": metadata,
         "classified_lines": [asdict(line) for line in classified_lines],
         "lines": [asdict(row) for row in rows],
@@ -562,7 +472,6 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         attempt_file.write_text(attempt["text"], encoding="utf-8")
 
     classified_lines = classify_lines(text)
-    product_block = detect_product_block(classified_lines)
     line_type_counts = summarize_line_types(classified_lines)
     ignored_line_count = sum(
         count for line_type, count in line_type_counts.items()
@@ -570,10 +479,13 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     )
 
     store_hint = detect_store_hint(text, image_path.name)
+    profile = get_profile_for_store(store_hint)
+    product_block = profile.detect_product_block(classified_lines)
     rows = parse_receipt_lines(
         text,
         image_path.name,
         store_hint,
+        profile.profile_name,
         classified_lines,
         product_block,
     )
@@ -592,6 +504,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         "source_file": image_path.name,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "store_hint": store_hint,
+        "profile_name": profile.profile_name,
         "ocr_variant": best_attempt["variant"],
         "ocr_psm": best_attempt["psm"],
         "ocr_score": best_attempt["score"],
@@ -612,6 +525,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         source_file=image_path.name,
         status="success",
         store_hint=store_hint,
+        profile_name=profile.profile_name,
         detected_rows=len(rows),
         ocr_line_count=len([line for line in text.splitlines() if line.strip()]),
         total_amount_hint=metadata["total_amount_hint"],
@@ -636,12 +550,14 @@ def list_image_files(input_dir: Path) -> list[Path]:
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
     all_line_type_counts = {}
+    profiles_used = {}
     for row in report_rows:
+        profiles_used[row.source_file] = row.profile_name
         for line_type, count in row.line_type_counts.items():
             all_line_type_counts[line_type] = all_line_type_counts.get(line_type, 0) + count
 
     summary = {
-        "schema_version": "receipt-ocr-benchmark-v3-product-block",
+        "schema_version": "receipt-ocr-benchmark-v4-store-profiles",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "total_receipts": len(report_rows),
         "success_count": sum(1 for row in report_rows if row.status == "success"),
@@ -649,10 +565,12 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         "total_detected_rows": sum(row.detected_rows for row in report_rows),
         "total_ignored_lines": sum(row.ignored_line_count for row in report_rows),
         "line_type_counts": all_line_type_counts,
+        "profiles_used": profiles_used,
         "product_blocks": {
             row.source_file: row.product_block for row in report_rows
         },
         "by_store_hint": {},
+        "by_profile": {},
     }
 
     for row in report_rows:
@@ -664,15 +582,29 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
                 "ignored_lines": 0,
                 "avg_confidence_values": [],
                 "line_type_counts": {},
+                "profiles": {},
             },
         )
         bucket["receipts"] += 1
         bucket["detected_rows"] += row.detected_rows
         bucket["ignored_lines"] += row.ignored_line_count
+        bucket["profiles"][row.profile_name] = bucket["profiles"].get(row.profile_name, 0) + 1
         if row.parse_confidence_avg:
             bucket["avg_confidence_values"].append(row.parse_confidence_avg)
         for line_type, count in row.line_type_counts.items():
             bucket["line_type_counts"][line_type] = bucket["line_type_counts"].get(line_type, 0) + count
+
+        profile_bucket = summary["by_profile"].setdefault(
+            row.profile_name,
+            {
+                "receipts": 0,
+                "detected_rows": 0,
+                "ignored_lines": 0,
+            },
+        )
+        profile_bucket["receipts"] += 1
+        profile_bucket["detected_rows"] += row.detected_rows
+        profile_bucket["ignored_lines"] += row.ignored_line_count
 
     for bucket in summary["by_store_hint"].values():
         values = bucket.pop("avg_confidence_values")
@@ -722,16 +654,20 @@ def main():
             report_rows.append(result)
             print(
                 f"[OK] {image_file.name}: {len(rows)} product/quantity rows, "
+                f"profile={result.profile_name}, "
                 f"block={result.product_block.get('start_line')}-{result.product_block.get('end_line')}, "
                 f"ignored={result.ignored_line_count}, store={result.store_hint}, "
                 f"confidence={result.parse_confidence_avg}"
             )
 
         except Exception as exc:
+            store_hint = detect_store_hint("", image_file.name)
+            profile = get_profile_for_store(store_hint)
             result = ReceiptResult(
                 source_file=image_file.name,
                 status="error",
-                store_hint=detect_store_hint("", image_file.name),
+                store_hint=store_hint,
+                profile_name=profile.profile_name,
                 detected_rows=0,
                 ocr_line_count=0,
                 total_amount_hint="",
@@ -739,7 +675,13 @@ def main():
                 warnings=[],
                 line_type_counts={},
                 ignored_line_count=0,
-                product_block={"start_line": None, "end_line": None, "reason": "error", "line_count": 0},
+                product_block={
+                    "start_line": None,
+                    "end_line": None,
+                    "reason": "error",
+                    "line_count": 0,
+                    "profile": profile.profile_name,
+                },
                 error=str(exc),
             )
             report_rows.append(result)
