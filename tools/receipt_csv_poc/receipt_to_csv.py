@@ -20,6 +20,7 @@ AMOUNT_PATTERN = re.compile(r'(?<!\d)(-?\d+[\.,]\d{2})(?!\d)')
 SUPPORTED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff', '.webp'}
 DISCOUNT_KEYWORDS = ('korting', 'voordeel', 'lidl plus', 'bonus')
 TOTAL_KEYWORDS = ('totaal', 'te betalen')
+RECONCILIATION_TOLERANCE = Decimal('0.02')
 
 
 @dataclass
@@ -150,6 +151,21 @@ def extract_amounts(line: str) -> list[Decimal]:
     return [to_decimal(amount) for amount in AMOUNT_PATTERN.findall(line)]
 
 
+def _reconciliation_status(diff: Decimal, total_hint: str, discount_count: int) -> tuple[str, float, list[str]]:
+    warnings: list[str] = []
+    if not total_hint:
+        warnings.append('missing_total_hint')
+    if diff.copy_abs() <= RECONCILIATION_TOLERANCE and total_hint:
+        confidence = 0.95 if discount_count else 0.90
+        return 'balanced', confidence, warnings
+    if total_hint and diff.copy_abs() <= Decimal('0.10'):
+        warnings.append('small_rounding_or_ocr_difference')
+        return 'near_balance', 0.72, warnings
+    if total_hint:
+        warnings.append('gross_discount_net_mismatch')
+    return 'needs_review', 0.35, warnings
+
+
 def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, store_hint: str) -> dict:
     gross_sum = sum((to_decimal(row.line_total) for row in rows), Decimal('0'))
     discount_candidates = []
@@ -180,6 +196,9 @@ def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, 
     discount_total = sum((to_decimal(item['amount']) for item in discount_candidates), Decimal('0'))
     net_candidate = gross_sum - discount_total
     best_total_hint = total_candidates[-1]['amount'] if total_candidates else ''
+    hinted_total = to_decimal(best_total_hint)
+    difference = net_candidate - hinted_total if best_total_hint else net_candidate
+    status, confidence, warnings = _reconciliation_status(difference, best_total_hint, len(discount_candidates))
 
     return {
         'store_hint': store_hint,
@@ -188,10 +207,14 @@ def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, 
         'net_total_candidate': money(net_candidate),
         'total_amount_hints': total_candidates,
         'best_total_amount_hint': best_total_hint,
+        'net_vs_best_total_difference': money(difference),
+        'financial_reconciliation_status': status,
+        'financial_reconciliation_confidence': confidence,
+        'financial_reconciliation_warnings': warnings,
         'discount_candidates': discount_candidates,
         'discount_candidate_count': len(discount_candidates),
         'line_count_after_merge': len(rows),
-        'totals_strategy': 'gross_minus_detected_discounts',
+        'totals_strategy': 'gross_minus_detected_discounts_vs_best_total_hint',
     }
 
 
@@ -238,7 +261,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     json_payload = {
-        'schema_version': 'receipt-ocr-poc-v7-lidl-totals',
+        'schema_version': 'receipt-ocr-poc-v8-financial-reconciliation',
         'metadata': metadata,
         'classified_lines': [asdict(line) for line in classified_lines],
         'lines': [asdict(row) for row in merged_rows],
@@ -273,13 +296,19 @@ def list_image_files(input_dir: Path):
 
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
+    status_counts: dict[str, int] = {}
+    for row in report_rows:
+        status = row.totals_diagnostics.get('financial_reconciliation_status', 'unknown')
+        status_counts[status] = status_counts.get(status, 0) + 1
+
     summary = {
-        'schema_version': 'receipt-ocr-benchmark-v7-lidl-totals',
+        'schema_version': 'receipt-ocr-benchmark-v8-financial-reconciliation',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
         'success_count': sum(1 for row in report_rows if row.status == 'success'),
         'error_count': sum(1 for row in report_rows if row.status == 'error'),
         'total_detected_rows': sum(row.detected_rows for row in report_rows),
+        'financial_reconciliation_status_counts': status_counts,
         'profiles_used': {},
         'merge_diagnostics': {},
         'refinement_diagnostics': {},
@@ -321,7 +350,8 @@ def main():
             merged = result.merge_diagnostics.get('merged_quantity_lines_count', 0)
             gross = result.totals_diagnostics.get('gross_line_sum', '0.00')
             net = result.totals_diagnostics.get('net_total_candidate', '0.00')
-            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} gross={gross} net={net} profile={result.profile_name}')
+            recon = result.totals_diagnostics.get('financial_reconciliation_status', 'unknown')
+            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} gross={gross} net={net} recon={recon} profile={result.profile_name}')
         except Exception as exc:
             print(f'[ERROR] {image_file.name}: {exc}')
 
