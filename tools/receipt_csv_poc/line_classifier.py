@@ -44,7 +44,7 @@ METADATA_KEYWORDS = [
     "dank u", "vragen over", "www.", ".nl", ".com",
 ]
 
-NOISE_CHARS_RE = re.compile(r"[{}\[\]~^_<>")
+NOISE_CHARS_RE = re.compile(r"[{}\\[\\]~^_<>]")
 ALPHA_RE = re.compile(r"[A-Za-zÀ-ÿ]")
 
 
