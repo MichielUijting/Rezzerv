@@ -1,0 +1,201 @@
+{
+  "schema_version": "receipt-ocr-poc-v1",
+  "metadata": {
+    "source_file": "Plus foto 2.jpeg",
+    "created_at": "2026-05-13T09:28:31.843781+00:00",
+    "store_hint": "albert_heijn",
+    "ocr_variant": "adaptive_threshold",
+    "ocr_psm": 4,
+    "ocr_score": 165,
+    "ocr_attempts": [
+      {
+        "variant": "adaptive_threshold",
+        "psm": 4,
+        "score": 165
+      },
+      {
+        "variant": "adaptive_threshold",
+        "psm": 6,
+        "score": 121
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 6,
+        "score": 106
+      },
+      {
+        "variant": "normalized",
+        "psm": 6,
+        "score": 101
+      },
+      {
+        "variant": "gray",
+        "psm": 6,
+        "score": 99
+      },
+      {
+        "variant": "gray",
+        "psm": 4,
+        "score": 56
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 4,
+        "score": 46
+      },
+      {
+        "variant": "normalized",
+        "psm": 4,
+        "score": 43
+      }
+    ],
+    "total_amount_hint": "614.36",
+    "detected_rows": 10,
+    "parse_confidence_avg": 0.748,
+    "warnings": [
+      "multiple_amounts_detected"
+    ]
+  },
+  "lines": [
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 23,
+      "item_text": "4 aie ch i es PUFFS PIZZA",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.49",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "4 aie ch i es PUFFS PIZZA 1,49 . Wag) thy f",
+      "warning": ""
+    },
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 24,
+      "item_text": "i eat int UAT WELTY VEGGIE STICKS",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.29",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "| i eat int UAT WELTY VEGGIE STICKS 1,29 Tal",
+      "warning": ""
+    },
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 25,
+      "item_text": "MAURY ign 4 ye py 4+ CARROTS, APPLES +",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.99",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "MAURY ign 4 ye py 4+ CARROTS, APPLES + 1,99 Vey?",
+      "warning": ""
+    },
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 26,
+      "item_text": "Mii i Ma, Yat aan APPLE PEACH HANGO",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.49",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "Mii i Ma, Yat aan APPLE PEACH HANGO 1,49",
+      "warning": ""
+    },
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 28,
+      "item_text": "i i ih a UMW GROENTE RINGEN +12H",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.15",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "i i ih a UMW GROENTE RINGEN +12H 1,15",
+      "warning": ""
+    },
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 51,
+      "item_text": "44",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "70.08",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "44 70,08 ; rtserienunner: ne 0 -",
+      "warning": ""
+    },
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 54,
+      "item_text": "64",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "4.92",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "64 4,92 ; ; 12026 11:40.",
+      "warning": ""
+    },
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 68,
+      "item_text": "30,89 EUR ; iH 175 zegels +",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "30.00",
+      "currency": "EUR",
+      "parser_confidence": 0.62,
+      "raw_line": "30,89 EUR ; iH 175 zegels + €30,00 tegoed",
+      "warning": "multiple_amounts_detected"
+    },
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 74,
+      "item_text": "116",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "14.08",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "116 14,08 |",
+      "warning": ""
+    },
+    {
+      "source_file": "Plus foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 80,
+      "item_text": "Lt 4,16",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "14.08",
+      "currency": "EUR",
+      "parser_confidence": 0.62,
+      "raw_line": "Lt 4,16 14,08",
+      "warning": "multiple_amounts_detected"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+source_file,store_hint,line_no,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
+AH foto 2.jpeg,albert_heijn,6,4 AMM GEHAKT,,,,6.99,EUR,0.78,"4 AMM GEHAKT 6,99 |",
+AH foto 2.jpeg,albert_heijn,7,i od SOEPGR BASIS,,,,1.29,EUR,0.78,"i od SOEPGR BASIS 1,29 !",
+AH foto 2.jpeg,albert_heijn,10,JoUW VOORDEEL,,,,0.00,EUR,0.78," JoUW VOORDEEL 0,00",
+AH foto 2.jpeg,albert_heijn,12,BONUS BOX,,,,0.00,EUR,0.58,"BONUS BOX 0,00",discount_or_loyalty_line
+AH foto 2.jpeg,albert_heijn,26,"OY \ 7,60",,,,0.68,EUR,0.62,"OY \ 7,60 0,68 ,",multiple_amounts_detected

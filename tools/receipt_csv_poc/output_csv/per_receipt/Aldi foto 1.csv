@@ -1,0 +1,10 @@
+source_file,store_hint,line_no,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
+Aldi foto 1.jpg,aldi,3,OPENINGSTIJDEN: MA TM ZAT 08.00,,,,20.00,EUR,0.62,OPENINGSTIJDEN: MA TM ZAT 08.00-20.00,multiple_amounts_detected
+Aldi foto 1.jpg,aldi,4,"ZON 10,00~",,,,18.00,EUR,0.45,"ZON 10,00~18.00",multiple_amounts_detected;ocr_noise
+Aldi foto 1.jpg,aldi,5,"GOUDSE KAAS 48i} GESN, JONG",,,,2.39,EUR,0.45,"GOUDSE KAAS 48i} GESN, JONG 2,39",ocr_noise
+Aldi foto 1.jpg,aldi,6,WADDENBOLLEN ;,,,,1.50,EUR,0.78,"WADDENBOLLEN ; 1,50",
+Aldi foto 1.jpg,aldi,7,CHOCOPOPS / CHOCO SHELLS. °,,,,1.41,EUR,0.78,"CHOCOPOPS / CHOCO SHELLS. ° 1,41",
+Aldi foto 1.jpg,aldi,8,7-GRANEN ONTBIJT ~,,,,1.25,EUR,0.45,"7-GRANEN ONTBIJT ~ . 1,25",ocr_noise
+Aldi foto 1.jpg,aldi,9,BEDRAG EURO,,,,6.55,EUR,0.78,"BEDRAG EURO 6,55",
+Aldi foto 1.jpg,aldi,29,"B 9,00% 6,01 0,54",,,,6.55,EUR,0.62,"B 9,00% 6,01 0,54 6,55",multiple_amounts_detected
+Aldi foto 1.jpg,aldi,35,04(3)038 3235 & 08:28,,,,26.09,EUR,0.78,04(3)038 3235 & 08:28 26.09.2022,

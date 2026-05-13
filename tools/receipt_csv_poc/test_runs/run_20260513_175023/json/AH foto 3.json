@@ -1,0 +1,41 @@
+{
+  "schema_version": "receipt-ocr-poc-v5-quantity-merge",
+  "metadata": {
+    "source_file": "AH foto 3.jpg",
+    "created_at": "2026-05-13T15:50:31.721884+00:00",
+    "store_hint": "unknown",
+    "profile_name": "generic",
+    "detected_rows": 0,
+    "line_type_counts": {
+      "discount_line": 0,
+      "metadata_line": 0,
+      "noise_line": 0,
+      "payment_line": 0,
+      "product_line": 0,
+      "quantity_line": 0,
+      "total_line": 0,
+      "unknown_line": 0,
+      "vat_line": 0
+    },
+    "product_block": {
+      "start_line": null,
+      "end_line": null,
+      "reason": "no_parseable_lines",
+      "line_count": 0,
+      "profile": "generic"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    }
+  },
+  "classified_lines": [],
+  "lines": []
+}

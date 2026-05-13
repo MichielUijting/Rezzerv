@@ -1,0 +1,58 @@
+{
+  "schema_version": "receipt-ocr-poc-v1",
+  "metadata": {
+    "source_file": "AH foto 3.jpg",
+    "created_at": "2026-05-13T09:26:27.350799+00:00",
+    "store_hint": "albert_heijn",
+    "ocr_variant": "otsu_threshold",
+    "ocr_psm": 6,
+    "ocr_score": 34,
+    "ocr_attempts": [
+      {
+        "variant": "otsu_threshold",
+        "psm": 6,
+        "score": 34
+      },
+      {
+        "variant": "normalized",
+        "psm": 6,
+        "score": 33
+      },
+      {
+        "variant": "adaptive_threshold",
+        "psm": 6,
+        "score": 31
+      },
+      {
+        "variant": "gray",
+        "psm": 6,
+        "score": 28
+      },
+      {
+        "variant": "gray",
+        "psm": 4,
+        "score": 0
+      },
+      {
+        "variant": "normalized",
+        "psm": 4,
+        "score": 0
+      },
+      {
+        "variant": "adaptive_threshold",
+        "psm": 4,
+        "score": 0
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 4,
+        "score": 0
+      }
+    ],
+    "total_amount_hint": "",
+    "detected_rows": 0,
+    "parse_confidence_avg": 0.0,
+    "warnings": []
+  },
+  "lines": []
+}

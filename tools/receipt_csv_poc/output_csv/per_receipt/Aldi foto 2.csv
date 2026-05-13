@@ -1,0 +1,12 @@
+source_file,store_hint,line_no,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
+Aldi foto 2.jpg,aldi,4,UPENINGSTIJUDEN: WA-VR 8.00,,,,21.59,EUR,0.62,UPENINGSTIJUDEN: WA-VR 8.00-21.59 UYR,multiple_amounts_detected
+Aldi foto 2.jpg,aldi,5,ZA 8.00,,,,20.00,EUR,0.62,| ZA 8.00-20.00 wip,multiple_amounts_detected
+Aldi foto 2.jpg,aldi,6,; 10. —-:12.00,,,,18.00,EUR,0.62,; 10. —-:12.00-18.00 UUs -,multiple_amounts_detected
+Aldi foto 2.jpg,aldi,7,MELKCHOCOLADE,,,,2.56,EUR,0.78,"MELKCHOCOLADE 2,56",
+Aldi foto 2.jpg,aldi,8,EAPDAPPELSCHIUFJE Seek,,,,1.22,EUR,0.78,"EAPDAPPELSCHIUFJE Seek . 1,22.",
+Aldi foto 2.jpg,aldi,9,a alee SPEK-UL,,,,1.22,EUR,0.78,"a alee SPEK-UL- 1,22",
+Aldi foto 2.jpg,aldi,10,SUB TOTA,,,,9.00,EUR,0.78,"SUB TOTA | 9,00 \",
+Aldi foto 2.jpg,aldi,11,SCDRAG = EURO \,,,,9.00,EUR,0.78,"SCDRAG = EURO \ 9,00 *",
+Aldi foto 2.jpg,aldi,12,CONTANT ~  \ =,,,,5.00,EUR,0.45,"CONTANT ~  \ = 5,00",ocr_noise
+Aldi foto 2.jpg,aldi,14,"B 9,008 4,59 \, Q4}",,,,5.00,EUR,0.45,"B 9,008 4,59 \, Q4} 5,00 |",multiple_amounts_detected;ocr_noise
+Aldi foto 2.jpg,aldi,20,13(48057 68%9 } 15:21,,,,23.02,EUR,0.45,13(48057 68%9 } 15:21 23.02.2019,ocr_noise
