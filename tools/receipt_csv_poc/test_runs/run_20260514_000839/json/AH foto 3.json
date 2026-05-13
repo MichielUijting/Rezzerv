@@ -1,0 +1,65 @@
+{
+  "schema_version": "receipt-ocr-poc-v9-ssot-diagnostic-financials",
+  "metadata": {
+    "source_file": "AH foto 3.jpg",
+    "created_at": "2026-05-13T22:08:51.045158+00:00",
+    "store_hint": "unknown",
+    "profile_name": "generic",
+    "detected_rows": 0,
+    "line_type_counts": {
+      "discount_line": 0,
+      "metadata_line": 0,
+      "noise_line": 0,
+      "payment_line": 0,
+      "product_line": 0,
+      "quantity_line": 0,
+      "total_line": 0,
+      "unknown_line": 0,
+      "vat_line": 0
+    },
+    "product_block": {
+      "start_line": null,
+      "end_line": null,
+      "reason": "no_parseable_lines",
+      "line_count": 0,
+      "profile": "generic"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "refinement_diagnostics": {
+      "profile": "generic",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "totals_diagnostics": {
+      "store_hint": "unknown",
+      "gross_line_sum": "0.00",
+      "discount_total_detected": "0.00",
+      "net_total_candidate": "0.00",
+      "selected_total_hint": null,
+      "selected_total_hint_reason": "",
+      "net_vs_selected_total_difference": "0.00",
+      "all_total_hints": [],
+      "excluded_total_hints": [],
+      "selected_discount_strategy": "sum_individual_discount_lines",
+      "selected_discount_candidates": [],
+      "excluded_discount_candidates": [],
+      "all_discount_candidates": [],
+      "discount_candidate_count": 0,
+      "line_count_after_merge": 0,
+      "totals_strategy": "diagnostic_gross_minus_selected_discount_vs_selected_total_hint"
+    }
+  },
+  "classified_lines": [],
+  "lines": []
+}
