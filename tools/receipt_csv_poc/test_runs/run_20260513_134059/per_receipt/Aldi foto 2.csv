@@ -1,0 +1,7 @@
+source_file,store_hint,line_no,line_type,classifier_reason,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
+Aldi foto 2.jpg,aldi,7,product_line,amount_and_text,MELKCHOCOLADE,,,,2.56,EUR,0.78,"MELKCHOCOLADE 2,56",
+Aldi foto 2.jpg,aldi,8,product_line,amount_and_text,EAPDAPPELSCHIUFJE Seek,,,,1.22,EUR,0.78,"EAPDAPPELSCHIUFJE Seek . 1,22.",
+Aldi foto 2.jpg,aldi,9,product_line,amount_and_text,a alee SPEK-UL,,,,1.22,EUR,0.78,"a alee SPEK-UL- 1,22",
+Aldi foto 2.jpg,aldi,10,product_line,amount_and_text,SUB TOTA,,,,9.00,EUR,0.78,"SUB TOTA | 9,00 \",
+Aldi foto 2.jpg,aldi,11,product_line,amount_and_text,SCDRAG = EURO \,,,,9.00,EUR,0.78,"SCDRAG = EURO \ 9,00 *",
+Aldi foto 2.jpg,aldi,14,product_line,amount_and_text,"B 9,008 4,59 \, Q4}",,,,5.00,EUR,0.45,"B 9,008 4,59 \, Q4} 5,00 |",multiple_amounts_detected;ocr_noise

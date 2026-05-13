@@ -1,0 +1,8 @@
+source_file,store_hint,line_no,line_type,classifier_reason,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
+plus foto 1.jpg,albert_heijn,29,product_line,amount_and_text,* mS Be og ae se “eS nee Onschr },,,,1.69,EUR,0.45,* mS Be og ae se “eS nee Onschr } 1.69 7S ance oy Sgt int ee,ocr_noise
+plus foto 1.jpg,albert_heijn,32,product_line,amount_and_text,Fo ° a il oe a at a . i . MIX Vv vour de,,,,2.05,EUR,0.78,"Fo ° a il oe a at a . i . MIX Vv vour de 2.05 $e S ae “tae sR, of atts aes we .",
+plus foto 1.jpg,albert_heijn,37,product_line,amount_and_text,"° oo wand oe ee . . crane tA CaIVALS 2,97",,,,1.33,EUR,0.62,"° oo wand oe ee . . crane tA CaIVALS 2,97 1,33 pe aor “aa een Me",multiple_amounts_detected
+plus foto 1.jpg,albert_heijn,38,product_line,amount_and_text,cee Syne ee. ae pa STRANBERR Haat ae,,,,1.22,EUR,0.78,"cee Syne ee. ae pa STRANBERR Haat ae 1,22 pte wake SUES oe",
+plus foto 1.jpg,albert_heijn,40,product_line,amount_and_text,aan a : a we | Tr aan . . WERELE GER.Z-A,,,,1.02,EUR,0.78,". aan a : a we | Tr aan . . WERELE GER.Z-A 1,02 uw, fo REA et mo",
+plus foto 1.jpg,albert_heijn,51,product_line,amount_and_text,ny a Me Fe 3 Dele he 2 taal,,,,0.28,EUR,0.78,"ny a Me Fe 3 Dele he 2 taal 0,28 | wh, a",
+plus foto 1.jpg,albert_heijn,103,product_line,amount_and_text,oe > ‘% : . nie <“ ne Patun: iecode,,,,14.33,EUR,0.78,"oe > ‘% : . nie <“ ne Patun: iecode: 14,33 ae 7 wee a SN 7 are, ae",

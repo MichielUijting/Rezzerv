@@ -1,0 +1,21 @@
+source_file,store_hint,line_no,line_type,classifier_reason,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
+Lidl App 2.png,lidl,5,product_line,amount_and_text,Aardappel zoet,,,,3.24,EUR,0.78,"Aardappel zoet 3,24 B",
+Lidl App 2.png,lidl,6,quantity_line,weight_price_pattern,"1,224 kg x",1.224,kg,2.65,2.65,EUR,0.55,"1,224 kg x 2,65 EUR",quantity_line_requires_merge
+Lidl App 2.png,lidl,8,product_line,amount_and_text,Tortilla chips XXL,,,,1.29,EUR,0.78,"Tortilla chips XXL 1,29 B",
+Lidl App 2.png,lidl,9,product_line,amount_and_text,Knorr CaS Ch. tomaat,,,,0.89,EUR,0.78,"Knorr CaS Ch. tomaat 0,89 B",
+Lidl App 2.png,lidl,10,product_line,amount_and_text,Knorr CaS kip,,,,0.89,EUR,0.78,"Knorr CaS kip 0,89 B",
+Lidl App 2.png,lidl,11,product_line,amount_and_text,Mexicaanse kruiden,,,,1.49,EUR,0.78,"Mexicaanse kruiden 1,49 B",
+Lidl App 2.png,lidl,12,product_line,amount_and_text,Verse halfvolle melk,,,,0.89,EUR,0.78,"Verse halfvolle melk 0,89 B",
+Lidl App 2.png,lidl,13,product_line,amount_and_text,Gouda belegen gerasp,,,,2.39,EUR,0.78,"Gouda belegen gerasp 2,39 B",
+Lidl App 2.png,lidl,14,product_line,amount_and_text,Slagersleverworst,,,,1.49,EUR,0.78,"Slagersleverworst 1,49 B",
+Lidl App 2.png,lidl,15,product_line,product_with_quantity_pattern,"Rundersaucijzen 2 x 4,99",2,stuk,4.99,9.98,EUR,0.62,"Rundersaucijzen 2 x 4,99 9,98 B",multiple_amounts_detected
+Lidl App 2.png,lidl,16,product_line,amount_and_text,Kidneybonen,,,,2.59,EUR,0.78,"Kidneybonen 2,59 B",
+Lidl App 2.png,lidl,17,product_line,amount_and_text,Snacktomaten,,,,1.79,EUR,0.78,"Snacktomaten 1,79 B",
+Lidl App 2.png,lidl,18,product_line,product_with_quantity_pattern,"Komkommer 2 x 0,79",2,stuk,0.79,1.58,EUR,0.62,"Komkommer 2 x 0,79 1,58 B",multiple_amounts_detected
+Lidl App 2.png,lidl,19,product_line,amount_and_text,Duurzame basmati rijst,,,,1.69,EUR,0.78,"Duurzame basmati rijst 1,69 B",
+Lidl App 2.png,lidl,20,product_line,amount_and_text,Créme fraiche 30%,,,,0.99,EUR,0.78,"Créme fraiche 30% 0,99 B",
+Lidl App 2.png,lidl,21,product_line,product_with_quantity_pattern,"Tomatenblokjes 2 x 0,58",2,stuk,0.58,1.16,EUR,0.62,"Tomatenblokjes 2 x 0,58 1,16 B",multiple_amounts_detected
+Lidl App 2.png,lidl,22,product_line,amount_and_text,Mexicaanse kruidenm,,,,0.49,EUR,0.78,"Mexicaanse kruidenm. 0,49 B",
+Lidl App 2.png,lidl,23,product_line,amount_and_text,Mexicaanse kruidenm,,,,0.49,EUR,0.78,"Mexicaanse kruidenm. 0,49 B",
+Lidl App 2.png,lidl,24,product_line,product_with_quantity_pattern,"Taco saus 2 x 0,99",2,stuk,0.99,1.98,EUR,0.62,"Taco saus 2 x 0,99 1,98 B",multiple_amounts_detected
+Lidl App 2.png,lidl,43,product_line,amount_and_text,"B 9 31,32 2,82",,,,34.14,EUR,0.62,"B 9 31,32 2,82 34,14",multiple_amounts_detected

@@ -1,0 +1,1273 @@
+{
+  "schema_version": "receipt-ocr-poc-v2-line-classifier",
+  "metadata": {
+    "source_file": "plus foto 1.jpg",
+    "created_at": "2026-05-13T11:43:16.684302+00:00",
+    "store_hint": "albert_heijn",
+    "ocr_variant": "adaptive_threshold",
+    "ocr_psm": 6,
+    "ocr_score": 197,
+    "ocr_attempts": [
+      {
+        "variant": "adaptive_threshold",
+        "psm": 6,
+        "score": 197
+      },
+      {
+        "variant": "adaptive_threshold",
+        "psm": 4,
+        "score": 139
+      },
+      {
+        "variant": "normalized",
+        "psm": 6,
+        "score": 111
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 4,
+        "score": 111
+      },
+      {
+        "variant": "normalized",
+        "psm": 4,
+        "score": 110
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 6,
+        "score": 101
+      },
+      {
+        "variant": "gray",
+        "psm": 4,
+        "score": 60
+      },
+      {
+        "variant": "gray",
+        "psm": 6,
+        "score": 31
+      }
+    ],
+    "total_amount_hint": "",
+    "detected_rows": 7,
+    "parse_confidence_avg": 0.71,
+    "warnings": [
+      "multiple_amounts_detected",
+      "ocr_noise"
+    ],
+    "line_type_counts": {
+      "discount_line": 1,
+      "metadata_line": 3,
+      "noise_line": 28,
+      "payment_line": 0,
+      "product_line": 7,
+      "quantity_line": 0,
+      "total_line": 0,
+      "unknown_line": 114,
+      "vat_line": 2
+    },
+    "ignored_line_count": 148
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "z, (tet & 2 7 eece",
+      "normalized_line": "z, (tet & 2 7 eece",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "- ed i\" < ar’ od ca 5 te ‘ap oe ' By \" Mah x a € “kes",
+      "normalized_line": "- ed i\" < ar’ od ca 5 te ‘ap oe ' By \" Mah x a € “kes",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "RT “he me nk RTS ae oF Tee Toa 5 ara as a PRY .",
+      "normalized_line": "RT “he me nk RTS ae oF Tee Toa 5 ara as a PRY .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "ao ut he Ge 2. ty ac: Pauw OTH 5 Soy .",
+      "normalized_line": "ao ut he Ge 2. ty ac: Pauw OTH 5 Soy .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "_ ~ : “, “Con * : as, vay my ore vie rane sigs an Vee SO 8 2 # % Sy ~ en",
+      "normalized_line": "_ ~ : “, “Con * : as, vay my ore vie rane sigs an Vee SO 8 2 # % Sy ~ en",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "© ~ wo we ’ . ~ bad ee 7 aa wert. vat en spy - + me . se . a ¥",
+      "normalized_line": "© ~ wo we ’ . ~ bad ee 7 aa wert. vat en spy - + me . se . a ¥",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "ae A - “ #Y ia Pee “ ne aor rb . * ag ro non wae ana uf m4 7 a ey * Piste! in an an Py ye . “. at eo ;",
+      "normalized_line": "ae A - “ #Y ia Pee “ ne aor rb . * ag ro non wae ana uf m4 7 a ey * Piste! in an an Py ye . “. at eo ;",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "toa: . - So Re ae Oe Pte, aes gy ene Aa7 Woe ae “ates! oP ve SE : 4",
+      "normalized_line": "toa: . - So Re ae Oe Pte, aes gy ene Aa7 Woe ae “ates! oP ve SE : 4",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 9,
+      "raw_line": ": eo 2 a a z : nh. Fig fame * a Bee et raneey ae “a ae “ete! ae St : ;",
+      "normalized_line": ": eo 2 a a z : nh. Fig fame * a Bee et raneey ae “a ae “ete! ae St : ;",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "3 La : pr 7 “a ae Pony t Te eked wy ote el A 1 zn :",
+      "normalized_line": "3 La : pr 7 “a ae Pony t Te eked wy ote el A 1 zn :",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 11,
+      "raw_line": ". » wey : < . oy - _— we? aay arian Ag are 7 oe be Ay . a1",
+      "normalized_line": ". » wey : < . oy - _— we? aay arian Ag are 7 oe be Ay . a1",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "* my Me nS DO. . ~ ios PAS oon wiet Hey te ee, - 4",
+      "normalized_line": "* my Me nS DO. . ~ ios PAS oon wiet Hey te ee, - 4",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 13,
+      "raw_line": ". ; an . ; oe om 4a ies ms, Aa, ae Nyy iter: a co re 7,",
+      "normalized_line": ". ; an . ; oe om 4a ies ms, Aa, ae Nyy iter: a co re 7,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 14,
+      "raw_line": ": we Sole we Ms, soy wep ats “be 4 i- wee afiy? wn Sa eal Lees yep ee ed",
+      "normalized_line": ": we Sole we Ms, soy wep ats “be 4 i- wee afiy? wn Sa eal Lees yep ee ed",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "Po . “tet EO : ca ahs tad wy ‘ ae oe, toa on are aie ae “a va ane “",
+      "normalized_line": "Po . “tet EO : ca ahs tad wy ‘ ae oe, toa on are aie ae “a va ane “",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 16,
+      "raw_line": ": ot en cy ae ae : aes . ee mn aenre “~ xy, = ale = wa ob es Ae",
+      "normalized_line": ": ot en cy ae ae : aes . ee mn aenre “~ xy, = ale = wa ob es Ae",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "> . pe 4 Oy ‘. aad ! wow . ” “ha “. ay ve an 1 oR wate Bt ee on ae",
+      "normalized_line": "> . pe 4 Oy ‘. aad ! wow . ” “ha “. ay ve an 1 oR wate Bt ee on ae",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "& a Sa an ee Se ! to co . pie os ee wal Teh a wy. aes, mie” ae Somer ;",
+      "normalized_line": "& a Sa an ee Se ! to co . pie os ee wal Teh a wy. aes, mie” ae Somer ;",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "hoy - ~ . “ ee. ae 2 Sty ton 5, “0 * Lae at Cee Seg oa ope an 7 ae",
+      "normalized_line": "hoy - ~ . “ ee. ae 2 Sty ton 5, “0 * Lae at Cee Seg oa ope an 7 ae",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 20,
+      "raw_line": ". 2. ata? j ay % » ED ors pas ny at Ce ae 2 an on ‘rs é Ce? ne 7 “8",
+      "normalized_line": ". 2. ata? j ay % » ED ors pas ny at Ce ae 2 an on ‘rs é Ce? ne 7 “8",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "a : og ag BO as ras oh oe * J US GIL 263 holes aan oes oy wey Poe. ates My By ane",
+      "normalized_line": "a : og ag BO as ras oh oe * J US GIL 263 holes aan oes oy wey Poe. ates My By ane",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "aan oa a, Sy ore Doge a. ut! € aes “oes PL hiaan 2 ore . a och meee E wt a coe ies oa a ao",
+      "normalized_line": "aan oa a, Sy ore Doge a. ut! € aes “oes PL hiaan 2 ore . a och meee E wt a coe ies oa a ao",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "\" : moa : Hoy an fee a ‘e te TP, ’ Tet hans caninge. acres reese oa 2 bet oy AST SY oe t os,",
+      "normalized_line": "\" : moa : Hoy an fee a ‘e te TP, ’ Tet hans caninge. acres reese oa 2 bet oy AST SY oe t os,",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "£ yo ae Ted a ~, on is < SH . Nuste No tse Tete) os Ee eye, ¥ ele “Ett ioe 2 .",
+      "normalized_line": "£ yo ae Ted a ~, on is < SH . Nuste No tse Tete) os Ee eye, ¥ ele “Ett ioe 2 .",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "Ss “ay ne fo Uae Os Sree, . rhe SN a7 7a Rotts ag : ae veep ee es es a er ae Lie,",
+      "normalized_line": "Ss “ay ne fo Uae Os Sree, . rhe SN a7 7a Rotts ag : ae veep ee es es a er ae Lie,",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "an 5 we i rao at “oo % ear ‘ : fel: Stéhg . 4 oar ws ey *: ~ Sera fare on om Ba,",
+      "normalized_line": "an 5 we i rao at “oo % ear ‘ : fel: Stéhg . 4 oar ws ey *: ~ Sera fare on om Ba,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 27,
+      "raw_line": ": 5 ay “ts oa Re Ing <n o. P re ~ “yey ra “a < 0% ’ she * rate .",
+      "normalized_line": ": 5 ay “ts oa Re Ing <n o. P re ~ “yey ra “a < 0% ’ she * rate .",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "- ea, , 1 “a Puree : we < Saye . ‘ - om se tee Can Te aes a “S 3 a",
+      "normalized_line": "- ea, , 1 “a Puree : we < Saye . ‘ - om se tee Can Te aes a “S 3 a",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "* mS Be og ae se “eS nee Onschr } 1.69 7S ance oy Sgt int ee",
+      "normalized_line": "* mS Be og ae se “eS nee Onschr } 1.69 7S ance oy Sgt int ee",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "~ , MA. or : ot -O.F “8, ca, pe te 5h \". “",
+      "normalized_line": "~ , MA. or : ot -O.F “8, ca, pe te 5h \". “",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 31,
+      "raw_line": ": a, thy, ee an aan Hon . Re Mle * | pararaner aera wes v.84 aoe .",
+      "normalized_line": ": a, thy, ee an aan Hon . Re Mle * | pararaner aera wes v.84 aoe .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "Fo ° a il oe a at a . i . MIX Vv vour de 2.05 $e S ae “tae sR, of atts aes we .",
+      "normalized_line": "Fo ° a il oe a at a . i . MIX Vv vour de 2.05 $e S ae “tae sR, of atts aes we .",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "~ i att es — oo aie et y NAST neet % ne aim oe ~: S”, oe Sok no So",
+      "normalized_line": "~ i att es — oo aie et y NAST neet % ne aim oe ~: S”, oe Sok no So",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "z ‘ ee ae yee rn ” is an “ PL ARK CH 6,9. See wal .° Paty ~~ wart ye ee” Von Net ‘~",
+      "normalized_line": "z ‘ ee ae yee rn ” is an “ PL ARK CH 6,9. See wal .° Paty ~~ wart ye ee” Von Net ‘~",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 35,
+      "raw_line": ": x “ond ay my an . . ’ Y tan) ty ~ ~ we, 3 - ~ ee",
+      "normalized_line": ": x “ond ay my an . . ’ Y tan) ty ~ ~ we, 3 - ~ ee",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "wo + 7 ye an ~ re en rs oe ° . - ey ew ~ aa 0 . 4 es",
+      "normalized_line": "wo + 7 ye an ~ re en rs oe ° . - ey ew ~ aa 0 . 4 es",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "° oo wand oe ee . . crane tA CaIVALS 2,97 1,33 pe aor “aa een Me",
+      "normalized_line": "° oo wand oe ee . . crane tA CaIVALS 2,97 1,33 pe aor “aa een Me",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "cee Syne ee. ae pa STRANBERR Haat ae 1,22 pte wake SUES oe",
+      "normalized_line": "cee Syne ee. ae pa STRANBERR Haat ae 1,22 pte wake SUES oe",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "te an Seo, east a yok an : co ue, hgte One - wy Nes =. ‘",
+      "normalized_line": "te an Seo, east a yok an : co ue, hgte One - wy Nes =. ‘",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 40,
+      "raw_line": ". aan a : a we | Tr aan . . WERELE GER.Z-A 1,02 uw, fo REA et mo",
+      "normalized_line": ". aan a : a we | Tr aan . . WERELE GER.Z-A 1,02 uw, fo REA et mo",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "Se! eae ae oe . “2% 3EL DG AIS 05 ve aeianet Te eat nom ot, Saar",
+      "normalized_line": "Se! eae ae oe . “2% 3EL DG AIS 05 ve aeianet Te eat nom ot, Saar",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "pgs “a re areas a. i 2K WEE aIX H BLO 2.0 “SAEED, nae Ee ae px a aloe eae Z",
+      "normalized_line": "pgs “a re areas a. i 2K WEE aIX H BLO 2.0 “SAEED, nae Ee ae px a aloe eae Z",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 43,
+      "raw_line": ". oa nig. Pt ies mB, he art won i sex BONE Nt WTEN 16 cee “hs",
+      "normalized_line": ". oa nig. Pt ies mB, he art won i sex BONE Nt WTEN 16 cee “hs",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 44,
+      "raw_line": ", - roe ~ vat Agen a ot YY aed ye 2 KKERER ut -0, . cls re ye Seeley wel Oe .",
+      "normalized_line": ", - roe ~ vat Agen a ot YY aed ye 2 KKERER ut -0, . cls re ye Seeley wel Oe .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 45,
+      "raw_line": "; OM Rake ae ay ae, KI KERATEN GNGEZO ordeelt Brass tat DNS, MONS ee a eet a",
+      "normalized_line": "; OM Rake ae ay ae, KI KERATEN GNGEZO ordeelt Brass tat DNS, MONS ee a eet a",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 46,
+      "raw_line": "Mee! are woes ae E, Walt * K N G safsan . “Olea are eee rae Cor ae. ae",
+      "normalized_line": "Mee! are woes ae E, Walt * K N G safsan . “Olea are eee rae Cor ae. ae",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 47,
+      "raw_line": "wae Mea, ww a ay a wl . Ki NNOTE ser y eeeees 2 frye ee vest oe at ae is rot",
+      "normalized_line": "wae Mea, ww a ay a wl . Ki NNOTE ser y eeeees 2 frye ee vest oe at ae is rot",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 48,
+      "raw_line": "; , 7 ot rane ao Be Stay oy mot * SHEY t ne cseses GS ne 3B Clean ous Mo a es” og\" ee ar 93",
+      "normalized_line": "; , 7 ot rane ao Be Stay oy mot * SHEY t ne cseses GS ne 3B Clean ous Mo a es” og\" ee ar 93",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 49,
+      "raw_line": ": ae as i : . . mars wet « Pager, “er.” at 7 * .",
+      "normalized_line": ": ae as i : . . mars wet « Pager, “er.” at 7 * .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 50,
+      "raw_line": "ae Po oy ae / ‘es - ara P “2 on a hon Ed Pr te *, oats ae ate ax we",
+      "normalized_line": "ae Po oy ae / ‘es - ara P “2 on a hon Ed Pr te *, oats ae ate ax we",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 51,
+      "raw_line": "ny a Me Fe 3 Dele he 2 taal 0,28 | wh, a",
+      "normalized_line": "ny a Me Fe 3 Dele he 2 taal 0,28 | wh, a",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 52,
+      "raw_line": "- ~ Dele Sy “ ne . es ~ o “ey 4 ew *, Eton or eet ;*.\"",
+      "normalized_line": "- ~ Dele Sy “ ne . es ~ o “ey 4 ew *, Eton or eet ;*.\"",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 53,
+      "raw_line": "‘ - : : ray woe + te ws bt “aw - A 5. 0E, ete eee ae ome es",
+      "normalized_line": "‘ - : : ray woe + te ws bt “aw - A 5. 0E, ete eee ae ome es",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 54,
+      "raw_line": ": me tes Pus rae * og te a tl 1 oy > sv. eS nae ire Cd bane Pua ~.",
+      "normalized_line": ": me tes Pus rae * og te a tl 1 oy > sv. eS nae ire Cd bane Pua ~.",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 55,
+      "raw_line": ". vo tat oo} re Sp ae oS s 05 wy gisges Sehaty oat oy Wes rr",
+      "normalized_line": ". vo tat oo} re Sp ae oS s 05 wy gisges Sehaty oat oy Wes rr",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 56,
+      "raw_line": "me canoe Sets ~ nn n 7) teat Ny toy oe Se eee wy",
+      "normalized_line": "me canoe Sets ~ nn n 7) teat Ny toy oe Se eee wy",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 57,
+      "raw_line": "nN Pye pe Se ee ae Or an nte C-2, a ae ne 7.7.09 tte Ty On Tas te a",
+      "normalized_line": "nN Pye pe Se ee ae Or an nte C-2, a ae ne 7.7.09 tte Ty On Tas te a",
+      "line_type": "metadata_line",
+      "reason": "date_like"
+    },
+    {
+      "line_no": 58,
+      "raw_line": "wd roa asPia » a LUSPu ICE 58 ye oe ne oe Ne at Os rit foe ie te Soa",
+      "normalized_line": "wd roa asPia » a LUSPu ICE 58 ye oe ne oe Ne at Os rit foe ie te Soa",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 59,
+      "raw_line": "- SS , oy orn . - > L xX P vo €-2, a “bale * f ee ee ee ST “ina Ha ‘a *.\",",
+      "normalized_line": "- SS , oy orn . - > L xX P vo €-2, a “bale * f ee ee ee ST “ina Ha ‘a *.\",",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 60,
+      "raw_line": "foe Tt, Me ae vo oe Re . 14 THE aed aan ~. prices *. oe oT a *, a",
+      "normalized_line": "foe Tt, Me ae vo oe Re . 14 THE aed aan ~. prices *. oe oT a *, a",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 61,
+      "raw_line": "- aan t ”. 7. Olt ey r rer 7 EL 94 “oy © ate Tea Poan My! 7 OR APS oe ae, en",
+      "normalized_line": "- aan t ”. 7. Olt ey r rer 7 EL 94 “oy © ate Tea Poan My! 7 OR APS oe ae, en",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 62,
+      "raw_line": ". z an tie eet . . ZEG 10 €-§, s. my ar aeaot, Fg, Fa ~ FS at tne ”",
+      "normalized_line": ". z an tie eet . . ZEG 10 €-§, s. my ar aeaot, Fg, Fa ~ FS at tne ”",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 63,
+      "raw_line": ". . ae ee tel OF: ae) : sors yt ay yr Son) \"a rate ay Pt Sofas",
+      "normalized_line": ". . ae ee tel OF: ae) : sors yt ay yr Son) \"a rate ay Pt Sofas",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 64,
+      "raw_line": "orc an aa 2 we & acer on 1 ZEGEL ELLE noczssss ro Be “",
+      "normalized_line": "orc an aa 2 we & acer on 1 ZEGEL ELLE noczssss ro Be “",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 65,
+      "raw_line": "~ - : wo hae oar 1x Oh R sas Oe eras 9% mee",
+      "normalized_line": "~ - : wo hae oar 1x Oh R sas Oe eras 9% mee",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 66,
+      "raw_line": "Sgt . an aa area. aa ie oe ACTIE B WERELDGE SSzsRe 4,33 o> pnd SB oan",
+      "normalized_line": "Sgt . an aa area. aa ie oe ACTIE B WERELDGE SSzsRe 4,33 o> pnd SB oan",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 67,
+      "raw_line": ". va . ° oT. Ply we ” . . aaacs . . ‘. °}. ope pia - ‘ae .",
+      "normalized_line": ". va . ° oT. Ply we ” . . aaacs . . ‘. °}. ope pia - ‘ae .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 68,
+      "raw_line": "+ “ya, ste ‘~ tad Fe . X Sates ' ete ai +. Oi ead i\") Sate He tae” a ae 7,",
+      "normalized_line": "+ “ya, ste ‘~ tad Fe . X Sates ' ete ai +. Oi ead i\") Sate He tae” a ae 7,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 69,
+      "raw_line": "3 m. . foe . 7 “ * . oe Tats *. “ oars 1 1 ZEGEL ~ c 1 is aera che SRR stan ane “.*",
+      "normalized_line": "3 m. . foe . 7 “ * . oe Tats *. “ oars 1 1 ZEGEL ~ c 1 is aera che SRR stan ane “.*",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 70,
+      "raw_line": ": TP, “ ~ ” * ee - on - - 2X Pn Xe ~~ oan a. sy oe ae) tieghast eo ve a",
+      "normalized_line": ": TP, “ ~ ” * ee - on - - 2X Pn Xe ~~ oan a. sy oe ae) tieghast eo ve a",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 71,
+      "raw_line": ": » ot : we, ied “ee als Cores ae eer a ge ww OS =. Se, wa ats Bae,",
+      "normalized_line": ": » ot : we, ied “ee als Cores ae eer a ge ww OS =. Se, wa ats Bae,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 72,
+      "raw_line": "s \". - Se ot - i= “oe “, honey ase i , al i oy \" *. none Tse Pst eee etree aN re a",
+      "normalized_line": "s \". - Se ot - i= “oe “, honey ase i , al i oy \" *. none Tse Pst eee etree aN re a",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 73,
+      "raw_line": "~ an mye ae Ne re ale ‘ rete “nn ta wae Wwe tate! \"NG aon ini? 74 aid",
+      "normalized_line": "~ an mye ae Ne re ale ‘ rete “nn ta wae Wwe tate! \"NG aon ini? 74 aid",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 74,
+      "raw_line": "oh “ . ° ae a8, a & oP oa, oA a ey ats eS wee. .",
+      "normalized_line": "oh “ . ° ae a8, a & oP oa, oA a ey ats eS wee. .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 75,
+      "raw_line": "Tay PT a Aer. oe, v oerere . eaters ae prec cae Ante",
+      "normalized_line": "Tay PT a Aer. oe, v oerere . eaters ae prec cae Ante",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 76,
+      "raw_line": "4 \"ou “eta, ae an fet, y « 66 “Ae =. > eel ae rela! wy SINC reek -",
+      "normalized_line": "4 \"ou “eta, ae an fet, y « 66 “Ae =. > eel ae rela! wy SINC reek -",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 77,
+      "raw_line": "¥, an . a ag . “we 2 Ae - 4. ns",
+      "normalized_line": "¥, an . a ag . “we 2 Ae - 4. ns",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 78,
+      "raw_line": "Mo woe . ee arg sae onda! oe . 50144008 lana “> oy wasted ” nt stints",
+      "normalized_line": "Mo woe . ee arg sae onda! oe . 50144008 lana “> oy wasted ” nt stints",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 79,
+      "raw_line": "wre cy at Pk : : ae “ Seer ae) POL; TICKET 028 EES aaah! if",
+      "normalized_line": "wre cy at Pk : : ae “ Seer ae) POL; TICKET 028 EES aaah! if",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 80,
+      "raw_line": "a re oe - or . tal ete . et ae ey KL ANT 1. 02391 so ae eee saan “het Tse",
+      "normalized_line": "a re oe - or . tal ete . et ae ey KL ANT 1. 02391 so ae eee saan “het Tse",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 81,
+      "raw_line": "“a ge 7 ° “> we “ are irae oa, rmhina “oy + an “» ao: * Fah Sag See By",
+      "normalized_line": "“a ge 7 ° “> we “ are irae oa, rmhina “oy + an “» ao: * Fah Sag See By",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 82,
+      "raw_line": "Sy vo : ma mae 4 yg ye “at; “f Te nt Sw ‘O ae ae cant , ate rm “ ‘= oe",
+      "normalized_line": "Sy vo : ma mae 4 yg ye “at; “f Te nt Sw ‘O ae ae cant , ate rm “ ‘= oe",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 83,
+      "raw_line": "Bone . . ~~ Py om La a sean wees “. en tcha mo eS ae ee, ret ‘e ~S ss 2 ee i",
+      "normalized_line": "Bone . . ~~ Py om La a sean wees “. en tcha mo eS ae ee, ret ‘e ~S ss 2 ee i",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 84,
+      "raw_line": "a ae ge a ween Tate ee atk. Me de: mae, ee ee see) a ais rae",
+      "normalized_line": "a ae ge a ween Tate ee atk. Me de: mae, ee ee see) a ais rae",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 85,
+      "raw_line": "“ ae oa ” an ~ Matty a sie, a. Tr ansa _ ye “ye a, eer Me ., a te ‘ qe",
+      "normalized_line": "“ ae oa ” an ~ Matty a sie, a. Tr ansa _ ye “ye a, eer Me ., a te ‘ qe",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 86,
+      "raw_line": "- . 8 ie e a a - an “eat, : + . a oSeiens wo ea a, eet tee :",
+      "normalized_line": "- . 8 ie e a a - an “eat, : + . a oSeiens wo ea a, eet tee :",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 87,
+      "raw_line": "“ Se, “ er a Can aan rn ar ' 006 wy xe Sone eae we Ta rere",
+      "normalized_line": "“ Se, “ er a Can aan rn ar ' 006 wy xe Sone eae we Ta rere",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 88,
+      "raw_line": ". ars 27, - arn mo wot ot, a a Ee ~ 8,",
+      "normalized_line": ". ars 27, - arn mo wot ot, a a Ee ~ 8,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 89,
+      "raw_line": "cian aan ns a Nat ew, ts tro 60) XxXX{ , yt TB an \"Ls eeeeneoes < wee Car ;",
+      "normalized_line": "cian aan ns a Nat ew, ts tro 60) XxXX{ , yt TB an \"Ls eeeeneoes < wee Car ;",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 90,
+      "raw_line": "Sa oy st ee nes ws Haes 0000430. KXXKKX 4 = Ig ie ee Be",
+      "normalized_line": "Sa oy st ee nes ws Haes 0000430. KXXKKX 4 = Ig ie ee Be",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 91,
+      "raw_line": ": woP, . ee aN \\ soe . a on : .” . ed Me, * ,",
+      "normalized_line": ": woP, . ee aN \\ soe . a on : .” . ed Me, * ,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 92,
+      "raw_line": "me ne “a S ! tacwe ie ” (A00CO HRARKX pene a aie Ke ota\". aocuore",
+      "normalized_line": "me ne “a S ! tacwe ie ” (A00CO HRARKX pene a aie Ke ota\". aocuore",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 93,
+      "raw_line": "ra ae “ey “ ay we an an : ESTRO , Cee Ot, aCe ie ae re 7 ary",
+      "normalized_line": "ra ae “ey “ ay we an an : ESTRO , Cee Ot, aCe ie ae re 7 ary",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 94,
+      "raw_line": "aan . oa roy, . = . an .. . a \" é . ~. ~ mys",
+      "normalized_line": "aan . oa roy, . = . an .. . a \" é . ~. ~ mys",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 95,
+      "raw_line": "ae ane Me 7, wa Me ~ a f + HA t: rs . es iy peaas Ser < ae +",
+      "normalized_line": "ae ane Me 7, wa Me ~ a f + HA t: rs . es iy peaas Ser < ae +",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 96,
+      "raw_line": "Te oo . oF — Ce aS ats Kaart; lenuniie 9:40 Oe te! ve atta et ee Bre . “I -",
+      "normalized_line": "Te oo . oF — Ce aS ats Kaart; lenuniie 9:40 Oe te! ve atta et ee Bre . “I -",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 97,
+      "raw_line": "aa . te! te ag) . . Kaartser 01/2019 sUoAe ; wren etal m= men earns",
+      "normalized_line": "aa . te! te ag) . . Kaartser 01/2019 sUoAe ; wren etal m= men earns",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 98,
+      "raw_line": "ye: yea ty ans . 4 on ee Mee ay ae yey te",
+      "normalized_line": "ye: yea ty ans . 4 on ee Mee ay ae yey te",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 99,
+      "raw_line": "aa : - oe ae eT 4] 9 One ed OS wy, ott * vo af",
+      "normalized_line": "aa : - oe ae eT 4] 9 One ed OS wy, ott * vo af",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 100,
+      "raw_line": ":* “sy . oom 7 oo *- a . x . . | NG 0 ae were a mayne ag oe ves . aoe oe",
+      "normalized_line": ":* “sy . oom 7 oo *- a . x . . | NG 0 ae were a mayne ag oe ves . aoe oe",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 101,
+      "raw_line": "od . “e a > ae, ne or. he 4 BETALI EUR an al a ate Sorex man fa’ “ \"ow",
+      "normalized_line": "od . “e a > ae, ne or. he 4 BETALI EUR an al a ate Sorex man fa’ “ \"ow",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 102,
+      "raw_line": "4 . ian “ My mo we 2 } . 1 : 7, nian “sy, Kote “, “ow onan",
+      "normalized_line": "4 . ian “ My mo we 2 } . 1 : 7, nian “sy, Kote “, “ow onan",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 103,
+      "raw_line": "oe > ‘% : . nie <“ ne Patun: iecode: 14,33 ae 7 wee a SN 7 are, ae",
+      "normalized_line": "oe > ‘% : . nie <“ ne Patun: iecode: 14,33 ae 7 wee a SN 7 are, ae",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 104,
+      "raw_line": ", . ad mee red , yey ers - sat nae aa ony 2 te Ya - “4, . oy",
+      "normalized_line": ", . ad mee red , yey ers - sat nae aa ony 2 te Ya - “4, . oy",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 105,
+      "raw_line": "So oe ae tyne ee na 4 Autor 6 PaaS * fe ae ara oe",
+      "normalized_line": "So oe ae tyne ee na 4 Autor 6 PaaS * fe ae ara oe",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 106,
+      "raw_line": ". wt an ee V - . “aL Lita ‘ pete ne ~, ve + ae wre fe .. rt 44” \", . so ae",
+      "normalized_line": ". wt an ee V - . “aL Lita ‘ pete ne ~, ve + ae wre fe .. rt 44” \", . so ae",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 107,
+      "raw_line": "= oN . . ~ a “ toy a . area ow + - re",
+      "normalized_line": "= oN . . ~ a “ toy a . area ow + - re",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 108,
+      "raw_line": ". Ly . “ ~.. ran an gn : yy ; YY hy: ’ , ete ae a. a ae",
+      "normalized_line": ". Ly . “ ~.. ran an gn : yy ; YY hy: ’ , ete ae a. a ae",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 109,
+      "raw_line": ": 4 w “hk » . . sy a . ~ . ” roy",
+      "normalized_line": ": 4 w “hk » . . sy a . ~ . ” roy",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 110,
+      "raw_line": "- wee ta 3 Bey =. eRe $ : om",
+      "normalized_line": "- wee ta 3 Bey =. eRe $ : om",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 111,
+      "raw_line": ". non yt peat . sae Ne an ‘ eee aan NN se ‘oe, sake,",
+      "normalized_line": ". non yt peat . sae Ne an ‘ eee aan NN se ‘oe, sake,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 112,
+      "raw_line": "a 7 ae a3 ooo ‘ff . ‘ = “s _ 7 , ~ to net",
+      "normalized_line": "a 7 ae a3 ooo ‘ff . ‘ = “s _ 7 , ~ to net",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 113,
+      "raw_line": "tot, Pia ytee ure wo * Sk ay . PIN ld (Ca BTW 05 ATS an ne) Oy ae, “eS",
+      "normalized_line": "tot, Pia ytee ure wo * Sk ay . PIN ld (Ca BTW 05 ATS an ne) Oy ae, “eS",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 114,
+      "raw_line": "ne *, My aoe Tos, wt Seats hae ty why elge 14, an ars aot . arean or",
+      "normalized_line": "ne *, My aoe Tos, wt Seats hae ty why elge 14, an ars aot . arean or",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 115,
+      "raw_line": "“am, a a”, 4 om . BN - ee as 4 aw Wiss { 16 4 05 an , e ry wy",
+      "normalized_line": "“am, a a”, 4 om . BN - ee as 4 aw Wiss { 16 4 05 an , e ry wy",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 116,
+      "raw_line": "- nae aa « a a . bee f “ now ° a nt ~ on ve . . . .",
+      "normalized_line": "- nae aa « a a . bee f “ now ° a nt ~ on ve . . . .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 117,
+      "raw_line": "ve - ae oe te a ae a man } | ' tee on me oo ic",
+      "normalized_line": "ve - ae oe te a ae a man } | ' tee on me oo ic",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 118,
+      "raw_line": "ae A: os “ ws of iva ree ae WH groep ‘ 1,1 wee wy ee < , ~ °",
+      "normalized_line": "ae A: os “ ws of iva ree ae WH groep ‘ 1,1 wee wy ee < , ~ °",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 119,
+      "raw_line": "Por an . a“ : 73 Wawa, ot won ~ nae + oc oot . . tk .\"",
+      "normalized_line": "Por an . a“ : 73 Wawa, ot won ~ nae + oc oot . . tk .\"",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 120,
+      "raw_line": "a 7, ~o oe me on ne ve vy, we «3 BTH laag g tetas 14 a aan +. + .* . . Me,",
+      "normalized_line": "a 7, ~o oe me on ne ve vy, we «3 BTH laag g tetas 14 a aan +. + .* . . Me,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 121,
+      "raw_line": "at ye * a rar a whe “ae ” ~ fdedad * ‘ ° me . a .",
+      "normalized_line": "at ye * a rar a whe “ae ” ~ fdedad * ‘ ° me . a .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 122,
+      "raw_line": "a ae eo a, “ft oA a, at . “Sy ” a . BIW BTW waae . to, way . . n, 2",
+      "normalized_line": "a ae eo a, “ft oA a, at . “Sy ” a . BIW BTW waae . to, way . . n, 2",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 123,
+      "raw_line": "as iS ’ wan “) : arco ee . sane see ‘oy mo, “",
+      "normalized_line": "as iS ’ wan “) : arco ee . sane see ‘oy mo, “",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 124,
+      "raw_line": "oO + . “ y + 4A * f , ar, Can =<. we PN . i",
+      "normalized_line": "oO + . “ y + 4A * f , ar, Can =<. we PN . i",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 125,
+      "raw_line": "—_ Os ay. 4 ae TA “, eH . on wy . nten a eae is a",
+      "normalized_line": "—_ Os ay. 4 ae TA “, eH . on wy . nten a eae is a",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 126,
+      "raw_line": "hye ° i fain ” Qnee “ae “es \"Ne. - “ote we) “ss PLUSPu vse a he ‘ :",
+      "normalized_line": "hye ° i fain ” Qnee “ae “es \"Ne. - “ote we) “ss PLUSPu vse a he ‘ :",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 127,
+      "raw_line": "“ ° x. Aly. an +, te Ae! ad fete! en cree Se ‘. ws we",
+      "normalized_line": "“ ° x. Aly. an +, te Ae! ad fete! en cree Se ‘. ws we",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 128,
+      "raw_line": ". tees ~ fata * * wey wt eae ace a a : .",
+      "normalized_line": ". tees ~ fata * * wey wt eae ace a a : .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 129,
+      "raw_line": "oan - : 243 “4 . a. Su 4 nin mn No are . , = T= ° “ .",
+      "normalized_line": "oan - : 243 “4 . a. Su 4 nin mn No are . , = T= ° “ .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 130,
+      "raw_line": "ale EN, ae wee ee ee vat eT kelen re",
+      "normalized_line": "ale EN, ae wee ee ee vat eT kelen re",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 131,
+      "raw_line": ", a an ann “. a aS ~ ton he ey, ian . 7 ae",
+      "normalized_line": ", a an ann “. a aS ~ ton he ey, ian . 7 ae",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 132,
+      "raw_line": ". a wn a rae we ‘o “ am ® LO on “Bo. wi Arti “7 ' .\"",
+      "normalized_line": ". a wn a rae we ‘o “ am ® LO on “Bo. wi Arti “7 ' .\"",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 133,
+      "raw_line": "“?Z ” yw Don on “4, tes wa “, a we * \". wen, a A a 42 i 00 uur : \\",
+      "normalized_line": "“?Z ” yw Don on “4, tes wa “, a we * \". wen, a A a 42 i 00 uur : \\",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 134,
+      "raw_line": "“yt, ~ arid ite « an ane a aan an 7. : n: ,",
+      "normalized_line": "“yt, ~ arid ite « an ane a aan an 7. : n: ,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 135,
+      "raw_line": "oes on we aw sO ay eo at re! . ngstij 08:0 20:00 u . : :",
+      "normalized_line": "oes on we aw sO ay eo at re! . ngstij 08:0 20:00 u . : :",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 136,
+      "raw_line": "ae my . “en rn an “ ne ‘ i",
+      "normalized_line": "ae my . “en rn an “ ne ‘ i",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 137,
+      "raw_line": "aie “, . ca aan ~ i er im SL _ dnze Vri 0 i 0 18: u",
+      "normalized_line": "aie “, . ca aan ~ i er im SL _ dnze Vri 0 i 0 18: u",
+      "line_type": "noise_line",
+      "reason": "noise_chars_no_amount"
+    },
+    {
+      "line_no": 138,
+      "raw_line": "“4 ‘ . . wo \" e : mo 2 1 a",
+      "normalized_line": "“4 ‘ . . wo \" e : mo 2 1 a",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 139,
+      "raw_line": "ae SBOE aon aa Haandag 12:0 ae |",
+      "normalized_line": "ae SBOE aon aa Haandag 12:0 ae |",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 140,
+      "raw_line": "te Corie AE ars nas Ipen do Bonne",
+      "normalized_line": "te Corie AE ars nas Ipen do Bonne",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 141,
+      "raw_line": ". aan oa ae : “ U per “40",
+      "normalized_line": ". aan oa ae : “ U per “40",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 142,
+      "raw_line": "a . oe a 19 19:",
+      "normalized_line": "a . oe a 19 19:",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 143,
+      "raw_line": "“ er ye cae y her - . : ‘ ] ‘",
+      "normalized_line": "“ er ye cae y her - . : ‘ ] ‘",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 144,
+      "raw_line": ". 1 ue aw! y * ~ an eo .",
+      "normalized_line": ". 1 ue aw! y * ~ an eo .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 145,
+      "raw_line": "4 wy. aoe \\",
+      "normalized_line": "4 wy. aoe \\",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 146,
+      "raw_line": "\\ yee w“ oe Mee",
+      "normalized_line": "\\ yee w“ oe Mee",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 147,
+      "raw_line": "a . Yo) 4 one g, .",
+      "normalized_line": "a . Yo) 4 one g, .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 148,
+      "raw_line": "- wo RY fed an n an vot : sh.",
+      "normalized_line": "- wo RY fed an n an vot : sh.",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 149,
+      "raw_line": ", “te ~ ss ‘ us .",
+      "normalized_line": ", “te ~ ss ‘ us .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 150,
+      "raw_line": "« “ 1 : . . enemmest wma",
+      "normalized_line": "« “ 1 : . . enemmest wma",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 151,
+      "raw_line": "; ° a | ; 7 cma dreamy",
+      "normalized_line": "; ° a | ; 7 cma dreamy",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 152,
+      "raw_line": ": ; “a ewertae :",
+      "normalized_line": ": ; “a ewertae :",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 153,
+      "raw_line": ". : . . . : lees eye yen ;",
+      "normalized_line": ". : . . . : lees eye yen ;",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 154,
+      "raw_line": "2 : a . ° ie .",
+      "normalized_line": "2 : a . ° ie .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 155,
+      "raw_line": ". 7 ‘ t ° . 7",
+      "normalized_line": ". 7 ‘ t ° . 7",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    }
+  ],
+  "lines": [
+    {
+      "source_file": "plus foto 1.jpg",
+      "store_hint": "albert_heijn",
+      "line_no": 29,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "item_text": "* mS Be og ae se “eS nee Onschr }",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.69",
+      "currency": "EUR",
+      "parser_confidence": 0.45,
+      "raw_line": "* mS Be og ae se “eS nee Onschr } 1.69 7S ance oy Sgt int ee",
+      "warning": "ocr_noise"
+    },
+    {
+      "source_file": "plus foto 1.jpg",
+      "store_hint": "albert_heijn",
+      "line_no": 32,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "item_text": "Fo ° a il oe a at a . i . MIX Vv vour de",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "2.05",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "Fo ° a il oe a at a . i . MIX Vv vour de 2.05 $e S ae “tae sR, of atts aes we .",
+      "warning": ""
+    },
+    {
+      "source_file": "plus foto 1.jpg",
+      "store_hint": "albert_heijn",
+      "line_no": 37,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "item_text": "° oo wand oe ee . . crane tA CaIVALS 2,97",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.33",
+      "currency": "EUR",
+      "parser_confidence": 0.62,
+      "raw_line": "° oo wand oe ee . . crane tA CaIVALS 2,97 1,33 pe aor “aa een Me",
+      "warning": "multiple_amounts_detected"
+    },
+    {
+      "source_file": "plus foto 1.jpg",
+      "store_hint": "albert_heijn",
+      "line_no": 38,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "item_text": "cee Syne ee. ae pa STRANBERR Haat ae",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.22",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "cee Syne ee. ae pa STRANBERR Haat ae 1,22 pte wake SUES oe",
+      "warning": ""
+    },
+    {
+      "source_file": "plus foto 1.jpg",
+      "store_hint": "albert_heijn",
+      "line_no": 40,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "item_text": "aan a : a we | Tr aan . . WERELE GER.Z-A",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.02",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": ". aan a : a we | Tr aan . . WERELE GER.Z-A 1,02 uw, fo REA et mo",
+      "warning": ""
+    },
+    {
+      "source_file": "plus foto 1.jpg",
+      "store_hint": "albert_heijn",
+      "line_no": 51,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "item_text": "ny a Me Fe 3 Dele he 2 taal",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.28",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "ny a Me Fe 3 Dele he 2 taal 0,28 | wh, a",
+      "warning": ""
+    },
+    {
+      "source_file": "plus foto 1.jpg",
+      "store_hint": "albert_heijn",
+      "line_no": 103,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "item_text": "oe > ‘% : . nie <“ ne Patun: iecode",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "14.33",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "oe > ‘% : . nie <“ ne Patun: iecode: 14,33 ae 7 wee a SN 7 are, ae",
+      "warning": ""
+    }
+  ]
+}

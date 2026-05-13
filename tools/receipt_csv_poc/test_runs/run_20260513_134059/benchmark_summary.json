@@ -1,0 +1,90 @@
+{
+  "schema_version": "receipt-ocr-benchmark-v2-line-classifier",
+  "created_at": "2026-05-13T11:43:40.536067+00:00",
+  "total_receipts": 11,
+  "success_count": 11,
+  "error_count": 0,
+  "total_detected_rows": 91,
+  "total_ignored_lines": 645,
+  "line_type_counts": {
+    "discount_line": 18,
+    "metadata_line": 65,
+    "noise_line": 80,
+    "payment_line": 29,
+    "product_line": 85,
+    "quantity_line": 6,
+    "total_line": 13,
+    "unknown_line": 419,
+    "vat_line": 21
+  },
+  "by_store_hint": {
+    "albert_heijn": {
+      "receipts": 4,
+      "detected_rows": 18,
+      "ignored_lines": 335,
+      "line_type_counts": {
+        "discount_line": 5,
+        "metadata_line": 13,
+        "noise_line": 50,
+        "payment_line": 8,
+        "product_line": 18,
+        "quantity_line": 0,
+        "total_line": 5,
+        "unknown_line": 250,
+        "vat_line": 4
+      },
+      "avg_parse_confidence": 0.726
+    },
+    "aldi": {
+      "receipts": 2,
+      "detected_rows": 10,
+      "ignored_lines": 46,
+      "line_type_counts": {
+        "discount_line": 1,
+        "metadata_line": 19,
+        "noise_line": 2,
+        "payment_line": 5,
+        "product_line": 10,
+        "quantity_line": 0,
+        "total_line": 2,
+        "unknown_line": 14,
+        "vat_line": 3
+      },
+      "avg_parse_confidence": 0.67
+    },
+    "jumbo": {
+      "receipts": 3,
+      "detected_rows": 24,
+      "ignored_lines": 199,
+      "line_type_counts": {
+        "discount_line": 5,
+        "metadata_line": 15,
+        "noise_line": 28,
+        "payment_line": 6,
+        "product_line": 19,
+        "quantity_line": 5,
+        "total_line": 3,
+        "unknown_line": 130,
+        "vat_line": 12
+      },
+      "avg_parse_confidence": 0.737
+    },
+    "lidl": {
+      "receipts": 2,
+      "detected_rows": 39,
+      "ignored_lines": 65,
+      "line_type_counts": {
+        "discount_line": 7,
+        "metadata_line": 18,
+        "noise_line": 0,
+        "payment_line": 10,
+        "product_line": 38,
+        "quantity_line": 1,
+        "total_line": 3,
+        "unknown_line": 25,
+        "vat_line": 2
+      },
+      "avg_parse_confidence": 0.742
+    }
+  }
+}

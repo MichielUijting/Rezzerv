@@ -1,0 +1,361 @@
+{
+  "schema_version": "receipt-ocr-poc-v2-line-classifier",
+  "metadata": {
+    "source_file": "AH foto 2.jpeg",
+    "created_at": "2026-05-13T11:41:16.279744+00:00",
+    "store_hint": "albert_heijn",
+    "ocr_variant": "adaptive_threshold",
+    "ocr_psm": 6,
+    "ocr_score": 79,
+    "ocr_attempts": [
+      {
+        "variant": "adaptive_threshold",
+        "psm": 6,
+        "score": 79
+      },
+      {
+        "variant": "normalized",
+        "psm": 6,
+        "score": 71
+      },
+      {
+        "variant": "adaptive_threshold",
+        "psm": 4,
+        "score": 70
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 6,
+        "score": 70
+      },
+      {
+        "variant": "normalized",
+        "psm": 4,
+        "score": 63
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 4,
+        "score": 63
+      },
+      {
+        "variant": "gray",
+        "psm": 4,
+        "score": 61
+      },
+      {
+        "variant": "gray",
+        "psm": 6,
+        "score": 59
+      }
+    ],
+    "total_amount_hint": "8.28",
+    "detected_rows": 3,
+    "parse_confidence_avg": 0.727,
+    "warnings": [
+      "multiple_amounts_detected"
+    ],
+    "line_type_counts": {
+      "discount_line": 3,
+      "metadata_line": 5,
+      "noise_line": 5,
+      "payment_line": 5,
+      "product_line": 3,
+      "quantity_line": 0,
+      "total_line": 3,
+      "unknown_line": 9,
+      "vat_line": 1
+    },
+    "ignored_line_count": 31
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "| Albert Heijgh Ger Koopman",
+      "normalized_line": "| Albert Heijgh Ger Koopman",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "Polenplein 24a Oriel",
+      "normalized_line": "Polenplein 24a Oriel",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "| tol: 026-4742394",
+      "normalized_line": "| tol: 026-4742394",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "|",
+      "normalized_line": "|",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 5,
+      "raw_line": ": AANTAL. OMSCHRTJVING PRIJS BEDRAG",
+      "normalized_line": ": AANTAL. OMSCHRTJVING PRIJS BEDRAG",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "4 AMM GEHAKT 6,99 |",
+      "normalized_line": "4 AMM GEHAKT 6,99 |",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "i od SOEPGR BASIS 1,29 !",
+      "normalized_line": "i od SOEPGR BASIS 1,29 !",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "2 SUBTOTAAL. 8,28",
+      "normalized_line": "2 SUBTOTAAL. 8,28",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "|",
+      "normalized_line": "|",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 10,
+      "raw_line": " JoUW VOORDEEL 0,00",
+      "normalized_line": "JoUW VOORDEEL 0,00",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 11,
+      "raw_line": ": waarvan",
+      "normalized_line": ": waarvan",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "BONUS BOX 0,00",
+      "normalized_line": "BONUS BOX 0,00",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "TOTAAL 83,28",
+      "normalized_line": "TOTAAL 83,28",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "BETAALD MET:",
+      "normalized_line": "BETAALD MET:",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 15,
+      "raw_line": ", PINNEN 8,28",
+      "normalized_line": ", PINNEN 8,28",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "POI: 50100891 KLANTTICKET",
+      "normalized_line": "POI: 50100891 KLANTTICKET",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "Terminal BS171970 Merchant 3732071002",
+      "normalized_line": "Terminal BS171970 Merchant 3732071002",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "Periode 6085 Transactie 00093286",
+      "normalized_line": "Periode 6085 Transactie 00093286",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "Token  1003030534301033342 V PAY",
+      "normalized_line": "Token 1003030534301033342 V PAY",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "'  (A0000000032020) Kaart 48751 2xxxxxxxxx3334",
+      "normalized_line": "' (A0000000032020) Kaart 48751 2xxxxxxxxx3334",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "Kaartserienummer 2 BETALING",
+      "normalized_line": "Kaartserienummer 2 BETALING",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "i Datum 6/03/2026 15:18 Autorisatiecode WO10SL",
+      "normalized_line": "i Datum 6/03/2026 15:18 Autorisatiecode WO10SL",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "| Totaal 8,28 EUR Contactless :",
+      "normalized_line": "| Totaal 8,28 EUR Contactless :",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "'  Leesinethode CHIP |",
+      "normalized_line": "' Leesinethode CHIP |",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "BIW OVER EUR",
+      "normalized_line": "BIW OVER EUR",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "OY \\ 7,60 0,68 ,",
+      "normalized_line": "OY \\ 7,60 0,68 ,",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "| TOTAAL 7,60 0,68 |",
+      "normalized_line": "| TOTAAL 7,60 0,68 |",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "WN AQ i",
+      "normalized_line": "WN AQ i",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "107 |",
+      "normalized_line": "107 |",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "521 .",
+      "normalized_line": "521 .",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "1:18 ¥ 26-03-2026 |",
+      "normalized_line": "1:18 ¥ 26-03-2026 |",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "Vragen over Je kassabon? |",
+      "normalized_line": "Vragen over Je kassabon? |",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "Save eyesanecewerkers ,",
+      "normalized_line": "Save eyesanecewerkers ,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "halnnan ie gqraag. |",
+      "normalized_line": "halnnan ie gqraag. |",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    }
+  ],
+  "lines": [
+    {
+      "source_file": "AH foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 6,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "item_text": "4 AMM GEHAKT",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "6.99",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "4 AMM GEHAKT 6,99 |",
+      "warning": ""
+    },
+    {
+      "source_file": "AH foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 7,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "item_text": "i od SOEPGR BASIS",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.29",
+      "currency": "EUR",
+      "parser_confidence": 0.78,
+      "raw_line": "i od SOEPGR BASIS 1,29 !",
+      "warning": ""
+    },
+    {
+      "source_file": "AH foto 2.jpeg",
+      "store_hint": "albert_heijn",
+      "line_no": 26,
+      "line_type": "product_line",
+      "classifier_reason": "amount_and_text",
+      "item_text": "OY \\ 7,60",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.68",
+      "currency": "EUR",
+      "parser_confidence": 0.62,
+      "raw_line": "OY \\ 7,60 0,68 ,",
+      "warning": "multiple_amounts_detected"
+    }
+  ]
+}
