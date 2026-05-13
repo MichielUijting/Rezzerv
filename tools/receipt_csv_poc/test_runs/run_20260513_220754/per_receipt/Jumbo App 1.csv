@@ -1,0 +1,14 @@
+source_file,store_hint,profile_name,line_no,line_type,item_text,quantity,unit,unit_price,line_total,parser_confidence,raw_line,warning
+Jumbo App 1.png,jumbo,jumbo,7,product_line,Jumbo Passata Rust.,2,stuk,5.69,11.38,0.75,"Jumbo Passata Rust. 1,99 | 2X5,69 11,38",quantity_line_merged
+Jumbo App 1.png,jumbo,jumbo,11,quantity_line,"2X1,50",2,stuk,1.50,3.00,0.75,"2X1,50 3,00",quantity_line_requires_merge;quantity_merge_rejected:line_distance_too_large
+Jumbo App 1.png,jumbo,jumbo,12,product_line,Jumbo Kroep Cassave,,,,1.09,0.75,"Jumbo Kroep Cassave 1,09",
+Jumbo App 1.png,jumbo,jumbo,13,product_line,Chorizo Ring,3,stuk,1.00,3.00,0.75,"Chorizo Ring 3,81 | 3X1,00 3,00",quantity_line_merged
+Jumbo App 1.png,jumbo,jumbo,16,product_line,Halfvolle Melk 1.0L P,,,,0.87,0.75,"Halfvolle Melk 1.0L P 0,87",
+Jumbo App 1.png,jumbo,jumbo,17,product_line,Jumbo Paprikamix,,,,2.29,0.75,"Jumbo Paprikamix 2,29",
+Jumbo App 1.png,jumbo,jumbo,18,product_line,Hartig Itali.Kruide,,,,1.99,0.75,"Hartig Itali.Kruide 1,99",
+Jumbo App 1.png,jumbo,jumbo,19,product_line,Jumbo Rooibos Mango,,,,1.05,0.75,"Jumbo Rooibos Mango 1,05",
+Jumbo App 1.png,jumbo,jumbo,20,product_line,Lemondor Limoensap,,,,0.99,0.75,"Lemondor Limoensap 0,99",
+Jumbo App 1.png,jumbo,jumbo,21,product_line,Komkommer,,,,0.89,0.75,"Komkommer 0,89",
+Jumbo App 1.png,jumbo,jumbo,22,product_line,Lassie Paella Rijst,,,,2.59,0.75,"Lassie Paella Rijst 2,59",
+Jumbo App 1.png,jumbo,jumbo,23,product_line,Broccoli,,,,0.88,0.75,"Broccoli 0,88",
+Jumbo App 1.png,jumbo,jumbo,24,product_line,Espresso D Oro,51,stuk,0.10,5.10,0.75,"Espresso D Oro 15,99 | 51X0,10 5,10",quantity_line_merged
