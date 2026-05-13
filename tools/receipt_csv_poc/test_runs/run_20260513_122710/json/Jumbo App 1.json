@@ -1,0 +1,387 @@
+{
+  "schema_version": "receipt-ocr-poc-v2-line-classifier",
+  "metadata": {
+    "source_file": "Jumbo App 1.png",
+    "created_at": "2026-05-13T10:28:05.585084+00:00",
+    "store_hint": "jumbo",
+    "ocr_variant": "gray",
+    "ocr_psm": 4,
+    "ocr_score": 142,
+    "ocr_attempts": [
+      {
+        "variant": "gray",
+        "psm": 4,
+        "score": 142
+      },
+      {
+        "variant": "gray",
+        "psm": 6,
+        "score": 141
+      },
+      {
+        "variant": "normalized",
+        "psm": 6,
+        "score": 141
+      },
+      {
+        "variant": "normalized",
+        "psm": 4,
+        "score": 141
+      },
+      {
+        "variant": "adaptive_threshold",
+        "psm": 6,
+        "score": 141
+      },
+      {
+        "variant": "adaptive_threshold",
+        "psm": 4,
+        "score": 141
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 6,
+        "score": 141
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 4,
+        "score": 141
+      }
+    ],
+    "total_amount_hint": "56.91",
+    "detected_rows": 0,
+    "parse_confidence_avg": 0.0,
+    "warnings": [],
+    "line_type_counts": {
+      "discount_line": 1,
+      "metadata_line": 5,
+      "noise_line": 3,
+      "payment_line": 0,
+      "product_line": 0,
+      "quantity_line": 0,
+      "total_line": 0,
+      "unknown_line": 33,
+      "vat_line": 3
+    },
+    "ignored_line_count": 45
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "JUMBO",
+      "normalized_line": "JUMBO",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "Jumbo Heteren Teun van Blijderveen",
+      "normalized_line": "Jumbo Heteren Teun van Blijderveen",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "Beemdhof 38, 6666 DL Heteren",
+      "normalized_line": "Beemdhof 38, 6666 DL Heteren",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "Producten",
+      "normalized_line": "Producten",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "Jumbo Passata Rust. 1,99",
+      "normalized_line": "Jumbo Passata Rust. 1,99",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "Kipdij Reepje 400",
+      "normalized_line": "Kipdij Reepje 400",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "2X 5,69 11,38",
+      "normalized_line": "2X 5,69 11,38",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "Coni Kroepoek Bali",
+      "normalized_line": "Coni Kroepoek Bali",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "2X1,50 3,00",
+      "normalized_line": "2X1,50 3,00",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "Jumbo Kroep Cassave 1,09",
+      "normalized_line": "Jumbo Kroep Cassave 1,09",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "Chorizo Ring 3,81",
+      "normalized_line": "Chorizo Ring 3,81",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "Knorr Jachtsaus",
+      "normalized_line": "Knorr Jachtsaus",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "3X 1,00 3,00",
+      "normalized_line": "3X 1,00 3,00",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "Halfvolle Melk 1.0 L P 0,87",
+      "normalized_line": "Halfvolle Melk 1.0 L P 0,87",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "Jumbo Paprikamix 2,29",
+      "normalized_line": "Jumbo Paprikamix 2,29",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "Hartig Itali.Kruide 1,99",
+      "normalized_line": "Hartig Itali.Kruide 1,99",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "Jumbo Rooibos Mango 1,05",
+      "normalized_line": "Jumbo Rooibos Mango 1,05",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "Lemondor Limoensap 0,99",
+      "normalized_line": "Lemondor Limoensap 0,99",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "Komkommer 0,89",
+      "normalized_line": "Komkommer 0,89",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "Lassie Paella Rijst 2,59",
+      "normalized_line": "Lassie Paella Rijst 2,59",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "Broccoli 0,88",
+      "normalized_line": "Broccoli 0,88",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "Espresso D Oro 15,99",
+      "normalized_line": "Espresso D Oro 15,99",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "Koopzegel Digitaal",
+      "normalized_line": "Koopzegel Digitaal",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "51X0,10 5,10",
+      "normalized_line": "51X0,10 5,10",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "Totaal (incl. BTW) € 56,91",
+      "normalized_line": "Totaal (incl. BTW) € 56,91",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "Totaal korting € 0,00",
+      "normalized_line": "Totaal korting € 0,00",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "Jumbo Extra's",
+      "normalized_line": "Jumbo Extra's",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "Extra punten kado +100 punten",
+      "normalized_line": "Extra punten kado +100 punten",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "Melk en karnemelk +8 punten",
+      "normalized_line": "Melk en karnemelk +8 punten",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "Oud saldo: 0 punten",
+      "normalized_line": "Oud saldo: 0 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "Gespaard: 108 punten",
+      "normalized_line": "Gespaard: 108 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "Ingewisseld: 0 punten",
+      "normalized_line": "Ingewisseld: 0 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "Nieuw saldo: 108 punten",
+      "normalized_line": "Nieuw saldo: 108 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "BIW% Bedrag excl BTW bedrag",
+      "normalized_line": "BIW% Bedrag excl BTW bedrag",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "0,00% €5,10 €0,00",
+      "normalized_line": "0,00% €5,10 €0,00",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "9,00% € 47,53 €4,28",
+      "normalized_line": "9,00% € 47,53 €4,28",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "BTW Totaal € 52,63 €4,28",
+      "normalized_line": "BTW Totaal € 52,63 €4,28",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 40,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "INIA",
+      "normalized_line": "INIA",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 43,
+      "raw_line": "63553007881603242026",
+      "normalized_line": "63553007881603242026",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 44,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 45,
+      "raw_line": "Dinsdag 24 maart 2026, 12:36",
+      "normalized_line": "Dinsdag 24 maart 2026, 12:36",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    }
+  ],
+  "lines": []
+}

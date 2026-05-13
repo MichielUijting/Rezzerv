@@ -1,0 +1,716 @@
+{
+  "schema_version": "receipt-ocr-poc-v2-line-classifier",
+  "metadata": {
+    "source_file": "Jumbo foto 3.jpg",
+    "created_at": "2026-05-13T10:28:36.756147+00:00",
+    "store_hint": "jumbo",
+    "ocr_variant": "adaptive_threshold",
+    "ocr_psm": 4,
+    "ocr_score": 52,
+    "ocr_attempts": [
+      {
+        "variant": "adaptive_threshold",
+        "psm": 4,
+        "score": 52
+      },
+      {
+        "variant": "gray",
+        "psm": 4,
+        "score": 46
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 4,
+        "score": 40
+      },
+      {
+        "variant": "normalized",
+        "psm": 4,
+        "score": 39
+      },
+      {
+        "variant": "normalized",
+        "psm": 6,
+        "score": 37
+      },
+      {
+        "variant": "otsu_threshold",
+        "psm": 6,
+        "score": 37
+      },
+      {
+        "variant": "adaptive_threshold",
+        "psm": 6,
+        "score": 31
+      },
+      {
+        "variant": "gray",
+        "psm": 6,
+        "score": 25
+      }
+    ],
+    "total_amount_hint": "0.00",
+    "detected_rows": 0,
+    "parse_confidence_avg": 0.0,
+    "warnings": [],
+    "line_type_counts": {
+      "discount_line": 1,
+      "metadata_line": 1,
+      "noise_line": 21,
+      "payment_line": 0,
+      "product_line": 0,
+      "quantity_line": 0,
+      "total_line": 1,
+      "unknown_line": 65,
+      "vat_line": 3
+    },
+    "ignored_line_count": 92
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "-",
+      "normalized_line": "-",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "or teal .",
+      "normalized_line": "or teal .",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "—",
+      "normalized_line": "—",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "ee",
+      "normalized_line": "ee",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "; rn an",
+      "normalized_line": "; rn an",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "—- —e\"",
+      "normalized_line": "—- —e\"",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "—_—e",
+      "normalized_line": "—_—e",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "-",
+      "normalized_line": "-",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "_",
+      "normalized_line": "_",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "DUK BD",
+      "normalized_line": "DUK BD",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "supermarkten",
+      "normalized_line": "supermarkten",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "De Helling 16",
+      "normalized_line": "De Helling 16",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "9665 JX ce renee",
+      "normalized_line": "9665 JX ce renee",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "ra 1471",
+      "normalized_line": "ra 1471",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "BIWx Bedrag excl BTW bedrag",
+      "normalized_line": "BIWx Bedrag excl BTW bedrag",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "9 , 00% (),00",
+      "normalized_line": "9 , 00% (),00",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "BTW Totaal 0°00 0,00",
+      "normalized_line": "BTW Totaal 0°00 0,00",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "Jumbo Extra",
+      "normalized_line": "Jumbo Extra",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "Pasnumier * 5 or7a8a5600",
+      "normalized_line": "Pasnumier * 5 or7a8a5600",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "Qude saldo:",
+      "normalized_line": "Qude saldo:",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "Respaarde punten: 0)",
+      "normalized_line": "Respaarde punten: 0)",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "ingewisse Ice ‘unten;",
+      "normalized_line": "ingewisse Ice ‘unten;",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "Nieuw 167",
+      "normalized_line": "Nieuw 167",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "70RG “OED VOOR JEZELF EN VOOR ELKAAR!",
+      "normalized_line": "70RG “OED VOOR JEZELF EN VOOR ELKAAR!",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "JUMBO QUDE PEKELA",
+      "normalized_line": "JUMBO QUDE PEKELA",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "HEDEWERKER: Nare",
+      "normalized_line": "HEDEWERKER: Nare",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "STORE 4681 POS 2 ri 1383 10:20 08-05-2020",
+      "normalized_line": "STORE 4681 POS 2 ri 1383 10:20 08-05-2020",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 40,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "Paves — oat os",
+      "normalized_line": "Paves — oat os",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "fasefoestateesr bev famsbaipuentannboetivesiendtersteteentetaheahantenben tevin etetinnbentorl \"De pest mre vom eon Was yosa ae end",
+      "normalized_line": "fasefoestateesr bev famsbaipuentannboetivesiendtersteteentetaheahantenben tevin etetinnbentorl \"De pest mre vom eon Was yosa ae end",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 43,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 44,
+      "raw_line": "* Dit is een kopie bon #**",
+      "normalized_line": "* Dit is een kopie bon #**",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 45,
+      "raw_line": "JUMBO STROOPHAFELS ,",
+      "normalized_line": "JUMBO STROOPHAFELS ,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 46,
+      "raw_line": "Gratis stroopwafels -],65",
+      "normalized_line": "Gratis stroopwafels -],65",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 47,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 48,
+      "raw_line": "Totaal (),00 ; “",
+      "normalized_line": "Totaal (),00 ; “",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 49,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 50,
+      "raw_line": "belated et edn Rte eels ete danish ak ae Bk a nO ee",
+      "normalized_line": "belated et edn Rte eels ete danish ak ae Bk a nO ee",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 51,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 52,
+      "raw_line": "BTW overzicht",
+      "normalized_line": "BTW overzicht",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 53,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 54,
+      "raw_line": "VACCCAACOAL nm ;",
+      "normalized_line": "VACCCAACOAL nm ;",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 55,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 56,
+      "raw_line": "64681002138305082020",
+      "normalized_line": "64681002138305082020",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 57,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 58,
+      "raw_line": "° : .",
+      "normalized_line": "° : .",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 59,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 60,
+      "raw_line": "ee etm ee mom",
+      "normalized_line": "ee etm ee mom",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 61,
+      "raw_line": ".- na",
+      "normalized_line": ".- na",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 62,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 63,
+      "raw_line": "~",
+      "normalized_line": "~",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 64,
+      "raw_line": "- : rd",
+      "normalized_line": "- : rd",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 65,
+      "raw_line": ": . ~",
+      "normalized_line": ": . ~",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 66,
+      "raw_line": "Soper ae",
+      "normalized_line": "Soper ae",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 67,
+      "raw_line": "- o",
+      "normalized_line": "- o",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 68,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 69,
+      "raw_line": "~",
+      "normalized_line": "~",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 70,
+      "raw_line": "+ “—",
+      "normalized_line": "+ “—",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 71,
+      "raw_line": "-— id",
+      "normalized_line": "-— id",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 72,
+      "raw_line": "-",
+      "normalized_line": "-",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 73,
+      "raw_line": "on _",
+      "normalized_line": "on _",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 74,
+      "raw_line": "os",
+      "normalized_line": "os",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 75,
+      "raw_line": "_ ow",
+      "normalized_line": "_ ow",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 76,
+      "raw_line": "-",
+      "normalized_line": "-",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 77,
+      "raw_line": "eee | a Te -",
+      "normalized_line": "eee | a Te -",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 78,
+      "raw_line": "a",
+      "normalized_line": "a",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 79,
+      "raw_line": "-- -",
+      "normalized_line": "-- -",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 80,
+      "raw_line": "4",
+      "normalized_line": "4",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 81,
+      "raw_line": "called rete",
+      "normalized_line": "called rete",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 82,
+      "raw_line": "=xeR",
+      "normalized_line": "=xeR",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 83,
+      "raw_line": ": : ©",
+      "normalized_line": ": : ©",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 84,
+      "raw_line": "—_ ’",
+      "normalized_line": "—_ ’",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 85,
+      "raw_line": "_— .",
+      "normalized_line": "_— .",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 86,
+      "raw_line": "- —",
+      "normalized_line": "- —",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 87,
+      "raw_line": "aa oe",
+      "normalized_line": "aa oe",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 88,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 89,
+      "raw_line": "-",
+      "normalized_line": "-",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 90,
+      "raw_line": "we _f",
+      "normalized_line": "we _f",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 91,
+      "raw_line": "ona",
+      "normalized_line": "ona",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 92,
+      "raw_line": "oo",
+      "normalized_line": "oo",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    }
+  ],
+  "lines": []
+}
