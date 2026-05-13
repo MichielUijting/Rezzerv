@@ -15,7 +15,8 @@ class ProductBlock:
 
 class ReceiptProfile:
     profile_name = "generic"
-    merge_strategy = "previous_product"
+    merge_strategy = "safe_previous_product"
+    max_quantity_merge_distance = 1
 
     product_block_start_keywords = [
         "omschrijving",
@@ -116,20 +117,22 @@ class ReceiptProfile:
             parts.append(suffix)
         return ";".join(parts)
 
-    def _find_previous_product_index(self, rows: list, quantity_index: int) -> int | None:
+    def _find_safe_previous_product_index(self, rows: list, quantity_index: int) -> tuple[int | None, str]:
+        quantity_row = rows[quantity_index]
         for candidate_index in range(quantity_index - 1, -1, -1):
-            if rows[candidate_index].line_type == "product_line":
-                return candidate_index
-        return None
+            candidate = rows[candidate_index]
+            if candidate.line_type == "quantity_line":
+                continue
+            if candidate.line_type != "product_line":
+                return None, "blocked_by_non_product_row"
+            distance = int(quantity_row.line_no) - int(candidate.line_no)
+            if distance <= self.max_quantity_merge_distance:
+                return candidate_index, "safe_previous_product"
+            return None, "line_distance_too_large"
+        return None, "no_previous_product"
 
-    def _find_next_product_index(self, rows: list, quantity_index: int) -> int | None:
-        for candidate_index in range(quantity_index + 1, len(rows)):
-            if rows[candidate_index].line_type == "product_line":
-                return candidate_index
-        return None
-
-    def _target_product_index(self, rows: list, quantity_index: int) -> int | None:
-        return self._find_previous_product_index(rows, quantity_index)
+    def _target_product_index(self, rows: list, quantity_index: int) -> tuple[int | None, str]:
+        return self._find_safe_previous_product_index(rows, quantity_index)
 
     def _merge_quantity_into_product(self, product_row, quantity_row):
         quantity = quantity_row.quantity or product_row.quantity
@@ -150,28 +153,43 @@ class ReceiptProfile:
             warning=warning,
         )
 
+    def _mark_rejected_quantity(self, row, reason: str):
+        return replace(row, warning=self._merge_warning(row.warning, f"quantity_merge_rejected:{reason}"))
+
     def merge_quantity_lines(self, rows: list, classified_lines) -> tuple[list, dict[str, object]]:
         merged_rows = list(rows)
         remove_indexes: set[int] = set()
-        merged_count = 0
-        unmerged_count = 0
+        merged_pairs: list[dict[str, int]] = []
+        rejection_reasons: dict[str, int] = {}
+        merge_candidates_count = 0
+        rejected_count = 0
 
         for index, row in enumerate(merged_rows):
             if row.line_type != "quantity_line":
                 continue
-            target_index = self._target_product_index(merged_rows, index)
+            merge_candidates_count += 1
+            target_index, reason = self._target_product_index(merged_rows, index)
             if target_index is None:
-                unmerged_count += 1
+                rejected_count += 1
+                rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
+                merged_rows[index] = self._mark_rejected_quantity(row, reason)
                 continue
             merged_rows[target_index] = self._merge_quantity_into_product(merged_rows[target_index], row)
             remove_indexes.add(index)
-            merged_count += 1
+            merged_pairs.append({
+                "product_line_no": int(merged_rows[target_index].line_no),
+                "quantity_line_no": int(row.line_no),
+            })
 
         output_rows = [row for index, row in enumerate(merged_rows) if index not in remove_indexes]
         diagnostics = {
             "merge_strategy": self.merge_strategy,
-            "merged_quantity_lines_count": merged_count,
-            "unmerged_quantity_lines_count": unmerged_count,
+            "merge_candidates_count": merge_candidates_count,
+            "merged_quantity_lines_count": len(merged_pairs),
+            "unmerged_quantity_lines_count": rejected_count,
+            "rejected_quantity_lines_count": rejected_count,
+            "rejection_reasons": rejection_reasons,
+            "merged_pairs": merged_pairs,
             "input_rows_count": len(rows),
             "output_rows_count": len(output_rows),
         }
@@ -180,4 +198,5 @@ class ReceiptProfile:
 
 class GenericProfile(ReceiptProfile):
     profile_name = "generic"
-    merge_strategy = "previous_product"
+    merge_strategy = "safe_previous_product"
+    max_quantity_merge_distance = 1
