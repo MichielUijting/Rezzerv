@@ -128,8 +128,8 @@ def parse_receipt_lines(text: str, source_file: str, profile_name: str, classifi
     return rows
 
 
-def process_receipt(image_path: Path, output_dir: Path):
-    text = pytesseract.image_to_string(Image.open(image_path), lang='nld+eng')
+def process_receipt(image_path: Path, output_dir: Path, lang: str):
+    text = pytesseract.image_to_string(Image.open(image_path), lang=lang)
 
     classified_lines = classify_lines(text)
     line_type_counts = summarize_line_types(classified_lines)
@@ -203,6 +203,9 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         'schema_version': 'receipt-ocr-benchmark-v5-quantity-merge',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
+        'success_count': sum(1 for row in report_rows if row.status == 'success'),
+        'error_count': sum(1 for row in report_rows if row.status == 'error'),
+        'total_detected_rows': sum(row.detected_rows for row in report_rows),
         'profiles_used': {},
         'merge_diagnostics': {},
     }
@@ -221,11 +224,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--input', default='input_receipts')
     parser.add_argument('--output', default='output_csv')
+    parser.add_argument('--lang', default='nld+eng')
     args = parser.parse_args()
 
     input_dir = Path(args.input)
-    timestamp = datetime.now().strftime('run_%Y%m%d_%H%M%S')
-    output_dir = Path('test_runs') / timestamp
+    output_dir = Path(args.output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     all_rows = []
@@ -233,7 +236,7 @@ def main():
 
     for image_file in list_image_files(input_dir):
         try:
-            rows, result = process_receipt(image_file, output_dir)
+            rows, result = process_receipt(image_file, output_dir, args.lang)
             all_rows.extend(rows)
             report_rows.append(result)
             print(f'[OK] {image_file.name}: {len(rows)} rows merged={result.merge_diagnostics.get("merged_quantity_lines_count",0)} profile={result.profile_name}')
