@@ -49,6 +49,7 @@ CSV_COLUMNS = [
     "line_no",
     "line_type",
     "classifier_reason",
+    "in_product_block",
     "item_text",
     "quantity",
     "unit",
@@ -61,6 +62,38 @@ CSV_COLUMNS = [
 ]
 
 PARSEABLE_LINE_TYPES = {"product_line", "quantity_line"}
+PRODUCT_BLOCK_START_KEYWORDS = [
+    "omschrijving",
+    "prijs bedrag",
+    "aantal omschrijving",
+    "producten",
+]
+PRODUCT_BLOCK_END_KEYWORDS = [
+    "aantal art",
+    "aantal artikelen",
+    "subtotaal",
+    "sub tota",
+    "bedrag euro",
+    "bedrag = euro",
+    "totaal",
+    "bankpas",
+    "pin",
+    "pinnen",
+    "betaling",
+    "contant",
+    "visa",
+    "vpay",
+    "v pay",
+    "maestro",
+    "mastercard",
+    "contactless",
+    "terminal",
+    "merchant",
+    "transactie",
+    "btw",
+    "bedr.excl",
+    "bedr.incl",
+]
 
 
 @dataclass
@@ -70,6 +103,7 @@ class ReceiptLine:
     line_no: int
     line_type: str
     classifier_reason: str
+    in_product_block: bool
     item_text: str
     quantity: str
     unit: str
@@ -93,6 +127,7 @@ class ReceiptResult:
     warnings: list[str]
     line_type_counts: dict[str, int]
     ignored_line_count: int
+    product_block: dict[str, object]
     error: str = ""
 
 
@@ -307,13 +342,88 @@ def parse_quantity_and_unit(line: str):
 
 
 
-def warning_for_line(line: str, line_type: str, amount_count: int) -> tuple[str, float]:
+def line_contains_any(line: str, keywords: list[str]) -> bool:
+    lowered = line.lower()
+    return any(keyword in lowered for keyword in keywords)
+
+
+
+def detect_product_block(classified_lines) -> dict[str, object]:
+    """Detects the likely receipt item block. Diagnostic only; does not set status."""
+    non_empty = [line for line in classified_lines if line.normalized_line]
+    start_line = None
+    end_line = None
+    reason = "fallback_first_parseable_line"
+
+    for line in non_empty:
+        if line_contains_any(line.normalized_line, PRODUCT_BLOCK_START_KEYWORDS):
+            start_line = line.line_no + 1
+            reason = "header_keyword"
+            break
+
+    if start_line is None:
+        for line in non_empty:
+            if line.line_type in PARSEABLE_LINE_TYPES:
+                start_line = line.line_no
+                break
+
+    if start_line is None:
+        return {
+            "start_line": None,
+            "end_line": None,
+            "reason": "no_parseable_lines",
+            "line_count": 0,
+        }
+
+    parseable_seen = 0
+    for line in non_empty:
+        if line.line_no < start_line:
+            continue
+        if line.line_type in PARSEABLE_LINE_TYPES:
+            parseable_seen += 1
+        if parseable_seen > 0 and (
+            line.line_type in {"total_line", "payment_line", "vat_line"}
+            or line_contains_any(line.normalized_line, PRODUCT_BLOCK_END_KEYWORDS)
+        ):
+            end_line = max(start_line, line.line_no - 1)
+            break
+
+    if end_line is None:
+        parseable_lines = [
+            line.line_no for line in non_empty
+            if line.line_no >= start_line and line.line_type in PARSEABLE_LINE_TYPES
+        ]
+        end_line = max(parseable_lines) if parseable_lines else start_line
+
+    return {
+        "start_line": start_line,
+        "end_line": end_line,
+        "reason": reason,
+        "line_count": max(0, end_line - start_line + 1),
+    }
+
+
+
+def is_in_product_block(line_no: int, product_block: dict[str, object]) -> bool:
+    start_line = product_block.get("start_line")
+    end_line = product_block.get("end_line")
+    if start_line is None or end_line is None:
+        return False
+    return int(start_line) <= line_no <= int(end_line)
+
+
+
+def warning_for_line(line: str, line_type: str, amount_count: int, in_product_block: bool) -> tuple[str, float]:
     warning = ""
     confidence = 0.78
 
+    if not in_product_block:
+        warning = "outside_product_block"
+        confidence = min(confidence, 0.35)
+
     if amount_count > 1:
-        warning = "multiple_amounts_detected"
-        confidence = 0.62
+        warning = f"{warning};multiple_amounts_detected" if warning else "multiple_amounts_detected"
+        confidence = min(confidence, 0.62)
 
     if line_type == "quantity_line":
         warning = f"{warning};quantity_line_requires_merge" if warning else "quantity_line_requires_merge"
@@ -331,13 +441,24 @@ def warning_for_line(line: str, line_type: str, amount_count: int) -> tuple[str,
 
 
 
-def parse_receipt_lines(text: str, source_file: str, store_hint: str, classified_lines=None) -> list[ReceiptLine]:
+def parse_receipt_lines(
+    text: str,
+    source_file: str,
+    store_hint: str,
+    classified_lines=None,
+    product_block=None,
+) -> list[ReceiptLine]:
     rows: list[ReceiptLine] = []
     classified_lines = classified_lines or classify_lines(text)
+    product_block = product_block or detect_product_block(classified_lines)
 
     for classified in classified_lines:
         line = classified.normalized_line
         if not line:
+            continue
+
+        in_product_block = is_in_product_block(classified.line_no, product_block)
+        if not in_product_block:
             continue
 
         if classified.line_type not in PARSEABLE_LINE_TYPES:
@@ -354,7 +475,12 @@ def parse_receipt_lines(text: str, source_file: str, store_hint: str, classified
         if len(item_text) < 2:
             continue
 
-        warning, confidence = warning_for_line(line, classified.line_type, len(amounts))
+        warning, confidence = warning_for_line(
+            line,
+            classified.line_type,
+            len(amounts),
+            in_product_block,
+        )
         quantity, unit, unit_price = parse_quantity_and_unit(line)
 
         rows.append(
@@ -364,6 +490,7 @@ def parse_receipt_lines(text: str, source_file: str, store_hint: str, classified
                 line_no=classified.line_no,
                 line_type=classified.line_type,
                 classifier_reason=classified.reason,
+                in_product_block=in_product_block,
                 item_text=item_text,
                 quantity=quantity,
                 unit=unit,
@@ -393,7 +520,7 @@ def write_rows_csv(rows: Iterable[ReceiptLine], csv_path: Path):
 def write_rows_json(rows: Iterable[ReceiptLine], json_path: Path, metadata: dict, classified_lines):
     json_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema_version": "receipt-ocr-poc-v2-line-classifier",
+        "schema_version": "receipt-ocr-poc-v3-product-block",
         "metadata": metadata,
         "classified_lines": [asdict(line) for line in classified_lines],
         "lines": [asdict(row) for row in rows],
@@ -435,6 +562,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         attempt_file.write_text(attempt["text"], encoding="utf-8")
 
     classified_lines = classify_lines(text)
+    product_block = detect_product_block(classified_lines)
     line_type_counts = summarize_line_types(classified_lines)
     ignored_line_count = sum(
         count for line_type, count in line_type_counts.items()
@@ -442,13 +570,23 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     )
 
     store_hint = detect_store_hint(text, image_path.name)
-    rows = parse_receipt_lines(text, image_path.name, store_hint, classified_lines)
+    rows = parse_receipt_lines(
+        text,
+        image_path.name,
+        store_hint,
+        classified_lines,
+        product_block,
+    )
 
     receipt_csv = per_receipt_dir / f"{image_path.stem}.csv"
     write_rows_csv(rows, receipt_csv)
 
     warnings = sorted({row.warning for row in rows if row.warning})
     confidence_avg = round(float(np.mean([row.parser_confidence for row in rows])), 3) if rows else 0.0
+    outside_block_parseable_count = sum(
+        1 for line in classified_lines
+        if line.line_type in PARSEABLE_LINE_TYPES and not is_in_product_block(line.line_no, product_block)
+    )
 
     metadata = {
         "source_file": image_path.name,
@@ -464,6 +602,8 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         "warnings": warnings,
         "line_type_counts": line_type_counts,
         "ignored_line_count": ignored_line_count,
+        "product_block": product_block,
+        "outside_block_parseable_count": outside_block_parseable_count,
     }
 
     write_rows_json(rows, json_dir / f"{image_path.stem}.json", metadata, classified_lines)
@@ -479,6 +619,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         warnings=warnings,
         line_type_counts=line_type_counts,
         ignored_line_count=ignored_line_count,
+        product_block=product_block,
     )
 
     return rows, result
@@ -500,7 +641,7 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
             all_line_type_counts[line_type] = all_line_type_counts.get(line_type, 0) + count
 
     summary = {
-        "schema_version": "receipt-ocr-benchmark-v2-line-classifier",
+        "schema_version": "receipt-ocr-benchmark-v3-product-block",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "total_receipts": len(report_rows),
         "success_count": sum(1 for row in report_rows if row.status == "success"),
@@ -508,6 +649,9 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         "total_detected_rows": sum(row.detected_rows for row in report_rows),
         "total_ignored_lines": sum(row.ignored_line_count for row in report_rows),
         "line_type_counts": all_line_type_counts,
+        "product_blocks": {
+            row.source_file: row.product_block for row in report_rows
+        },
         "by_store_hint": {},
     }
 
@@ -578,6 +722,7 @@ def main():
             report_rows.append(result)
             print(
                 f"[OK] {image_file.name}: {len(rows)} product/quantity rows, "
+                f"block={result.product_block.get('start_line')}-{result.product_block.get('end_line')}, "
                 f"ignored={result.ignored_line_count}, store={result.store_hint}, "
                 f"confidence={result.parse_confidence_avg}"
             )
@@ -594,6 +739,7 @@ def main():
                 warnings=[],
                 line_type_counts={},
                 ignored_line_count=0,
+                product_block={"start_line": None, "end_line": None, "reason": "error", "line_count": 0},
                 error=str(exc),
             )
             report_rows.append(result)
