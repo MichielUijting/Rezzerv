@@ -1,11 +1,11 @@
 import re
 from dataclasses import dataclass
 
-AMOUNT_RE = re.compile(r"(?<!\\d)-?\\d{1,4}[\\.,]\\d{2}(?!\\d)")
-TIME_RANGE_RE = re.compile(r"\\b\\d{1,2}[\\.:,]\\d{2}\\s*[-–~]\\s*\\d{1,2}[\\.:,]\\d{2}\\b")
-DATE_RE = re.compile(r"\\b\\d{1,2}[-\\./]\\d{1,2}[-\\./]\\d{2,4}\\b")
-QUANTITY_MULTIPLIER_RE = re.compile(r"\\b\\d+(?:[\\.,]\\d+)?\\s*[xX]\\s*\\d+[\\.,]\\d{2}\\b")
-WEIGHT_PRICE_RE = re.compile(r"\\b\\d+[\\.,]\\d{3}\\s*(kg|g|l|ml)\\s*[xX]\\s*\\d+[\\.,]\\d{2}\\b", re.I)
+AMOUNT_RE = re.compile(r"(?<!\d)-?\d{1,4}[\.,]\d{2}(?!\d)")
+TIME_RANGE_RE = re.compile(r"\b\d{1,2}[\.:,]\d{2}\s*[-–~]\s*\d{1,2}[\.:,]\d{2}\b")
+DATE_RE = re.compile(r"\b\d{1,2}[-\./]\d{1,2}[-\./]\d{2,4}\b")
+QUANTITY_MULTIPLIER_RE = re.compile(r"\b\d+(?:[\.,]\d+)?\s*[xX]\s*\d+[\.,]\d{2}\b")
+WEIGHT_PRICE_RE = re.compile(r"\b\d+[\.,]\d{3}\s*(kg|g|l|ml)\s*[xX]\s*\d+[\.,]\d{2}\b", re.I)
 
 LINE_TYPES = {
     "product_line",
@@ -44,7 +44,7 @@ METADATA_KEYWORDS = [
     "dank u", "vragen over", "www.", ".nl", ".com",
 ]
 
-NOISE_CHARS_RE = re.compile(r"[{}\\[\\]~^_<>]")
+NOISE_CHARS_RE = re.compile(r"[{}\[\]~^_<>]")
 ALPHA_RE = re.compile(r"[A-Za-zÀ-ÿ]")
 
 
@@ -111,7 +111,7 @@ def classify_line(raw_line: str) -> tuple[str, str]:
         return "quantity_line", "weight_price_pattern"
 
     if QUANTITY_MULTIPLIER_RE.search(line):
-        text_without_numbers = re.sub(r"[\\d\\sXx\\.,€-]", "", line)
+        text_without_numbers = re.sub(r"[\d\sXx\.,€-]", "", line)
         if len(text_without_numbers) <= 3:
             return "quantity_line", "quantity_only_pattern"
         return "product_line", "product_with_quantity_pattern"
