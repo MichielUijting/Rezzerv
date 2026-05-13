@@ -11,7 +11,7 @@ from sqlalchemy import text
 from app.db import get_runtime_datastore_info
 
 BASELINE_DIR = Path(__file__).resolve().parent.parent / 'testing' / 'receipt_status_baseline'
-EXPECTED_STATUS_PATH = BASELINE_DIR / 'expected_status_v4.json'
+EXPECTED_STATUS_PATH = BASELINE_DIR / 'expected_status_v5.json'
 CRITERIA_DOC_PATH = BASELINE_DIR / 'Categorie_kassabon_v1.1.docx'
 
 STATUS_LABELS = {'approved': 'Gecontroleerd', 'review_needed': 'Controle nodig', 'manual': 'Handmatig'}
@@ -332,7 +332,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
                 'failed_criteria': ['MISSING_ACTIVE_RECEIPT'],
                 'reason': 'Controle nodig: geen actieve receipt_table gevonden voor dit baselinebestand.',
                 'mapping_reason': best_match_reason,
-                'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v4',
+                'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v5',
             })
             continue
         remaining_actual = [row for row in remaining_actual if row.get('receipt_table_id') != best_actual.get('receipt_table_id')]
@@ -385,7 +385,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             'match_score': best_score,
             'match_signals': best_flags,
             'mapping_reason': None if best_flags.get('filename_exact') else best_match_reason,
-            'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v4',
+            'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v5',
         })
 
     for actual in remaining_actual:
