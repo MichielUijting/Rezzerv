@@ -33,6 +33,19 @@ STORE_LOYALTY_KEYWORDS = {
     'ah': ('bonus box', 'bonuskaart'),
     'jumbo': ('extra\'s', 'jumbo extra'),
 }
+NAME_AMOUNT_LINK_MAX_DISTANCE = 4
+NAME_AMOUNT_LINK_HEADER_KEYWORDS = (
+    'omschrijving', 'omschrtjving', 'prijs', 'bedrag', 'aantal', 'subtotaal',
+    'totaal', 'betaald', 'waarvan', 'terminal', 'merchant', 'transactie',
+    'klantticket', 'periode', 'token', 'kaart', 'tel:',
+)
+NAME_AMOUNT_LINK_STORE_HEADER_KEYWORDS = {
+    'ah': ('albert heijn',),
+    'plus': ('plus',),
+    'jumbo': ('jumbo supermarkt',),
+    'lidl': ('lidl nederland',),
+    'aldi': ('aldi',),
+}
 
 
 @dataclass
@@ -65,6 +78,7 @@ class ReceiptResult:
     refinement_diagnostics: dict
     totals_diagnostics: dict
     product_block_rescue_diagnostics: dict
+    product_name_amount_link_diagnostics: dict
     amount_only_exclusion_diagnostics: dict
     loyalty_exclusion_diagnostics: dict
 
@@ -376,6 +390,127 @@ def build_product_block_rescue_diagnostics(classified_lines: list) -> dict:
     }
 
 
+def _contains_any_keyword(text: str, keywords: tuple[str, ...]) -> bool:
+    lowered = text.lower()
+    return any(keyword in lowered for keyword in keywords)
+
+
+def _is_name_amount_link_name_candidate(orphan_name: dict, stop_line_no: int | None, store_hint: str) -> tuple[bool, str]:
+    line_no = int(orphan_name.get('line_no', 0))
+    normalized = str(orphan_name.get('normalized_line') or '')
+    lowered = normalized.lower()
+
+    if stop_line_no is not None and line_no >= int(stop_line_no):
+        return False, 'name_line_in_or_after_total_payment_vat_zone'
+    if _contains_any_keyword(lowered, NAME_AMOUNT_LINK_HEADER_KEYWORDS):
+        return False, 'name_line_matches_generic_header_or_metadata_keyword'
+    if _contains_any_keyword(lowered, NAME_AMOUNT_LINK_STORE_HEADER_KEYWORDS.get(store_hint, ())):
+        return False, 'name_line_matches_store_header_keyword'
+    if len(re.findall(r'[A-Za-zÀ-ÿ]', normalized)) < 3:
+        return False, 'name_line_has_too_little_alpha_text'
+    return True, 'orphan_product_name_before_total_payment_vat_zone'
+
+
+def _is_name_amount_link_amount_candidate(orphan_amount: dict, stop_line_no: int | None) -> tuple[bool, str]:
+    line_no = int(orphan_amount.get('line_no', 0))
+    line_type = str(orphan_amount.get('line_type') or '')
+    amounts = orphan_amount.get('amounts') or []
+    normalized = str(orphan_amount.get('normalized_line') or '')
+
+    if not amounts:
+        return False, 'amount_line_without_amount'
+    if stop_line_no is not None and line_no >= int(stop_line_no):
+        return False, 'amount_line_in_or_after_total_payment_vat_zone'
+    if line_type in {'payment_line', 'total_line', 'vat_line', 'metadata_line'}:
+        return False, 'amount_line_has_protected_line_type'
+    if _contains_any_keyword(normalized, TOTAL_KEYWORDS + TOTAL_HINT_EXCLUDE_KEYWORDS):
+        return False, 'amount_line_matches_total_keyword'
+    return True, 'orphan_amount_before_total_payment_vat_zone'
+
+
+def build_product_name_amount_link_diagnostics(product_block_rescue_diagnostics: dict, store_hint: str) -> dict:
+    """Diagnose only: suggest possible orphan product-name/amount links without reconstructing rows."""
+    stop_line_no = product_block_rescue_diagnostics.get('stop_line_no')
+    orphan_names = product_block_rescue_diagnostics.get('orphan_product_name_lines') or []
+    orphan_amounts = product_block_rescue_diagnostics.get('orphan_amount_lines') or []
+    candidate_links = []
+    rejected_links = []
+    eligible_names = []
+    eligible_amounts = []
+
+    for name in orphan_names:
+        accepted, reason = _is_name_amount_link_name_candidate(name, stop_line_no, store_hint)
+        annotated = {**name, 'link_candidate_reason': reason}
+        if accepted:
+            eligible_names.append(annotated)
+        else:
+            rejected_links.append({
+                'product_name_line_no': name.get('line_no'),
+                'product_name_raw_line': name.get('raw_line'),
+                'rejection_reason': reason,
+            })
+
+    for amount in orphan_amounts:
+        accepted, reason = _is_name_amount_link_amount_candidate(amount, stop_line_no)
+        annotated = {**amount, 'link_candidate_reason': reason}
+        if accepted:
+            eligible_amounts.append(annotated)
+        else:
+            rejected_links.append({
+                'amount_line_no': amount.get('line_no'),
+                'amount_raw_line': amount.get('raw_line'),
+                'rejection_reason': reason,
+            })
+
+    for name in eligible_names:
+        for amount in eligible_amounts:
+            distance = int(amount['line_no']) - int(name['line_no'])
+            if distance <= 0:
+                rejected_links.append({
+                    'product_name_line_no': name['line_no'],
+                    'amount_line_no': amount['line_no'],
+                    'distance': distance,
+                    'product_name_raw_line': name['raw_line'],
+                    'amount_raw_line': amount['raw_line'],
+                    'rejection_reason': 'amount_not_after_product_name_line',
+                })
+                continue
+            if distance > NAME_AMOUNT_LINK_MAX_DISTANCE:
+                rejected_links.append({
+                    'product_name_line_no': name['line_no'],
+                    'amount_line_no': amount['line_no'],
+                    'distance': distance,
+                    'product_name_raw_line': name['raw_line'],
+                    'amount_raw_line': amount['raw_line'],
+                    'rejection_reason': 'line_distance_too_large_for_diagnostic_link',
+                })
+                continue
+            candidate_links.append({
+                'product_name_line_no': name['line_no'],
+                'amount_line_no': amount['line_no'],
+                'distance': distance,
+                'product_name_raw_line': name['raw_line'],
+                'amount_raw_line': amount['raw_line'],
+                'amounts': amount.get('amounts', []),
+                'diagnostic_reason': 'orphan_product_name_followed_by_orphan_amount_before_total_payment_vat_zone',
+                'diagnostic_only': True,
+            })
+
+    return {
+        'diagnostic_scope': 'orphan_product_name_to_orphan_amount_before_total_payment_vat_zone',
+        'max_line_distance': NAME_AMOUNT_LINK_MAX_DISTANCE,
+        'store_hint': store_hint,
+        'candidate_link_count': len(candidate_links),
+        'candidate_links': candidate_links,
+        'eligible_name_line_count': len(eligible_names),
+        'eligible_amount_line_count': len(eligible_amounts),
+        'rejected_link_count': len(rejected_links),
+        'rejected_links': rejected_links,
+        'diagnostic_only': True,
+        'reconstruction_applied': False,
+    }
+
+
 def _is_amount_only_currency_line(normalized_line: str) -> bool:
     if not normalized_line or not AMOUNT_PATTERN.search(normalized_line):
         return False
@@ -531,6 +666,10 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
 
     product_block = profile.detect_product_block(classified_lines)
     product_block_rescue_diagnostics = build_product_block_rescue_diagnostics(classified_lines)
+    product_name_amount_link_diagnostics = build_product_name_amount_link_diagnostics(
+        product_block_rescue_diagnostics,
+        store_hint,
+    )
 
     rows = parse_receipt_lines(
         text,
@@ -553,6 +692,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         'line_type_counts': line_type_counts,
         'product_block': product_block,
         'product_block_rescue_diagnostics': product_block_rescue_diagnostics,
+        'product_name_amount_link_diagnostics': product_name_amount_link_diagnostics,
         'amount_only_exclusion_diagnostics': amount_only_exclusion_diagnostics,
         'loyalty_exclusion_diagnostics': loyalty_exclusion_diagnostics,
         'merge_diagnostics': merge_diagnostics,
@@ -566,7 +706,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     json_payload = {
-        'schema_version': 'receipt-ocr-poc-v14-generic-store-loyalty-guard',
+        'schema_version': 'receipt-ocr-poc-v15-name-amount-link-diagnostics',
         'metadata': metadata,
         'classified_lines': [asdict(line) for line in classified_lines],
         'lines': [asdict(row) for row in merged_rows],
@@ -594,6 +734,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         refinement_diagnostics=refinement_diagnostics,
         totals_diagnostics=totals_diagnostics,
         product_block_rescue_diagnostics=product_block_rescue_diagnostics,
+        product_name_amount_link_diagnostics=product_name_amount_link_diagnostics,
         amount_only_exclusion_diagnostics=amount_only_exclusion_diagnostics,
         loyalty_exclusion_diagnostics=loyalty_exclusion_diagnostics,
     )
@@ -605,7 +746,7 @@ def list_image_files(input_dir: Path):
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
     summary = {
-        'schema_version': 'receipt-ocr-benchmark-v14-generic-store-loyalty-guard',
+        'schema_version': 'receipt-ocr-benchmark-v15-name-amount-link-diagnostics',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
         'run_success_count': sum(1 for row in report_rows if row.run_result == 'success'),
@@ -616,6 +757,7 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         'refinement_diagnostics': {},
         'totals_diagnostics': {},
         'product_block_rescue_diagnostics': {},
+        'product_name_amount_link_diagnostics': {},
         'amount_only_exclusion_diagnostics': {},
         'loyalty_exclusion_diagnostics': {},
     }
@@ -626,6 +768,7 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         summary['refinement_diagnostics'][row.source_file] = row.refinement_diagnostics
         summary['totals_diagnostics'][row.source_file] = row.totals_diagnostics
         summary['product_block_rescue_diagnostics'][row.source_file] = row.product_block_rescue_diagnostics
+        summary['product_name_amount_link_diagnostics'][row.source_file] = row.product_name_amount_link_diagnostics
         summary['amount_only_exclusion_diagnostics'][row.source_file] = row.amount_only_exclusion_diagnostics
         summary['loyalty_exclusion_diagnostics'][row.source_file] = row.loyalty_exclusion_diagnostics
 
@@ -656,13 +799,14 @@ def main():
             merged = result.merge_diagnostics.get('merged_quantity_lines_count', 0)
             excluded_amount_only = result.amount_only_exclusion_diagnostics.get('excluded_amount_only_count', 0)
             excluded_loyalty = result.loyalty_exclusion_diagnostics.get('excluded_loyalty_count', 0)
+            link_candidates = result.product_name_amount_link_diagnostics.get('candidate_link_count', 0)
             gross = result.totals_diagnostics.get('gross_line_sum', '0.00')
             net = result.totals_diagnostics.get('net_total_candidate', '0.00')
             selected_total = result.totals_diagnostics.get('selected_total_hint') or {}
             selected_total_amount = selected_total.get('amount', '')
             diff = result.totals_diagnostics.get('net_vs_selected_total_difference', '')
             rescue = result.product_block_rescue_diagnostics.get('product_block_rescue_reason', '')
-            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} excluded_amount_only={excluded_amount_only} excluded_loyalty={excluded_loyalty} gross={gross} net={net} selected_total={selected_total_amount} diff={diff} rescue={rescue} profile={result.profile_name}')
+            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} excluded_amount_only={excluded_amount_only} excluded_loyalty={excluded_loyalty} name_amount_links={link_candidates} gross={gross} net={net} selected_total={selected_total_amount} diff={diff} rescue={rescue} profile={result.profile_name}')
         except Exception as exc:
             print(f'[ERROR] {image_file.name}: {exc}')
 
