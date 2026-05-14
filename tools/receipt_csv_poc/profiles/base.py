@@ -152,15 +152,42 @@ class ReceiptProfile:
     def _target_product_index(self, rows: list, quantity_index: int) -> tuple[int | None, str]:
         return self._find_safe_previous_product_index(rows, quantity_index)
 
+    def _select_merged_line_total(self, product_row, quantity_row) -> tuple[str, str]:
+        article_line_amount = product_row.line_total or ""
+        quantity_line_amount = quantity_row.line_total or ""
+
+        if article_line_amount:
+            if quantity_line_amount and quantity_line_amount != article_line_amount:
+                return article_line_amount, "preserve_existing_article_line_amount_quantity_amount_conflict"
+            return article_line_amount, "preserve_existing_article_line_amount"
+        if quantity_line_amount:
+            return quantity_line_amount, "fallback_to_quantity_line_amount_no_article_amount"
+        return "", "no_amount_available_after_quantity_merge"
+
+    def _quantity_merge_amount_diagnostic(self, product_row, quantity_row, selected_line_total: str, selected_reason: str) -> dict[str, object]:
+        return {
+            "product_line_no": int(product_row.line_no),
+            "quantity_line_no": int(quantity_row.line_no),
+            "article_line_amount": product_row.line_total or "",
+            "quantity_line_amount": quantity_row.line_total or "",
+            "merged_line_total": quantity_row.line_total or product_row.line_total or "",
+            "selected_line_total": selected_line_total,
+            "selected_line_total_reason": selected_reason,
+            "diagnostic_only": True,
+            "reconstruction_applied": False,
+        }
+
     def _merge_quantity_into_product(self, product_row, quantity_row):
         quantity = quantity_row.quantity or product_row.quantity
         unit = quantity_row.unit or product_row.unit
         unit_price = quantity_row.unit_price or product_row.unit_price
-        line_total = quantity_row.line_total or product_row.line_total
+        line_total, selected_reason = self._select_merged_line_total(product_row, quantity_row)
         raw_line = f"{product_row.raw_line} | {quantity_row.raw_line}"
         warning = self._merge_warning(product_row.warning, "quantity_line_merged")
+        if selected_reason == "preserve_existing_article_line_amount_quantity_amount_conflict":
+            warning = self._merge_warning(warning, "quantity_amount_conflict_preserved_article_amount")
         confidence = min(product_row.parser_confidence, quantity_row.parser_confidence)
-        return replace(
+        merged_row = replace(
             product_row,
             quantity=quantity,
             unit=unit,
@@ -170,6 +197,8 @@ class ReceiptProfile:
             raw_line=raw_line,
             warning=warning,
         )
+        diagnostic = self._quantity_merge_amount_diagnostic(product_row, quantity_row, line_total, selected_reason)
+        return merged_row, diagnostic
 
     def _mark_rejected_quantity(self, row, reason: str):
         return replace(row, warning=self._merge_warning(row.warning, f"quantity_merge_rejected:{reason}"))
@@ -178,7 +207,9 @@ class ReceiptProfile:
         merged_rows = list(rows)
         remove_indexes: set[int] = set()
         merged_pairs: list[dict[str, int]] = []
+        quantity_merge_amount_pairs: list[dict[str, object]] = []
         rejection_reasons: dict[str, int] = {}
+        selection_reasons: dict[str, int] = {}
         merge_candidates_count = 0
         rejected_count = 0
 
@@ -192,12 +223,16 @@ class ReceiptProfile:
                 rejection_reasons[reason] = rejection_reasons.get(reason, 0) + 1
                 merged_rows[index] = self._mark_rejected_quantity(row, reason)
                 continue
-            merged_rows[target_index] = self._merge_quantity_into_product(merged_rows[target_index], row)
+            merged_row, amount_diagnostic = self._merge_quantity_into_product(merged_rows[target_index], row)
+            merged_rows[target_index] = merged_row
             remove_indexes.add(index)
             merged_pairs.append({
                 "product_line_no": int(merged_rows[target_index].line_no),
                 "quantity_line_no": int(row.line_no),
             })
+            quantity_merge_amount_pairs.append(amount_diagnostic)
+            selected_reason = str(amount_diagnostic.get("selected_line_total_reason") or "")
+            selection_reasons[selected_reason] = selection_reasons.get(selected_reason, 0) + 1
 
         output_rows = [row for index, row in enumerate(merged_rows) if index not in remove_indexes]
         diagnostics = {
@@ -208,6 +243,12 @@ class ReceiptProfile:
             "rejected_quantity_lines_count": rejected_count,
             "rejection_reasons": rejection_reasons,
             "merged_pairs": merged_pairs,
+            "quantity_merge_amount_diagnostics": {
+                "diagnostic_only": True,
+                "reconstruction_applied": False,
+                "merged_pairs": quantity_merge_amount_pairs,
+                "selected_line_total_reasons": selection_reasons,
+            },
             "input_rows_count": len(rows),
             "output_rows_count": len(output_rows),
         }
