@@ -31,6 +31,15 @@ DIAGNOSTIC_KEYS = [
     'preprocessing_sequence_diagnostics',
 ]
 
+POC_SIGNAL_KEYS = [
+    'detected_rows',
+    'line_type_counts',
+    'product_block',
+    'product_block_rescue_diagnostics',
+    'line_diagnostics',
+    'processing_report',
+]
+
 
 class ReceiptIngestionPipeline:
     """
@@ -74,20 +83,21 @@ class ReceiptIngestionPipeline:
 
     def _build_parser_rows(self, payload: Dict[str, Any]) -> List[ParserRow]:
         rows = []
-        for row in payload.get('rows', []) or []:
-            product_name = str(row.get('product_name') or '').strip()
+        source_rows = payload.get('rows', []) or payload.get('parser_rows', []) or []
+        for row in source_rows:
+            product_name = str(row.get('product_name') or row.get('item_text') or '').strip()
             if not product_name:
                 continue
             rows.append(
                 ParserRow(
                     product_name=product_name,
-                    amount=_safe_float(row.get('line_total')),
+                    amount=_safe_float(row.get('line_total') or row.get('amount')),
                     quantity=_optional_float(row.get('quantity')),
                     unit_price=_optional_float(row.get('unit_price')),
-                    line_no=row.get('line_no'),
+                    line_no=row.get('line_no') or row.get('line_number'),
                     source='parser',
                     confidence=_optional_float(row.get('confidence')),
-                    warning='',
+                    warning=str(row.get('warning') or ''),
                 )
             )
         return rows
@@ -124,18 +134,25 @@ class ReceiptIngestionPipeline:
         self,
         payload: Dict[str, Any],
     ) -> EngineProcessingState:
-        parser_rows = payload.get('rows', []) or []
-
-        if not parser_rows:
-            return EngineProcessingState.FAILED
+        parser_rows = payload.get('rows', []) or payload.get('parser_rows', []) or []
+        if parser_rows:
+            return EngineProcessingState.PARSED
 
         metadata = payload.get('metadata', {}) or {}
-        has_diagnostics = any(key in metadata for key in DIAGNOSTIC_KEYS)
+        has_known_diagnostics = any(key in metadata for key in DIAGNOSTIC_KEYS)
+        has_poc_signals = any(key in metadata for key in POC_SIGNAL_KEYS)
+        has_schema_version = bool(payload.get('schema_version'))
+        has_source_file = bool(metadata.get('source_file') or payload.get('source_file'))
+        has_line_type_counts = bool(metadata.get('line_type_counts'))
+        has_detected_rows_signal = 'detected_rows' in metadata
 
-        if has_diagnostics:
+        if has_known_diagnostics or has_poc_signals or has_line_type_counts or has_detected_rows_signal:
             return EngineProcessingState.DIAGNOSTICS_AVAILABLE
 
-        return EngineProcessingState.PARSED
+        if has_schema_version and has_source_file:
+            return EngineProcessingState.DIAGNOSTICS_AVAILABLE
+
+        return EngineProcessingState.FAILED
 
 
 # ---------------------------------------------------------------------------
