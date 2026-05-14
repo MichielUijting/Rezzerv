@@ -12,6 +12,7 @@ from .contracts import (
     ReceiptIngestionResult,
     ReviewSuggestion,
 )
+from .diagnostics import build_diagnostics_summary
 
 
 DIAGNOSTIC_KEYS = [
@@ -59,6 +60,13 @@ class ReceiptIngestionPipeline:
         parser_rows = self._build_parser_rows(payload)
         review_suggestions = self._build_review_suggestions(payload)
         diagnostics = self._collect_diagnostics(metadata)
+
+        diagnostics['diagnostics_summary'] = build_diagnostics_summary(
+            payload=payload,
+            parser_rows=parser_rows,
+            review_suggestions=review_suggestions,
+        )
+
         processing_state = self._derive_engine_processing_state(payload)
 
         return ReceiptIngestionResult(
