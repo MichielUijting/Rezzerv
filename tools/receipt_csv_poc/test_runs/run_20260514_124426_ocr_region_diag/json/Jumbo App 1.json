@@ -1,0 +1,3140 @@
+{
+  "schema_version": "receipt-ocr-poc-v15-name-amount-link-diagnostics",
+  "metadata": {
+    "source_file": "Jumbo App 1.png",
+    "created_at": "2026-05-14T10:44:46.611103+00:00",
+    "store_hint": "jumbo",
+    "profile_name": "jumbo",
+    "detected_rows": 13,
+    "line_type_counts": {
+      "discount_line": 1,
+      "metadata_line": 4,
+      "noise_line": 1,
+      "payment_line": 0,
+      "product_line": 18,
+      "quantity_line": 4,
+      "total_line": 0,
+      "unknown_line": 10,
+      "vat_line": 5
+    },
+    "product_block": {
+      "start_line": 7,
+      "end_line": 26,
+      "reason": "header_keyword",
+      "line_count": 20,
+      "profile": "jumbo"
+    },
+    "product_block_rescue_diagnostics": {
+      "candidate_product_block_start": 1,
+      "candidate_product_block_end": 25,
+      "orphan_product_name_lines": [
+        {
+          "line_no": 1,
+          "raw_line": "JUMBO",
+          "normalized_line": "JUMBO",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 3,
+          "raw_line": "Jumbo Heteren Teun van Blijderveen",
+          "normalized_line": "Jumbo Heteren Teun van Blijderveen",
+          "line_type": "product_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 4,
+          "raw_line": "Beemdhof 38, 6666 DL Heteren",
+          "normalized_line": "Beemdhof 38, 6666 DL Heteren",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 6,
+          "raw_line": "Producten",
+          "normalized_line": "Producten",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 8,
+          "raw_line": "Kipdij Reepje 400",
+          "normalized_line": "Kipdij Reepje 400",
+          "line_type": "product_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 10,
+          "raw_line": "Coni Kroepoek Bali",
+          "normalized_line": "Coni Kroepoek Bali",
+          "line_type": "product_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 14,
+          "raw_line": "Knorr Jachtsaus",
+          "normalized_line": "Knorr Jachtsaus",
+          "line_type": "product_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 25,
+          "raw_line": "Koopzegel Digitaal",
+          "normalized_line": "Koopzegel Digitaal",
+          "line_type": "product_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 29,
+          "raw_line": "Jumbo Extra's",
+          "normalized_line": "Jumbo Extra's",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 30,
+          "raw_line": "Extrapuntenkado +100 punten",
+          "normalized_line": "Extrapuntenkado +100 punten",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 31,
+          "raw_line": "Melk en karnemelk +8 punten",
+          "normalized_line": "Melk en karnemelk +8 punten",
+          "line_type": "product_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 33,
+          "raw_line": "Gespaard: 108 punten",
+          "normalized_line": "Gespaard: 108 punten",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        }
+      ],
+      "orphan_amount_lines": [
+        {
+          "line_no": 9,
+          "raw_line": "2X5,69 11,38",
+          "normalized_line": "2X5,69 11,38",
+          "line_type": "quantity_line",
+          "amounts": [
+            "5.69",
+            "11.38"
+          ],
+          "reason": "standalone_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 11,
+          "raw_line": "2X1,50 3,00",
+          "normalized_line": "2X1,50 3,00",
+          "line_type": "quantity_line",
+          "amounts": [
+            "1.50",
+            "3.00"
+          ],
+          "reason": "standalone_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 15,
+          "raw_line": "3X1,00 3,00",
+          "normalized_line": "3X1,00 3,00",
+          "line_type": "quantity_line",
+          "amounts": [
+            "1.00",
+            "3.00"
+          ],
+          "reason": "standalone_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 26,
+          "raw_line": "51X0,10 5,10",
+          "normalized_line": "51X0,10 5,10",
+          "line_type": "quantity_line",
+          "amounts": [
+            "0.10",
+            "5.10"
+          ],
+          "reason": "standalone_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 37,
+          "raw_line": "0,00% €5,10 €0,00",
+          "normalized_line": "0,00% €5,10 €0,00",
+          "line_type": "vat_line",
+          "amounts": [
+            "0.00",
+            "5.10",
+            "0.00"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 38,
+          "raw_line": "9,00% €47,83 €4,28",
+          "normalized_line": "9,00% €47,83 €4,28",
+          "line_type": "vat_line",
+          "amounts": [
+            "9.00",
+            "47.83",
+            "4.28"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "nearby_name_amount_pairs": [
+        {
+          "product_name_line_no": 6,
+          "amount_line_no": 9,
+          "distance": 3,
+          "product_name_raw_line": "Producten",
+          "amount_raw_line": "2X5,69 11,38",
+          "amounts": [
+            "5.69",
+            "11.38"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 8,
+          "amount_line_no": 9,
+          "distance": 1,
+          "product_name_raw_line": "Kipdij Reepje 400",
+          "amount_raw_line": "2X5,69 11,38",
+          "amounts": [
+            "5.69",
+            "11.38"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 8,
+          "amount_line_no": 11,
+          "distance": 3,
+          "product_name_raw_line": "Kipdij Reepje 400",
+          "amount_raw_line": "2X1,50 3,00",
+          "amounts": [
+            "1.50",
+            "3.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 10,
+          "amount_line_no": 9,
+          "distance": -1,
+          "product_name_raw_line": "Coni Kroepoek Bali",
+          "amount_raw_line": "2X5,69 11,38",
+          "amounts": [
+            "5.69",
+            "11.38"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 10,
+          "amount_line_no": 11,
+          "distance": 1,
+          "product_name_raw_line": "Coni Kroepoek Bali",
+          "amount_raw_line": "2X1,50 3,00",
+          "amounts": [
+            "1.50",
+            "3.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 14,
+          "amount_line_no": 11,
+          "distance": -3,
+          "product_name_raw_line": "Knorr Jachtsaus",
+          "amount_raw_line": "2X1,50 3,00",
+          "amounts": [
+            "1.50",
+            "3.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 14,
+          "amount_line_no": 15,
+          "distance": 1,
+          "product_name_raw_line": "Knorr Jachtsaus",
+          "amount_raw_line": "3X1,00 3,00",
+          "amounts": [
+            "1.00",
+            "3.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 25,
+          "amount_line_no": 26,
+          "distance": 1,
+          "product_name_raw_line": "Koopzegel Digitaal",
+          "amount_raw_line": "51X0,10 5,10",
+          "amounts": [
+            "0.10",
+            "5.10"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 29,
+          "amount_line_no": 26,
+          "distance": -3,
+          "product_name_raw_line": "Jumbo Extra's",
+          "amount_raw_line": "51X0,10 5,10",
+          "amounts": [
+            "0.10",
+            "5.10"
+          ],
+          "reason": "name_amount_within_3_lines"
+        }
+      ],
+      "product_block_rescue_reason": "orphan_product_names_before_total_payment_vat_zone",
+      "stop_line_no": 27,
+      "stop_line_reason": "first_total_payment_vat_line"
+    },
+    "product_name_amount_link_diagnostics": {
+      "diagnostic_scope": "orphan_product_name_to_orphan_amount_before_total_payment_vat_zone",
+      "max_line_distance": 4,
+      "store_hint": "jumbo",
+      "candidate_link_count": 6,
+      "candidate_links": [
+        {
+          "product_name_line_no": 6,
+          "amount_line_no": 9,
+          "distance": 3,
+          "product_name_raw_line": "Producten",
+          "amount_raw_line": "2X5,69 11,38",
+          "amounts": [
+            "5.69",
+            "11.38"
+          ],
+          "diagnostic_reason": "orphan_product_name_followed_by_orphan_amount_before_total_payment_vat_zone",
+          "diagnostic_only": true
+        },
+        {
+          "product_name_line_no": 8,
+          "amount_line_no": 9,
+          "distance": 1,
+          "product_name_raw_line": "Kipdij Reepje 400",
+          "amount_raw_line": "2X5,69 11,38",
+          "amounts": [
+            "5.69",
+            "11.38"
+          ],
+          "diagnostic_reason": "orphan_product_name_followed_by_orphan_amount_before_total_payment_vat_zone",
+          "diagnostic_only": true
+        },
+        {
+          "product_name_line_no": 8,
+          "amount_line_no": 11,
+          "distance": 3,
+          "product_name_raw_line": "Kipdij Reepje 400",
+          "amount_raw_line": "2X1,50 3,00",
+          "amounts": [
+            "1.50",
+            "3.00"
+          ],
+          "diagnostic_reason": "orphan_product_name_followed_by_orphan_amount_before_total_payment_vat_zone",
+          "diagnostic_only": true
+        },
+        {
+          "product_name_line_no": 10,
+          "amount_line_no": 11,
+          "distance": 1,
+          "product_name_raw_line": "Coni Kroepoek Bali",
+          "amount_raw_line": "2X1,50 3,00",
+          "amounts": [
+            "1.50",
+            "3.00"
+          ],
+          "diagnostic_reason": "orphan_product_name_followed_by_orphan_amount_before_total_payment_vat_zone",
+          "diagnostic_only": true
+        },
+        {
+          "product_name_line_no": 14,
+          "amount_line_no": 15,
+          "distance": 1,
+          "product_name_raw_line": "Knorr Jachtsaus",
+          "amount_raw_line": "3X1,00 3,00",
+          "amounts": [
+            "1.00",
+            "3.00"
+          ],
+          "diagnostic_reason": "orphan_product_name_followed_by_orphan_amount_before_total_payment_vat_zone",
+          "diagnostic_only": true
+        },
+        {
+          "product_name_line_no": 25,
+          "amount_line_no": 26,
+          "distance": 1,
+          "product_name_raw_line": "Koopzegel Digitaal",
+          "amount_raw_line": "51X0,10 5,10",
+          "amounts": [
+            "0.10",
+            "5.10"
+          ],
+          "diagnostic_reason": "orphan_product_name_followed_by_orphan_amount_before_total_payment_vat_zone",
+          "diagnostic_only": true
+        }
+      ],
+      "eligible_name_line_count": 8,
+      "eligible_amount_line_count": 4,
+      "rejected_link_count": 32,
+      "rejected_links": [
+        {
+          "product_name_line_no": 29,
+          "product_name_raw_line": "Jumbo Extra's",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 30,
+          "product_name_raw_line": "Extrapuntenkado +100 punten",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 31,
+          "product_name_raw_line": "Melk en karnemelk +8 punten",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 33,
+          "product_name_raw_line": "Gespaard: 108 punten",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 37,
+          "amount_raw_line": "0,00% €5,10 €0,00",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 38,
+          "amount_raw_line": "9,00% €47,83 €4,28",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 1,
+          "amount_line_no": 9,
+          "distance": 8,
+          "product_name_raw_line": "JUMBO",
+          "amount_raw_line": "2X5,69 11,38",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 1,
+          "amount_line_no": 11,
+          "distance": 10,
+          "product_name_raw_line": "JUMBO",
+          "amount_raw_line": "2X1,50 3,00",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 1,
+          "amount_line_no": 15,
+          "distance": 14,
+          "product_name_raw_line": "JUMBO",
+          "amount_raw_line": "3X1,00 3,00",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 1,
+          "amount_line_no": 26,
+          "distance": 25,
+          "product_name_raw_line": "JUMBO",
+          "amount_raw_line": "51X0,10 5,10",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 3,
+          "amount_line_no": 9,
+          "distance": 6,
+          "product_name_raw_line": "Jumbo Heteren Teun van Blijderveen",
+          "amount_raw_line": "2X5,69 11,38",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 3,
+          "amount_line_no": 11,
+          "distance": 8,
+          "product_name_raw_line": "Jumbo Heteren Teun van Blijderveen",
+          "amount_raw_line": "2X1,50 3,00",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 3,
+          "amount_line_no": 15,
+          "distance": 12,
+          "product_name_raw_line": "Jumbo Heteren Teun van Blijderveen",
+          "amount_raw_line": "3X1,00 3,00",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 3,
+          "amount_line_no": 26,
+          "distance": 23,
+          "product_name_raw_line": "Jumbo Heteren Teun van Blijderveen",
+          "amount_raw_line": "51X0,10 5,10",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 4,
+          "amount_line_no": 9,
+          "distance": 5,
+          "product_name_raw_line": "Beemdhof 38, 6666 DL Heteren",
+          "amount_raw_line": "2X5,69 11,38",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 4,
+          "amount_line_no": 11,
+          "distance": 7,
+          "product_name_raw_line": "Beemdhof 38, 6666 DL Heteren",
+          "amount_raw_line": "2X1,50 3,00",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 4,
+          "amount_line_no": 15,
+          "distance": 11,
+          "product_name_raw_line": "Beemdhof 38, 6666 DL Heteren",
+          "amount_raw_line": "3X1,00 3,00",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 4,
+          "amount_line_no": 26,
+          "distance": 22,
+          "product_name_raw_line": "Beemdhof 38, 6666 DL Heteren",
+          "amount_raw_line": "51X0,10 5,10",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 6,
+          "amount_line_no": 11,
+          "distance": 5,
+          "product_name_raw_line": "Producten",
+          "amount_raw_line": "2X1,50 3,00",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 6,
+          "amount_line_no": 15,
+          "distance": 9,
+          "product_name_raw_line": "Producten",
+          "amount_raw_line": "3X1,00 3,00",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 6,
+          "amount_line_no": 26,
+          "distance": 20,
+          "product_name_raw_line": "Producten",
+          "amount_raw_line": "51X0,10 5,10",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 8,
+          "amount_line_no": 15,
+          "distance": 7,
+          "product_name_raw_line": "Kipdij Reepje 400",
+          "amount_raw_line": "3X1,00 3,00",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 8,
+          "amount_line_no": 26,
+          "distance": 18,
+          "product_name_raw_line": "Kipdij Reepje 400",
+          "amount_raw_line": "51X0,10 5,10",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 10,
+          "amount_line_no": 9,
+          "distance": -1,
+          "product_name_raw_line": "Coni Kroepoek Bali",
+          "amount_raw_line": "2X5,69 11,38",
+          "rejection_reason": "amount_not_after_product_name_line"
+        },
+        {
+          "product_name_line_no": 10,
+          "amount_line_no": 15,
+          "distance": 5,
+          "product_name_raw_line": "Coni Kroepoek Bali",
+          "amount_raw_line": "3X1,00 3,00",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 10,
+          "amount_line_no": 26,
+          "distance": 16,
+          "product_name_raw_line": "Coni Kroepoek Bali",
+          "amount_raw_line": "51X0,10 5,10",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 14,
+          "amount_line_no": 9,
+          "distance": -5,
+          "product_name_raw_line": "Knorr Jachtsaus",
+          "amount_raw_line": "2X5,69 11,38",
+          "rejection_reason": "amount_not_after_product_name_line"
+        },
+        {
+          "product_name_line_no": 14,
+          "amount_line_no": 11,
+          "distance": -3,
+          "product_name_raw_line": "Knorr Jachtsaus",
+          "amount_raw_line": "2X1,50 3,00",
+          "rejection_reason": "amount_not_after_product_name_line"
+        },
+        {
+          "product_name_line_no": 14,
+          "amount_line_no": 26,
+          "distance": 12,
+          "product_name_raw_line": "Knorr Jachtsaus",
+          "amount_raw_line": "51X0,10 5,10",
+          "rejection_reason": "line_distance_too_large_for_diagnostic_link"
+        },
+        {
+          "product_name_line_no": 25,
+          "amount_line_no": 9,
+          "distance": -16,
+          "product_name_raw_line": "Koopzegel Digitaal",
+          "amount_raw_line": "2X5,69 11,38",
+          "rejection_reason": "amount_not_after_product_name_line"
+        },
+        {
+          "product_name_line_no": 25,
+          "amount_line_no": 11,
+          "distance": -14,
+          "product_name_raw_line": "Koopzegel Digitaal",
+          "amount_raw_line": "2X1,50 3,00",
+          "rejection_reason": "amount_not_after_product_name_line"
+        },
+        {
+          "product_name_line_no": 25,
+          "amount_line_no": 15,
+          "distance": -10,
+          "product_name_raw_line": "Koopzegel Digitaal",
+          "amount_raw_line": "3X1,00 3,00",
+          "rejection_reason": "amount_not_after_product_name_line"
+        }
+      ],
+      "diagnostic_only": true,
+      "reconstruction_applied": false
+    },
+    "amount_only_exclusion_diagnostics": {
+      "excluded_amount_only_lines": [],
+      "excluded_amount_only_count": 0,
+      "amount_only_exclusion_reason": "amount_currency_only_in_or_after_payment_total_vat_zone"
+    },
+    "loyalty_exclusion_diagnostics": {
+      "excluded_loyalty_lines": [
+        {
+          "line_no": 29,
+          "raw_line": "Jumbo Extra's",
+          "normalized_line": "Jumbo Extra's",
+          "previous_line_type": "product_line",
+          "matched_loyalty_rule": [
+            {
+              "scope": "store:jumbo",
+              "keyword": "extra's"
+            },
+            {
+              "scope": "store:jumbo",
+              "keyword": "jumbo extra"
+            }
+          ],
+          "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+        },
+        {
+          "line_no": 33,
+          "raw_line": "Gespaard: 108 punten",
+          "normalized_line": "Gespaard: 108 punten",
+          "previous_line_type": "metadata_line",
+          "matched_loyalty_rule": [
+            {
+              "scope": "generic",
+              "keyword": "spaar"
+            }
+          ],
+          "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+        }
+      ],
+      "excluded_loyalty_count": 2,
+      "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product_jumbo",
+      "merge_candidates_count": 4,
+      "merged_quantity_lines_count": 3,
+      "unmerged_quantity_lines_count": 1,
+      "rejected_quantity_lines_count": 1,
+      "rejection_reasons": {
+        "line_distance_too_large": 1
+      },
+      "merged_pairs": [
+        {
+          "product_line_no": 7,
+          "quantity_line_no": 9
+        },
+        {
+          "product_line_no": 13,
+          "quantity_line_no": 15
+        },
+        {
+          "product_line_no": 24,
+          "quantity_line_no": 26
+        }
+      ],
+      "input_rows_count": 16,
+      "output_rows_count": 13
+    },
+    "refinement_diagnostics": {
+      "profile": "jumbo",
+      "refined_lines_count": 7,
+      "refinement_reasons": {
+        "jumbo_unknown_product_context": 7
+      },
+      "refined_line_numbers": [
+        3,
+        8,
+        10,
+        14,
+        25,
+        29,
+        31
+      ]
+    },
+    "totals_diagnostics": {
+      "store_hint": "jumbo",
+      "gross_line_sum": "35.12",
+      "discount_total_detected": "0.00",
+      "net_total_candidate": "35.12",
+      "selected_total_hint": {
+        "line_no": 27,
+        "amount": "56.91",
+        "raw_line": "Totaal (incl. BTW) €56,91",
+        "reason": "total_keyword",
+        "selected_total_hint_reason": "first_payable_total_like_line"
+      },
+      "selected_total_hint_reason": "first_payable_total_like_line",
+      "net_vs_selected_total_difference": "-21.79",
+      "all_total_hints": [
+        {
+          "line_no": 27,
+          "amount": "56.91",
+          "raw_line": "Totaal (incl. BTW) €56,91",
+          "reason": "total_keyword"
+        },
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "Totaal korting €0,00",
+          "reason": "total_keyword"
+        },
+        {
+          "line_no": 39,
+          "amount": "4.28",
+          "raw_line": "BTW Totaal €52,63 €4,28",
+          "reason": "total_keyword"
+        }
+      ],
+      "excluded_total_hints": [
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "Totaal korting €0,00",
+          "reason": "total_keyword",
+          "excluded_reason": "summary_or_tax_total_not_payable_total"
+        },
+        {
+          "line_no": 39,
+          "amount": "4.28",
+          "raw_line": "BTW Totaal €52,63 €4,28",
+          "reason": "total_keyword",
+          "excluded_reason": "summary_or_tax_total_not_payable_total"
+        }
+      ],
+      "selected_discount_strategy": "summary_discount_total",
+      "selected_discount_candidates": [
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "Totaal korting €0,00",
+          "reason": "discount_keyword"
+        }
+      ],
+      "excluded_discount_candidates": [],
+      "all_discount_candidates": [
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "Totaal korting €0,00",
+          "reason": "discount_keyword"
+        }
+      ],
+      "discount_candidate_count": 1,
+      "line_count_after_merge": 13,
+      "totals_strategy": "diagnostic_gross_minus_selected_discount_vs_selected_total_hint",
+      "suspicious_amounts": [],
+      "possible_duplicate_lines": [],
+      "possible_missing_discount_application": [],
+      "amount_delta_candidates": []
+    },
+    "ocr_region_amount_diagnostics": {
+      "diagnostic_scope": "tesseract_image_to_data_region_amount_diagnostics",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "image_file": "Jumbo App 1.png",
+      "ocr_region_count": 39,
+      "amount_region_count": 21,
+      "candidate_region_link_count": 0,
+      "candidate_region_links": [],
+      "orphan_product_name_region_diagnostics": [
+        {
+          "product_name_line_no": 1,
+          "product_name_raw_line": "JUMBO",
+          "name_region_key": "1:1:1:1",
+          "name_region_text": "JUMBO",
+          "name_region_box": {
+            "left": 134,
+            "top": 41,
+            "width": 91,
+            "height": 18,
+            "right": 225,
+            "bottom": 59,
+            "center_x": 179,
+            "center_y": 50
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:3:1:2",
+              "amount_region_text": "Jumbo Passata Rust. 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 232,
+                "width": 307,
+                "height": 14,
+                "right": 332,
+                "bottom": 246,
+                "center_x": 178,
+                "center_y": 239
+              },
+              "vertical_distance_px": 189,
+              "horizontal_gap_px": -200,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:4",
+              "amount_region_text": "2X5,69 11,38",
+              "amounts": [
+                "5.69",
+                "11.38"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 285,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 298,
+                "center_x": 183,
+                "center_y": 291
+              },
+              "vertical_distance_px": 241,
+              "horizontal_gap_px": -191,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:6",
+              "amount_region_text": "2X1,50 3,00",
+              "amounts": [
+                "1.50",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 337,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 350,
+                "center_x": 183,
+                "center_y": 343
+              },
+              "vertical_distance_px": 293,
+              "horizontal_gap_px": -191,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:7",
+              "amount_region_text": "Jumbo Kroep Cassave 1,09",
+              "amounts": [
+                "1.09"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 362,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 378,
+                "center_x": 178,
+                "center_y": 370
+              },
+              "vertical_distance_px": 320,
+              "horizontal_gap_px": -200,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:8",
+              "amount_region_text": "Chorizo Ring 3,81",
+              "amounts": [
+                "3.81"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 388,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 404,
+                "center_x": 179,
+                "center_y": 396
+              },
+              "vertical_distance_px": 346,
+              "horizontal_gap_px": -199,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:10",
+              "amount_region_text": "3X1,00 3,00",
+              "amounts": [
+                "1.00",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 441,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 454,
+                "center_x": 183,
+                "center_y": 447
+              },
+              "vertical_distance_px": 397,
+              "horizontal_gap_px": -191,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:11",
+              "amount_region_text": "Halfvolle Melk 1.0L P 0,87",
+              "amounts": [
+                "0.87"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 466,
+                "width": 306,
+                "height": 14,
+                "right": 332,
+                "bottom": 480,
+                "center_x": 179,
+                "center_y": 473
+              },
+              "vertical_distance_px": 423,
+              "horizontal_gap_px": -199,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:12",
+              "amount_region_text": "Jumbo Paprikamix 2,29",
+              "amounts": [
+                "2.29"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 492,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 508,
+                "center_x": 178,
+                "center_y": 500
+              },
+              "vertical_distance_px": 450,
+              "horizontal_gap_px": -200,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:13",
+              "amount_region_text": "Hartig Itali.Kruide 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 518,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 534,
+                "center_x": 179,
+                "center_y": 526
+              },
+              "vertical_distance_px": 476,
+              "horizontal_gap_px": -199,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:14",
+              "amount_region_text": "Jumbo Rooibos Mango 1,05",
+              "amounts": [
+                "1.05"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 544,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 560,
+                "center_x": 178,
+                "center_y": 552
+              },
+              "vertical_distance_px": 502,
+              "horizontal_gap_px": -200,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 3,
+          "product_name_raw_line": "Jumbo Heteren Teun van Blijderveen",
+          "name_region_key": "1:2:1:1",
+          "name_region_text": "Jumbo Heteren Teun van Blijderveen",
+          "name_region_box": {
+            "left": 52,
+            "top": 79,
+            "width": 253,
+            "height": 16,
+            "right": 305,
+            "bottom": 95,
+            "center_x": 178,
+            "center_y": 87
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:3:1:2",
+              "amount_region_text": "Jumbo Passata Rust. 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 232,
+                "width": 307,
+                "height": 14,
+                "right": 332,
+                "bottom": 246,
+                "center_x": 178,
+                "center_y": 239
+              },
+              "vertical_distance_px": 152,
+              "horizontal_gap_px": -280,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:4",
+              "amount_region_text": "2X5,69 11,38",
+              "amounts": [
+                "5.69",
+                "11.38"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 285,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 298,
+                "center_x": 183,
+                "center_y": 291
+              },
+              "vertical_distance_px": 204,
+              "horizontal_gap_px": -271,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:6",
+              "amount_region_text": "2X1,50 3,00",
+              "amounts": [
+                "1.50",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 337,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 350,
+                "center_x": 183,
+                "center_y": 343
+              },
+              "vertical_distance_px": 256,
+              "horizontal_gap_px": -271,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:7",
+              "amount_region_text": "Jumbo Kroep Cassave 1,09",
+              "amounts": [
+                "1.09"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 362,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 378,
+                "center_x": 178,
+                "center_y": 370
+              },
+              "vertical_distance_px": 283,
+              "horizontal_gap_px": -280,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:8",
+              "amount_region_text": "Chorizo Ring 3,81",
+              "amounts": [
+                "3.81"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 388,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 404,
+                "center_x": 179,
+                "center_y": 396
+              },
+              "vertical_distance_px": 309,
+              "horizontal_gap_px": -279,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:10",
+              "amount_region_text": "3X1,00 3,00",
+              "amounts": [
+                "1.00",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 441,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 454,
+                "center_x": 183,
+                "center_y": 447
+              },
+              "vertical_distance_px": 360,
+              "horizontal_gap_px": -271,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:11",
+              "amount_region_text": "Halfvolle Melk 1.0L P 0,87",
+              "amounts": [
+                "0.87"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 466,
+                "width": 306,
+                "height": 14,
+                "right": 332,
+                "bottom": 480,
+                "center_x": 179,
+                "center_y": 473
+              },
+              "vertical_distance_px": 386,
+              "horizontal_gap_px": -279,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:12",
+              "amount_region_text": "Jumbo Paprikamix 2,29",
+              "amounts": [
+                "2.29"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 492,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 508,
+                "center_x": 178,
+                "center_y": 500
+              },
+              "vertical_distance_px": 413,
+              "horizontal_gap_px": -280,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:13",
+              "amount_region_text": "Hartig Itali.Kruide 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 518,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 534,
+                "center_x": 179,
+                "center_y": 526
+              },
+              "vertical_distance_px": 439,
+              "horizontal_gap_px": -279,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:14",
+              "amount_region_text": "Jumbo Rooibos Mango 1,05",
+              "amounts": [
+                "1.05"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 544,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 560,
+                "center_x": 178,
+                "center_y": 552
+              },
+              "vertical_distance_px": 465,
+              "horizontal_gap_px": -280,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 4,
+          "product_name_raw_line": "Beemdhof 38, 6666 DL Heteren",
+          "name_region_key": "1:2:1:2",
+          "name_region_text": "Beemdhof 38, 6666 DL Heteren",
+          "name_region_box": {
+            "left": 72,
+            "top": 101,
+            "width": 214,
+            "height": 14,
+            "right": 286,
+            "bottom": 115,
+            "center_x": 179,
+            "center_y": 108
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:3:1:2",
+              "amount_region_text": "Jumbo Passata Rust. 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 232,
+                "width": 307,
+                "height": 14,
+                "right": 332,
+                "bottom": 246,
+                "center_x": 178,
+                "center_y": 239
+              },
+              "vertical_distance_px": 131,
+              "horizontal_gap_px": -261,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:4",
+              "amount_region_text": "2X5,69 11,38",
+              "amounts": [
+                "5.69",
+                "11.38"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 285,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 298,
+                "center_x": 183,
+                "center_y": 291
+              },
+              "vertical_distance_px": 183,
+              "horizontal_gap_px": -252,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:6",
+              "amount_region_text": "2X1,50 3,00",
+              "amounts": [
+                "1.50",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 337,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 350,
+                "center_x": 183,
+                "center_y": 343
+              },
+              "vertical_distance_px": 235,
+              "horizontal_gap_px": -252,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:7",
+              "amount_region_text": "Jumbo Kroep Cassave 1,09",
+              "amounts": [
+                "1.09"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 362,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 378,
+                "center_x": 178,
+                "center_y": 370
+              },
+              "vertical_distance_px": 262,
+              "horizontal_gap_px": -261,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:8",
+              "amount_region_text": "Chorizo Ring 3,81",
+              "amounts": [
+                "3.81"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 388,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 404,
+                "center_x": 179,
+                "center_y": 396
+              },
+              "vertical_distance_px": 288,
+              "horizontal_gap_px": -260,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:10",
+              "amount_region_text": "3X1,00 3,00",
+              "amounts": [
+                "1.00",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 441,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 454,
+                "center_x": 183,
+                "center_y": 447
+              },
+              "vertical_distance_px": 339,
+              "horizontal_gap_px": -252,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:11",
+              "amount_region_text": "Halfvolle Melk 1.0L P 0,87",
+              "amounts": [
+                "0.87"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 466,
+                "width": 306,
+                "height": 14,
+                "right": 332,
+                "bottom": 480,
+                "center_x": 179,
+                "center_y": 473
+              },
+              "vertical_distance_px": 365,
+              "horizontal_gap_px": -260,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:12",
+              "amount_region_text": "Jumbo Paprikamix 2,29",
+              "amounts": [
+                "2.29"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 492,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 508,
+                "center_x": 178,
+                "center_y": 500
+              },
+              "vertical_distance_px": 392,
+              "horizontal_gap_px": -261,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:13",
+              "amount_region_text": "Hartig Itali.Kruide 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 518,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 534,
+                "center_x": 179,
+                "center_y": 526
+              },
+              "vertical_distance_px": 418,
+              "horizontal_gap_px": -260,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:14",
+              "amount_region_text": "Jumbo Rooibos Mango 1,05",
+              "amounts": [
+                "1.05"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 544,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 560,
+                "center_x": 178,
+                "center_y": 552
+              },
+              "vertical_distance_px": 444,
+              "horizontal_gap_px": -261,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 6,
+          "product_name_raw_line": "Producten",
+          "name_region_key": "1:3:1:1",
+          "name_region_text": "Producten",
+          "name_region_box": {
+            "left": 26,
+            "top": 203,
+            "width": 87,
+            "height": 15,
+            "right": 113,
+            "bottom": 218,
+            "center_x": 69,
+            "center_y": 210
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:3:1:2",
+              "amount_region_text": "Jumbo Passata Rust. 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 232,
+                "width": 307,
+                "height": 14,
+                "right": 332,
+                "bottom": 246,
+                "center_x": 178,
+                "center_y": 239
+              },
+              "vertical_distance_px": 29,
+              "horizontal_gap_px": -88,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:4",
+              "amount_region_text": "2X5,69 11,38",
+              "amounts": [
+                "5.69",
+                "11.38"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 285,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 298,
+                "center_x": 183,
+                "center_y": 291
+              },
+              "vertical_distance_px": 81,
+              "horizontal_gap_px": -79,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:6",
+              "amount_region_text": "2X1,50 3,00",
+              "amounts": [
+                "1.50",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 337,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 350,
+                "center_x": 183,
+                "center_y": 343
+              },
+              "vertical_distance_px": 133,
+              "horizontal_gap_px": -79,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:7",
+              "amount_region_text": "Jumbo Kroep Cassave 1,09",
+              "amounts": [
+                "1.09"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 362,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 378,
+                "center_x": 178,
+                "center_y": 370
+              },
+              "vertical_distance_px": 160,
+              "horizontal_gap_px": -88,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:8",
+              "amount_region_text": "Chorizo Ring 3,81",
+              "amounts": [
+                "3.81"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 388,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 404,
+                "center_x": 179,
+                "center_y": 396
+              },
+              "vertical_distance_px": 186,
+              "horizontal_gap_px": -87,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:10",
+              "amount_region_text": "3X1,00 3,00",
+              "amounts": [
+                "1.00",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 441,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 454,
+                "center_x": 183,
+                "center_y": 447
+              },
+              "vertical_distance_px": 237,
+              "horizontal_gap_px": -79,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:11",
+              "amount_region_text": "Halfvolle Melk 1.0L P 0,87",
+              "amounts": [
+                "0.87"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 466,
+                "width": 306,
+                "height": 14,
+                "right": 332,
+                "bottom": 480,
+                "center_x": 179,
+                "center_y": 473
+              },
+              "vertical_distance_px": 263,
+              "horizontal_gap_px": -87,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:12",
+              "amount_region_text": "Jumbo Paprikamix 2,29",
+              "amounts": [
+                "2.29"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 492,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 508,
+                "center_x": 178,
+                "center_y": 500
+              },
+              "vertical_distance_px": 290,
+              "horizontal_gap_px": -88,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:13",
+              "amount_region_text": "Hartig Itali.Kruide 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 518,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 534,
+                "center_x": 179,
+                "center_y": 526
+              },
+              "vertical_distance_px": 316,
+              "horizontal_gap_px": -87,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:14",
+              "amount_region_text": "Jumbo Rooibos Mango 1,05",
+              "amounts": [
+                "1.05"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 544,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 560,
+                "center_x": 178,
+                "center_y": 552
+              },
+              "vertical_distance_px": 342,
+              "horizontal_gap_px": -88,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 8,
+          "product_name_raw_line": "Kipdij Reepje 400",
+          "name_region_key": "1:3:1:3",
+          "name_region_text": "Kipdij Reepje 400",
+          "name_region_box": {
+            "left": 26,
+            "top": 258,
+            "width": 117,
+            "height": 16,
+            "right": 143,
+            "bottom": 274,
+            "center_x": 84,
+            "center_y": 266
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:3:1:2",
+              "amount_region_text": "Jumbo Passata Rust. 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 232,
+                "width": 307,
+                "height": 14,
+                "right": 332,
+                "bottom": 246,
+                "center_x": 178,
+                "center_y": 239
+              },
+              "vertical_distance_px": 27,
+              "horizontal_gap_px": -118,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:4",
+              "amount_region_text": "2X5,69 11,38",
+              "amounts": [
+                "5.69",
+                "11.38"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 285,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 298,
+                "center_x": 183,
+                "center_y": 291
+              },
+              "vertical_distance_px": 25,
+              "horizontal_gap_px": -109,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:6",
+              "amount_region_text": "2X1,50 3,00",
+              "amounts": [
+                "1.50",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 337,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 350,
+                "center_x": 183,
+                "center_y": 343
+              },
+              "vertical_distance_px": 77,
+              "horizontal_gap_px": -109,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:7",
+              "amount_region_text": "Jumbo Kroep Cassave 1,09",
+              "amounts": [
+                "1.09"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 362,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 378,
+                "center_x": 178,
+                "center_y": 370
+              },
+              "vertical_distance_px": 104,
+              "horizontal_gap_px": -118,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:8",
+              "amount_region_text": "Chorizo Ring 3,81",
+              "amounts": [
+                "3.81"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 388,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 404,
+                "center_x": 179,
+                "center_y": 396
+              },
+              "vertical_distance_px": 130,
+              "horizontal_gap_px": -117,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:10",
+              "amount_region_text": "3X1,00 3,00",
+              "amounts": [
+                "1.00",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 441,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 454,
+                "center_x": 183,
+                "center_y": 447
+              },
+              "vertical_distance_px": 181,
+              "horizontal_gap_px": -109,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:11",
+              "amount_region_text": "Halfvolle Melk 1.0L P 0,87",
+              "amounts": [
+                "0.87"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 466,
+                "width": 306,
+                "height": 14,
+                "right": 332,
+                "bottom": 480,
+                "center_x": 179,
+                "center_y": 473
+              },
+              "vertical_distance_px": 207,
+              "horizontal_gap_px": -117,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:12",
+              "amount_region_text": "Jumbo Paprikamix 2,29",
+              "amounts": [
+                "2.29"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 492,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 508,
+                "center_x": 178,
+                "center_y": 500
+              },
+              "vertical_distance_px": 234,
+              "horizontal_gap_px": -118,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:13",
+              "amount_region_text": "Hartig Itali.Kruide 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 518,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 534,
+                "center_x": 179,
+                "center_y": 526
+              },
+              "vertical_distance_px": 260,
+              "horizontal_gap_px": -117,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:14",
+              "amount_region_text": "Jumbo Rooibos Mango 1,05",
+              "amounts": [
+                "1.05"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 544,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 560,
+                "center_x": 178,
+                "center_y": 552
+              },
+              "vertical_distance_px": 286,
+              "horizontal_gap_px": -118,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 10,
+          "product_name_raw_line": "Coni Kroepoek Bali",
+          "name_region_key": "1:3:1:5",
+          "name_region_text": "Coni Kroepoek Bali",
+          "name_region_box": {
+            "left": 26,
+            "top": 310,
+            "width": 127,
+            "height": 16,
+            "right": 153,
+            "bottom": 326,
+            "center_x": 89,
+            "center_y": 318
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:3:1:2",
+              "amount_region_text": "Jumbo Passata Rust. 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 232,
+                "width": 307,
+                "height": 14,
+                "right": 332,
+                "bottom": 246,
+                "center_x": 178,
+                "center_y": 239
+              },
+              "vertical_distance_px": 79,
+              "horizontal_gap_px": -128,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:4",
+              "amount_region_text": "2X5,69 11,38",
+              "amounts": [
+                "5.69",
+                "11.38"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 285,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 298,
+                "center_x": 183,
+                "center_y": 291
+              },
+              "vertical_distance_px": 27,
+              "horizontal_gap_px": -119,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:6",
+              "amount_region_text": "2X1,50 3,00",
+              "amounts": [
+                "1.50",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 337,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 350,
+                "center_x": 183,
+                "center_y": 343
+              },
+              "vertical_distance_px": 25,
+              "horizontal_gap_px": -119,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:7",
+              "amount_region_text": "Jumbo Kroep Cassave 1,09",
+              "amounts": [
+                "1.09"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 362,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 378,
+                "center_x": 178,
+                "center_y": 370
+              },
+              "vertical_distance_px": 52,
+              "horizontal_gap_px": -128,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:8",
+              "amount_region_text": "Chorizo Ring 3,81",
+              "amounts": [
+                "3.81"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 388,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 404,
+                "center_x": 179,
+                "center_y": 396
+              },
+              "vertical_distance_px": 78,
+              "horizontal_gap_px": -127,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:10",
+              "amount_region_text": "3X1,00 3,00",
+              "amounts": [
+                "1.00",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 441,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 454,
+                "center_x": 183,
+                "center_y": 447
+              },
+              "vertical_distance_px": 129,
+              "horizontal_gap_px": -119,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:11",
+              "amount_region_text": "Halfvolle Melk 1.0L P 0,87",
+              "amounts": [
+                "0.87"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 466,
+                "width": 306,
+                "height": 14,
+                "right": 332,
+                "bottom": 480,
+                "center_x": 179,
+                "center_y": 473
+              },
+              "vertical_distance_px": 155,
+              "horizontal_gap_px": -127,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:12",
+              "amount_region_text": "Jumbo Paprikamix 2,29",
+              "amounts": [
+                "2.29"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 492,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 508,
+                "center_x": 178,
+                "center_y": 500
+              },
+              "vertical_distance_px": 182,
+              "horizontal_gap_px": -128,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:13",
+              "amount_region_text": "Hartig Itali.Kruide 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 518,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 534,
+                "center_x": 179,
+                "center_y": 526
+              },
+              "vertical_distance_px": 208,
+              "horizontal_gap_px": -127,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:14",
+              "amount_region_text": "Jumbo Rooibos Mango 1,05",
+              "amounts": [
+                "1.05"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 544,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 560,
+                "center_x": 178,
+                "center_y": 552
+              },
+              "vertical_distance_px": 234,
+              "horizontal_gap_px": -128,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 14,
+          "product_name_raw_line": "Knorr Jachtsaus",
+          "name_region_key": "1:3:1:9",
+          "name_region_text": "Knorr Jachtsaus",
+          "name_region_box": {
+            "left": 26,
+            "top": 406,
+            "width": 107,
+            "height": 30,
+            "right": 133,
+            "bottom": 436,
+            "center_x": 79,
+            "center_y": 421
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:3:1:2",
+              "amount_region_text": "Jumbo Passata Rust. 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 232,
+                "width": 307,
+                "height": 14,
+                "right": 332,
+                "bottom": 246,
+                "center_x": 178,
+                "center_y": 239
+              },
+              "vertical_distance_px": 182,
+              "horizontal_gap_px": -108,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:4",
+              "amount_region_text": "2X5,69 11,38",
+              "amounts": [
+                "5.69",
+                "11.38"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 285,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 298,
+                "center_x": 183,
+                "center_y": 291
+              },
+              "vertical_distance_px": 130,
+              "horizontal_gap_px": -99,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:6",
+              "amount_region_text": "2X1,50 3,00",
+              "amounts": [
+                "1.50",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 337,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 350,
+                "center_x": 183,
+                "center_y": 343
+              },
+              "vertical_distance_px": 78,
+              "horizontal_gap_px": -99,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:7",
+              "amount_region_text": "Jumbo Kroep Cassave 1,09",
+              "amounts": [
+                "1.09"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 362,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 378,
+                "center_x": 178,
+                "center_y": 370
+              },
+              "vertical_distance_px": 51,
+              "horizontal_gap_px": -108,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:8",
+              "amount_region_text": "Chorizo Ring 3,81",
+              "amounts": [
+                "3.81"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 388,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 404,
+                "center_x": 179,
+                "center_y": 396
+              },
+              "vertical_distance_px": 25,
+              "horizontal_gap_px": -107,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:10",
+              "amount_region_text": "3X1,00 3,00",
+              "amounts": [
+                "1.00",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 441,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 454,
+                "center_x": 183,
+                "center_y": 447
+              },
+              "vertical_distance_px": 26,
+              "horizontal_gap_px": -99,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:11",
+              "amount_region_text": "Halfvolle Melk 1.0L P 0,87",
+              "amounts": [
+                "0.87"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 466,
+                "width": 306,
+                "height": 14,
+                "right": 332,
+                "bottom": 480,
+                "center_x": 179,
+                "center_y": 473
+              },
+              "vertical_distance_px": 52,
+              "horizontal_gap_px": -107,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:12",
+              "amount_region_text": "Jumbo Paprikamix 2,29",
+              "amounts": [
+                "2.29"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 492,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 508,
+                "center_x": 178,
+                "center_y": 500
+              },
+              "vertical_distance_px": 79,
+              "horizontal_gap_px": -108,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:13",
+              "amount_region_text": "Hartig Itali.Kruide 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 518,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 534,
+                "center_x": 179,
+                "center_y": 526
+              },
+              "vertical_distance_px": 105,
+              "horizontal_gap_px": -107,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:14",
+              "amount_region_text": "Jumbo Rooibos Mango 1,05",
+              "amounts": [
+                "1.05"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 544,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 560,
+                "center_x": 178,
+                "center_y": 552
+              },
+              "vertical_distance_px": 131,
+              "horizontal_gap_px": -108,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 25,
+          "product_name_raw_line": "Koopzegel Digitaal",
+          "name_region_key": "1:3:1:20",
+          "name_region_text": "Koopzegel Digitaal",
+          "name_region_box": {
+            "left": 26,
+            "top": 700,
+            "width": 127,
+            "height": 16,
+            "right": 153,
+            "bottom": 716,
+            "center_x": 89,
+            "center_y": 708
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:3:1:2",
+              "amount_region_text": "Jumbo Passata Rust. 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 232,
+                "width": 307,
+                "height": 14,
+                "right": 332,
+                "bottom": 246,
+                "center_x": 178,
+                "center_y": 239
+              },
+              "vertical_distance_px": 469,
+              "horizontal_gap_px": -128,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:4",
+              "amount_region_text": "2X5,69 11,38",
+              "amounts": [
+                "5.69",
+                "11.38"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 285,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 298,
+                "center_x": 183,
+                "center_y": 291
+              },
+              "vertical_distance_px": 417,
+              "horizontal_gap_px": -119,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:6",
+              "amount_region_text": "2X1,50 3,00",
+              "amounts": [
+                "1.50",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 337,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 350,
+                "center_x": 183,
+                "center_y": 343
+              },
+              "vertical_distance_px": 365,
+              "horizontal_gap_px": -119,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:7",
+              "amount_region_text": "Jumbo Kroep Cassave 1,09",
+              "amounts": [
+                "1.09"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 362,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 378,
+                "center_x": 178,
+                "center_y": 370
+              },
+              "vertical_distance_px": 338,
+              "horizontal_gap_px": -128,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:8",
+              "amount_region_text": "Chorizo Ring 3,81",
+              "amounts": [
+                "3.81"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 388,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 404,
+                "center_x": 179,
+                "center_y": 396
+              },
+              "vertical_distance_px": 312,
+              "horizontal_gap_px": -127,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:10",
+              "amount_region_text": "3X1,00 3,00",
+              "amounts": [
+                "1.00",
+                "3.00"
+              ],
+              "amount_region_box": {
+                "left": 34,
+                "top": 441,
+                "width": 298,
+                "height": 13,
+                "right": 332,
+                "bottom": 454,
+                "center_x": 183,
+                "center_y": 447
+              },
+              "vertical_distance_px": 261,
+              "horizontal_gap_px": -119,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:11",
+              "amount_region_text": "Halfvolle Melk 1.0L P 0,87",
+              "amounts": [
+                "0.87"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 466,
+                "width": 306,
+                "height": 14,
+                "right": 332,
+                "bottom": 480,
+                "center_x": 179,
+                "center_y": 473
+              },
+              "vertical_distance_px": 235,
+              "horizontal_gap_px": -127,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:12",
+              "amount_region_text": "Jumbo Paprikamix 2,29",
+              "amounts": [
+                "2.29"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 492,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 508,
+                "center_x": 178,
+                "center_y": 500
+              },
+              "vertical_distance_px": 208,
+              "horizontal_gap_px": -128,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:13",
+              "amount_region_text": "Hartig Itali.Kruide 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_region_box": {
+                "left": 26,
+                "top": 518,
+                "width": 306,
+                "height": 16,
+                "right": 332,
+                "bottom": 534,
+                "center_x": 179,
+                "center_y": 526
+              },
+              "vertical_distance_px": 182,
+              "horizontal_gap_px": -127,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:3:1:14",
+              "amount_region_text": "Jumbo Rooibos Mango 1,05",
+              "amounts": [
+                "1.05"
+              ],
+              "amount_region_box": {
+                "left": 25,
+                "top": 544,
+                "width": 307,
+                "height": 16,
+                "right": 332,
+                "bottom": 560,
+                "center_x": 178,
+                "center_y": 552
+              },
+              "vertical_distance_px": 156,
+              "horizontal_gap_px": -128,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 29,
+          "product_name_raw_line": "Jumbo Extra's",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 30,
+          "product_name_raw_line": "Extrapuntenkado +100 punten",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 31,
+          "product_name_raw_line": "Melk en karnemelk +8 punten",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 33,
+          "product_name_raw_line": "Gespaard: 108 punten",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "limits": {
+        "max_vertical_distance_px": 28,
+        "max_nearby_vertical_distance_px": 60,
+        "min_right_gap_px": -10
+      }
+    }
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "JUMBO",
+      "normalized_line": "JUMBO",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "Jumbo Heteren Teun van Blijderveen",
+      "normalized_line": "Jumbo Heteren Teun van Blijderveen",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "Beemdhof 38, 6666 DL Heteren",
+      "normalized_line": "Beemdhof 38, 6666 DL Heteren",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "Producten",
+      "normalized_line": "Producten",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "Jumbo Passata Rust. 1,99",
+      "normalized_line": "Jumbo Passata Rust. 1,99",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "Kipdij Reepje 400",
+      "normalized_line": "Kipdij Reepje 400",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "2X5,69 11,38",
+      "normalized_line": "2X5,69 11,38",
+      "line_type": "quantity_line",
+      "reason": "quantity_only_pattern"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "Coni Kroepoek Bali",
+      "normalized_line": "Coni Kroepoek Bali",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "2X1,50 3,00",
+      "normalized_line": "2X1,50 3,00",
+      "line_type": "quantity_line",
+      "reason": "quantity_only_pattern"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "Jumbo Kroep Cassave 1,09",
+      "normalized_line": "Jumbo Kroep Cassave 1,09",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "Chorizo Ring 3,81",
+      "normalized_line": "Chorizo Ring 3,81",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "Knorr Jachtsaus",
+      "normalized_line": "Knorr Jachtsaus",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "3X1,00 3,00",
+      "normalized_line": "3X1,00 3,00",
+      "line_type": "quantity_line",
+      "reason": "quantity_only_pattern"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "Halfvolle Melk 1.0L P 0,87",
+      "normalized_line": "Halfvolle Melk 1.0L P 0,87",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "Jumbo Paprikamix 2,29",
+      "normalized_line": "Jumbo Paprikamix 2,29",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "Hartig Itali.Kruide 1,99",
+      "normalized_line": "Hartig Itali.Kruide 1,99",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "Jumbo Rooibos Mango 1,05",
+      "normalized_line": "Jumbo Rooibos Mango 1,05",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "Lemondor Limoensap 0,99",
+      "normalized_line": "Lemondor Limoensap 0,99",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "Komkommer 0,89",
+      "normalized_line": "Komkommer 0,89",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "Lassie Paella Rijst 2,59",
+      "normalized_line": "Lassie Paella Rijst 2,59",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "Broccoli 0,88",
+      "normalized_line": "Broccoli 0,88",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "Espresso D Oro 15,99",
+      "normalized_line": "Espresso D Oro 15,99",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "Koopzegel Digitaal",
+      "normalized_line": "Koopzegel Digitaal",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "51X0,10 5,10",
+      "normalized_line": "51X0,10 5,10",
+      "line_type": "quantity_line",
+      "reason": "quantity_only_pattern"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "Totaal (incl. BTW) €56,91",
+      "normalized_line": "Totaal (incl. BTW) €56,91",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "Totaal korting €0,00",
+      "normalized_line": "Totaal korting €0,00",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "Jumbo Extra's",
+      "normalized_line": "Jumbo Extra's",
+      "line_type": "unknown_line",
+      "reason": "loyalty_payment_zone_excluded"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "Extrapuntenkado +100 punten",
+      "normalized_line": "Extrapuntenkado +100 punten",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "Melk en karnemelk +8 punten",
+      "normalized_line": "Melk en karnemelk +8 punten",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "Oud saldo: 0 punten",
+      "normalized_line": "Oud saldo: 0 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "Gespaard: 108 punten",
+      "normalized_line": "Gespaard: 108 punten",
+      "line_type": "unknown_line",
+      "reason": "loyalty_payment_zone_excluded"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "Ingewisseld: 0 punten",
+      "normalized_line": "Ingewisseld: 0 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "Nieuw saldo: 108 punten",
+      "normalized_line": "Nieuw saldo: 108 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "BTW% Bedrag excl BTW bedrag",
+      "normalized_line": "BTW% Bedrag excl BTW bedrag",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "0,00% €5,10 €0,00",
+      "normalized_line": "0,00% €5,10 €0,00",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "9,00% €47,83 €4,28",
+      "normalized_line": "9,00% €47,83 €4,28",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "BTW Totaal €52,63 €4,28",
+      "normalized_line": "BTW Totaal €52,63 €4,28",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 40,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "63553007881603242026",
+      "normalized_line": "63553007881603242026",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 43,
+      "raw_line": "Dinsdag 24 maart 2026, 12:36",
+      "normalized_line": "Dinsdag 24 maart 2026, 12:36",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    }
+  ],
+  "lines": [
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 7,
+      "line_type": "product_line",
+      "item_text": "Jumbo Passata Rust.",
+      "quantity": "2",
+      "unit": "stuk",
+      "unit_price": "5.69",
+      "line_total": "11.38",
+      "parser_confidence": 0.75,
+      "raw_line": "Jumbo Passata Rust. 1,99 | 2X5,69 11,38",
+      "warning": "quantity_line_merged"
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 11,
+      "line_type": "quantity_line",
+      "item_text": "2X1,50",
+      "quantity": "2",
+      "unit": "stuk",
+      "unit_price": "1.50",
+      "line_total": "3.00",
+      "parser_confidence": 0.75,
+      "raw_line": "2X1,50 3,00",
+      "warning": "quantity_line_requires_merge;quantity_merge_rejected:line_distance_too_large"
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 12,
+      "line_type": "product_line",
+      "item_text": "Jumbo Kroep Cassave",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.09",
+      "parser_confidence": 0.75,
+      "raw_line": "Jumbo Kroep Cassave 1,09",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 13,
+      "line_type": "product_line",
+      "item_text": "Chorizo Ring",
+      "quantity": "3",
+      "unit": "stuk",
+      "unit_price": "1.00",
+      "line_total": "3.00",
+      "parser_confidence": 0.75,
+      "raw_line": "Chorizo Ring 3,81 | 3X1,00 3,00",
+      "warning": "quantity_line_merged"
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 16,
+      "line_type": "product_line",
+      "item_text": "Halfvolle Melk 1.0L P",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.87",
+      "parser_confidence": 0.75,
+      "raw_line": "Halfvolle Melk 1.0L P 0,87",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 17,
+      "line_type": "product_line",
+      "item_text": "Jumbo Paprikamix",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "2.29",
+      "parser_confidence": 0.75,
+      "raw_line": "Jumbo Paprikamix 2,29",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 18,
+      "line_type": "product_line",
+      "item_text": "Hartig Itali.Kruide",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.99",
+      "parser_confidence": 0.75,
+      "raw_line": "Hartig Itali.Kruide 1,99",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 19,
+      "line_type": "product_line",
+      "item_text": "Jumbo Rooibos Mango",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.05",
+      "parser_confidence": 0.75,
+      "raw_line": "Jumbo Rooibos Mango 1,05",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 20,
+      "line_type": "product_line",
+      "item_text": "Lemondor Limoensap",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.99",
+      "parser_confidence": 0.75,
+      "raw_line": "Lemondor Limoensap 0,99",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 21,
+      "line_type": "product_line",
+      "item_text": "Komkommer",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.89",
+      "parser_confidence": 0.75,
+      "raw_line": "Komkommer 0,89",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 22,
+      "line_type": "product_line",
+      "item_text": "Lassie Paella Rijst",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "2.59",
+      "parser_confidence": 0.75,
+      "raw_line": "Lassie Paella Rijst 2,59",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 23,
+      "line_type": "product_line",
+      "item_text": "Broccoli",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.88",
+      "parser_confidence": 0.75,
+      "raw_line": "Broccoli 0,88",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 24,
+      "line_type": "product_line",
+      "item_text": "Espresso D Oro",
+      "quantity": "51",
+      "unit": "stuk",
+      "unit_price": "0.10",
+      "line_total": "5.10",
+      "parser_confidence": 0.75,
+      "raw_line": "Espresso D Oro 15,99 | 51X0,10 5,10",
+      "warning": "quantity_line_merged"
+    }
+  ]
+}

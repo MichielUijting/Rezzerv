@@ -1,5 +1,6 @@
-run_name=run_20260514_121611_name_amount_diag
-run_path=tools/receipt_csv_poc/test_runs/run_20260514_121611_name_amount_diag
-benchmark_summary=tools/receipt_csv_poc/test_runs/run_20260514_121611_name_amount_diag/benchmark_summary.json
+run_name=run_20260514_124426_ocr_region_diag
+run_path=tools/receipt_csv_poc/test_runs/run_20260514_124426_ocr_region_diag
+benchmark_summary=tools/receipt_csv_poc/test_runs/run_20260514_124426_ocr_region_diag/benchmark_summary.json
 branch=sync/local-rezzerv-receipt-basis-v2
-created_local=do 14-05-2026 12:16:33,17
+diagnostics=ocr_region_amount_diagnostics
+created_local=do 14-05-2026 12:45:46,36

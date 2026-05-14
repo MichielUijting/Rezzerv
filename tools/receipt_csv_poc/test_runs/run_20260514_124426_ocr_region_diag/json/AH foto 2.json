@@ -1,0 +1,996 @@
+{
+  "schema_version": "receipt-ocr-poc-v15-name-amount-link-diagnostics",
+  "metadata": {
+    "source_file": "AH foto 2.jpeg",
+    "created_at": "2026-05-14T10:44:37.097954+00:00",
+    "store_hint": "ah",
+    "profile_name": "generic",
+    "detected_rows": 0,
+    "line_type_counts": {
+      "discount_line": 2,
+      "metadata_line": 4,
+      "noise_line": 1,
+      "payment_line": 5,
+      "product_line": 0,
+      "quantity_line": 0,
+      "total_line": 2,
+      "unknown_line": 32,
+      "vat_line": 0
+    },
+    "product_block": {
+      "start_line": 6,
+      "end_line": 6,
+      "reason": "header_keyword",
+      "line_count": 1,
+      "profile": "generic"
+    },
+    "product_block_rescue_diagnostics": {
+      "candidate_product_block_start": 1,
+      "candidate_product_block_end": 10,
+      "orphan_product_name_lines": [
+        {
+          "line_no": 1,
+          "raw_line": "Albert Heijn Ger Koopman",
+          "normalized_line": "Albert Heijn Ger Koopman",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 2,
+          "raw_line": "Polenplein 24a Driel",
+          "normalized_line": "Polenplein 24a Driel",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 3,
+          "raw_line": "tel: 026-4742394",
+          "normalized_line": "tel: 026-4742394",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 5,
+          "raw_line": "AANTAL OMSCHRIJVING PRIJS BEDRAG",
+          "normalized_line": "AANTAL OMSCHRIJVING PRIJS BEDRAG",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 7,
+          "raw_line": "AH M GEHAKT",
+          "normalized_line": "AH M GEHAKT",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 8,
+          "raw_line": "SOEPGR BASIS",
+          "normalized_line": "SOEPGR BASIS",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 10,
+          "raw_line": "—..m",
+          "normalized_line": "—..m",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 15,
+          "raw_line": "waarvan /",
+          "normalized_line": "waarvan /",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 16,
+          "raw_line": "BONUS BOX",
+          "normalized_line": "BONUS BOX",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 18,
+          "raw_line": "TOTAAE",
+          "normalized_line": "TOTAAE",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 35,
+          "raw_line": "Leesmethode CHIP",
+          "normalized_line": "Leesmethode CHIP",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 37,
+          "raw_line": "tw OVER ER",
+          "normalized_line": "tw OVER ER",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 40,
+          "raw_line": "A UT",
+          "normalized_line": "A UT",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 44,
+          "raw_line": "ze kas Ver KerS",
+          "normalized_line": "ze kas Ver KerS",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 46,
+          "raw_line": "KEGEL ic areade",
+          "normalized_line": "KEGEL ic areade",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        }
+      ],
+      "orphan_amount_lines": [
+        {
+          "line_no": 33,
+          "raw_line": "Totaal 8,28 EUR Contactless",
+          "normalized_line": "Totaal 8,28 EUR Contactless",
+          "line_type": "payment_line",
+          "amounts": [
+            "8.28"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "nearby_name_amount_pairs": [
+        {
+          "product_name_line_no": 35,
+          "amount_line_no": 33,
+          "distance": -2,
+          "product_name_raw_line": "Leesmethode CHIP",
+          "amount_raw_line": "Totaal 8,28 EUR Contactless",
+          "amounts": [
+            "8.28"
+          ],
+          "reason": "name_amount_within_3_lines"
+        }
+      ],
+      "product_block_rescue_reason": "orphan_product_names_before_total_payment_vat_zone",
+      "stop_line_no": 12,
+      "stop_line_reason": "first_total_payment_vat_line"
+    },
+    "product_name_amount_link_diagnostics": {
+      "diagnostic_scope": "orphan_product_name_to_orphan_amount_before_total_payment_vat_zone",
+      "max_line_distance": 4,
+      "store_hint": "ah",
+      "candidate_link_count": 0,
+      "candidate_links": [],
+      "eligible_name_line_count": 3,
+      "eligible_amount_line_count": 0,
+      "rejected_link_count": 13,
+      "rejected_links": [
+        {
+          "product_name_line_no": 1,
+          "product_name_raw_line": "Albert Heijn Ger Koopman",
+          "rejection_reason": "name_line_matches_store_header_keyword"
+        },
+        {
+          "product_name_line_no": 3,
+          "product_name_raw_line": "tel: 026-4742394",
+          "rejection_reason": "name_line_matches_generic_header_or_metadata_keyword"
+        },
+        {
+          "product_name_line_no": 5,
+          "product_name_raw_line": "AANTAL OMSCHRIJVING PRIJS BEDRAG",
+          "rejection_reason": "name_line_matches_generic_header_or_metadata_keyword"
+        },
+        {
+          "product_name_line_no": 10,
+          "product_name_raw_line": "—..m",
+          "rejection_reason": "name_line_has_too_little_alpha_text"
+        },
+        {
+          "product_name_line_no": 15,
+          "product_name_raw_line": "waarvan /",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 16,
+          "product_name_raw_line": "BONUS BOX",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 18,
+          "product_name_raw_line": "TOTAAE",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 35,
+          "product_name_raw_line": "Leesmethode CHIP",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 37,
+          "product_name_raw_line": "tw OVER ER",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 40,
+          "product_name_raw_line": "A UT",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 44,
+          "product_name_raw_line": "ze kas Ver KerS",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 46,
+          "product_name_raw_line": "KEGEL ic areade",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 33,
+          "amount_raw_line": "Totaal 8,28 EUR Contactless",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "diagnostic_only": true,
+      "reconstruction_applied": false
+    },
+    "amount_only_exclusion_diagnostics": {
+      "excluded_amount_only_lines": [],
+      "excluded_amount_only_count": 0,
+      "amount_only_exclusion_reason": "amount_currency_only_in_or_after_payment_total_vat_zone"
+    },
+    "loyalty_exclusion_diagnostics": {
+      "excluded_loyalty_lines": [
+        {
+          "line_no": 16,
+          "raw_line": "BONUS BOX",
+          "normalized_line": "BONUS BOX",
+          "previous_line_type": "discount_line",
+          "matched_loyalty_rule": [
+            {
+              "scope": "store:ah",
+              "keyword": "bonus box"
+            }
+          ],
+          "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+        }
+      ],
+      "excluded_loyalty_count": 1,
+      "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "refinement_diagnostics": {
+      "profile": "generic",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "totals_diagnostics": {
+      "store_hint": "ah",
+      "gross_line_sum": "0.00",
+      "discount_total_detected": "0.00",
+      "net_total_candidate": "0.00",
+      "selected_total_hint": {
+        "line_no": 33,
+        "amount": "8.28",
+        "raw_line": "Totaal 8,28 EUR Contactless",
+        "reason": "total_keyword",
+        "selected_total_hint_reason": "first_payable_total_like_line"
+      },
+      "selected_total_hint_reason": "first_payable_total_like_line",
+      "net_vs_selected_total_difference": "-8.28",
+      "all_total_hints": [
+        {
+          "line_no": 33,
+          "amount": "8.28",
+          "raw_line": "Totaal 8,28 EUR Contactless",
+          "reason": "total_keyword"
+        }
+      ],
+      "excluded_total_hints": [],
+      "selected_discount_strategy": "sum_individual_discount_lines",
+      "selected_discount_candidates": [],
+      "excluded_discount_candidates": [],
+      "all_discount_candidates": [],
+      "discount_candidate_count": 0,
+      "line_count_after_merge": 0,
+      "totals_strategy": "diagnostic_gross_minus_selected_discount_vs_selected_total_hint",
+      "suspicious_amounts": [],
+      "possible_duplicate_lines": [],
+      "possible_missing_discount_application": [],
+      "amount_delta_candidates": [
+        {
+          "line_no": 33,
+          "amount": "8.28",
+          "raw_line": "Totaal 8,28 EUR Contactless",
+          "line_type": "payment_line",
+          "reason": "ocr_line_amount_equals_abs_net_vs_selected_total_difference"
+        }
+      ]
+    },
+    "ocr_region_amount_diagnostics": {
+      "diagnostic_scope": "tesseract_image_to_data_region_amount_diagnostics",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "image_file": "AH foto 2.jpeg",
+      "ocr_region_count": 29,
+      "amount_region_count": 1,
+      "candidate_region_link_count": 0,
+      "candidate_region_links": [],
+      "orphan_product_name_region_diagnostics": [
+        {
+          "product_name_line_no": 1,
+          "product_name_raw_line": "Albert Heijn Ger Koopman",
+          "name_region_key": "1:2:1:1",
+          "name_region_text": "Albert Heijn Ger Koopman",
+          "name_region_box": {
+            "left": 304,
+            "top": 244,
+            "width": 479,
+            "height": 35,
+            "right": 783,
+            "bottom": 279,
+            "center_x": 543,
+            "center_y": 261
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:16:3:2",
+              "amount_region_text": "Totaal 8,28 EUR Contactless",
+              "amounts": [
+                "8.28"
+              ],
+              "amount_region_box": {
+                "left": 98,
+                "top": 1364,
+                "width": 651,
+                "height": 43,
+                "right": 749,
+                "bottom": 1407,
+                "center_x": 423,
+                "center_y": 1385
+              },
+              "vertical_distance_px": 1124,
+              "horizontal_gap_px": -685,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 2,
+          "product_name_raw_line": "Polenplein 24a Driel",
+          "name_region_key": "1:2:1:2",
+          "name_region_text": "Polenplein 24a Driel",
+          "name_region_box": {
+            "left": 344,
+            "top": 282,
+            "width": 392,
+            "height": 38,
+            "right": 736,
+            "bottom": 320,
+            "center_x": 540,
+            "center_y": 301
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:16:3:2",
+              "amount_region_text": "Totaal 8,28 EUR Contactless",
+              "amounts": [
+                "8.28"
+              ],
+              "amount_region_box": {
+                "left": 98,
+                "top": 1364,
+                "width": 651,
+                "height": 43,
+                "right": 749,
+                "bottom": 1407,
+                "center_x": 423,
+                "center_y": 1385
+              },
+              "vertical_distance_px": 1084,
+              "horizontal_gap_px": -638,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 3,
+          "product_name_raw_line": "tel: 026-4742394",
+          "name_region_key": "1:2:1:3",
+          "name_region_text": "tel: 026-4742394",
+          "name_region_box": {
+            "left": 385,
+            "top": 321,
+            "width": 319,
+            "height": 35,
+            "right": 704,
+            "bottom": 356,
+            "center_x": 544,
+            "center_y": 338
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:16:3:2",
+              "amount_region_text": "Totaal 8,28 EUR Contactless",
+              "amounts": [
+                "8.28"
+              ],
+              "amount_region_box": {
+                "left": 98,
+                "top": 1364,
+                "width": 651,
+                "height": 43,
+                "right": 749,
+                "bottom": 1407,
+                "center_x": 423,
+                "center_y": 1385
+              },
+              "vertical_distance_px": 1047,
+              "horizontal_gap_px": -606,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 5,
+          "product_name_raw_line": "AANTAL OMSCHRIJVING PRIJS BEDRAG",
+          "name_region_key": "1:4:1:1",
+          "name_region_text": "AANTAL OMSCHRIJVING PRIJS BEDRAG",
+          "name_region_box": {
+            "left": 121,
+            "top": 393,
+            "width": 686,
+            "height": 76,
+            "right": 807,
+            "bottom": 469,
+            "center_x": 464,
+            "center_y": 431
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:16:3:2",
+              "amount_region_text": "Totaal 8,28 EUR Contactless",
+              "amounts": [
+                "8.28"
+              ],
+              "amount_region_box": {
+                "left": 98,
+                "top": 1364,
+                "width": 651,
+                "height": 43,
+                "right": 749,
+                "bottom": 1407,
+                "center_x": 423,
+                "center_y": 1385
+              },
+              "vertical_distance_px": 954,
+              "horizontal_gap_px": -709,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 7,
+          "product_name_raw_line": "AH M GEHAKT",
+          "name_region_key": "1:5:1:1",
+          "name_region_text": "AH M GEHAKT",
+          "name_region_box": {
+            "left": 283,
+            "top": 488,
+            "width": 218,
+            "height": 32,
+            "right": 501,
+            "bottom": 520,
+            "center_x": 392,
+            "center_y": 504
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:16:3:2",
+              "amount_region_text": "Totaal 8,28 EUR Contactless",
+              "amounts": [
+                "8.28"
+              ],
+              "amount_region_box": {
+                "left": 98,
+                "top": 1364,
+                "width": 651,
+                "height": 43,
+                "right": 749,
+                "bottom": 1407,
+                "center_x": 423,
+                "center_y": 1385
+              },
+              "vertical_distance_px": 881,
+              "horizontal_gap_px": -403,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 8,
+          "product_name_raw_line": "SOEPGR BASIS",
+          "name_region_key": "1:5:1:2",
+          "name_region_text": "SOEPGR BASIS",
+          "name_region_box": {
+            "left": 283,
+            "top": 529,
+            "width": 241,
+            "height": 31,
+            "right": 524,
+            "bottom": 560,
+            "center_x": 403,
+            "center_y": 544
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:16:3:2",
+              "amount_region_text": "Totaal 8,28 EUR Contactless",
+              "amounts": [
+                "8.28"
+              ],
+              "amount_region_box": {
+                "left": 98,
+                "top": 1364,
+                "width": 651,
+                "height": 43,
+                "right": 749,
+                "bottom": 1407,
+                "center_x": 423,
+                "center_y": 1385
+              },
+              "vertical_distance_px": 841,
+              "horizontal_gap_px": -426,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 10,
+          "product_name_raw_line": "—..m",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "no_matchable_product_name_tokens"
+        },
+        {
+          "product_name_line_no": 15,
+          "product_name_raw_line": "waarvan /",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 16,
+          "product_name_raw_line": "BONUS BOX",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 18,
+          "product_name_raw_line": "TOTAAE",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 35,
+          "product_name_raw_line": "Leesmethode CHIP",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 37,
+          "product_name_raw_line": "tw OVER ER",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 40,
+          "product_name_raw_line": "A UT",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 44,
+          "product_name_raw_line": "ze kas Ver KerS",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 46,
+          "product_name_raw_line": "KEGEL ic areade",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "limits": {
+        "max_vertical_distance_px": 28,
+        "max_nearby_vertical_distance_px": 60,
+        "min_right_gap_px": -10
+      }
+    }
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "Albert Heijn Ger Koopman",
+      "normalized_line": "Albert Heijn Ger Koopman",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "Polenplein 24a Driel",
+      "normalized_line": "Polenplein 24a Driel",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "tel: 026-4742394",
+      "normalized_line": "tel: 026-4742394",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "AANTAL OMSCHRIJVING PRIJS BEDRAG",
+      "normalized_line": "AANTAL OMSCHRIJVING PRIJS BEDRAG",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "AH M GEHAKT",
+      "normalized_line": "AH M GEHAKT",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "SOEPGR BASIS",
+      "normalized_line": "SOEPGR BASIS",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "—..m",
+      "normalized_line": "—..m",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "SUBTOTAAL.",
+      "normalized_line": "SUBTOTAAL.",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "JOUW VOORDEEL",
+      "normalized_line": "JOUW VOORDEEL",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "waarvan /",
+      "normalized_line": "waarvan /",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "BONUS BOX",
+      "normalized_line": "BONUS BOX",
+      "line_type": "unknown_line",
+      "reason": "loyalty_payment_zone_excluded"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "TOTAAE",
+      "normalized_line": "TOTAAE",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "BETAALD MET:",
+      "normalized_line": "BETAALD MET:",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "PINNEN",
+      "normalized_line": "PINNEN",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "POI: 50100891 KLANTTICKET",
+      "normalized_line": "POI: 50100891 KLANTTICKET",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "Terminal BS171970 Merchant 3732071002",
+      "normalized_line": "Terminal BS171970 Merchant 3732071002",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "Periode 6085 Transactie 00093286",
+      "normalized_line": "Periode 6085 Transactie 00093286",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "Token  1003030534301033342 V PAY",
+      "normalized_line": "Token 1003030534301033342 V PAY",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "(A0000000032020) Kaart 487512xxxxxxxxx3334",
+      "normalized_line": "(A0000000032020) Kaart 487512xxxxxxxxx3334",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "Kaartserienummer 2 BETALING",
+      "normalized_line": "Kaartserienummer 2 BETALING",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "Datum 26/03/2026 15: 18 Autorisatiecode WO1081",
+      "normalized_line": "Datum 26/03/2026 15: 18 Autorisatiecode WO1081",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "Totaal 8,28 EUR Contactless",
+      "normalized_line": "Totaal 8,28 EUR Contactless",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "Leesmethode CHIP",
+      "normalized_line": "Leesmethode CHIP",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "tw OVER ER",
+      "normalized_line": "tw OVER ER",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "4 TOTAAL ren ie",
+      "normalized_line": "4 TOTAAL ren ie",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 40,
+      "raw_line": "A UT",
+      "normalized_line": "A UT",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "16 4 26-08 2028",
+      "normalized_line": "16 4 26-08 2028",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 43,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 44,
+      "raw_line": "ze kas Ver KerS",
+      "normalized_line": "ze kas Ver KerS",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 45,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 46,
+      "raw_line": "KEGEL ic areade",
+      "normalized_line": "KEGEL ic areade",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    }
+  ],
+  "lines": []
+}
