@@ -15,18 +15,20 @@ def build_diagnostics_summary(
     review_suggestions: List[ReviewSuggestion],
 ) -> Dict[str, Any]:
     metadata = payload.get('metadata', {}) or {}
+    has_usable_legacy_diagnostics = _has_usable_legacy_poc_diagnostics(metadata, payload)
 
     image_quality = _derive_image_quality(metadata)
-    ocr_quality = _derive_ocr_quality(metadata, parser_rows)
+    ocr_quality = _derive_ocr_quality(metadata, parser_rows, has_usable_legacy_diagnostics)
     parser_confidence = _derive_parser_confidence(parser_rows)
     safety_level = _derive_safety_level(review_suggestions)
-    dominant_issue = _derive_dominant_issue(metadata, parser_rows)
+    dominant_issue = _derive_dominant_issue(metadata, parser_rows, has_usable_legacy_diagnostics)
     recommended_user_action = _derive_recommended_user_action(
         image_quality=image_quality,
         parser_confidence=parser_confidence,
         parser_rows=parser_rows,
         review_suggestions=review_suggestions,
         dominant_issue=dominant_issue,
+        has_usable_legacy_diagnostics=has_usable_legacy_diagnostics,
     )
 
     return {
@@ -36,7 +38,30 @@ def build_diagnostics_summary(
         'safety_level': safety_level,
         'dominant_issue': dominant_issue,
         'recommended_user_action': recommended_user_action,
+        'has_usable_legacy_poc_diagnostics': has_usable_legacy_diagnostics,
     }
+
+
+def _has_usable_legacy_poc_diagnostics(metadata: Dict[str, Any], payload: Dict[str, Any]) -> bool:
+    if metadata.get('product_block_rescue_diagnostics'):
+        return True
+
+    if metadata.get('line_type_counts'):
+        return True
+
+    if 'detected_rows' in metadata:
+        return True
+
+    if metadata.get('line_diagnostics'):
+        return True
+
+    if metadata.get('product_block'):
+        return True
+
+    has_schema_version = bool(payload.get('schema_version'))
+    has_source_file = bool(metadata.get('source_file') or payload.get('source_file'))
+
+    return has_schema_version and has_source_file
 
 
 def _derive_image_quality(metadata: Dict[str, Any]) -> str:
@@ -62,7 +87,11 @@ def _derive_image_quality(metadata: Dict[str, Any]) -> str:
     return 'poor'
 
 
-def _derive_ocr_quality(metadata: Dict[str, Any], parser_rows: List[ParserRow]) -> str:
+def _derive_ocr_quality(
+    metadata: Dict[str, Any],
+    parser_rows: List[ParserRow],
+    has_usable_legacy_diagnostics: bool,
+) -> str:
     normalization = metadata.get('ocr_structural_normalization', {}) or {}
     groups = normalization.get('normalized_line_groups', []) or []
 
@@ -74,6 +103,9 @@ def _derive_ocr_quality(metadata: Dict[str, Any], parser_rows: List[ParserRow]) 
 
     if groups:
         return 'poor'
+
+    if has_usable_legacy_diagnostics:
+        return 'moderate'
 
     return 'unknown'
 
@@ -116,6 +148,7 @@ def _derive_safety_level(review_suggestions: List[ReviewSuggestion]) -> str:
 def _derive_dominant_issue(
     metadata: Dict[str, Any],
     parser_rows: List[ParserRow],
+    has_usable_legacy_diagnostics: bool,
 ) -> str:
     governance = metadata.get('pre_ocr_image_correction_governance', {}) or {}
     findings = governance.get('image_quality_findings', {}) or {}
@@ -127,6 +160,9 @@ def _derive_dominant_issue(
     rejected_groups = normalization.get('rejected_groups', []) or []
 
     if rejected_groups:
+        return 'ocr_structure'
+
+    if not parser_rows and has_usable_legacy_diagnostics:
         return 'ocr_structure'
 
     if not parser_rows:
@@ -141,6 +177,7 @@ def _derive_recommended_user_action(
     parser_rows: List[ParserRow],
     review_suggestions: List[ReviewSuggestion],
     dominant_issue: str,
+    has_usable_legacy_diagnostics: bool,
 ) -> str:
     if image_quality == 'poor':
         return 'rescan'
@@ -149,6 +186,9 @@ def _derive_recommended_user_action(
         return 'accept'
 
     if review_suggestions:
+        return 'review'
+
+    if not parser_rows and has_usable_legacy_diagnostics:
         return 'review'
 
     if dominant_issue == 'missing_parser_rows':
