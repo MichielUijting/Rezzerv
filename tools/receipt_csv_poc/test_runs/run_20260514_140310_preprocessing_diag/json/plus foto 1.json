@@ -2118,6 +2118,3504 @@
           "reconstruction_applied": false
         }
       ]
+    },
+    "article_zone_amount_validation": {
+      "diagnostic_scope": "article_zone_amount_to_left_product_validation",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "best_variant": {
+        "variant": "scale_up_175",
+        "article_zone_amount_count": 6,
+        "validated_pair_count": 0,
+        "rejected_pair_count": 30
+      },
+      "limits": {
+        "max_vertical_distance_px": 34,
+        "min_horizontal_gap_px": -20,
+        "max_horizontal_gap_px": 600
+      },
+      "variants": [
+        {
+          "variant": "original",
+          "article_zone_amount_count": 0,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 0,
+          "validated_pairs": [],
+          "rejected_pairs": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "grayscale",
+          "article_zone_amount_count": 2,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 10,
+          "validated_pairs": [],
+          "rejected_pairs": [
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "* GX WEBELDGER TERTYAKE 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1029,
+                "top": 1299,
+                "width": 556,
+                "height": 38,
+                "right": 1585,
+                "bottom": 1337,
+                "center_x": 1307,
+                "center_y": 1318
+              },
+              "amount_mean_confidence": 72.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 126,
+              "horizontal_gap_px": -569,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "* GX WEBELDGER TERTYAKE 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1029,
+                "top": 1299,
+                "width": 556,
+                "height": 38,
+                "right": 1585,
+                "bottom": 1337,
+                "center_x": 1307,
+                "center_y": 1318
+              },
+              "amount_mean_confidence": 72.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 98,
+              "horizontal_gap_px": -448,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "* GX WEBELDGER TERTYAKE 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1029,
+                "top": 1299,
+                "width": 556,
+                "height": 38,
+                "right": 1585,
+                "bottom": 1337,
+                "center_x": 1307,
+                "center_y": 1318
+              },
+              "amount_mean_confidence": 72.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 66,
+              "horizontal_gap_px": -448,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "* GX WEBELDGER TERTYAKE 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1029,
+                "top": 1299,
+                "width": 556,
+                "height": 38,
+                "right": 1585,
+                "bottom": 1337,
+                "center_x": 1307,
+                "center_y": 1318
+              },
+              "amount_mean_confidence": 72.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 37,
+              "horizontal_gap_px": -428,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "* GX WEBELDGER TERTYAKE 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1029,
+                "top": 1299,
+                "width": 556,
+                "height": 38,
+                "right": 1585,
+                "bottom": 1337,
+                "center_x": 1307,
+                "center_y": 1318
+              },
+              "amount_mean_confidence": 72.4,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 2,
+              "horizontal_gap_px": -534,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "* 2x WERELDGER.Z-AFR 8080 2,87",
+              "amounts": [
+                "2.87"
+              ],
+              "amount_box": {
+                "left": 1028,
+                "top": 1329,
+                "width": 558,
+                "height": 39,
+                "right": 1586,
+                "bottom": 1368,
+                "center_x": 1307,
+                "center_y": 1348
+              },
+              "amount_mean_confidence": 59.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 156,
+              "horizontal_gap_px": -570,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "* 2x WERELDGER.Z-AFR 8080 2,87",
+              "amounts": [
+                "2.87"
+              ],
+              "amount_box": {
+                "left": 1028,
+                "top": 1329,
+                "width": 558,
+                "height": 39,
+                "right": 1586,
+                "bottom": 1368,
+                "center_x": 1307,
+                "center_y": 1348
+              },
+              "amount_mean_confidence": 59.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 128,
+              "horizontal_gap_px": -449,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "* 2x WERELDGER.Z-AFR 8080 2,87",
+              "amounts": [
+                "2.87"
+              ],
+              "amount_box": {
+                "left": 1028,
+                "top": 1329,
+                "width": 558,
+                "height": 39,
+                "right": 1586,
+                "bottom": 1368,
+                "center_x": 1307,
+                "center_y": 1348
+              },
+              "amount_mean_confidence": 59.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 96,
+              "horizontal_gap_px": -449,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "* 2x WERELDGER.Z-AFR 8080 2,87",
+              "amounts": [
+                "2.87"
+              ],
+              "amount_box": {
+                "left": 1028,
+                "top": 1329,
+                "width": 558,
+                "height": 39,
+                "right": 1586,
+                "bottom": 1368,
+                "center_x": 1307,
+                "center_y": 1348
+              },
+              "amount_mean_confidence": 59.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 67,
+              "horizontal_gap_px": -429,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "* 2x WERELDGER.Z-AFR 8080 2,87",
+              "amounts": [
+                "2.87"
+              ],
+              "amount_box": {
+                "left": 1028,
+                "top": 1329,
+                "width": 558,
+                "height": 39,
+                "right": 1586,
+                "bottom": 1368,
+                "center_x": 1307,
+                "center_y": 1348
+              },
+              "amount_mean_confidence": 59.8,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 32,
+              "horizontal_gap_px": -535,
+              "diagnostic_only": true
+            }
+          ],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "contrast",
+          "article_zone_amount_count": 2,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 10,
+          "validated_pairs": [],
+          "rejected_pairs": [
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "* GX WERELOGER. TERTYAKE 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1029,
+                "top": 1299,
+                "width": 556,
+                "height": 38,
+                "right": 1585,
+                "bottom": 1337,
+                "center_x": 1307,
+                "center_y": 1318
+              },
+              "amount_mean_confidence": 64.6,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 126,
+              "horizontal_gap_px": -569,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "* GX WERELOGER. TERTYAKE 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1029,
+                "top": 1299,
+                "width": 556,
+                "height": 38,
+                "right": 1585,
+                "bottom": 1337,
+                "center_x": 1307,
+                "center_y": 1318
+              },
+              "amount_mean_confidence": 64.6,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 98,
+              "horizontal_gap_px": -448,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "* GX WERELOGER. TERTYAKE 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1029,
+                "top": 1299,
+                "width": 556,
+                "height": 38,
+                "right": 1585,
+                "bottom": 1337,
+                "center_x": 1307,
+                "center_y": 1318
+              },
+              "amount_mean_confidence": 64.6,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 66,
+              "horizontal_gap_px": -448,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "* GX WERELOGER. TERTYAKE 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1029,
+                "top": 1299,
+                "width": 556,
+                "height": 38,
+                "right": 1585,
+                "bottom": 1337,
+                "center_x": 1307,
+                "center_y": 1318
+              },
+              "amount_mean_confidence": 64.6,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 37,
+              "horizontal_gap_px": -428,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "* GX WERELOGER. TERTYAKE 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1029,
+                "top": 1299,
+                "width": 556,
+                "height": 38,
+                "right": 1585,
+                "bottom": 1337,
+                "center_x": 1307,
+                "center_y": 1318
+              },
+              "amount_mean_confidence": 64.6,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 2,
+              "horizontal_gap_px": -534,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "* 2x WERELOGER.Z-AFR 8080 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1028,
+                "top": 1329,
+                "width": 558,
+                "height": 39,
+                "right": 1586,
+                "bottom": 1368,
+                "center_x": 1307,
+                "center_y": 1348
+              },
+              "amount_mean_confidence": 62.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 156,
+              "horizontal_gap_px": -570,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "* 2x WERELOGER.Z-AFR 8080 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1028,
+                "top": 1329,
+                "width": 558,
+                "height": 39,
+                "right": 1586,
+                "bottom": 1368,
+                "center_x": 1307,
+                "center_y": 1348
+              },
+              "amount_mean_confidence": 62.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 128,
+              "horizontal_gap_px": -449,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "* 2x WERELOGER.Z-AFR 8080 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1028,
+                "top": 1329,
+                "width": 558,
+                "height": 39,
+                "right": 1586,
+                "bottom": 1368,
+                "center_x": 1307,
+                "center_y": 1348
+              },
+              "amount_mean_confidence": 62.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 96,
+              "horizontal_gap_px": -449,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "* 2x WERELOGER.Z-AFR 8080 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1028,
+                "top": 1329,
+                "width": 558,
+                "height": 39,
+                "right": 1586,
+                "bottom": 1368,
+                "center_x": 1307,
+                "center_y": 1348
+              },
+              "amount_mean_confidence": 62.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 67,
+              "horizontal_gap_px": -429,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "* 2x WERELOGER.Z-AFR 8080 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1028,
+                "top": 1329,
+                "width": 558,
+                "height": 39,
+                "right": 1586,
+                "bottom": 1368,
+                "center_x": 1307,
+                "center_y": 1348
+              },
+              "amount_mean_confidence": 62.8,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 32,
+              "horizontal_gap_px": -535,
+              "diagnostic_only": true
+            }
+          ],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "threshold",
+          "article_zone_amount_count": 5,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 25,
+          "validated_pairs": [],
+          "rejected_pairs": [
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "BAMI NASI MIX VD 1.69",
+              "amounts": [
+                "1.69"
+              ],
+              "amount_box": {
+                "left": 1123,
+                "top": 1137,
+                "width": 621,
+                "height": 45,
+                "right": 1744,
+                "bottom": 1182,
+                "center_x": 1433,
+                "center_y": 1159
+              },
+              "amount_mean_confidence": 82.8,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 33,
+              "horizontal_gap_px": -475,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "BAMI NASI MIX VD 1.69",
+              "amounts": [
+                "1.69"
+              ],
+              "amount_box": {
+                "left": 1123,
+                "top": 1137,
+                "width": 621,
+                "height": 45,
+                "right": 1744,
+                "bottom": 1182,
+                "center_x": 1433,
+                "center_y": 1159
+              },
+              "amount_mean_confidence": 82.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 61,
+              "horizontal_gap_px": -354,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "BAMI NASI MIX VD 1.69",
+              "amounts": [
+                "1.69"
+              ],
+              "amount_box": {
+                "left": 1123,
+                "top": 1137,
+                "width": 621,
+                "height": 45,
+                "right": 1744,
+                "bottom": 1182,
+                "center_x": 1433,
+                "center_y": 1159
+              },
+              "amount_mean_confidence": 82.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 93,
+              "horizontal_gap_px": -354,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "BAMI NASI MIX VD 1.69",
+              "amounts": [
+                "1.69"
+              ],
+              "amount_box": {
+                "left": 1123,
+                "top": 1137,
+                "width": 621,
+                "height": 45,
+                "right": 1744,
+                "bottom": 1182,
+                "center_x": 1433,
+                "center_y": 1159
+              },
+              "amount_mean_confidence": 82.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 122,
+              "horizontal_gap_px": -334,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "BAMI NASI MIX VD 1.69",
+              "amounts": [
+                "1.69"
+              ],
+              "amount_box": {
+                "left": 1123,
+                "top": 1137,
+                "width": 621,
+                "height": 45,
+                "right": 1744,
+                "bottom": 1182,
+                "center_x": 1433,
+                "center_y": 1159
+              },
+              "amount_mean_confidence": 82.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 157,
+              "horizontal_gap_px": -440,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "PLUS geeft meer voordéell 9,85",
+              "amounts": [
+                "9.85"
+              ],
+              "amount_box": {
+                "left": 1157,
+                "top": 1169,
+                "width": 589,
+                "height": 42,
+                "right": 1746,
+                "bottom": 1211,
+                "center_x": 1451,
+                "center_y": 1190
+              },
+              "amount_mean_confidence": 69.0,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 2,
+              "horizontal_gap_px": -441,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "PLUS geeft meer voordéell 9,85",
+              "amounts": [
+                "9.85"
+              ],
+              "amount_box": {
+                "left": 1157,
+                "top": 1169,
+                "width": 589,
+                "height": 42,
+                "right": 1746,
+                "bottom": 1211,
+                "center_x": 1451,
+                "center_y": 1190
+              },
+              "amount_mean_confidence": 69.0,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 30,
+              "horizontal_gap_px": -320,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "PLUS geeft meer voordéell 9,85",
+              "amounts": [
+                "9.85"
+              ],
+              "amount_box": {
+                "left": 1157,
+                "top": 1169,
+                "width": 589,
+                "height": 42,
+                "right": 1746,
+                "bottom": 1211,
+                "center_x": 1451,
+                "center_y": 1190
+              },
+              "amount_mean_confidence": 69.0,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 62,
+              "horizontal_gap_px": -320,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "PLUS geeft meer voordéell 9,85",
+              "amounts": [
+                "9.85"
+              ],
+              "amount_box": {
+                "left": 1157,
+                "top": 1169,
+                "width": 589,
+                "height": 42,
+                "right": 1746,
+                "bottom": 1211,
+                "center_x": 1451,
+                "center_y": 1190
+              },
+              "amount_mean_confidence": 69.0,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 91,
+              "horizontal_gap_px": -300,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "PLUS geeft meer voordéell 9,85",
+              "amounts": [
+                "9.85"
+              ],
+              "amount_box": {
+                "left": 1157,
+                "top": 1169,
+                "width": 589,
+                "height": 42,
+                "right": 1746,
+                "bottom": 1211,
+                "center_x": 1451,
+                "center_y": 1190
+              },
+              "amount_mean_confidence": 69.0,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 126,
+              "horizontal_gap_px": -406,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "ROHIGE KWARK KANEELG : 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1120,
+                "top": 1201,
+                "width": 627,
+                "height": 40,
+                "right": 1747,
+                "bottom": 1241,
+                "center_x": 1433,
+                "center_y": 1221
+              },
+              "amount_mean_confidence": 59.2,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 29,
+              "horizontal_gap_px": -478,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "ROHIGE KWARK KANEELG : 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1120,
+                "top": 1201,
+                "width": 627,
+                "height": 40,
+                "right": 1747,
+                "bottom": 1241,
+                "center_x": 1433,
+                "center_y": 1221
+              },
+              "amount_mean_confidence": 59.2,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 1,
+              "horizontal_gap_px": -357,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "ROHIGE KWARK KANEELG : 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1120,
+                "top": 1201,
+                "width": 627,
+                "height": 40,
+                "right": 1747,
+                "bottom": 1241,
+                "center_x": 1433,
+                "center_y": 1221
+              },
+              "amount_mean_confidence": 59.2,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 31,
+              "horizontal_gap_px": -357,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "ROHIGE KWARK KANEELG : 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1120,
+                "top": 1201,
+                "width": 627,
+                "height": 40,
+                "right": 1747,
+                "bottom": 1241,
+                "center_x": 1433,
+                "center_y": 1221
+              },
+              "amount_mean_confidence": 59.2,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 60,
+              "horizontal_gap_px": -337,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "ROHIGE KWARK KANEELG : 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1120,
+                "top": 1201,
+                "width": 627,
+                "height": 40,
+                "right": 1747,
+                "bottom": 1241,
+                "center_x": 1433,
+                "center_y": 1221
+              },
+              "amount_mean_confidence": 59.2,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 95,
+              "horizontal_gap_px": -443,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "ROHTGE KWARK WIT CHO : 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1119,
+                "top": 1231,
+                "width": 629,
+                "height": 41,
+                "right": 1748,
+                "bottom": 1272,
+                "center_x": 1433,
+                "center_y": 1251
+              },
+              "amount_mean_confidence": 76.83,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 59,
+              "horizontal_gap_px": -479,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "ROHTGE KWARK WIT CHO : 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1119,
+                "top": 1231,
+                "width": 629,
+                "height": 41,
+                "right": 1748,
+                "bottom": 1272,
+                "center_x": 1433,
+                "center_y": 1251
+              },
+              "amount_mean_confidence": 76.83,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 31,
+              "horizontal_gap_px": -358,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "ROHTGE KWARK WIT CHO : 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1119,
+                "top": 1231,
+                "width": 629,
+                "height": 41,
+                "right": 1748,
+                "bottom": 1272,
+                "center_x": 1433,
+                "center_y": 1251
+              },
+              "amount_mean_confidence": 76.83,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 1,
+              "horizontal_gap_px": -358,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "ROHTGE KWARK WIT CHO : 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1119,
+                "top": 1231,
+                "width": 629,
+                "height": 41,
+                "right": 1748,
+                "bottom": 1272,
+                "center_x": 1433,
+                "center_y": 1251
+              },
+              "amount_mean_confidence": 76.83,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 30,
+              "horizontal_gap_px": -338,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "ROHTGE KWARK WIT CHO : 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1119,
+                "top": 1231,
+                "width": 629,
+                "height": 41,
+                "right": 1748,
+                "bottom": 1272,
+                "center_x": 1433,
+                "center_y": 1251
+              },
+              "amount_mean_confidence": 76.83,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 65,
+              "horizontal_gap_px": -444,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "2X WERECOGER.TERTYAKT - 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1060,
+                "top": 1296,
+                "width": 527,
+                "height": 42,
+                "right": 1587,
+                "bottom": 1338,
+                "center_x": 1323,
+                "center_y": 1317
+              },
+              "amount_mean_confidence": 74.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 125,
+              "horizontal_gap_px": -538,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "2X WERECOGER.TERTYAKT - 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1060,
+                "top": 1296,
+                "width": 527,
+                "height": 42,
+                "right": 1587,
+                "bottom": 1338,
+                "center_x": 1323,
+                "center_y": 1317
+              },
+              "amount_mean_confidence": 74.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 97,
+              "horizontal_gap_px": -417,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "2X WERECOGER.TERTYAKT - 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1060,
+                "top": 1296,
+                "width": 527,
+                "height": 42,
+                "right": 1587,
+                "bottom": 1338,
+                "center_x": 1323,
+                "center_y": 1317
+              },
+              "amount_mean_confidence": 74.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 65,
+              "horizontal_gap_px": -417,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "2X WERECOGER.TERTYAKT - 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1060,
+                "top": 1296,
+                "width": 527,
+                "height": 42,
+                "right": 1587,
+                "bottom": 1338,
+                "center_x": 1323,
+                "center_y": 1317
+              },
+              "amount_mean_confidence": 74.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 36,
+              "horizontal_gap_px": -397,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "2X WERECOGER.TERTYAKT - 2,97",
+              "amounts": [
+                "2.97"
+              ],
+              "amount_box": {
+                "left": 1060,
+                "top": 1296,
+                "width": 527,
+                "height": 42,
+                "right": 1587,
+                "bottom": 1338,
+                "center_x": 1323,
+                "center_y": 1317
+              },
+              "amount_mean_confidence": 74.75,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 1,
+              "horizontal_gap_px": -503,
+              "diagnostic_only": true
+            }
+          ],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "sharpen",
+          "article_zone_amount_count": 0,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 0,
+          "validated_pairs": [],
+          "rejected_pairs": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "scale_up_175",
+          "article_zone_amount_count": 6,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 30,
+          "validated_pairs": [],
+          "rejected_pairs": [
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "BART NAST HIx ¥D 1.64",
+              "amounts": [
+                "1.64"
+              ],
+              "amount_box": {
+                "left": 1965,
+                "top": 1992,
+                "width": 1086,
+                "height": 76,
+                "right": 3051,
+                "bottom": 2068,
+                "center_x": 2508,
+                "center_y": 2030
+              },
+              "amount_mean_confidence": 78.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 838,
+              "horizontal_gap_px": 367,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "BART NAST HIx ¥D 1.64",
+              "amounts": [
+                "1.64"
+              ],
+              "amount_box": {
+                "left": 1965,
+                "top": 1992,
+                "width": 1086,
+                "height": 76,
+                "right": 3051,
+                "bottom": 2068,
+                "center_x": 2508,
+                "center_y": 2030
+              },
+              "amount_mean_confidence": 78.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 810,
+              "horizontal_gap_px": 488,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "BART NAST HIx ¥D 1.64",
+              "amounts": [
+                "1.64"
+              ],
+              "amount_box": {
+                "left": 1965,
+                "top": 1992,
+                "width": 1086,
+                "height": 76,
+                "right": 3051,
+                "bottom": 2068,
+                "center_x": 2508,
+                "center_y": 2030
+              },
+              "amount_mean_confidence": 78.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 778,
+              "horizontal_gap_px": 488,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "BART NAST HIx ¥D 1.64",
+              "amounts": [
+                "1.64"
+              ],
+              "amount_box": {
+                "left": 1965,
+                "top": 1992,
+                "width": 1086,
+                "height": 76,
+                "right": 3051,
+                "bottom": 2068,
+                "center_x": 2508,
+                "center_y": 2030
+              },
+              "amount_mean_confidence": 78.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 749,
+              "horizontal_gap_px": 508,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "BART NAST HIx ¥D 1.64",
+              "amounts": [
+                "1.64"
+              ],
+              "amount_box": {
+                "left": 1965,
+                "top": 1992,
+                "width": 1086,
+                "height": 76,
+                "right": 3051,
+                "bottom": 2068,
+                "center_x": 2508,
+                "center_y": 2030
+              },
+              "amount_mean_confidence": 78.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 714,
+              "horizontal_gap_px": 402,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "ROMIGE KWARK KANEELB 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1960,
+                "top": 2105,
+                "width": 1095,
+                "height": 65,
+                "right": 3055,
+                "bottom": 2170,
+                "center_x": 2507,
+                "center_y": 2137
+              },
+              "amount_mean_confidence": 82.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 945,
+              "horizontal_gap_px": 362,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "ROMIGE KWARK KANEELB 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1960,
+                "top": 2105,
+                "width": 1095,
+                "height": 65,
+                "right": 3055,
+                "bottom": 2170,
+                "center_x": 2507,
+                "center_y": 2137
+              },
+              "amount_mean_confidence": 82.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 917,
+              "horizontal_gap_px": 483,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "ROMIGE KWARK KANEELB 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1960,
+                "top": 2105,
+                "width": 1095,
+                "height": 65,
+                "right": 3055,
+                "bottom": 2170,
+                "center_x": 2507,
+                "center_y": 2137
+              },
+              "amount_mean_confidence": 82.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 885,
+              "horizontal_gap_px": 483,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "ROMIGE KWARK KANEELB 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1960,
+                "top": 2105,
+                "width": 1095,
+                "height": 65,
+                "right": 3055,
+                "bottom": 2170,
+                "center_x": 2507,
+                "center_y": 2137
+              },
+              "amount_mean_confidence": 82.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 856,
+              "horizontal_gap_px": 503,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "ROMIGE KWARK KANEELB 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1960,
+                "top": 2105,
+                "width": 1095,
+                "height": 65,
+                "right": 3055,
+                "bottom": 2170,
+                "center_x": 2507,
+                "center_y": 2137
+              },
+              "amount_mean_confidence": 82.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 821,
+              "horizontal_gap_px": 397,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "BOMIGE KWARK WIT CHO 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1959,
+                "top": 2160,
+                "width": 1100,
+                "height": 60,
+                "right": 3059,
+                "bottom": 2220,
+                "center_x": 2509,
+                "center_y": 2190
+              },
+              "amount_mean_confidence": 80.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 998,
+              "horizontal_gap_px": 361,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "BOMIGE KWARK WIT CHO 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1959,
+                "top": 2160,
+                "width": 1100,
+                "height": 60,
+                "right": 3059,
+                "bottom": 2220,
+                "center_x": 2509,
+                "center_y": 2190
+              },
+              "amount_mean_confidence": 80.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 970,
+              "horizontal_gap_px": 482,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "BOMIGE KWARK WIT CHO 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1959,
+                "top": 2160,
+                "width": 1100,
+                "height": 60,
+                "right": 3059,
+                "bottom": 2220,
+                "center_x": 2509,
+                "center_y": 2190
+              },
+              "amount_mean_confidence": 80.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 938,
+              "horizontal_gap_px": 482,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "BOMIGE KWARK WIT CHO 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1959,
+                "top": 2160,
+                "width": 1100,
+                "height": 60,
+                "right": 3059,
+                "bottom": 2220,
+                "center_x": 2509,
+                "center_y": 2190
+              },
+              "amount_mean_confidence": 80.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 909,
+              "horizontal_gap_px": 502,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "BOMIGE KWARK WIT CHO 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 1959,
+                "top": 2160,
+                "width": 1100,
+                "height": 60,
+                "right": 3059,
+                "bottom": 2220,
+                "center_x": 2509,
+                "center_y": 2190
+              },
+              "amount_mean_confidence": 80.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 874,
+              "horizontal_gap_px": 396,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "STRAWBEBAY SCHNITTE 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_box": {
+                "left": 1958,
+                "top": 2216,
+                "width": 1103,
+                "height": 59,
+                "right": 3061,
+                "bottom": 2275,
+                "center_x": 2509,
+                "center_y": 2245
+              },
+              "amount_mean_confidence": 76.33,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1053,
+              "horizontal_gap_px": 360,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "STRAWBEBAY SCHNITTE 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_box": {
+                "left": 1958,
+                "top": 2216,
+                "width": 1103,
+                "height": 59,
+                "right": 3061,
+                "bottom": 2275,
+                "center_x": 2509,
+                "center_y": 2245
+              },
+              "amount_mean_confidence": 76.33,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1025,
+              "horizontal_gap_px": 481,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "STRAWBEBAY SCHNITTE 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_box": {
+                "left": 1958,
+                "top": 2216,
+                "width": 1103,
+                "height": 59,
+                "right": 3061,
+                "bottom": 2275,
+                "center_x": 2509,
+                "center_y": 2245
+              },
+              "amount_mean_confidence": 76.33,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 993,
+              "horizontal_gap_px": 481,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "STRAWBEBAY SCHNITTE 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_box": {
+                "left": 1958,
+                "top": 2216,
+                "width": 1103,
+                "height": 59,
+                "right": 3061,
+                "bottom": 2275,
+                "center_x": 2509,
+                "center_y": 2245
+              },
+              "amount_mean_confidence": 76.33,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 964,
+              "horizontal_gap_px": 501,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "STRAWBEBAY SCHNITTE 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_box": {
+                "left": 1958,
+                "top": 2216,
+                "width": 1103,
+                "height": 59,
+                "right": 3061,
+                "bottom": 2275,
+                "center_x": 2509,
+                "center_y": 2245
+              },
+              "amount_mean_confidence": 76.33,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 929,
+              "horizontal_gap_px": 395,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "2X WEBELDGER TEHTYAKI 2,97 5,94",
+              "amounts": [
+                "2.97",
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 1861,
+                "top": 2274,
+                "width": 1199,
+                "height": 65,
+                "right": 3060,
+                "bottom": 2339,
+                "center_x": 2460,
+                "center_y": 2306
+              },
+              "amount_mean_confidence": 74.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1114,
+              "horizontal_gap_px": 263,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "2X WEBELDGER TEHTYAKI 2,97 5,94",
+              "amounts": [
+                "2.97",
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 1861,
+                "top": 2274,
+                "width": 1199,
+                "height": 65,
+                "right": 3060,
+                "bottom": 2339,
+                "center_x": 2460,
+                "center_y": 2306
+              },
+              "amount_mean_confidence": 74.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1086,
+              "horizontal_gap_px": 384,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "2X WEBELDGER TEHTYAKI 2,97 5,94",
+              "amounts": [
+                "2.97",
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 1861,
+                "top": 2274,
+                "width": 1199,
+                "height": 65,
+                "right": 3060,
+                "bottom": 2339,
+                "center_x": 2460,
+                "center_y": 2306
+              },
+              "amount_mean_confidence": 74.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1054,
+              "horizontal_gap_px": 384,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "2X WEBELDGER TEHTYAKI 2,97 5,94",
+              "amounts": [
+                "2.97",
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 1861,
+                "top": 2274,
+                "width": 1199,
+                "height": 65,
+                "right": 3060,
+                "bottom": 2339,
+                "center_x": 2460,
+                "center_y": 2306
+              },
+              "amount_mean_confidence": 74.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1025,
+              "horizontal_gap_px": 404,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "2X WEBELDGER TEHTYAKI 2,97 5,94",
+              "amounts": [
+                "2.97",
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 1861,
+                "top": 2274,
+                "width": 1199,
+                "height": 65,
+                "right": 3060,
+                "bottom": 2339,
+                "center_x": 2460,
+                "center_y": 2306
+              },
+              "amount_mean_confidence": 74.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 990,
+              "horizontal_gap_px": 298,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "eX WERELDGER Z-AFB.B0B0 2 97 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 1856,
+                "top": 2326,
+                "width": 1208,
+                "height": 70,
+                "right": 3064,
+                "bottom": 2396,
+                "center_x": 2460,
+                "center_y": 2361
+              },
+              "amount_mean_confidence": 63.5,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1169,
+              "horizontal_gap_px": 258,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "eX WERELDGER Z-AFB.B0B0 2 97 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 1856,
+                "top": 2326,
+                "width": 1208,
+                "height": 70,
+                "right": 3064,
+                "bottom": 2396,
+                "center_x": 2460,
+                "center_y": 2361
+              },
+              "amount_mean_confidence": 63.5,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1141,
+              "horizontal_gap_px": 379,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "eX WERELDGER Z-AFB.B0B0 2 97 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 1856,
+                "top": 2326,
+                "width": 1208,
+                "height": 70,
+                "right": 3064,
+                "bottom": 2396,
+                "center_x": 2460,
+                "center_y": 2361
+              },
+              "amount_mean_confidence": 63.5,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1109,
+              "horizontal_gap_px": 379,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "eX WERELDGER Z-AFB.B0B0 2 97 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 1856,
+                "top": 2326,
+                "width": 1208,
+                "height": 70,
+                "right": 3064,
+                "bottom": 2396,
+                "center_x": 2460,
+                "center_y": 2361
+              },
+              "amount_mean_confidence": 63.5,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1080,
+              "horizontal_gap_px": 399,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "eX WERELDGER Z-AFB.B0B0 2 97 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 1856,
+                "top": 2326,
+                "width": 1208,
+                "height": 70,
+                "right": 3064,
+                "bottom": 2396,
+                "center_x": 2460,
+                "center_y": 2361
+              },
+              "amount_mean_confidence": 63.5,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1045,
+              "horizontal_gap_px": 293,
+              "diagnostic_only": true
+            }
+          ],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "contrast_scale_up_175",
+          "article_zone_amount_count": 5,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 25,
+          "validated_pairs": [],
+          "rejected_pairs": [
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "EE OO sew Bee ag hi i A BAMI NASI MIX VD 1.64",
+              "amounts": [
+                "1.64"
+              ],
+              "amount_box": {
+                "left": 371,
+                "top": 1957,
+                "width": 2680,
+                "height": 111,
+                "right": 3051,
+                "bottom": 2068,
+                "center_x": 1711,
+                "center_y": 2012
+              },
+              "amount_mean_confidence": 47.85,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 820,
+              "horizontal_gap_px": -1227,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "EE OO sew Bee ag hi i A BAMI NASI MIX VD 1.64",
+              "amounts": [
+                "1.64"
+              ],
+              "amount_box": {
+                "left": 371,
+                "top": 1957,
+                "width": 2680,
+                "height": 111,
+                "right": 3051,
+                "bottom": 2068,
+                "center_x": 1711,
+                "center_y": 2012
+              },
+              "amount_mean_confidence": 47.85,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 792,
+              "horizontal_gap_px": -1106,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "EE OO sew Bee ag hi i A BAMI NASI MIX VD 1.64",
+              "amounts": [
+                "1.64"
+              ],
+              "amount_box": {
+                "left": 371,
+                "top": 1957,
+                "width": 2680,
+                "height": 111,
+                "right": 3051,
+                "bottom": 2068,
+                "center_x": 1711,
+                "center_y": 2012
+              },
+              "amount_mean_confidence": 47.85,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 760,
+              "horizontal_gap_px": -1106,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "EE OO sew Bee ag hi i A BAMI NASI MIX VD 1.64",
+              "amounts": [
+                "1.64"
+              ],
+              "amount_box": {
+                "left": 371,
+                "top": 1957,
+                "width": 2680,
+                "height": 111,
+                "right": 3051,
+                "bottom": 2068,
+                "center_x": 1711,
+                "center_y": 2012
+              },
+              "amount_mean_confidence": 47.85,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 731,
+              "horizontal_gap_px": -1086,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "EE OO sew Bee ag hi i A BAMI NASI MIX VD 1.64",
+              "amounts": [
+                "1.64"
+              ],
+              "amount_box": {
+                "left": 371,
+                "top": 1957,
+                "width": 2680,
+                "height": 111,
+                "right": 3051,
+                "bottom": 2068,
+                "center_x": 1711,
+                "center_y": 2012
+              },
+              "amount_mean_confidence": 47.85,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 696,
+              "horizontal_gap_px": -1192,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "SE Sats Henk rece a ee BOMIGE KWARK KANEELB 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 394,
+                "top": 2071,
+                "width": 2661,
+                "height": 99,
+                "right": 3055,
+                "bottom": 2170,
+                "center_x": 1724,
+                "center_y": 2120
+              },
+              "amount_mean_confidence": 41.6,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 928,
+              "horizontal_gap_px": -1204,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "SE Sats Henk rece a ee BOMIGE KWARK KANEELB 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 394,
+                "top": 2071,
+                "width": 2661,
+                "height": 99,
+                "right": 3055,
+                "bottom": 2170,
+                "center_x": 1724,
+                "center_y": 2120
+              },
+              "amount_mean_confidence": 41.6,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 900,
+              "horizontal_gap_px": -1083,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "SE Sats Henk rece a ee BOMIGE KWARK KANEELB 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 394,
+                "top": 2071,
+                "width": 2661,
+                "height": 99,
+                "right": 3055,
+                "bottom": 2170,
+                "center_x": 1724,
+                "center_y": 2120
+              },
+              "amount_mean_confidence": 41.6,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 868,
+              "horizontal_gap_px": -1083,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "SE Sats Henk rece a ee BOMIGE KWARK KANEELB 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 394,
+                "top": 2071,
+                "width": 2661,
+                "height": 99,
+                "right": 3055,
+                "bottom": 2170,
+                "center_x": 1724,
+                "center_y": 2120
+              },
+              "amount_mean_confidence": 41.6,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 839,
+              "horizontal_gap_px": -1063,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "SE Sats Henk rece a ee BOMIGE KWARK KANEELB 2,05",
+              "amounts": [
+                "2.05"
+              ],
+              "amount_box": {
+                "left": 394,
+                "top": 2071,
+                "width": 2661,
+                "height": 99,
+                "right": 3055,
+                "bottom": 2170,
+                "center_x": 1724,
+                "center_y": 2120
+              },
+              "amount_mean_confidence": 41.6,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 804,
+              "horizontal_gap_px": -1169,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "col Re ie Ba te a ee Sst IE : STRAWBERAY SCHNITTE 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_box": {
+                "left": 316,
+                "top": 2179,
+                "width": 2745,
+                "height": 96,
+                "right": 3061,
+                "bottom": 2275,
+                "center_x": 1688,
+                "center_y": 2227
+              },
+              "amount_mean_confidence": 35.08,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1035,
+              "horizontal_gap_px": -1282,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "col Re ie Ba te a ee Sst IE : STRAWBERAY SCHNITTE 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_box": {
+                "left": 316,
+                "top": 2179,
+                "width": 2745,
+                "height": 96,
+                "right": 3061,
+                "bottom": 2275,
+                "center_x": 1688,
+                "center_y": 2227
+              },
+              "amount_mean_confidence": 35.08,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1007,
+              "horizontal_gap_px": -1161,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "col Re ie Ba te a ee Sst IE : STRAWBERAY SCHNITTE 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_box": {
+                "left": 316,
+                "top": 2179,
+                "width": 2745,
+                "height": 96,
+                "right": 3061,
+                "bottom": 2275,
+                "center_x": 1688,
+                "center_y": 2227
+              },
+              "amount_mean_confidence": 35.08,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 975,
+              "horizontal_gap_px": -1161,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "col Re ie Ba te a ee Sst IE : STRAWBERAY SCHNITTE 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_box": {
+                "left": 316,
+                "top": 2179,
+                "width": 2745,
+                "height": 96,
+                "right": 3061,
+                "bottom": 2275,
+                "center_x": 1688,
+                "center_y": 2227
+              },
+              "amount_mean_confidence": 35.08,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 946,
+              "horizontal_gap_px": -1141,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "col Re ie Ba te a ee Sst IE : STRAWBERAY SCHNITTE 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "amount_box": {
+                "left": 316,
+                "top": 2179,
+                "width": 2745,
+                "height": 96,
+                "right": 3061,
+                "bottom": 2275,
+                "center_x": 1688,
+                "center_y": 2227
+              },
+              "amount_mean_confidence": 35.08,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 911,
+              "horizontal_gap_px": -1247,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "as Se Sat gs eee OX HEREC OGER TERTYAKT 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 161,
+                "top": 2228,
+                "width": 2899,
+                "height": 109,
+                "right": 3060,
+                "bottom": 2337,
+                "center_x": 1610,
+                "center_y": 2282
+              },
+              "amount_mean_confidence": 37.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1090,
+              "horizontal_gap_px": -1437,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "as Se Sat gs eee OX HEREC OGER TERTYAKT 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 161,
+                "top": 2228,
+                "width": 2899,
+                "height": 109,
+                "right": 3060,
+                "bottom": 2337,
+                "center_x": 1610,
+                "center_y": 2282
+              },
+              "amount_mean_confidence": 37.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1062,
+              "horizontal_gap_px": -1316,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "as Se Sat gs eee OX HEREC OGER TERTYAKT 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 161,
+                "top": 2228,
+                "width": 2899,
+                "height": 109,
+                "right": 3060,
+                "bottom": 2337,
+                "center_x": 1610,
+                "center_y": 2282
+              },
+              "amount_mean_confidence": 37.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1030,
+              "horizontal_gap_px": -1316,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "as Se Sat gs eee OX HEREC OGER TERTYAKT 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 161,
+                "top": 2228,
+                "width": 2899,
+                "height": 109,
+                "right": 3060,
+                "bottom": 2337,
+                "center_x": 1610,
+                "center_y": 2282
+              },
+              "amount_mean_confidence": 37.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1001,
+              "horizontal_gap_px": -1296,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "as Se Sat gs eee OX HEREC OGER TERTYAKT 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 161,
+                "top": 2228,
+                "width": 2899,
+                "height": 109,
+                "right": 3060,
+                "bottom": 2337,
+                "center_x": 1610,
+                "center_y": 2282
+              },
+              "amount_mean_confidence": 37.8,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 966,
+              "horizontal_gap_px": -1402,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "ett voordeel!",
+              "product_name_raw_line": "ett voordeel!",
+              "product_name_box": {
+                "left": 1285,
+                "top": 1181,
+                "width": 313,
+                "height": 23,
+                "right": 1598,
+                "bottom": 1204,
+                "center_x": 1441,
+                "center_y": 1192
+              },
+              "amount_text": "OE EE 2x WERELDGER.Z-APR gogo 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 192,
+                "top": 2290,
+                "width": 2872,
+                "height": 106,
+                "right": 3064,
+                "bottom": 2396,
+                "center_x": 1628,
+                "center_y": 2343
+              },
+              "amount_mean_confidence": 46.0,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1151,
+              "horizontal_gap_px": -1406,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "RK KANEELB",
+              "product_name_raw_line": "RK KANEELB",
+              "product_name_box": {
+                "left": 1301,
+                "top": 1207,
+                "width": 176,
+                "height": 26,
+                "right": 1477,
+                "bottom": 1233,
+                "center_x": 1389,
+                "center_y": 1220
+              },
+              "amount_text": "OE EE 2x WERELDGER.Z-APR gogo 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 192,
+                "top": 2290,
+                "width": 2872,
+                "height": 106,
+                "right": 3064,
+                "bottom": 2396,
+                "center_x": 1628,
+                "center_y": 2343
+              },
+              "amount_mean_confidence": 46.0,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1123,
+              "horizontal_gap_px": -1285,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "K WIT CHG",
+              "product_name_raw_line": "K WIT CHG",
+              "product_name_box": {
+                "left": 1319,
+                "top": 1240,
+                "width": 158,
+                "height": 24,
+                "right": 1477,
+                "bottom": 1264,
+                "center_x": 1398,
+                "center_y": 1252
+              },
+              "amount_text": "OE EE 2x WERELDGER.Z-APR gogo 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 192,
+                "top": 2290,
+                "width": 2872,
+                "height": 106,
+                "right": 3064,
+                "bottom": 2396,
+                "center_x": 1628,
+                "center_y": 2343
+              },
+              "amount_mean_confidence": 46.0,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1091,
+              "horizontal_gap_px": -1285,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "STRAWBERRY SCHNITTE",
+              "product_name_raw_line": "STRAWBERRY SCHNITTE",
+              "product_name_box": {
+                "left": 1120,
+                "top": 1267,
+                "width": 337,
+                "height": 29,
+                "right": 1457,
+                "bottom": 1296,
+                "center_x": 1288,
+                "center_y": 1281
+              },
+              "amount_text": "OE EE 2x WERELDGER.Z-APR gogo 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 192,
+                "top": 2290,
+                "width": 2872,
+                "height": 106,
+                "right": 3064,
+                "bottom": 2396,
+                "center_x": 1628,
+                "center_y": 2343
+              },
+              "amount_mean_confidence": 46.0,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1062,
+              "horizontal_gap_px": -1265,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+              "product_name_box": {
+                "left": 1030,
+                "top": 1300,
+                "width": 533,
+                "height": 33,
+                "right": 1563,
+                "bottom": 1333,
+                "center_x": 1296,
+                "center_y": 1316
+              },
+              "amount_text": "OE EE 2x WERELDGER.Z-APR gogo 5,94",
+              "amounts": [
+                "5.94"
+              ],
+              "amount_box": {
+                "left": 192,
+                "top": 2290,
+                "width": 2872,
+                "height": 106,
+                "right": 3064,
+                "bottom": 2396,
+                "center_x": 1628,
+                "center_y": 2343
+              },
+              "amount_mean_confidence": 46.0,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 1027,
+              "horizontal_gap_px": -1371,
+              "diagnostic_only": true
+            }
+          ],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        }
+      ]
     }
   },
   "classified_lines": [

@@ -1499,6 +1499,778 @@
           "reconstruction_applied": false
         }
       ]
+    },
+    "article_zone_amount_validation": {
+      "diagnostic_scope": "article_zone_amount_to_left_product_validation",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "best_variant": {
+        "variant": "contrast_scale_up_175",
+        "article_zone_amount_count": 2,
+        "validated_pair_count": 0,
+        "rejected_pair_count": 8
+      },
+      "limits": {
+        "max_vertical_distance_px": 34,
+        "min_horizontal_gap_px": -20,
+        "max_horizontal_gap_px": 600
+      },
+      "variants": [
+        {
+          "variant": "original",
+          "article_zone_amount_count": 0,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 0,
+          "validated_pairs": [],
+          "rejected_pairs": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "grayscale",
+          "article_zone_amount_count": 1,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 4,
+          "validated_pairs": [],
+          "rejected_pairs": [
+            {
+              "product_name_text": "Albert Heijn Ger Koopman",
+              "product_name_raw_line": "Albert Heijn Ger Koopman",
+              "product_name_box": {
+                "left": 304,
+                "top": 244,
+                "width": 479,
+                "height": 35,
+                "right": 783,
+                "bottom": 279,
+                "center_x": 543,
+                "center_y": 261
+              },
+              "amount_text": "1 MH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 122,
+                "top": 464,
+                "width": 686,
+                "height": 56,
+                "right": 808,
+                "bottom": 520,
+                "center_x": 465,
+                "center_y": 492
+              },
+              "amount_mean_confidence": 86.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 231,
+              "horizontal_gap_px": -661,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "Polenplein 24a Driel",
+              "product_name_raw_line": "Polenplein 24a Driel",
+              "product_name_box": {
+                "left": 344,
+                "top": 282,
+                "width": 392,
+                "height": 38,
+                "right": 736,
+                "bottom": 320,
+                "center_x": 540,
+                "center_y": 301
+              },
+              "amount_text": "1 MH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 122,
+                "top": 464,
+                "width": 686,
+                "height": 56,
+                "right": 808,
+                "bottom": 520,
+                "center_x": 465,
+                "center_y": 492
+              },
+              "amount_mean_confidence": 86.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 191,
+              "horizontal_gap_px": -614,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "AH M GEHAKT",
+              "product_name_raw_line": "AH M GEHAKT",
+              "product_name_box": {
+                "left": 283,
+                "top": 488,
+                "width": 218,
+                "height": 32,
+                "right": 501,
+                "bottom": 520,
+                "center_x": 392,
+                "center_y": 504
+              },
+              "amount_text": "1 MH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 122,
+                "top": 464,
+                "width": 686,
+                "height": 56,
+                "right": 808,
+                "bottom": 520,
+                "center_x": 465,
+                "center_y": 492
+              },
+              "amount_mean_confidence": 86.4,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 12,
+              "horizontal_gap_px": -379,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "SOEPGR BASIS",
+              "product_name_raw_line": "SOEPGR BASIS",
+              "product_name_box": {
+                "left": 283,
+                "top": 529,
+                "width": 241,
+                "height": 31,
+                "right": 524,
+                "bottom": 560,
+                "center_x": 403,
+                "center_y": 544
+              },
+              "amount_text": "1 MH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 122,
+                "top": 464,
+                "width": 686,
+                "height": 56,
+                "right": 808,
+                "bottom": 520,
+                "center_x": 465,
+                "center_y": 492
+              },
+              "amount_mean_confidence": 86.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 52,
+              "horizontal_gap_px": -402,
+              "diagnostic_only": true
+            }
+          ],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "contrast",
+          "article_zone_amount_count": 1,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 4,
+          "validated_pairs": [],
+          "rejected_pairs": [
+            {
+              "product_name_text": "Albert Heijn Ger Koopman",
+              "product_name_raw_line": "Albert Heijn Ger Koopman",
+              "product_name_box": {
+                "left": 304,
+                "top": 244,
+                "width": 479,
+                "height": 35,
+                "right": 783,
+                "bottom": 279,
+                "center_x": 543,
+                "center_y": 261
+              },
+              "amount_text": "1 “AH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 122,
+                "top": 464,
+                "width": 686,
+                "height": 56,
+                "right": 808,
+                "bottom": 520,
+                "center_x": 465,
+                "center_y": 492
+              },
+              "amount_mean_confidence": 77.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 231,
+              "horizontal_gap_px": -661,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "Polenplein 24a Driel",
+              "product_name_raw_line": "Polenplein 24a Driel",
+              "product_name_box": {
+                "left": 344,
+                "top": 282,
+                "width": 392,
+                "height": 38,
+                "right": 736,
+                "bottom": 320,
+                "center_x": 540,
+                "center_y": 301
+              },
+              "amount_text": "1 “AH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 122,
+                "top": 464,
+                "width": 686,
+                "height": 56,
+                "right": 808,
+                "bottom": 520,
+                "center_x": 465,
+                "center_y": 492
+              },
+              "amount_mean_confidence": 77.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 191,
+              "horizontal_gap_px": -614,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "AH M GEHAKT",
+              "product_name_raw_line": "AH M GEHAKT",
+              "product_name_box": {
+                "left": 283,
+                "top": 488,
+                "width": 218,
+                "height": 32,
+                "right": 501,
+                "bottom": 520,
+                "center_x": 392,
+                "center_y": 504
+              },
+              "amount_text": "1 “AH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 122,
+                "top": 464,
+                "width": 686,
+                "height": 56,
+                "right": 808,
+                "bottom": 520,
+                "center_x": 465,
+                "center_y": 492
+              },
+              "amount_mean_confidence": 77.4,
+              "validation": "rejected",
+              "reason": "amount_not_right_of_product_name",
+              "vertical_distance_px": 12,
+              "horizontal_gap_px": -379,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "SOEPGR BASIS",
+              "product_name_raw_line": "SOEPGR BASIS",
+              "product_name_box": {
+                "left": 283,
+                "top": 529,
+                "width": 241,
+                "height": 31,
+                "right": 524,
+                "bottom": 560,
+                "center_x": 403,
+                "center_y": 544
+              },
+              "amount_text": "1 “AH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 122,
+                "top": 464,
+                "width": 686,
+                "height": 56,
+                "right": 808,
+                "bottom": 520,
+                "center_x": 465,
+                "center_y": 492
+              },
+              "amount_mean_confidence": 77.4,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 52,
+              "horizontal_gap_px": -402,
+              "diagnostic_only": true
+            }
+          ],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "threshold",
+          "article_zone_amount_count": 0,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 0,
+          "validated_pairs": [],
+          "rejected_pairs": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "sharpen",
+          "article_zone_amount_count": 0,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 0,
+          "validated_pairs": [],
+          "rejected_pairs": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "scale_up_175",
+          "article_zone_amount_count": 1,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 4,
+          "validated_pairs": [],
+          "rejected_pairs": [
+            {
+              "product_name_text": "Albert Heijn Ger Koopman",
+              "product_name_raw_line": "Albert Heijn Ger Koopman",
+              "product_name_box": {
+                "left": 304,
+                "top": 244,
+                "width": 479,
+                "height": 35,
+                "right": 783,
+                "bottom": 279,
+                "center_x": 543,
+                "center_y": 261
+              },
+              "amount_text": "1 SOEPGR BASIS 1,29",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 916,
+                "width": 1202,
+                "height": 64,
+                "right": 1416,
+                "bottom": 980,
+                "center_x": 815,
+                "center_y": 948
+              },
+              "amount_mean_confidence": 94.25,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 687,
+              "horizontal_gap_px": -569,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "Polenplein 24a Driel",
+              "product_name_raw_line": "Polenplein 24a Driel",
+              "product_name_box": {
+                "left": 344,
+                "top": 282,
+                "width": 392,
+                "height": 38,
+                "right": 736,
+                "bottom": 320,
+                "center_x": 540,
+                "center_y": 301
+              },
+              "amount_text": "1 SOEPGR BASIS 1,29",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 916,
+                "width": 1202,
+                "height": 64,
+                "right": 1416,
+                "bottom": 980,
+                "center_x": 815,
+                "center_y": 948
+              },
+              "amount_mean_confidence": 94.25,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 647,
+              "horizontal_gap_px": -522,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "AH M GEHAKT",
+              "product_name_raw_line": "AH M GEHAKT",
+              "product_name_box": {
+                "left": 283,
+                "top": 488,
+                "width": 218,
+                "height": 32,
+                "right": 501,
+                "bottom": 520,
+                "center_x": 392,
+                "center_y": 504
+              },
+              "amount_text": "1 SOEPGR BASIS 1,29",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 916,
+                "width": 1202,
+                "height": 64,
+                "right": 1416,
+                "bottom": 980,
+                "center_x": 815,
+                "center_y": 948
+              },
+              "amount_mean_confidence": 94.25,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 444,
+              "horizontal_gap_px": -287,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "SOEPGR BASIS",
+              "product_name_raw_line": "SOEPGR BASIS",
+              "product_name_box": {
+                "left": 283,
+                "top": 529,
+                "width": 241,
+                "height": 31,
+                "right": 524,
+                "bottom": 560,
+                "center_x": 403,
+                "center_y": 544
+              },
+              "amount_text": "1 SOEPGR BASIS 1,29",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 916,
+                "width": 1202,
+                "height": 64,
+                "right": 1416,
+                "bottom": 980,
+                "center_x": 815,
+                "center_y": 948
+              },
+              "amount_mean_confidence": 94.25,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 404,
+              "horizontal_gap_px": -310,
+              "diagnostic_only": true
+            }
+          ],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "contrast_scale_up_175",
+          "article_zone_amount_count": 2,
+          "validated_pair_count": 0,
+          "rejected_pair_count": 8,
+          "validated_pairs": [],
+          "rejected_pairs": [
+            {
+              "product_name_text": "Albert Heijn Ger Koopman",
+              "product_name_raw_line": "Albert Heijn Ger Koopman",
+              "product_name_box": {
+                "left": 304,
+                "top": 244,
+                "width": 479,
+                "height": 35,
+                "right": 783,
+                "bottom": 279,
+                "center_x": 543,
+                "center_y": 261
+              },
+              "amount_text": "1 AH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 811,
+                "width": 1201,
+                "height": 99,
+                "right": 1415,
+                "bottom": 910,
+                "center_x": 814,
+                "center_y": 860
+              },
+              "amount_mean_confidence": 91.2,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 599,
+              "horizontal_gap_px": -569,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "Polenplein 24a Driel",
+              "product_name_raw_line": "Polenplein 24a Driel",
+              "product_name_box": {
+                "left": 344,
+                "top": 282,
+                "width": 392,
+                "height": 38,
+                "right": 736,
+                "bottom": 320,
+                "center_x": 540,
+                "center_y": 301
+              },
+              "amount_text": "1 AH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 811,
+                "width": 1201,
+                "height": 99,
+                "right": 1415,
+                "bottom": 910,
+                "center_x": 814,
+                "center_y": 860
+              },
+              "amount_mean_confidence": 91.2,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 559,
+              "horizontal_gap_px": -522,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "AH M GEHAKT",
+              "product_name_raw_line": "AH M GEHAKT",
+              "product_name_box": {
+                "left": 283,
+                "top": 488,
+                "width": 218,
+                "height": 32,
+                "right": 501,
+                "bottom": 520,
+                "center_x": 392,
+                "center_y": 504
+              },
+              "amount_text": "1 AH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 811,
+                "width": 1201,
+                "height": 99,
+                "right": 1415,
+                "bottom": 910,
+                "center_x": 814,
+                "center_y": 860
+              },
+              "amount_mean_confidence": 91.2,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 356,
+              "horizontal_gap_px": -287,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "SOEPGR BASIS",
+              "product_name_raw_line": "SOEPGR BASIS",
+              "product_name_box": {
+                "left": 283,
+                "top": 529,
+                "width": 241,
+                "height": 31,
+                "right": 524,
+                "bottom": 560,
+                "center_x": 403,
+                "center_y": 544
+              },
+              "amount_text": "1 AH M GEHAKT 6,99",
+              "amounts": [
+                "6.99"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 811,
+                "width": 1201,
+                "height": 99,
+                "right": 1415,
+                "bottom": 910,
+                "center_x": 814,
+                "center_y": 860
+              },
+              "amount_mean_confidence": 91.2,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 316,
+              "horizontal_gap_px": -310,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "Albert Heijn Ger Koopman",
+              "product_name_raw_line": "Albert Heijn Ger Koopman",
+              "product_name_box": {
+                "left": 304,
+                "top": 244,
+                "width": 479,
+                "height": 35,
+                "right": 783,
+                "bottom": 279,
+                "center_x": 543,
+                "center_y": 261
+              },
+              "amount_text": "1 SOEPGR BASIS 1,29",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 916,
+                "width": 1202,
+                "height": 64,
+                "right": 1416,
+                "bottom": 980,
+                "center_x": 815,
+                "center_y": 948
+              },
+              "amount_mean_confidence": 90.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 687,
+              "horizontal_gap_px": -569,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "Polenplein 24a Driel",
+              "product_name_raw_line": "Polenplein 24a Driel",
+              "product_name_box": {
+                "left": 344,
+                "top": 282,
+                "width": 392,
+                "height": 38,
+                "right": 736,
+                "bottom": 320,
+                "center_x": 540,
+                "center_y": 301
+              },
+              "amount_text": "1 SOEPGR BASIS 1,29",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 916,
+                "width": 1202,
+                "height": 64,
+                "right": 1416,
+                "bottom": 980,
+                "center_x": 815,
+                "center_y": 948
+              },
+              "amount_mean_confidence": 90.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 647,
+              "horizontal_gap_px": -522,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "AH M GEHAKT",
+              "product_name_raw_line": "AH M GEHAKT",
+              "product_name_box": {
+                "left": 283,
+                "top": 488,
+                "width": 218,
+                "height": 32,
+                "right": 501,
+                "bottom": 520,
+                "center_x": 392,
+                "center_y": 504
+              },
+              "amount_text": "1 SOEPGR BASIS 1,29",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 916,
+                "width": 1202,
+                "height": 64,
+                "right": 1416,
+                "bottom": 980,
+                "center_x": 815,
+                "center_y": 948
+              },
+              "amount_mean_confidence": 90.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 444,
+              "horizontal_gap_px": -287,
+              "diagnostic_only": true
+            },
+            {
+              "product_name_text": "SOEPGR BASIS",
+              "product_name_raw_line": "SOEPGR BASIS",
+              "product_name_box": {
+                "left": 283,
+                "top": 529,
+                "width": 241,
+                "height": 31,
+                "right": 524,
+                "bottom": 560,
+                "center_x": 403,
+                "center_y": 544
+              },
+              "amount_text": "1 SOEPGR BASIS 1,29",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_box": {
+                "left": 214,
+                "top": 916,
+                "width": 1202,
+                "height": 64,
+                "right": 1416,
+                "bottom": 980,
+                "center_x": 815,
+                "center_y": 948
+              },
+              "amount_mean_confidence": 90.75,
+              "validation": "rejected",
+              "reason": "vertical_distance_too_large",
+              "vertical_distance_px": 404,
+              "horizontal_gap_px": -310,
+              "diagnostic_only": true
+            }
+          ],
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        }
+      ]
     }
   },
   "classified_lines": [
