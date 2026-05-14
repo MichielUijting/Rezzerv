@@ -15,18 +15,54 @@ DEFAULT_TARGETS = {
     'Plus foto 2',
     'plus foto 1',
 }
+POC_PREFIX = Path('tools') / 'receipt_csv_poc'
 
 
-def _read_latest_run_path(latest_file: Path) -> Path:
+def _read_key_values(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
-    for line in latest_file.read_text(encoding='utf-8').splitlines():
+    if not path.exists():
+        return values
+    for line in path.read_text(encoding='utf-8').splitlines():
         if '=' in line:
             key, value = line.split('=', 1)
             values[key.strip()] = value.strip()
-    run_path = values.get('run_path')
-    if not run_path:
-        raise ValueError(f'No run_path found in {latest_file}')
-    return Path(run_path)
+    return values
+
+
+def _candidate_run_paths(raw_run_path: str) -> list[Path]:
+    raw = Path(raw_run_path)
+    candidates = [raw]
+    parts = raw.parts
+    prefix_parts = POC_PREFIX.parts
+    if len(parts) > len(prefix_parts) and parts[:len(prefix_parts)] == prefix_parts:
+        candidates.append(Path(*parts[len(prefix_parts):]))
+    if raw.name:
+        candidates.append(Path('test_runs') / raw.name)
+    return candidates
+
+
+def _is_valid_run_dir(path: Path) -> bool:
+    return (path / 'json').exists() and (path / 'benchmark_summary.json').exists()
+
+
+def _find_latest_valid_run(test_runs_dir: Path = Path('test_runs')) -> Path:
+    valid_runs = [path for path in test_runs_dir.glob('run_*') if path.is_dir() and _is_valid_run_dir(path)]
+    if not valid_runs:
+        raise FileNotFoundError(f'No valid run directory found under {test_runs_dir}')
+    return sorted(valid_runs, key=lambda path: path.name)[-1]
+
+
+def _read_latest_run_path(latest_file: Path) -> Path:
+    values = _read_key_values(latest_file)
+    raw_run_path = values.get('run_path', '')
+    if raw_run_path:
+        for candidate in _candidate_run_paths(raw_run_path):
+            if _is_valid_run_dir(candidate):
+                return candidate
+        print(f'[WARN] LATEST_PUSHED_RUN points to invalid or incomplete run: {raw_run_path}')
+    fallback = _find_latest_valid_run()
+    print(f'[INFO] Using latest valid local run instead: {fallback}')
+    return fallback
 
 
 def update_targeted_run(input_dir: Path, output_dir: Path, lang: str, targets: set[str]) -> None:
