@@ -26,7 +26,13 @@ RESCUE_STOP_LINE_TYPES = {'total_line', 'payment_line', 'vat_line'}
 RESCUE_EXCLUDED_LINE_TYPES = {'metadata_line', 'payment_line', 'vat_line', 'discount_line', 'noise_line', 'total_line'}
 CURRENCY_WORDS_PATTERN = re.compile(r'\b(eur|euro)\b', re.IGNORECASE)
 CURRENCY_SYMBOLS_PATTERN = re.compile(r'[€$£]')
-LOYALTY_KEYWORDS = ('zegel', 'zegels', 'pluspunten', 'campagne', 'spaar', 'spaarkaart', 'loyalty')
+GENERIC_LOYALTY_KEYWORDS = ('zegel', 'zegels', 'campagne', 'spaar', 'spaarkaart', 'loyalty')
+STORE_LOYALTY_KEYWORDS = {
+    'plus': ('pluspunten', 'pluspunt', 'digitale zegels'),
+    'lidl': ('lidl plus',),
+    'ah': ('bonus box', 'bonuskaart'),
+    'jumbo': ('extra\'s', 'jumbo extra'),
+}
 
 
 @dataclass
@@ -90,6 +96,8 @@ def detect_store_hint(text: str, filename: str) -> str:
         return 'aldi'
     if 'plus' in combined:
         return 'plus'
+    if 'albert heijn' in combined or re.search(r'\bah\b', combined):
+        return 'ah'
     return 'unknown'
 
 
@@ -409,25 +417,36 @@ def exclude_amount_only_payment_zone_lines(classified_lines: list, product_block
     }
 
 
-def exclude_loyalty_payment_zone_lines(classified_lines: list, product_block_rescue_diagnostics: dict) -> tuple[list, dict]:
+def _matched_loyalty_rules(normalized_line: str, store_hint: str) -> list[dict]:
+    lowered = normalized_line.lower()
+    matches = [
+        {'scope': 'generic', 'keyword': keyword}
+        for keyword in GENERIC_LOYALTY_KEYWORDS
+        if keyword in lowered
+    ]
+    for keyword in STORE_LOYALTY_KEYWORDS.get(store_hint, ()): 
+        if keyword in lowered:
+            matches.append({'scope': f'store:{store_hint}', 'keyword': keyword})
+    return matches
+
+
+def exclude_loyalty_payment_zone_lines(classified_lines: list, product_block_rescue_diagnostics: dict, store_hint: str) -> tuple[list, dict]:
     stop_line_no = product_block_rescue_diagnostics.get('stop_line_no')
     excluded_lines = []
     guarded_lines = []
 
     for line in classified_lines:
         normalized = line.normalized_line or ''
-        lowered = normalized.lower()
         in_or_after_payment_zone = stop_line_no is not None and int(line.line_no) >= int(stop_line_no)
-        has_loyalty_keyword = any(keyword in lowered for keyword in LOYALTY_KEYWORDS)
+        matched_rules = _matched_loyalty_rules(normalized, store_hint)
 
-        if in_or_after_payment_zone and has_loyalty_keyword:
+        if in_or_after_payment_zone and matched_rules:
             excluded_lines.append({
                 'line_no': line.line_no,
                 'raw_line': line.raw_line,
                 'normalized_line': normalized,
                 'previous_line_type': line.line_type,
-                'matched_keywords': [keyword for keyword in LOYALTY_KEYWORDS if keyword in lowered],
-                'amounts': [normalize_decimal(amount) for amount in AMOUNT_PATTERN.findall(normalized)],
+                'matched_loyalty_rule': matched_rules,
                 'loyalty_exclusion_reason': 'loyalty_campaign_line_in_or_after_payment_total_vat_zone',
             })
             guarded_lines.append(replace(line, line_type='unknown_line', reason='loyalty_payment_zone_excluded'))
@@ -506,6 +525,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     classified_lines, loyalty_exclusion_diagnostics = exclude_loyalty_payment_zone_lines(
         classified_lines,
         pre_guard_rescue_diagnostics,
+        store_hint,
     )
     line_type_counts = summarize_line_types(classified_lines)
 
@@ -546,7 +566,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     json_payload = {
-        'schema_version': 'receipt-ocr-poc-v13-loyalty-guard',
+        'schema_version': 'receipt-ocr-poc-v14-generic-store-loyalty-guard',
         'metadata': metadata,
         'classified_lines': [asdict(line) for line in classified_lines],
         'lines': [asdict(row) for row in merged_rows],
@@ -585,7 +605,7 @@ def list_image_files(input_dir: Path):
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
     summary = {
-        'schema_version': 'receipt-ocr-benchmark-v13-loyalty-guard',
+        'schema_version': 'receipt-ocr-benchmark-v14-generic-store-loyalty-guard',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
         'run_success_count': sum(1 for row in report_rows if row.run_result == 'success'),
