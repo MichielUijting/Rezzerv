@@ -22,6 +22,7 @@ services:
       REZZERV_GS1_MPM_SHARE_API_KEY: ${REZZERV_GS1_MPM_SHARE_API_KEY:-}
     volumes:
       - ./backend/data:/app/data
+      - ./tools:/app/tools:ro
 
   frontend:
     build:
