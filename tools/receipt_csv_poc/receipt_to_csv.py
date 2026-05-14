@@ -22,6 +22,8 @@ DISCOUNT_KEYWORDS = ('korting', 'voordeel', 'lidl plus', 'bonus')
 TOTAL_KEYWORDS = ('totaal', 'te betalen', 'kaartbetaling')
 TOTAL_HINT_EXCLUDE_KEYWORDS = ('prijsvoordeel', 'totaal korting', 'btw totaal', 'biw totaal')
 SUMMARY_DISCOUNT_KEYWORDS = ('totaal prijsvoordeel', 'totaal korting')
+RESCUE_STOP_LINE_TYPES = {'total_line', 'payment_line', 'vat_line'}
+RESCUE_EXCLUDED_LINE_TYPES = {'metadata_line', 'payment_line', 'vat_line', 'discount_line', 'noise_line', 'total_line'}
 
 
 @dataclass
@@ -53,6 +55,7 @@ class ReceiptResult:
     merge_diagnostics: dict
     refinement_diagnostics: dict
     totals_diagnostics: dict
+    product_block_rescue_diagnostics: dict
 
 
 def normalize_decimal(value: str) -> str:
@@ -208,7 +211,6 @@ def build_delta_diagnostics(rows: list[ReceiptLine], classified_lines: list, dif
     possible_duplicate_lines = []
     seen: dict[tuple[str, str], dict] = {}
 
-    row_entries = []
     for row in rows:
         amount = to_decimal(row.line_total)
         entry = {
@@ -218,7 +220,6 @@ def build_delta_diagnostics(rows: list[ReceiptLine], classified_lines: list, dif
             'raw_line': row.raw_line,
             'reason': 'parsed_output_line',
         }
-        row_entries.append(entry)
         if amount == abs_difference:
             suspicious_amounts.append({**entry, 'suspicion_reason': 'amount_equals_abs_net_vs_selected_total_difference'})
         key = (row.item_text.lower().strip(), money(amount))
@@ -258,6 +259,107 @@ def build_delta_diagnostics(rows: list[ReceiptLine], classified_lines: list, dif
         'possible_duplicate_lines': possible_duplicate_lines,
         'possible_missing_discount_application': possible_missing_discount_application,
         'amount_delta_candidates': amount_delta_candidates,
+    }
+
+
+def _line_as_rescue_candidate(line, reason: str) -> dict:
+    amounts = AMOUNT_PATTERN.findall(line.normalized_line or '')
+    return {
+        'line_no': line.line_no,
+        'raw_line': line.raw_line,
+        'normalized_line': line.normalized_line,
+        'line_type': line.line_type,
+        'amounts': [normalize_decimal(amount) for amount in amounts],
+        'reason': reason,
+    }
+
+
+def _is_rescue_product_name_line(line) -> bool:
+    normalized = line.normalized_line or ''
+    if not normalized:
+        return False
+    if line.line_type in RESCUE_EXCLUDED_LINE_TYPES:
+        return False
+    if AMOUNT_PATTERN.search(normalized):
+        return False
+    if not re.search(r'[A-Za-zÀ-ÿ]', normalized):
+        return False
+    if len(normalized.strip()) < 3:
+        return False
+    return True
+
+
+def _is_rescue_amount_line(line) -> bool:
+    normalized = line.normalized_line or ''
+    if not normalized:
+        return False
+    if not AMOUNT_PATTERN.search(normalized):
+        return False
+    letters = re.findall(r'[A-Za-zÀ-ÿ]', normalized)
+    alpha_text = ''.join(letters)
+    return len(alpha_text) <= 3 or line.line_type in {'payment_line', 'total_line', 'unknown_line'}
+
+
+def build_product_block_rescue_diagnostics(classified_lines: list) -> dict:
+    orphan_product_name_lines = []
+    orphan_amount_lines = []
+    nearby_name_amount_pairs = []
+    stop_line_no = None
+
+    for line in classified_lines:
+        if stop_line_no is None and line.line_type in RESCUE_STOP_LINE_TYPES and line.normalized_line:
+            stop_line_no = line.line_no
+
+        if _is_rescue_product_name_line(line):
+            reason = 'text_without_amount_before_total_payment_vat_zone' if stop_line_no is None or line.line_no < stop_line_no else 'text_without_amount_after_total_payment_vat_zone'
+            orphan_product_name_lines.append(_line_as_rescue_candidate(line, reason))
+
+        if _is_rescue_amount_line(line):
+            reason = 'standalone_amount_before_total_payment_vat_zone' if stop_line_no is None or line.line_no < stop_line_no else 'standalone_amount_in_or_after_total_payment_vat_zone'
+            orphan_amount_lines.append(_line_as_rescue_candidate(line, reason))
+
+    for name in orphan_product_name_lines:
+        for amount in orphan_amount_lines:
+            distance = int(amount['line_no']) - int(name['line_no'])
+            if 1 <= abs(distance) <= 3:
+                nearby_name_amount_pairs.append({
+                    'product_name_line_no': name['line_no'],
+                    'amount_line_no': amount['line_no'],
+                    'distance': distance,
+                    'product_name_raw_line': name['raw_line'],
+                    'amount_raw_line': amount['raw_line'],
+                    'amounts': amount['amounts'],
+                    'reason': 'name_amount_within_3_lines',
+                })
+
+    before_stop_names = [line for line in orphan_product_name_lines if stop_line_no is None or line['line_no'] < stop_line_no]
+    before_stop_pairs = [
+        pair for pair in nearby_name_amount_pairs
+        if stop_line_no is None or (pair['product_name_line_no'] < stop_line_no and pair['amount_line_no'] < stop_line_no)
+    ]
+
+    if before_stop_names:
+        candidate_start = before_stop_names[0]['line_no']
+        candidate_end = before_stop_names[-1]['line_no']
+        reason = 'orphan_product_names_before_total_payment_vat_zone'
+    elif before_stop_pairs:
+        candidate_start = min(pair['product_name_line_no'] for pair in before_stop_pairs)
+        candidate_end = max(pair['amount_line_no'] for pair in before_stop_pairs)
+        reason = 'nearby_name_amount_pairs_before_total_payment_vat_zone'
+    else:
+        candidate_start = None
+        candidate_end = None
+        reason = 'no_rescue_product_block_candidate'
+
+    return {
+        'candidate_product_block_start': candidate_start,
+        'candidate_product_block_end': candidate_end,
+        'orphan_product_name_lines': orphan_product_name_lines,
+        'orphan_amount_lines': orphan_amount_lines,
+        'nearby_name_amount_pairs': nearby_name_amount_pairs,
+        'product_block_rescue_reason': reason,
+        'stop_line_no': stop_line_no,
+        'stop_line_reason': 'first_total_payment_vat_line' if stop_line_no is not None else '',
     }
 
 
@@ -321,6 +423,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     line_type_counts = summarize_line_types(classified_lines)
 
     product_block = profile.detect_product_block(classified_lines)
+    product_block_rescue_diagnostics = build_product_block_rescue_diagnostics(classified_lines)
 
     rows = parse_receipt_lines(
         text,
@@ -342,6 +445,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         'detected_rows': len(merged_rows),
         'line_type_counts': line_type_counts,
         'product_block': product_block,
+        'product_block_rescue_diagnostics': product_block_rescue_diagnostics,
         'merge_diagnostics': merge_diagnostics,
         'refinement_diagnostics': refinement_diagnostics,
         'totals_diagnostics': totals_diagnostics,
@@ -353,7 +457,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     json_payload = {
-        'schema_version': 'receipt-ocr-poc-v10-delta-diagnostics',
+        'schema_version': 'receipt-ocr-poc-v11-product-block-rescue-diagnostics',
         'metadata': metadata,
         'classified_lines': [asdict(line) for line in classified_lines],
         'lines': [asdict(row) for row in merged_rows],
@@ -380,6 +484,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         merge_diagnostics=merge_diagnostics,
         refinement_diagnostics=refinement_diagnostics,
         totals_diagnostics=totals_diagnostics,
+        product_block_rescue_diagnostics=product_block_rescue_diagnostics,
     )
 
 
@@ -389,7 +494,7 @@ def list_image_files(input_dir: Path):
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
     summary = {
-        'schema_version': 'receipt-ocr-benchmark-v10-delta-diagnostics',
+        'schema_version': 'receipt-ocr-benchmark-v11-product-block-rescue-diagnostics',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
         'run_success_count': sum(1 for row in report_rows if row.run_result == 'success'),
@@ -399,6 +504,7 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         'merge_diagnostics': {},
         'refinement_diagnostics': {},
         'totals_diagnostics': {},
+        'product_block_rescue_diagnostics': {},
     }
 
     for row in report_rows:
@@ -406,6 +512,7 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         summary['merge_diagnostics'][row.source_file] = row.merge_diagnostics
         summary['refinement_diagnostics'][row.source_file] = row.refinement_diagnostics
         summary['totals_diagnostics'][row.source_file] = row.totals_diagnostics
+        summary['product_block_rescue_diagnostics'][row.source_file] = row.product_block_rescue_diagnostics
 
     (output_dir / 'benchmark_summary.json').write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -437,7 +544,8 @@ def main():
             selected_total = result.totals_diagnostics.get('selected_total_hint') or {}
             selected_total_amount = selected_total.get('amount', '')
             diff = result.totals_diagnostics.get('net_vs_selected_total_difference', '')
-            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} gross={gross} net={net} selected_total={selected_total_amount} diff={diff} profile={result.profile_name}')
+            rescue = result.product_block_rescue_diagnostics.get('product_block_rescue_reason', '')
+            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} gross={gross} net={net} selected_total={selected_total_amount} diff={diff} rescue={rescue} profile={result.profile_name}')
         except Exception as exc:
             print(f'[ERROR] {image_file.name}: {exc}')
 
