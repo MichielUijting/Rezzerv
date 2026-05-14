@@ -6,7 +6,10 @@ from typing import Callable
 
 from fastapi import APIRouter, HTTPException, Query
 
-from backend.receipt_ingestion import ReceiptIngestionPipeline
+try:
+    from receipt_ingestion import ReceiptIngestionPipeline
+except ModuleNotFoundError:  # local repo-root CLI/import compatibility
+    from backend.receipt_ingestion import ReceiptIngestionPipeline
 
 router = APIRouter(
     prefix='/api/receipt-ingestion',
