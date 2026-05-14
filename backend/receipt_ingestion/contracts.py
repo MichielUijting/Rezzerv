@@ -8,9 +8,9 @@ from typing import Any, Dict, List, Optional
 ENGINE_VERSION = "receipt-ingestion-v01"
 
 
-class QualityStatus(str, Enum):
-    CONTROLLED = "controlled"
-    REVIEW_NEEDED = "review_needed"
+class EngineProcessingState(str, Enum):
+    PARSED = "parsed"
+    DIAGNOSTICS_AVAILABLE = "diagnostics_available"
     FAILED = "failed"
 
 
@@ -58,7 +58,8 @@ class ReceiptIngestionResult:
     parser_rows: List[ParserRow] = field(default_factory=list)
     review_suggestions: List[ReviewSuggestion] = field(default_factory=list)
     diagnostics: DiagnosticBundle = field(default_factory=DiagnosticBundle)
-    quality_status: QualityStatus = QualityStatus.REVIEW_NEEDED
+    engine_processing_state: EngineProcessingState = EngineProcessingState.DIAGNOSTICS_AVAILABLE
+    po_norm_status_label: Optional[str] = None
     engine_version: str = ENGINE_VERSION
 
     def to_dict(self) -> Dict[str, Any]:
@@ -68,6 +69,7 @@ class ReceiptIngestionResult:
             "parser_rows": [row.to_dict() for row in self.parser_rows],
             "review_suggestions": [suggestion.to_dict() for suggestion in self.review_suggestions],
             "diagnostics": self.diagnostics.to_dict(),
-            "quality_status": self.quality_status.value,
+            "engine_processing_state": self.engine_processing_state.value,
+            "po_norm_status_label": self.po_norm_status_label,
             "engine_version": self.engine_version,
         }
