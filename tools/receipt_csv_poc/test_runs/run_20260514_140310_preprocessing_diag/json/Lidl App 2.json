@@ -1,0 +1,2432 @@
+{
+  "schema_version": "receipt-ocr-poc-v15-name-amount-link-diagnostics",
+  "metadata": {
+    "source_file": "Lidl App 2.png",
+    "created_at": "2026-05-14T12:03:23.173510+00:00",
+    "store_hint": "lidl",
+    "profile_name": "lidl",
+    "detected_rows": 18,
+    "line_type_counts": {
+      "discount_line": 3,
+      "metadata_line": 10,
+      "noise_line": 0,
+      "payment_line": 6,
+      "product_line": 19,
+      "quantity_line": 1,
+      "total_line": 2,
+      "unknown_line": 30,
+      "vat_line": 1
+    },
+    "product_block": {
+      "start_line": 6,
+      "end_line": 27,
+      "reason": "header_keyword",
+      "line_count": 22,
+      "profile": "lidl"
+    },
+    "product_block_rescue_diagnostics": {
+      "candidate_product_block_start": 1,
+      "candidate_product_block_end": 27,
+      "orphan_product_name_lines": [
+        {
+          "line_no": 1,
+          "raw_line": "Lidl Arnhem",
+          "normalized_line": "Lidl Arnhem",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 2,
+          "raw_line": "Fortunastraat 44",
+          "normalized_line": "Fortunastraat 44",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 3,
+          "raw_line": "6846 XZ Arnhem",
+          "normalized_line": "6846 XZ Arnhem",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 5,
+          "raw_line": "OMSCHRIJVING EUR",
+          "normalized_line": "OMSCHRIJVING EUR",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 27,
+          "raw_line": "Aantal 22 art",
+          "normalized_line": "Aantal 22 art",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 59,
+          "raw_line": "Bespaar meer met de Lidl Plus-app!",
+          "normalized_line": "Bespaar meer met de Lidl Plus-app!",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 61,
+          "raw_line": "Bespaar nóg meer door het blijven scannen",
+          "normalized_line": "Bespaar nóg meer door het blijven scannen",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 62,
+          "raw_line": "van jouw Lidl Plus-app.",
+          "normalized_line": "van jouw Lidl Plus-app.",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 66,
+          "raw_line": "Aankoop gedaan bij",
+          "normalized_line": "Aankoop gedaan bij",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 68,
+          "raw_line": "Arnhem",
+          "normalized_line": "Arnhem",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 69,
+          "raw_line": "Fortunastraat 44",
+          "normalized_line": "Fortunastraat 44",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 70,
+          "raw_line": "6846 XZ Arnhem",
+          "normalized_line": "6846 XZ Arnhem",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        }
+      ],
+      "orphan_amount_lines": [
+        {
+          "line_no": 28,
+          "raw_line": "Totaal 34,14",
+          "normalized_line": "Totaal 34,14",
+          "line_type": "total_line",
+          "amounts": [
+            "34.14"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 29,
+          "raw_line": "Bankpas 34,14",
+          "normalized_line": "Bankpas 34,14",
+          "line_type": "payment_line",
+          "amounts": [
+            "34.14"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 49,
+          "raw_line": "Totaal: 34,14 EUR",
+          "normalized_line": "Totaal: 34,14 EUR",
+          "line_type": "total_line",
+          "amounts": [
+            "34.14"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 55,
+          "raw_line": "B 9 31,32 2,82 34,14",
+          "normalized_line": "B 9 31,32 2,82 34,14",
+          "line_type": "product_line",
+          "amounts": [
+            "31.32",
+            "2.82",
+            "34.14"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 56,
+          "raw_line": "0742 221829/81 25.11.25",
+          "normalized_line": "0742 221829/81 25.11.25",
+          "line_type": "metadata_line",
+          "amounts": [
+            "25.11"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "nearby_name_amount_pairs": [
+        {
+          "product_name_line_no": 27,
+          "amount_line_no": 28,
+          "distance": 1,
+          "product_name_raw_line": "Aantal 22 art",
+          "amount_raw_line": "Totaal 34,14",
+          "amounts": [
+            "34.14"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 27,
+          "amount_line_no": 29,
+          "distance": 2,
+          "product_name_raw_line": "Aantal 22 art",
+          "amount_raw_line": "Bankpas 34,14",
+          "amounts": [
+            "34.14"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 59,
+          "amount_line_no": 56,
+          "distance": -3,
+          "product_name_raw_line": "Bespaar meer met de Lidl Plus-app!",
+          "amount_raw_line": "0742 221829/81 25.11.25",
+          "amounts": [
+            "25.11"
+          ],
+          "reason": "name_amount_within_3_lines"
+        }
+      ],
+      "product_block_rescue_reason": "orphan_product_names_before_total_payment_vat_zone",
+      "stop_line_no": 28,
+      "stop_line_reason": "first_total_payment_vat_line"
+    },
+    "product_name_amount_link_diagnostics": {
+      "diagnostic_scope": "orphan_product_name_to_orphan_amount_before_total_payment_vat_zone",
+      "max_line_distance": 4,
+      "store_hint": "lidl",
+      "candidate_link_count": 0,
+      "candidate_links": [],
+      "eligible_name_line_count": 3,
+      "eligible_amount_line_count": 0,
+      "rejected_link_count": 14,
+      "rejected_links": [
+        {
+          "product_name_line_no": 5,
+          "product_name_raw_line": "OMSCHRIJVING EUR",
+          "rejection_reason": "name_line_matches_generic_header_or_metadata_keyword"
+        },
+        {
+          "product_name_line_no": 27,
+          "product_name_raw_line": "Aantal 22 art",
+          "rejection_reason": "name_line_matches_generic_header_or_metadata_keyword"
+        },
+        {
+          "product_name_line_no": 59,
+          "product_name_raw_line": "Bespaar meer met de Lidl Plus-app!",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 61,
+          "product_name_raw_line": "Bespaar nóg meer door het blijven scannen",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 62,
+          "product_name_raw_line": "van jouw Lidl Plus-app.",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 66,
+          "product_name_raw_line": "Aankoop gedaan bij",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 68,
+          "product_name_raw_line": "Arnhem",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 69,
+          "product_name_raw_line": "Fortunastraat 44",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 70,
+          "product_name_raw_line": "6846 XZ Arnhem",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 28,
+          "amount_raw_line": "Totaal 34,14",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 29,
+          "amount_raw_line": "Bankpas 34,14",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 49,
+          "amount_raw_line": "Totaal: 34,14 EUR",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 55,
+          "amount_raw_line": "B 9 31,32 2,82 34,14",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 56,
+          "amount_raw_line": "0742 221829/81 25.11.25",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "diagnostic_only": true,
+      "reconstruction_applied": false
+    },
+    "amount_only_exclusion_diagnostics": {
+      "excluded_amount_only_lines": [],
+      "excluded_amount_only_count": 0,
+      "amount_only_exclusion_reason": "amount_currency_only_in_or_after_payment_total_vat_zone"
+    },
+    "loyalty_exclusion_diagnostics": {
+      "excluded_loyalty_lines": [
+        {
+          "line_no": 59,
+          "raw_line": "Bespaar meer met de Lidl Plus-app!",
+          "normalized_line": "Bespaar meer met de Lidl Plus-app!",
+          "previous_line_type": "unknown_line",
+          "matched_loyalty_rule": [
+            {
+              "scope": "generic",
+              "keyword": "spaar"
+            },
+            {
+              "scope": "store:lidl",
+              "keyword": "lidl plus"
+            }
+          ],
+          "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+        },
+        {
+          "line_no": 61,
+          "raw_line": "Bespaar nóg meer door het blijven scannen",
+          "normalized_line": "Bespaar nóg meer door het blijven scannen",
+          "previous_line_type": "unknown_line",
+          "matched_loyalty_rule": [
+            {
+              "scope": "generic",
+              "keyword": "spaar"
+            }
+          ],
+          "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+        },
+        {
+          "line_no": 62,
+          "raw_line": "van jouw Lidl Plus-app.",
+          "normalized_line": "van jouw Lidl Plus-app.",
+          "previous_line_type": "unknown_line",
+          "matched_loyalty_rule": [
+            {
+              "scope": "store:lidl",
+              "keyword": "lidl plus"
+            }
+          ],
+          "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+        }
+      ],
+      "excluded_loyalty_count": 3,
+      "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 1,
+      "merged_quantity_lines_count": 1,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [
+        {
+          "product_line_no": 6,
+          "quantity_line_no": 7
+        }
+      ],
+      "input_rows_count": 19,
+      "output_rows_count": 18
+    },
+    "refinement_diagnostics": {
+      "profile": "lidl",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "totals_diagnostics": {
+      "store_hint": "lidl",
+      "gross_line_sum": "34.72",
+      "discount_total_detected": "1.17",
+      "net_total_candidate": "33.55",
+      "selected_total_hint": {
+        "line_no": 49,
+        "amount": "34.14",
+        "raw_line": "Totaal: 34,14 EUR",
+        "reason": "total_keyword",
+        "selected_total_hint_reason": "later_matching_payable_total_like_line"
+      },
+      "selected_total_hint_reason": "later_matching_payable_total_like_line",
+      "net_vs_selected_total_difference": "-0.59",
+      "all_total_hints": [
+        {
+          "line_no": 28,
+          "amount": "34.14",
+          "raw_line": "Totaal 34,14",
+          "reason": "total_keyword"
+        },
+        {
+          "line_no": 49,
+          "amount": "34.14",
+          "raw_line": "Totaal: 34,14 EUR",
+          "reason": "total_keyword"
+        },
+        {
+          "line_no": 52,
+          "amount": "1.17",
+          "raw_line": "Totaal prijsvoordeel 1,17",
+          "reason": "total_keyword"
+        }
+      ],
+      "excluded_total_hints": [
+        {
+          "line_no": 52,
+          "amount": "1.17",
+          "raw_line": "Totaal prijsvoordeel 1,17",
+          "reason": "total_keyword",
+          "excluded_reason": "summary_or_tax_total_not_payable_total"
+        }
+      ],
+      "selected_discount_strategy": "summary_discount_total",
+      "selected_discount_candidates": [
+        {
+          "line_no": 52,
+          "amount": "1.17",
+          "raw_line": "Totaal prijsvoordeel 1,17",
+          "reason": "discount_keyword"
+        }
+      ],
+      "excluded_discount_candidates": [
+        {
+          "line_no": 9,
+          "amount": "1.17",
+          "raw_line": "Lidl Plus korting -1,17",
+          "reason": "discount_keyword",
+          "excluded_reason": "summary_discount_total_selected"
+        }
+      ],
+      "all_discount_candidates": [
+        {
+          "line_no": 9,
+          "amount": "1.17",
+          "raw_line": "Lidl Plus korting -1,17",
+          "reason": "discount_keyword"
+        },
+        {
+          "line_no": 52,
+          "amount": "1.17",
+          "raw_line": "Totaal prijsvoordeel 1,17",
+          "reason": "discount_keyword"
+        }
+      ],
+      "discount_candidate_count": 2,
+      "line_count_after_merge": 18,
+      "totals_strategy": "diagnostic_gross_minus_selected_discount_vs_selected_total_hint",
+      "suspicious_amounts": [],
+      "possible_duplicate_lines": [
+        {
+          "first_line_no": 24,
+          "duplicate_line_no": 25,
+          "amount": "0.49",
+          "item_text": "Mexicaanse kruidenm.  B",
+          "reason": "same_item_text_and_amount"
+        }
+      ],
+      "possible_missing_discount_application": [],
+      "amount_delta_candidates": []
+    },
+    "ocr_region_amount_diagnostics": {
+      "diagnostic_scope": "tesseract_image_to_data_region_amount_diagnostics",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "image_file": "Lidl App 2.png",
+      "ocr_region_count": 54,
+      "amount_region_count": 26,
+      "candidate_region_link_count": 0,
+      "candidate_region_links": [],
+      "orphan_product_name_region_diagnostics": [
+        {
+          "product_name_line_no": 1,
+          "product_name_raw_line": "Lidl Arnhem",
+          "name_region_key": "1:1:1:1",
+          "name_region_text": "Lidl Arnhem",
+          "name_region_box": {
+            "left": 387,
+            "top": 474,
+            "width": 251,
+            "height": 29,
+            "right": 638,
+            "bottom": 503,
+            "center_x": 512,
+            "center_y": 488
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:2:1:2",
+              "amount_region_text": "Aardappel zoet 3,24B",
+              "amounts": [
+                "3.24"
+              ],
+              "amount_region_box": {
+                "left": 57,
+                "top": 657,
+                "width": 977,
+                "height": 38,
+                "right": 1034,
+                "bottom": 695,
+                "center_x": 545,
+                "center_y": 676
+              },
+              "vertical_distance_px": 188,
+              "horizontal_gap_px": -581,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:1:3",
+              "amount_region_text": "1,224 kg x 2,65 EUR",
+              "amounts": [
+                "2.65"
+              ],
+              "amount_region_box": {
+                "left": 107,
+                "top": 702,
+                "width": 485,
+                "height": 38,
+                "right": 592,
+                "bottom": 740,
+                "center_x": 349,
+                "center_y": 721
+              },
+              "vertical_distance_px": 233,
+              "horizontal_gap_px": -531,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:1",
+              "amount_region_text": "Lidl Plus korting -1,17",
+              "amounts": [
+                "-1.17"
+              ],
+              "amount_region_box": {
+                "left": 177,
+                "top": 748,
+                "width": 809,
+                "height": 38,
+                "right": 986,
+                "bottom": 786,
+                "center_x": 581,
+                "center_y": 767
+              },
+              "vertical_distance_px": 279,
+              "horizontal_gap_px": -461,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:2",
+              "amount_region_text": "Tortilla chips XXL 1,29 B",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_region_box": {
+                "left": 58,
+                "top": 794,
+                "width": 976,
+                "height": 38,
+                "right": 1034,
+                "bottom": 832,
+                "center_x": 546,
+                "center_y": 813
+              },
+              "vertical_distance_px": 325,
+              "horizontal_gap_px": -580,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:3",
+              "amount_region_text": "Knorr CaS Ch. tomaat 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 60,
+                "top": 839,
+                "width": 974,
+                "height": 34,
+                "right": 1034,
+                "bottom": 873,
+                "center_x": 547,
+                "center_y": 856
+              },
+              "vertical_distance_px": 368,
+              "horizontal_gap_px": -578,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:4",
+              "amount_region_text": "Knorr CaS kip 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 60,
+                "top": 885,
+                "width": 974,
+                "height": 38,
+                "right": 1034,
+                "bottom": 923,
+                "center_x": 547,
+                "center_y": 904
+              },
+              "vertical_distance_px": 416,
+              "horizontal_gap_px": -578,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:5",
+              "amount_region_text": "Mexicaanse kruiden 1,49 B",
+              "amounts": [
+                "1.49"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 930,
+                "width": 975,
+                "height": 34,
+                "right": 1034,
+                "bottom": 964,
+                "center_x": 546,
+                "center_y": 947
+              },
+              "vertical_distance_px": 459,
+              "horizontal_gap_px": -579,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:6",
+              "amount_region_text": "Verse halfvolle melk 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 57,
+                "top": 976,
+                "width": 977,
+                "height": 34,
+                "right": 1034,
+                "bottom": 1010,
+                "center_x": 545,
+                "center_y": 993
+              },
+              "vertical_distance_px": 505,
+              "horizontal_gap_px": -581,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:7",
+              "amount_region_text": "Gouda belegen gerasp 2,39 B",
+              "amounts": [
+                "2.39"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 1022,
+                "width": 975,
+                "height": 38,
+                "right": 1034,
+                "bottom": 1060,
+                "center_x": 546,
+                "center_y": 1041
+              },
+              "vertical_distance_px": 553,
+              "horizontal_gap_px": -579,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:8",
+              "amount_region_text": "Slagersleverworst 1,49 B",
+              "amounts": [
+                "1.49"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 1067,
+                "width": 975,
+                "height": 38,
+                "right": 1034,
+                "bottom": 1105,
+                "center_x": 546,
+                "center_y": 1086
+              },
+              "vertical_distance_px": 598,
+              "horizontal_gap_px": -579,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 2,
+          "product_name_raw_line": "Fortunastraat 44",
+          "name_region_key": "1:1:1:2",
+          "name_region_text": "Fortunastraat 44",
+          "name_region_box": {
+            "left": 341,
+            "top": 522,
+            "width": 367,
+            "height": 27,
+            "right": 708,
+            "bottom": 549,
+            "center_x": 524,
+            "center_y": 535
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:2:1:2",
+              "amount_region_text": "Aardappel zoet 3,24B",
+              "amounts": [
+                "3.24"
+              ],
+              "amount_region_box": {
+                "left": 57,
+                "top": 657,
+                "width": 977,
+                "height": 38,
+                "right": 1034,
+                "bottom": 695,
+                "center_x": 545,
+                "center_y": 676
+              },
+              "vertical_distance_px": 141,
+              "horizontal_gap_px": -651,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:1:3",
+              "amount_region_text": "1,224 kg x 2,65 EUR",
+              "amounts": [
+                "2.65"
+              ],
+              "amount_region_box": {
+                "left": 107,
+                "top": 702,
+                "width": 485,
+                "height": 38,
+                "right": 592,
+                "bottom": 740,
+                "center_x": 349,
+                "center_y": 721
+              },
+              "vertical_distance_px": 186,
+              "horizontal_gap_px": -601,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:1",
+              "amount_region_text": "Lidl Plus korting -1,17",
+              "amounts": [
+                "-1.17"
+              ],
+              "amount_region_box": {
+                "left": 177,
+                "top": 748,
+                "width": 809,
+                "height": 38,
+                "right": 986,
+                "bottom": 786,
+                "center_x": 581,
+                "center_y": 767
+              },
+              "vertical_distance_px": 232,
+              "horizontal_gap_px": -531,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:2",
+              "amount_region_text": "Tortilla chips XXL 1,29 B",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_region_box": {
+                "left": 58,
+                "top": 794,
+                "width": 976,
+                "height": 38,
+                "right": 1034,
+                "bottom": 832,
+                "center_x": 546,
+                "center_y": 813
+              },
+              "vertical_distance_px": 278,
+              "horizontal_gap_px": -650,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:3",
+              "amount_region_text": "Knorr CaS Ch. tomaat 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 60,
+                "top": 839,
+                "width": 974,
+                "height": 34,
+                "right": 1034,
+                "bottom": 873,
+                "center_x": 547,
+                "center_y": 856
+              },
+              "vertical_distance_px": 321,
+              "horizontal_gap_px": -648,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:4",
+              "amount_region_text": "Knorr CaS kip 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 60,
+                "top": 885,
+                "width": 974,
+                "height": 38,
+                "right": 1034,
+                "bottom": 923,
+                "center_x": 547,
+                "center_y": 904
+              },
+              "vertical_distance_px": 369,
+              "horizontal_gap_px": -648,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:5",
+              "amount_region_text": "Mexicaanse kruiden 1,49 B",
+              "amounts": [
+                "1.49"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 930,
+                "width": 975,
+                "height": 34,
+                "right": 1034,
+                "bottom": 964,
+                "center_x": 546,
+                "center_y": 947
+              },
+              "vertical_distance_px": 412,
+              "horizontal_gap_px": -649,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:6",
+              "amount_region_text": "Verse halfvolle melk 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 57,
+                "top": 976,
+                "width": 977,
+                "height": 34,
+                "right": 1034,
+                "bottom": 1010,
+                "center_x": 545,
+                "center_y": 993
+              },
+              "vertical_distance_px": 458,
+              "horizontal_gap_px": -651,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:7",
+              "amount_region_text": "Gouda belegen gerasp 2,39 B",
+              "amounts": [
+                "2.39"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 1022,
+                "width": 975,
+                "height": 38,
+                "right": 1034,
+                "bottom": 1060,
+                "center_x": 546,
+                "center_y": 1041
+              },
+              "vertical_distance_px": 506,
+              "horizontal_gap_px": -649,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:8",
+              "amount_region_text": "Slagersleverworst 1,49 B",
+              "amounts": [
+                "1.49"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 1067,
+                "width": 975,
+                "height": 38,
+                "right": 1034,
+                "bottom": 1105,
+                "center_x": 546,
+                "center_y": 1086
+              },
+              "vertical_distance_px": 551,
+              "horizontal_gap_px": -649,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 3,
+          "product_name_raw_line": "6846 XZ Arnhem",
+          "name_region_key": "1:1:1:3",
+          "name_region_text": "6846 XZ Arnhem",
+          "name_region_box": {
+            "left": 339,
+            "top": 565,
+            "width": 346,
+            "height": 29,
+            "right": 685,
+            "bottom": 594,
+            "center_x": 512,
+            "center_y": 579
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:2:1:2",
+              "amount_region_text": "Aardappel zoet 3,24B",
+              "amounts": [
+                "3.24"
+              ],
+              "amount_region_box": {
+                "left": 57,
+                "top": 657,
+                "width": 977,
+                "height": 38,
+                "right": 1034,
+                "bottom": 695,
+                "center_x": 545,
+                "center_y": 676
+              },
+              "vertical_distance_px": 97,
+              "horizontal_gap_px": -628,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:1:3",
+              "amount_region_text": "1,224 kg x 2,65 EUR",
+              "amounts": [
+                "2.65"
+              ],
+              "amount_region_box": {
+                "left": 107,
+                "top": 702,
+                "width": 485,
+                "height": 38,
+                "right": 592,
+                "bottom": 740,
+                "center_x": 349,
+                "center_y": 721
+              },
+              "vertical_distance_px": 142,
+              "horizontal_gap_px": -578,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:1",
+              "amount_region_text": "Lidl Plus korting -1,17",
+              "amounts": [
+                "-1.17"
+              ],
+              "amount_region_box": {
+                "left": 177,
+                "top": 748,
+                "width": 809,
+                "height": 38,
+                "right": 986,
+                "bottom": 786,
+                "center_x": 581,
+                "center_y": 767
+              },
+              "vertical_distance_px": 188,
+              "horizontal_gap_px": -508,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:2",
+              "amount_region_text": "Tortilla chips XXL 1,29 B",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_region_box": {
+                "left": 58,
+                "top": 794,
+                "width": 976,
+                "height": 38,
+                "right": 1034,
+                "bottom": 832,
+                "center_x": 546,
+                "center_y": 813
+              },
+              "vertical_distance_px": 234,
+              "horizontal_gap_px": -627,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:3",
+              "amount_region_text": "Knorr CaS Ch. tomaat 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 60,
+                "top": 839,
+                "width": 974,
+                "height": 34,
+                "right": 1034,
+                "bottom": 873,
+                "center_x": 547,
+                "center_y": 856
+              },
+              "vertical_distance_px": 277,
+              "horizontal_gap_px": -625,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:4",
+              "amount_region_text": "Knorr CaS kip 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 60,
+                "top": 885,
+                "width": 974,
+                "height": 38,
+                "right": 1034,
+                "bottom": 923,
+                "center_x": 547,
+                "center_y": 904
+              },
+              "vertical_distance_px": 325,
+              "horizontal_gap_px": -625,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:5",
+              "amount_region_text": "Mexicaanse kruiden 1,49 B",
+              "amounts": [
+                "1.49"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 930,
+                "width": 975,
+                "height": 34,
+                "right": 1034,
+                "bottom": 964,
+                "center_x": 546,
+                "center_y": 947
+              },
+              "vertical_distance_px": 368,
+              "horizontal_gap_px": -626,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:6",
+              "amount_region_text": "Verse halfvolle melk 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 57,
+                "top": 976,
+                "width": 977,
+                "height": 34,
+                "right": 1034,
+                "bottom": 1010,
+                "center_x": 545,
+                "center_y": 993
+              },
+              "vertical_distance_px": 414,
+              "horizontal_gap_px": -628,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:7",
+              "amount_region_text": "Gouda belegen gerasp 2,39 B",
+              "amounts": [
+                "2.39"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 1022,
+                "width": 975,
+                "height": 38,
+                "right": 1034,
+                "bottom": 1060,
+                "center_x": 546,
+                "center_y": 1041
+              },
+              "vertical_distance_px": 462,
+              "horizontal_gap_px": -626,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:8",
+              "amount_region_text": "Slagersleverworst 1,49 B",
+              "amounts": [
+                "1.49"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 1067,
+                "width": 975,
+                "height": 38,
+                "right": 1034,
+                "bottom": 1105,
+                "center_x": 546,
+                "center_y": 1086
+              },
+              "vertical_distance_px": 507,
+              "horizontal_gap_px": -626,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 5,
+          "product_name_raw_line": "OMSCHRIJVING EUR",
+          "name_region_key": "1:2:1:1",
+          "name_region_text": "OMSCHRIJVING EUR",
+          "name_region_box": {
+            "left": 58,
+            "top": 613,
+            "width": 930,
+            "height": 27,
+            "right": 988,
+            "bottom": 640,
+            "center_x": 523,
+            "center_y": 626
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:2:1:2",
+              "amount_region_text": "Aardappel zoet 3,24B",
+              "amounts": [
+                "3.24"
+              ],
+              "amount_region_box": {
+                "left": 57,
+                "top": 657,
+                "width": 977,
+                "height": 38,
+                "right": 1034,
+                "bottom": 695,
+                "center_x": 545,
+                "center_y": 676
+              },
+              "vertical_distance_px": 50,
+              "horizontal_gap_px": -931,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:1:3",
+              "amount_region_text": "1,224 kg x 2,65 EUR",
+              "amounts": [
+                "2.65"
+              ],
+              "amount_region_box": {
+                "left": 107,
+                "top": 702,
+                "width": 485,
+                "height": 38,
+                "right": 592,
+                "bottom": 740,
+                "center_x": 349,
+                "center_y": 721
+              },
+              "vertical_distance_px": 95,
+              "horizontal_gap_px": -881,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:1",
+              "amount_region_text": "Lidl Plus korting -1,17",
+              "amounts": [
+                "-1.17"
+              ],
+              "amount_region_box": {
+                "left": 177,
+                "top": 748,
+                "width": 809,
+                "height": 38,
+                "right": 986,
+                "bottom": 786,
+                "center_x": 581,
+                "center_y": 767
+              },
+              "vertical_distance_px": 141,
+              "horizontal_gap_px": -811,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:2",
+              "amount_region_text": "Tortilla chips XXL 1,29 B",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_region_box": {
+                "left": 58,
+                "top": 794,
+                "width": 976,
+                "height": 38,
+                "right": 1034,
+                "bottom": 832,
+                "center_x": 546,
+                "center_y": 813
+              },
+              "vertical_distance_px": 187,
+              "horizontal_gap_px": -930,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:3",
+              "amount_region_text": "Knorr CaS Ch. tomaat 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 60,
+                "top": 839,
+                "width": 974,
+                "height": 34,
+                "right": 1034,
+                "bottom": 873,
+                "center_x": 547,
+                "center_y": 856
+              },
+              "vertical_distance_px": 230,
+              "horizontal_gap_px": -928,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:4",
+              "amount_region_text": "Knorr CaS kip 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 60,
+                "top": 885,
+                "width": 974,
+                "height": 38,
+                "right": 1034,
+                "bottom": 923,
+                "center_x": 547,
+                "center_y": 904
+              },
+              "vertical_distance_px": 278,
+              "horizontal_gap_px": -928,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:5",
+              "amount_region_text": "Mexicaanse kruiden 1,49 B",
+              "amounts": [
+                "1.49"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 930,
+                "width": 975,
+                "height": 34,
+                "right": 1034,
+                "bottom": 964,
+                "center_x": 546,
+                "center_y": 947
+              },
+              "vertical_distance_px": 321,
+              "horizontal_gap_px": -929,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:6",
+              "amount_region_text": "Verse halfvolle melk 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 57,
+                "top": 976,
+                "width": 977,
+                "height": 34,
+                "right": 1034,
+                "bottom": 1010,
+                "center_x": 545,
+                "center_y": 993
+              },
+              "vertical_distance_px": 367,
+              "horizontal_gap_px": -931,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:7",
+              "amount_region_text": "Gouda belegen gerasp 2,39 B",
+              "amounts": [
+                "2.39"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 1022,
+                "width": 975,
+                "height": 38,
+                "right": 1034,
+                "bottom": 1060,
+                "center_x": 546,
+                "center_y": 1041
+              },
+              "vertical_distance_px": 415,
+              "horizontal_gap_px": -929,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:8",
+              "amount_region_text": "Slagersleverworst 1,49 B",
+              "amounts": [
+                "1.49"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 1067,
+                "width": 975,
+                "height": 38,
+                "right": 1034,
+                "bottom": 1105,
+                "center_x": 546,
+                "center_y": 1086
+              },
+              "vertical_distance_px": 460,
+              "horizontal_gap_px": -929,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 27,
+          "product_name_raw_line": "Aantal 22 art",
+          "name_region_key": "1:2:2:19",
+          "name_region_text": "Aantal 22 art",
+          "name_region_box": {
+            "left": 57,
+            "top": 1615,
+            "width": 579,
+            "height": 29,
+            "right": 636,
+            "bottom": 1644,
+            "center_x": 346,
+            "center_y": 1629
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:2:1:2",
+              "amount_region_text": "Aardappel zoet 3,24B",
+              "amounts": [
+                "3.24"
+              ],
+              "amount_region_box": {
+                "left": 57,
+                "top": 657,
+                "width": 977,
+                "height": 38,
+                "right": 1034,
+                "bottom": 695,
+                "center_x": 545,
+                "center_y": 676
+              },
+              "vertical_distance_px": 953,
+              "horizontal_gap_px": -579,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:1:3",
+              "amount_region_text": "1,224 kg x 2,65 EUR",
+              "amounts": [
+                "2.65"
+              ],
+              "amount_region_box": {
+                "left": 107,
+                "top": 702,
+                "width": 485,
+                "height": 38,
+                "right": 592,
+                "bottom": 740,
+                "center_x": 349,
+                "center_y": 721
+              },
+              "vertical_distance_px": 908,
+              "horizontal_gap_px": -529,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:1",
+              "amount_region_text": "Lidl Plus korting -1,17",
+              "amounts": [
+                "-1.17"
+              ],
+              "amount_region_box": {
+                "left": 177,
+                "top": 748,
+                "width": 809,
+                "height": 38,
+                "right": 986,
+                "bottom": 786,
+                "center_x": 581,
+                "center_y": 767
+              },
+              "vertical_distance_px": 862,
+              "horizontal_gap_px": -459,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:2",
+              "amount_region_text": "Tortilla chips XXL 1,29 B",
+              "amounts": [
+                "1.29"
+              ],
+              "amount_region_box": {
+                "left": 58,
+                "top": 794,
+                "width": 976,
+                "height": 38,
+                "right": 1034,
+                "bottom": 832,
+                "center_x": 546,
+                "center_y": 813
+              },
+              "vertical_distance_px": 816,
+              "horizontal_gap_px": -578,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:3",
+              "amount_region_text": "Knorr CaS Ch. tomaat 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 60,
+                "top": 839,
+                "width": 974,
+                "height": 34,
+                "right": 1034,
+                "bottom": 873,
+                "center_x": 547,
+                "center_y": 856
+              },
+              "vertical_distance_px": 773,
+              "horizontal_gap_px": -576,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:4",
+              "amount_region_text": "Knorr CaS kip 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 60,
+                "top": 885,
+                "width": 974,
+                "height": 38,
+                "right": 1034,
+                "bottom": 923,
+                "center_x": 547,
+                "center_y": 904
+              },
+              "vertical_distance_px": 725,
+              "horizontal_gap_px": -576,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:5",
+              "amount_region_text": "Mexicaanse kruiden 1,49 B",
+              "amounts": [
+                "1.49"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 930,
+                "width": 975,
+                "height": 34,
+                "right": 1034,
+                "bottom": 964,
+                "center_x": 546,
+                "center_y": 947
+              },
+              "vertical_distance_px": 682,
+              "horizontal_gap_px": -577,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:6",
+              "amount_region_text": "Verse halfvolle melk 0,89 B",
+              "amounts": [
+                "0.89"
+              ],
+              "amount_region_box": {
+                "left": 57,
+                "top": 976,
+                "width": 977,
+                "height": 34,
+                "right": 1034,
+                "bottom": 1010,
+                "center_x": 545,
+                "center_y": 993
+              },
+              "vertical_distance_px": 636,
+              "horizontal_gap_px": -579,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:7",
+              "amount_region_text": "Gouda belegen gerasp 2,39 B",
+              "amounts": [
+                "2.39"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 1022,
+                "width": 975,
+                "height": 38,
+                "right": 1034,
+                "bottom": 1060,
+                "center_x": 546,
+                "center_y": 1041
+              },
+              "vertical_distance_px": 588,
+              "horizontal_gap_px": -577,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:2:2:8",
+              "amount_region_text": "Slagersleverworst 1,49 B",
+              "amounts": [
+                "1.49"
+              ],
+              "amount_region_box": {
+                "left": 59,
+                "top": 1067,
+                "width": 975,
+                "height": 38,
+                "right": 1034,
+                "bottom": 1105,
+                "center_x": 546,
+                "center_y": 1086
+              },
+              "vertical_distance_px": 543,
+              "horizontal_gap_px": -577,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 59,
+          "product_name_raw_line": "Bespaar meer met de Lidl Plus-app!",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 61,
+          "product_name_raw_line": "Bespaar nóg meer door het blijven scannen",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 62,
+          "product_name_raw_line": "van jouw Lidl Plus-app.",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 66,
+          "product_name_raw_line": "Aankoop gedaan bij",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 68,
+          "product_name_raw_line": "Arnhem",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 69,
+          "product_name_raw_line": "Fortunastraat 44",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 70,
+          "product_name_raw_line": "6846 XZ Arnhem",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "limits": {
+        "max_vertical_distance_px": 28,
+        "max_nearby_vertical_distance_px": 60,
+        "min_right_gap_px": -10
+      }
+    },
+    "preprocessing_variant_diagnostics": {
+      "diagnostic_scope": "image_preprocessing_variant_ocr_region_diagnostics",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "image_file": "Lidl App 2.png",
+      "variant_count": 0,
+      "best_variant": {},
+      "variants": [],
+      "skip_reason": "non_photo_input_extension"
+    }
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "Lidl Arnhem",
+      "normalized_line": "Lidl Arnhem",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "Fortunastraat 44",
+      "normalized_line": "Fortunastraat 44",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "6846 XZ Arnhem",
+      "normalized_line": "6846 XZ Arnhem",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "OMSCHRIJVING EUR",
+      "normalized_line": "OMSCHRIJVING EUR",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "Aardappel zoet 3,24B",
+      "normalized_line": "Aardappel zoet 3,24B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "1,224 kg x 2,65 EUR",
+      "normalized_line": "1,224 kg x 2,65 EUR",
+      "line_type": "quantity_line",
+      "reason": "weight_price_pattern"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "Lidl Plus korting -1,17",
+      "normalized_line": "Lidl Plus korting -1,17",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "Tortilla chips XXL 1,29 B",
+      "normalized_line": "Tortilla chips XXL 1,29 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "Knorr CaS Ch. tomaat 0,89 B",
+      "normalized_line": "Knorr CaS Ch. tomaat 0,89 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "Knorr CaS kip 0,89 B",
+      "normalized_line": "Knorr CaS kip 0,89 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "Mexicaanse kruiden 1,49 B",
+      "normalized_line": "Mexicaanse kruiden 1,49 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "Verse halfvolle melk 0,89 B",
+      "normalized_line": "Verse halfvolle melk 0,89 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "Gouda belegen gerasp 2,39 B",
+      "normalized_line": "Gouda belegen gerasp 2,39 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "Slagersleverworst 1,49 B",
+      "normalized_line": "Slagersleverworst 1,49 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "Rundersaucijzen 2 x 4,99 9,98 B",
+      "normalized_line": "Rundersaucijzen 2 x 4,99 9,98 B",
+      "line_type": "product_line",
+      "reason": "product_with_quantity_pattern"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "Kidneybonen 2,59 B",
+      "normalized_line": "Kidneybonen 2,59 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "Snacktomaten 1,79 B",
+      "normalized_line": "Snacktomaten 1,79 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "Komkommer 2 x 0,79 1,58 B",
+      "normalized_line": "Komkommer 2 x 0,79 1,58 B",
+      "line_type": "product_line",
+      "reason": "product_with_quantity_pattern"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "Duurzame basmati rijst 1,69 B",
+      "normalized_line": "Duurzame basmati rijst 1,69 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "Créme fraiche 30% 0,99 B",
+      "normalized_line": "Créme fraiche 30% 0,99 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "Tomatenblokjes 2 x 0,58 1,16 B",
+      "normalized_line": "Tomatenblokjes 2 x 0,58 1,16 B",
+      "line_type": "product_line",
+      "reason": "product_with_quantity_pattern"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "Mexicaanse kruidenm. 0,49 B",
+      "normalized_line": "Mexicaanse kruidenm. 0,49 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "Mexicaanse kruidenm. 0,49 B",
+      "normalized_line": "Mexicaanse kruidenm. 0,49 B",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "Taco saus 2 x 0,99 1,98 B",
+      "normalized_line": "Taco saus 2 x 0,99 1,98 B",
+      "line_type": "product_line",
+      "reason": "product_with_quantity_pattern"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "Aantal 22 art",
+      "normalized_line": "Aantal 22 art",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "Totaal 34,14",
+      "normalized_line": "Totaal 34,14",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "Bankpas 34,14",
+      "normalized_line": "Bankpas 34,14",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "Kopie Kaarthouder",
+      "normalized_line": "Kopie Kaarthouder",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "Merchant Ref.: NLO74281221829329251",
+      "normalized_line": "Merchant Ref.: NLO74281221829329251",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "Terminal: NY50M4 Merchant: 278508",
+      "normalized_line": "Terminal: NY50M4 Merchant: 278508",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "Periode: 5329 Transactie: 02214349",
+      "normalized_line": "Periode: 5329 Transactie: 02214349",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "Contactloze betaling",
+      "normalized_line": "Contactloze betaling",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "V PAY (A0000000032020)",
+      "normalized_line": "V PAY (A0000000032020)",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 40,
+      "raw_line": "V-PAY",
+      "normalized_line": "V-PAY",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "Kaart: 487512xxXxxxXxxxx3334",
+      "normalized_line": "Kaart: 487512xxXxxxXxxxx3334",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 43,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 44,
+      "raw_line": "Kaartnr: 02",
+      "normalized_line": "Kaartnr: 02",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 45,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 46,
+      "raw_line": "BETALING",
+      "normalized_line": "BETALING",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 47,
+      "raw_line": "25/11/2025 12:37 Auth. code: W00856",
+      "normalized_line": "25/11/2025 12:37 Auth. code: W00856",
+      "line_type": "metadata_line",
+      "reason": "date_like"
+    },
+    {
+      "line_no": 48,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 49,
+      "raw_line": "Totaal: 34,14 EUR",
+      "normalized_line": "Totaal: 34,14 EUR",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 50,
+      "raw_line": "AKKOORD",
+      "normalized_line": "AKKOORD",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 51,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 52,
+      "raw_line": "Totaal prijsvoordeel 1,17",
+      "normalized_line": "Totaal prijsvoordeel 1,17",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 53,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 54,
+      "raw_line": "% Bedr . Excl BTW Bedr. Incl",
+      "normalized_line": "% Bedr . Excl BTW Bedr. Incl",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 55,
+      "raw_line": "B 9 31,32 2,82 34,14",
+      "normalized_line": "B 9 31,32 2,82 34,14",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 56,
+      "raw_line": "0742 221829/81 25.11.25",
+      "normalized_line": "0742 221829/81 25.11.25",
+      "line_type": "metadata_line",
+      "reason": "date_like"
+    },
+    {
+      "line_no": 57,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 58,
+      "raw_line": "DANK U WEL EN GRAAG TOT ZIENS",
+      "normalized_line": "DANK U WEL EN GRAAG TOT ZIENS",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 59,
+      "raw_line": "Bespaar meer met de Lidl Plus-app!",
+      "normalized_line": "Bespaar meer met de Lidl Plus-app!",
+      "line_type": "unknown_line",
+      "reason": "loyalty_payment_zone_excluded"
+    },
+    {
+      "line_no": 60,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 61,
+      "raw_line": "Bespaar nóg meer door het blijven scannen",
+      "normalized_line": "Bespaar nóg meer door het blijven scannen",
+      "line_type": "unknown_line",
+      "reason": "loyalty_payment_zone_excluded"
+    },
+    {
+      "line_no": 62,
+      "raw_line": "van jouw Lidl Plus-app.",
+      "normalized_line": "van jouw Lidl Plus-app.",
+      "line_type": "unknown_line",
+      "reason": "loyalty_payment_zone_excluded"
+    },
+    {
+      "line_no": 63,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 64,
+      "raw_line": "Bedankt voor je bezoek!",
+      "normalized_line": "Bedankt voor je bezoek!",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 65,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 66,
+      "raw_line": "Aankoop gedaan bij",
+      "normalized_line": "Aankoop gedaan bij",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 67,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 68,
+      "raw_line": "Arnhem",
+      "normalized_line": "Arnhem",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 69,
+      "raw_line": "Fortunastraat 44",
+      "normalized_line": "Fortunastraat 44",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 70,
+      "raw_line": "6846 XZ Arnhem",
+      "normalized_line": "6846 XZ Arnhem",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 71,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 72,
+      "raw_line": "Filiaal informatie >",
+      "normalized_line": "Filiaal informatie >",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    }
+  ],
+  "lines": [
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 6,
+      "line_type": "product_line",
+      "item_text": "Aardappel zoet B",
+      "quantity": "1.224",
+      "unit": "kg",
+      "unit_price": "2.65",
+      "line_total": "2.65",
+      "parser_confidence": 0.75,
+      "raw_line": "Aardappel zoet 3,24B | 1,224 kg x 2,65 EUR",
+      "warning": "quantity_line_merged"
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 10,
+      "line_type": "product_line",
+      "item_text": "Tortilla chips XXL  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.29",
+      "parser_confidence": 0.75,
+      "raw_line": "Tortilla chips XXL 1,29 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 11,
+      "line_type": "product_line",
+      "item_text": "Knorr CaS Ch. tomaat  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.89",
+      "parser_confidence": 0.75,
+      "raw_line": "Knorr CaS Ch. tomaat 0,89 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 12,
+      "line_type": "product_line",
+      "item_text": "Knorr CaS kip  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.89",
+      "parser_confidence": 0.75,
+      "raw_line": "Knorr CaS kip 0,89 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 13,
+      "line_type": "product_line",
+      "item_text": "Mexicaanse kruiden  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.49",
+      "parser_confidence": 0.75,
+      "raw_line": "Mexicaanse kruiden 1,49 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 14,
+      "line_type": "product_line",
+      "item_text": "Verse halfvolle melk  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.89",
+      "parser_confidence": 0.75,
+      "raw_line": "Verse halfvolle melk 0,89 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 15,
+      "line_type": "product_line",
+      "item_text": "Gouda belegen gerasp  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "2.39",
+      "parser_confidence": 0.75,
+      "raw_line": "Gouda belegen gerasp 2,39 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 16,
+      "line_type": "product_line",
+      "item_text": "Slagersleverworst  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.49",
+      "parser_confidence": 0.75,
+      "raw_line": "Slagersleverworst 1,49 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 17,
+      "line_type": "product_line",
+      "item_text": "Rundersaucijzen 2 x 4,99  B",
+      "quantity": "2",
+      "unit": "stuk",
+      "unit_price": "4.99",
+      "line_total": "9.98",
+      "parser_confidence": 0.75,
+      "raw_line": "Rundersaucijzen 2 x 4,99 9,98 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 18,
+      "line_type": "product_line",
+      "item_text": "Kidneybonen  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "2.59",
+      "parser_confidence": 0.75,
+      "raw_line": "Kidneybonen 2,59 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 19,
+      "line_type": "product_line",
+      "item_text": "Snacktomaten  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.79",
+      "parser_confidence": 0.75,
+      "raw_line": "Snacktomaten 1,79 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 20,
+      "line_type": "product_line",
+      "item_text": "Komkommer 2 x 0,79  B",
+      "quantity": "2",
+      "unit": "stuk",
+      "unit_price": "0.79",
+      "line_total": "1.58",
+      "parser_confidence": 0.75,
+      "raw_line": "Komkommer 2 x 0,79 1,58 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 21,
+      "line_type": "product_line",
+      "item_text": "Duurzame basmati rijst  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.69",
+      "parser_confidence": 0.75,
+      "raw_line": "Duurzame basmati rijst 1,69 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 22,
+      "line_type": "product_line",
+      "item_text": "Créme fraiche 30%  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.99",
+      "parser_confidence": 0.75,
+      "raw_line": "Créme fraiche 30% 0,99 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 23,
+      "line_type": "product_line",
+      "item_text": "Tomatenblokjes 2 x 0,58  B",
+      "quantity": "2",
+      "unit": "stuk",
+      "unit_price": "0.58",
+      "line_total": "1.16",
+      "parser_confidence": 0.75,
+      "raw_line": "Tomatenblokjes 2 x 0,58 1,16 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 24,
+      "line_type": "product_line",
+      "item_text": "Mexicaanse kruidenm.  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.49",
+      "parser_confidence": 0.75,
+      "raw_line": "Mexicaanse kruidenm. 0,49 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 25,
+      "line_type": "product_line",
+      "item_text": "Mexicaanse kruidenm.  B",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.49",
+      "parser_confidence": 0.75,
+      "raw_line": "Mexicaanse kruidenm. 0,49 B",
+      "warning": ""
+    },
+    {
+      "source_file": "Lidl App 2.png",
+      "store_hint": "lidl",
+      "profile_name": "lidl",
+      "line_no": 26,
+      "line_type": "product_line",
+      "item_text": "Taco saus 2 x 0,99  B",
+      "quantity": "2",
+      "unit": "stuk",
+      "unit_price": "0.99",
+      "line_total": "1.98",
+      "parser_confidence": 0.75,
+      "raw_line": "Taco saus 2 x 0,99 1,98 B",
+      "warning": ""
+    }
+  ]
+}

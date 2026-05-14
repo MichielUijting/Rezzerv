@@ -1,0 +1,203 @@
+{
+  "schema_version": "receipt-ocr-poc-v15-name-amount-link-diagnostics",
+  "metadata": {
+    "source_file": "AH foto 3.jpg",
+    "created_at": "2026-05-14T12:03:13.285622+00:00",
+    "store_hint": "ah",
+    "profile_name": "generic",
+    "detected_rows": 0,
+    "line_type_counts": {
+      "discount_line": 0,
+      "metadata_line": 0,
+      "noise_line": 0,
+      "payment_line": 0,
+      "product_line": 0,
+      "quantity_line": 0,
+      "total_line": 0,
+      "unknown_line": 0,
+      "vat_line": 0
+    },
+    "product_block": {
+      "start_line": null,
+      "end_line": null,
+      "reason": "no_parseable_lines",
+      "line_count": 0,
+      "profile": "generic"
+    },
+    "product_block_rescue_diagnostics": {
+      "candidate_product_block_start": null,
+      "candidate_product_block_end": null,
+      "orphan_product_name_lines": [],
+      "orphan_amount_lines": [],
+      "nearby_name_amount_pairs": [],
+      "product_block_rescue_reason": "no_rescue_product_block_candidate",
+      "stop_line_no": null,
+      "stop_line_reason": ""
+    },
+    "product_name_amount_link_diagnostics": {
+      "diagnostic_scope": "orphan_product_name_to_orphan_amount_before_total_payment_vat_zone",
+      "max_line_distance": 4,
+      "store_hint": "ah",
+      "candidate_link_count": 0,
+      "candidate_links": [],
+      "eligible_name_line_count": 0,
+      "eligible_amount_line_count": 0,
+      "rejected_link_count": 0,
+      "rejected_links": [],
+      "diagnostic_only": true,
+      "reconstruction_applied": false
+    },
+    "amount_only_exclusion_diagnostics": {
+      "excluded_amount_only_lines": [],
+      "excluded_amount_only_count": 0,
+      "amount_only_exclusion_reason": "amount_currency_only_in_or_after_payment_total_vat_zone"
+    },
+    "loyalty_exclusion_diagnostics": {
+      "excluded_loyalty_lines": [],
+      "excluded_loyalty_count": 0,
+      "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "refinement_diagnostics": {
+      "profile": "generic",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "totals_diagnostics": {
+      "store_hint": "ah",
+      "gross_line_sum": "0.00",
+      "discount_total_detected": "0.00",
+      "net_total_candidate": "0.00",
+      "selected_total_hint": null,
+      "selected_total_hint_reason": "",
+      "net_vs_selected_total_difference": "0.00",
+      "all_total_hints": [],
+      "excluded_total_hints": [],
+      "selected_discount_strategy": "sum_individual_discount_lines",
+      "selected_discount_candidates": [],
+      "excluded_discount_candidates": [],
+      "all_discount_candidates": [],
+      "discount_candidate_count": 0,
+      "line_count_after_merge": 0,
+      "totals_strategy": "diagnostic_gross_minus_selected_discount_vs_selected_total_hint",
+      "suspicious_amounts": [],
+      "possible_duplicate_lines": [],
+      "possible_missing_discount_application": [],
+      "amount_delta_candidates": []
+    },
+    "ocr_region_amount_diagnostics": {
+      "diagnostic_scope": "tesseract_image_to_data_region_amount_diagnostics",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "image_file": "AH foto 3.jpg",
+      "ocr_region_count": 0,
+      "amount_region_count": 0,
+      "candidate_region_link_count": 0,
+      "candidate_region_links": [],
+      "orphan_product_name_region_diagnostics": [],
+      "limits": {
+        "max_vertical_distance_px": 28,
+        "max_nearby_vertical_distance_px": 60,
+        "min_right_gap_px": -10
+      }
+    },
+    "preprocessing_variant_diagnostics": {
+      "diagnostic_scope": "image_preprocessing_variant_ocr_region_diagnostics",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "image_file": "AH foto 3.jpg",
+      "variant_count": 7,
+      "best_variant": {
+        "variant": "scale_up_175",
+        "ocr_region_count": 2,
+        "amount_region_count": 0,
+        "candidate_region_link_count": 0
+      },
+      "variants": [
+        {
+          "variant": "original",
+          "ocr_region_count": 0,
+          "amount_region_count": 0,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/AH_foto_3__original.png"
+        },
+        {
+          "variant": "grayscale",
+          "ocr_region_count": 0,
+          "amount_region_count": 0,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/AH_foto_3__grayscale.png"
+        },
+        {
+          "variant": "contrast",
+          "ocr_region_count": 0,
+          "amount_region_count": 0,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/AH_foto_3__contrast.png"
+        },
+        {
+          "variant": "threshold",
+          "ocr_region_count": 1,
+          "amount_region_count": 0,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/AH_foto_3__threshold.png"
+        },
+        {
+          "variant": "sharpen",
+          "ocr_region_count": 0,
+          "amount_region_count": 0,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/AH_foto_3__sharpen.png"
+        },
+        {
+          "variant": "scale_up_175",
+          "ocr_region_count": 2,
+          "amount_region_count": 0,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/AH_foto_3__scale_up_175.png"
+        },
+        {
+          "variant": "contrast_scale_up_175",
+          "ocr_region_count": 0,
+          "amount_region_count": 0,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/AH_foto_3__contrast_scale_up_175.png"
+        }
+      ]
+    }
+  },
+  "classified_lines": [],
+  "lines": []
+}

@@ -1,0 +1,3435 @@
+{
+  "schema_version": "receipt-ocr-poc-v15-name-amount-link-diagnostics",
+  "metadata": {
+    "source_file": "Plus foto 2.jpeg",
+    "created_at": "2026-05-14T12:03:25.896439+00:00",
+    "store_hint": "plus",
+    "profile_name": "generic",
+    "detected_rows": 0,
+    "line_type_counts": {
+      "discount_line": 0,
+      "metadata_line": 2,
+      "noise_line": 3,
+      "payment_line": 5,
+      "product_line": 0,
+      "quantity_line": 0,
+      "total_line": 0,
+      "unknown_line": 51,
+      "vat_line": 1
+    },
+    "product_block": {
+      "start_line": null,
+      "end_line": null,
+      "reason": "no_parseable_lines",
+      "line_count": 0,
+      "profile": "generic"
+    },
+    "product_block_rescue_diagnostics": {
+      "candidate_product_block_start": 1,
+      "candidate_product_block_end": 16,
+      "orphan_product_name_lines": [
+        {
+          "line_no": 1,
+          "raw_line": "> spaafKaant geregistreerd",
+          "normalized_line": "> spaafKaant geregistreerd",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 3,
+          "raw_line": "BIO DADELTJES",
+          "normalized_line": "BIO DADELTJES",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 5,
+          "raw_line": "DKK RIJSTWAFEL",
+          "normalized_line": "DKK RIJSTWAFEL",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 7,
+          "raw_line": "LAMA PUFFS PIZZA",
+          "normalized_line": "LAMA PUFFS PIZZA",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 8,
+          "raw_line": "WELTY VEGGIE STICKS",
+          "normalized_line": "WELTY VEGGIE STICKS",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 9,
+          "raw_line": "4+ CARROTS, APPLES +",
+          "normalized_line": "4+ CARROTS, APPLES +",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 10,
+          "raw_line": "APPLE PEACH MANGO",
+          "normalized_line": "APPLE PEACH MANGO",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 11,
+          "raw_line": "APPLE QUINOA",
+          "normalized_line": "APPLE QUINOA",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 12,
+          "raw_line": "GROENTE RINGEN +12M",
+          "normalized_line": "GROENTE RINGEN +12M",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 14,
+          "raw_line": "Subtotaa",
+          "normalized_line": "Subtotaa",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 16,
+          "raw_line": "pLusPunten DIGITAA",
+          "normalized_line": "pLusPunten DIGITAA",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 23,
+          "raw_line": "Kaar tserienUnnei",
+          "normalized_line": "Kaar tserienUnnei",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 26,
+          "raw_line": "Datun",
+          "normalized_line": "Datun",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 31,
+          "raw_line": "HIP",
+          "normalized_line": "HIP",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 32,
+          "raw_line": "DR KLANTAPPARAAT",
+          "normalized_line": "DR KLANTAPPARAAT",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 39,
+          "raw_line": "DIGITALE ZEGELS",
+          "normalized_line": "DIGITALE ZEGELS",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 41,
+          "raw_line": "PLuSpunten",
+          "normalized_line": "PLuSpunten",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 44,
+          "raw_line": "Campagne zegel",
+          "normalized_line": "Campagne zegel",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 45,
+          "raw_line": "Kijk voor deg",
+          "normalized_line": "Kijk voor deg",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 47,
+          "raw_line": "op plu!",
+          "normalized_line": "op plu!",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 52,
+          "raw_line": "Ave",
+          "normalized_line": "Ave",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 54,
+          "raw_line": "prettige dag gewenst!",
+          "normalized_line": "prettige dag gewenst!",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 56,
+          "raw_line": "U bent geholpen door Sel fPayteht ‚6 (1006)",
+          "normalized_line": "U bent geholpen door Sel fPayteht ‚6 (1006)",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 57,
+          "raw_line": "44.2026 11:40 kassa 6 Bonne 6757",
+          "normalized_line": "44.2026 11:40 kassa 6 Bonne 6757",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 59,
+          "raw_line": "He doen net je me,",
+          "normalized_line": "He doen net je me,",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 61,
+          "raw_line": "waw PLUS «Dl.",
+          "normalized_line": "waw PLUS «Dl.",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        }
+      ],
+      "orphan_amount_lines": [
+        {
+          "line_no": 29,
+          "raw_line": "14,36 EUR",
+          "normalized_line": "14,36 EUR",
+          "line_type": "unknown_line",
+          "amounts": [
+            "14.36"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 34,
+          "raw_line": "€14,36",
+          "normalized_line": "€14,36",
+          "line_type": "unknown_line",
+          "amounts": [
+            "14.36"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 37,
+          "raw_line": "Wisselgeld (Content) €0,00",
+          "normalized_line": "Wisselgeld (Content) €0,00",
+          "line_type": "payment_line",
+          "amounts": [
+            "0.00"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 42,
+          "raw_line": "475 zegels + €30,00 teg",
+          "normalized_line": "475 zegels + €30,00 teg",
+          "line_type": "unknown_line",
+          "amounts": [
+            "30.00"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "nearby_name_amount_pairs": [
+        {
+          "product_name_line_no": 26,
+          "amount_line_no": 29,
+          "distance": 3,
+          "product_name_raw_line": "Datun",
+          "amount_raw_line": "14,36 EUR",
+          "amounts": [
+            "14.36"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 31,
+          "amount_line_no": 29,
+          "distance": -2,
+          "product_name_raw_line": "HIP",
+          "amount_raw_line": "14,36 EUR",
+          "amounts": [
+            "14.36"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 31,
+          "amount_line_no": 34,
+          "distance": 3,
+          "product_name_raw_line": "HIP",
+          "amount_raw_line": "€14,36",
+          "amounts": [
+            "14.36"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 32,
+          "amount_line_no": 29,
+          "distance": -3,
+          "product_name_raw_line": "DR KLANTAPPARAAT",
+          "amount_raw_line": "14,36 EUR",
+          "amounts": [
+            "14.36"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 32,
+          "amount_line_no": 34,
+          "distance": 2,
+          "product_name_raw_line": "DR KLANTAPPARAAT",
+          "amount_raw_line": "€14,36",
+          "amounts": [
+            "14.36"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 39,
+          "amount_line_no": 37,
+          "distance": -2,
+          "product_name_raw_line": "DIGITALE ZEGELS",
+          "amount_raw_line": "Wisselgeld (Content) €0,00",
+          "amounts": [
+            "0.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 39,
+          "amount_line_no": 42,
+          "distance": 3,
+          "product_name_raw_line": "DIGITALE ZEGELS",
+          "amount_raw_line": "475 zegels + €30,00 teg",
+          "amounts": [
+            "30.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 41,
+          "amount_line_no": 42,
+          "distance": 1,
+          "product_name_raw_line": "PLuSpunten",
+          "amount_raw_line": "475 zegels + €30,00 teg",
+          "amounts": [
+            "30.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 44,
+          "amount_line_no": 42,
+          "distance": -2,
+          "product_name_raw_line": "Campagne zegel",
+          "amount_raw_line": "475 zegels + €30,00 teg",
+          "amounts": [
+            "30.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 45,
+          "amount_line_no": 42,
+          "distance": -3,
+          "product_name_raw_line": "Kijk voor deg",
+          "amount_raw_line": "475 zegels + €30,00 teg",
+          "amounts": [
+            "30.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        }
+      ],
+      "product_block_rescue_reason": "orphan_product_names_before_total_payment_vat_zone",
+      "stop_line_no": 18,
+      "stop_line_reason": "first_total_payment_vat_line"
+    },
+    "product_name_amount_link_diagnostics": {
+      "diagnostic_scope": "orphan_product_name_to_orphan_amount_before_total_payment_vat_zone",
+      "max_line_distance": 4,
+      "store_hint": "plus",
+      "candidate_link_count": 0,
+      "candidate_links": [],
+      "eligible_name_line_count": 10,
+      "eligible_amount_line_count": 0,
+      "rejected_link_count": 20,
+      "rejected_links": [
+        {
+          "product_name_line_no": 16,
+          "product_name_raw_line": "pLusPunten DIGITAA",
+          "rejection_reason": "name_line_matches_store_header_keyword"
+        },
+        {
+          "product_name_line_no": 23,
+          "product_name_raw_line": "Kaar tserienUnnei",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 26,
+          "product_name_raw_line": "Datun",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 31,
+          "product_name_raw_line": "HIP",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 32,
+          "product_name_raw_line": "DR KLANTAPPARAAT",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 39,
+          "product_name_raw_line": "DIGITALE ZEGELS",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 41,
+          "product_name_raw_line": "PLuSpunten",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 44,
+          "product_name_raw_line": "Campagne zegel",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 45,
+          "product_name_raw_line": "Kijk voor deg",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 47,
+          "product_name_raw_line": "op plu!",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 52,
+          "product_name_raw_line": "Ave",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 54,
+          "product_name_raw_line": "prettige dag gewenst!",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 56,
+          "product_name_raw_line": "U bent geholpen door Sel fPayteht ‚6 (1006)",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 57,
+          "product_name_raw_line": "44.2026 11:40 kassa 6 Bonne 6757",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 59,
+          "product_name_raw_line": "He doen net je me,",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 61,
+          "product_name_raw_line": "waw PLUS «Dl.",
+          "rejection_reason": "name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 29,
+          "amount_raw_line": "14,36 EUR",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 34,
+          "amount_raw_line": "€14,36",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 37,
+          "amount_raw_line": "Wisselgeld (Content) €0,00",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "amount_line_no": 42,
+          "amount_raw_line": "475 zegels + €30,00 teg",
+          "rejection_reason": "amount_line_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "diagnostic_only": true,
+      "reconstruction_applied": false
+    },
+    "amount_only_exclusion_diagnostics": {
+      "excluded_amount_only_lines": [
+        {
+          "line_no": 29,
+          "raw_line": "14,36 EUR",
+          "normalized_line": "14,36 EUR",
+          "previous_line_type": "product_line",
+          "amounts": [
+            "14.36"
+          ],
+          "amount_only_exclusion_reason": "amount_currency_only_in_or_after_payment_total_vat_zone"
+        },
+        {
+          "line_no": 34,
+          "raw_line": "€14,36",
+          "normalized_line": "€14,36",
+          "previous_line_type": "unknown_line",
+          "amounts": [
+            "14.36"
+          ],
+          "amount_only_exclusion_reason": "amount_currency_only_in_or_after_payment_total_vat_zone"
+        }
+      ],
+      "excluded_amount_only_count": 2,
+      "amount_only_exclusion_reason": "amount_currency_only_in_or_after_payment_total_vat_zone"
+    },
+    "loyalty_exclusion_diagnostics": {
+      "excluded_loyalty_lines": [
+        {
+          "line_no": 39,
+          "raw_line": "DIGITALE ZEGELS",
+          "normalized_line": "DIGITALE ZEGELS",
+          "previous_line_type": "unknown_line",
+          "matched_loyalty_rule": [
+            {
+              "scope": "generic",
+              "keyword": "zegel"
+            },
+            {
+              "scope": "generic",
+              "keyword": "zegels"
+            },
+            {
+              "scope": "store:plus",
+              "keyword": "digitale zegels"
+            }
+          ],
+          "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+        },
+        {
+          "line_no": 41,
+          "raw_line": "PLuSpunten",
+          "normalized_line": "PLuSpunten",
+          "previous_line_type": "unknown_line",
+          "matched_loyalty_rule": [
+            {
+              "scope": "store:plus",
+              "keyword": "pluspunten"
+            },
+            {
+              "scope": "store:plus",
+              "keyword": "pluspunt"
+            }
+          ],
+          "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+        },
+        {
+          "line_no": 42,
+          "raw_line": "475 zegels + €30,00 teg",
+          "normalized_line": "475 zegels + €30,00 teg",
+          "previous_line_type": "product_line",
+          "matched_loyalty_rule": [
+            {
+              "scope": "generic",
+              "keyword": "zegel"
+            },
+            {
+              "scope": "generic",
+              "keyword": "zegels"
+            }
+          ],
+          "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+        },
+        {
+          "line_no": 44,
+          "raw_line": "Campagne zegel",
+          "normalized_line": "Campagne zegel",
+          "previous_line_type": "unknown_line",
+          "matched_loyalty_rule": [
+            {
+              "scope": "generic",
+              "keyword": "zegel"
+            },
+            {
+              "scope": "generic",
+              "keyword": "campagne"
+            }
+          ],
+          "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+        }
+      ],
+      "excluded_loyalty_count": 4,
+      "loyalty_exclusion_reason": "loyalty_campaign_line_in_or_after_payment_total_vat_zone"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "refinement_diagnostics": {
+      "profile": "generic",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "totals_diagnostics": {
+      "store_hint": "plus",
+      "gross_line_sum": "0.00",
+      "discount_total_detected": "0.00",
+      "net_total_candidate": "0.00",
+      "selected_total_hint": null,
+      "selected_total_hint_reason": "",
+      "net_vs_selected_total_difference": "0.00",
+      "all_total_hints": [],
+      "excluded_total_hints": [],
+      "selected_discount_strategy": "sum_individual_discount_lines",
+      "selected_discount_candidates": [],
+      "excluded_discount_candidates": [],
+      "all_discount_candidates": [],
+      "discount_candidate_count": 0,
+      "line_count_after_merge": 0,
+      "totals_strategy": "diagnostic_gross_minus_selected_discount_vs_selected_total_hint",
+      "suspicious_amounts": [],
+      "possible_duplicate_lines": [],
+      "possible_missing_discount_application": [],
+      "amount_delta_candidates": [
+        {
+          "line_no": 37,
+          "amount": "0.00",
+          "raw_line": "Wisselgeld (Content) €0,00",
+          "line_type": "payment_line",
+          "reason": "ocr_line_amount_equals_abs_net_vs_selected_total_difference"
+        }
+      ]
+    },
+    "ocr_region_amount_diagnostics": {
+      "diagnostic_scope": "tesseract_image_to_data_region_amount_diagnostics",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "image_file": "Plus foto 2.jpeg",
+      "ocr_region_count": 40,
+      "amount_region_count": 5,
+      "candidate_region_link_count": 0,
+      "candidate_region_links": [],
+      "orphan_product_name_region_diagnostics": [
+        {
+          "product_name_line_no": 1,
+          "product_name_raw_line": "> spaafKaant geregistreerd",
+          "name_region_key": "1:1:1:1",
+          "name_region_text": "> spaafKaant geregistreerd",
+          "name_region_box": {
+            "left": 367,
+            "top": 288,
+            "width": 205,
+            "height": 24,
+            "right": 572,
+            "bottom": 312,
+            "center_x": 469,
+            "center_y": 300
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 654,
+              "horizontal_gap_px": 8,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 765,
+              "horizontal_gap_px": 56,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 789,
+              "horizontal_gap_px": -187,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 930,
+              "horizontal_gap_px": -162,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 1065,
+              "horizontal_gap_px": -123,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 3,
+          "product_name_raw_line": "BIO DADELTJES",
+          "name_region_key": "1:2:1:1",
+          "name_region_text": "BIO DADELTJES",
+          "name_region_box": {
+            "left": 350,
+            "top": 330,
+            "width": 103,
+            "height": 16,
+            "right": 453,
+            "bottom": 346,
+            "center_x": 401,
+            "center_y": 338
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 616,
+              "horizontal_gap_px": 127,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 727,
+              "horizontal_gap_px": 175,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 751,
+              "horizontal_gap_px": -68,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 892,
+              "horizontal_gap_px": -43,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 1027,
+              "horizontal_gap_px": -4,
+              "reject_reason": "amount_region_too_far_vertically"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 5,
+          "product_name_raw_line": "DKK RIJSTWAFEL",
+          "name_region_key": "1:2:2:1",
+          "name_region_text": "DKK RIJSTWAFEL",
+          "name_region_box": {
+            "left": 350,
+            "top": 348,
+            "width": 111,
+            "height": 16,
+            "right": 461,
+            "bottom": 364,
+            "center_x": 405,
+            "center_y": 356
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 598,
+              "horizontal_gap_px": 119,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 709,
+              "horizontal_gap_px": 167,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 733,
+              "horizontal_gap_px": -76,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 874,
+              "horizontal_gap_px": -51,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 1009,
+              "horizontal_gap_px": -12,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 7,
+          "product_name_raw_line": "LAMA PUFFS PIZZA",
+          "name_region_key": "1:2:3:1",
+          "name_region_text": "LAMA PUFFS PIZZA",
+          "name_region_box": {
+            "left": 351,
+            "top": 363,
+            "width": 126,
+            "height": 16,
+            "right": 477,
+            "bottom": 379,
+            "center_x": 414,
+            "center_y": 371
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 583,
+              "horizontal_gap_px": 103,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 694,
+              "horizontal_gap_px": 151,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 718,
+              "horizontal_gap_px": -92,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 859,
+              "horizontal_gap_px": -67,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 994,
+              "horizontal_gap_px": -28,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 8,
+          "product_name_raw_line": "WELTY VEGGIE STICKS",
+          "name_region_key": "1:2:3:2",
+          "name_region_text": "WELTY VEGGIE STICKS",
+          "name_region_box": {
+            "left": 351,
+            "top": 377,
+            "width": 151,
+            "height": 18,
+            "right": 502,
+            "bottom": 395,
+            "center_x": 426,
+            "center_y": 386
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 568,
+              "horizontal_gap_px": 78,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 679,
+              "horizontal_gap_px": 126,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 703,
+              "horizontal_gap_px": -117,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 844,
+              "horizontal_gap_px": -92,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 979,
+              "horizontal_gap_px": -53,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 9,
+          "product_name_raw_line": "4+ CARROTS, APPLES +",
+          "name_region_key": "1:2:3:3",
+          "name_region_text": "4+ CARROTS, APPLES +",
+          "name_region_box": {
+            "left": 350,
+            "top": 395,
+            "width": 160,
+            "height": 16,
+            "right": 510,
+            "bottom": 411,
+            "center_x": 430,
+            "center_y": 403
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 551,
+              "horizontal_gap_px": 70,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 662,
+              "horizontal_gap_px": 118,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 686,
+              "horizontal_gap_px": -125,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 827,
+              "horizontal_gap_px": -100,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 962,
+              "horizontal_gap_px": -61,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 10,
+          "product_name_raw_line": "APPLE PEACH MANGO",
+          "name_region_key": "1:2:3:4",
+          "name_region_text": "APPLE PEACH MANGO",
+          "name_region_box": {
+            "left": 350,
+            "top": 412,
+            "width": 136,
+            "height": 15,
+            "right": 486,
+            "bottom": 427,
+            "center_x": 418,
+            "center_y": 419
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 535,
+              "horizontal_gap_px": 94,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 646,
+              "horizontal_gap_px": 142,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 670,
+              "horizontal_gap_px": -101,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 811,
+              "horizontal_gap_px": -76,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 946,
+              "horizontal_gap_px": -37,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 11,
+          "product_name_raw_line": "APPLE QUINOA",
+          "name_region_key": "1:2:3:5",
+          "name_region_text": "APPLE QUINOA",
+          "name_region_box": {
+            "left": 350,
+            "top": 431,
+            "width": 95,
+            "height": 13,
+            "right": 445,
+            "bottom": 444,
+            "center_x": 397,
+            "center_y": 437
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 517,
+              "horizontal_gap_px": 135,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 628,
+              "horizontal_gap_px": 183,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 652,
+              "horizontal_gap_px": -60,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 793,
+              "horizontal_gap_px": -35,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 928,
+              "horizontal_gap_px": 4,
+              "reject_reason": "amount_region_too_far_vertically"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 12,
+          "product_name_raw_line": "GROENTE RINGEN +12M",
+          "name_region_key": "1:2:3:6",
+          "name_region_text": "GROENTE RINGEN +12M",
+          "name_region_box": {
+            "left": 350,
+            "top": 444,
+            "width": 153,
+            "height": 16,
+            "right": 503,
+            "bottom": 460,
+            "center_x": 426,
+            "center_y": 452
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 502,
+              "horizontal_gap_px": 77,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 613,
+              "horizontal_gap_px": 125,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 637,
+              "horizontal_gap_px": -118,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 778,
+              "horizontal_gap_px": -93,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 913,
+              "horizontal_gap_px": -54,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 14,
+          "product_name_raw_line": "Subtotaa",
+          "name_region_key": "1:3:1:1",
+          "name_region_text": "Subtotaa",
+          "name_region_box": {
+            "left": 335,
+            "top": 481,
+            "width": 125,
+            "height": 14,
+            "right": 460,
+            "bottom": 495,
+            "center_x": 397,
+            "center_y": 488
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 466,
+              "horizontal_gap_px": 120,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 577,
+              "horizontal_gap_px": 168,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 601,
+              "horizontal_gap_px": -75,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 742,
+              "horizontal_gap_px": -50,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 877,
+              "horizontal_gap_px": -11,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 16,
+          "product_name_raw_line": "pLusPunten DIGITAA",
+          "name_region_key": "1:4:1:1",
+          "name_region_text": "pLusPunten DIGITAA",
+          "name_region_box": {
+            "left": 387,
+            "top": 506,
+            "width": 139,
+            "height": 20,
+            "right": 526,
+            "bottom": 526,
+            "center_x": 456,
+            "center_y": 516
+          },
+          "name_region_match_reason": "matched_by_normalized_text_tokens",
+          "candidate_amount_regions": [],
+          "rejected_amount_regions": [
+            {
+              "amount_region_key": "1:7:1:1",
+              "amount_region_text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 580,
+                "top": 940,
+                "width": 69,
+                "height": 28,
+                "right": 649,
+                "bottom": 968,
+                "center_x": 614,
+                "center_y": 954
+              },
+              "vertical_distance_px": 438,
+              "horizontal_gap_px": 54,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:9:1:1",
+              "amount_region_text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "amount_region_box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "vertical_distance_px": 549,
+              "horizontal_gap_px": 102,
+              "reject_reason": "amount_region_too_far_vertically"
+            },
+            {
+              "amount_region_key": "1:10:1:2",
+              "amount_region_text": "Wisselgeld (Content) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "amount_region_box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "vertical_distance_px": 573,
+              "horizontal_gap_px": -141,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:12:1:2",
+              "amount_region_text": "475 zegels + €30,00 teg",
+              "amounts": [
+                "30.00"
+              ],
+              "amount_region_box": {
+                "left": 410,
+                "top": 1219,
+                "width": 184,
+                "height": 23,
+                "right": 594,
+                "bottom": 1242,
+                "center_x": 502,
+                "center_y": 1230
+              },
+              "vertical_distance_px": 714,
+              "horizontal_gap_px": -116,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            },
+            {
+              "amount_region_key": "1:14:1:3",
+              "amount_region_text": "BTW ype 4,08",
+              "amounts": [
+                "4.08"
+              ],
+              "amount_region_box": {
+                "left": 449,
+                "top": 1348,
+                "width": 256,
+                "height": 34,
+                "right": 705,
+                "bottom": 1382,
+                "center_x": 577,
+                "center_y": 1365
+              },
+              "vertical_distance_px": 849,
+              "horizontal_gap_px": -77,
+              "reject_reason": "amount_region_not_to_the_right_of_product_region"
+            }
+          ],
+          "reject_reason": "no_amount_region_right_or_nearby_for_product_name_region"
+        },
+        {
+          "product_name_line_no": 23,
+          "product_name_raw_line": "Kaar tserienUnnei",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 26,
+          "product_name_raw_line": "Datun",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 31,
+          "product_name_raw_line": "HIP",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 32,
+          "product_name_raw_line": "DR KLANTAPPARAAT",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 39,
+          "product_name_raw_line": "DIGITALE ZEGELS",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 41,
+          "product_name_raw_line": "PLuSpunten",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 44,
+          "product_name_raw_line": "Campagne zegel",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 45,
+          "product_name_raw_line": "Kijk voor deg",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 47,
+          "product_name_raw_line": "op plu!",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 52,
+          "product_name_raw_line": "Ave",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 54,
+          "product_name_raw_line": "prettige dag gewenst!",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 56,
+          "product_name_raw_line": "U bent geholpen door Sel fPayteht ‚6 (1006)",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 57,
+          "product_name_raw_line": "44.2026 11:40 kassa 6 Bonne 6757",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 59,
+          "product_name_raw_line": "He doen net je me,",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        },
+        {
+          "product_name_line_no": 61,
+          "product_name_raw_line": "waw PLUS «Dl.",
+          "name_region": null,
+          "candidate_amount_regions": [],
+          "reject_reason": "product_name_line_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "limits": {
+        "max_vertical_distance_px": 28,
+        "max_nearby_vertical_distance_px": 60,
+        "min_right_gap_px": -10
+      }
+    },
+    "preprocessing_variant_diagnostics": {
+      "diagnostic_scope": "image_preprocessing_variant_ocr_region_diagnostics",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "image_file": "Plus foto 2.jpeg",
+      "variant_count": 7,
+      "best_variant": {
+        "variant": "contrast_scale_up_175",
+        "ocr_region_count": 54,
+        "amount_region_count": 13,
+        "candidate_region_link_count": 1
+      },
+      "variants": [
+        {
+          "variant": "original",
+          "ocr_region_count": 39,
+          "amount_region_count": 3,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/Plus_foto_2__original.png"
+        },
+        {
+          "variant": "grayscale",
+          "ocr_region_count": 29,
+          "amount_region_count": 3,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/Plus_foto_2__grayscale.png"
+        },
+        {
+          "variant": "contrast",
+          "ocr_region_count": 59,
+          "amount_region_count": 7,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/Plus_foto_2__contrast.png"
+        },
+        {
+          "variant": "threshold",
+          "ocr_region_count": 59,
+          "amount_region_count": 3,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/Plus_foto_2__threshold.png"
+        },
+        {
+          "variant": "sharpen",
+          "ocr_region_count": 43,
+          "amount_region_count": 0,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/Plus_foto_2__sharpen.png"
+        },
+        {
+          "variant": "scale_up_175",
+          "ocr_region_count": 38,
+          "amount_region_count": 2,
+          "candidate_region_link_count": 0,
+          "candidate_region_links": [],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/Plus_foto_2__scale_up_175.png"
+        },
+        {
+          "variant": "contrast_scale_up_175",
+          "ocr_region_count": 54,
+          "amount_region_count": 13,
+          "candidate_region_link_count": 1,
+          "candidate_region_links": [
+            {
+              "product_name_line_no": 12,
+              "product_name_raw_line": "GROENTE RINGEN +12M",
+              "name_region_key": "1:6:1:1",
+              "name_region_text": "GROENTE RINGEN +121",
+              "name_region_box": {
+                "left": 613,
+                "top": 778,
+                "width": 267,
+                "height": 27,
+                "right": 880,
+                "bottom": 805,
+                "center_x": 746,
+                "center_y": 791
+              },
+              "amount_region_key": "1:5:2:1",
+              "amount_region_text": "1,15",
+              "amounts": [
+                "1.15"
+              ],
+              "amount_region_box": {
+                "left": 1058,
+                "top": 760,
+                "width": 50,
+                "height": 25,
+                "right": 1108,
+                "bottom": 785,
+                "center_x": 1083,
+                "center_y": 772
+              },
+              "vertical_distance_px": 19,
+              "horizontal_gap_px": 178,
+              "diagnostic_reason": "amount_region_right_on_same_visual_line",
+              "diagnostic_only": true
+            }
+          ],
+          "diagnostic_only": true,
+          "reconstruction_applied": false,
+          "image_written": "test_runs/run_20260514_140310_preprocessing_diag/debug_images/preprocessing_variants/Plus_foto_2__contrast_scale_up_175.png"
+        }
+      ]
+    },
+    "amount_region_zone_diagnostics": {
+      "diagnostic_scope": "amount_region_zone_classification_by_preprocessing_variant",
+      "diagnostic_only": true,
+      "reconstruction_applied": false,
+      "image_file": "Plus foto 2.jpeg",
+      "best_article_zone_variant": {
+        "variant": "contrast_scale_up_175",
+        "amount_region_count": 13,
+        "article_zone_amount_count": 8,
+        "non_article_zone_amount_count": 5
+      },
+      "variants": [
+        {
+          "variant": "original",
+          "amount_region_count": 3,
+          "article_zone_amount_count": 0,
+          "non_article_zone_amount_count": 3,
+          "amount_regions": [
+            {
+              "text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 580,
+                "top": 946,
+                "width": 69,
+                "height": 14,
+                "right": 649,
+                "bottom": 960,
+                "center_x": 614,
+                "center_y": 953
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:8:1:1",
+              "mean_confidence": 90.0
+            },
+            {
+              "text": "PIN €14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "zone": "payment_zone",
+              "box": {
+                "left": 384,
+                "top": 1058,
+                "width": 289,
+                "height": 27,
+                "right": 673,
+                "bottom": 1085,
+                "center_x": 528,
+                "center_y": 1071
+              },
+              "zone_reason": "amount_region_text_matches_payment_zone_keyword:pin",
+              "region_key": "1:12:1:1",
+              "mean_confidence": 85.5
+            },
+            {
+              "text": "wisselgeld (Contant) €0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "zone": "payment_zone",
+              "box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "zone_reason": "amount_region_text_matches_payment_zone_keyword:wisselgeld",
+              "region_key": "1:12:1:2",
+              "mean_confidence": 76.0
+            }
+          ],
+          "zone_context": {
+            "variant_factor": 1.0,
+            "article_top": 270,
+            "article_bottom": 570,
+            "product_right_edge": 572,
+            "stop_y": 783,
+            "matched_product_name_region_count": 11
+          },
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "grayscale",
+          "amount_region_count": 3,
+          "article_zone_amount_count": 0,
+          "non_article_zone_amount_count": 3,
+          "amount_regions": [
+            {
+              "text": "Totaal: 14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 346,
+                "top": 946,
+                "width": 303,
+                "height": 32,
+                "right": 649,
+                "bottom": 978,
+                "center_x": 497,
+                "center_y": 962
+              },
+              "zone_reason": "amount_region_text_matches_total_zone_keyword:totaal",
+              "region_key": "1:7:1:1",
+              "mean_confidence": 89.33
+            },
+            {
+              "text": "€14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 628,
+                "top": 1058,
+                "width": 45,
+                "height": 15,
+                "right": 673,
+                "bottom": 1073,
+                "center_x": 650,
+                "center_y": 1065
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:8:1:1",
+              "mean_confidence": 68.0
+            },
+            {
+              "text": "€0,00",
+              "amounts": [
+                "0.00"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 637,
+                "top": 1075,
+                "width": 38,
+                "height": 14,
+                "right": 675,
+                "bottom": 1089,
+                "center_x": 656,
+                "center_y": 1082
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:8:1:2",
+              "mean_confidence": 93.0
+            }
+          ],
+          "zone_context": {
+            "variant_factor": 1.0,
+            "article_top": 329,
+            "article_bottom": 775,
+            "product_right_edge": 510,
+            "stop_y": 783,
+            "matched_product_name_region_count": 9
+          },
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "contrast",
+          "amount_region_count": 7,
+          "article_zone_amount_count": 0,
+          "non_article_zone_amount_count": 7,
+          "amount_regions": [
+            {
+              "text": "50,89 ì",
+              "amounts": [
+                "50.89"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 63,
+                "top": 933,
+                "width": 147,
+                "height": 18,
+                "right": 210,
+                "bottom": 951,
+                "center_x": 136,
+                "center_y": 942
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:18:2:2",
+              "mean_confidence": 68.0
+            },
+            {
+              "text": "14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 581,
+                "top": 946,
+                "width": 68,
+                "height": 14,
+                "right": 649,
+                "bottom": 960,
+                "center_x": 615,
+                "center_y": 953
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:18:3:1",
+              "mean_confidence": 86.0
+            },
+            {
+              "text": "50,69",
+              "amounts": [
+                "50.69"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 62,
+                "top": 970,
+                "width": 43,
+                "height": 12,
+                "right": 105,
+                "bottom": 982,
+                "center_x": 83,
+                "center_y": 976
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:21:1:1",
+              "mean_confidence": 89.0
+            },
+            {
+              "text": "8.00",
+              "amounts": [
+                "8.00"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 70,
+                "top": 989,
+                "width": 34,
+                "height": 12,
+                "right": 104,
+                "bottom": 1001,
+                "center_x": 87,
+                "center_y": 995
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:21:1:2",
+              "mean_confidence": 95.0
+            },
+            {
+              "text": "3122 PIN €14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "zone": "payment_zone",
+              "box": {
+                "left": 0,
+                "top": 1059,
+                "width": 673,
+                "height": 52,
+                "right": 673,
+                "bottom": 1111,
+                "center_x": 336,
+                "center_y": 1085
+              },
+              "zone_reason": "amount_region_text_matches_payment_zone_keyword:pin",
+              "region_key": "1:23:1:4",
+              "mean_confidence": 70.33
+            },
+            {
+              "text": "Wisselgeld (Contant) €9,00",
+              "amounts": [
+                "9.00"
+              ],
+              "zone": "payment_zone",
+              "box": {
+                "left": 385,
+                "top": 1075,
+                "width": 290,
+                "height": 28,
+                "right": 675,
+                "bottom": 1103,
+                "center_x": 530,
+                "center_y": 1089
+              },
+              "zone_reason": "amount_region_text_matches_payment_zone_keyword:wisselgeld",
+              "region_key": "1:23:1:5",
+              "mean_confidence": 82.0
+            },
+            {
+              "text": "50,89 EUR 475 zegels + £30,00 tegoed",
+              "amounts": [
+                "50.89",
+                "30.00"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 0,
+                "top": 1214,
+                "width": 620,
+                "height": 47,
+                "right": 620,
+                "bottom": 1261,
+                "center_x": 310,
+                "center_y": 1237
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:25:4:1",
+              "mean_confidence": 85.0
+            }
+          ],
+          "zone_context": {
+            "variant_factor": 1.0,
+            "article_top": 270,
+            "article_bottom": 787,
+            "product_right_edge": 572,
+            "stop_y": 795,
+            "matched_product_name_region_count": 11
+          },
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "threshold",
+          "amount_region_count": 3,
+          "article_zone_amount_count": 0,
+          "non_article_zone_amount_count": 3,
+          "amount_regions": [
+            {
+              "text": "Totaal: 14,96 EUR",
+              "amounts": [
+                "14.96"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 346,
+                "top": 945,
+                "width": 303,
+                "height": 25,
+                "right": 649,
+                "bottom": 970,
+                "center_x": 497,
+                "center_y": 957
+              },
+              "zone_reason": "amount_region_text_matches_total_zone_keyword:totaal",
+              "region_key": "1:48:1:1",
+              "mean_confidence": 76.0
+            },
+            {
+              "text": "475 zegsls + 290,00 tegoed",
+              "amounts": [
+                "290.00"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 409,
+                "top": 1214,
+                "width": 211,
+                "height": 28,
+                "right": 620,
+                "bottom": 1242,
+                "center_x": 514,
+                "center_y": 1228
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:51:1:2",
+              "mean_confidence": 75.8
+            },
+            {
+              "text": "0,89 EUR",
+              "amounts": [
+                "0.89"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 0,
+                "top": 1245,
+                "width": 81,
+                "height": 16,
+                "right": 81,
+                "bottom": 1261,
+                "center_x": 40,
+                "center_y": 1253
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:29:1:1",
+              "mean_confidence": 88.0
+            }
+          ],
+          "zone_context": {
+            "variant_factor": 1.0,
+            "article_top": 345,
+            "article_bottom": 587,
+            "product_right_edge": 536,
+            "stop_y": 780,
+            "matched_product_name_region_count": 8
+          },
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "sharpen",
+          "amount_region_count": 0,
+          "article_zone_amount_count": 0,
+          "non_article_zone_amount_count": 0,
+          "amount_regions": [],
+          "zone_context": {
+            "variant_factor": 1.0,
+            "article_top": 306,
+            "article_bottom": 576,
+            "product_right_edge": 510,
+            "stop_y": 782,
+            "matched_product_name_region_count": 10
+          },
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "scale_up_175",
+          "amount_region_count": 2,
+          "article_zone_amount_count": 0,
+          "non_article_zone_amount_count": 2,
+          "amount_regions": [
+            {
+              "text": "Joten: 14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 606,
+                "top": 1655,
+                "width": 529,
+                "height": 40,
+                "right": 1135,
+                "bottom": 1695,
+                "center_x": 870,
+                "center_y": 1675
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:6:1:1",
+              "mean_confidence": 62.0
+            },
+            {
+              "text": "PIN } €14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "zone": "payment_zone",
+              "box": {
+                "left": 672,
+                "top": 1852,
+                "width": 506,
+                "height": 56,
+                "right": 1178,
+                "bottom": 1908,
+                "center_x": 925,
+                "center_y": 1880
+              },
+              "zone_reason": "amount_region_text_matches_payment_zone_keyword:pin",
+              "region_key": "1:9:1:1",
+              "mean_confidence": 72.33
+            }
+          ],
+          "zone_context": {
+            "variant_factor": 1.75,
+            "article_top": 531,
+            "article_bottom": 994,
+            "product_right_edge": 929,
+            "stop_y": 1371,
+            "matched_product_name_region_count": 10
+          },
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        },
+        {
+          "variant": "contrast_scale_up_175",
+          "amount_region_count": 13,
+          "article_zone_amount_count": 8,
+          "non_article_zone_amount_count": 5,
+          "amount_regions": [
+            {
+              "text": "BIO DADELTJES 3,29",
+              "amounts": [
+                "3.29"
+              ],
+              "zone": "article_zone",
+              "box": {
+                "left": 612,
+                "top": 560,
+                "width": 491,
+                "height": 46,
+                "right": 1103,
+                "bottom": 606,
+                "center_x": 857,
+                "center_y": 583
+              },
+              "zone_reason": "inside_inferred_article_zone",
+              "region_key": "1:5:1:1",
+              "mean_confidence": 92.0
+            },
+            {
+              "text": "DKK RIJSTWAFEL 1,89",
+              "amounts": [
+                "1.89"
+              ],
+              "zone": "article_zone",
+              "box": {
+                "left": 612,
+                "top": 588,
+                "width": 492,
+                "height": 49,
+                "right": 1104,
+                "bottom": 637,
+                "center_x": 858,
+                "center_y": 612
+              },
+              "zone_reason": "inside_inferred_article_zone",
+              "region_key": "1:5:1:2",
+              "mean_confidence": 91.33
+            },
+            {
+              "text": "LAMA PUFFS PIZZA 1,49",
+              "amounts": [
+                "1.49"
+              ],
+              "zone": "article_zone",
+              "box": {
+                "left": 614,
+                "top": 617,
+                "width": 490,
+                "height": 47,
+                "right": 1104,
+                "bottom": 664,
+                "center_x": 859,
+                "center_y": 640
+              },
+              "zone_reason": "inside_inferred_article_zone",
+              "region_key": "1:5:1:3",
+              "mean_confidence": 92.5
+            },
+            {
+              "text": "MELTY VEGGIE STICKS 1,29",
+              "amounts": [
+                "1.29"
+              ],
+              "zone": "article_zone",
+              "box": {
+                "left": 614,
+                "top": 646,
+                "width": 491,
+                "height": 45,
+                "right": 1105,
+                "bottom": 691,
+                "center_x": 859,
+                "center_y": 668
+              },
+              "zone_reason": "inside_inferred_article_zone",
+              "region_key": "1:5:1:4",
+              "mean_confidence": 94.25
+            },
+            {
+              "text": "4+ CARROTS, APPLES + 1,99",
+              "amounts": [
+                "1.99"
+              ],
+              "zone": "article_zone",
+              "box": {
+                "left": 612,
+                "top": 675,
+                "width": 494,
+                "height": 43,
+                "right": 1106,
+                "bottom": 718,
+                "center_x": 859,
+                "center_y": 696
+              },
+              "zone_reason": "inside_inferred_article_zone",
+              "region_key": "1:5:1:5",
+              "mean_confidence": 92.6
+            },
+            {
+              "text": "APPLE PEACH MANGO 1,49",
+              "amounts": [
+                "1.49"
+              ],
+              "zone": "article_zone",
+              "box": {
+                "left": 613,
+                "top": 703,
+                "width": 493,
+                "height": 44,
+                "right": 1106,
+                "bottom": 747,
+                "center_x": 859,
+                "center_y": 725
+              },
+              "zone_reason": "inside_inferred_article_zone",
+              "region_key": "1:5:1:6",
+              "mean_confidence": 89.75
+            },
+            {
+              "text": "APPLE GUINOA 1,49",
+              "amounts": [
+                "1.49"
+              ],
+              "zone": "article_zone",
+              "box": {
+                "left": 612,
+                "top": 731,
+                "width": 496,
+                "height": 45,
+                "right": 1108,
+                "bottom": 776,
+                "center_x": 860,
+                "center_y": 753
+              },
+              "zone_reason": "inside_inferred_article_zone",
+              "region_key": "1:5:1:7",
+              "mean_confidence": 90.33
+            },
+            {
+              "text": "1,15",
+              "amounts": [
+                "1.15"
+              ],
+              "zone": "article_zone",
+              "box": {
+                "left": 1058,
+                "top": 760,
+                "width": 50,
+                "height": 25,
+                "right": 1108,
+                "bottom": 785,
+                "center_x": 1083,
+                "center_y": 772
+              },
+              "zone_reason": "inside_inferred_article_zone",
+              "region_key": "1:5:2:1",
+              "mean_confidence": 85.0
+            },
+            {
+              "text": "Totaal 14,36 EUR",
+              "amounts": [
+                "14.36"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 607,
+                "top": 1655,
+                "width": 528,
+                "height": 40,
+                "right": 1135,
+                "bottom": 1695,
+                "center_x": 871,
+                "center_y": 1675
+              },
+              "zone_reason": "amount_region_text_matches_total_zone_keyword:totaal",
+              "region_key": "1:16:1:1",
+              "mean_confidence": 92.67
+            },
+            {
+              "text": "BAN PIN €14,36",
+              "amounts": [
+                "14.36"
+              ],
+              "zone": "payment_zone",
+              "box": {
+                "left": 381,
+                "top": 1853,
+                "width": 797,
+                "height": 48,
+                "right": 1178,
+                "bottom": 1901,
+                "center_x": 779,
+                "center_y": 1877
+              },
+              "zone_reason": "amount_region_text_matches_payment_zone_keyword:pin",
+              "region_key": "1:19:3:1",
+              "mean_confidence": 74.67
+            },
+            {
+              "text": "wisselgeld (Contant) €9,00",
+              "amounts": [
+                "9.00"
+              ],
+              "zone": "payment_zone",
+              "box": {
+                "left": 673,
+                "top": 1881,
+                "width": 508,
+                "height": 48,
+                "right": 1181,
+                "bottom": 1929,
+                "center_x": 927,
+                "center_y": 1905
+              },
+              "zone_reason": "amount_region_text_matches_payment_zone_keyword:wisselgeld",
+              "region_key": "1:19:4:1",
+              "mean_confidence": 86.33
+            },
+            {
+              "text": "50,89 EUR",
+              "amounts": [
+                "50.89"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 0,
+                "top": 2179,
+                "width": 141,
+                "height": 27,
+                "right": 141,
+                "bottom": 2206,
+                "center_x": 70,
+                "center_y": 2192
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:22:1:1",
+              "mean_confidence": 92.5
+            },
+            {
+              "text": "4,20 ) Fj",
+              "amounts": [
+                "4.20"
+              ],
+              "zone": "total_zone",
+              "box": {
+                "left": 110,
+                "top": 2302,
+                "width": 394,
+                "height": 26,
+                "right": 504,
+                "bottom": 2328,
+                "center_x": 307,
+                "center_y": 2315
+              },
+              "zone_reason": "amount_region_at_or_after_first_total_payment_vat_stopline",
+              "region_key": "1:24:1:1",
+              "mean_confidence": 57.33
+            }
+          ],
+          "zone_context": {
+            "variant_factor": 1.75,
+            "article_top": 473,
+            "article_bottom": 1362,
+            "product_right_edge": 1106,
+            "stop_y": 1376,
+            "matched_product_name_region_count": 10
+          },
+          "diagnostic_only": true,
+          "reconstruction_applied": false
+        }
+      ]
+    }
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "> spaafKaant geregistreerd",
+      "normalized_line": "> spaafKaant geregistreerd",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "BIO DADELTJES",
+      "normalized_line": "BIO DADELTJES",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "DKK RIJSTWAFEL",
+      "normalized_line": "DKK RIJSTWAFEL",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "LAMA PUFFS PIZZA",
+      "normalized_line": "LAMA PUFFS PIZZA",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "WELTY VEGGIE STICKS",
+      "normalized_line": "WELTY VEGGIE STICKS",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "4+ CARROTS, APPLES +",
+      "normalized_line": "4+ CARROTS, APPLES +",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "APPLE PEACH MANGO",
+      "normalized_line": "APPLE PEACH MANGO",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "APPLE QUINOA",
+      "normalized_line": "APPLE QUINOA",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "GROENTE RINGEN +12M",
+      "normalized_line": "GROENTE RINGEN +12M",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "Subtotaa",
+      "normalized_line": "Subtotaa",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "pLusPunten DIGITAA",
+      "normalized_line": "pLusPunten DIGITAA",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "Visa Debit",
+      "normalized_line": "Visa Debit",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "(4000000003 1010)",
+      "normalized_line": "(4000000003 1010)",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "VISA DEBIT",
+      "normalized_line": "VISA DEBIT",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "Kaart",
+      "normalized_line": "Kaart",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "Kaar tserienUnnei",
+      "normalized_line": "Kaar tserienUnnei",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "BETALING",
+      "normalized_line": "BETALING",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "Datun",
+      "normalized_line": "Datun",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "Autorisatiecode",
+      "normalized_line": "Autorisatiecode",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "14,36 EUR",
+      "normalized_line": "14,36 EUR",
+      "line_type": "unknown_line",
+      "reason": "amount_only_payment_zone_excluded"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "HIP",
+      "normalized_line": "HIP",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "DR KLANTAPPARAAT",
+      "normalized_line": "DR KLANTAPPARAAT",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "€14,36",
+      "normalized_line": "€14,36",
+      "line_type": "unknown_line",
+      "reason": "amount_only_payment_zone_excluded"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "PIN",
+      "normalized_line": "PIN",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "Wisselgeld (Content) €0,00",
+      "normalized_line": "Wisselgeld (Content) €0,00",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "DIGITALE ZEGELS",
+      "normalized_line": "DIGITALE ZEGELS",
+      "line_type": "unknown_line",
+      "reason": "loyalty_payment_zone_excluded"
+    },
+    {
+      "line_no": 40,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "PLuSpunten",
+      "normalized_line": "PLuSpunten",
+      "line_type": "unknown_line",
+      "reason": "loyalty_payment_zone_excluded"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "475 zegels + €30,00 teg",
+      "normalized_line": "475 zegels + €30,00 teg",
+      "line_type": "unknown_line",
+      "reason": "loyalty_payment_zone_excluded"
+    },
+    {
+      "line_no": 43,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 44,
+      "raw_line": "Campagne zegel",
+      "normalized_line": "Campagne zegel",
+      "line_type": "unknown_line",
+      "reason": "loyalty_payment_zone_excluded"
+    },
+    {
+      "line_no": 45,
+      "raw_line": "Kijk voor deg",
+      "normalized_line": "Kijk voor deg",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 46,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 47,
+      "raw_line": "op plu!",
+      "normalized_line": "op plu!",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 48,
+      "raw_line": "1",
+      "normalized_line": "1",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 49,
+      "raw_line": "BTW ype 4,08",
+      "normalized_line": "BTW ype 4,08",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 50,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 51,
+      "raw_line": "19941",
+      "normalized_line": "19941",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 52,
+      "raw_line": "Ave",
+      "normalized_line": "Ave",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 53,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 54,
+      "raw_line": "prettige dag gewenst!",
+      "normalized_line": "prettige dag gewenst!",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 55,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 56,
+      "raw_line": "U bent geholpen door Sel fPayteht ‚6 (1006)",
+      "normalized_line": "U bent geholpen door Sel fPayteht ‚6 (1006)",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 57,
+      "raw_line": "44.2026 11:40 kassa 6 Bonne 6757",
+      "normalized_line": "44.2026 11:40 kassa 6 Bonne 6757",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 58,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 59,
+      "raw_line": "He doen net je me,",
+      "normalized_line": "He doen net je me,",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 60,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 61,
+      "raw_line": "waw PLUS «Dl.",
+      "normalized_line": "waw PLUS «Dl.",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 62,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    }
+  ],
+  "lines": []
+}
