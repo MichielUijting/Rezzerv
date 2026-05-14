@@ -201,6 +201,66 @@ def select_discount_total(discount_candidates: list[dict]) -> tuple[Decimal, str
     return selected_total, 'sum_individual_discount_lines', selected_candidates, []
 
 
+def build_delta_diagnostics(rows: list[ReceiptLine], classified_lines: list, difference: Decimal) -> dict:
+    abs_difference = difference.copy_abs()
+    suspicious_amounts = []
+    amount_delta_candidates = []
+    possible_duplicate_lines = []
+    seen: dict[tuple[str, str], dict] = {}
+
+    row_entries = []
+    for row in rows:
+        amount = to_decimal(row.line_total)
+        entry = {
+            'line_no': row.line_no,
+            'amount': money(amount),
+            'item_text': row.item_text,
+            'raw_line': row.raw_line,
+            'reason': 'parsed_output_line',
+        }
+        row_entries.append(entry)
+        if amount == abs_difference:
+            suspicious_amounts.append({**entry, 'suspicion_reason': 'amount_equals_abs_net_vs_selected_total_difference'})
+        key = (row.item_text.lower().strip(), money(amount))
+        if key in seen:
+            possible_duplicate_lines.append({
+                'first_line_no': seen[key]['line_no'],
+                'duplicate_line_no': row.line_no,
+                'amount': money(amount),
+                'item_text': row.item_text,
+                'reason': 'same_item_text_and_amount',
+            })
+        else:
+            seen[key] = entry
+
+    for line in classified_lines:
+        amounts = extract_amounts(line.normalized_line or '')
+        for amount in amounts:
+            if amount == abs_difference:
+                amount_delta_candidates.append({
+                    'line_no': line.line_no,
+                    'amount': money(amount),
+                    'raw_line': line.raw_line,
+                    'line_type': line.line_type,
+                    'reason': 'ocr_line_amount_equals_abs_net_vs_selected_total_difference',
+                })
+
+    possible_missing_discount_application = []
+    if abs_difference != Decimal('0'):
+        for candidate in amount_delta_candidates:
+            lowered = str(candidate.get('raw_line', '')).lower()
+            if any(keyword in lowered for keyword in DISCOUNT_KEYWORDS):
+                possible_missing_discount_application.append({**candidate, 'reason': 'discount_like_amount_matches_difference'})
+
+    return {
+        'analyzed_difference_abs': money(abs_difference),
+        'suspicious_amounts': suspicious_amounts,
+        'possible_duplicate_lines': possible_duplicate_lines,
+        'possible_missing_discount_application': possible_missing_discount_application,
+        'amount_delta_candidates': amount_delta_candidates,
+    }
+
+
 def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, store_hint: str) -> dict:
     gross_sum = sum((to_decimal(row.line_total) for row in rows), Decimal('0'))
     discount_candidates = []
@@ -224,6 +284,7 @@ def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, 
     selected_total_amount = selected_total_hint.get('amount') if selected_total_hint else ''
     selected_total_decimal = to_decimal(selected_total_amount)
     difference = net_candidate - selected_total_decimal if selected_total_hint else net_candidate
+    delta_diagnostics = build_delta_diagnostics(rows, classified_lines, difference)
 
     return {
         'store_hint': store_hint,
@@ -242,6 +303,10 @@ def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, 
         'discount_candidate_count': len(discount_candidates),
         'line_count_after_merge': len(rows),
         'totals_strategy': 'diagnostic_gross_minus_selected_discount_vs_selected_total_hint',
+        'suspicious_amounts': delta_diagnostics['suspicious_amounts'],
+        'possible_duplicate_lines': delta_diagnostics['possible_duplicate_lines'],
+        'possible_missing_discount_application': delta_diagnostics['possible_missing_discount_application'],
+        'amount_delta_candidates': delta_diagnostics['amount_delta_candidates'],
     }
 
 
@@ -288,7 +353,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     json_payload = {
-        'schema_version': 'receipt-ocr-poc-v9-ssot-diagnostic-financials',
+        'schema_version': 'receipt-ocr-poc-v10-delta-diagnostics',
         'metadata': metadata,
         'classified_lines': [asdict(line) for line in classified_lines],
         'lines': [asdict(row) for row in merged_rows],
@@ -324,7 +389,7 @@ def list_image_files(input_dir: Path):
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
     summary = {
-        'schema_version': 'receipt-ocr-benchmark-v9-ssot-diagnostic-financials',
+        'schema_version': 'receipt-ocr-benchmark-v10-delta-diagnostics',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
         'run_success_count': sum(1 for row in report_rows if row.run_result == 'success'),
@@ -343,9 +408,7 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         summary['totals_diagnostics'][row.source_file] = row.totals_diagnostics
 
     (output_dir / 'benchmark_summary.json').write_text(
-        json.dumps(summary, ensure_ascii=False, indent=2),
-        encoding='utf-8',
-    )
+        json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
 
 
 def main():
@@ -373,7 +436,8 @@ def main():
             net = result.totals_diagnostics.get('net_total_candidate', '0.00')
             selected_total = result.totals_diagnostics.get('selected_total_hint') or {}
             selected_total_amount = selected_total.get('amount', '')
-            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} gross={gross} net={net} selected_total={selected_total_amount} profile={result.profile_name}')
+            diff = result.totals_diagnostics.get('net_vs_selected_total_difference', '')
+            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} gross={gross} net={net} selected_total={selected_total_amount} diff={diff} profile={result.profile_name}')
         except Exception as exc:
             print(f'[ERROR] {image_file.name}: {exc}')
 
