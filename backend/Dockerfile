@@ -28,6 +28,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
  && pip install --no-cache-dir -r requirements.txt
 
 COPY app ./app
+COPY receipt_ingestion ./receipt_ingestion
 COPY VERSION.txt ./VERSION.txt
 
 EXPOSE 8000
