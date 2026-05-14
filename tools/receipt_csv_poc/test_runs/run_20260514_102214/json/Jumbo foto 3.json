@@ -1,0 +1,681 @@
+{
+  "schema_version": "receipt-ocr-poc-v11-product-block-rescue-diagnostics",
+  "metadata": {
+    "source_file": "Jumbo foto 3.jpg",
+    "created_at": "2026-05-14T08:22:26.931998+00:00",
+    "store_hint": "jumbo",
+    "profile_name": "jumbo",
+    "detected_rows": 0,
+    "line_type_counts": {
+      "discount_line": 1,
+      "metadata_line": 4,
+      "noise_line": 2,
+      "payment_line": 0,
+      "product_line": 3,
+      "quantity_line": 0,
+      "total_line": 1,
+      "unknown_line": 36,
+      "vat_line": 3
+    },
+    "product_block": {
+      "start_line": 16,
+      "end_line": 17,
+      "reason": "fallback_first_parseable_line",
+      "line_count": 2,
+      "profile": "jumbo"
+    },
+    "product_block_rescue_diagnostics": {
+      "candidate_product_block_start": 1,
+      "candidate_product_block_end": 16,
+      "orphan_product_name_lines": [
+        {
+          "line_no": 1,
+          "raw_line": "2S supermarkten @",
+          "normalized_line": "2S supermarkten @",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 2,
+          "raw_line": "on De Helling 16",
+          "normalized_line": "on De Helling 16",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 3,
+          "raw_line": "ee 9665 JX Oude Pekela",
+          "normalized_line": "ee 9665 JX Oude Pekela",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 4,
+          "raw_line": "est 0597471760",
+          "normalized_line": "est 0597471760",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 5,
+          "raw_line": "= HW jumbo com",
+          "normalized_line": "= HW jumbo com",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 7,
+          "raw_line": "re en Le eee eee ee ne Ve Uk OA ae Oe AMT ne (ron ee ny",
+          "normalized_line": "re en Le eee eee ee ne Ve Uk OA ae Oe AMT ne (ron ee ny",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 10,
+          "raw_line": "OMSCHRIVING BEDRAG ‘IN ‘",
+          "normalized_line": "OMSCHRIVING BEDRAG ‘IN ‘",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 12,
+          "raw_line": "$tt Dit ‘is een kaste ban +44",
+          "normalized_line": "$tt Dit ‘is een kaste ban +44",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 14,
+          "raw_line": "VO WEG: Wei SVD CHRP BERtt ope lower Wau prow Wan",
+          "normalized_line": "VO WEG: Wei SVD CHRP BERtt ope lower Wau prow Wan",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 16,
+          "raw_line": "JUMBO STROOPWAFELS Hel",
+          "normalized_line": "JUMBO STROOPWAFELS Hel",
+          "line_type": "product_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 20,
+          "raw_line": "aaa at a a Mead ons ee Eo ee a a a nC ee |",
+          "normalized_line": "aaa at a a Mead ons ee Eo ee a a a nC ee |",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 30,
+          "raw_line": "CE RL San ie ner Gre mk) ee eh ee ee",
+          "normalized_line": "CE RL San ie ner Gre mk) ee eh ee ee",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 32,
+          "raw_line": "+ mA Som LN Aid) OKA OE ie Nae Wow fee mY",
+          "normalized_line": "+ mA Som LN Aid) OKA OE ie Nae Wow fee mY",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 34,
+          "raw_line": "Jumbo Extra's",
+          "normalized_line": "Jumbo Extra's",
+          "line_type": "product_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 37,
+          "raw_line": "Qude saldo: 167",
+          "normalized_line": "Qude saldo: 167",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 41,
+          "raw_line": "Nieuwe saldo; 167",
+          "normalized_line": "Nieuwe saldo; 167",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 42,
+          "raw_line": "ZORG GOED VOOR JEZELF EN VOOR ELKAAR!",
+          "normalized_line": "ZORG GOED VOOR JEZELF EN VOOR ELKAAR!",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 43,
+          "raw_line": "JUMBO OUDE PEKELA",
+          "normalized_line": "JUMBO OUDE PEKELA",
+          "line_type": "product_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 45,
+          "raw_line": "HEDEWERKER: Maren",
+          "normalized_line": "HEDEWERKER: Maren",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 48,
+          "raw_line": "| ccc |",
+          "normalized_line": "| ccc |",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 50,
+          "raw_line": "See?",
+          "normalized_line": "See?",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        }
+      ],
+      "orphan_amount_lines": [
+        {
+          "line_no": 18,
+          "raw_line": "Totaal 0,00",
+          "normalized_line": "Totaal 0,00",
+          "line_type": "total_line",
+          "amounts": [
+            "0.00"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "nearby_name_amount_pairs": [
+        {
+          "product_name_line_no": 16,
+          "amount_line_no": 18,
+          "distance": 2,
+          "product_name_raw_line": "JUMBO STROOPWAFELS Hel",
+          "amount_raw_line": "Totaal 0,00",
+          "amounts": [
+            "0.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        },
+        {
+          "product_name_line_no": 20,
+          "amount_line_no": 18,
+          "distance": -2,
+          "product_name_raw_line": "aaa at a a Mead ons ee Eo ee a a a nC ee |",
+          "amount_raw_line": "Totaal 0,00",
+          "amounts": [
+            "0.00"
+          ],
+          "reason": "name_amount_within_3_lines"
+        }
+      ],
+      "product_block_rescue_reason": "orphan_product_names_before_total_payment_vat_zone",
+      "stop_line_no": 18,
+      "stop_line_reason": "first_total_payment_vat_line"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product_jumbo",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "refinement_diagnostics": {
+      "profile": "jumbo",
+      "refined_lines_count": 3,
+      "refinement_reasons": {
+        "jumbo_unknown_product_context": 3
+      },
+      "refined_line_numbers": [
+        16,
+        34,
+        43
+      ]
+    },
+    "totals_diagnostics": {
+      "store_hint": "jumbo",
+      "gross_line_sum": "0.00",
+      "discount_total_detected": "0.00",
+      "net_total_candidate": "0.00",
+      "selected_total_hint": {
+        "line_no": 18,
+        "amount": "0.00",
+        "raw_line": "Totaal 0,00",
+        "reason": "total_keyword",
+        "selected_total_hint_reason": "first_payable_total_like_line"
+      },
+      "selected_total_hint_reason": "first_payable_total_like_line",
+      "net_vs_selected_total_difference": "0.00",
+      "all_total_hints": [
+        {
+          "line_no": 18,
+          "amount": "0.00",
+          "raw_line": "Totaal 0,00",
+          "reason": "total_keyword"
+        },
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "BIW Totaal] 0,00 0, 00",
+          "reason": "total_keyword"
+        }
+      ],
+      "excluded_total_hints": [
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "BIW Totaal] 0,00 0, 00",
+          "reason": "total_keyword",
+          "excluded_reason": "summary_or_tax_total_not_payable_total"
+        }
+      ],
+      "selected_discount_strategy": "sum_individual_discount_lines",
+      "selected_discount_candidates": [],
+      "excluded_discount_candidates": [],
+      "all_discount_candidates": [],
+      "discount_candidate_count": 0,
+      "line_count_after_merge": 0,
+      "totals_strategy": "diagnostic_gross_minus_selected_discount_vs_selected_total_hint",
+      "suspicious_amounts": [],
+      "possible_duplicate_lines": [],
+      "possible_missing_discount_application": [],
+      "amount_delta_candidates": [
+        {
+          "line_no": 18,
+          "amount": "0.00",
+          "raw_line": "Totaal 0,00",
+          "line_type": "total_line",
+          "reason": "ocr_line_amount_equals_abs_net_vs_selected_total_difference"
+        },
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "BIW Totaal] 0,00 0, 00",
+          "line_type": "vat_line",
+          "reason": "ocr_line_amount_equals_abs_net_vs_selected_total_difference"
+        }
+      ]
+    }
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "2S supermarkten @",
+      "normalized_line": "2S supermarkten @",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "on De Helling 16",
+      "normalized_line": "on De Helling 16",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "ee 9665 JX Oude Pekela",
+      "normalized_line": "ee 9665 JX Oude Pekela",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "est 0597471760",
+      "normalized_line": "est 0597471760",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "= HW jumbo com",
+      "normalized_line": "= HW jumbo com",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "re en Le eee eee ee ne Ve Uk OA ae Oe AMT ne (ron ee ny",
+      "normalized_line": "re en Le eee eee ee ne Ve Uk OA ae Oe AMT ne (ron ee ny",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "om beam Pune Saks Sah Goon ep GST Doe aml Gone Gl Sous Say Ves SON AE VSD, ORT BON",
+      "normalized_line": "om beam Pune Saks Sah Goon ep GST Doe aml Gone Gl Sous Say Ves SON AE VSD, ORT BON",
+      "line_type": "noise_line",
+      "reason": "very_long_no_amount"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "OMSCHRIVING BEDRAG ‘IN ‘",
+      "normalized_line": "OMSCHRIVING BEDRAG ‘IN ‘",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "$tt Dit ‘is een kaste ban +44",
+      "normalized_line": "$tt Dit ‘is een kaste ban +44",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "VO WEG: Wei SVD CHRP BERtt ope lower Wau prow Wan",
+      "normalized_line": "VO WEG: Wei SVD CHRP BERtt ope lower Wau prow Wan",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "JUMBO STROOPWAFELS Hel",
+      "normalized_line": "JUMBO STROOPWAFELS Hel",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "Gratis stroopwafels -|,65",
+      "normalized_line": "Gratis stroopwafels -|,65",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "Totaal 0,00",
+      "normalized_line": "Totaal 0,00",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "aaa at a a Mead ons ee Eo ee a a a nC ee |",
+      "normalized_line": "aaa at a a Mead ons ee Eo ee a a a nC ee |",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "BTW overzicht",
+      "normalized_line": "BTW overzicht",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "BTW% a Bedrag excl BTW Baar ag",
+      "normalized_line": "BTW% a Bedrag excl BTW Baar ag",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 25,
+      "raw_line": ":] (),",
+      "normalized_line": ":] (),",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "oe",
+      "normalized_line": "oe",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "BIW Totaal] 0,00 0, 00",
+      "normalized_line": "BIW Totaal] 0,00 0, 00",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "CE RL San ie ner Gre mk) ee eh ee ee",
+      "normalized_line": "CE RL San ie ner Gre mk) ee eh ee ee",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "+ mA Som LN Aid) OKA OE ie Nae Wow fee mY",
+      "normalized_line": "+ mA Som LN Aid) OKA OE ie Nae Wow fee mY",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "Jumbo Extra's",
+      "normalized_line": "Jumbo Extra's",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "Pasnummer: 2622273835639",
+      "normalized_line": "Pasnummer: 2622273835639",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "Qude saldo: 167",
+      "normalized_line": "Qude saldo: 167",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "Gespaarde punten: 0)",
+      "normalized_line": "Gespaarde punten: 0)",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "Ingewisselde punten: 0",
+      "normalized_line": "Ingewisselde punten: 0",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 40,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "Nieuwe saldo; 167",
+      "normalized_line": "Nieuwe saldo; 167",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "ZORG GOED VOOR JEZELF EN VOOR ELKAAR!",
+      "normalized_line": "ZORG GOED VOOR JEZELF EN VOOR ELKAAR!",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 43,
+      "raw_line": "JUMBO OUDE PEKELA",
+      "normalized_line": "JUMBO OUDE PEKELA",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 44,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 45,
+      "raw_line": "HEDEWERKER: Maren",
+      "normalized_line": "HEDEWERKER: Maren",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 46,
+      "raw_line": "STORE 4681 POS 2 TRANS 1383 10:20 08-05-2020",
+      "normalized_line": "STORE 4681 POS 2 TRANS 1383 10:20 08-05-2020",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 47,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 48,
+      "raw_line": "| ccc |",
+      "normalized_line": "| ccc |",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 49,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 50,
+      "raw_line": "See?",
+      "normalized_line": "See?",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    }
+  ],
+  "lines": []
+}

@@ -1,0 +1,830 @@
+{
+  "schema_version": "receipt-ocr-poc-v11-product-block-rescue-diagnostics",
+  "metadata": {
+    "source_file": "plus foto 1.jpg",
+    "created_at": "2026-05-14T08:22:30.954782+00:00",
+    "store_hint": "plus",
+    "profile_name": "generic",
+    "detected_rows": 0,
+    "line_type_counts": {
+      "discount_line": 2,
+      "metadata_line": 11,
+      "noise_line": 1,
+      "payment_line": 3,
+      "product_line": 0,
+      "quantity_line": 0,
+      "total_line": 2,
+      "unknown_line": 49,
+      "vat_line": 3
+    },
+    "product_block": {
+      "start_line": null,
+      "end_line": null,
+      "reason": "no_parseable_lines",
+      "line_count": 0,
+      "profile": "generic"
+    },
+    "product_block_rescue_diagnostics": {
+      "candidate_product_block_start": 1,
+      "candidate_product_block_end": 19,
+      "orphan_product_name_lines": [
+        {
+          "line_no": 1,
+          "raw_line": "ett yoordeel |",
+          "normalized_line": "ett yoordeel |",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 2,
+          "raw_line": "RK KANEELB",
+          "normalized_line": "RK KANEELB",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 3,
+          "raw_line": "K WIT CHG",
+          "normalized_line": "K WIT CHG",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 4,
+          "raw_line": "STHAWBERAY SCHNITTE",
+          "normalized_line": "STHAWBERAY SCHNITTE",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 5,
+          "raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+          "normalized_line": "* 2K REL OGER. TERTYAKYE 2,9",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 6,
+          "raw_line": "* 2% WERELDGER.Z-APR hobo 2,987",
+          "normalized_line": "* 2% WERELDGER.Z-APR hobo 2,987",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 7,
+          "raw_line": "BONENMIX HATS",
+          "normalized_line": "BONENMIX HATS",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 8,
+          "raw_line": "KIKKERERWTEN BIG",
+          "normalized_line": "KIKKERERWTEN BIG",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 9,
+          "raw_line": "KIKKERWTEN",
+          "normalized_line": "KIKKERWTEN",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 10,
+          "raw_line": "CASHEWNOTEN ONGEZOUT",
+          "normalized_line": "CASHEWNOTEN ONGEZOUT",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 11,
+          "raw_line": "PLUS geeft neer veordeet!",
+          "normalized_line": "PLUS geeft neer veordeet!",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 13,
+          "raw_line": "Subtotaa",
+          "normalized_line": "Subtotaa",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 15,
+          "raw_line": "14X PLUSPUnten",
+          "normalized_line": "14X PLUSPUnten",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 16,
+          "raw_line": "( ZEGEL THE VOICE",
+          "normalized_line": "( ZEGEL THE VOICE",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 17,
+          "raw_line": "1 ZEGEL/DANIO",
+          "normalized_line": "1 ZEGEL/DANIO",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 19,
+          "raw_line": "2X 1 ZEGEL WERELDGERECH",
+          "normalized_line": "2X 1 ZEGEL WERELDGERECH",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_before_total_payment_vat_zone"
+        },
+        {
+          "line_no": 23,
+          "raw_line": "POL: 60144008",
+          "normalized_line": "POL: 60144008",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 25,
+          "raw_line": "KLANTTICKE]",
+          "normalized_line": "KLANTTICKE]",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 29,
+          "raw_line": "ier ohant sero",
+          "normalized_line": "ier ohant sero",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 32,
+          "raw_line": "Per ode: 02391028",
+          "normalized_line": "Per ode: 02391028",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 35,
+          "raw_line": "Haestro",
+          "normalized_line": "Haestro",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 36,
+          "raw_line": "(A0060000043060)",
+          "normalized_line": "(A0060000043060)",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 44,
+          "raw_line": "BETAL ING",
+          "normalized_line": "BETAL ING",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 50,
+          "raw_line": "Leesmethode: NFC Chip",
+          "normalized_line": "Leesmethode: NFC Chip",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 59,
+          "raw_line": "12 Artikelen",
+          "normalized_line": "12 Artikelen",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        },
+        {
+          "line_no": 67,
+          "raw_line": "U bert geholpen door SERVICEBALIE (5)",
+          "normalized_line": "U bert geholpen door SERVICEBALIE (5)",
+          "line_type": "unknown_line",
+          "amounts": [],
+          "reason": "text_without_amount_after_total_payment_vat_zone"
+        }
+      ],
+      "orphan_amount_lines": [
+        {
+          "line_no": 48,
+          "raw_line": "Totaal; 14,33 EUR",
+          "normalized_line": "Totaal; 14,33 EUR",
+          "line_type": "total_line",
+          "amounts": [
+            "14.33"
+          ],
+          "reason": "standalone_amount_in_or_after_total_payment_vat_zone"
+        }
+      ],
+      "nearby_name_amount_pairs": [
+        {
+          "product_name_line_no": 50,
+          "amount_line_no": 48,
+          "distance": -2,
+          "product_name_raw_line": "Leesmethode: NFC Chip",
+          "amount_raw_line": "Totaal; 14,33 EUR",
+          "amounts": [
+            "14.33"
+          ],
+          "reason": "name_amount_within_3_lines"
+        }
+      ],
+      "product_block_rescue_reason": "orphan_product_names_before_total_payment_vat_zone",
+      "stop_line_no": 21,
+      "stop_line_reason": "first_total_payment_vat_line"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product",
+      "merge_candidates_count": 0,
+      "merged_quantity_lines_count": 0,
+      "unmerged_quantity_lines_count": 0,
+      "rejected_quantity_lines_count": 0,
+      "rejection_reasons": {},
+      "merged_pairs": [],
+      "input_rows_count": 0,
+      "output_rows_count": 0
+    },
+    "refinement_diagnostics": {
+      "profile": "generic",
+      "refined_lines_count": 0,
+      "refinement_reasons": {},
+      "refined_line_numbers": []
+    },
+    "totals_diagnostics": {
+      "store_hint": "plus",
+      "gross_line_sum": "0.00",
+      "discount_total_detected": "0.00",
+      "net_total_candidate": "0.00",
+      "selected_total_hint": {
+        "line_no": 48,
+        "amount": "14.33",
+        "raw_line": "Totaal; 14,33 EUR",
+        "reason": "total_keyword",
+        "selected_total_hint_reason": "first_payable_total_like_line"
+      },
+      "selected_total_hint_reason": "first_payable_total_like_line",
+      "net_vs_selected_total_difference": "-14.33",
+      "all_total_hints": [
+        {
+          "line_no": 48,
+          "amount": "14.33",
+          "raw_line": "Totaal; 14,33 EUR",
+          "reason": "total_keyword"
+        }
+      ],
+      "excluded_total_hints": [],
+      "selected_discount_strategy": "sum_individual_discount_lines",
+      "selected_discount_candidates": [],
+      "excluded_discount_candidates": [],
+      "all_discount_candidates": [],
+      "discount_candidate_count": 0,
+      "line_count_after_merge": 0,
+      "totals_strategy": "diagnostic_gross_minus_selected_discount_vs_selected_total_hint",
+      "suspicious_amounts": [],
+      "possible_duplicate_lines": [],
+      "possible_missing_discount_application": [],
+      "amount_delta_candidates": [
+        {
+          "line_no": 48,
+          "amount": "14.33",
+          "raw_line": "Totaal; 14,33 EUR",
+          "line_type": "total_line",
+          "reason": "ocr_line_amount_equals_abs_net_vs_selected_total_difference"
+        }
+      ]
+    }
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "ett yoordeel |",
+      "normalized_line": "ett yoordeel |",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "RK KANEELB",
+      "normalized_line": "RK KANEELB",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "K WIT CHG",
+      "normalized_line": "K WIT CHG",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "STHAWBERAY SCHNITTE",
+      "normalized_line": "STHAWBERAY SCHNITTE",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "* 2K REL OGER. TERTYAKYE 2,9",
+      "normalized_line": "* 2K REL OGER. TERTYAKYE 2,9",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "* 2% WERELDGER.Z-APR hobo 2,987",
+      "normalized_line": "* 2% WERELDGER.Z-APR hobo 2,987",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "BONENMIX HATS",
+      "normalized_line": "BONENMIX HATS",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "KIKKERERWTEN BIG",
+      "normalized_line": "KIKKERERWTEN BIG",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "KIKKERWTEN",
+      "normalized_line": "KIKKERWTEN",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "CASHEWNOTEN ONGEZOUT",
+      "normalized_line": "CASHEWNOTEN ONGEZOUT",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "PLUS geeft neer veordeet!",
+      "normalized_line": "PLUS geeft neer veordeet!",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "Subtotaa",
+      "normalized_line": "Subtotaa",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "14X PLUSPUnten",
+      "normalized_line": "14X PLUSPUnten",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "( ZEGEL THE VOICE",
+      "normalized_line": "( ZEGEL THE VOICE",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "1 ZEGEL/DANIO",
+      "normalized_line": "1 ZEGEL/DANIO",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "X ACTIE BONDUELLE",
+      "normalized_line": "X ACTIE BONDUELLE",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "2X 1 ZEGEL WERELDGERECH",
+      "normalized_line": "2X 1 ZEGEL WERELDGERECH",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "Totaal",
+      "normalized_line": "Totaal",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "POL: 60144008",
+      "normalized_line": "POL: 60144008",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "KLANTTICKE]",
+      "normalized_line": "KLANTTICKE]",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "Terminal 31016626",
+      "normalized_line": "Terminal 31016626",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "ier ohant sero",
+      "normalized_line": "ier ohant sero",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "9004",
+      "normalized_line": "9004",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "Per ode: 02391028",
+      "normalized_line": "Per ode: 02391028",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "Transactie: ‘i :",
+      "normalized_line": "Transactie: ‘i :",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "Haestro",
+      "normalized_line": "Haestro",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "(A0060000043060)",
+      "normalized_line": "(A0060000043060)",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "MAESTRO",
+      "normalized_line": "MAESTRO",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 40,
+      "raw_line": "Kaart; XXAKKXXXAXXAXKKAXX 1006",
+      "normalized_line": "Kaart; XXAKKXXXAXXAXKKAXX 1006",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "Kaartserienunmer : 4",
+      "normalized_line": "Kaartserienunmer : 4",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 43,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 44,
+      "raw_line": "BETAL ING",
+      "normalized_line": "BETAL ING",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 45,
+      "raw_line": "Datun: 04/01/2019 19:40",
+      "normalized_line": "Datun: 04/01/2019 19:40",
+      "line_type": "metadata_line",
+      "reason": "date_like"
+    },
+    {
+      "line_no": 46,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 47,
+      "raw_line": "Autorisatiecode: 94USAB",
+      "normalized_line": "Autorisatiecode: 94USAB",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 48,
+      "raw_line": "Totaal; 14,33 EUR",
+      "normalized_line": "Totaal; 14,33 EUR",
+      "line_type": "total_line",
+      "reason": "total_keyword"
+    },
+    {
+      "line_no": 49,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 50,
+      "raw_line": "Leesmethode: NFC Chip",
+      "normalized_line": "Leesmethode: NFC Chip",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 51,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 52,
+      "raw_line": "PIN",
+      "normalized_line": "PIN",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 53,
+      "raw_line": "Wisselgeld (Contant)",
+      "normalized_line": "Wisselgeld (Contant)",
+      "line_type": "payment_line",
+      "reason": "payment_keyword"
+    },
+    {
+      "line_no": 54,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 55,
+      "raw_line": "BTW groep",
+      "normalized_line": "BTW groep",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 56,
+      "raw_line": "BTW laag 9%",
+      "normalized_line": "BTW laag 9%",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 57,
+      "raw_line": "Totaal BIW",
+      "normalized_line": "Totaal BIW",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 58,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 59,
+      "raw_line": "12 Artikelen",
+      "normalized_line": "12 Artikelen",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 60,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 61,
+      "raw_line": "Onze openingstijden zijn:",
+      "normalized_line": "Onze openingstijden zijn:",
+      "line_type": "metadata_line",
+      "reason": "opening_hours"
+    },
+    {
+      "line_no": 62,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 63,
+      "raw_line": "Maandag - Vrijdag 08:00 - 22:00 uur",
+      "normalized_line": "Maandag - Vrijdag 08:00 - 22:00 uur",
+      "line_type": "metadata_line",
+      "reason": "opening_hours"
+    },
+    {
+      "line_no": 64,
+      "raw_line": "Zaterdag 08:00 - 20:00 uur",
+      "normalized_line": "Zaterdag 08:00 - 20:00 uur",
+      "line_type": "metadata_line",
+      "reason": "opening_hours"
+    },
+    {
+      "line_no": 65,
+      "raw_line": "zondag 12:00 - 18:00 uur",
+      "normalized_line": "zondag 12:00 - 18:00 uur",
+      "line_type": "metadata_line",
+      "reason": "opening_hours"
+    },
+    {
+      "line_no": 66,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 67,
+      "raw_line": "U bert geholpen door SERVICEBALIE (5)",
+      "normalized_line": "U bert geholpen door SERVICEBALIE (5)",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 68,
+      "raw_line": "4-1-2019 19:40 kassa 1 Bonner 2987",
+      "normalized_line": "4-1-2019 19:40 kassa 1 Bonner 2987",
+      "line_type": "metadata_line",
+      "reason": "date_like"
+    },
+    {
+      "line_no": 69,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 70,
+      "raw_line": "Bedankt voor ww bezoek en graag tot rien",
+      "normalized_line": "Bedankt voor ww bezoek en graag tot rien",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 71,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    }
+  ],
+  "lines": []
+}
