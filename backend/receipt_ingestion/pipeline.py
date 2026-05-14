@@ -7,8 +7,8 @@ from typing import Any, Dict, Iterable, List
 
 from .contracts import (
     DiagnosticBundle,
+    EngineProcessingState,
     ParserRow,
-    QualityStatus,
     ReceiptIngestionResult,
     ReviewSuggestion,
 )
@@ -36,11 +36,10 @@ class ReceiptIngestionPipeline:
     """
     Central orchestration wrapper around the current receipt_csv_poc outputs.
 
-    This is intentionally conservative:
-    - no parser replacement;
-    - no database integration;
-    - no UI integration;
-    - no shadow rows promoted to parser rows.
+    IMPORTANT SSOT RULE:
+    - this engine NEVER determines receipt category/status;
+    - po_norm_status_label may only be passed through from upstream status services;
+    - engine_processing_state is TECHNICAL ONLY and may never be used for UI counts/categories.
     """
 
     def ingest_json_payload(self, payload: Dict[str, Any]) -> ReceiptIngestionResult:
@@ -51,7 +50,7 @@ class ReceiptIngestionPipeline:
         parser_rows = self._build_parser_rows(payload)
         review_suggestions = self._build_review_suggestions(payload)
         diagnostics = self._collect_diagnostics(metadata)
-        quality_status = self._derive_quality_status(payload, review_suggestions)
+        processing_state = self._derive_engine_processing_state(payload)
 
         return ReceiptIngestionResult(
             receipt_id=receipt_id,
@@ -59,7 +58,8 @@ class ReceiptIngestionPipeline:
             parser_rows=parser_rows,
             review_suggestions=review_suggestions,
             diagnostics=DiagnosticBundle(diagnostics=diagnostics),
-            quality_status=quality_status,
+            engine_processing_state=processing_state,
+            po_norm_status_label=metadata.get('po_norm_status_label'),
         )
 
     def ingest_json_file(self, path: Path) -> ReceiptIngestionResult:
@@ -120,23 +120,22 @@ class ReceiptIngestionPipeline:
                 collected[key] = metadata[key]
         return collected
 
-    def _derive_quality_status(
+    def _derive_engine_processing_state(
         self,
         payload: Dict[str, Any],
-        review_suggestions: List[ReviewSuggestion],
-    ) -> QualityStatus:
-        metadata = payload.get('metadata', {}) or {}
-        gating = metadata.get('parser_safety_gating', {}) or {}
-        readiness = (gating.get('readiness') or {}).get('ready_for_controlled_integration')
-
-        if readiness is True and not review_suggestions:
-            return QualityStatus.CONTROLLED
-
+    ) -> EngineProcessingState:
         parser_rows = payload.get('rows', []) or []
-        if not parser_rows:
-            return QualityStatus.FAILED
 
-        return QualityStatus.REVIEW_NEEDED
+        if not parser_rows:
+            return EngineProcessingState.FAILED
+
+        metadata = payload.get('metadata', {}) or {}
+        has_diagnostics = any(key in metadata for key in DIAGNOSTIC_KEYS)
+
+        if has_diagnostics:
+            return EngineProcessingState.DIAGNOSTICS_AVAILABLE
+
+        return EngineProcessingState.PARSED
 
 
 # ---------------------------------------------------------------------------
