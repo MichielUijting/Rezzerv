@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -24,6 +24,8 @@ TOTAL_HINT_EXCLUDE_KEYWORDS = ('prijsvoordeel', 'totaal korting', 'btw totaal', 
 SUMMARY_DISCOUNT_KEYWORDS = ('totaal prijsvoordeel', 'totaal korting')
 RESCUE_STOP_LINE_TYPES = {'total_line', 'payment_line', 'vat_line'}
 RESCUE_EXCLUDED_LINE_TYPES = {'metadata_line', 'payment_line', 'vat_line', 'discount_line', 'noise_line', 'total_line'}
+CURRENCY_WORDS_PATTERN = re.compile(r'\b(eur|euro)\b', re.IGNORECASE)
+CURRENCY_SYMBOLS_PATTERN = re.compile(r'[€$£]')
 
 
 @dataclass
@@ -56,6 +58,7 @@ class ReceiptResult:
     refinement_diagnostics: dict
     totals_diagnostics: dict
     product_block_rescue_diagnostics: dict
+    amount_only_exclusion_diagnostics: dict
 
 
 def normalize_decimal(value: str) -> str:
@@ -363,6 +366,47 @@ def build_product_block_rescue_diagnostics(classified_lines: list) -> dict:
     }
 
 
+def _is_amount_only_currency_line(normalized_line: str) -> bool:
+    if not normalized_line or not AMOUNT_PATTERN.search(normalized_line):
+        return False
+    remainder = AMOUNT_PATTERN.sub(' ', normalized_line)
+    remainder = CURRENCY_WORDS_PATTERN.sub(' ', remainder)
+    remainder = CURRENCY_SYMBOLS_PATTERN.sub(' ', remainder)
+    remainder = re.sub(r'[\s\.,:;()\[\]{}+\-_/\\|]+', '', remainder)
+    return remainder == ''
+
+
+def exclude_amount_only_payment_zone_lines(classified_lines: list, product_block_rescue_diagnostics: dict) -> tuple[list, dict]:
+    stop_line_no = product_block_rescue_diagnostics.get('stop_line_no')
+    excluded_lines = []
+    guarded_lines = []
+
+    for line in classified_lines:
+        normalized = line.normalized_line or ''
+        in_or_after_payment_zone = stop_line_no is not None and int(line.line_no) >= int(stop_line_no)
+        amount_only_currency = _is_amount_only_currency_line(normalized)
+        has_real_article_text = bool(re.search(r'[A-Za-zÀ-ÿ]{4,}', normalized)) and not amount_only_currency
+
+        if amount_only_currency and in_or_after_payment_zone and not has_real_article_text:
+            excluded_lines.append({
+                'line_no': line.line_no,
+                'raw_line': line.raw_line,
+                'normalized_line': normalized,
+                'previous_line_type': line.line_type,
+                'amounts': [normalize_decimal(amount) for amount in AMOUNT_PATTERN.findall(normalized)],
+                'amount_only_exclusion_reason': 'amount_currency_only_in_or_after_payment_total_vat_zone',
+            })
+            guarded_lines.append(replace(line, line_type='unknown_line', reason='amount_only_payment_zone_excluded'))
+        else:
+            guarded_lines.append(line)
+
+    return guarded_lines, {
+        'excluded_amount_only_lines': excluded_lines,
+        'excluded_amount_only_count': len(excluded_lines),
+        'amount_only_exclusion_reason': 'amount_currency_only_in_or_after_payment_total_vat_zone',
+    }
+
+
 def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, store_hint: str) -> dict:
     gross_sum = sum((to_decimal(row.line_total) for row in rows), Decimal('0'))
     discount_candidates = []
@@ -420,6 +464,11 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
 
     classified_lines = classify_lines(text)
     classified_lines, refinement_diagnostics = profile.refine_classified_lines(classified_lines)
+    pre_guard_rescue_diagnostics = build_product_block_rescue_diagnostics(classified_lines)
+    classified_lines, amount_only_exclusion_diagnostics = exclude_amount_only_payment_zone_lines(
+        classified_lines,
+        pre_guard_rescue_diagnostics,
+    )
     line_type_counts = summarize_line_types(classified_lines)
 
     product_block = profile.detect_product_block(classified_lines)
@@ -446,6 +495,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         'line_type_counts': line_type_counts,
         'product_block': product_block,
         'product_block_rescue_diagnostics': product_block_rescue_diagnostics,
+        'amount_only_exclusion_diagnostics': amount_only_exclusion_diagnostics,
         'merge_diagnostics': merge_diagnostics,
         'refinement_diagnostics': refinement_diagnostics,
         'totals_diagnostics': totals_diagnostics,
@@ -457,7 +507,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     json_payload = {
-        'schema_version': 'receipt-ocr-poc-v11-product-block-rescue-diagnostics',
+        'schema_version': 'receipt-ocr-poc-v12-amount-only-guard',
         'metadata': metadata,
         'classified_lines': [asdict(line) for line in classified_lines],
         'lines': [asdict(row) for row in merged_rows],
@@ -485,6 +535,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         refinement_diagnostics=refinement_diagnostics,
         totals_diagnostics=totals_diagnostics,
         product_block_rescue_diagnostics=product_block_rescue_diagnostics,
+        amount_only_exclusion_diagnostics=amount_only_exclusion_diagnostics,
     )
 
 
@@ -494,7 +545,7 @@ def list_image_files(input_dir: Path):
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
     summary = {
-        'schema_version': 'receipt-ocr-benchmark-v11-product-block-rescue-diagnostics',
+        'schema_version': 'receipt-ocr-benchmark-v12-amount-only-guard',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
         'run_success_count': sum(1 for row in report_rows if row.run_result == 'success'),
@@ -505,6 +556,7 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         'refinement_diagnostics': {},
         'totals_diagnostics': {},
         'product_block_rescue_diagnostics': {},
+        'amount_only_exclusion_diagnostics': {},
     }
 
     for row in report_rows:
@@ -513,6 +565,7 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         summary['refinement_diagnostics'][row.source_file] = row.refinement_diagnostics
         summary['totals_diagnostics'][row.source_file] = row.totals_diagnostics
         summary['product_block_rescue_diagnostics'][row.source_file] = row.product_block_rescue_diagnostics
+        summary['amount_only_exclusion_diagnostics'][row.source_file] = row.amount_only_exclusion_diagnostics
 
     (output_dir / 'benchmark_summary.json').write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -539,13 +592,14 @@ def main():
             report_rows.append(result)
             refined = result.refinement_diagnostics.get('refined_lines_count', 0)
             merged = result.merge_diagnostics.get('merged_quantity_lines_count', 0)
+            excluded_amount_only = result.amount_only_exclusion_diagnostics.get('excluded_amount_only_count', 0)
             gross = result.totals_diagnostics.get('gross_line_sum', '0.00')
             net = result.totals_diagnostics.get('net_total_candidate', '0.00')
             selected_total = result.totals_diagnostics.get('selected_total_hint') or {}
             selected_total_amount = selected_total.get('amount', '')
             diff = result.totals_diagnostics.get('net_vs_selected_total_difference', '')
             rescue = result.product_block_rescue_diagnostics.get('product_block_rescue_reason', '')
-            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} gross={gross} net={net} selected_total={selected_total_amount} diff={diff} rescue={rescue} profile={result.profile_name}')
+            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} excluded_amount_only={excluded_amount_only} gross={gross} net={net} selected_total={selected_total_amount} diff={diff} rescue={rescue} profile={result.profile_name}')
         except Exception as exc:
             print(f'[ERROR] {image_file.name}: {exc}')
 
