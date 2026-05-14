@@ -26,6 +26,7 @@ RESCUE_STOP_LINE_TYPES = {'total_line', 'payment_line', 'vat_line'}
 RESCUE_EXCLUDED_LINE_TYPES = {'metadata_line', 'payment_line', 'vat_line', 'discount_line', 'noise_line', 'total_line'}
 CURRENCY_WORDS_PATTERN = re.compile(r'\b(eur|euro)\b', re.IGNORECASE)
 CURRENCY_SYMBOLS_PATTERN = re.compile(r'[€$£]')
+LOYALTY_KEYWORDS = ('zegel', 'zegels', 'pluspunten', 'campagne', 'spaar', 'spaarkaart', 'loyalty')
 
 
 @dataclass
@@ -59,6 +60,7 @@ class ReceiptResult:
     totals_diagnostics: dict
     product_block_rescue_diagnostics: dict
     amount_only_exclusion_diagnostics: dict
+    loyalty_exclusion_diagnostics: dict
 
 
 def normalize_decimal(value: str) -> str:
@@ -407,6 +409,38 @@ def exclude_amount_only_payment_zone_lines(classified_lines: list, product_block
     }
 
 
+def exclude_loyalty_payment_zone_lines(classified_lines: list, product_block_rescue_diagnostics: dict) -> tuple[list, dict]:
+    stop_line_no = product_block_rescue_diagnostics.get('stop_line_no')
+    excluded_lines = []
+    guarded_lines = []
+
+    for line in classified_lines:
+        normalized = line.normalized_line or ''
+        lowered = normalized.lower()
+        in_or_after_payment_zone = stop_line_no is not None and int(line.line_no) >= int(stop_line_no)
+        has_loyalty_keyword = any(keyword in lowered for keyword in LOYALTY_KEYWORDS)
+
+        if in_or_after_payment_zone and has_loyalty_keyword:
+            excluded_lines.append({
+                'line_no': line.line_no,
+                'raw_line': line.raw_line,
+                'normalized_line': normalized,
+                'previous_line_type': line.line_type,
+                'matched_keywords': [keyword for keyword in LOYALTY_KEYWORDS if keyword in lowered],
+                'amounts': [normalize_decimal(amount) for amount in AMOUNT_PATTERN.findall(normalized)],
+                'loyalty_exclusion_reason': 'loyalty_campaign_line_in_or_after_payment_total_vat_zone',
+            })
+            guarded_lines.append(replace(line, line_type='unknown_line', reason='loyalty_payment_zone_excluded'))
+        else:
+            guarded_lines.append(line)
+
+    return guarded_lines, {
+        'excluded_loyalty_lines': excluded_lines,
+        'excluded_loyalty_count': len(excluded_lines),
+        'loyalty_exclusion_reason': 'loyalty_campaign_line_in_or_after_payment_total_vat_zone',
+    }
+
+
 def compute_totals_diagnostics(rows: list[ReceiptLine], classified_lines: list, store_hint: str) -> dict:
     gross_sum = sum((to_decimal(row.line_total) for row in rows), Decimal('0'))
     discount_candidates = []
@@ -469,6 +503,10 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         classified_lines,
         pre_guard_rescue_diagnostics,
     )
+    classified_lines, loyalty_exclusion_diagnostics = exclude_loyalty_payment_zone_lines(
+        classified_lines,
+        pre_guard_rescue_diagnostics,
+    )
     line_type_counts = summarize_line_types(classified_lines)
 
     product_block = profile.detect_product_block(classified_lines)
@@ -496,6 +534,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         'product_block': product_block,
         'product_block_rescue_diagnostics': product_block_rescue_diagnostics,
         'amount_only_exclusion_diagnostics': amount_only_exclusion_diagnostics,
+        'loyalty_exclusion_diagnostics': loyalty_exclusion_diagnostics,
         'merge_diagnostics': merge_diagnostics,
         'refinement_diagnostics': refinement_diagnostics,
         'totals_diagnostics': totals_diagnostics,
@@ -507,7 +546,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
     csv_dir.mkdir(parents=True, exist_ok=True)
 
     json_payload = {
-        'schema_version': 'receipt-ocr-poc-v12-amount-only-guard',
+        'schema_version': 'receipt-ocr-poc-v13-loyalty-guard',
         'metadata': metadata,
         'classified_lines': [asdict(line) for line in classified_lines],
         'lines': [asdict(row) for row in merged_rows],
@@ -536,6 +575,7 @@ def process_receipt(image_path: Path, output_dir: Path, lang: str):
         totals_diagnostics=totals_diagnostics,
         product_block_rescue_diagnostics=product_block_rescue_diagnostics,
         amount_only_exclusion_diagnostics=amount_only_exclusion_diagnostics,
+        loyalty_exclusion_diagnostics=loyalty_exclusion_diagnostics,
     )
 
 
@@ -545,7 +585,7 @@ def list_image_files(input_dir: Path):
 
 def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
     summary = {
-        'schema_version': 'receipt-ocr-benchmark-v12-amount-only-guard',
+        'schema_version': 'receipt-ocr-benchmark-v13-loyalty-guard',
         'created_at': datetime.now(timezone.utc).isoformat(),
         'total_receipts': len(report_rows),
         'run_success_count': sum(1 for row in report_rows if row.run_result == 'success'),
@@ -557,6 +597,7 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         'totals_diagnostics': {},
         'product_block_rescue_diagnostics': {},
         'amount_only_exclusion_diagnostics': {},
+        'loyalty_exclusion_diagnostics': {},
     }
 
     for row in report_rows:
@@ -566,6 +607,7 @@ def write_benchmark_summary(output_dir: Path, report_rows: list[ReceiptResult]):
         summary['totals_diagnostics'][row.source_file] = row.totals_diagnostics
         summary['product_block_rescue_diagnostics'][row.source_file] = row.product_block_rescue_diagnostics
         summary['amount_only_exclusion_diagnostics'][row.source_file] = row.amount_only_exclusion_diagnostics
+        summary['loyalty_exclusion_diagnostics'][row.source_file] = row.loyalty_exclusion_diagnostics
 
     (output_dir / 'benchmark_summary.json').write_text(
         json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -593,13 +635,14 @@ def main():
             refined = result.refinement_diagnostics.get('refined_lines_count', 0)
             merged = result.merge_diagnostics.get('merged_quantity_lines_count', 0)
             excluded_amount_only = result.amount_only_exclusion_diagnostics.get('excluded_amount_only_count', 0)
+            excluded_loyalty = result.loyalty_exclusion_diagnostics.get('excluded_loyalty_count', 0)
             gross = result.totals_diagnostics.get('gross_line_sum', '0.00')
             net = result.totals_diagnostics.get('net_total_candidate', '0.00')
             selected_total = result.totals_diagnostics.get('selected_total_hint') or {}
             selected_total_amount = selected_total.get('amount', '')
             diff = result.totals_diagnostics.get('net_vs_selected_total_difference', '')
             rescue = result.product_block_rescue_diagnostics.get('product_block_rescue_reason', '')
-            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} excluded_amount_only={excluded_amount_only} gross={gross} net={net} selected_total={selected_total_amount} diff={diff} rescue={rescue} profile={result.profile_name}')
+            print(f'[OK] {image_file.name}: {len(rows)} rows refined={refined} merged={merged} excluded_amount_only={excluded_amount_only} excluded_loyalty={excluded_loyalty} gross={gross} net={net} selected_total={selected_total_amount} diff={diff} rescue={rescue} profile={result.profile_name}')
         except Exception as exc:
             print(f'[ERROR] {image_file.name}: {exc}')
 
