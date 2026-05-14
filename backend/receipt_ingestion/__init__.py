@@ -1,8 +1,8 @@
 from .contracts import (
     ENGINE_VERSION,
     DiagnosticBundle,
+    EngineProcessingState,
     ParserRow,
-    QualityStatus,
     ReceiptIngestionResult,
     ReviewSuggestion,
 )
@@ -11,8 +11,8 @@ from .pipeline import ReceiptIngestionPipeline
 __all__ = [
     'ENGINE_VERSION',
     'DiagnosticBundle',
+    'EngineProcessingState',
     'ParserRow',
-    'QualityStatus',
     'ReceiptIngestionPipeline',
     'ReceiptIngestionResult',
     'ReviewSuggestion',
