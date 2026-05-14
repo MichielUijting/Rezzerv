@@ -1,0 +1,646 @@
+{
+  "schema_version": "receipt-ocr-poc-v10-delta-diagnostics",
+  "metadata": {
+    "source_file": "Jumbo App 1.png",
+    "created_at": "2026-05-14T07:50:53.192751+00:00",
+    "store_hint": "jumbo",
+    "profile_name": "jumbo",
+    "detected_rows": 13,
+    "line_type_counts": {
+      "discount_line": 1,
+      "metadata_line": 5,
+      "noise_line": 1,
+      "payment_line": 0,
+      "product_line": 19,
+      "quantity_line": 4,
+      "total_line": 0,
+      "unknown_line": 8,
+      "vat_line": 5
+    },
+    "product_block": {
+      "start_line": 7,
+      "end_line": 26,
+      "reason": "header_keyword",
+      "line_count": 20,
+      "profile": "jumbo"
+    },
+    "merge_diagnostics": {
+      "merge_strategy": "safe_previous_product_jumbo",
+      "merge_candidates_count": 4,
+      "merged_quantity_lines_count": 3,
+      "unmerged_quantity_lines_count": 1,
+      "rejected_quantity_lines_count": 1,
+      "rejection_reasons": {
+        "line_distance_too_large": 1
+      },
+      "merged_pairs": [
+        {
+          "product_line_no": 7,
+          "quantity_line_no": 9
+        },
+        {
+          "product_line_no": 13,
+          "quantity_line_no": 15
+        },
+        {
+          "product_line_no": 24,
+          "quantity_line_no": 26
+        }
+      ],
+      "input_rows_count": 16,
+      "output_rows_count": 13
+    },
+    "refinement_diagnostics": {
+      "profile": "jumbo",
+      "refined_lines_count": 7,
+      "refinement_reasons": {
+        "jumbo_unknown_product_context": 7
+      },
+      "refined_line_numbers": [
+        3,
+        8,
+        10,
+        14,
+        25,
+        29,
+        31
+      ]
+    },
+    "totals_diagnostics": {
+      "store_hint": "jumbo",
+      "gross_line_sum": "35.12",
+      "discount_total_detected": "0.00",
+      "net_total_candidate": "35.12",
+      "selected_total_hint": {
+        "line_no": 27,
+        "amount": "56.91",
+        "raw_line": "Totaal (incl. BTW) €56,91",
+        "reason": "total_keyword",
+        "selected_total_hint_reason": "first_payable_total_like_line"
+      },
+      "selected_total_hint_reason": "first_payable_total_like_line",
+      "net_vs_selected_total_difference": "-21.79",
+      "all_total_hints": [
+        {
+          "line_no": 27,
+          "amount": "56.91",
+          "raw_line": "Totaal (incl. BTW) €56,91",
+          "reason": "total_keyword"
+        },
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "Totaal korting €0,00",
+          "reason": "total_keyword"
+        },
+        {
+          "line_no": 39,
+          "amount": "4.28",
+          "raw_line": "BTW Totaal €52,63 €4,28",
+          "reason": "total_keyword"
+        }
+      ],
+      "excluded_total_hints": [
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "Totaal korting €0,00",
+          "reason": "total_keyword",
+          "excluded_reason": "summary_or_tax_total_not_payable_total"
+        },
+        {
+          "line_no": 39,
+          "amount": "4.28",
+          "raw_line": "BTW Totaal €52,63 €4,28",
+          "reason": "total_keyword",
+          "excluded_reason": "summary_or_tax_total_not_payable_total"
+        }
+      ],
+      "selected_discount_strategy": "summary_discount_total",
+      "selected_discount_candidates": [
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "Totaal korting €0,00",
+          "reason": "discount_keyword"
+        }
+      ],
+      "excluded_discount_candidates": [],
+      "all_discount_candidates": [
+        {
+          "line_no": 28,
+          "amount": "0.00",
+          "raw_line": "Totaal korting €0,00",
+          "reason": "discount_keyword"
+        }
+      ],
+      "discount_candidate_count": 1,
+      "line_count_after_merge": 13,
+      "totals_strategy": "diagnostic_gross_minus_selected_discount_vs_selected_total_hint",
+      "suspicious_amounts": [],
+      "possible_duplicate_lines": [],
+      "possible_missing_discount_application": [],
+      "amount_delta_candidates": []
+    }
+  },
+  "classified_lines": [
+    {
+      "line_no": 1,
+      "raw_line": "JUMBO",
+      "normalized_line": "JUMBO",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 2,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 3,
+      "raw_line": "Jumbo Heteren Teun van Blijderveen",
+      "normalized_line": "Jumbo Heteren Teun van Blijderveen",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 4,
+      "raw_line": "Beemdhof 38, 6666 DL Heteren",
+      "normalized_line": "Beemdhof 38, 6666 DL Heteren",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 5,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 6,
+      "raw_line": "Producten",
+      "normalized_line": "Producten",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 7,
+      "raw_line": "Jumbo Passata Rust. 1,99",
+      "normalized_line": "Jumbo Passata Rust. 1,99",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 8,
+      "raw_line": "Kipdij Reepje 400",
+      "normalized_line": "Kipdij Reepje 400",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 9,
+      "raw_line": "2X5,69 11,38",
+      "normalized_line": "2X5,69 11,38",
+      "line_type": "quantity_line",
+      "reason": "quantity_only_pattern"
+    },
+    {
+      "line_no": 10,
+      "raw_line": "Coni Kroepoek Bali",
+      "normalized_line": "Coni Kroepoek Bali",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 11,
+      "raw_line": "2X1,50 3,00",
+      "normalized_line": "2X1,50 3,00",
+      "line_type": "quantity_line",
+      "reason": "quantity_only_pattern"
+    },
+    {
+      "line_no": 12,
+      "raw_line": "Jumbo Kroep Cassave 1,09",
+      "normalized_line": "Jumbo Kroep Cassave 1,09",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 13,
+      "raw_line": "Chorizo Ring 3,81",
+      "normalized_line": "Chorizo Ring 3,81",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 14,
+      "raw_line": "Knorr Jachtsaus",
+      "normalized_line": "Knorr Jachtsaus",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 15,
+      "raw_line": "3X1,00 3,00",
+      "normalized_line": "3X1,00 3,00",
+      "line_type": "quantity_line",
+      "reason": "quantity_only_pattern"
+    },
+    {
+      "line_no": 16,
+      "raw_line": "Halfvolle Melk 1.0L P 0,87",
+      "normalized_line": "Halfvolle Melk 1.0L P 0,87",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 17,
+      "raw_line": "Jumbo Paprikamix 2,29",
+      "normalized_line": "Jumbo Paprikamix 2,29",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 18,
+      "raw_line": "Hartig Itali.Kruide 1,99",
+      "normalized_line": "Hartig Itali.Kruide 1,99",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 19,
+      "raw_line": "Jumbo Rooibos Mango 1,05",
+      "normalized_line": "Jumbo Rooibos Mango 1,05",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 20,
+      "raw_line": "Lemondor Limoensap 0,99",
+      "normalized_line": "Lemondor Limoensap 0,99",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 21,
+      "raw_line": "Komkommer 0,89",
+      "normalized_line": "Komkommer 0,89",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 22,
+      "raw_line": "Lassie Paella Rijst 2,59",
+      "normalized_line": "Lassie Paella Rijst 2,59",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 23,
+      "raw_line": "Broccoli 0,88",
+      "normalized_line": "Broccoli 0,88",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 24,
+      "raw_line": "Espresso D Oro 15,99",
+      "normalized_line": "Espresso D Oro 15,99",
+      "line_type": "product_line",
+      "reason": "amount_and_text"
+    },
+    {
+      "line_no": 25,
+      "raw_line": "Koopzegel Digitaal",
+      "normalized_line": "Koopzegel Digitaal",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 26,
+      "raw_line": "51X0,10 5,10",
+      "normalized_line": "51X0,10 5,10",
+      "line_type": "quantity_line",
+      "reason": "quantity_only_pattern"
+    },
+    {
+      "line_no": 27,
+      "raw_line": "Totaal (incl. BTW) €56,91",
+      "normalized_line": "Totaal (incl. BTW) €56,91",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 28,
+      "raw_line": "Totaal korting €0,00",
+      "normalized_line": "Totaal korting €0,00",
+      "line_type": "discount_line",
+      "reason": "discount_keyword"
+    },
+    {
+      "line_no": 29,
+      "raw_line": "Jumbo Extra's",
+      "normalized_line": "Jumbo Extra's",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 30,
+      "raw_line": "Extra punten kado +100 punten",
+      "normalized_line": "Extra punten kado +100 punten",
+      "line_type": "unknown_line",
+      "reason": "no_amount"
+    },
+    {
+      "line_no": 31,
+      "raw_line": "Melk en karnemelk +8 punten",
+      "normalized_line": "Melk en karnemelk +8 punten",
+      "line_type": "product_line",
+      "reason": "jumbo_unknown_product_context"
+    },
+    {
+      "line_no": 32,
+      "raw_line": "Oud saldo: 0 punten",
+      "normalized_line": "Oud saldo: 0 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 33,
+      "raw_line": "Gespaard: 108 punten",
+      "normalized_line": "Gespaard: 108 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 34,
+      "raw_line": "Ingewisseld: 0 punten",
+      "normalized_line": "Ingewisseld: 0 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 35,
+      "raw_line": "Nieuw saldo: 108 punten",
+      "normalized_line": "Nieuw saldo: 108 punten",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    },
+    {
+      "line_no": 36,
+      "raw_line": "BTW% Bedrag excl BTW bedrag",
+      "normalized_line": "BTW% Bedrag excl BTW bedrag",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 37,
+      "raw_line": "0,00% €5,10 €0,00",
+      "normalized_line": "0,00% €5,10 €0,00",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 38,
+      "raw_line": "9,00% €47,53 €4,28",
+      "normalized_line": "9,00% €47,53 €4,28",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 39,
+      "raw_line": "BTW Totaal €52,63 €4,28",
+      "normalized_line": "BTW Totaal €52,63 €4,28",
+      "line_type": "vat_line",
+      "reason": "vat_keyword"
+    },
+    {
+      "line_no": 40,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 41,
+      "raw_line": "63553007881603242026",
+      "normalized_line": "63553007881603242026",
+      "line_type": "noise_line",
+      "reason": "no_alpha_no_amount"
+    },
+    {
+      "line_no": 42,
+      "raw_line": "",
+      "normalized_line": "",
+      "line_type": "unknown_line",
+      "reason": "empty"
+    },
+    {
+      "line_no": 43,
+      "raw_line": "Dinsdag 24 maart 2026, 12:36",
+      "normalized_line": "Dinsdag 24 maart 2026, 12:36",
+      "line_type": "metadata_line",
+      "reason": "metadata_keyword"
+    }
+  ],
+  "lines": [
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 7,
+      "line_type": "product_line",
+      "item_text": "Jumbo Passata Rust.",
+      "quantity": "2",
+      "unit": "stuk",
+      "unit_price": "5.69",
+      "line_total": "11.38",
+      "parser_confidence": 0.75,
+      "raw_line": "Jumbo Passata Rust. 1,99 | 2X5,69 11,38",
+      "warning": "quantity_line_merged"
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 11,
+      "line_type": "quantity_line",
+      "item_text": "2X1,50",
+      "quantity": "2",
+      "unit": "stuk",
+      "unit_price": "1.50",
+      "line_total": "3.00",
+      "parser_confidence": 0.75,
+      "raw_line": "2X1,50 3,00",
+      "warning": "quantity_line_requires_merge;quantity_merge_rejected:line_distance_too_large"
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 12,
+      "line_type": "product_line",
+      "item_text": "Jumbo Kroep Cassave",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.09",
+      "parser_confidence": 0.75,
+      "raw_line": "Jumbo Kroep Cassave 1,09",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 13,
+      "line_type": "product_line",
+      "item_text": "Chorizo Ring",
+      "quantity": "3",
+      "unit": "stuk",
+      "unit_price": "1.00",
+      "line_total": "3.00",
+      "parser_confidence": 0.75,
+      "raw_line": "Chorizo Ring 3,81 | 3X1,00 3,00",
+      "warning": "quantity_line_merged"
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 16,
+      "line_type": "product_line",
+      "item_text": "Halfvolle Melk 1.0L P",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.87",
+      "parser_confidence": 0.75,
+      "raw_line": "Halfvolle Melk 1.0L P 0,87",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 17,
+      "line_type": "product_line",
+      "item_text": "Jumbo Paprikamix",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "2.29",
+      "parser_confidence": 0.75,
+      "raw_line": "Jumbo Paprikamix 2,29",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 18,
+      "line_type": "product_line",
+      "item_text": "Hartig Itali.Kruide",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.99",
+      "parser_confidence": 0.75,
+      "raw_line": "Hartig Itali.Kruide 1,99",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 19,
+      "line_type": "product_line",
+      "item_text": "Jumbo Rooibos Mango",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "1.05",
+      "parser_confidence": 0.75,
+      "raw_line": "Jumbo Rooibos Mango 1,05",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 20,
+      "line_type": "product_line",
+      "item_text": "Lemondor Limoensap",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.99",
+      "parser_confidence": 0.75,
+      "raw_line": "Lemondor Limoensap 0,99",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 21,
+      "line_type": "product_line",
+      "item_text": "Komkommer",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.89",
+      "parser_confidence": 0.75,
+      "raw_line": "Komkommer 0,89",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 22,
+      "line_type": "product_line",
+      "item_text": "Lassie Paella Rijst",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "2.59",
+      "parser_confidence": 0.75,
+      "raw_line": "Lassie Paella Rijst 2,59",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 23,
+      "line_type": "product_line",
+      "item_text": "Broccoli",
+      "quantity": "",
+      "unit": "",
+      "unit_price": "",
+      "line_total": "0.88",
+      "parser_confidence": 0.75,
+      "raw_line": "Broccoli 0,88",
+      "warning": ""
+    },
+    {
+      "source_file": "Jumbo App 1.png",
+      "store_hint": "jumbo",
+      "profile_name": "jumbo",
+      "line_no": 24,
+      "line_type": "product_line",
+      "item_text": "Espresso D Oro",
+      "quantity": "51",
+      "unit": "stuk",
+      "unit_price": "0.10",
+      "line_total": "5.10",
+      "parser_confidence": 0.75,
+      "raw_line": "Espresso D Oro 15,99 | 51X0,10 5,10",
+      "warning": "quantity_line_merged"
+    }
+  ]
+}
