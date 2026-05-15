@@ -111,9 +111,84 @@ function SummaryCard({ data }) {
   )
 }
 
+function ReadinessTable({ items, selectedPath, onSelect }) {
+  return (
+    <Card>
+      <div style={{ display: 'grid', gap: '12px' }}>
+        <div>
+          <strong>Review readiness baseline</strong>
+          <div style={{ color: '#5f6f64' }}>Diagnostic-only overzicht voor toekomstige gecontroleerde parseraugmentatie.</div>
+        </div>
+
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '960px' }}>
+            <thead>
+              <tr style={{ background: '#f2f5f2' }}>
+                <th style={headerStyle}>Bon</th>
+                <th style={headerStyle}>Advies</th>
+                <th style={headerStyle}>Hoofdreden</th>
+                <th style={headerStyle}>OCR-issues</th>
+                <th style={headerStyle}>Reviewtaken</th>
+                <th style={headerStyle}>Readiness</th>
+                <th style={headerStyle}>Actie</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => {
+                const isSelected = item.json_path === selectedPath
+                return (
+                  <tr key={item.json_path} style={{ background: isSelected ? '#f6faf6' : '#fff' }}>
+                    <td style={cellStyle}>{item.file_name}</td>
+                    <td style={cellStyle}>{item.recommended_user_action || '-'}</td>
+                    <td style={cellStyle}>{item.main_reason || '-'}</td>
+                    <td style={cellStyle}>{item.ocr_issue_count || 0}</td>
+                    <td style={cellStyle}>{item.review_task_count || 0}</td>
+                    <td style={cellStyle}>
+                      <Badge>{item.readiness || 'insufficient_diagnostics'}</Badge>
+                    </td>
+                    <td style={cellStyle}>
+                      <button
+                        type="button"
+                        onClick={() => onSelect(item.json_path)}
+                        style={{
+                          border: '1px solid #d4ddd5',
+                          borderRadius: '10px',
+                          padding: '6px 10px',
+                          background: '#0f3d24',
+                          color: '#fff',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Open preview
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+const headerStyle = {
+  textAlign: 'left',
+  padding: '10px',
+  borderBottom: '1px solid #d9e1da',
+}
+
+const cellStyle = {
+  padding: '10px',
+  borderBottom: '1px solid #eef2ee',
+  verticalAlign: 'top',
+}
+
 export default function ReceiptReviewPreviewPage() {
   const [jsonPath, setJsonPath] = useState(DEFAULT_JSON_PATH)
   const [availableJsons, setAvailableJsons] = useState([])
+  const [readinessItems, setReadinessItems] = useState([])
   const [data, setData] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isLoadingList, setIsLoadingList] = useState(false)
@@ -122,29 +197,38 @@ export default function ReceiptReviewPreviewPage() {
   const normalized = useMemo(() => data?.normalized_review_diagnostics || {}, [data])
 
   useEffect(() => {
-    async function loadJsonList() {
+    async function loadInitialData() {
       setIsLoadingList(true)
       try {
-        const response = await fetchJson('/api/receipt-ingestion/test-run-jsons')
-        setAvailableJsons(Array.isArray(response?.items) ? response.items : [])
+        const [jsonListResponse, readinessResponse] = await Promise.all([
+          fetchJson('/api/receipt-ingestion/test-run-jsons'),
+          fetchJson('/api/receipt-ingestion/review-readiness-baseline'),
+        ])
+
+        setAvailableJsons(Array.isArray(jsonListResponse?.items) ? jsonListResponse.items : [])
+        setReadinessItems(Array.isArray(readinessResponse?.items) ? readinessResponse.items : [])
       } catch {
         setAvailableJsons([])
+        setReadinessItems([])
       } finally {
         setIsLoadingList(false)
       }
     }
 
-    loadJsonList()
+    loadInitialData()
   }, [])
 
-  async function loadPreview() {
-    const pathValue = String(jsonPath || '').trim()
+  async function loadPreview(pathOverride) {
+    const pathValue = String(pathOverride || jsonPath || '').trim()
     if (!pathValue) {
       setError('Vul eerst een JSON-pad in.')
       return
     }
+
+    setJsonPath(pathValue)
     setIsLoading(true)
     setError('')
+
     try {
       const response = await fetchJson(`/api/receipt-ingestion/explainability-preview?json_path=${encodeURIComponent(pathValue)}`)
       setData(response)
@@ -163,7 +247,7 @@ export default function ReceiptReviewPreviewPage() {
           <div style={{ display: 'grid', gap: '12px' }}>
             <div>
               <strong>Doel</strong>
-              <div>Read-only preview van explainability en genormaliseerde reviewdiagnostics. Dit scherm schrijft niets weg en verwerkt geen kassabon.</div>
+              <div>Read-only preview van explainability, genormaliseerde reviewdiagnostics en readiness-baseline. Dit scherm schrijft niets weg en verwerkt geen kassabon.</div>
             </div>
 
             <label htmlFor="receipt-review-json-path"><strong>POC JSON-pad</strong></label>
@@ -175,7 +259,7 @@ export default function ReceiptReviewPreviewPage() {
             />
 
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <Button onClick={loadPreview} disabled={isLoading}>{isLoading ? 'Laden...' : 'Preview laden'}</Button>
+              <Button onClick={() => loadPreview()} disabled={isLoading}>{isLoading ? 'Laden...' : 'Preview laden'}</Button>
               {isLoadingList ? <span>Testset laden...</span> : null}
             </div>
 
@@ -211,6 +295,10 @@ export default function ReceiptReviewPreviewPage() {
             {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
           </div>
         </Card>
+
+        {readinessItems.length ? (
+          <ReadinessTable items={readinessItems} selectedPath={jsonPath} onSelect={loadPreview} />
+        ) : null}
 
         {data ? (
           <>
