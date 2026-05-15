@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import traceback
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -69,7 +70,13 @@ async def diagnose_receipt_zip_import(file: UploadFile = File(...)) -> dict[str,
             try:
                 file_bytes = archive.read(member)
             except Exception as exc:
-                items.append(_failed_item(item_name, 'file_extract', f'Bestand kon niet uit ZIP worden gelezen: {exc}'))
+                items.append(_failed_item(
+                    item_name,
+                    'file_extract',
+                    f'Bestand kon niet uit ZIP worden gelezen: {exc}',
+                    exc=exc,
+                    traceback_text=traceback.format_exc(),
+                ))
                 continue
             items.append(_diagnose_single_file(item_name, file_bytes))
 
@@ -88,7 +95,13 @@ def _diagnose_single_file(filename: str, file_bytes: bytes) -> dict[str, Any]:
     try:
         mime_type = detect_mime_type(filename, file_bytes)
     except Exception as exc:
-        return _failed_item(filename, 'mime_detect', f'MIME-detectie faalde: {exc}')
+        return _failed_item(
+            filename,
+            'mime_detect',
+            f'MIME-detectie faalde: {exc}',
+            exc=exc,
+            traceback_text=traceback.format_exc(),
+        )
 
     try:
         parse_result = parse_receipt_content(file_bytes, filename, mime_type)
@@ -100,6 +113,9 @@ def _diagnose_single_file(filename: str, file_bytes: bytes) -> dict[str, Any]:
             'raw_receipt_created': False,
             'failure_stage': 'parse',
             'failure_reason': f'Parser/OCR exception: {type(exc).__name__}: {exc}',
+            'exception_type': type(exc).__name__,
+            'exception_message': str(exc),
+            'exception_traceback': traceback.format_exc(),
             'mime_type': mime_type,
             'expected_behavior': 'Parserfout moet worden hersteld; technisch leesbare supermarktbon mag niet verdwijnen.',
         }
@@ -112,6 +128,9 @@ def _diagnose_single_file(filename: str, file_bytes: bytes) -> dict[str, Any]:
             'raw_receipt_created': True,
             'failure_stage': 'parse',
             'failure_reason': 'Parser classificeert dit bestand als geen bruikbare kassabon.',
+            'exception_type': None,
+            'exception_message': None,
+            'exception_traceback': None,
             'mime_type': mime_type,
             'parse_status': getattr(parse_result, 'parse_status', None),
             'store_name': getattr(parse_result, 'store_name', None),
@@ -133,6 +152,9 @@ def _diagnose_single_file(filename: str, file_bytes: bytes) -> dict[str, Any]:
         'raw_receipt_created': True,
         'failure_stage': None,
         'failure_reason': None,
+        'exception_type': None,
+        'exception_message': None,
+        'exception_traceback': None,
         'mime_type': mime_type,
         'parse_status': parse_result.parse_status,
         'store_name': parse_result.store_name,
@@ -143,7 +165,14 @@ def _diagnose_single_file(filename: str, file_bytes: bytes) -> dict[str, Any]:
     }
 
 
-def _failed_item(filename: str, stage: str, reason: str) -> dict[str, Any]:
+def _failed_item(
+    filename: str,
+    stage: str,
+    reason: str,
+    *,
+    exc: Exception | None = None,
+    traceback_text: str | None = None,
+) -> dict[str, Any]:
     return {
         'filename': filename,
         'import_result': 'failed',
@@ -151,6 +180,9 @@ def _failed_item(filename: str, stage: str, reason: str) -> dict[str, Any]:
         'raw_receipt_created': False,
         'failure_stage': stage,
         'failure_reason': reason,
+        'exception_type': type(exc).__name__ if exc else None,
+        'exception_message': str(exc) if exc else None,
+        'exception_traceback': traceback_text,
         'expected_behavior': 'technical_failure_only',
     }
 
