@@ -55,7 +55,6 @@ def _rezzerv_escape_bad_character_ranges(pattern):
             continue
         if char == '-' and in_class:
             next_char = pattern[index + 1] if index + 1 < length else ''
-            # Only escape dash when it could be interpreted as a range operator.
             if not class_started and next_char not in {']', ''}:
                 result.append('\\-')
             else:
@@ -120,10 +119,10 @@ re = _RezzervSafeRegexModule(_rezzerv_raw_re)
 '@
 
     $marker = 'import re'
-    if ($content -notmatch [regex]::Escape($marker)) {
+    if (-not $content.Contains($marker)) {
         throw 'Kan import re niet vinden in receipt_service.py'
     }
-    $content = $content -replace [regex]::Escape($marker), ($marker + $insert), 1
+    $content = $content.Replace($marker, ($marker + $insert))
     Copy-Item $path "$path.runtime-regex-hardening-backup" -Force
     Set-Content $path $content -Encoding UTF8
     Write-Host 'Runtime regex hardening toegevoegd aan receipt_service.py' -ForegroundColor Green
