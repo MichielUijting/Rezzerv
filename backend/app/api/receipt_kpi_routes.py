@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.db import engine
 from receipt_ingestion.kassa_kpi_baseline import build_kassa_kpi_baseline
+from receipt_ingestion.kassa_kpi_scope_diagnosis import build_kassa_kpi_scope_diagnosis
 
 router = APIRouter(
     prefix='/api/receipt-kpi',
@@ -20,3 +21,14 @@ def get_receipt_kpi_baseline():
     """
     with engine.begin() as conn:
         return build_kassa_kpi_baseline(conn)
+
+
+@router.get('/scope-diagnosis')
+def get_receipt_kpi_scope_diagnosis():
+    """Explain why the KPI scope may be empty.
+
+    Read-only diagnostic endpoint.
+    Does not restore archived receipts or modify receipt status.
+    """
+    with engine.begin() as conn:
+        return build_kassa_kpi_scope_diagnosis(conn)
