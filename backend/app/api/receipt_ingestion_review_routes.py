@@ -8,8 +8,10 @@ from fastapi import APIRouter, HTTPException, Query
 
 try:
     from receipt_ingestion import ReceiptIngestionPipeline
+    from receipt_ingestion.explainability import build_receipt_explainability
 except ModuleNotFoundError:  # local repo-root CLI/import compatibility
     from backend.receipt_ingestion import ReceiptIngestionPipeline
+    from backend.receipt_ingestion.explainability import build_receipt_explainability
 
 router = APIRouter(
     prefix='/api/receipt-ingestion',
@@ -69,6 +71,12 @@ def _resolve_safe_json_path(json_path: str, allowed_root: Path) -> Path:
     return candidate
 
 
+def _build_response_payload(result) -> dict:
+    payload = result.to_dict()
+    payload['explainability'] = build_receipt_explainability(payload)
+    return payload
+
+
 @router.get('/review-preview')
 def get_receipt_ingestion_review_preview(
     json_path: str = Query(..., description='Pad naar POC JSON onder tools/receipt_csv_poc/test_runs'),
@@ -86,3 +94,22 @@ def get_receipt_ingestion_review_preview(
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail='Receipt ingestion preview kon niet worden opgebouwd') from exc
+
+
+@router.get('/explainability-preview')
+def get_receipt_ingestion_explainability_preview(
+    json_path: str = Query(..., description='Pad naar POC JSON onder tools/receipt_csv_poc/test_runs'),
+):
+    pipeline_factory, allowed_root = _require_configured()
+    safe_path = _resolve_safe_json_path(json_path, allowed_root)
+
+    try:
+        pipeline = pipeline_factory()
+        result = pipeline.ingest_json_file(safe_path)
+        return _build_response_payload(result)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail='POC JSON-bestand is ongeldig') from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail='Receipt ingestion explainability preview kon niet worden opgebouwd') from exc
