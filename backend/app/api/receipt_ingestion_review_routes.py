@@ -116,6 +116,45 @@ def _iter_safe_json_files(allowed_root: Path, *, include_archived: bool = False)
     return files
 
 
+def _deduplicate_receipt_json_files(json_files: list[Path]) -> list[Path]:
+    """Keep one current diagnostic JSON per functional receipt.
+
+    POC test_runs contain the same receipt repeated over many diagnostic runs.
+    The admin cockpit must show functional receipts, not every historical run.
+    """
+    chosen: dict[str, Path] = {}
+    for json_file in json_files:
+        key = _receipt_identity_key(json_file)
+        current = chosen.get(key)
+        if current is None or _json_file_sort_key(json_file) > _json_file_sort_key(current):
+            chosen[key] = json_file
+    return sorted(chosen.values(), key=lambda path: _receipt_identity_key(path))
+
+
+def _receipt_identity_key(json_file: Path) -> str:
+    try:
+        payload = json.loads(json_file.read_text(encoding='utf-8'))
+    except Exception:
+        return json_file.stem.strip().lower()
+
+    if not isinstance(payload, dict):
+        return json_file.stem.strip().lower()
+
+    metadata = payload.get('metadata') if isinstance(payload.get('metadata'), dict) else {}
+    source_file = str(metadata.get('source_file') or payload.get('source_file') or '').strip().lower()
+    if source_file:
+        return Path(source_file).stem.strip().lower()
+    return json_file.stem.strip().lower()
+
+
+def _json_file_sort_key(json_file: Path) -> tuple[float, str]:
+    try:
+        mtime = json_file.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    return (mtime, json_file.as_posix())
+
+
 def _is_archived_receipt_json(json_file: Path, allowed_abs: Path) -> bool:
     try:
         relative_parts = [part.lower() for part in json_file.resolve().relative_to(allowed_abs).parts]
@@ -237,8 +276,10 @@ def _failed_readiness_item(public_path: str, json_file: Path, readiness: str, re
 @router.get('/test-run-jsons')
 def get_receipt_ingestion_test_run_jsons():
     _pipeline_factory, allowed_root = _require_configured()
+    source_files = _iter_safe_json_files(allowed_root)
+    active_files = _deduplicate_receipt_json_files(source_files)
     items = []
-    for json_file in _iter_safe_json_files(allowed_root):
+    for json_file in active_files:
         run_name = '-'
         parts = json_file.resolve().relative_to(_allowed_root_abs(allowed_root)).parts
         if parts:
@@ -251,23 +292,33 @@ def get_receipt_ingestion_test_run_jsons():
             }
         )
 
-    return {'items': items, 'count': len(items), 'archived_receipts_excluded': True}
+    return {
+        'items': items,
+        'count': len(items),
+        'source_count': len(source_files),
+        'archived_receipts_excluded': True,
+        'duplicate_runs_collapsed': True,
+    }
 
 
 @router.get('/review-readiness-baseline')
 def get_receipt_ingestion_review_readiness_baseline():
     pipeline_factory, allowed_root = _require_configured()
     pipeline = pipeline_factory()
+    source_files = _iter_safe_json_files(allowed_root)
+    active_files = _deduplicate_receipt_json_files(source_files)
     items = [
         _build_readiness_item(json_file=json_file, allowed_root=allowed_root, pipeline=pipeline)
-        for json_file in _iter_safe_json_files(allowed_root)
+        for json_file in active_files
     ]
     return {
         'items': items,
         'count': len(items),
+        'source_count': len(source_files),
         'readiness_labels': sorted(READINESS_LABELS),
         'diagnostic_only': True,
         'archived_receipts_excluded': True,
+        'duplicate_runs_collapsed': True,
     }
 
 
