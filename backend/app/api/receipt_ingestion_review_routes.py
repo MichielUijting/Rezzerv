@@ -9,9 +9,11 @@ from fastapi import APIRouter, HTTPException, Query
 try:
     from receipt_ingestion import ReceiptIngestionPipeline
     from receipt_ingestion.explainability import build_receipt_explainability
+    from receipt_ingestion.normalized_review_diagnostics import build_normalized_review_diagnostics
 except ModuleNotFoundError:  # local repo-root CLI/import compatibility
     from backend.receipt_ingestion import ReceiptIngestionPipeline
     from backend.receipt_ingestion.explainability import build_receipt_explainability
+    from backend.receipt_ingestion.normalized_review_diagnostics import build_normalized_review_diagnostics
 
 router = APIRouter(
     prefix='/api/receipt-ingestion',
@@ -74,6 +76,7 @@ def _resolve_safe_json_path(json_path: str, allowed_root: Path) -> Path:
 def _build_response_payload(result) -> dict:
     payload = result.to_dict()
     payload['explainability'] = build_receipt_explainability(payload)
+    payload['normalized_review_diagnostics'] = build_normalized_review_diagnostics(payload)
     return payload
 
 
