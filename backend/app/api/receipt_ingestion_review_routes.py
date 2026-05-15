@@ -10,10 +10,12 @@ try:
     from receipt_ingestion import ReceiptIngestionPipeline
     from receipt_ingestion.explainability import build_receipt_explainability
     from receipt_ingestion.normalized_review_diagnostics import build_normalized_review_diagnostics
+    from receipt_ingestion.human_diagnosis import build_human_diagnosis
 except ModuleNotFoundError:  # local repo-root CLI/import compatibility
     from backend.receipt_ingestion import ReceiptIngestionPipeline
     from backend.receipt_ingestion.explainability import build_receipt_explainability
     from backend.receipt_ingestion.normalized_review_diagnostics import build_normalized_review_diagnostics
+    from backend.receipt_ingestion.human_diagnosis import build_human_diagnosis
 
 router = APIRouter(
     prefix='/api/receipt-ingestion',
@@ -42,14 +44,6 @@ def configure_receipt_ingestion_review_routes(
     pipeline_factory: Callable[[], ReceiptIngestionPipeline] | None = None,
     allowed_test_runs_root: Path | None = None,
 ) -> None:
-    """Configure read-only review-preview dependencies.
-
-    This router is intentionally preview-only:
-    - no database writes;
-    - no UI coupling;
-    - no parser replacement;
-    - no receipt status calculation.
-    """
     global _pipeline_factory, _allowed_test_runs_root
     _pipeline_factory = pipeline_factory or ReceiptIngestionPipeline
     _allowed_test_runs_root = Path(allowed_test_runs_root or Path('tools') / 'receipt_csv_poc' / 'test_runs')
@@ -117,11 +111,6 @@ def _iter_safe_json_files(allowed_root: Path, *, include_archived: bool = False)
 
 
 def _deduplicate_receipt_json_files(json_files: list[Path]) -> list[Path]:
-    """Keep one current diagnostic JSON per functional receipt.
-
-    POC test_runs contain the same receipt repeated over many diagnostic runs.
-    The admin cockpit must show functional receipts, not every historical run.
-    """
     chosen: dict[str, Path] = {}
     for json_file in json_files:
         key = _receipt_identity_key(json_file)
@@ -193,6 +182,7 @@ def _build_response_payload(result) -> dict:
     payload = result.to_dict()
     payload['explainability'] = build_receipt_explainability(payload)
     payload['normalized_review_diagnostics'] = build_normalized_review_diagnostics(payload)
+    payload['human_diagnosis'] = build_human_diagnosis(payload)
     return payload
 
 
@@ -232,6 +222,7 @@ def _build_readiness_item(*, json_file: Path, allowed_root: Path, pipeline: Rece
         payload = _build_response_payload(result)
         normalized = payload.get('normalized_review_diagnostics') or {}
         explainability = payload.get('explainability') or {}
+        human = payload.get('human_diagnosis') or {}
         summary = (payload.get('diagnostics') or {}).get('diagnostics_summary') or {}
         readiness = _derive_readiness_label(payload)
         if readiness not in READINESS_LABELS:
@@ -249,6 +240,7 @@ def _build_readiness_item(*, json_file: Path, allowed_root: Path, pipeline: Rece
             'review_task_count': len(normalized.get('review_tasks') or []),
             'readiness': readiness,
             'readiness_is_diagnostic_only': True,
+            'human_diagnosis': human,
         }
     except json.JSONDecodeError:
         return _failed_readiness_item(public_path, json_file, 'manual_entry_needed', 'invalid_json')
@@ -270,6 +262,14 @@ def _failed_readiness_item(public_path: str, json_file: Path, readiness: str, re
         'review_task_count': 0,
         'readiness': readiness,
         'readiness_is_diagnostic_only': True,
+        'human_diagnosis': {
+            'primary_issue': 'insufficient_diagnostics',
+            'severity': 'high',
+            'admin_explanation': 'De diagnose kon niet worden opgebouwd.',
+            'recommended_human_action': 'Controleer de bronbon en technische logs.',
+            'evidence': [reason],
+            'diagnostic_only': True,
+        },
     }
 
 
