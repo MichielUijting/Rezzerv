@@ -11,11 +11,21 @@ try:
     from receipt_ingestion.explainability import build_receipt_explainability
     from receipt_ingestion.normalized_review_diagnostics import build_normalized_review_diagnostics
     from receipt_ingestion.human_diagnosis import build_human_diagnosis
+    from receipt_ingestion.parser_augmentation import (
+        AUGMENTATION_MODE,
+        apply_parser_augmentation_safety_gate,
+        build_parser_candidates,
+    )
 except ModuleNotFoundError:  # local repo-root CLI/import compatibility
     from backend.receipt_ingestion import ReceiptIngestionPipeline
     from backend.receipt_ingestion.explainability import build_receipt_explainability
     from backend.receipt_ingestion.normalized_review_diagnostics import build_normalized_review_diagnostics
     from backend.receipt_ingestion.human_diagnosis import build_human_diagnosis
+    from backend.receipt_ingestion.parser_augmentation import (
+        AUGMENTATION_MODE,
+        apply_parser_augmentation_safety_gate,
+        build_parser_candidates,
+    )
 
 router = APIRouter(
     prefix='/api/receipt-ingestion',
@@ -178,11 +188,29 @@ def _is_archived_receipt_json(json_file: Path, allowed_abs: Path) -> bool:
     return False
 
 
+def _build_parser_augmentation(payload: dict) -> dict:
+    candidates = build_parser_candidates(payload)
+    gated = apply_parser_augmentation_safety_gate(candidates)
+    return {
+        'augmentation_mode': AUGMENTATION_MODE,
+        'candidate_rows': candidates,
+        'accepted_augmented_rows': gated.get('accepted_augmented_rows') or [],
+        'rejected_candidates': gated.get('rejected_candidates') or [],
+        'summary': gated.get('summary') or {
+            'candidate_count': 0,
+            'accepted_count': 0,
+            'rejected_count': 0,
+        },
+        'diagnostic_only': True,
+    }
+
+
 def _build_response_payload(result) -> dict:
     payload = result.to_dict()
     payload['explainability'] = build_receipt_explainability(payload)
     payload['normalized_review_diagnostics'] = build_normalized_review_diagnostics(payload)
     payload['human_diagnosis'] = build_human_diagnosis(payload)
+    payload['parser_augmentation'] = _build_parser_augmentation(payload)
     return payload
 
 
