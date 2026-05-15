@@ -18,6 +18,7 @@ import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPriv
 import Voorraad from '../../pages/Voorraad'
 import RegressionRunnerPage from '../../features/admin/RegressionRunnerPage'
 import ScannerLabPage from '../../pages/ScannerLabPage.jsx'
+import ReceiptReviewPreviewPage from '../../pages/ReceiptReviewPreviewPage.jsx'
 import IncidentalPurchasePage from '../../features/purchaseImport/IncidentalPurchasePage.jsx'
 import AlmostOutPage from '../../features/almostOut/AlmostOutPage.jsx'
 import AuthGuard from './AuthGuard'
@@ -69,6 +70,7 @@ const router = createBrowserRouter([
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
   { path: '/voorraad/incidentele-aankoop', element: <Protected><IncidentalPurchasePage /></Protected> },
   { path: '/dev/scanner-lab', element: <Protected><ScannerLabPage /></Protected> },
+  { path: '/dev/receipt-review-preview', element: <Protected><ReceiptReviewPreviewPage /></Protected> },
   { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
