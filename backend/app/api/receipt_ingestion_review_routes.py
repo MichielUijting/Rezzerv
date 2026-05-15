@@ -23,6 +23,14 @@ router = APIRouter(
 _pipeline_factory: Callable[[], ReceiptIngestionPipeline] | None = None
 _allowed_test_runs_root: Path | None = None
 
+READINESS_LABELS = {
+    'candidate_for_controlled_parser_augmentation',
+    'review_only',
+    'rescan_needed',
+    'manual_entry_needed',
+    'insufficient_diagnostics',
+}
+
 
 def configure_receipt_ingestion_review_routes(
     *,
@@ -84,21 +92,12 @@ def _public_json_path(path: Path, allowed_root: Path) -> str:
     return f'{root_label.rstrip("/")}/{relative_to_allowed}'
 
 
-def _build_response_payload(result) -> dict:
-    payload = result.to_dict()
-    payload['explainability'] = build_receipt_explainability(payload)
-    payload['normalized_review_diagnostics'] = build_normalized_review_diagnostics(payload)
-    return payload
-
-
-@router.get('/test-run-jsons')
-def get_receipt_ingestion_test_run_jsons():
-    _pipeline_factory, allowed_root = _require_configured()
+def _iter_safe_json_files(allowed_root: Path):
     allowed_abs = _allowed_root_abs(allowed_root)
     if not allowed_abs.exists() or not allowed_abs.is_dir():
-        return {'items': [], 'count': 0}
+        return []
 
-    items = []
+    files = []
     for json_file in sorted(allowed_abs.glob('**/*.json')):
         if not json_file.is_file():
             continue
@@ -106,8 +105,101 @@ def get_receipt_ingestion_test_run_jsons():
             json_file.resolve().relative_to(allowed_abs)
         except ValueError:
             continue
+        files.append(json_file)
+    return files
+
+
+def _build_response_payload(result) -> dict:
+    payload = result.to_dict()
+    payload['explainability'] = build_receipt_explainability(payload)
+    payload['normalized_review_diagnostics'] = build_normalized_review_diagnostics(payload)
+    return payload
+
+
+def _derive_readiness_label(payload: dict) -> str:
+    explainability = payload.get('explainability') or {}
+    normalized = payload.get('normalized_review_diagnostics') or {}
+    summary = (payload.get('diagnostics') or {}).get('diagnostics_summary') or {}
+
+    action = str(explainability.get('recommended_user_action') or summary.get('recommended_user_action') or '').strip()
+    has_legacy_diag = bool(summary.get('has_usable_legacy_poc_diagnostics'))
+    parser_rows = payload.get('parser_rows') or []
+    review_suggestions = payload.get('review_suggestions') or []
+    ocr_issues = normalized.get('ocr_issues') or []
+    image_issues = normalized.get('image_issues') or []
+    review_tasks = normalized.get('review_tasks') or []
+    safety_notes = normalized.get('parser_safety_notes') or []
+
+    if action == 'rescan':
+        return 'rescan_needed'
+    if action == 'manual_entry':
+        return 'manual_entry_needed'
+    if not has_legacy_diag and not parser_rows and not review_suggestions:
+        return 'insufficient_diagnostics'
+    if parser_rows and action == 'accept':
+        return 'candidate_for_controlled_parser_augmentation'
+    if review_suggestions and not image_issues:
+        return 'candidate_for_controlled_parser_augmentation'
+    if has_legacy_diag and (ocr_issues or review_tasks or safety_notes):
+        return 'review_only'
+    return 'insufficient_diagnostics'
+
+
+def _build_readiness_item(*, json_file: Path, allowed_root: Path, pipeline: ReceiptIngestionPipeline) -> dict:
+    public_path = _public_json_path(json_file, allowed_root)
+    try:
+        result = pipeline.ingest_json_file(json_file)
+        payload = _build_response_payload(result)
+        normalized = payload.get('normalized_review_diagnostics') or {}
+        explainability = payload.get('explainability') or {}
+        summary = (payload.get('diagnostics') or {}).get('diagnostics_summary') or {}
+        readiness = _derive_readiness_label(payload)
+        if readiness not in READINESS_LABELS:
+            readiness = 'insufficient_diagnostics'
+        return {
+            'json_path': public_path,
+            'file_name': json_file.name,
+            'receipt_id': payload.get('receipt_id') or json_file.stem,
+            'source_file': payload.get('source_file') or '-',
+            'engine_processing_state': payload.get('engine_processing_state') or 'failed',
+            'recommended_user_action': explainability.get('recommended_user_action') or summary.get('recommended_user_action') or '-',
+            'main_reason': explainability.get('main_reason') or summary.get('dominant_issue') or '-',
+            'ocr_issue_count': len(normalized.get('ocr_issues') or []),
+            'image_issue_count': len(normalized.get('image_issues') or []),
+            'review_task_count': len(normalized.get('review_tasks') or []),
+            'readiness': readiness,
+            'readiness_is_diagnostic_only': True,
+        }
+    except json.JSONDecodeError:
+        return _failed_readiness_item(public_path, json_file, 'manual_entry_needed', 'invalid_json')
+    except Exception:
+        return _failed_readiness_item(public_path, json_file, 'insufficient_diagnostics', 'readiness_build_failed')
+
+
+def _failed_readiness_item(public_path: str, json_file: Path, readiness: str, reason: str) -> dict:
+    return {
+        'json_path': public_path,
+        'file_name': json_file.name,
+        'receipt_id': json_file.stem,
+        'source_file': '-',
+        'engine_processing_state': 'failed',
+        'recommended_user_action': 'manual_entry' if readiness == 'manual_entry_needed' else '-',
+        'main_reason': reason,
+        'ocr_issue_count': 0,
+        'image_issue_count': 0,
+        'review_task_count': 0,
+        'readiness': readiness,
+        'readiness_is_diagnostic_only': True,
+    }
+
+
+@router.get('/test-run-jsons')
+def get_receipt_ingestion_test_run_jsons():
+    _pipeline_factory, allowed_root = _require_configured()
+    items = []
+    for json_file in _iter_safe_json_files(allowed_root):
         run_name = '-'
-        parts = json_file.resolve().relative_to(allowed_abs).parts
+        parts = json_file.resolve().relative_to(_allowed_root_abs(allowed_root)).parts
         if parts:
             run_name = parts[0]
         items.append(
@@ -119,6 +211,22 @@ def get_receipt_ingestion_test_run_jsons():
         )
 
     return {'items': items, 'count': len(items)}
+
+
+@router.get('/review-readiness-baseline')
+def get_receipt_ingestion_review_readiness_baseline():
+    pipeline_factory, allowed_root = _require_configured()
+    pipeline = pipeline_factory()
+    items = [
+        _build_readiness_item(json_file=json_file, allowed_root=allowed_root, pipeline=pipeline)
+        for json_file in _iter_safe_json_files(allowed_root)
+    ]
+    return {
+        'items': items,
+        'count': len(items),
+        'readiness_labels': sorted(READINESS_LABELS),
+        'diagnostic_only': True,
+    }
 
 
 @router.get('/review-preview')
