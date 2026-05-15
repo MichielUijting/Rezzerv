@@ -50,6 +50,10 @@ def _require_configured() -> tuple[Callable[[], ReceiptIngestionPipeline], Path]
     return _pipeline_factory, _allowed_test_runs_root
 
 
+def _allowed_root_abs(allowed_root: Path) -> Path:
+    return (Path.cwd() / allowed_root).resolve() if not allowed_root.is_absolute() else allowed_root.resolve()
+
+
 def _resolve_safe_json_path(json_path: str, allowed_root: Path) -> Path:
     raw_path = Path(json_path)
     if raw_path.is_absolute():
@@ -57,7 +61,7 @@ def _resolve_safe_json_path(json_path: str, allowed_root: Path) -> Path:
     else:
         candidate = (Path.cwd() / raw_path).resolve()
 
-    allowed = (Path.cwd() / allowed_root).resolve() if not allowed_root.is_absolute() else allowed_root.resolve()
+    allowed = _allowed_root_abs(allowed_root)
 
     try:
         candidate.relative_to(allowed)
@@ -73,11 +77,48 @@ def _resolve_safe_json_path(json_path: str, allowed_root: Path) -> Path:
     return candidate
 
 
+def _public_json_path(path: Path, allowed_root: Path) -> str:
+    allowed_abs = _allowed_root_abs(allowed_root)
+    relative_to_allowed = path.resolve().relative_to(allowed_abs).as_posix()
+    root_label = allowed_root.as_posix() if not allowed_root.is_absolute() else 'tools/receipt_csv_poc/test_runs'
+    return f'{root_label.rstrip("/")}/{relative_to_allowed}'
+
+
 def _build_response_payload(result) -> dict:
     payload = result.to_dict()
     payload['explainability'] = build_receipt_explainability(payload)
     payload['normalized_review_diagnostics'] = build_normalized_review_diagnostics(payload)
     return payload
+
+
+@router.get('/test-run-jsons')
+def get_receipt_ingestion_test_run_jsons():
+    _pipeline_factory, allowed_root = _require_configured()
+    allowed_abs = _allowed_root_abs(allowed_root)
+    if not allowed_abs.exists() or not allowed_abs.is_dir():
+        return {'items': [], 'count': 0}
+
+    items = []
+    for json_file in sorted(allowed_abs.glob('**/*.json')):
+        if not json_file.is_file():
+            continue
+        try:
+            json_file.resolve().relative_to(allowed_abs)
+        except ValueError:
+            continue
+        run_name = '-'
+        parts = json_file.resolve().relative_to(allowed_abs).parts
+        if parts:
+            run_name = parts[0]
+        items.append(
+            {
+                'json_path': _public_json_path(json_file, allowed_root),
+                'file_name': json_file.name,
+                'run_name': run_name,
+            }
+        )
+
+    return {'items': items, 'count': len(items)}
 
 
 @router.get('/review-preview')
