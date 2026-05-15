@@ -31,6 +31,11 @@ READINESS_LABELS = {
     'insufficient_diagnostics',
 }
 
+ARCHIVE_PATH_MARKERS = {'archived', 'archive', 'gearchiveerd', 'verwijderd', 'deleted'}
+ARCHIVE_STATUS_VALUES = {'archived', 'archive', 'gearchiveerd', 'deleted', 'removed', 'verwijderd'}
+ARCHIVE_BOOLEAN_KEYS = {'is_archived', 'archived', 'is_deleted', 'deleted', 'functionally_deleted'}
+ARCHIVE_TIMESTAMP_KEYS = {'archived_at', 'deleted_at', 'removed_at'}
+
 
 def configure_receipt_ingestion_review_routes(
     *,
@@ -92,7 +97,7 @@ def _public_json_path(path: Path, allowed_root: Path) -> str:
     return f'{root_label.rstrip("/")}/{relative_to_allowed}'
 
 
-def _iter_safe_json_files(allowed_root: Path):
+def _iter_safe_json_files(allowed_root: Path, *, include_archived: bool = False):
     allowed_abs = _allowed_root_abs(allowed_root)
     if not allowed_abs.exists() or not allowed_abs.is_dir():
         return []
@@ -105,8 +110,44 @@ def _iter_safe_json_files(allowed_root: Path):
             json_file.resolve().relative_to(allowed_abs)
         except ValueError:
             continue
+        if not include_archived and _is_archived_receipt_json(json_file, allowed_abs):
+            continue
         files.append(json_file)
     return files
+
+
+def _is_archived_receipt_json(json_file: Path, allowed_abs: Path) -> bool:
+    try:
+        relative_parts = [part.lower() for part in json_file.resolve().relative_to(allowed_abs).parts]
+    except ValueError:
+        relative_parts = [part.lower() for part in json_file.parts]
+
+    if any(part in ARCHIVE_PATH_MARKERS for part in relative_parts):
+        return True
+
+    try:
+        payload = json.loads(json_file.read_text(encoding='utf-8'))
+    except Exception:
+        return False
+
+    if not isinstance(payload, dict):
+        return False
+
+    metadata = payload.get('metadata') if isinstance(payload.get('metadata'), dict) else {}
+    candidates = [payload, metadata]
+
+    for source in candidates:
+        for key in ARCHIVE_BOOLEAN_KEYS:
+            if source.get(key) is True:
+                return True
+        for key in ARCHIVE_TIMESTAMP_KEYS:
+            if source.get(key):
+                return True
+        status_value = str(source.get('status') or source.get('receipt_status') or source.get('archive_status') or '').strip().lower()
+        if status_value in ARCHIVE_STATUS_VALUES:
+            return True
+
+    return False
 
 
 def _build_response_payload(result) -> dict:
@@ -210,7 +251,7 @@ def get_receipt_ingestion_test_run_jsons():
             }
         )
 
-    return {'items': items, 'count': len(items)}
+    return {'items': items, 'count': len(items), 'archived_receipts_excluded': True}
 
 
 @router.get('/review-readiness-baseline')
@@ -226,6 +267,7 @@ def get_receipt_ingestion_review_readiness_baseline():
         'count': len(items),
         'readiness_labels': sorted(READINESS_LABELS),
         'diagnostic_only': True,
+        'archived_receipts_excluded': True,
     }
 
 
