@@ -1204,6 +1204,56 @@ def _looks_like_item_label_only(line: str, *, store_name: str | None = None, fil
         return False
     return True
 
+def _classify_receipt_text_line(
+    line: str,
+    *,
+    store_name: str | None = None,
+    filename: str | None = None,
+    detail_only_re: re.Pattern | None = None,
+    qty_first_re: re.Pattern | None = None,
+    label_first_re: re.Pattern | None = None,
+) -> str:
+    """Classify a normalized OCR text line before amount-pairing.
+
+    This helper centralizes the existing skip/filter/regex decisions so metadata,
+    footer/payment/tax and amount-detail lines are separated before labels are
+    paired with amounts. It intentionally does not change receipt status, DB
+    state or frontend behavior.
+    """
+    normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
+    if len(normalized) < 2:
+        return 'ignore'
+
+    lowered = normalized.lower()
+
+    if _should_skip_receipt_line(normalized, store_name=store_name, filename=filename):
+        if any(token in lowered for token in ('btw', 'vat', 'totaal', 'subtotaal', 'betaal', 'bankpas', 'pin', 'terminal', 'transactie')):
+            return 'footer_payment_tax'
+        return 'metadata'
+
+    if _looks_like_non_product_receipt_label(normalized):
+        if any(token in lowered for token in ('btw', 'vat', 'totaal', 'subtotaal', 'betaal', 'bankpas', 'pin', 'terminal', 'transactie')):
+            return 'footer_payment_tax'
+        return 'metadata'
+
+    if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', normalized):
+        return 'metadata'
+
+    if detail_only_re is not None and detail_only_re.match(normalized):
+        return 'amount_detail'
+
+    if qty_first_re is not None and qty_first_re.match(normalized):
+        return 'product_candidate'
+
+    if label_first_re is not None and label_first_re.match(normalized):
+        return 'product_candidate'
+
+    if _looks_like_item_label_only(normalized, store_name=store_name, filename=filename):
+        return 'continuation'
+
+    return 'ignore'
+
+
 
 def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, filename: str | None = None) -> list[dict[str, Any]]:
     extracted: list[dict[str, Any]] = []
@@ -1283,29 +1333,31 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
         normalized = re.sub(r'(?<=\d)/(?!/)(?=\d{2}\b)', ',', normalized)
         normalized = re.sub(r'^[^A-Za-z0-9]+', '', normalized).strip()
         normalized = re.sub(r'[^A-Za-z0-9]+$', '', normalized).strip()
-        if len(normalized) < 2:
-            continue
-        if _should_skip_receipt_line(normalized, store_name=store_name, filename=filename):
-            pending_label = None
-            pending_line_index = None
-            continue
-        if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', normalized):
+        classification = _classify_receipt_text_line(
+            normalized,
+            store_name=store_name,
+            filename=filename,
+            detail_only_re=detail_only_re,
+            qty_first_re=qty_first_re,
+            label_first_re=label_first_re,
+        )
+        if classification in {'ignore', 'metadata', 'footer_payment_tax'}:
             pending_label = None
             pending_line_index = None
             continue
 
         detail_match = detail_only_re.match(normalized)
-        if detail_match and pending_line_index is not None:
+        if classification == 'amount_detail' and detail_match and pending_line_index is not None:
             enrich_pending_line(pending_line_index, detail_match.group('qty'), detail_match.group('amount1'), detail_match.group('amount2'), source_index=source_index)
             pending_line_index = None
             pending_label = None
             continue
-        if detail_match and pending_label:
+        if classification == 'amount_detail' and detail_match and pending_label:
             append_line(pending_label, detail_match.group('qty'), detail_match.group('amount1'), detail_match.group('amount2'), source_index=source_index)
             pending_label = None
             pending_line_index = None
             continue
-        if detail_match:
+        if classification == 'amount_detail':
             continue
 
         qty_first_match = qty_first_re.match(normalized)
@@ -1323,7 +1375,7 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
                 pending_line_index = None
             continue
 
-        pending_label = normalized if _looks_like_item_label_only(normalized, store_name=store_name, filename=filename) else None
+        pending_label = normalized if classification == 'continuation' else None
         pending_line_index = None
 
     return extracted
