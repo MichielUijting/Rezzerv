@@ -1,12 +1,12 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 TARGET = Path('backend/app/services/receipt_service.py')
-
 HELPER_MARKER = 'def _classify_receipt_text_line('
 
-HELPER = '''def _classify_receipt_text_line(
+HELPER = r'''def _classify_receipt_text_line(
     line: str,
     *,
     store_name: str | None = None,
@@ -58,22 +58,7 @@ HELPER = '''def _classify_receipt_text_line(
 
 '''
 
-OLD_LOOP_BLOCK = '''        if len(normalized) < 2:
-            continue
-        if _should_skip_receipt_line(normalized, store_name=store_name, filename=filename):
-            pending_label = None
-            pending_line_index = None
-            continue
-        if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', normalized):
-            pending_label = None
-            pending_line_index = None
-            continue
-
-        detail_match = detail_only_re.match(normalized)
-        if detail_match and pending_line_index is not None:
-'''
-
-NEW_LOOP_BLOCK = '''        classification = _classify_receipt_text_line(
+NEW_CLASSIFICATION_BLOCK = r'''        classification = _classify_receipt_text_line(
             normalized,
             store_name=store_name,
             filename=filename,
@@ -90,18 +75,7 @@ NEW_LOOP_BLOCK = '''        classification = _classify_receipt_text_line(
         if classification == 'amount_detail' and detail_match and pending_line_index is not None:
 '''
 
-OLD_DETAIL_BLOCK = '''        if detail_match and pending_label:
-            append_line(pending_label, detail_match.group('qty'), detail_match.group('amount1'), detail_match.group('amount2'), source_index=source_index)
-            pending_label = None
-            pending_line_index = None
-            continue
-        if detail_match:
-            continue
-
-        qty_first_match = qty_first_re.match(normalized)
-'''
-
-NEW_DETAIL_BLOCK = '''        if classification == 'amount_detail' and detail_match and pending_label:
+NEW_DETAIL_BLOCK = r'''        if classification == 'amount_detail' and detail_match and pending_label:
             append_line(pending_label, detail_match.group('qty'), detail_match.group('amount1'), detail_match.group('amount2'), source_index=source_index)
             pending_label = None
             pending_line_index = None
@@ -112,11 +86,7 @@ NEW_DETAIL_BLOCK = '''        if classification == 'amount_detail' and detail_ma
         qty_first_match = qty_first_re.match(normalized)
 '''
 
-OLD_PENDING_LINE = '''        pending_label = normalized if _looks_like_item_label_only(normalized, store_name=store_name, filename=filename) else None
-        pending_line_index = None
-'''
-
-NEW_PENDING_LINE = '''        pending_label = normalized if classification == 'continuation' else None
+NEW_PENDING_LINE = r'''        pending_label = normalized if classification == 'continuation' else None
         pending_line_index = None
 '''
 
@@ -130,21 +100,70 @@ def restore_newlines(content: str, newline: str) -> str:
     return content.replace('\n', newline) if newline != '\n' else content
 
 
-def replace_once(content: str, old: str, new: str, description: str) -> str:
-    count = content.count(old)
-    if count != 1:
-        raise SystemExit(f'Patchblok niet exact 1x gevonden: {description} ({count}x)')
-    return content.replace(old, new, 1)
+def replace_regex_once(content: str, pattern: str, replacement: str, description: str) -> str:
+    matches = list(re.finditer(pattern, content, flags=re.DOTALL))
+    if len(matches) != 1:
+        raise SystemExit(f'Patchblok niet exact 1x gevonden: {description} ({len(matches)}x)')
+    start, end = matches[0].span()
+    return content[:start] + replacement + content[end:]
 
 
 def insert_helper(content: str) -> str:
     if HELPER_MARKER in content:
         return content
-    marker = '''def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, filename: str | None = None) -> list[dict[str, Any]]:
-'''
+    marker = 'def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, filename: str | None = None) -> list[dict[str, Any]]:\n'
     if marker not in content:
         raise SystemExit('Insertmarker voor _extract_receipt_lines niet gevonden')
     return content.replace(marker, HELPER + marker, 1)
+
+
+def patch_extract_loop(content: str) -> str:
+    if '_classify_receipt_text_line(\n            normalized,' in content:
+        return content
+
+    loop_pattern = (
+        r"        if len\(normalized\) < 2:\n"
+        r"            continue\n"
+        r"        if _should_skip_receipt_line\(normalized, store_name=store_name, filename=filename\):\n"
+        r"            pending_label = None\n"
+        r"            pending_line_index = None\n"
+        r"            continue\n"
+        r"        if re\.search\(r['\"]\\d\{1,2\}\[/-\]\\d\{1,2\}\[/-\]\\d\{4\}['\"], normalized\):\n"
+        r"            pending_label = None\n"
+        r"            pending_line_index = None\n"
+        r"            continue\n\n"
+        r"        detail_match = detail_only_re\.match\(normalized\)\n"
+        r"        if detail_match and pending_line_index is not None:\n"
+    )
+    return replace_regex_once(content, loop_pattern, NEW_CLASSIFICATION_BLOCK, 'central classification before pairing')
+
+
+def patch_detail_block(content: str) -> str:
+    if "if classification == 'amount_detail' and detail_match and pending_label:" in content:
+        return content
+
+    detail_pattern = (
+        r"        if detail_match and pending_label:\n"
+        r"            append_line\(pending_label, detail_match\.group\('qty'\), detail_match\.group\('amount1'\), detail_match\.group\('amount2'\), source_index=source_index\)\n"
+        r"            pending_label = None\n"
+        r"            pending_line_index = None\n"
+        r"            continue\n"
+        r"        if detail_match:\n"
+        r"            continue\n\n"
+        r"        qty_first_match = qty_first_re\.match\(normalized\)\n"
+    )
+    return replace_regex_once(content, detail_pattern, NEW_DETAIL_BLOCK, 'amount_detail gate')
+
+
+def patch_pending_line(content: str) -> str:
+    if "pending_label = normalized if classification == 'continuation' else None" in content:
+        return content
+
+    pending_pattern = (
+        r"        pending_label = normalized if _looks_like_item_label_only\(normalized, store_name=store_name, filename=filename\) else None\n"
+        r"        pending_line_index = None\n"
+    )
+    return replace_regex_once(content, pending_pattern, NEW_PENDING_LINE, 'continuation classification')
 
 
 def main() -> None:
@@ -156,9 +175,9 @@ def main() -> None:
     content = original
 
     content = insert_helper(content)
-    content = replace_once(content, OLD_LOOP_BLOCK, NEW_LOOP_BLOCK, 'central classification before pairing')
-    content = replace_once(content, OLD_DETAIL_BLOCK, NEW_DETAIL_BLOCK, 'amount_detail gate')
-    content = replace_once(content, OLD_PENDING_LINE, NEW_PENDING_LINE, 'continuation classification')
+    content = patch_extract_loop(content)
+    content = patch_detail_block(content)
+    content = patch_pending_line(content)
 
     if content == original:
         print('Geen wijziging nodig')
