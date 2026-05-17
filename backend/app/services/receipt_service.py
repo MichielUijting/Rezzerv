@@ -1226,6 +1226,19 @@ def _classify_receipt_text_line(
 
     lowered = normalized.lower()
 
+    # 8K-0B proven false-positive guards: keep metadata/footer lines out before amount-pairing.
+    upper_compact = normalized.upper().replace(',', '.')
+    if re.fullmatch(r'(?:ZA|ZO|ZON)\s+\d{1,2}\.\d{2}', upper_compact):
+        return 'metadata'
+    if re.match(r'^[A-Z]\s+\d{1,2}[,.]\d{2}%\b', normalized.upper()):
+        return 'footer_payment_tax'
+    if any(day in lowered for day in ('maandag', 'dinsdag', 'woensdag', 'woernsdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag')) and ('t/m' in lowered or ' tot ' in lowered):
+        return 'metadata'
+    if re.fullmatch(r'\d{1,4}[.]\d{2}', normalized) or re.fullmatch(r'\d{1,4},\d{2}', normalized):
+        return 'footer_payment_tax'
+    if re.search(r'\bzegels?\b|\bzege1s\b|\bpluspunten\b', lowered) and re.search(r'\d{1,2}:\d{2}|\d{3,}', normalized):
+        return 'footer_payment_tax'
+
     if _should_skip_receipt_line(normalized, store_name=store_name, filename=filename):
         if any(token in lowered for token in ('btw', 'vat', 'totaal', 'subtotaal', 'betaal', 'bankpas', 'pin', 'terminal', 'transactie')):
             return 'footer_payment_tax'
