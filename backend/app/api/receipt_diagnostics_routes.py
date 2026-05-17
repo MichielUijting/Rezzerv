@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -21,12 +22,11 @@ router = APIRouter(
     tags=['receipt-diagnostics'],
 )
 
-ROUTE_INVENTORY_PATH = (
-    Path(__file__).resolve().parents[3]
-    / 'tools'
-    / 'receipt_csv_poc'
-    / 'reports'
-    / 'receipt_diagnostics_route_inventory.json'
+ROUTE_INVENTORY_PATH = Path(
+    os.getenv(
+        'REZZERV_RECEIPT_DIAGNOSTICS_ROUTE_INVENTORY',
+        '/app/tools/receipt_csv_poc/reports/receipt_diagnostics_route_inventory.json',
+    )
 )
 
 
