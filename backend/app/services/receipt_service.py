@@ -1374,14 +1374,14 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
             continue
 
         qty_first_match = qty_first_re.match(normalized)
-        if qty_first_match:
+        if classification == 'product_candidate' and qty_first_match:
             append_line(qty_first_match.group('label'), qty_first_match.group('qty'), qty_first_match.group('amount1'), qty_first_match.group('amount2'), source_index=source_index)
             pending_label = None
             pending_line_index = None
             continue
 
         label_first_match = label_first_re.match(normalized)
-        if label_first_match:
+        if classification == 'product_candidate' and label_first_match:
             pending_label = None
             pending_line_index = append_line(label_first_match.group('label'), label_first_match.group('qty'), label_first_match.group('amount1'), label_first_match.group('amount2'), source_index=source_index)
             if label_first_match.group('qty') or label_first_match.group('amount2'):
