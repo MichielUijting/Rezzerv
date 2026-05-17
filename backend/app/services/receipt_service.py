@@ -1425,6 +1425,13 @@ def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: s
         lowered = normalized.lower()
         if len(normalized) < 4:
             continue
+        sparse_classification = _classify_receipt_text_line(
+            normalized,
+            store_name=store_name,
+            filename=filename,
+        )
+        if sparse_classification in {'ignore', 'metadata', 'footer_payment_tax'}:
+            continue
         if any(token in lowered for token in sparse_skip):
             continue
         if _should_skip_receipt_line(normalized, store_name=store_name, filename=filename):
@@ -1436,6 +1443,13 @@ def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: s
             amount = _parse_decimal(match.group('amount'))
             quantity = _parse_quantity(match.group('qty'))
             if label and amount is not None and quantity is not None and quantity > 0:
+                label_classification = _classify_receipt_text_line(
+                    label,
+                    store_name=store_name,
+                    filename=filename,
+                )
+                if label_classification in {'ignore', 'metadata', 'footer_payment_tax'}:
+                    continue
                 unit_price = (amount / quantity).quantize(Decimal('0.01')) if quantity else amount
                 extracted.append({
                     'raw_label': label,
@@ -1463,6 +1477,13 @@ def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: s
         if label.replace(' ', '').isdigit():
             continue
         if _looks_like_non_product_receipt_label(label):
+            continue
+        label_classification = _classify_receipt_text_line(
+            label,
+            store_name=store_name,
+            filename=filename,
+        )
+        if label_classification in {'ignore', 'metadata', 'footer_payment_tax'}:
             continue
         if len(label.split()) > 12:
             continue
