@@ -1321,6 +1321,22 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
                 'barcode': None,
                 'confidence_score': 0.85,
                 'source_index': source_index,
+                'producer_trace': {
+                    'filename': filename,
+                    'store_name': store_name,
+                    'function_name': '_extract_receipt_lines',
+                    'append_branch': 'append_line',
+                    'parser_path': '_extract_receipt_lines.append_line',
+                    'source_index': source_index,
+                    'raw_line': lines[source_index] if 0 <= source_index < len(lines) else None,
+                    'normalized_line': re.sub(r'\s+', ' ', str(lines[source_index] if 0 <= source_index < len(lines) else '')).strip(),
+                    'label': label_value,
+                    'amount': _amount_to_float(line_total),
+                    'classification': _classify_receipt_text_line(label_value, store_name=store_name, filename=filename),
+                    'classification_allows_append': _classify_receipt_text_line(label_value, store_name=store_name, filename=filename) not in {'ignore', 'metadata', 'footer_payment_tax'},
+                    'append_allowed': True,
+                    'caller_line_hint': 'canonical append_line extracted.append',
+                },
             }
         )
         return len(extracted) - 1
@@ -1462,6 +1478,22 @@ def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: s
                     'barcode': None,
                     'confidence_score': 0.55,
                     'source_index': source_index,
+                    'producer_trace': {
+                        'filename': filename,
+                        'store_name': store_name,
+                        'function_name': '_extract_sparse_receipt_lines',
+                        'append_branch': 'qty_x_amount',
+                        'parser_path': '_extract_sparse_receipt_lines.qty_x_amount',
+                        'source_index': source_index,
+                        'raw_line': raw_line,
+                        'normalized_line': normalized,
+                        'label': label,
+                        'amount': _amount_to_float(amount),
+                        'classification': label_classification,
+                        'classification_allows_append': label_classification not in {'ignore', 'metadata', 'footer_payment_tax'},
+                        'append_allowed': True,
+                        'caller_line_hint': 'sparse qty_x_amount extracted.append',
+                    },
                 })
                 continue
 
@@ -1498,6 +1530,22 @@ def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: s
             'barcode': None,
             'confidence_score': 0.5,
             'source_index': source_index,
+            'producer_trace': {
+                'filename': filename,
+                'store_name': store_name,
+                'function_name': '_extract_sparse_receipt_lines',
+                'append_branch': 'amount_re',
+                'parser_path': '_extract_sparse_receipt_lines.amount_re',
+                'source_index': source_index,
+                'raw_line': raw_line,
+                'normalized_line': normalized,
+                'label': label,
+                'amount': _amount_to_float(amount),
+                'classification': label_classification,
+                'classification_allows_append': label_classification not in {'ignore', 'metadata', 'footer_payment_tax'},
+                'append_allowed': True,
+                'caller_line_hint': 'sparse amount_re extracted.append',
+            },
         })
 
     return extracted
