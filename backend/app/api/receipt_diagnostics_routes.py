@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from typing import Any
+from pathlib import Path
 
 from fastapi import APIRouter, File, Response, UploadFile
 
@@ -21,69 +21,19 @@ router = APIRouter(
     tags=['receipt-diagnostics'],
 )
 
+ROUTE_INVENTORY_PATH = (
+    Path(__file__).resolve().parents[3]
+    / 'tools'
+    / 'receipt_csv_poc'
+    / 'reports'
+    / 'receipt_diagnostics_route_inventory.json'
+)
+
 
 @router.get('/route-inventory')
-def get_receipt_diagnostics_route_inventory() -> dict[str, Any]:
-    """Read-only inventory of receipt-related diagnostic APIs.
-
-    This endpoint is intentionally static: it documents the consolidation plan
-    and prevents new ad-hoc diagnostic endpoints from becoming the source of truth.
-    """
-    return {
-        'success': True,
-        'diagnostic_only': True,
-        'parser_changed': False,
-        'status_classification_changed': False,
-        'database_changed': False,
-        'canonical_routes': [
-            {
-                'path': '/api/receipt-diagnostics/line-quality',
-                'method': 'GET',
-                'purpose': 'Canonical line-level quality report for active receipts.',
-                'source': 'build_receipt_line_diagnosis',
-            },
-            {
-                'path': '/api/receipt-diagnostics/line-quality/download',
-                'method': 'GET',
-                'purpose': 'Downloadable line-level quality report.',
-                'source': 'build_receipt_line_diagnosis',
-            },
-            {
-                'path': '/api/receipt-diagnostics/parser-quality',
-                'method': 'GET',
-                'purpose': 'Parser-oriented diagnosis for active receipts.',
-                'source': 'build_receipt_parser_diagnosis',
-            },
-            {
-                'path': '/api/receipt-diagnostics/kpi',
-                'method': 'GET',
-                'purpose': 'Current Gecontroleerd/Controle nodig KPI baseline.',
-                'source': 'build_kassa_kpi_baseline',
-            },
-            {
-                'path': '/api/receipt-diagnostics/import-dry-run',
-                'method': 'POST',
-                'purpose': 'ZIP import preflight without database writes.',
-                'source': 'diagnose_receipt_zip_import',
-            },
-        ],
-        'legacy_routes_to_deprecate_after_validation': [
-            '/api/testing/receipt-line-diagnosis',
-            '/api/testing/receipt-line-diagnosis/download',
-            '/api/testing/receipt-parser-diagnosis',
-            '/api/testing/receipt-parser-diagnosis/download',
-            '/api/receipt-import-diagnosis/health',
-            '/api/receipt-import-diagnosis/zip-dry-run',
-            '/api/receipt-kpi/baseline',
-            '/api/receipt-kpi/scope-diagnosis',
-        ],
-        'temporary_routes_that_must_not_return': [
-            '/api/testing/receipt-filter-selftest',
-            '/api/testing/receipt-line-flow-trace',
-            '/api/testing/receipt-table-schema',
-            '/api/testing/reset-active-receipt-testset',
-        ],
-    }
+def get_receipt_diagnostics_route_inventory():
+    with ROUTE_INVENTORY_PATH.open('r', encoding='utf-8') as handle:
+        return json.load(handle)
 
 
 @router.get('/line-quality')
