@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import Response
 from sqlalchemy import text
 
-from app.services.receipt_service import parse_receipt_content
+from app.services.receipt_service import parse_receipt_content, _classify_receipt_text_line
 from app.services.receipt_status_baseline_service_v4 import validate_receipt_status_baseline
 
 
@@ -49,7 +49,33 @@ def _receipt_line_dict(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _reparse_line_dict(line: dict[str, Any], fallback_index: int) -> dict[str, Any]:
+def _diagnostic_line_classification(value: Any, *, store_name: str | None, filename: str | None) -> str:
+    try:
+        return _classify_receipt_text_line(str(value or ''), store_name=store_name, filename=filename)
+    except Exception as exc:
+        return f'classification_error:{exc.__class__.__name__}'
+
+
+def _build_producer_trace(line: dict[str, Any], *, filename: str, store_name: str | None) -> dict[str, Any]:
+    existing_trace = line.get('producer_trace') if isinstance(line.get('producer_trace'), dict) else {}
+    label = line.get('normalized_label') or line.get('raw_label')
+    classification = existing_trace.get('classification') or _diagnostic_line_classification(label, store_name=store_name, filename=filename)
+    return {
+        'filename': existing_trace.get('filename') or filename,
+        'store_name': existing_trace.get('store_name') or store_name,
+        'parser_path': existing_trace.get('parser_path') or 'parse_receipt_content.result_line',
+        'source_index': existing_trace.get('source_index') if 'source_index' in existing_trace else line.get('source_index'),
+        'normalized_line': existing_trace.get('normalized_line') or line.get('normalized_label') or line.get('raw_label'),
+        'label': existing_trace.get('label') or label,
+        'amount': _to_number(existing_trace.get('amount') if 'amount' in existing_trace else line.get('line_total')),
+        'classification': classification,
+        'append_allowed': existing_trace.get('append_allowed') if 'append_allowed' in existing_trace else True,
+        'classification_allows_append': classification not in {'ignore', 'metadata', 'footer_payment_tax'},
+        'trace_source': 'parser_trace' if existing_trace else 'diagnostic_result_line_trace',
+    }
+
+
+def _reparse_line_dict(line: dict[str, Any], fallback_index: int, *, filename: str, store_name: str | None) -> dict[str, Any]:
     return {
         'line_number': fallback_index + 1,
         'raw_label': line.get('raw_label'),
@@ -64,6 +90,7 @@ def _reparse_line_dict(line: dict[str, Any], fallback_index: int) -> dict[str, A
         'source_index': line.get('source_index'),
         'duplicate_merge_applied': line.get('duplicate_merge_applied'),
         'merged_companion_label': line.get('merged_companion_label'),
+        'producer_trace': _build_producer_trace(line, filename=filename, store_name=store_name),
     }
 
 
@@ -78,10 +105,14 @@ def _build_live_reparse(row: dict[str, Any]) -> dict[str, Any]:
         return {'available': False, 'error': f'storage_file_missing:{storage_path}'}
     try:
         result = parse_receipt_content(path.read_bytes(), filename, mime_type)
-        lines = [_reparse_line_dict(line, index) for index, line in enumerate(list(getattr(result, 'lines', None) or []))]
+        store_name = getattr(result, 'store_name', None)
+        lines = [
+            _reparse_line_dict(line, index, filename=filename, store_name=store_name)
+            for index, line in enumerate(list(getattr(result, 'lines', None) or []))
+        ]
         return {
             'available': True,
-            'store_name': getattr(result, 'store_name', None),
+            'store_name': store_name,
             'total_amount': _to_number(getattr(result, 'total_amount', None)),
             'discount_total': _to_number(getattr(result, 'discount_total', None)),
             'line_count': len(lines),
@@ -179,6 +210,7 @@ def build_receipt_line_diagnosis(engine, household_id: str = '1', filenames: lis
             'target_filenames': requested,
             'selection': 'all_active_receipts',
             'status_source': 'receipt_status_baseline_service_v4.py via po_norm_status_label',
+            'producer_trace_added': True,
         },
         'summary': {'requested': 'all_active_receipts', 'returned': len(receipts)},
         'receipts': receipts,
