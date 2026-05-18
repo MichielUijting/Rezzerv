@@ -27,6 +27,7 @@ from app.receipt_ingestion.line_classifier import classify_receipt_text_line
 from app.receipt_ingestion.product_candidate_gateway import append_product_candidate
 from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
+from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
 
 try:
     from pypdf import PdfReader
@@ -2805,7 +2806,7 @@ def _store_raw_file(storage_root: Path, household_id: str, raw_receipt_id: str, 
     return str(target_path)
 
 
-def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None, reject_non_receipt: bool = False, create_failed_receipt_table: bool = False, failed_store_name: str | None = None, failed_purchase_at: str | None = None) -> dict[str, Any]:
+def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filename: str, file_bytes: bytes, source_id: str | None = None, mime_type: str | None = None, reject_non_receipt: bool = False, create_failed_receipt_table: bool = False, failed_store_name: str | None = None, failed_purchase_at: str | None = None, include_debug: bool = False) -> dict[str, Any]:
     detected_mime = detect_mime_type(filename, file_bytes, mime_type)
     digest = sha256_hex(file_bytes)
     with engine.begin() as conn:
@@ -2942,12 +2943,15 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
                             'confidence_score': line.get('confidence_score'),
                         },
                     )
-        return {
+        response = {
             'raw_receipt_id': raw_receipt_id,
             'receipt_table_id': receipt_table_id,
             'duplicate': False,
             'parse_status': determine_final_parse_status(parse_result),
         }
+        if include_debug:
+            response['parser_debug'] = build_parser_debug_payload(parse_result)
+        return response
 
 
 def _resolve_reparse_source_payload(record: dict[str, Any], file_bytes: bytes) -> tuple[bytes, str, str]:
