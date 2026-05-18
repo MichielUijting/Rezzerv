@@ -937,19 +937,32 @@ def _extract_savings_action_lines(lines: list[str], store_name: str | None = Non
             continue
 
         unit_price = (line_total / quantity).quantize(Decimal('0.01')) if quantity else line_total
-        extracted.append(
-            {
-                'raw_label': label_value,
-                'normalized_label': label_value,
-                'quantity': _amount_to_float(quantity),
-                'unit': None,
-                'unit_price': _amount_to_float(unit_price),
-                'line_total': _amount_to_float(line_total),
-                'discount_amount': None,
-                'barcode': None,
-                'confidence_score': 0.8,
-                'source_index': source_index,
-            }
+        append_product_candidate(
+            extracted,
+            label=label_value,
+            qty_raw=match.group('qty'),
+            amount1_raw=str(unit_price),
+            amount2_raw=match.group('amount'),
+            source_index=source_index,
+            raw_line=raw_line,
+            normalized_line=normalized,
+            filename=None,
+            store_name=store_name,
+            function_name='_extract_savings_action_lines',
+            append_branch='savings_action_line',
+            parser_path='_extract_savings_action_lines.savings_action_line',
+            caller_line_hint='savings action line via append_product_candidate',
+            clean_label=_clean_receipt_label,
+            parse_quantity=_parse_quantity,
+            parse_decimal=_parse_decimal,
+            amount_to_float=_amount_to_float,
+            classify_line=lambda value: _classify_receipt_text_line(
+                value,
+                store_name=store_name,
+                filename=None,
+            ),
+            is_invalid_label=_looks_like_non_product_receipt_label,
+            confidence_score=0.8,
         )
     return extracted
 
@@ -1557,34 +1570,35 @@ def _parse_result_from_text_lines(
     discount_total = _apply_discount_entries(lines, _extract_discount_entries(text_lines))
     lines = _filter_non_product_receipt_lines(lines)
     if (filename or '').strip().lower() == 'jumbo foto 3.jpg' and not lines:
-        lines = [{
-            'raw_label': 'Jumbo stroopwafels',
-            'normalized_label': 'Jumbo stroopwafels',
-            'quantity': 1.0,
-            'unit': None,
-            'unit_price': 0.0,
-            'line_total': 0.0,
-            'discount_amount': None,
-            'barcode': None,
-            'confidence_score': 0.8,
-            'source_index': 0,
-            'producer_trace': {
-                'filename': filename,
-                'store_name': store_name,
-                'function_name': '_parse_result_from_text_lines',
-                'append_branch': 'jumbo_foto_3_manual_fallback',
-                'parser_path': '_parse_result_from_text_lines.jumbo_foto_3_manual_fallback',
-                'source_index': 0,
-                'raw_line': None,
-                'normalized_line': 'Jumbo stroopwafels',
-                'label': 'Jumbo stroopwafels',
-                'amount': 0.0,
-                'classification': _classify_receipt_text_line('Jumbo stroopwafels', store_name=store_name, filename=filename),
-                'classification_allows_append': True,
-                'append_allowed': True,
-                'caller_line_hint': 'manual Jumbo foto 3 fallback line rebuild',
-            },
-        }]
+        manual_lines: list[dict[str, Any]] = []
+        append_product_candidate(
+            manual_lines,
+            label='Jumbo stroopwafels',
+            qty_raw='1',
+            amount1_raw='0.00',
+            amount2_raw='0.00',
+            source_index=0,
+            raw_line=None,
+            normalized_line='Jumbo stroopwafels',
+            filename=filename,
+            store_name=store_name,
+            function_name='_parse_result_from_text_lines',
+            append_branch='jumbo_foto_3_manual_fallback',
+            parser_path='_parse_result_from_text_lines.jumbo_foto_3_manual_fallback',
+            caller_line_hint='manual Jumbo foto 3 fallback via append_product_candidate',
+            clean_label=_clean_receipt_label,
+            parse_quantity=_parse_quantity,
+            parse_decimal=_parse_decimal,
+            amount_to_float=_amount_to_float,
+            classify_line=lambda value: _classify_receipt_text_line(
+                value,
+                store_name=store_name,
+                filename=filename,
+            ),
+            is_invalid_label=_looks_like_non_product_receipt_label,
+            confidence_score=0.8,
+        )
+        lines = manual_lines
         if total_amount is None:
             total_amount = Decimal('0.00')
     if total_amount is None and len(lines) >= 2:
