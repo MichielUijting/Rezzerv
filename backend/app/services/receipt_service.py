@@ -25,6 +25,7 @@ from sqlalchemy import bindparam, text
 
 from app.receipt_ingestion.line_classifier import classify_receipt_text_line
 from app.receipt_ingestion.product_candidate_gateway import append_product_candidate
+from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
 
 try:
     from pypdf import PdfReader
@@ -2054,7 +2055,30 @@ def _parse_action_pdf_result(text: str, filename: str) -> ReceiptParseResult | N
                 qty = float(match.group('qty'))
                 total = _parse_decimal(match.group('amount'))
                 unit_price = (total / Decimal(str(int(qty)))).quantize(Decimal('0.01')) if total is not None and qty else total
-                extracted.append(_line_dict(label, qty, unit_price, total))
+                append_structured_product_candidate(
+                    extracted,
+                    label=label,
+                    quantity=qty,
+                    unit=None,
+                    unit_price=unit_price,
+                    line_total=total,
+                    discount_amount=None,
+                    barcode=None,
+                    source_index=None,
+                    raw_line=line,
+                    normalized_line=line,
+                    source_segment=' | '.join(buffer + [line]),
+                    filename=filename,
+                    store_name='Action',
+                    function_name='_parse_action_pdf_result',
+                    append_branch='action_pdf_line',
+                    parser_path='_parse_action_pdf_result.action_pdf_line',
+                    caller_line_hint='Action PDF structured line via append_structured_product_candidate',
+                    clean_label=_clean_receipt_label,
+                    amount_to_float=_amount_to_float,
+                    is_invalid_label=_looks_like_non_product_receipt_label,
+                    confidence_score=0.88,
+                )
                 buffer = []
             else:
                 buffer.append(line)
@@ -2108,10 +2132,56 @@ def _parse_hornbach_pdf_result(text: str, filename: str) -> ReceiptParseResult |
     multi = re.search(r'10\s+7\s+St\s+10692297\s+(.+?)\s+21,00%\s+38,00\s+266,00', normalized, re.S)
     if multi:
         label = re.sub(r'\s+', ' ', multi.group(1)).strip()
-        extracted.append(_line_dict(label, 7.0, Decimal('38.00'), Decimal('266.00')))
+        append_structured_product_candidate(
+            extracted,
+            label=label,
+            quantity=7.0,
+            unit='St',
+            unit_price=Decimal('38.00'),
+            line_total=Decimal('266.00'),
+            discount_amount=None,
+            barcode='10692297',
+            source_index=None,
+            raw_line=multi.group(0),
+            normalized_line=re.sub(r'\s+', ' ', multi.group(0)).strip(),
+            source_segment=multi.group(0),
+            filename=filename,
+            store_name='Hornbach',
+            function_name='_parse_hornbach_pdf_result',
+            append_branch='hornbach_multi_item',
+            parser_path='_parse_hornbach_pdf_result.hornbach_multi_item',
+            caller_line_hint='Hornbach PDF structured multi item via append_structured_product_candidate',
+            clean_label=_clean_receipt_label,
+            amount_to_float=_amount_to_float,
+            is_invalid_label=_looks_like_non_product_receipt_label,
+            confidence_score=0.9,
+        )
     freight = re.search(r'8448722\s+Vrachtkosten\s+21,00%\s+22,50\s+22,50', normalized)
     if freight:
-        extracted.append(_line_dict('Vrachtkosten', 1.0, Decimal('22.50'), Decimal('22.50')))
+        append_structured_product_candidate(
+            extracted,
+            label='Vrachtkosten',
+            quantity=1.0,
+            unit=None,
+            unit_price=Decimal('22.50'),
+            line_total=Decimal('22.50'),
+            discount_amount=None,
+            barcode='8448722',
+            source_index=None,
+            raw_line=freight.group(0),
+            normalized_line=re.sub(r'\s+', ' ', freight.group(0)).strip(),
+            source_segment=freight.group(0),
+            filename=filename,
+            store_name='Hornbach',
+            function_name='_parse_hornbach_pdf_result',
+            append_branch='hornbach_freight',
+            parser_path='_parse_hornbach_pdf_result.hornbach_freight',
+            caller_line_hint='Hornbach PDF structured freight via append_structured_product_candidate',
+            clean_label=_clean_receipt_label,
+            amount_to_float=_amount_to_float,
+            is_invalid_label=_looks_like_non_product_receipt_label,
+            confidence_score=0.9,
+        )
     return _receipt_result_from_manual('Hornbach', purchase_at, total_amount, extracted, store_branch='Postbus 1099, 3430 BB Nieuwegein', confidence=0.9)
 
 
@@ -2171,7 +2241,30 @@ def _parse_bol_email_result(text: str, html_text: str, filename: str, header_dat
         label = re.sub(r'\s+', ' ', order_product.group(2)).strip()
         price_match = re.search(r'(?is)1x\s+€\s*([0-9]+,[0-9]{2})', haystack)
         price = _parse_decimal(price_match.group(1)) if price_match else total_amount
-        extracted.append(_line_dict(label, 1.0, price, price))
+        append_structured_product_candidate(
+            extracted,
+            label=label,
+            quantity=1.0,
+            unit=None,
+            unit_price=price,
+            line_total=price,
+            discount_amount=None,
+            barcode=None,
+            source_index=None,
+            raw_line=order_product.group(0),
+            normalized_line=re.sub(r'\s+', ' ', order_product.group(0)).strip(),
+            source_segment=order_product.group(0),
+            filename=filename,
+            store_name='Bol',
+            function_name='_parse_bol_email_result',
+            append_branch='bol_email_order_product',
+            parser_path='_parse_bol_email_result.bol_email_order_product',
+            caller_line_hint='Bol email structured order product via append_structured_product_candidate',
+            clean_label=_clean_receipt_label,
+            amount_to_float=_amount_to_float,
+            is_invalid_label=_looks_like_non_product_receipt_label,
+            confidence_score=0.84,
+        )
     return _receipt_result_from_manual('Bol', purchase_at, total_amount, extracted, confidence=0.84)
 
 
