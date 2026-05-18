@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
@@ -42,6 +42,7 @@ from app.schemas.receipts import (
 from app.services.testing_service import testing_service
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, parse_receipt_content, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
+from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 import tempfile
 import cv2
@@ -10275,6 +10276,7 @@ def import_uploaded_receipt_payload(
     create_failed_receipt_table: bool = False,
     failed_store_name: str | None = None,
     failed_purchase_at: str | None = None,
+    include_debug: bool = False,
 ) -> dict[str, Any]:
     if _looks_like_zip_upload(filename, mime_type, file_bytes):
         member_results: list[dict[str, Any]] = []
@@ -10290,6 +10292,7 @@ def import_uploaded_receipt_payload(
                     create_failed_receipt_table=create_failed_receipt_table,
                     failed_store_name=failed_store_name,
                     failed_purchase_at=failed_purchase_at,
+                    include_debug=include_debug,
                 )
                 item = dict(imported)
                 item['filename'] = member['filename']
@@ -10346,6 +10349,7 @@ def import_uploaded_receipt_payload(
         create_failed_receipt_table=create_failed_receipt_table,
         failed_store_name=failed_store_name,
         failed_purchase_at=failed_purchase_at,
+        include_debug=include_debug,
     )
 
 
