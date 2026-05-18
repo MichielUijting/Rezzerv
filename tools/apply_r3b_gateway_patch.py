@@ -29,8 +29,9 @@ if end == -1:
 old_block = content[start:end]
 if "canonical append_line extracted.append" not in old_block:
     raise SystemExit("R3b patch aborted: expected primary append_line block not found or already changed.")
-if old_block.count("extracted.append") != 1:
-    raise SystemExit("R3b patch aborted: primary append_line block did not contain exactly one extracted.append.")
+real_append_calls = re.findall(r"^\s*extracted\.append\s*\(", old_block, flags=re.M)
+if len(real_append_calls) != 1:
+    raise SystemExit(f"R3b patch aborted: expected exactly one real extracted.append call, found {len(real_append_calls)}.")
 
 new_block = '''    def append_line(label: str, qty_raw: str | None, amount1_raw: str | None, amount2_raw: str | None, *, source_index: int) -> int | None:
         return append_product_candidate(
