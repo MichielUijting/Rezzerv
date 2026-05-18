@@ -2729,6 +2729,7 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
             discount_total=None,
             currency='EUR',
             lines=[],
+            parser_diagnostics=summarize_lines_parser_diagnostics([]),
         )
 
     if mime_type in {'text/html', 'text/plain'} or suffix in {'.html', '.htm', '.txt'}:
