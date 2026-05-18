@@ -23,7 +23,7 @@ from typing import Any, Iterable
 
 from sqlalchemy import bindparam, text
 
-from backend.receipt_ingestion.line_classifier import classify_receipt_text_line
+from app.receipt_ingestion.line_classifier import classify_receipt_text_line
 
 try:
     from pypdf import PdfReader
