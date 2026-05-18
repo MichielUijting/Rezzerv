@@ -1416,35 +1416,33 @@ def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: s
                 )
                 if label_classification in {'ignore', 'metadata', 'footer_payment_tax'}:
                     continue
-                unit_price = (amount / quantity).quantize(Decimal('0.01')) if quantity else amount
-                extracted.append({
-                    'raw_label': label,
-                    'normalized_label': label,
-                    'quantity': _amount_to_float(quantity),
-                    'unit': None,
-                    'unit_price': _amount_to_float(unit_price),
-                    'line_total': _amount_to_float(amount),
-                    'discount_amount': None,
-                    'barcode': None,
-                    'confidence_score': 0.55,
-                    'source_index': source_index,
-                    'producer_trace': {
-                        'filename': filename,
-                        'store_name': store_name,
-                        'function_name': '_extract_sparse_receipt_lines',
-                        'append_branch': 'qty_x_amount',
-                        'parser_path': '_extract_sparse_receipt_lines.qty_x_amount',
-                        'source_index': source_index,
-                        'raw_line': raw_line,
-                        'normalized_line': normalized,
-                        'label': label,
-                        'amount': _amount_to_float(amount),
-                        'classification': label_classification,
-                        'classification_allows_append': label_classification not in {'ignore', 'metadata', 'footer_payment_tax'},
-                        'append_allowed': True,
-                        'caller_line_hint': 'sparse qty_x_amount extracted.append',
-                    },
-                })
+                append_product_candidate(
+                    extracted,
+                    label=label,
+                    qty_raw=match.group('qty'),
+                    amount1_raw=str(unit_price),
+                    amount2_raw=match.group('amount'),
+                    source_index=source_index,
+                    raw_line=raw_line,
+                    normalized_line=normalized,
+                    filename=filename,
+                    store_name=store_name,
+                    function_name='_extract_sparse_receipt_lines',
+                    append_branch='qty_x_amount',
+                    parser_path='_extract_sparse_receipt_lines.qty_x_amount',
+                    caller_line_hint='sparse qty_x_amount via append_product_candidate',
+                    clean_label=_clean_receipt_label,
+                    parse_quantity=_parse_quantity,
+                    parse_decimal=_parse_decimal,
+                    amount_to_float=_amount_to_float,
+                    classify_line=lambda value: _classify_receipt_text_line(
+                        value,
+                        store_name=store_name,
+                        filename=filename,
+                    ),
+                    is_invalid_label=_looks_like_non_product_receipt_label,
+                    confidence_score=0.55,
+                )
                 continue
 
         match = amount_re.search(normalized)
@@ -1469,34 +1467,33 @@ def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: s
             continue
         if len(label.split()) > 12:
             continue
-        extracted.append({
-            'raw_label': label,
-            'normalized_label': label,
-            'quantity': None,
-            'unit': None,
-            'unit_price': _amount_to_float(amount),
-            'line_total': _amount_to_float(amount),
-            'discount_amount': None,
-            'barcode': None,
-            'confidence_score': 0.5,
-            'source_index': source_index,
-            'producer_trace': {
-                'filename': filename,
-                'store_name': store_name,
-                'function_name': '_extract_sparse_receipt_lines',
-                'append_branch': 'amount_re',
-                'parser_path': '_extract_sparse_receipt_lines.amount_re',
-                'source_index': source_index,
-                'raw_line': raw_line,
-                'normalized_line': normalized,
-                'label': label,
-                'amount': _amount_to_float(amount),
-                'classification': label_classification,
-                'classification_allows_append': label_classification not in {'ignore', 'metadata', 'footer_payment_tax'},
-                'append_allowed': True,
-                'caller_line_hint': 'sparse amount_re extracted.append',
-            },
-        })
+        append_product_candidate(
+            extracted,
+            label=label,
+            qty_raw=None,
+            amount1_raw=match.group('amount'),
+            amount2_raw=None,
+            source_index=source_index,
+            raw_line=raw_line,
+            normalized_line=normalized,
+            filename=filename,
+            store_name=store_name,
+            function_name='_extract_sparse_receipt_lines',
+            append_branch='amount_re',
+            parser_path='_extract_sparse_receipt_lines.amount_re',
+            caller_line_hint='sparse amount_re via append_product_candidate',
+            clean_label=_clean_receipt_label,
+            parse_quantity=_parse_quantity,
+            parse_decimal=_parse_decimal,
+            amount_to_float=_amount_to_float,
+            classify_line=lambda value: _classify_receipt_text_line(
+                value,
+                store_name=store_name,
+                filename=filename,
+            ),
+            is_invalid_label=_looks_like_non_product_receipt_label,
+            confidence_score=0.5,
+        )
 
     return extracted
 
