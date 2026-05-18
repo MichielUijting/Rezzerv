@@ -26,6 +26,7 @@ from sqlalchemy import bindparam, text
 from app.receipt_ingestion.line_classifier import classify_receipt_text_line
 from app.receipt_ingestion.product_candidate_gateway import append_product_candidate
 from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
+from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 
 try:
     from pypdf import PdfReader
@@ -110,6 +111,7 @@ class ReceiptParseResult:
     currency: str = 'EUR'
     lines: list[dict[str, Any]] | None = None
     store_branch: str | None = None
+    parser_diagnostics: dict[str, Any] | None = None
 
 
 def sanitize_filename(name: str) -> str:
@@ -1523,6 +1525,7 @@ def _failed_receipt_result(confidence: float = 0.0) -> ReceiptParseResult:
         discount_total=None,
         currency='EUR',
         lines=[],
+        parser_diagnostics=summarize_lines_parser_diagnostics([]),
     )
 
 
@@ -1669,6 +1672,7 @@ def _parse_result_from_text_lines(
         currency='EUR',
         lines=lines,
         store_branch=store_branch,
+        parser_diagnostics=summarize_lines_parser_diagnostics(lines),
     )
 
 
@@ -2012,6 +2016,7 @@ def _receipt_result_from_manual(store_name: str | None, purchase_at: str | None,
         currency='EUR',
         lines=lines,
         store_branch=store_branch,
+        parser_diagnostics=summarize_lines_parser_diagnostics(lines),
     )
 
 
