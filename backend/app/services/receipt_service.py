@@ -23,6 +23,8 @@ from typing import Any, Iterable
 
 from sqlalchemy import bindparam, text
 
+from backend.receipt_ingestion.line_classifier import classify_receipt_text_line
+
 try:
     from pypdf import PdfReader
 except Exception:  # pragma: no cover
@@ -1215,59 +1217,25 @@ def _classify_receipt_text_line(
     qty_first_re: re.Pattern | None = None,
     label_first_re: re.Pattern | None = None,
 ) -> str:
-    """Classify a normalized OCR text line before amount-pairing.
-
-    This helper centralizes the existing skip/filter/regex decisions so metadata,
-    footer/payment/tax and amount-detail lines are separated before labels are
-    paired with amounts. It intentionally does not change receipt status, DB
-    state or frontend behavior.
-    """
-    normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
-    if len(normalized) < 2:
-        return 'ignore'
-
-    lowered = normalized.lower()
-
-    # 8K-0B proven false-positive guards: keep metadata/footer lines out before amount-pairing.
-    upper_compact = normalized.upper().replace(',', '.')
-    if re.fullmatch(r'(?:ZA|ZO|ZON)\s+\d{1,2}\.\d{2}', upper_compact):
-        return 'metadata'
-    if re.match(r'^[A-Z]\s+\d{1,2}[,.]\d{2}%\b', normalized.upper()):
-        return 'footer_payment_tax'
-    if any(day in lowered for day in ('maandag', 'dinsdag', 'woensdag', 'woernsdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag')) and ('t/m' in lowered or ' tot ' in lowered):
-        return 'metadata'
-    if re.fullmatch(r'\d{1,4}[.]\d{2}', normalized) or re.fullmatch(r'\d{1,4},\d{2}', normalized):
-        return 'footer_payment_tax'
-    if re.search(r'\bzegels?\b|\bzege1s\b|\bpluspunten\b', lowered) and re.search(r'\d{1,2}:\d{2}|\d{3,}', normalized):
-        return 'footer_payment_tax'
-
-    if _should_skip_receipt_line(normalized, store_name=store_name, filename=filename):
-        if any(token in lowered for token in ('btw', 'vat', 'totaal', 'subtotaal', 'betaal', 'bankpas', 'pin', 'terminal', 'transactie')):
-            return 'footer_payment_tax'
-        return 'metadata'
-
-    if _looks_like_non_product_receipt_label(normalized):
-        if any(token in lowered for token in ('btw', 'vat', 'totaal', 'subtotaal', 'betaal', 'bankpas', 'pin', 'terminal', 'transactie')):
-            return 'footer_payment_tax'
-        return 'metadata'
-
-    if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', normalized):
-        return 'metadata'
-
-    if detail_only_re is not None and detail_only_re.match(normalized):
-        return 'amount_detail'
-
-    if qty_first_re is not None and qty_first_re.match(normalized):
-        return 'product_candidate'
-
-    if label_first_re is not None and label_first_re.match(normalized):
-        return 'product_candidate'
-
-    if _looks_like_item_label_only(normalized, store_name=store_name, filename=filename):
-        return 'continuation'
-
-    return 'ignore'
-
+    return classify_receipt_text_line(
+        line,
+        store_name=store_name,
+        filename=filename,
+        detail_only_re=detail_only_re,
+        qty_first_re=qty_first_re,
+        label_first_re=label_first_re,
+        should_skip_receipt_line=lambda value: _should_skip_receipt_line(
+            value,
+            store_name=store_name,
+            filename=filename,
+        ),
+        looks_like_non_product_receipt_label=_looks_like_non_product_receipt_label,
+        looks_like_item_label_only=lambda value: _looks_like_item_label_only(
+            value,
+            store_name=store_name,
+            filename=filename,
+        ),
+    )
 
 
 def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, filename: str | None = None) -> list[dict[str, Any]]:
