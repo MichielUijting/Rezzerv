@@ -1156,7 +1156,9 @@ def _filter_non_product_receipt_lines(lines: list[dict[str, Any]]) -> list[dict[
         if key in seen:
             continue
         seen.add(key)
-        filtered.append(line)
+        # 8K-G: preserve diagnostic/runtime-only fields such as producer_trace.
+        # Keep a shallow copy so later mutations cannot strip trace metadata from the original append path.
+        filtered.append(dict(line))
     return filtered
 
 
@@ -1621,6 +1623,22 @@ def _parse_result_from_text_lines(
             'barcode': None,
             'confidence_score': 0.8,
             'source_index': 0,
+            'producer_trace': {
+                'filename': filename,
+                'store_name': store_name,
+                'function_name': '_parse_result_from_text_lines',
+                'append_branch': 'jumbo_foto_3_manual_fallback',
+                'parser_path': '_parse_result_from_text_lines.jumbo_foto_3_manual_fallback',
+                'source_index': 0,
+                'raw_line': None,
+                'normalized_line': 'Jumbo stroopwafels',
+                'label': 'Jumbo stroopwafels',
+                'amount': 0.0,
+                'classification': _classify_receipt_text_line('Jumbo stroopwafels', store_name=store_name, filename=filename),
+                'classification_allows_append': True,
+                'append_allowed': True,
+                'caller_line_hint': 'manual Jumbo foto 3 fallback line rebuild',
+            },
         }]
         if total_amount is None:
             total_amount = Decimal('0.00')
