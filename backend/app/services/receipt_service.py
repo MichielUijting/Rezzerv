@@ -24,6 +24,7 @@ from typing import Any, Iterable
 from sqlalchemy import bindparam, text
 
 from app.receipt_ingestion.line_classifier import classify_receipt_text_line
+from app.receipt_ingestion.product_candidate_gateway import append_product_candidate
 
 try:
     from pypdf import PdfReader
@@ -1259,57 +1260,36 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
     pending_line_index: int | None = None
 
     def append_line(label: str, qty_raw: str | None, amount1_raw: str | None, amount2_raw: str | None, *, source_index: int) -> int | None:
-        label_value = _clean_receipt_label(label)
-        if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
-            return None
-        if _looks_like_non_product_receipt_label(label_value):
-            return None
-        if _is_aldi_context(store_name=store_name, filename=filename) and _is_invalid_aldi_article_candidate(label_value):
-            return None
-        quantity = _parse_quantity((qty_raw or '').replace('kg', '').replace('KG', '').strip()) if qty_raw else None
-        if quantity is not None and quantity <= 0:
-            quantity = None
-        amount1 = _parse_decimal(amount1_raw)
-        amount2 = _parse_decimal(amount2_raw)
-        if amount1 is None and amount2 is None:
-            return None
-        if amount2 is not None:
-            unit_price = amount1
-            line_total = amount2
-        else:
-            unit_price = amount1
-            line_total = amount1
-        extracted.append(
-            {
-                'raw_label': label_value,
-                'normalized_label': label_value,
-                'quantity': _amount_to_float(quantity),
-                'unit': 'kg' if qty_raw and 'kg' in qty_raw.lower() else None,
-                'unit_price': _amount_to_float(unit_price),
-                'line_total': _amount_to_float(line_total),
-                'discount_amount': None,
-                'barcode': None,
-                'confidence_score': 0.85,
-                'source_index': source_index,
-                'producer_trace': {
-                    'filename': filename,
-                    'store_name': store_name,
-                    'function_name': '_extract_receipt_lines',
-                    'append_branch': 'append_line',
-                    'parser_path': '_extract_receipt_lines.append_line',
-                    'source_index': source_index,
-                    'raw_line': lines[source_index] if 0 <= source_index < len(lines) else None,
-                    'normalized_line': re.sub(r'\s+', ' ', str(lines[source_index] if 0 <= source_index < len(lines) else '')).strip(),
-                    'label': label_value,
-                    'amount': _amount_to_float(line_total),
-                    'classification': _classify_receipt_text_line(label_value, store_name=store_name, filename=filename),
-                    'classification_allows_append': _classify_receipt_text_line(label_value, store_name=store_name, filename=filename) not in {'ignore', 'metadata', 'footer_payment_tax'},
-                    'append_allowed': True,
-                    'caller_line_hint': 'canonical append_line extracted.append',
-                },
-            }
+        return append_product_candidate(
+            extracted,
+            label=label,
+            qty_raw=qty_raw,
+            amount1_raw=amount1_raw,
+            amount2_raw=amount2_raw,
+            source_index=source_index,
+            raw_line=lines[source_index] if 0 <= source_index < len(lines) else None,
+            normalized_line=re.sub(r'\s+', ' ', str(lines[source_index] if 0 <= source_index < len(lines) else '')).strip(),
+            filename=filename,
+            store_name=store_name,
+            function_name='_extract_receipt_lines',
+            append_branch='append_line',
+            parser_path='_extract_receipt_lines.append_line',
+            caller_line_hint='canonical append_line via append_product_candidate',
+            clean_label=_clean_receipt_label,
+            parse_quantity=_parse_quantity,
+            parse_decimal=_parse_decimal,
+            amount_to_float=_amount_to_float,
+            classify_line=lambda value: _classify_receipt_text_line(
+                value,
+                store_name=store_name,
+                filename=filename,
+            ),
+            is_invalid_label=lambda value: (
+                _looks_like_non_product_receipt_label(value)
+                or (_is_aldi_context(store_name=store_name, filename=filename) and _is_invalid_aldi_article_candidate(value))
+            ),
+            confidence_score=0.85,
         )
-        return len(extracted) - 1
 
     def enrich_pending_line(target_index: int, qty_raw: str | None, amount1_raw: str | None, amount2_raw: str | None, *, source_index: int) -> None:
         if target_index < 0 or target_index >= len(extracted):
