@@ -42,7 +42,6 @@ from app.schemas.receipts import (
 from app.services.testing_service import testing_service
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, parse_receipt_content, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
-from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 import tempfile
 import cv2
@@ -10838,6 +10837,7 @@ def run_receipt_status_baseline_diagnosis(household_id: Optional[str] = None):
 @app.post("/api/receipts/share-import")
 async def import_shared_receipt(
     household_id: str = Form(...),
+    debug: int = Query(default=0),
     file: UploadFile = File(...),
     source_context: str = Form('shared_file'),
     source_label: Optional[str] = Form(None),
@@ -10870,6 +10870,7 @@ async def import_shared_receipt(
             source_id=share_source['id'],
             mime_type=file.content_type,
             reject_non_receipt=True,
+            include_debug=bool(debug),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -10881,6 +10882,7 @@ async def import_shared_receipt(
 @app.post("/api/receipts/share-target")
 async def import_share_target_receipt(
     household_id: str = Query('1'),
+    debug: int = Query(default=0),
     receipt: UploadFile = File(...),
     title: Optional[str] = Form(None),
     text_value: Optional[str] = Form(None, alias='text'),
@@ -10911,6 +10913,7 @@ async def import_share_target_receipt(
             source_id=share_source['id'],
             mime_type=receipt.content_type,
             reject_non_receipt=True,
+            include_debug=bool(debug),
         )
     except ValueError as exc:
         from urllib.parse import quote
@@ -10929,6 +10932,7 @@ async def import_share_target_receipt(
 @app.post("/api/receipts/import")
 async def import_receipt(
     household_id: str = Form(...),
+    debug: int = Query(default=0),
     file: UploadFile = File(...),
     authorization: Optional[str] = Header(None),
 ):
@@ -10971,6 +10975,7 @@ async def import_receipt(
             file_bytes=file_bytes,
             source_id=source_id,
             mime_type=file.content_type,
+            include_debug=bool(debug),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
