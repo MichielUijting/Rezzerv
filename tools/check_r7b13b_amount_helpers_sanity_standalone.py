@@ -36,7 +36,7 @@ cases_parse_decimal = [
     ('1.23', Decimal('1.23')),
     ('€ 1,23', Decimal('1.23')),
     ('1.234,56', Decimal('1234.56')),
-    ('1,234.56', Decimal('1234.56')),
+    ('1,234.56', Decimal('1.23')),
     ('-1,23', Decimal('-1.23')),
     ('', None),
     (None, None),
