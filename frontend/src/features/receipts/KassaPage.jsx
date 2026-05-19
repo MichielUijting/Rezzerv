@@ -278,13 +278,8 @@ function persistStoredReceiptIds(storageKey, ids) {
 
 function normalizeInboxStatus(value) {
   const normalized = String(value || '').trim()
-  if (normalized === 'Gecontroleerd' || normalized === 'Controle nodig' || normalized === 'Handmatig') {
-    return normalized
-  }
-  if (normalized === 'Nieuw' || normalized.toLowerCase() === 'manual') {
-    return 'Handmatig'
-  }
-  return 'Handmatig'
+  if (normalized === 'Gecontroleerd') return 'Gecontroleerd'
+  return 'Controle nodig'
 }
 
 
@@ -1952,7 +1947,6 @@ export default function KassaPage() {
   }, [receipts, deletedReceiptIds])
 
   const inboxSummary = useMemo(() => ({
-    Handmatig: inboxItems.filter((item) => item.inbox_status === 'Handmatig').length,
     'Controle nodig': inboxItems.filter((item) => item.inbox_status === 'Controle nodig').length,
     Gecontroleerd: inboxItems.filter((item) => item.inbox_status === 'Gecontroleerd').length,
   }), [inboxItems])
@@ -2491,7 +2485,6 @@ export default function KassaPage() {
 
               <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
                 {[
-                  { key: 'Handmatig', helper: 'Handmatige beoordeling nodig' },
                   { key: 'Controle nodig', helper: 'Vraagt extra aandacht' },
                   { key: 'Gecontroleerd', helper: 'Al bekeken in Kassa' },
                 ].map((entry) => {
