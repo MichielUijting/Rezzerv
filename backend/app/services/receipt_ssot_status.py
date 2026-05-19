@@ -12,11 +12,22 @@ _CACHE: dict[str, Any] = {"loaded_at": 0.0, "items": {}}
 _CACHE_TTL_SECONDS = 1.0
 
 
+def _normalize_status_label(label: Any) -> str:
+    """Normalize legacy receipt status labels for the active Kassa UI.
+
+    Historical parser/status diagnostics may still contain manual/Handmatig.
+    The active Kassa contract exposes only Gecontroleerd or Controle nodig.
+    """
+    normalized = str(label or "").strip()
+    if normalized in {"", "Handmatig", "manual"}:
+        return "Controle nodig"
+    return normalized
+
+
 def _status_code(label: str) -> str:
-    if label == "Gecontroleerd":
+    normalized_label = _normalize_status_label(label)
+    if normalized_label == "Gecontroleerd":
         return "controlled"
-    if label == "Handmatig":
-        return "manual"
     return "review"
 
 
@@ -34,7 +45,7 @@ def load_po_norm_status_items() -> dict[str, dict[str, Any]]:
             receipt_table_id = str(item.get("receipt_table_id") or "").strip()
             if not receipt_table_id:
                 continue
-            label = str(item.get("po_norm_status_label") or "Controle nodig")
+            label = _normalize_status_label(item.get("po_norm_status_label") or "Controle nodig")
             items[receipt_table_id] = {
                 "po_norm_status": _status_code(label),
                 "po_norm_status_label": label,
@@ -69,15 +80,18 @@ def apply_po_norm_status(payload: dict[str, Any]) -> dict[str, Any]:
             "po_norm_reason": "Controle nodig: geen baseline-match gevonden voor deze actieve kassabon.",
         }
 
+    label = _normalize_status_label(item.get("po_norm_status_label"))
+    status_code = _status_code(label)
+
     payload.pop("parse_status", None)
     payload.pop("actual_parse_status", None)
     payload.pop("actual_status_label", None)
-    payload["po_norm_status"] = item["po_norm_status"]
-    payload["po_norm_status_label"] = item["po_norm_status_label"]
+    payload["po_norm_status"] = status_code
+    payload["po_norm_status_label"] = label
     payload["po_norm_failed_criteria"] = item.get("po_norm_failed_criteria") or []
     payload["po_norm_reason"] = item.get("po_norm_reason")
-    payload["inbox_status"] = item["po_norm_status_label"]
-    payload["status"] = item["po_norm_status_label"]
+    payload["inbox_status"] = label
+    payload["status"] = label
 
     if any(key in payload for key in ("parse_status", "actual_parse_status", "actual_status_label")):
         raise RuntimeError("INVALID STATUS SOURCE")
