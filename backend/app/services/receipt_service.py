@@ -28,6 +28,7 @@ from app.receipt_ingestion.product_candidate_gateway import append_product_candi
 from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
+from app.receipt_ingestion.amounts import parse_decimal as _parse_decimal
 
 try:
     from pypdf import PdfReader
@@ -212,21 +213,6 @@ def _html_to_text(value: str) -> str:
     normalized = re.sub(r'\n{3,}', '\n\n', normalized)
     normalized = normalized.replace(' \n', '\n').replace('\n ', '\n')
     return normalized.strip()
-
-
-def _parse_decimal(raw: str | None) -> Decimal | None:
-    if not raw:
-        return None
-    value = raw.replace('€', '').replace('EUR', '').replace('eur', '').strip()
-    value = value.replace('.', '').replace(',', '.') if ',' in value and '.' in value else value.replace(',', '.')
-    value = re.sub(r'[^0-9\-.]', '', value)
-    if not value or value in {'-', '.', '-.'}:
-        return None
-    try:
-        return Decimal(value).quantize(Decimal('0.01'))
-    except (InvalidOperation, ValueError):
-        return None
-
 
 def _normalize_fingerprint_text(value: Any) -> str:
     normalized = re.sub(r'\s+', ' ', str(value or '').strip().lower())

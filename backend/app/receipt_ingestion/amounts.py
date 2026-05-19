@@ -37,34 +37,21 @@ def parse_quantity(raw: str | None) -> Decimal | None:
         return None
 
 
-def parse_decimal(value: object) -> Decimal | None:
+def parse_decimal(raw: str | None) -> Decimal | None:
     """Parse an OCR amount-like value into a 2-decimal Decimal.
 
-    This helper is deliberately status-neutral: invalid values return None and
-    no parser, UI, or PO status is derived here.
+    This is the R7b-16b frozen behavior extracted from receipt_service._parse_decimal.
+    The helper is deliberately status-neutral: invalid values return None.
     """
-    if value is None:
+    if not raw:
         return None
-
-    cleaned = str(value).strip()
-    if not cleaned:
+    value = raw.replace('€', '').replace('EUR', '').replace('eur', '').strip()
+    value = value.replace('.', '').replace(',', '.') if ',' in value and '.' in value else value.replace(',', '.')
+    value = re.sub(r'[^0-9\-.]', '', value)
+    if not value or value in {'-', '.', '-.'}:
         return None
-
-    cleaned = cleaned.replace('€', '').replace('EUR', '').replace('eur', '').replace('\xa0', ' ').strip()
-    cleaned = re.sub(r'[^0-9,.-]', '', cleaned)
-    if not cleaned or cleaned in {'-', ',', '.', '-,', '-.'}:
-        return None
-
-    if ',' in cleaned and '.' in cleaned:
-        if cleaned.rfind(',') > cleaned.rfind('.'):
-            cleaned = cleaned.replace('.', '').replace(',', '.')
-        else:
-            cleaned = cleaned.replace(',', '')
-    else:
-        cleaned = cleaned.replace(',', '.')
-
     try:
-        return Decimal(cleaned).quantize(Decimal('0.01'))
+        return Decimal(value).quantize(Decimal('0.01'))
     except (InvalidOperation, ValueError):
         return None
 

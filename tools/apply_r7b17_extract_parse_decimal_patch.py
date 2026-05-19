@@ -16,7 +16,7 @@ if old_helper not in service:
 
 import_line = 'from app.receipt_ingestion.amounts import parse_decimal as _parse_decimal\n'
 if import_line not in service:
-    marker = 'from app.receipt_ingestion.normalization import normalize_text_lines\n'
+    marker = 'from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload\n'
     if marker not in service:
         raise SystemExit('Import marker for receipt_ingestion.normalization not found')
     service = service.replace(marker, marker + import_line, 1)
