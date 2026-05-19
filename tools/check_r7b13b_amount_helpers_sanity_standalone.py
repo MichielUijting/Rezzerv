@@ -1,73 +1,35 @@
 from __future__ import annotations
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from pathlib import Path
-import re
+import importlib.util
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ROOT / 'backend' / 'app' / 'services' / 'receipt_service.py'
+TARGET = ROOT / 'backend' / 'app' / 'receipt_ingestion' / 'amounts.py'
+
+if not TARGET.exists():
+    raise SystemExit('Missing backend/app/receipt_ingestion/amounts.py')
 
 source = TARGET.read_text(encoding='utf-8-sig')
 required_markers = [
-    'def _parse_decimal(',
-    'def _parse_quantity(',
-    'def _amount_to_float(',
-    'def _price_from_split_parts(',
+    'def parse_decimal(',
+    'def parse_quantity(',
+    'def amount_to_float(',
+    'def price_from_split_parts(',
 ]
 missing = [marker for marker in required_markers if marker not in source]
 if missing:
-    raise SystemExit(f'Missing amount helper(s) in receipt_service.py: {missing}')
+    raise SystemExit(f'Missing amount helper(s) in amounts.py: {missing}')
 
-# Standalone behavioural mirror of the current helpers. This deliberately avoids
-# importing receipt_service.py, because local user machines do not necessarily
-# have backend dependencies such as SQLAlchemy installed.
-def parse_quantity(raw: str | None) -> Decimal | None:
-    if not raw:
-        return None
-    cleaned = raw.strip().replace(',', '.')
-    cleaned = re.sub(r'[^0-9\-.]', '', cleaned)
-    if not cleaned:
-        return None
-    try:
-        return Decimal(cleaned)
-    except (InvalidOperation, ValueError):
-        return None
+spec = importlib.util.spec_from_file_location('receipt_ingestion_amounts', TARGET)
+module = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(module)
 
-
-def parse_decimal(value: object) -> Decimal | None:
-    if value is None:
-        return None
-    cleaned = str(value).strip()
-    if not cleaned:
-        return None
-    cleaned = cleaned.replace('€', '').replace('\xa0', ' ').strip()
-    cleaned = re.sub(r'[^0-9,.-]', '', cleaned)
-    if not cleaned or cleaned in {'-', ',', '.', '-,', '-.'}:
-        return None
-    if ',' in cleaned and '.' in cleaned:
-        if cleaned.rfind(',') > cleaned.rfind('.'):
-            cleaned = cleaned.replace('.', '').replace(',', '.')
-        else:
-            cleaned = cleaned.replace(',', '')
-    else:
-        cleaned = cleaned.replace(',', '.')
-    try:
-        return Decimal(cleaned).quantize(Decimal('0.01'))
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def amount_to_float(value: Decimal | None) -> float | None:
-    return float(value) if value is not None else None
-
-
-def price_from_split_parts(euros: str | None, cents: str | None) -> Decimal | None:
-    if euros is None or cents is None:
-        return None
-    try:
-        return Decimal(f"{int(euros)}.{int(cents):02d}").quantize(Decimal('0.01'))
-    except Exception:
-        return None
+parse_decimal = module.parse_decimal
+parse_quantity = module.parse_quantity
+amount_to_float = module.amount_to_float
+price_from_split_parts = module.price_from_split_parts
 
 cases_parse_decimal = [
     ('1,23', Decimal('1.23')),
@@ -121,10 +83,11 @@ for raw, expected in [(Decimal('1.23'), 1.23), (None, None)]:
         failures.append(f'amount_to_float({raw!r}) -> {actual!r}, expected {expected!r}')
 
 if failures:
-    print('R7b-13b standalone amount helper sanity check failed:')
+    print('R7b-17 standalone amount helper sanity check failed:')
     for failure in failures:
         print('-', failure)
     raise SystemExit(1)
 
-print('R7b-13b standalone amount helper sanity check passed.')
+print('R7b-17 standalone amount helper sanity check passed.')
+print('parse_decimal extracted to receipt_ingestion.amounts.')
 print('No backend dependencies imported; safe to run on local Windows Python.')
