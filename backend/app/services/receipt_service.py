@@ -29,6 +29,13 @@ from app.receipt_ingestion.structured_product_gateway import append_structured_p
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
 from app.receipt_ingestion.amounts import parse_decimal as _parse_decimal
+from app.receipt_ingestion.fingerprints import (
+    _build_receipt_fingerprint,
+    _is_plausible_purchase_at,
+    _is_plausible_total_amount,
+    _normalize_fingerprint_text,
+    build_receipt_fingerprint_from_parse_result,
+)
 
 try:
     from pypdf import PdfReader
@@ -213,63 +220,6 @@ def _html_to_text(value: str) -> str:
     normalized = re.sub(r'\n{3,}', '\n\n', normalized)
     normalized = normalized.replace(' \n', '\n').replace('\n ', '\n')
     return normalized.strip()
-
-def _normalize_fingerprint_text(value: Any) -> str:
-    normalized = re.sub(r'\s+', ' ', str(value or '').strip().lower())
-    normalized = re.sub(r'[^a-z0-9€.,:;\-_/ ]+', '', normalized)
-    return normalized.strip()
-
-
-def _is_plausible_purchase_at(value: str | None) -> bool:
-    if not value:
-        return False
-    try:
-        parsed = datetime.fromisoformat(str(value).replace('Z', '+00:00'))
-    except Exception:
-        return False
-    current_year = datetime.utcnow().year
-    return current_year - 10 <= parsed.year <= current_year + 1
-
-
-def _is_plausible_total_amount(value: Decimal | None) -> bool:
-    if value is None:
-        return False
-    try:
-        amount = Decimal(value).quantize(Decimal('0.01'))
-    except Exception:
-        return False
-    return Decimal('0.00') <= amount <= Decimal('10000.00')
-
-
-def _build_receipt_fingerprint(store_name: str | None, purchase_at: str | None, total_amount: Decimal | None, lines: list[dict[str, Any]]) -> str:
-    store_part = _normalize_fingerprint_text(store_name)
-    purchase_part = ''
-    if purchase_at:
-        try:
-            purchase_part = datetime.fromisoformat(str(purchase_at).replace('Z', '+00:00')).strftime('%Y-%m-%d %H:%M')
-        except Exception:
-            purchase_part = _normalize_fingerprint_text(purchase_at)
-    total_part = f"{Decimal(total_amount).quantize(Decimal('0.01')):.2f}" if total_amount is not None else ''
-    line_parts: list[str] = []
-    for line in lines[:12]:
-        label = _normalize_fingerprint_text(line.get('normalized_label') or line.get('raw_label'))
-        if not label:
-            continue
-        amount = _parse_decimal(str(line.get('line_total')))
-        amount_part = f"{amount:.2f}" if amount is not None else ''
-        line_parts.append(f"{label}|{amount_part}")
-    return '||'.join([store_part, purchase_part, total_part, '##'.join(line_parts)])
-
-
-
-
-def build_receipt_fingerprint_from_parse_result(parse_result: ReceiptParseResult | None) -> str:
-    if not parse_result or not parse_result.is_receipt:
-        return ''
-    purchase_at = parse_result.purchase_at if _is_plausible_purchase_at(parse_result.purchase_at) else None
-    total_amount = parse_result.total_amount if _is_plausible_total_amount(parse_result.total_amount) else None
-    return _build_receipt_fingerprint(parse_result.store_name, purchase_at, total_amount, parse_result.lines)
-
 
 def _column_exists(conn, table_name: str, column_name: str) -> bool:
     rows = conn.execute(text(f'PRAGMA table_info({table_name})')).mappings().all()
