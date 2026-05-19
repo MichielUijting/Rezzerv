@@ -42,6 +42,11 @@ def _amounts_match(total_amount: Any, line_total_sum: Any, discount_total: Any, 
 
 
 def derive_parse_status_from_row(row: dict[str, Any]) -> str:
+    """Derive technical receipt parse status.
+
+    Legacy status `manual` is no longer exposed for active Kassa receipts.
+    Weak/incomplete receipts fall back to review_needed.
+    """
     store_name_correct = _store_name_is_usable(row.get('store_name'))
     try:
         line_count = int(row.get('line_count') or 0)
@@ -57,9 +62,7 @@ def derive_parse_status_from_row(row: dict[str, Any]) -> str:
     )
     if store_name_correct and article_count_correct and total_price_correct and line_sum_matches_total:
         return 'approved'
-    if store_name_correct and article_count_correct and total_price_correct:
-        return 'review_needed'
-    return 'manual'
+    return 'review_needed'
 
 
 def sync_receipt_statuses(engine, household_id: str | None = None) -> dict[str, int]:
@@ -106,7 +109,7 @@ def sync_receipt_statuses(engine, household_id: str | None = None) -> dict[str, 
             params,
         ).mappings().all()
 
-        counts = {'checked': 0, 'updated': 0, 'approved': 0, 'review_needed': 0, 'manual': 0}
+        counts = {'checked': 0, 'updated': 0, 'approved': 0, 'review_needed': 0}
         updates: list[dict[str, Any]] = []
         for row in rows:
             row_dict = dict(row)
