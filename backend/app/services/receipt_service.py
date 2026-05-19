@@ -28,7 +28,12 @@ from app.receipt_ingestion.product_candidate_gateway import append_product_candi
 from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
-from app.receipt_ingestion.amounts import parse_decimal as _parse_decimal
+from app.receipt_ingestion.amounts import (
+    amount_to_float as _amount_to_float,
+    parse_decimal as _parse_decimal,
+    parse_quantity as _parse_quantity,
+    price_from_split_parts as _price_from_split_parts,
+)
 from app.receipt_ingestion.fingerprints import (
     _build_receipt_fingerprint,
     _is_plausible_purchase_at,
@@ -381,23 +386,6 @@ def dedupe_receipts_for_household(engine, household_id: str) -> dict[str, Any]:
         'kept_count': len(rows) - len(duplicate_rows),
         'duplicate_table_ids': [row['receipt_table_id'] for row in duplicate_rows],
     }
-
-def _parse_quantity(raw: str | None) -> Decimal | None:
-    if not raw:
-        return None
-    cleaned = raw.strip().replace(',', '.')
-    cleaned = re.sub(r'[^0-9\-.]', '', cleaned)
-    if not cleaned:
-        return None
-    try:
-        return Decimal(cleaned)
-    except (InvalidOperation, ValueError):
-        return None
-
-
-def _amount_to_float(value: Decimal | None) -> float | None:
-    return float(value) if value is not None else None
-
 
 def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
     """Bepaalt de definitieve database-status voor een kassabon.
@@ -1928,15 +1916,6 @@ def _parse_dutch_textual_date(text: str, default_year: int | None = None) -> str
     try:
         return datetime(year, month, day).isoformat()
     except ValueError:
-        return None
-
-
-def _price_from_split_parts(euros: str | None, cents: str | None) -> Decimal | None:
-    if euros is None or cents is None:
-        return None
-    try:
-        return Decimal(f"{int(euros)}.{int(cents):02d}").quantize(Decimal('0.01'))
-    except Exception:
         return None
 
 
