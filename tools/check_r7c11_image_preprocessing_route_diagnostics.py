@@ -46,9 +46,43 @@ def normalize_name(value: str) -> str:
     return ''.join(ch for ch in text if ch.isalnum())
 
 
-def read_registry(path: Path) -> list[dict[str, str]]:
+def fixture_id_from_name(value: str) -> str:
+    base = Path(value).stem.lower()
+    base = re.sub(r'[^a-z0-9]+', '_', base).strip('_')
+    return f'zip_{base}' if base else 'zip_fixture'
+
+
+def rows_from_zip(zip_path: Path) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    with zipfile.ZipFile(zip_path) as archive:
+        for item in archive.infolist():
+            if item.is_dir():
+                continue
+            fixture_file = Path(item.filename).name
+            if Path(fixture_file).suffix.lower() not in IMAGE_EXTENSIONS:
+                continue
+            rows.append({
+                'canonical_fixture_id': fixture_id_from_name(fixture_file),
+                'fixture_file': fixture_file,
+            })
+    rows.sort(key=lambda row: row['fixture_file'].lower())
+    return rows
+
+
+def read_registry(path: Path | None, zip_path: Path) -> list[dict[str, str]]:
+    if path is None or not path.exists():
+        return rows_from_zip(zip_path)
     with path.open('r', encoding='utf-8-sig', newline='') as handle:
-        return list(csv.DictReader(handle))
+        rows = list(csv.DictReader(handle))
+    cleaned: list[dict[str, str]] = []
+    for row in rows:
+        fixture_file = str(row.get('fixture_file') or row.get('matched_original_filename') or row.get('filename') or '').strip()
+        if fixture_file and Path(fixture_file).suffix.lower() in IMAGE_EXTENSIONS:
+            cleaned.append({
+                'canonical_fixture_id': str(row.get('canonical_fixture_id') or fixture_id_from_name(fixture_file)),
+                'fixture_file': fixture_file,
+            })
+    return cleaned if cleaned else rows_from_zip(zip_path)
 
 
 def extract_fixture(zip_path: Path, fixture_file: str, output_dir: Path) -> Path | None:
@@ -69,26 +103,11 @@ def create_paddle(route_name: str):
     from paddleocr import PaddleOCR  # type: ignore
 
     if route_name == 'raw_paddle_current':
-        return PaddleOCR(
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            use_textline_orientation=False,
-            lang='en',
-        )
+        return PaddleOCR(use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False, lang='en')
     if route_name == 'paddle_orientation_enabled':
-        return PaddleOCR(
-            use_doc_orientation_classify=True,
-            use_doc_unwarping=False,
-            use_textline_orientation=True,
-            lang='en',
-        )
+        return PaddleOCR(use_doc_orientation_classify=True, use_doc_unwarping=False, use_textline_orientation=True, lang='en')
     if route_name == 'paddle_unwarping_enabled':
-        return PaddleOCR(
-            use_doc_orientation_classify=True,
-            use_doc_unwarping=True,
-            use_textline_orientation=True,
-            lang='en',
-        )
+        return PaddleOCR(use_doc_orientation_classify=True, use_doc_unwarping=True, use_textline_orientation=True, lang='en')
     raise ValueError(route_name)
 
 
@@ -112,12 +131,12 @@ def collect_paddle_lines(image_path: Path, route_name: str) -> tuple[list[str], 
         current_texts = _normalize_paddle_collection(first_present(payload, ('rec_texts', 'texts')))
         current_boxes = _normalize_paddle_collection(first_present(payload, ('rec_boxes', 'dt_polys', 'rec_polys')))
         current_scores = _normalize_paddle_collection(first_present(payload, ('rec_scores', 'scores')))
-        texts.extend([str(text) for text in current_texts if str(text).strip()])
-        boxes.extend(current_boxes[: len(current_texts)])
-        scores.extend(current_scores[: len(current_texts)])
+        normalized_texts = [str(text) for text in current_texts if str(text).strip()]
+        texts.extend(normalized_texts)
+        boxes.extend(current_boxes[: len(normalized_texts)])
+        scores.extend(current_scores[: len(normalized_texts)])
 
     grouped_lines = _group_paddle_texts_to_lines(texts, boxes if boxes else None)
-
     layout_boxes = []
     for text, score, box in zip(texts, scores, boxes):
         parsed = box_from_ocr_bbox(text, box, score)
@@ -125,7 +144,6 @@ def collect_paddle_lines(image_path: Path, route_name: str) -> tuple[list[str], 
             layout_boxes.append(parsed)
 
     diagnostic = build_text_layout_diagnostic(layout_boxes)
-
     return grouped_lines, {
         'ocr_line_count': len(grouped_lines),
         'region_count': diagnostic.candidate_regions_count,
@@ -139,31 +157,13 @@ def collect_tesseract_lines(image_path: Path, psm: int) -> tuple[list[str], dict
     if completed.returncode != 0:
         raise RuntimeError((completed.stderr or '').strip() or f'tesseract failed with code {completed.returncode}')
     lines = [line.strip() for line in (completed.stdout or '').splitlines() if line.strip()]
-    return lines, {
-        'ocr_line_count': len(lines),
-        'region_count': 0,
-        'selection_confidence': 0.0,
-    }
+    return lines, {'ocr_line_count': len(lines), 'region_count': 0, 'selection_confidence': 0.0}
 
 
 def parse_preview(lines: list[str], filename: str) -> dict[str, Any]:
-    result = _parse_result_from_text_lines(
-        lines,
-        filename,
-        rich_confidence=0.84,
-        partial_confidence=0.64,
-        review_confidence=0.36,
-    ) if lines else None
-
+    result = _parse_result_from_text_lines(lines, filename, rich_confidence=0.84, partial_confidence=0.64, review_confidence=0.36) if lines else None
     if result is None:
-        return {
-            'store_name': '',
-            'purchase_at': '',
-            'total_amount': '',
-            'article_line_count': 0,
-            'parse_status': 'failed',
-        }
-
+        return {'store_name': '', 'purchase_at': '', 'total_amount': '', 'article_line_count': 0, 'parse_status': 'failed'}
     return {
         'store_name': result.store_name or '',
         'purchase_at': result.purchase_at or '',
@@ -181,8 +181,7 @@ def route_quality_score(parsed: dict[str, Any], metrics: dict[str, Any]) -> floa
         score += 0.15
     if parsed.get('total_amount'):
         score += 0.35
-    article_count = int(parsed.get('article_line_count') or 0)
-    score += min(0.20, article_count * 0.01)
+    score += min(0.20, int(parsed.get('article_line_count') or 0) * 0.01)
     if float(metrics.get('selection_confidence') or 0.0) > 0.25:
         score += 0.05
     return round(min(1.0, score), 4)
@@ -202,7 +201,6 @@ def analyse_route(image_path: Path, fixture_file: str, route_name: str) -> dict[
 
     parsed = parse_preview(lines, fixture_file)
     quality = route_quality_score(parsed, metrics)
-
     return {
         'fixture_file': fixture_file,
         'route_name': route_name,
@@ -221,29 +219,24 @@ def analyse_route(image_path: Path, fixture_file: str, route_name: str) -> dict[
 
 def main() -> int:
     parser = argparse.ArgumentParser(description='R7c-11 image preprocessing route diagnostics')
-    parser.add_argument('--registry', required=True)
+    parser.add_argument('--registry', default='', help='Optional registry CSV. If missing, image fixtures are read directly from --fixtures-zip.')
     parser.add_argument('--fixtures-zip', required=True)
     parser.add_argument('--json-out', required=True)
     parser.add_argument('--csv-out', required=True)
     args = parser.parse_args()
 
-    registry = read_registry(Path(args.registry))
     zip_path = Path(args.fixtures_zip)
-
+    registry_path = Path(args.registry) if args.registry else None
+    registry = read_registry(registry_path, zip_path)
     results: list[dict[str, Any]] = []
 
     with tempfile.TemporaryDirectory(prefix='r7c11-routes-') as temp_dir:
         temp_root = Path(temp_dir)
-
         for row in registry:
             fixture_file = row.get('fixture_file') or ''
-            if Path(fixture_file).suffix.lower() not in IMAGE_EXTENSIONS:
-                continue
-
             image_path = extract_fixture(zip_path, fixture_file, temp_root)
             if image_path is None:
                 continue
-
             for route_name in ROUTES:
                 try:
                     result = analyse_route(image_path, fixture_file, route_name)
@@ -272,23 +265,7 @@ def main() -> int:
 
     csv_out = Path(args.csv_out)
     csv_out.parent.mkdir(parents=True, exist_ok=True)
-
-    fieldnames = [
-        'canonical_fixture_id',
-        'fixture_file',
-        'route_name',
-        'ocr_line_count',
-        'store_name',
-        'purchase_at',
-        'total_amount',
-        'article_line_count',
-        'parse_status',
-        'region_count',
-        'selection_confidence',
-        'route_quality_score',
-        'diagnostic_only',
-    ]
-
+    fieldnames = ['canonical_fixture_id', 'fixture_file', 'route_name', 'ocr_line_count', 'store_name', 'purchase_at', 'total_amount', 'article_line_count', 'parse_status', 'region_count', 'selection_confidence', 'route_quality_score', 'diagnostic_only']
     with csv_out.open('w', encoding='utf-8', newline='') as handle:
         writer = csv.DictWriter(handle, fieldnames=fieldnames)
         writer.writeheader()
@@ -296,8 +273,8 @@ def main() -> int:
 
     ah_rows = [row for row in results if re.search(r'ah foto 3', str(row.get('fixture_file', '')), re.I)]
     ah_rows = sorted(ah_rows, key=lambda row: float(row.get('route_quality_score') or 0.0), reverse=True)
-
     print('R7c-11 image preprocessing route diagnostics')
+    print(f'- image fixtures: {len(registry)}')
     print(f'- route results: {len(results)}')
     if ah_rows:
         best = ah_rows[0]
