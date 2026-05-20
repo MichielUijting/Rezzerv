@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import io
@@ -1077,7 +1077,7 @@ def _looks_like_non_product_receipt_label(label: str | None) -> bool:
         return True
     if re.search(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b', lowered):
         return True
-    letters = re.findall(r'[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿]', candidate)
+    letters = re.findall(r'[A-Za-zÀ-ÖØ-öø-ÿ]', candidate)
     digits = re.findall(r'\d', candidate)
     if len(letters) < 2 and len(digits) >= 2:
         return True
