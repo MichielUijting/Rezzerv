@@ -25,7 +25,6 @@ from app.services.receipt_service import (  # noqa: E402
     _normalize_paddle_collection,
 )
 
-
 PRICE_PATTERN = re.compile(r"\b\d+[\.,]\d{2}\b")
 TOTAL_PATTERN = re.compile(r"\b(totaal|total|te betalen)\b", re.I)
 
@@ -63,10 +62,11 @@ def get_model() -> PaddleOCR:
     return MODEL
 
 
-def normalize_name(value: str) -> str:
-    value = str(value or '').strip().lower().replace('\\', '/')
-    value = value.split('/')[-1]
-    return ''.join(ch for ch in value if ch.isalnum())
+def first_present(payload: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if key in payload and payload.get(key) is not None:
+            return payload.get(key)
+    return None
 
 
 def find_fixture(zip_path: Path, output_dir: Path) -> Path:
@@ -83,10 +83,20 @@ def find_fixture(zip_path: Path, output_dir: Path) -> Path:
 
 
 def flatten_points(raw_box: Any) -> tuple[float, float, float, float] | None:
+    if hasattr(raw_box, 'tolist'):
+        raw_box = raw_box.tolist()
+    if isinstance(raw_box, (list, tuple)) and len(raw_box) == 4 and not isinstance(raw_box[0], (list, tuple)):
+        try:
+            x1, y1, x2, y2 = [float(v) for v in raw_box]
+            return min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)
+        except Exception:
+            return None
     if not isinstance(raw_box, (list, tuple)):
         return None
     points: list[tuple[float, float]] = []
     for item in raw_box:
+        if hasattr(item, 'tolist'):
+            item = item.tolist()
         if isinstance(item, (list, tuple)) and len(item) >= 2:
             try:
                 points.append((float(item[0]), float(item[1])))
@@ -102,12 +112,10 @@ def flatten_points(raw_box: Any) -> tuple[float, float, float, float] | None:
 def collect_boxes(image_path: Path) -> list[OcrBox]:
     result = get_model().predict(str(image_path))
     collected: list[OcrBox] = []
-
     for item in _normalize_paddle_collection(result):
         payload = _extract_payload_from_paddle_item(item)
-        texts = _normalize_paddle_collection(payload.get('rec_texts') or payload.get('texts'))
-        boxes = _normalize_paddle_collection(payload.get('rec_boxes') or payload.get('dt_polys') or payload.get('rec_polys'))
-
+        texts = _normalize_paddle_collection(first_present(payload, ('rec_texts', 'texts')))
+        boxes = _normalize_paddle_collection(first_present(payload, ('rec_boxes', 'dt_polys', 'rec_polys')))
         for text, raw_box in zip(texts, boxes):
             text_value = str(text).strip()
             if not text_value:
@@ -117,29 +125,23 @@ def collect_boxes(image_path: Path) -> list[OcrBox]:
                 continue
             x1, y1, x2, y2 = parsed
             collected.append(OcrBox(text=text_value, x1=x1, y1=y1, x2=x2, y2=y2))
-
     return collected
 
 
 def cluster_lines(boxes: list[OcrBox]) -> list[list[OcrBox]]:
     ordered = sorted(boxes, key=lambda box: (box.center_y, box.x1))
     lines: list[list[OcrBox]] = []
-
     threshold = 18.0
-
     for box in ordered:
         if not lines:
             lines.append([box])
             continue
-
         current = lines[-1]
         avg_y = sum(item.center_y for item in current) / len(current)
-
         if math.fabs(box.center_y - avg_y) <= threshold:
             current.append(box)
         else:
             lines.append([box])
-
     return lines
 
 
@@ -158,22 +160,14 @@ def detect_price_anchors(lines: list[list[OcrBox]]) -> list[OcrBox]:
 
 def candidate_pairs(lines: list[list[OcrBox]]) -> list[dict[str, str]]:
     pairs: list[dict[str, str]] = []
-
     for line in lines:
         prices = [box for box in line if is_price(box.text)]
         articles = [box for box in line if not is_price(box.text)]
-
         if not prices or not articles:
             continue
-
         article_text = ' '.join(item.text for item in sorted(articles, key=lambda item: item.x1))
-
         for price in prices:
-            pairs.append({
-                'article': article_text,
-                'price': price.text,
-            })
-
+            pairs.append({'article': article_text, 'price': price.text})
     return pairs
 
 
@@ -209,14 +203,12 @@ def main() -> int:
     parser.add_argument('--json-out', required=True)
     parser.add_argument('--csv-out', required=True)
     args = parser.parse_args()
-
     with tempfile.TemporaryDirectory(prefix='r7c12-ah3-') as td:
         image_path = find_fixture(Path(args.fixtures_zip), Path(td))
         boxes = collect_boxes(image_path)
         lines = cluster_lines(boxes)
         anchors = detect_price_anchors(lines)
         pairs = candidate_pairs(lines)
-
         result = {
             'fixture_file': 'AH foto 3.jpg',
             'ocr_box_count': len(boxes),
@@ -231,30 +223,15 @@ def main() -> int:
             'diagnostic_only': True,
             'sample_pairs': pairs[:10],
         }
-
     json_out = Path(args.json_out)
     json_out.parent.mkdir(parents=True, exist_ok=True)
     json_out.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
-
     csv_out = Path(args.csv_out)
     csv_out.parent.mkdir(parents=True, exist_ok=True)
     with csv_out.open('w', encoding='utf-8', newline='') as handle:
-        writer = csv.DictWriter(handle, fieldnames=[
-            'fixture_file',
-            'ocr_box_count',
-            'raw_ocr_line_count',
-            'topology_line_count',
-            'price_anchor_count',
-            'candidate_article_price_pairs',
-            'reconstructed_article_line_count',
-            'detected_total_amount',
-            'store_name',
-            'purchase_at',
-            'diagnostic_only',
-        ])
+        writer = csv.DictWriter(handle, fieldnames=['fixture_file', 'ocr_box_count', 'raw_ocr_line_count', 'topology_line_count', 'price_anchor_count', 'candidate_article_price_pairs', 'reconstructed_article_line_count', 'detected_total_amount', 'store_name', 'purchase_at', 'diagnostic_only'])
         writer.writeheader()
         writer.writerow({k: v for k, v in result.items() if k != 'sample_pairs'})
-
     print('R7c-12 AH foto 3 topology reconstruction diagnostics')
     print(f"ocr_box_count: {result['ocr_box_count']}")
     print(f"topology_line_count: {result['topology_line_count']}")
