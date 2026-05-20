@@ -4,6 +4,7 @@ import argparse
 import csv
 import json
 import re
+import subprocess
 import sys
 import tempfile
 import zipfile
@@ -25,7 +26,6 @@ from app.services.receipt_service import (  # noqa: E402
     _group_paddle_texts_to_lines,
     _normalize_paddle_collection,
     _parse_result_from_text_lines,
-    _run_tesseract_ocr,
 )
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
@@ -134,8 +134,11 @@ def collect_paddle_lines(image_path: Path, route_name: str) -> tuple[list[str], 
 
 
 def collect_tesseract_lines(image_path: Path, psm: int) -> tuple[list[str], dict[str, Any]]:
-    text = _run_tesseract_ocr(str(image_path), config=f'--psm {psm}') or ''
-    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    command = ['tesseract', str(image_path), 'stdout', '-l', 'nld+eng', '--psm', str(psm)]
+    completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=90)
+    if completed.returncode != 0:
+        raise RuntimeError((completed.stderr or '').strip() or f'tesseract failed with code {completed.returncode}')
+    lines = [line.strip() for line in (completed.stdout or '').splitlines() if line.strip()]
     return lines, {
         'ocr_line_count': len(lines),
         'region_count': 0,
