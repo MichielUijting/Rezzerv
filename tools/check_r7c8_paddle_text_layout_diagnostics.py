@@ -16,7 +16,7 @@ for candidate in (ROOT, ROOT / 'backend', Path('/app')):
     if candidate.exists() and candidate_text not in sys.path:
         sys.path.insert(0, candidate_text)
 
-from receipt_ingestion.text_layout_regions import box_from_ocr_bbox, build_text_layout_diagnostic
+from app.receipt_ingestion.text_layout_regions import box_from_ocr_bbox, build_text_layout_diagnostic
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
 
