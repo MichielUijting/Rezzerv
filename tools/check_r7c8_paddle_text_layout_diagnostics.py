@@ -4,10 +4,17 @@ import argparse
 import csv
 import json
 import re
+import sys
 import tempfile
 import zipfile
 from pathlib import Path
 from typing import Any
+
+ROOT = Path(__file__).resolve().parents[1]
+for candidate in (ROOT, ROOT / 'backend', Path('/app')):
+    candidate_text = str(candidate)
+    if candidate.exists() and candidate_text not in sys.path:
+        sys.path.insert(0, candidate_text)
 
 from receipt_ingestion.text_layout_regions import box_from_ocr_bbox, build_text_layout_diagnostic
 
