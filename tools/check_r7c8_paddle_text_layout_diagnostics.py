@@ -27,6 +27,13 @@ def normalize_name(value: str) -> str:
     return ''.join(ch for ch in text if ch.isalnum())
 
 
+def first_present(payload: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for key in keys:
+        if key in payload and payload.get(key) is not None:
+            return payload.get(key)
+    return None
+
+
 def read_registry(path: Path) -> list[dict[str, str]]:
     with path.open('r', encoding='utf-8-sig', newline='') as handle:
         return list(csv.DictReader(handle))
@@ -115,10 +122,9 @@ def analyse_image(model: Any, image_path: Path) -> dict[str, Any]:
     boxes = []
     for item in normalize_collection(result):
         payload = payload_from_item(item)
-        texts = normalize_collection(payload.get('rec_texts') or payload.get('texts'))
-        scores = normalize_collection(payload.get('rec_scores') or payload.get('scores'))
-        raw_boxes = payload.get('rec_boxes') or payload.get('dt_polys') or payload.get('rec_polys')
-        raw_boxes = normalize_collection(raw_boxes)
+        texts = normalize_collection(first_present(payload, ('rec_texts', 'texts')))
+        scores = normalize_collection(first_present(payload, ('rec_scores', 'scores')))
+        raw_boxes = normalize_collection(first_present(payload, ('rec_boxes', 'dt_polys', 'rec_polys')))
         for index, text in enumerate(texts):
             score = scores[index] if index < len(scores) else None
             raw_box = raw_boxes[index] if index < len(raw_boxes) else None
