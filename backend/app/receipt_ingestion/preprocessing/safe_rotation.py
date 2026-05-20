@@ -1,0 +1,163 @@
+﻿from __future__ import annotations
+
+import math
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+
+try:
+    import cv2  # type: ignore
+    import numpy as np  # type: ignore
+except Exception:
+    cv2 = None  # type: ignore
+    np = None  # type: ignore
+
+SAFE_ABS_ANGLE_LIMIT = 45.0
+MIN_CONFIDENCE = 0.55
+IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+
+
+@dataclass
+class SafeRotationDecision:
+    preprocessing_step: str
+    rotation_allowed: bool
+    selected_route: str
+    estimated_angle_deg: float
+    angle_confidence: float
+    angle_consensus: float
+    hough_angle_count: int
+    min_area_rect_angle: float | None
+    fallback_reason: list[str]
+    candidate_angles: list[float]
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _fallback(reason: str) -> SafeRotationDecision:
+    return SafeRotationDecision(
+        preprocessing_step="safe_rotation",
+        rotation_allowed=False,
+        selected_route="original",
+        estimated_angle_deg=0.0,
+        angle_confidence=0.0,
+        angle_consensus=0.0,
+        hough_angle_count=0,
+        min_area_rect_angle=None,
+        fallback_reason=[reason],
+        candidate_angles=[],
+    )
+
+
+def _normalize_angle(value: float) -> float:
+    while value <= -90:
+        value += 180
+    while value > 90:
+        value -= 180
+    return value
+
+
+def _median(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    return ordered[len(ordered) // 2]
+
+
+def _decode(file_bytes: bytes):
+    if cv2 is None or np is None:
+        return None
+    data = np.frombuffer(file_bytes, dtype=np.uint8)
+    return cv2.imdecode(data, cv2.IMREAD_COLOR)
+
+
+def _encode_png(image) -> bytes | None:
+    ok, encoded = cv2.imencode(".png", image)
+    return bytes(encoded.tobytes()) if ok else None
+
+
+def _hough_angles(image) -> list[float]:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    edges = cv2.Canny(gray, 50, 150)
+    lines = cv2.HoughLines(edges, 1, math.pi / 180, 200)
+    if lines is None:
+        return []
+    angles: list[float] = []
+    for line in lines[:40]:
+        _rho, theta = line[0]
+        angle = _normalize_angle(math.degrees(theta) - 90)
+        if abs(angle) <= 85:
+            angles.append(round(float(angle), 2))
+    return angles
+
+
+def _rect_angle(image) -> float | None:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    thresh = cv2.threshold(blur, 180, 255, cv2.THRESH_BINARY)[1]
+    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    contour = max(contours, key=cv2.contourArea)
+    if cv2.contourArea(contour) < 1000:
+        return None
+    angle = float(cv2.minAreaRect(contour)[-1])
+    if angle < -45:
+        angle += 90
+    elif angle > 45:
+        angle -= 90
+    return round(_normalize_angle(angle), 2)
+
+
+def _estimate(image) -> tuple[float, float, float, int, float | None, list[float]]:
+    hough = _hough_angles(image)
+    rect = _rect_angle(image)
+    candidates = list(hough)
+    if rect is not None:
+        candidates.append(rect)
+    angle = _median(candidates) if candidates else 0.0
+    close = [item for item in candidates if abs(item - angle) <= 5]
+    consensus = len(close) / max(1, len(candidates))
+    enough_lines = min(1.0, len(hough) / 10.0)
+    plausible = 1.0 if abs(angle) <= SAFE_ABS_ANGLE_LIMIT else 0.0
+    confidence = round((consensus * 0.55) + (enough_lines * 0.25) + (plausible * 0.20), 4)
+    return round(angle, 2), confidence, round(consensus, 4), len(hough), rect, candidates[:20]
+
+
+def apply_safe_rotation_preprocessing(file_bytes: bytes, filename: str) -> tuple[bytes, SafeRotationDecision]:
+    suffix = Path(filename or "").suffix.lower()
+    if suffix and suffix not in IMAGE_SUFFIXES:
+        return file_bytes, _fallback("unsupported_image_suffix")
+
+    image = _decode(file_bytes)
+    if image is None:
+        return file_bytes, _fallback("image_decode_failed_or_cv2_unavailable")
+
+    angle, confidence, consensus, hough_count, rect, candidates = _estimate(image)
+    reasons: list[str] = []
+
+    if abs(angle) > SAFE_ABS_ANGLE_LIMIT:
+        reasons.append("angle_exceeds_safe_limit")
+    if confidence < MIN_CONFIDENCE:
+        reasons.append("low_angle_confidence")
+    if abs(angle) < 0.5:
+        reasons.append("angle_effectively_zero")
+
+    if reasons:
+        return file_bytes, SafeRotationDecision(
+            "safe_rotation", False, "original", angle, confidence, consensus,
+            hough_count, rect, reasons, candidates
+        )
+
+    height, width = image.shape[:2]
+    matrix = cv2.getRotationMatrix2D((width / 2, height / 2), angle, 1.0)
+    rotated = cv2.warpAffine(image, matrix, (width, height), borderMode=cv2.BORDER_REPLICATE)
+    rotated_bytes = _encode_png(rotated)
+
+    if not rotated_bytes:
+        return file_bytes, _fallback("rotation_encode_failed")
+
+    return rotated_bytes, SafeRotationDecision(
+        "safe_rotation", True, "rotate_only", angle, confidence, consensus,
+        hough_count, rect, [], candidates
+    )
