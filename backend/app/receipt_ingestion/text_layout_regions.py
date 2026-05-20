@@ -88,14 +88,7 @@ def box_from_ocr_bbox(text: Any, bbox: Any, confidence: Any = None) -> TextBox |
                 parsed_confidence = None
         if x_max <= x_min or y_max <= y_min:
             return None
-        return TextBox(
-            text=normalized_text,
-            confidence=parsed_confidence,
-            x_min=x_min,
-            y_min=y_min,
-            x_max=x_max,
-            y_max=y_max,
-        )
+        return TextBox(normalized_text, parsed_confidence, x_min, y_min, x_max, y_max)
     except Exception:
         return None
 
@@ -165,16 +158,60 @@ def cluster_text_regions(boxes: list[TextBox]) -> list[TextRegion]:
     return regions
 
 
+def select_primary_text_region(regions: list[dict[str, Any]]) -> dict[str, Any]:
+    ranked = sorted(
+        [region for region in regions if isinstance(region, dict)],
+        key=lambda region: (
+            float(region.get('score') or 0.0),
+            int(region.get('text_count') or 0),
+            int(region.get('line_count') or 0),
+        ),
+        reverse=True,
+    )
+    if not ranked:
+        return {
+            'selected_region_id': None,
+            'selected_bbox': None,
+            'selected_score': 0.0,
+            'selected_text_count': 0,
+            'selected_line_count': 0,
+            'selection_confidence': 0.0,
+            'multi_text_regions_detected': False,
+            'competing_region_count': 0,
+            'reason': 'no text regions available',
+            'diagnostic_only': True,
+        }
+    selected = ranked[0]
+    selected_score = float(selected.get('score') or 0.0)
+    competing = [
+        region for region in ranked[1:]
+        if int(region.get('text_count') or 0) >= 3
+        and float(region.get('score') or 0.0) >= max(0.12, selected_score * 0.22)
+    ]
+    second_score = float(competing[0].get('score') or 0.0) if competing else 0.0
+    confidence = min(1.0, selected_score) if not competing else max(0.0, min(1.0, (selected_score - second_score) / max(selected_score, 0.0001)))
+    return {
+        'selected_region_id': selected.get('region_id'),
+        'selected_bbox': selected.get('bbox'),
+        'selected_score': round(selected_score, 4),
+        'selected_text_count': int(selected.get('text_count') or 0),
+        'selected_line_count': int(selected.get('line_count') or 0),
+        'selection_confidence': round(confidence, 4),
+        'multi_text_regions_detected': bool(competing),
+        'competing_region_count': len(competing),
+        'reason': 'single dominant text region' if not competing else 'primary region selected from multiple competing text regions',
+        'diagnostic_only': True,
+    }
+
+
 def build_text_layout_diagnostic(boxes: list[TextBox]) -> TextLayoutDiagnostic:
     regions = cluster_text_regions(boxes)
-    primary = regions[0] if regions else None
-    secondary_regions = [region for region in regions[1:] if primary and region.text_count >= 3 and region.score >= max(0.12, primary.score * 0.22)]
-    multi = bool(primary and secondary_regions)
-    primary_confidence = primary.confidence if primary and primary.confidence is not None else 0.0
+    selection = select_primary_text_region([asdict(region) for region in regions])
+    primary_confidence = regions[0].confidence if regions and regions[0].confidence is not None else 0.0
     return TextLayoutDiagnostic(
         candidate_regions_count=len(regions),
-        primary_region_id=primary.region_id if primary else None,
+        primary_region_id=selection['selected_region_id'],
         primary_region_confidence=primary_confidence,
-        multi_text_regions_detected=multi,
+        multi_text_regions_detected=bool(selection['multi_text_regions_detected']),
         regions=[asdict(region) for region in regions],
     )
