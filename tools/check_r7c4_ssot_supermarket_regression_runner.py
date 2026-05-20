@@ -107,20 +107,24 @@ def extract_details(payload: dict[str, Any]) -> list[dict[str, Any]]:
     return combined
 
 
-def detail_key(detail: dict[str, Any]) -> str:
-    for key in ('source_file', 'matched_original_filename', 'original_filename'):
+def detail_keys(detail: dict[str, Any]) -> list[str]:
+    keys: list[str] = []
+    for key in ('matched_original_filename', 'source_file', 'original_filename'):
         normalized = normalize_filename(detail.get(key))
-        if normalized:
-            return normalized
-    return normalize_receipt_id(detail.get('receipt_id'))
+        if normalized and normalized not in keys:
+            keys.append(normalized)
+    receipt_id = normalize_receipt_id(detail.get('receipt_id'))
+    if receipt_id and receipt_id not in keys:
+        keys.append(receipt_id)
+    return keys
 
 
 def build_detail_index(details: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     index: dict[str, dict[str, Any]] = {}
     for detail in details:
-        key = detail_key(detail)
-        if key:
-            index[key] = detail
+        for key in detail_keys(detail):
+            # Keep first match stable. The SSOT payload itself remains the source of truth.
+            index.setdefault(key, detail)
     return index
 
 
@@ -178,6 +182,8 @@ def main() -> int:
                 'expected_line_count': fixture['expected_line_count'],
                 'po_norm_status_label': '',
                 'technical_parse_status': '',
+                'source_file': '',
+                'matched_original_filename': '',
                 'result': 'missing_ssot_detail',
                 'failed_criteria': 'MISSING_SSOT_DETAIL',
             })
@@ -195,6 +201,8 @@ def main() -> int:
             'actual_line_count': detail.get('line_count', ''),
             'po_norm_status_label': label,
             'technical_parse_status': detail.get('technical_parse_status', ''),
+            'source_file': detail.get('source_file', ''),
+            'matched_original_filename': detail.get('matched_original_filename', ''),
             'result': detail.get('result', ''),
             'failed_criteria': ','.join(str(item) for item in failed_criteria),
         })
@@ -237,7 +245,8 @@ def main() -> int:
             fieldnames = [
                 'canonical_fixture_id', 'fixture_file', 'baseline_receipt_id',
                 'expected_total', 'actual_total', 'expected_line_count', 'actual_line_count',
-                'po_norm_status_label', 'technical_parse_status', 'result', 'failed_criteria',
+                'po_norm_status_label', 'technical_parse_status', 'source_file', 'matched_original_filename',
+                'result', 'failed_criteria',
             ]
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
