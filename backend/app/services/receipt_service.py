@@ -28,6 +28,7 @@ from app.receipt_ingestion.product_candidate_gateway import append_product_candi
 from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
+from app.receipt_ingestion.preprocessing.safe_rotation import apply_safe_rotation_preprocessing
 from app.receipt_ingestion.amounts import (
     amount_to_float as _amount_to_float,
     parse_decimal as _parse_decimal,
@@ -35,7 +36,6 @@ from app.receipt_ingestion.amounts import (
     price_from_split_parts as _price_from_split_parts,
 )
 from app.receipt_ingestion.fingerprints import (
-from app.receipt_ingestion.preprocessing.safe_rotation import apply_safe_rotation_preprocessing
     _build_receipt_fingerprint,
     _is_plausible_purchase_at,
     _is_plausible_total_amount,
@@ -2596,8 +2596,20 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
         mime_type = 'image/png'
 
     if mime_type.startswith('image/') or suffix in {'.png', '.jpg', '.jpeg', '.webp'}:
-        paddle_lines, paddle_confidence = _ocr_image_text_with_paddle(file_bytes, filename)
-        tesseract_lines, tesseract_confidence = _ocr_image_text_with_tesseract(file_bytes, filename)
+        ocr_file_bytes = file_bytes
+        ocr_filename = filename
+        safe_rotation_decision = None
+        try:
+            ocr_file_bytes, safe_rotation_decision = apply_safe_rotation_preprocessing(file_bytes, filename)
+            if safe_rotation_decision and safe_rotation_decision.selected_route == 'rotate_only':
+                ocr_filename = f"{Path(filename).stem}-safe-rotation.png"
+        except Exception as exc:
+            LOGGER.warning('Safe rotation preprocessing mislukt voor %s: %s', filename, exc)
+            ocr_file_bytes = file_bytes
+            ocr_filename = filename
+
+        paddle_lines, paddle_confidence = _ocr_image_text_with_paddle(ocr_file_bytes, ocr_filename)
+        tesseract_lines, tesseract_confidence = _ocr_image_text_with_tesseract(ocr_file_bytes, ocr_filename)
 
         paddle_result = _parse_result_from_text_lines(
             paddle_lines,
