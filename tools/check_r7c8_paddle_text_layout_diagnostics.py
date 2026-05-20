@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
-from app.receipt_ingestion.text_layout_regions import box_from_ocr_bbox, build_text_layout_diagnostic
+from receipt_ingestion.text_layout_regions import box_from_ocr_bbox, build_text_layout_diagnostic
 
 IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp'}
 
