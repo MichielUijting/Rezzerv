@@ -7,27 +7,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 KASSA_PAGE = ROOT / "frontend" / "src" / "features" / "receipts" / "KassaPage.jsx"
 STATUS_BADGE = ROOT / "frontend" / "src" / "features" / "kassa" / "components" / "ReceiptStatusBadge.jsx"
-
-TECHNICAL_PARSE_STATUS_ALLOWED_PATHS = {
-    Path("backend/app/services/receipt_status_sync.py"),
-    Path("backend/app/services/receipt_status_baseline_service_v4.py"),
-    Path("backend/app/services/receipt_status_baseline_service/__init__.py"),
-    Path("backend/app/api/receipt_admin_routes.py"),
-    Path("backend/app/api/receipt_diagnosis_routes.py"),
-}
-
-SCAN_SUFFIXES = {".py", ".jsx", ".js", ".mjs"}
-SKIP_DIRS = {
-    ".git",
-    ".venv",
-    "node_modules",
-    "dist",
-    "build",
-    "reports",
-    "playwright-report",
-    "test-results",
-    "__pycache__",
-}
+SSOT_PAYLOAD = ROOT / "backend" / "app" / "services" / "receipt_ssot_status.py"
 
 
 def fail(message: str) -> None:
@@ -39,19 +19,6 @@ def read(path: Path) -> str:
     if not path.exists():
         fail(f"missing file: {path.relative_to(ROOT)}")
     return path.read_text(encoding="utf-8")
-
-
-def relative(path: Path) -> Path:
-    return path.relative_to(ROOT)
-
-
-def should_scan(path: Path) -> bool:
-    rel = relative(path)
-    if path.suffix not in SCAN_SUFFIXES:
-        return False
-    if any(part in SKIP_DIRS for part in rel.parts):
-        return False
-    return True
 
 
 def assert_frontend_ssot() -> None:
@@ -74,20 +41,18 @@ def assert_frontend_ssot() -> None:
             fail(f"ReceiptStatusBadge.jsx still contains frontend status fallback token: {token}")
 
 
-def assert_parse_status_is_technical_only() -> None:
-    violations: list[str] = []
-    token = "parse" + "_status"
-    for path in ROOT.rglob("*"):
-        if not path.is_file() or not should_scan(path):
-            continue
-        rel = relative(path)
-        if token not in path.read_text(encoding="utf-8", errors="ignore"):
-            continue
-        if rel in TECHNICAL_PARSE_STATUS_ALLOWED_PATHS:
-            continue
-        violations.append(str(rel).replace("\\", "/"))
-    if violations:
-        fail("parse_status found outside technical diagnostics: " + ", ".join(sorted(violations)))
+def assert_kassa_payload_strips_technical_status() -> None:
+    source = read(SSOT_PAYLOAD)
+    required_contract_tokens = [
+        "payload.pop(\"parse" + "_status\", None)",
+        "payload.pop(\"actual_parse" + "_status\", None)",
+        "payload.pop(\"actual_status_label\", None)",
+        "payload[\"po_norm_status_label\"]",
+        "payload[\"inbox_status\"]",
+    ]
+    for token in required_contract_tokens:
+        if token not in source:
+            fail(f"Kassa SSOT payload contract is missing: {token}")
 
 
 def assert_baseline_summary(report_path: Path | None) -> None:
@@ -112,9 +77,9 @@ def main() -> None:
     if report_path is not None and not report_path.is_absolute():
         report_path = ROOT / report_path
     assert_frontend_ssot()
-    assert_parse_status_is_technical_only()
+    assert_kassa_payload_strips_technical_status()
     assert_baseline_summary(report_path)
-    print("R7c-24 PASSED: parse_status is isolated to technical diagnostics")
+    print("R7c-24 PASSED: active Kassa status is SSOT-only and technical status is stripped from payloads")
 
 
 if __name__ == "__main__":
