@@ -42,16 +42,6 @@ function formatMoney(value, currency = 'EUR') {
   }
 }
 
-function parseStatusLabel(value) {
-  if (value === 'parsed') return 'Geparsed'
-  if (value === 'partial') return 'Gedeeltelijk herkend'
-  if (value === 'review_needed') return 'Controle nodig'
-  if (value === 'approved') return 'Goedgekeurd'
-  if (value === 'approved_override') return 'Goedgekeurd met override'
-  if (value === 'failed') return 'Niet herkend'
-  return value || '-'
-}
-
 function emailPartLabel(value) {
   if (value === 'attachment') return 'Bijlage uit e-mail'
   if (value === 'html_body') return 'HTML-body van e-mail'
@@ -276,10 +266,10 @@ function persistStoredReceiptIds(storageKey, ids) {
   }
 }
 
-function normalizeInboxStatus(value) {
-  const normalized = String(value || '').trim()
-  if (normalized === 'Gecontroleerd') return 'Gecontroleerd'
-  return 'Controle nodig'
+function requirePoNormStatusLabel(item) {
+  const label = String(item?.po_norm_status_label || '').trim()
+  if (!label) return 'API-contractfout: po_norm_status_label ontbreekt'
+  return label
 }
 
 
@@ -572,7 +562,6 @@ function clearShareQueryParams() {
     url.searchParams.delete('share_status')
     url.searchParams.delete('receipt_table_id')
     url.searchParams.delete('duplicate')
-    url.searchParams.delete('parse_status')
     url.searchParams.delete('message')
     window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
   } catch {
@@ -589,7 +578,6 @@ function readShareQueryParams() {
       shareStatus,
       receiptTableId: params.get('receipt_table_id') || '',
       duplicate: params.get('duplicate') === '1',
-      parseStatus: params.get('parse_status') || '',
       message: params.get('message') || '',
     }
   } catch {
@@ -1876,7 +1864,7 @@ export default function KassaPage() {
             announceDuplicate(sharedResult)
           } else {
             setDuplicateNotice('')
-            setStatus(`Gedeelde bon ontvangen met status: ${parseStatusLabel(sharedResult.parseStatus || 'partial')}`)
+            setStatus('Gedeelde bon ontvangen. De bon staat nu in de Kassa.')
           }
           if (sharedResult.receiptTableId) {
             try {
@@ -1942,7 +1930,7 @@ export default function KassaPage() {
   const inboxItems = useMemo(() => {
     return receipts
       .filter((item) => !deletedReceiptIds.includes(String(item?.receipt_table_id || '')))
-      .map((item) => ({ ...item, inbox_status: normalizeInboxStatus(item?.inbox_status) }))
+      .map((item) => ({ ...item, inbox_status: requirePoNormStatusLabel(item) }))
       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))
   }, [receipts, deletedReceiptIds])
 
@@ -2152,7 +2140,7 @@ export default function KassaPage() {
 
         if (result?.receipt_table_id) {
           setDuplicateNotice('')
-          setStatus(`Foto verwerkt met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Kassa.`)
+          setStatus('Foto verwerkt. De bon staat nu in de Kassa.')
         } else {
           setStatus('Foto opgeslagen, maar nog niet als bruikbare kassabon herkend.')
         }
@@ -2243,7 +2231,7 @@ export default function KassaPage() {
 
         if (result?.receipt_table_id) {
           setDuplicateNotice('')
-          setStatus(`E-mailbon ontvangen met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Kassa.`)
+          setStatus('E-mailbon ontvangen. De bon staat nu in de Kassa.')
         } else {
           setStatus('E-mail verwerkt, maar nog niet als bruikbare kassabon herkend.')
         }
@@ -2347,7 +2335,7 @@ export default function KassaPage() {
 
         if (result?.receipt_table_id) {
           setDuplicateNotice('')
-          setStatus(`Bon toegevoegd met status: ${parseStatusLabel(result.parse_status)}. De bon staat nu in de Kassa.`)
+          setStatus('Bon toegevoegd. De bon staat nu in de Kassa.')
         } else {
           setStatus('Bestand opgeslagen, maar nog niet als bruikbare kassabon herkend.')
         }
