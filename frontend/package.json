@@ -11,7 +11,8 @@
                     "test:e2e:ui":  "playwright test --ui",
                     "test:e2e:headed":  "playwright test --headed",
                     "test:e2e:report":  "playwright show-report",
-                    "regression":  "node ./scripts/run-regression.mjs"
+                    "guard:ssot":  "python ../tools/check_r7c22_ssot_release_guard.py",
+                    "regression":  "npm run guard:ssot && node ./scripts/run-regression.mjs"
                 },
     "dependencies":  {
                          "@zxing/browser":  "^0.1.5",
