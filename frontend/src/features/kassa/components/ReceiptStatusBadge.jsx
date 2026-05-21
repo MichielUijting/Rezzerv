@@ -1,19 +1,20 @@
-function normalizeReceiptStatusLabel(value) {
+function requirePoNormStatusLabel(value) {
   const normalized = String(value || '').trim()
-  if (!normalized || normalized === 'Handmatig' || normalized.toLowerCase() === 'manual') return 'Controle nodig'
+  if (!normalized) {
+    return 'API-contractfout: po_norm_status_label ontbreekt'
+  }
   return normalized
 }
 
 function inboxStatusStyle(value) {
-  const normalizedValue = normalizeReceiptStatusLabel(value)
-  if (normalizedValue === 'Gecontroleerd') {
+  if (value === 'Gecontroleerd') {
     return {
       background: '#ECFDF3',
       color: '#027A48',
       border: '1px solid #ABEFC6',
     }
   }
-  if (normalizedValue === 'Controle nodig') {
+  if (value === 'Controle nodig') {
     return {
       background: '#FFFAEB',
       color: '#166534',
@@ -21,17 +22,17 @@ function inboxStatusStyle(value) {
     }
   }
   return {
-    background: '#FFFAEB',
-    color: '#166534',
-    border: '1px solid #FEDF89',
+    background: '#FEF3F2',
+    color: '#B42318',
+    border: '1px solid #FECDCA',
   }
 }
 
 export default function ReceiptStatusBadge({ value }) {
-  const normalizedValue = normalizeReceiptStatusLabel(value)
+  const label = requirePoNormStatusLabel(value)
   return (
     <span
-      data-testid={`receipt-inbox-status-${String(normalizedValue || '').toLowerCase().replace(/\s+/g, '-')}`}
+      data-testid={`receipt-inbox-status-${String(label || '').toLowerCase().replace(/\s+/g, '-')}`}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -41,10 +42,10 @@ export default function ReceiptStatusBadge({ value }) {
         fontSize: '13px',
         fontWeight: 700,
         whiteSpace: 'nowrap',
-        ...inboxStatusStyle(normalizedValue),
+        ...inboxStatusStyle(label),
       }}
     >
-      {normalizedValue || '-'}
+      {label}
     </span>
   )
 }
