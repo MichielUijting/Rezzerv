@@ -13305,12 +13305,6 @@ def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)
     log_regression_action('fixture.browser_reset', **payload)
     return payload
 
-@app.post("/api/dev/reset-data")
-def reset_data():
-    reset_dev_tables()
-    return {"status": "ok"}
-
-
 @app.post("/api/dev/diagnostics/store-location-options")
 def run_store_location_diagnostic(payload: DiagnosticRequest):
     effective_household_id = str(payload.household_id or 'demo-household')
@@ -14404,104 +14398,6 @@ def seed_inventory_event(conn, *, article_name: str, quantity: int, old_quantity
             'note': note,
         },
     )
-
-@app.post("/api/dev/generate-demo-data")
-def generate_demo_data(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
-    reset_dev_tables()
-
-    with engine.begin() as conn:
-        kitchen_id = conn.execute(
-            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), 'Keuken', 'demo-household') RETURNING id")
-        ).scalar_one()
-        pantry_id = conn.execute(
-            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), 'Berging', 'demo-household') RETURNING id")
-        ).scalar_one()
-        bathroom_id = conn.execute(
-            text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), 'Badkamer', 'demo-household') RETURNING id")
-        ).scalar_one()
-
-        kast1_id = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), 'Kast 1', :space_id) RETURNING id"),
-            {"space_id": kitchen_id},
-        ).scalar_one()
-        koelkast_id = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), 'Koelkast', :space_id) RETURNING id"),
-            {"space_id": kitchen_id},
-        ).scalar_one()
-        voorraadkast_id = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), 'Voorraadkast', :space_id) RETURNING id"),
-            {"space_id": pantry_id},
-        ).scalar_one()
-        diepvries_id = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), 'Diepvries', :space_id) RETURNING id"),
-            {"space_id": pantry_id},
-        ).scalar_one()
-        badkamerkast_id = conn.execute(
-            text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), 'Kast', :space_id) RETURNING id"),
-            {"space_id": bathroom_id},
-        ).scalar_one()
-
-        demo_rows = [
-            ("Rijst", 2, kitchen_id, kast1_id),
-            ("Pasta", 3, pantry_id, voorraadkast_id),
-            ("Koffie", 1, kitchen_id, kast1_id),
-            ("Shampoo", 4, bathroom_id, badkamerkast_id),
-            ("Tomaten", 3, kitchen_id, koelkast_id),
-            ("Tomaten", 2, pantry_id, voorraadkast_id),
-            ("Erwten", 5, pantry_id, voorraadkast_id),
-            ("IJs", 2, pantry_id, diepvries_id),
-            ("Melk", 2, kitchen_id, koelkast_id),
-            ("Thee", 8, kitchen_id, kast1_id),
-            ("Zout", 1, kitchen_id, kast1_id),
-        ]
-
-        space_lookup = {
-            kitchen_id: 'Keuken',
-            pantry_id: 'Berging',
-            bathroom_id: 'Badkamer',
-        }
-        sublocation_lookup = {
-            kast1_id: 'Kast 1',
-            koelkast_id: 'Koelkast',
-            voorraadkast_id: 'Voorraadkast',
-            diepvries_id: 'Diepvries',
-            badkamerkast_id: 'Kast',
-        }
-
-        for naam, aantal, space_id, sublocation_id in demo_rows:
-            conn.execute(
-                text("""
-                INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id)
-                VALUES (lower(hex(randomblob(16))), :naam, :aantal, 'demo-household', :space_id, :sublocation_id)
-                """),
-                {
-                    "naam": naam,
-                    "aantal": aantal,
-                    "space_id": space_id,
-                    "sublocation_id": sublocation_id,
-                },
-            )
-            seed_inventory_event(
-                conn,
-                article_name=naam,
-                quantity=int(aantal),
-                old_quantity=0,
-                new_quantity=int(aantal),
-                event_type='purchase',
-                source='seed_demo',
-                note='InitiÃƒÂ«le demo-voorraad',
-                location_id=sublocation_id or space_id,
-                location_label=' / '.join(part for part in [space_lookup.get(space_id, ''), sublocation_lookup.get(sublocation_id, '')] if part),
-            )
-
-    return {
-        "status": "ok",
-        "spaces": count_table("spaces"),
-        "sublocations": count_table("sublocations"),
-        "inventory": count_table("inventory"),
-    }
-
 
 @app.post("/api/dev/generate-layer1-receipt-fixture")
 def generate_layer1_receipt_fixture(authorization: Optional[str] = Header(None)):
@@ -16822,25 +16718,6 @@ def run_almost_out_backend_self_test_endpoint():
     testing_service.complete_external_test('almost_out_self_test', report.get('results', []))
     return report
 
-@app.post("/api/dev/regression/reset")
-def reset_regression_fixture_state():
-    household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
-    cleanup = cleanup_regression_fixture_state(household_id)
-    fixture = ensure_regression_inventory_fixture(household_id)
-    version_path = Path(__file__).resolve().parents[2] / "VERSION.txt"
-    version = version_path.read_text(encoding="utf-8").strip() if version_path.exists() else None
-    payload = {
-        "status": "ok",
-        "dataset": "ui_seed_with_inventory_fixture",
-        "household_id": household_id,
-        "version": version,
-        "cleanup": cleanup,
-        "inventory_fixture": fixture,
-    }
-    log_regression_action('fixture.reset', **payload)
-    return payload
-
-
 @app.post("/api/dev/regression/ensure-inventory-fixture")
 def ensure_regression_inventory_fixture_endpoint():
     household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
@@ -16851,11 +16728,6 @@ def ensure_regression_inventory_fixture_endpoint():
         **fixture,
     }
 
-
-@app.post("/api/dev/regression/cleanup")
-def cleanup_regression_fixture_state_endpoint():
-    household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
-    return cleanup_regression_fixture_state(household_id)
 
 @app.get("/api/dev/regression/receipt-fixture-file")
 def get_regression_receipt_fixture_file(kind: str = Query('manual')):
@@ -17048,55 +16920,6 @@ def seed_regression_kassa_receipts(authorization: Optional[str] = Header(None)):
             'new': {'receipt_table_id': new_receipt_id, 'store_name': 'Jumbo', 'inbox_status': 'Handmatig'},
         },
     }
-
-
-@app.post("/api/dev/generate-large-dataset")
-def generate_large_dataset(authorization: Optional[str] = Header(None)):
-    require_platform_admin_user(authorization)
-    import random
-    reset_dev_tables()
-
-    spaces=["Keuken","Berging","Badkamer","Garage","Kantoor"]
-    sub=["Kast 1","Kast 2","Koelkast","Diepvries","Plank"]
-
-    with engine.begin() as conn:
-
-        space_ids=[]
-        for s in spaces:
-            sid=conn.execute(
-                text("INSERT INTO spaces (id, naam, household_id) VALUES (lower(hex(randomblob(16))), :naam, 'demo-household') RETURNING id"),
-                {"naam":s}
-            ).scalar_one()
-            space_ids.append(sid)
-
-        sub_ids=[]
-        for sid in space_ids:
-            for name in sub:
-                subid=conn.execute(
-                    text("INSERT INTO sublocations (id, naam, space_id) VALUES (lower(hex(randomblob(16))), :naam, :sid) RETURNING id"),
-                    {"naam":name,"sid":sid}
-                ).scalar_one()
-                sub_ids.append((sid,subid))
-
-        products=[
-            "Rijst","Pasta","Tomaten","Koffie","Thee","Melk","Yoghurt","Bonen",
-            "Mais","Erwten","Zout","Peper","Olijfolie","Suiker","Meel"
-        ]
-
-        for i in range(200):
-            naam=random.choice(products)+" "+str(i)
-            aantal=random.randint(1,10)
-            sid,subid=random.choice(sub_ids)
-
-            conn.execute(
-                text("""
-                INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id)
-                VALUES (lower(hex(randomblob(16))), :naam, :aantal, 'demo-household', :sid, :subid)
-                """),
-                {"naam":naam,"aantal":aantal,"sid":sid,"subid":subid}
-            )
-
-    return {"status":"ok","inventory":count_table("inventory")}
 
 
 @app.post("/api/dev/generate-article-testdata")
