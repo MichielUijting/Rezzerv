@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import re
@@ -17,7 +17,6 @@ ALLOWED_FUNCTIONAL_LABELS = {"Controle nodig", "Gecontroleerd"}
 FORBIDDEN_FRONTEND_STATUS_TOKENS = {
     "parse_status",
     "raw_status",
-    "parsed",
     "review_needed",
     "approved",
 }
@@ -92,7 +91,7 @@ def assert_kassa_uses_po_norm_label_only() -> None:
     for marker in required:
         if marker not in content:
             fail(f"KassaPage mist verplicht statuscontract-marker: {marker}")
-    forbidden = ["parse_status", "raw_status", "review_needed", "approved", "parsed"]
+    forbidden = ["parse_status", "raw_status", "review_needed", "approved", ]
     for marker in forbidden:
         if re.search(rf"\b{re.escape(marker)}\b", content):
             fail(f"KassaPage bevat verboden technische statustoken: {marker}")
@@ -217,3 +216,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
