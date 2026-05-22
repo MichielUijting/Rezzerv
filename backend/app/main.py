@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
+﻿from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
@@ -695,7 +695,7 @@ MOCK_PURCHASES_BY_PROVIDER = {
                 "external_line_ref": "jumbo-line-3",
                 "external_article_code": "JUMBO-3001",
                 "article_name_raw": "Pindakaas",
-                "brand_raw": "CalvÃƒÆ’Ã‚Â©",
+                "brand_raw": "CalvÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©",
                 "quantity_raw": 1,
                 "unit_raw": "pot",
                 "line_price_raw": 3.49,
@@ -5773,7 +5773,7 @@ def build_incidental_purchase_note(*, source_label: str, article_name: str, supp
         parts.append(f"artikelnummer {article_number}")
     base = " ".join(part for part in parts if part).strip()
     if note and str(note).strip():
-        return f"{base} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {str(note).strip()}"
+        return f"{base} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â {str(note).strip()}"
     return base
 
 
@@ -7807,13 +7807,13 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
         can_auto_fill = simplification_level in {"gebalanceerd", "maximaal_gemak"} and can_suggest_article and can_suggest_location and times_confirmed >= 1
 
         if simplification_level == "voorzichtig":
-            suggestion_reason = "Voorstel op basis van eerdere keuze ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Voorzichtig"
+            suggestion_reason = "Voorstel op basis van eerdere keuze ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â niveau Voorzichtig"
             suggestion_confidence = "medium" if (can_suggest_article or can_suggest_location) else None
         elif simplification_level == "maximaal_gemak":
-            suggestion_reason = "Automatisch voorbereid ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Maximaal gemak"
+            suggestion_reason = "Automatisch voorbereid ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â niveau Maximaal gemak"
             suggestion_confidence = "high" if can_auto_fill else "medium"
         else:
-            suggestion_reason = "Automatisch voorbereid ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Gebalanceerd" if can_auto_fill else "Controleer voorstel ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Gebalanceerd"
+            suggestion_reason = "Automatisch voorbereid ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â niveau Gebalanceerd" if can_auto_fill else "Controleer voorstel ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â niveau Gebalanceerd"
             suggestion_confidence = "high" if can_auto_fill else "medium"
 
         conn.execute(
@@ -8366,7 +8366,7 @@ def apply_manual_inventory_adjustment(
     else:
         mutation_label = 'handmatige correctie'
 
-    note = f"{mutation_label.title()} via Voorraad: {old_total} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ {new_total} (regel {old_quantity} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ {new_quantity})"
+    note = f"{mutation_label.title()} via Voorraad: {old_total} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ {new_total} (regel {old_quantity} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ {new_quantity})"
     event_id = create_inventory_event(
         conn,
         household_id=household_id,
@@ -9187,14 +9187,14 @@ def create_receipt_source(payload: ReceiptSourceCreateRequest):
         source_path = ensure_receipt_source_path(household_id, source_type, label, source_path)
     elif source_type == 'email':
         email_value = (payload.external_reference or payload.source_path or '').strip()
-        label = base_label or ('E-mailbon' if not email_value else f'E-mailbon ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {email_value}')
+        label = base_label or ('E-mailbon' if not email_value else f'E-mailbon ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â {email_value}')
         source_path = email_value or None
     elif source_type == 'customer_card':
         store_name = (payload.store_name or '').strip()
         account_label = (payload.account_label or '').strip()
         external_reference = (payload.external_reference or '').strip()
         parts = [part for part in [store_name, account_label or external_reference] if part]
-        label = base_label or ('Klantenkaart' if not parts else ' ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â '.join(parts))
+        label = base_label or ('Klantenkaart' if not parts else ' ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â '.join(parts))
         source_path = external_reference or account_label or None
     else:
         label = base_label or 'Barcode / handmatig'
@@ -11806,7 +11806,7 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
             {'receipt_table_id': receipt_table_id},
         ).scalar()
         if int(valid_line_count or 0) < 1:
-            raise HTTPException(status_code=400, detail='Voeg minimaal ÃƒÆ’Ã‚Â©ÃƒÆ’Ã‚Â©n geldige bonregel toe voordat je goedkeurt')
+            raise HTTPException(status_code=400, detail='Voeg minimaal ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©n geldige bonregel toe voordat je goedkeurt')
         line_total_sum = conn.execute(
             text("SELECT COALESCE(SUM(COALESCE(corrected_line_total, line_total, 0)), 0) FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id AND COALESCE(is_deleted, 0) = 0"),
             {'receipt_table_id': receipt_table_id},
@@ -12103,7 +12103,7 @@ def update_household_member(member_email: str, payload: HouseholdMemberUpdateReq
             raise HTTPException(status_code=404, detail='Gebruiker is niet gekoppeld aan dit huishouden')
         current_role = str(existing.get('role') or 'member')
         if current_role == 'owner' and payload.role != 'owner' and count_household_admins(conn, household_id) <= 1:
-            raise HTTPException(status_code=409, detail='Er moet minimaal ÃƒÆ’Ã‚Â©ÃƒÆ’Ã‚Â©n admin in het huishouden overblijven')
+            raise HTTPException(status_code=409, detail='Er moet minimaal ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©n admin in het huishouden overblijven')
         conn.execute(
             text("UPDATE household_memberships SET role = :role, updated_at = CURRENT_TIMESTAMP WHERE id = :id"),
             {'id': existing['id'], 'role': payload.role},
@@ -12884,7 +12884,7 @@ def ensure_ui_test_seed_data():
                         'quantity_raw': 1, 'unit_raw': 'liter', 'line_price_raw': 1.59, 'currency_code': 'EUR',
                         'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': build_live_article_option_id('Melk'),
                         'target_location_id': kitchen_kast1, 'processing_status': 'pending', 'suggested_household_article_id': build_live_article_option_id('Melk'),
-                        'suggested_location_id': kitchen_kast1, 'suggestion_confidence': 'high', 'suggestion_reason': 'Automatisch voorbereid ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Gebalanceerd', 'is_auto_prefilled': 1,
+                        'suggested_location_id': kitchen_kast1, 'suggestion_confidence': 'high', 'suggestion_reason': 'Automatisch voorbereid ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â niveau Gebalanceerd', 'is_auto_prefilled': 1,
                     },
                     {
                         'external_line_ref': 'seed-jumbo-2', 'external_article_code': 'JUMBO-SEED-2', 'article_name_raw': 'Appelsap', 'brand_raw': 'Jumbo',
@@ -12892,7 +12892,7 @@ def ensure_ui_test_seed_data():
                         'match_status': 'unmatched', 'review_decision': 'selected', 'processing_status': 'pending',
                     },
                     {
-                        'external_line_ref': 'seed-jumbo-3', 'external_article_code': 'JUMBO-SEED-3', 'article_name_raw': 'Pindakaas', 'brand_raw': 'CalvÃƒÆ’Ã‚Â©',
+                        'external_line_ref': 'seed-jumbo-3', 'external_article_code': 'JUMBO-SEED-3', 'article_name_raw': 'Pindakaas', 'brand_raw': 'CalvÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©',
                         'quantity_raw': 1, 'unit_raw': 'pot', 'line_price_raw': 3.49, 'currency_code': 'EUR',
                         'match_status': 'unmatched', 'review_decision': 'ignored', 'processing_status': 'pending',
                     },
@@ -12901,7 +12901,7 @@ def ensure_ui_test_seed_data():
                         'quantity_raw': 6, 'unit_raw': 'stuks', 'line_price_raw': 2.19, 'currency_code': 'EUR',
                         'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': build_live_article_option_id('Tomaten'),
                         'target_location_id': None, 'processing_status': 'pending', 'suggested_household_article_id': build_live_article_option_id('Tomaten'),
-                        'suggested_location_id': kitchen_koelkast, 'suggestion_confidence': 'medium', 'suggestion_reason': 'Controleer voorstel ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Gebalanceerd', 'is_auto_prefilled': 0,
+                        'suggested_location_id': kitchen_koelkast, 'suggestion_confidence': 'medium', 'suggestion_reason': 'Controleer voorstel ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â niveau Gebalanceerd', 'is_auto_prefilled': 0,
                     },
                 ],
             )
@@ -13158,7 +13158,6 @@ def count_table(table_name: str) -> int:
         return conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar() or 0
 
 @app.get("/api/testing/status")
-@app.get("/api/dev/status")
 def get_dev_status(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
     return {
@@ -13168,7 +13167,6 @@ def get_dev_status(authorization: Optional[str] = Header(None)):
     }
 
 @app.post("/api/testing/fixtures/browser-regression/reset")
-@app.post("/api/dev/browser-regression/reset-fixture")
 def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
     with engine.begin() as conn:
@@ -13309,7 +13307,6 @@ def reset_data():
 
 
 @app.post("/api/testing/diagnostics/store-location-options")
-@app.post("/api/dev/diagnostics/store-location-options")
 def run_store_location_diagnostic(payload: DiagnosticRequest):
     effective_household_id = str(payload.household_id or 'demo-household')
     test_space_name = f"ZZ diagnose ruimte {uuid.uuid4().hex[:6]}"
@@ -13372,7 +13369,6 @@ def run_store_location_diagnostic(payload: DiagnosticRequest):
 
 
 @app.get("/api/testing/diagnostics/store-process-validation")
-@app.get("/api/dev/diagnostics/store-process-validation")
 def run_store_process_validation_diagnostic(householdId: str = Query(...)):
     with engine.begin() as conn:
         batch = conn.execute(
@@ -14084,8 +14080,8 @@ def transfer_inventory(payload: InventoryTransferRequest, authorization: Optiona
         source_note = f"Verplaatst naar {target_location.get('location_label') or 'doellocatie'}"
         target_note = f"Verplaatst vanuit {source_location.get('location_label') or 'bronlocatie'}"
         if note_prefix:
-            source_note = f"{source_note} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {note_prefix}"
-            target_note = f"{target_note} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {note_prefix}"
+            source_note = f"{source_note} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â {note_prefix}"
+            target_note = f"{target_note} ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â {note_prefix}"
         source_event_id = create_inventory_event(
             conn,
             household_id=household_id,
@@ -14284,7 +14280,6 @@ def archive_article(payload: ArticleArchiveRequest, authorization: Optional[str]
 
 
 @app.get("/api/testing/diagnostics/inventory-preview")
-@app.get("/api/dev/inventory-preview")
 def inventory_preview(response: Response, authorization: Optional[str] = Header(None)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
@@ -14322,7 +14317,6 @@ def inventory_preview(response: Response, authorization: Optional[str] = Header(
 
 
 @app.get("/api/testing/diagnostics/article-history")
-@app.get("/api/dev/article-history")
 def article_history(article_name: str, authorization: Optional[str] = Header(None)):
     article_name = (article_name or "").strip()
     if not article_name:
@@ -14376,7 +14370,7 @@ def article_history(article_name: str, authorization: Optional[str] = Header(Non
 
 
 
-def seed_inventory_event(conn, *, article_name: str, quantity: int, old_quantity: int, new_quantity: int, event_type: str = 'purchase', source: str = 'seed_demo', note: str = 'InitiÃƒÆ’Ã‚Â«le demodata', location_id: str | None = None, location_label: str = ''):
+def seed_inventory_event(conn, *, article_name: str, quantity: int, old_quantity: int, new_quantity: int, event_type: str = 'purchase', source: str = 'seed_demo', note: str = 'InitiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â«le demodata', location_id: str | None = None, location_label: str = ''):
     conn.execute(
         text(
             """
@@ -14485,7 +14479,7 @@ def generate_demo_data(authorization: Optional[str] = Header(None)):
                 new_quantity=int(aantal),
                 event_type='purchase',
                 source='seed_demo',
-                note='InitiÃƒÆ’Ã‚Â«le demo-voorraad',
+                note='InitiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â«le demo-voorraad',
                 location_id=sublocation_id or space_id,
                 location_label=' / '.join(part for part in [space_lookup.get(space_id, ''), sublocation_lookup.get(sublocation_id, '')] if part),
             )
@@ -14499,7 +14493,6 @@ def generate_demo_data(authorization: Optional[str] = Header(None)):
 
 
 @app.post("/api/testing/fixtures/receipt-layer1/generate")
-@app.post("/api/dev/generate-layer1-receipt-fixture")
 def generate_layer1_receipt_fixture(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
     household = ensure_household("admin@rezzerv.local")
@@ -14701,7 +14694,6 @@ def generate_layer1_receipt_fixture(authorization: Optional[str] = Header(None))
 
 
 @app.post("/api/testing/fixtures/receipt-export/generate")
-@app.post("/api/dev/generate-receipt-export-fixture")
 def generate_receipt_export_fixture(authorization: Optional[str] = Header(None), ):
     ensure_ui_test_seed_data()
 
@@ -14878,7 +14870,6 @@ def generate_receipt_export_fixture(authorization: Optional[str] = Header(None),
     }
 
 @app.get("/api/testing/fixtures/receipt-export/download")
-@app.get("/api/dev/export-receipt-export-fixture")
 def export_receipt_export_fixture(batchId: Optional[str] = Query(default=None), lineId: Optional[str] = Query(default=None)):
     fixture = None
     if not batchId or not lineId:
@@ -16093,7 +16084,6 @@ def build_purchase_import_batch_diagnostics(conn, batch_id: str):
 
 
 @app.get("/api/testing/diagnostics/purchase-import-batches/{batch_id}")
-@app.get("/api/dev/purchase-import-batches/{batch_id}/diagnostics")
 def get_purchase_import_batch_diagnostics(batch_id: str, authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
     with engine.begin() as conn:
@@ -16810,14 +16800,12 @@ def run_almost_out_prediction_regression_suite() -> dict[str, Any]:
 
 
 @app.post("/api/testing/regression/almost-out-prediction")
-@app.post("/api/dev/regression/almost-out-prediction")
 def run_almost_out_prediction_regression_endpoint():
     report = run_almost_out_prediction_regression_suite()
     testing_service.complete_external_test('almost_out_prediction', report.get('results', []))
     return report
 
 @app.post("/api/testing/regression/almost-out-self-test")
-@app.post("/api/dev/regression/almost-out-self-test")
 def run_almost_out_backend_self_test_endpoint():
     report = run_almost_out_backend_self_test(engine)
     testing_service.complete_external_test('almost_out_self_test', report.get('results', []))
@@ -16842,7 +16830,6 @@ def reset_regression_fixture_state():
 
 
 @app.post("/api/testing/fixtures/inventory/ensure")
-@app.post("/api/dev/regression/ensure-inventory-fixture")
 def ensure_regression_inventory_fixture_endpoint():
     household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
     fixture = ensure_regression_inventory_fixture(household_id)
@@ -16858,7 +16845,6 @@ def cleanup_regression_fixture_state_endpoint():
     return cleanup_regression_fixture_state(household_id)
 
 @app.get("/api/testing/fixtures/receipt/file")
-@app.get("/api/dev/regression/receipt-fixture-file")
 def get_regression_receipt_fixture_file(kind: str = Query('manual')):
     fixtures_root = Path(__file__).resolve().parent / 'testing' / 'receipt_parsing' / 'raw'
     fixture_map = {
@@ -16893,7 +16879,6 @@ def get_regression_receipt_fixture_file(kind: str = Query('manual')):
 
 
 @app.post("/api/testing/fixtures/receipts/seed-kassa")
-@app.post("/api/dev/regression/seed-kassa-receipts")
 def seed_regression_kassa_receipts(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
     household = ensure_household("admin@rezzerv.local")
@@ -17158,6 +17143,7 @@ def generate_article_testdata(authorization: Optional[str] = Header(None)):
 
 from app.api.router import api_router
 app.include_router(api_router)
+
 
 
 
