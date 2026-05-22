@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 
+from app.api.route_governance import build_route_governance_manifest
 from app.db import get_runtime_datastore_info
 
 router = APIRouter()
@@ -29,3 +30,9 @@ def api_version():
         'version': VERSION_TAG,
         'source': 'VERSION.txt',
     }
+
+
+@router.get('/api/admin/route-governance')
+def route_governance_manifest():
+    from app.main import app
+    return build_route_governance_manifest(app)
