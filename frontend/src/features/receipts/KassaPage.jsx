@@ -161,6 +161,7 @@ const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
 const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: '', status: '' }
 const MAX_CAMERA_UPLOAD_BYTES = 4 * 1024 * 1024
 const MAX_CAMERA_DIMENSION = 1800
+const RECEIPT_INBOX_AUTO_REFRESH_MS = 5000
 
 function formatQuantity(value) {
   if (value === null || value === undefined || value === '') return '-'
@@ -1798,14 +1799,26 @@ export default function KassaPage() {
     }
   }
 
+
+  function pruneReceiptUiState(apiItems = []) {
+    const apiItemIds = new Set((apiItems || []).map((item) => String(item?.receipt_table_id || '')).filter(Boolean))
+    setDeletedReceiptIds((current) => {
+      const next = current.filter((id) => apiItemIds.has(String(id)))
+      if (next.length !== current.length) persistStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY, next)
+      return next
+    })
+    setSelectedReceiptIds((current) => current.filter((id) => apiItemIds.has(String(id))))
+    setReceiptInboxFocusId((current) => (current && !apiItemIds.has(String(current)) ? '' : current))
+  }
   async function loadReceipts(nextHouseholdId = householdId, options = {}) {
-    setIsLoading(true)
-    setError('')
+    if (!options?.silent) setIsLoading(true)
+    if (!options?.silent) setError('')
     let items = []
     try {
       const list = await fetchJson(`/api/receipts?householdId=${encodeURIComponent(nextHouseholdId)}`)
       items = Array.isArray(list?.items) ? list.items : []
-      setReceipts(items)
+      setReceipts([...items])
+      pruneReceiptUiState(items)
       const activeReceiptId = String(options?.openReceiptId || openedReceiptId || '')
       if (activeReceiptId) {
         const sourceItem = items.find((item) => String(item.receipt_table_id) === activeReceiptId) || null
@@ -1821,10 +1834,27 @@ export default function KassaPage() {
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'Kassabonnen konden niet worden geladen.')
     } finally {
-      setIsLoading(false)
+      if (!options?.silent) setIsLoading(false)
     }
     return items
   }
+
+  useEffect(() => {
+    if (isAddReceiptRoute || isUploading) return undefined
+    let cancelled = false
+    const refreshKassaInbox = () => {
+      if (cancelled) return
+      loadReceipts(householdId, { silent: true }).catch(() => {})
+    }
+    refreshKassaInbox()
+    const intervalId = window.setInterval(refreshKassaInbox, RECEIPT_INBOX_AUTO_REFRESH_MS)
+    window.addEventListener('focus', refreshKassaInbox)
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', refreshKassaInbox)
+    }
+  }, [householdId, isAddReceiptRoute, isUploading])
 
   useEffect(() => {
     let cancelled = false
