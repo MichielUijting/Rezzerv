@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
+﻿from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
@@ -695,7 +695,7 @@ MOCK_PURCHASES_BY_PROVIDER = {
                 "external_line_ref": "jumbo-line-3",
                 "external_article_code": "JUMBO-3001",
                 "article_name_raw": "Pindakaas",
-                "brand_raw": "CalvÃƒÂ©",
+                "brand_raw": "CalvÃƒÆ’Ã‚Â©",
                 "quantity_raw": 1,
                 "unit_raw": "pot",
                 "line_price_raw": 3.49,
@@ -5773,7 +5773,7 @@ def build_incidental_purchase_note(*, source_label: str, article_name: str, supp
         parts.append(f"artikelnummer {article_number}")
     base = " ".join(part for part in parts if part).strip()
     if note and str(note).strip():
-        return f"{base} Ã¢â‚¬â€ {str(note).strip()}"
+        return f"{base} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {str(note).strip()}"
     return base
 
 
@@ -7807,13 +7807,13 @@ def apply_prefill_to_batch(conn, batch_id: str, household_id: str, store_provide
         can_auto_fill = simplification_level in {"gebalanceerd", "maximaal_gemak"} and can_suggest_article and can_suggest_location and times_confirmed >= 1
 
         if simplification_level == "voorzichtig":
-            suggestion_reason = "Voorstel op basis van eerdere keuze Ã¢â‚¬â€ niveau Voorzichtig"
+            suggestion_reason = "Voorstel op basis van eerdere keuze ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Voorzichtig"
             suggestion_confidence = "medium" if (can_suggest_article or can_suggest_location) else None
         elif simplification_level == "maximaal_gemak":
-            suggestion_reason = "Automatisch voorbereid Ã¢â‚¬â€ niveau Maximaal gemak"
+            suggestion_reason = "Automatisch voorbereid ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Maximaal gemak"
             suggestion_confidence = "high" if can_auto_fill else "medium"
         else:
-            suggestion_reason = "Automatisch voorbereid Ã¢â‚¬â€ niveau Gebalanceerd" if can_auto_fill else "Controleer voorstel Ã¢â‚¬â€ niveau Gebalanceerd"
+            suggestion_reason = "Automatisch voorbereid ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Gebalanceerd" if can_auto_fill else "Controleer voorstel ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Gebalanceerd"
             suggestion_confidence = "high" if can_auto_fill else "medium"
 
         conn.execute(
@@ -8366,7 +8366,7 @@ def apply_manual_inventory_adjustment(
     else:
         mutation_label = 'handmatige correctie'
 
-    note = f"{mutation_label.title()} via Voorraad: {old_total} Ã¢â€ â€™ {new_total} (regel {old_quantity} Ã¢â€ â€™ {new_quantity})"
+    note = f"{mutation_label.title()} via Voorraad: {old_total} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ {new_total} (regel {old_quantity} ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ {new_quantity})"
     event_id = create_inventory_event(
         conn,
         household_id=household_id,
@@ -9187,14 +9187,14 @@ def create_receipt_source(payload: ReceiptSourceCreateRequest):
         source_path = ensure_receipt_source_path(household_id, source_type, label, source_path)
     elif source_type == 'email':
         email_value = (payload.external_reference or payload.source_path or '').strip()
-        label = base_label or ('E-mailbon' if not email_value else f'E-mailbon Ã¢â‚¬â€ {email_value}')
+        label = base_label or ('E-mailbon' if not email_value else f'E-mailbon ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {email_value}')
         source_path = email_value or None
     elif source_type == 'customer_card':
         store_name = (payload.store_name or '').strip()
         account_label = (payload.account_label or '').strip()
         external_reference = (payload.external_reference or '').strip()
         parts = [part for part in [store_name, account_label or external_reference] if part]
-        label = base_label or ('Klantenkaart' if not parts else ' Ã¢â‚¬â€ '.join(parts))
+        label = base_label or ('Klantenkaart' if not parts else ' ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â '.join(parts))
         source_path = external_reference or account_label or None
     else:
         label = base_label or 'Barcode / handmatig'
@@ -11806,7 +11806,7 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
             {'receipt_table_id': receipt_table_id},
         ).scalar()
         if int(valid_line_count or 0) < 1:
-            raise HTTPException(status_code=400, detail='Voeg minimaal ÃƒÂ©ÃƒÂ©n geldige bonregel toe voordat je goedkeurt')
+            raise HTTPException(status_code=400, detail='Voeg minimaal ÃƒÆ’Ã‚Â©ÃƒÆ’Ã‚Â©n geldige bonregel toe voordat je goedkeurt')
         line_total_sum = conn.execute(
             text("SELECT COALESCE(SUM(COALESCE(corrected_line_total, line_total, 0)), 0) FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id AND COALESCE(is_deleted, 0) = 0"),
             {'receipt_table_id': receipt_table_id},
@@ -12103,7 +12103,7 @@ def update_household_member(member_email: str, payload: HouseholdMemberUpdateReq
             raise HTTPException(status_code=404, detail='Gebruiker is niet gekoppeld aan dit huishouden')
         current_role = str(existing.get('role') or 'member')
         if current_role == 'owner' and payload.role != 'owner' and count_household_admins(conn, household_id) <= 1:
-            raise HTTPException(status_code=409, detail='Er moet minimaal ÃƒÂ©ÃƒÂ©n admin in het huishouden overblijven')
+            raise HTTPException(status_code=409, detail='Er moet minimaal ÃƒÆ’Ã‚Â©ÃƒÆ’Ã‚Â©n admin in het huishouden overblijven')
         conn.execute(
             text("UPDATE household_memberships SET role = :role, updated_at = CURRENT_TIMESTAMP WHERE id = :id"),
             {'id': existing['id'], 'role': payload.role},
@@ -12884,7 +12884,7 @@ def ensure_ui_test_seed_data():
                         'quantity_raw': 1, 'unit_raw': 'liter', 'line_price_raw': 1.59, 'currency_code': 'EUR',
                         'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': build_live_article_option_id('Melk'),
                         'target_location_id': kitchen_kast1, 'processing_status': 'pending', 'suggested_household_article_id': build_live_article_option_id('Melk'),
-                        'suggested_location_id': kitchen_kast1, 'suggestion_confidence': 'high', 'suggestion_reason': 'Automatisch voorbereid Ã¢â‚¬â€ niveau Gebalanceerd', 'is_auto_prefilled': 1,
+                        'suggested_location_id': kitchen_kast1, 'suggestion_confidence': 'high', 'suggestion_reason': 'Automatisch voorbereid ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Gebalanceerd', 'is_auto_prefilled': 1,
                     },
                     {
                         'external_line_ref': 'seed-jumbo-2', 'external_article_code': 'JUMBO-SEED-2', 'article_name_raw': 'Appelsap', 'brand_raw': 'Jumbo',
@@ -12892,7 +12892,7 @@ def ensure_ui_test_seed_data():
                         'match_status': 'unmatched', 'review_decision': 'selected', 'processing_status': 'pending',
                     },
                     {
-                        'external_line_ref': 'seed-jumbo-3', 'external_article_code': 'JUMBO-SEED-3', 'article_name_raw': 'Pindakaas', 'brand_raw': 'CalvÃƒÂ©',
+                        'external_line_ref': 'seed-jumbo-3', 'external_article_code': 'JUMBO-SEED-3', 'article_name_raw': 'Pindakaas', 'brand_raw': 'CalvÃƒÆ’Ã‚Â©',
                         'quantity_raw': 1, 'unit_raw': 'pot', 'line_price_raw': 3.49, 'currency_code': 'EUR',
                         'match_status': 'unmatched', 'review_decision': 'ignored', 'processing_status': 'pending',
                     },
@@ -12901,7 +12901,7 @@ def ensure_ui_test_seed_data():
                         'quantity_raw': 6, 'unit_raw': 'stuks', 'line_price_raw': 2.19, 'currency_code': 'EUR',
                         'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': build_live_article_option_id('Tomaten'),
                         'target_location_id': None, 'processing_status': 'pending', 'suggested_household_article_id': build_live_article_option_id('Tomaten'),
-                        'suggested_location_id': kitchen_koelkast, 'suggestion_confidence': 'medium', 'suggestion_reason': 'Controleer voorstel Ã¢â‚¬â€ niveau Gebalanceerd', 'is_auto_prefilled': 0,
+                        'suggested_location_id': kitchen_koelkast, 'suggestion_confidence': 'medium', 'suggestion_reason': 'Controleer voorstel ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â niveau Gebalanceerd', 'is_auto_prefilled': 0,
                     },
                 ],
             )
@@ -13301,7 +13301,6 @@ def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)
     log_regression_action('fixture.browser_reset', **payload)
     return payload
 
-@app.post("/api/dev/reset-data")
 def reset_data():
     reset_dev_tables()
     return {"status": "ok"}
@@ -14081,8 +14080,8 @@ def transfer_inventory(payload: InventoryTransferRequest, authorization: Optiona
         source_note = f"Verplaatst naar {target_location.get('location_label') or 'doellocatie'}"
         target_note = f"Verplaatst vanuit {source_location.get('location_label') or 'bronlocatie'}"
         if note_prefix:
-            source_note = f"{source_note} Ã¢â‚¬â€ {note_prefix}"
-            target_note = f"{target_note} Ã¢â‚¬â€ {note_prefix}"
+            source_note = f"{source_note} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {note_prefix}"
+            target_note = f"{target_note} ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â {note_prefix}"
         source_event_id = create_inventory_event(
             conn,
             household_id=household_id,
@@ -14371,7 +14370,7 @@ def article_history(article_name: str, authorization: Optional[str] = Header(Non
 
 
 
-def seed_inventory_event(conn, *, article_name: str, quantity: int, old_quantity: int, new_quantity: int, event_type: str = 'purchase', source: str = 'seed_demo', note: str = 'InitiÃƒÂ«le demodata', location_id: str | None = None, location_label: str = ''):
+def seed_inventory_event(conn, *, article_name: str, quantity: int, old_quantity: int, new_quantity: int, event_type: str = 'purchase', source: str = 'seed_demo', note: str = 'InitiÃƒÆ’Ã‚Â«le demodata', location_id: str | None = None, location_label: str = ''):
     conn.execute(
         text(
             """
@@ -14396,7 +14395,6 @@ def seed_inventory_event(conn, *, article_name: str, quantity: int, old_quantity
         },
     )
 
-@app.post("/api/dev/generate-demo-data")
 def generate_demo_data(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
     reset_dev_tables()
@@ -14481,7 +14479,7 @@ def generate_demo_data(authorization: Optional[str] = Header(None)):
                 new_quantity=int(aantal),
                 event_type='purchase',
                 source='seed_demo',
-                note='InitiÃƒÂ«le demo-voorraad',
+                note='InitiÃƒÆ’Ã‚Â«le demo-voorraad',
                 location_id=sublocation_id or space_id,
                 location_label=' / '.join(part for part in [space_lookup.get(space_id, ''), sublocation_lookup.get(sublocation_id, '')] if part),
             )
@@ -16813,7 +16811,6 @@ def run_almost_out_backend_self_test_endpoint():
     testing_service.complete_external_test('almost_out_self_test', report.get('results', []))
     return report
 
-@app.post("/api/dev/regression/reset")
 def reset_regression_fixture_state():
     household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
     cleanup = cleanup_regression_fixture_state(household_id)
@@ -16843,7 +16840,6 @@ def ensure_regression_inventory_fixture_endpoint():
     }
 
 
-@app.post("/api/dev/regression/cleanup")
 def cleanup_regression_fixture_state_endpoint():
     household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
     return cleanup_regression_fixture_state(household_id)
@@ -17041,7 +17037,6 @@ def seed_regression_kassa_receipts(authorization: Optional[str] = Header(None)):
     }
 
 
-@app.post("/api/dev/generate-large-dataset")
 def generate_large_dataset(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
     import random
