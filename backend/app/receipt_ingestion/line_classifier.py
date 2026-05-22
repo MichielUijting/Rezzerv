@@ -17,10 +17,75 @@ def _default_false(_: str) -> bool:
     return False
 
 
+def _normalize_store(value: str | None) -> str:
+    return ''.join(ch.lower() for ch in str(value or '') if ch.isalnum())
+
+
 def _footer_or_metadata(lowered: str) -> str:
     if any(token in lowered for token in FOOTER_TOKENS):
         return 'footer_payment_tax'
     return 'metadata'
+
+
+def _store_specific_non_article_classification(line: str, store_name: str | None = None, filename: str | None = None) -> str | None:
+    """Conservative chain-specific non-article rules.
+
+    R9-11B: only rules that are evidently not an article-with-price live here.
+    These rules may exclude payment/footer/loyalty/metadata noise, but must not
+    force totals, status or article counts.
+    """
+    normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
+    if not normalized:
+        return 'ignore'
+    lowered = normalized.lower()
+    store_key = _normalize_store(store_name) or _normalize_store(filename)
+
+    common_payment_footer_tokens = (
+        'te betalen', 'totaal', 'subtotaal', 'totaal incl', 'btw', 'vat',
+        'pin', 'bankpas', 'maestro', 'visa', 'mastercard', 'contactloos',
+        'terminal', 'transactie', 'transactienr', 'betaling', 'betaald',
+        'wisselgeld', 'kasbon', 'bonnr', 'bon nr', 'bonnummer', 'referentie',
+    )
+    if any(token in lowered for token in common_payment_footer_tokens):
+        return _footer_or_metadata(lowered)
+
+    if re.fullmatch(r'(?:[a-z]\s*)?\d{1,2}[,.]\d{2}\s*%.*', lowered):
+        return 'footer_payment_tax'
+    if re.fullmatch(r'\d{1,2}:\d{2}(?::\d{2})?', lowered):
+        return 'metadata'
+    if re.fullmatch(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}.*', lowered):
+        return 'metadata'
+
+    if 'aldi' in store_key:
+        aldi_metadata_tokens = (
+            'aldi', 'aldi markt', 'filiaal', 'welkom', 'klantbon', 'kassabon',
+            'uw voordeel', 'bedankt', 'tot ziens', 'www.', 'kvk', 'iban', 'tel',
+        )
+        aldi_non_article_tokens = (
+            'statiegeld retour', 'emballage retour', 'retour statiegeld',
+            'saldo', 'kaart', 'autoriseert', 'autorisatie',
+        )
+        if any(token in lowered for token in aldi_non_article_tokens):
+            return 'footer_payment_tax'
+        if any(token in lowered for token in aldi_metadata_tokens):
+            return 'metadata'
+
+    if 'plus' in store_key:
+        plus_loyalty_tokens = (
+            'pluspunten', 'plus punten', 'digitale spaarkaart', 'spaarkaart',
+            'klant:', 'klantnummer', 'koopzegels', 'zegels', 'zegel',
+            'punten saldo', 'saldo punten', 'persoonlijke bonus',
+        )
+        plus_metadata_tokens = (
+            'plus', 'bedankt', 'welkom', 'filiaal', 'kassabon', 'www.',
+            'kvk', 'iban', 'tel', 'servicebalie', 'klantenservice',
+        )
+        if any(token in lowered for token in plus_loyalty_tokens):
+            return 'metadata'
+        if any(token in lowered for token in plus_metadata_tokens) and not re.search(r'\d+[,.]\d{2}', lowered):
+            return 'metadata'
+
+    return None
 
 
 def _non_article_reason(classification: str | None, line: str) -> str:
@@ -31,8 +96,10 @@ def _non_article_reason(classification: str | None, line: str) -> str:
             return 'total_or_subtotal_line'
         if any(token in lowered for token in ('btw', 'vat')):
             return 'vat_line'
-        if any(token in lowered for token in ('betaal', 'bankpas', 'pin', 'terminal', 'transactie')):
+        if any(token in lowered for token in ('betaal', 'bankpas', 'pin', 'terminal', 'transactie', 'maestro', 'visa', 'mastercard')):
             return 'payment_line'
+        if any(token in lowered for token in ('statiegeld retour', 'retour statiegeld', 'emballage retour')):
+            return 'deposit_return_or_refund_line'
         if re.fullmatch(r'\d{1,4}[.,]\d{2}', normalized):
             return 'standalone_amount_line'
         return 'footer_payment_tax_line'
@@ -41,6 +108,8 @@ def _non_article_reason(classification: str | None, line: str) -> str:
             return 'date_or_time_metadata'
         if any(day in lowered for day in DUTCH_DAY_TOKENS):
             return 'date_or_period_metadata'
+        if any(token in lowered for token in ('pluspunten', 'spaarkaart', 'koopzegel', 'klantnummer', 'zegels')):
+            return 'loyalty_or_savings_metadata'
         return 'receipt_metadata'
     if classification == 'ignore':
         return 'noise_or_unclassified_line'
@@ -63,10 +132,13 @@ def classify_receipt_text_line(
     looks_like_non_product_receipt_label: LegacyLineCheck | None = None,
     looks_like_item_label_only: LegacyLineCheck | None = None,
 ) -> str:
-    del store_name, filename
     normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
     if len(normalized) < 2:
         return 'ignore'
+
+    store_specific = _store_specific_non_article_classification(normalized, store_name=store_name, filename=filename)
+    if store_specific is not None:
+        return store_specific
 
     lowered = normalized.lower()
     upper_compact = normalized.upper().replace(',', '.')
@@ -120,11 +192,11 @@ def diagnose_article_line_classification(
 ) -> dict[str, Any]:
     """Return explicit article-vs-non-article diagnostics without changing parsing.
 
-    R9-11A contract:
+    R9-11A/R9-11B contract:
     - ARTIKEL_MET_PRIJS is a standalone product candidate with price.
     - GEEN_ARTIKEL is metadata/footer/payment/VAT/noise.
     - Supporting lines are diagnostic only and need parser context before they can
-      become part of an article. This function does not append or drop lines.
+      become part of an article. This function does not set status or totals.
     """
     normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
     classification = classify_receipt_text_line(
