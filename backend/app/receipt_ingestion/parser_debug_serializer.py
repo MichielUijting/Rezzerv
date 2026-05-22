@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from app.receipt_ingestion.explainability import build_receipt_explainability
+
 from app.receipt_ingestion.parser_diagnostics import (
     diagnostic_events_from_lines,
     summarize_lines_parser_diagnostics,
@@ -66,4 +68,5 @@ def build_parser_debug_payload(result: Any) -> dict[str, Any]:
         'events': normalized_events,
         'branches': group_events_by_branch(normalized_events),
         'metadata': _safe_metadata(result),
+        'explainability': build_receipt_explainability(result),
     }
