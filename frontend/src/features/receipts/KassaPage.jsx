@@ -161,7 +161,7 @@ const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
 const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: '', status: '' }
 const MAX_CAMERA_UPLOAD_BYTES = 4 * 1024 * 1024
 const MAX_CAMERA_DIMENSION = 1800
-const RECEIPT_INBOX_AUTO_REFRESH_MS = 5000
+const RECEIPT_INBOX_AUTO_REFRESH_MS = 60000
 
 function formatQuantity(value) {
   if (value === null || value === undefined || value === '') return '-'
@@ -1654,6 +1654,7 @@ export default function KassaPage() {
   const emailInputRef = useRef(null)
   const uploadBatchPollerRef = useRef(null)
   const uploadBatchLastProcessedRef = useRef(-1)
+  const receiptInboxRefreshInFlightRef = useRef(false)
   const inboxColumnDefaults = useMemo(() => Object.fromEntries(inboxTableColumns.map(({ key, width }) => [key, width])), [])
   const { widths: inboxColumnWidths, startResize: startInboxResize } = useResizableColumnWidths(inboxColumnDefaults)
   const [inboxSort, setInboxSort] = useState({ key: 'date', direction: 'desc' })
@@ -1819,6 +1820,8 @@ export default function KassaPage() {
       items = Array.isArray(list?.items) ? list.items : []
       setReceipts([...items])
       pruneReceiptUiState(items)
+      setError('')
+      if (!options?.preserveDuplicateNotice) setDuplicateNotice('')
       const activeReceiptId = String(options?.openReceiptId || openedReceiptId || '')
       if (activeReceiptId) {
         const sourceItem = items.find((item) => String(item.receipt_table_id) === activeReceiptId) || null
@@ -1842,17 +1845,22 @@ export default function KassaPage() {
   useEffect(() => {
     if (isAddReceiptRoute || isUploading) return undefined
     let cancelled = false
-    const refreshKassaInbox = () => {
-      if (cancelled) return
-      loadReceipts(householdId, { silent: true }).catch(() => {})
+    const refreshKassaInbox = async () => {
+      if (cancelled || receiptInboxRefreshInFlightRef.current) return
+      receiptInboxRefreshInFlightRef.current = true
+      try {
+        await loadReceipts(householdId, { silent: true })
+      } finally {
+        receiptInboxRefreshInFlightRef.current = false
+      }
     }
-    refreshKassaInbox()
     const intervalId = window.setInterval(refreshKassaInbox, RECEIPT_INBOX_AUTO_REFRESH_MS)
     window.addEventListener('focus', refreshKassaInbox)
     return () => {
       cancelled = true
       window.clearInterval(intervalId)
       window.removeEventListener('focus', refreshKassaInbox)
+      receiptInboxRefreshInFlightRef.current = false
     }
   }, [householdId, isAddReceiptRoute, isUploading])
 
