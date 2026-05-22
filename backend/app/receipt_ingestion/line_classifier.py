@@ -12,6 +12,39 @@ NON_ARTICLE_CLASSIFICATIONS = {'ignore', 'metadata', 'footer_payment_tax'}
 SUPPORTING_ARTICLE_CLASSIFICATIONS = {'amount_detail', 'continuation'}
 LegacyLineCheck = Callable[[str], bool]
 
+GENERIC_PAYMENT_TOKENS = (
+    'te betalen', 'totaal te betalen', 'betaald', 'betaling', 'kaartbetaling',
+    'pin', 'pinnen', 'bankpas', 'maestro', 'visa', 'mastercard', 'v pay', 'v-pay',
+    'contactloos', 'contant', 'wisselgeld', 'terminal', 'transactie', 'transactienr',
+    'autorisatie', 'akkoord', 'merchant', 'kopie kaarthouder', 'klantticket',
+)
+GENERIC_TOTAL_TOKENS = (
+    'totaal', 'subtotaal', 'sub totaal', 'bedrag euro', 'bedrag = euro',
+    'total', 'subtotal', 'incl. btw', 'incl btw', 'totaal incl',
+)
+GENERIC_TAX_TOKENS = (
+    'btw', 'vat', 'biw', 'bedrag excl', 'bedr.excl', 'btw-bedrag',
+    'netto', 'bruto', 'excl.', 'excl ', 'incl.', 'incl ',
+)
+GENERIC_DISCOUNT_TOKENS = (
+    'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
+    'lidl plus korting', 'totaal korting', 'coupon', 'voucher', 'gratis',
+)
+GENERIC_LOYALTY_TOKENS = (
+    'zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'pluspunt',
+    'spaar', 'spaarkaart', 'loyalty', 'bonuskaart', 'klantnummer', 'klant:',
+    'digitale zegels', 'digitale spaarkaart', 'campagne', 'punten saldo', 'saldo punten',
+)
+GENERIC_METADATA_TOKENS = (
+    'openingstijd', 'openingstijden', 'ma-vr', 'ma tm', 'ma t/m', 'periode',
+    'filiaal', 'kassa', 'kassabon', 'bonnr', 'bon nr', 'bonnummer', 'referentie',
+    'www.', 'http', 'kvk', 'iban', 'tel:', 'telefoon', 'servicebalie', 'klantenservice',
+    'bedankt', 'welkom', 'tot ziens', 'bezoek ook', 'voorwaarden',
+)
+GENERIC_DEPOSIT_RETURN_TOKENS = (
+    'statiegeld retour', 'retour statiegeld', 'emballage retour', 'fust retour',
+)
+
 
 def _default_false(_: str) -> bool:
     return False
@@ -21,10 +54,62 @@ def _normalize_store(value: str | None) -> str:
     return ''.join(ch.lower() for ch in str(value or '') if ch.isalnum())
 
 
+def _has_amount(value: str) -> bool:
+    return bool(re.search(r'(?<!\d)-?\d+[\.,]\d{2}(?!\d)', value))
+
+
 def _footer_or_metadata(lowered: str) -> str:
     if any(token in lowered for token in FOOTER_TOKENS):
         return 'footer_payment_tax'
     return 'metadata'
+
+
+def _generic_non_article_classification(line: str) -> str | None:
+    """Generic conservative non-article rules.
+
+    R9-13: this function only blocks lines that are evidently not article-with-price
+    candidates. It does not choose totals, compute status, or alter PO status rules.
+    """
+    normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
+    if not normalized:
+        return 'ignore'
+    lowered = normalized.lower()
+    upper = normalized.upper().replace(',', '.')
+
+    if re.fullmatch(r'(?:ZA|ZO|ZON)\s+\d{1,2}\.\d{2}', upper):
+        return 'metadata'
+    if re.fullmatch(r'\d{1,2}:\d{2}(?::\d{2})?', lowered):
+        return 'metadata'
+    if re.fullmatch(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}.*', lowered):
+        return 'metadata'
+    if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', normalized):
+        return 'metadata'
+    if any(day in lowered for day in DUTCH_DAY_TOKENS) and ('t/m' in lowered or ' tot ' in lowered):
+        return 'metadata'
+
+    if re.match(r'^[A-Z]\s+\d{1,2}[,.]\d{2}%\b', normalized.upper()):
+        return 'footer_payment_tax'
+    if re.fullmatch(r'(?:[a-z]\s*)?\d{1,2}[,.]\d{2}\s*%.*', lowered):
+        return 'footer_payment_tax'
+    if re.fullmatch(r'\d{1,4}[.]\d{2}', normalized) or re.fullmatch(r'\d{1,4},\d{2}', normalized):
+        return 'footer_payment_tax'
+
+    if any(token in lowered for token in GENERIC_PAYMENT_TOKENS):
+        return 'footer_payment_tax'
+    if any(token in lowered for token in GENERIC_TAX_TOKENS):
+        return 'footer_payment_tax'
+    if any(token in lowered for token in GENERIC_DEPOSIT_RETURN_TOKENS):
+        return 'footer_payment_tax'
+    if any(token in lowered for token in GENERIC_TOTAL_TOKENS):
+        return 'footer_payment_tax'
+    if any(token in lowered for token in GENERIC_DISCOUNT_TOKENS):
+        return 'footer_payment_tax'
+    if any(token in lowered for token in GENERIC_LOYALTY_TOKENS):
+        return 'metadata'
+    if any(token in lowered for token in GENERIC_METADATA_TOKENS) and not _has_amount(lowered):
+        return 'metadata'
+
+    return None
 
 
 def _store_specific_non_article_classification(line: str, store_name: str | None = None, filename: str | None = None) -> str | None:
@@ -94,12 +179,14 @@ def _non_article_reason(classification: str | None, line: str) -> str:
     if classification == 'footer_payment_tax':
         if any(token in lowered for token in ('totaal', 'subtotaal')):
             return 'total_or_subtotal_line'
-        if any(token in lowered for token in ('btw', 'vat')):
+        if any(token in lowered for token in ('btw', 'vat', 'biw', 'netto', 'bruto')):
             return 'vat_line'
         if any(token in lowered for token in ('betaal', 'bankpas', 'pin', 'terminal', 'transactie', 'maestro', 'visa', 'mastercard')):
             return 'payment_line'
         if any(token in lowered for token in ('statiegeld retour', 'retour statiegeld', 'emballage retour')):
             return 'deposit_return_or_refund_line'
+        if any(token in lowered for token in ('korting', 'bonus', 'actie', 'prijsvoordeel', 'voordeel', 'coupon')):
+            return 'discount_or_promotion_line'
         if re.fullmatch(r'\d{1,4}[.,]\d{2}', normalized):
             return 'standalone_amount_line'
         return 'footer_payment_tax_line'
@@ -108,7 +195,7 @@ def _non_article_reason(classification: str | None, line: str) -> str:
             return 'date_or_time_metadata'
         if any(day in lowered for day in DUTCH_DAY_TOKENS):
             return 'date_or_period_metadata'
-        if any(token in lowered for token in ('pluspunten', 'spaarkaart', 'koopzegel', 'klantnummer', 'zegels')):
+        if any(token in lowered for token in ('pluspunten', 'spaarkaart', 'koopzegel', 'klantnummer', 'zegels', 'bonuskaart')):
             return 'loyalty_or_savings_metadata'
         return 'receipt_metadata'
     if classification == 'ignore':
@@ -136,23 +223,15 @@ def classify_receipt_text_line(
     if len(normalized) < 2:
         return 'ignore'
 
+    generic_non_article = _generic_non_article_classification(normalized)
+    if generic_non_article is not None:
+        return generic_non_article
+
     store_specific = _store_specific_non_article_classification(normalized, store_name=store_name, filename=filename)
     if store_specific is not None:
         return store_specific
 
     lowered = normalized.lower()
-    upper_compact = normalized.upper().replace(',', '.')
-
-    if re.fullmatch(r'(?:ZA|ZO|ZON)\s+\d{1,2}\.\d{2}', upper_compact):
-        return 'metadata'
-    if re.match(r'^[A-Z]\s+\d{1,2}[,.]\d{2}%\b', normalized.upper()):
-        return 'footer_payment_tax'
-    if any(day in lowered for day in DUTCH_DAY_TOKENS) and ('t/m' in lowered or ' tot ' in lowered):
-        return 'metadata'
-    if re.fullmatch(r'\d{1,4}[.]\d{2}', normalized) or re.fullmatch(r'\d{1,4},\d{2}', normalized):
-        return 'footer_payment_tax'
-    if re.search(r'\bzegels?\b|\bzege1s\b|\bpluspunten\b', lowered) and re.search(r'\d{1,2}:\d{2}|\d{3,}', normalized):
-        return 'footer_payment_tax'
 
     should_skip = should_skip_receipt_line or _default_false
     if should_skip(normalized):
@@ -162,8 +241,6 @@ def classify_receipt_text_line(
     if looks_non_product(normalized):
         return _footer_or_metadata(lowered)
 
-    if re.search(r'\d{1,2}[/-]\d{1,2}[/-]\d{4}', normalized):
-        return 'metadata'
     if detail_only_re is not None and detail_only_re.match(normalized):
         return 'amount_detail'
     if qty_first_re is not None and qty_first_re.match(normalized):
@@ -192,7 +269,7 @@ def diagnose_article_line_classification(
 ) -> dict[str, Any]:
     """Return explicit article-vs-non-article diagnostics without changing parsing.
 
-    R9-11A/R9-11B contract:
+    R9-11A/R9-11B/R9-13 contract:
     - ARTIKEL_MET_PRIJS is a standalone product candidate with price.
     - GEEN_ARTIKEL is metadata/footer/payment/VAT/noise.
     - Supporting lines are diagnostic only and need parser context before they can
