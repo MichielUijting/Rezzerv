@@ -1,4 +1,4 @@
-﻿from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
 from pydantic import BaseModel, Field, field_validator
@@ -13157,6 +13157,7 @@ def count_table(table_name: str) -> int:
     with engine.begin() as conn:
         return conn.execute(text(f"SELECT COUNT(*) FROM {table_name}")).scalar() or 0
 
+@app.get("/api/testing/status")
 @app.get("/api/dev/status")
 def get_dev_status(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
@@ -13166,6 +13167,7 @@ def get_dev_status(authorization: Optional[str] = Header(None)):
         "inventory": count_table("inventory"),
     }
 
+@app.post("/api/testing/fixtures/browser-regression/reset")
 @app.post("/api/dev/browser-regression/reset-fixture")
 def reset_browser_regression_fixture(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
@@ -13306,6 +13308,7 @@ def reset_data():
     return {"status": "ok"}
 
 
+@app.post("/api/testing/diagnostics/store-location-options")
 @app.post("/api/dev/diagnostics/store-location-options")
 def run_store_location_diagnostic(payload: DiagnosticRequest):
     effective_household_id = str(payload.household_id or 'demo-household')
@@ -13368,6 +13371,7 @@ def run_store_location_diagnostic(payload: DiagnosticRequest):
     }
 
 
+@app.get("/api/testing/diagnostics/store-process-validation")
 @app.get("/api/dev/diagnostics/store-process-validation")
 def run_store_process_validation_diagnostic(householdId: str = Query(...)):
     with engine.begin() as conn:
@@ -14279,6 +14283,7 @@ def archive_article(payload: ArticleArchiveRequest, authorization: Optional[str]
         return archive_household_article_by_id(conn, effective_household_id, str(article_row.get('id') or ''), reason)
 
 
+@app.get("/api/testing/diagnostics/inventory-preview")
 @app.get("/api/dev/inventory-preview")
 def inventory_preview(response: Response, authorization: Optional[str] = Header(None)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -14316,6 +14321,7 @@ def inventory_preview(response: Response, authorization: Optional[str] = Header(
 
 
 
+@app.get("/api/testing/diagnostics/article-history")
 @app.get("/api/dev/article-history")
 def article_history(article_name: str, authorization: Optional[str] = Header(None)):
     article_name = (article_name or "").strip()
@@ -14492,6 +14498,7 @@ def generate_demo_data(authorization: Optional[str] = Header(None)):
     }
 
 
+@app.post("/api/testing/fixtures/receipt-layer1/generate")
 @app.post("/api/dev/generate-layer1-receipt-fixture")
 def generate_layer1_receipt_fixture(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
@@ -14693,6 +14700,7 @@ def generate_layer1_receipt_fixture(authorization: Optional[str] = Header(None))
     }
 
 
+@app.post("/api/testing/fixtures/receipt-export/generate")
 @app.post("/api/dev/generate-receipt-export-fixture")
 def generate_receipt_export_fixture(authorization: Optional[str] = Header(None), ):
     ensure_ui_test_seed_data()
@@ -14869,6 +14877,7 @@ def generate_receipt_export_fixture(authorization: Optional[str] = Header(None),
         'sourceReference': 'mock:export-regression-fixture',
     }
 
+@app.get("/api/testing/fixtures/receipt-export/download")
 @app.get("/api/dev/export-receipt-export-fixture")
 def export_receipt_export_fixture(batchId: Optional[str] = Query(default=None), lineId: Optional[str] = Query(default=None)):
     fixture = None
@@ -16083,6 +16092,7 @@ def build_purchase_import_batch_diagnostics(conn, batch_id: str):
     return {'batch_id': batch_id, 'line_diagnostics': diagnostics}
 
 
+@app.get("/api/testing/diagnostics/purchase-import-batches/{batch_id}")
 @app.get("/api/dev/purchase-import-batches/{batch_id}/diagnostics")
 def get_purchase_import_batch_diagnostics(batch_id: str, authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
@@ -16799,12 +16809,14 @@ def run_almost_out_prediction_regression_suite() -> dict[str, Any]:
     }
 
 
+@app.post("/api/testing/regression/almost-out-prediction")
 @app.post("/api/dev/regression/almost-out-prediction")
 def run_almost_out_prediction_regression_endpoint():
     report = run_almost_out_prediction_regression_suite()
     testing_service.complete_external_test('almost_out_prediction', report.get('results', []))
     return report
 
+@app.post("/api/testing/regression/almost-out-self-test")
 @app.post("/api/dev/regression/almost-out-self-test")
 def run_almost_out_backend_self_test_endpoint():
     report = run_almost_out_backend_self_test(engine)
@@ -16829,6 +16841,7 @@ def reset_regression_fixture_state():
     return payload
 
 
+@app.post("/api/testing/fixtures/inventory/ensure")
 @app.post("/api/dev/regression/ensure-inventory-fixture")
 def ensure_regression_inventory_fixture_endpoint():
     household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
@@ -16844,6 +16857,7 @@ def cleanup_regression_fixture_state_endpoint():
     household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
     return cleanup_regression_fixture_state(household_id)
 
+@app.get("/api/testing/fixtures/receipt/file")
 @app.get("/api/dev/regression/receipt-fixture-file")
 def get_regression_receipt_fixture_file(kind: str = Query('manual')):
     fixtures_root = Path(__file__).resolve().parent / 'testing' / 'receipt_parsing' / 'raw'
@@ -16878,6 +16892,7 @@ def get_regression_receipt_fixture_file(kind: str = Query('manual')):
     return FileResponse(path=file_path, filename=selected['filename'], media_type=selected['media_type'])
 
 
+@app.post("/api/testing/fixtures/receipts/seed-kassa")
 @app.post("/api/dev/regression/seed-kassa-receipts")
 def seed_regression_kassa_receipts(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
