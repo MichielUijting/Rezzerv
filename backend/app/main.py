@@ -12491,7 +12491,6 @@ def enrich_household_article_by_id(household_article_id: str, authorization: Opt
         }
 
 
-@app.get("/api/articles/{article_id}")
 def get_article_detail_by_id(article_id: str, authorization: Optional[str] = Header(None)):
     context = require_household_context(authorization)
     household_id = str(context.get('active_household_id') or '')
@@ -12506,7 +12505,6 @@ def get_article_detail_by_id(article_id: str, authorization: Optional[str] = Hea
         }
 
 
-@app.get("/api/articles/{article_id}/automation-override")
 def get_article_automation_override(article_id: str, authorization: Optional[str] = Header(None)):
     context = require_household_context(authorization)
     household_id = str(context.get('active_household_id') or '')
@@ -12517,7 +12515,6 @@ def get_article_automation_override(article_id: str, authorization: Optional[str
     return get_household_article_automation_override(str(article_row.get('id') or ''), authorization)
 
 
-@app.put("/api/articles/{article_id}/automation-override")
 def update_article_automation_override(article_id: str, payload: ArticleAutomationOverrideUpdateRequest, authorization: Optional[str] = Header(None)):
     context = require_household_admin_context(authorization)
     household_id = str(context['active_household_id'])
@@ -13464,7 +13461,6 @@ def run_store_process_validation_diagnostic(householdId: str = Query(...)):
 
 
 
-@app.get("/api/articles/household-details")
 def get_article_household_details(article_name: Optional[str] = None, article_id: Optional[str] = None, authorization: Optional[str] = Header(None)):
     context = require_household_context(authorization)
     household_id = str(context.get('active_household_id') or '')
@@ -13481,7 +13477,6 @@ def get_inventory_article_detail(inventory_id: str, authorization: Optional[str]
         return resolve_household_article_detail_service(conn, household_id, article_id=str(details.get('household_article_id') or details.get('article_id') or ''), create_if_missing=False) | {'inventory_id': details.get('inventory_id')}
 
 
-@app.get("/api/articles/product-details")
 def get_article_product_details_endpoint(article_name: Optional[str] = None, article_id: Optional[str] = None, authorization: Optional[str] = Header(None)):
     context = require_household_context(authorization)
     household_id = str(context.get('active_household_id') or '')
@@ -13557,7 +13552,6 @@ def retry_enrich_article_product(payload: ProductEnrichRequest, authorization: O
     return enrich_article_product(forced_payload, authorization)
 
 
-@app.post("/api/articles/{article_id}/enrich")
 def enrich_article_by_id(article_id: str, authorization: Optional[str] = Header(None)):
     context = require_household_context(authorization)
     household_id = str(context.get('active_household_id') or '')
@@ -13568,7 +13562,6 @@ def enrich_article_by_id(article_id: str, authorization: Optional[str] = Header(
     return enrich_household_article_by_id(str(article_row.get('id') or ''), authorization)
 
 
-@app.patch("/api/articles/household-details")
 def patch_article_household_details(payload: ArticleHouseholdDetailsUpdateRequest, article_name: Optional[str] = None, article_id: Optional[str] = None, authorization: Optional[str] = Header(None)):
     context = require_household_context(authorization)
     household_id = str(context.get('active_household_id') or '')
@@ -13578,7 +13571,6 @@ def patch_article_household_details(payload: ArticleHouseholdDetailsUpdateReques
             raise HTTPException(status_code=404, detail='Artikel niet gevonden')
     return patch_household_article_details_by_id(str(resolved_row.get('id') or ''), payload, authorization)
 
-@app.post("/api/articles/{article_id}/archive")
 def archive_article_by_id_adapter(article_id: str, payload: HouseholdArticleArchiveRequest | None = None, authorization: Optional[str] = Header(None)):
     context = require_household_admin_context(authorization)
     household_id = str(context['active_household_id'])
@@ -13589,7 +13581,6 @@ def archive_article_by_id_adapter(article_id: str, payload: HouseholdArticleArch
         return archive_household_article_by_id(conn, household_id, str(article_row.get('id') or ''), (payload.reason if payload else None))
 
 
-@app.delete("/api/articles/{article_id}")
 def delete_article_by_id_adapter(article_id: str, payload: HouseholdArticleDeleteRequest | None = None, authorization: Optional[str] = Header(None)):
     context = require_household_admin_context(authorization)
     household_id = str(context['active_household_id'])
@@ -13646,7 +13637,6 @@ def update_inventory_external_product_link(inventory_id: str, payload: ArticleEx
         return {'status': 'ok', 'details': details}
 
 
-@app.post("/api/articles/barcode-scan")
 def scan_article_barcode(payload: BarcodeLookupRequest, authorization: Optional[str] = Header(None)):
     context = require_inventory_write_context(authorization, payload.household_id)
     household_id = str(context.get("active_household_id") or "demo-household")
@@ -17143,6 +17133,7 @@ def generate_article_testdata(authorization: Optional[str] = Header(None)):
 
 from app.api.router import api_router
 app.include_router(api_router)
+
 
 
 
