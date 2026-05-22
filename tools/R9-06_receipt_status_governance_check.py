@@ -17,14 +17,15 @@ ALLOWED_FUNCTIONAL_LABELS = {"Controle nodig", "Gecontroleerd"}
 FORBIDDEN_FRONTEND_STATUS_TOKENS = {
     "parse_status",
     "raw_status",
-    "manual",
     "parsed",
     "review_needed",
     "approved",
 }
 
-# These files may mention technical statuses because they perform imports or API integration,
-# but Kassa rendering/filtering must still use po_norm_status_label only.
+# Legacy manual/Handmatig is prohibited as a status category in Kassa.
+# The word Manual may still appear in source labels such as "Manual upload".
+FORBIDDEN_KASSA_STATUS_LABELS = {"Handmatig"}
+
 FRONTEND_EXEMPT_PATH_PARTS = {
     "RegressionRunnerPage",
     "ReceiptReviewPreviewPage",
@@ -68,7 +69,6 @@ def grep_forbidden_frontend_status_usage() -> list[str]:
         text = read_text(path)
         for line_no, line in enumerate(text.splitlines(), start=1):
             if token_pattern.search(line):
-                # Allow documentation comments only when they explicitly state the prohibition.
                 stripped = line.strip().lower()
                 if stripped.startswith("//") and ("niet" in stripped or "forbidden" in stripped or "verboden" in stripped):
                     continue
@@ -92,10 +92,13 @@ def assert_kassa_uses_po_norm_label_only() -> None:
     for marker in required:
         if marker not in content:
             fail(f"KassaPage mist verplicht statuscontract-marker: {marker}")
-    forbidden = ["parse_status", "raw_status", "review_needed", "approved", "manual", "parsed"]
+    forbidden = ["parse_status", "raw_status", "review_needed", "approved", "parsed"]
     for marker in forbidden:
         if re.search(rf"\b{re.escape(marker)}\b", content):
             fail(f"KassaPage bevat verboden technische statustoken: {marker}")
+    for label in FORBIDDEN_KASSA_STATUS_LABELS:
+        if re.search(rf"inbox_status\s*[:=]\s*['\"]{re.escape(label)}['\"]", content):
+            fail(f"KassaPage gebruikt verboden functioneel statuslabel: {label}")
     ok("KassaPage rendert/filtert uitsluitend via po_norm_status_label/inbox_status")
 
 
@@ -204,8 +207,6 @@ def main() -> int:
     assert_api_applies_ssot()
     assert_no_forbidden_frontend_status_usage()
 
-    # Optionele runtime-check:
-    # python tools/R9-06_receipt_status_governance_check.py http://localhost:8011/api/receipts?householdId=1 rezzerv-dev-token::admin@rezzerv.local
     url = sys.argv[1] if len(sys.argv) >= 2 else None
     token = sys.argv[2] if len(sys.argv) >= 3 else None
     runtime_api_contract_snapshot(url, token)
