@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import hashlib
 import io
@@ -34,6 +34,13 @@ from app.receipt_ingestion.amounts import (
     parse_decimal as _parse_decimal,
     parse_quantity as _parse_quantity,
     price_from_split_parts as _price_from_split_parts,
+)
+from app.receipt_ingestion.header_parser import (
+    _store_from_text,
+    _looks_like_store_branch_line,
+    _store_branch_from_lines,
+    _purchase_at_from_lines,
+    _total_amount_from_lines,
 )
 from app.receipt_ingestion.fingerprints import (
     _build_receipt_fingerprint,
@@ -393,7 +400,7 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
 
     De parser mag intern streng blijven voor diagnose, maar de database moet
     weergeven of een bon voor de gebruiker bruikbaar is. Daarom wordt een bon
-    als 'parsed' opgeslagen zodra de essentiÃ«le kopgegevens betrouwbaar zijn:
+    als 'parsed' opgeslagen zodra de essentiÃƒÂ«le kopgegevens betrouwbaar zijn:
     winkelnaam en totaalbedrag. Waar mogelijk controleren we daarnaast of de
     netto regelsom binnen tolerantie klopt, maar een imperfecte artikel-extractie
     mag een verder bruikbare bon niet onnodig op 'review_needed' houden.
@@ -433,7 +440,7 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
         # totaalbedrag leidend voor de database-classificatie.
         return 'parsed'
 
-    # EssentiÃ«le kopgegevens zijn aanwezig; artikelregels kunnen later handmatig
+    # EssentiÃƒÂ«le kopgegevens zijn aanwezig; artikelregels kunnen later handmatig
     # worden verbeterd zonder dat de hele bon in de controlebak hoeft te blijven.
     return 'parsed'
 
@@ -1077,7 +1084,7 @@ def _looks_like_non_product_receipt_label(label: str | None) -> bool:
         return True
     if re.search(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b', lowered):
         return True
-    letters = re.findall(r'[A-Za-zÀ-ÖØ-öø-ÿ]', candidate)
+    letters = re.findall(r'[A-Za-zÃ€-Ã–Ã˜-Ã¶Ã¸-Ã¿]', candidate)
     digits = re.findall(r'\d', candidate)
     if len(letters) < 2 and len(digits) >= 2:
         return True
@@ -1844,8 +1851,8 @@ def _ocr_image_text_with_tesseract(file_bytes: bytes, filename: str) -> tuple[li
 def _normalize_store_specific_text(text: str) -> str:
     normalized = str(text or '').replace('\u00a0', ' ').replace('/uni00A0', ' ').replace('/uni00A01', ' 1 ')
     normalized = normalized.replace('/uni00A02', ' 2 ').replace('/uni00A03', ' 3 ').replace('/uni00A04', ' 4 ')
-    normalized = normalized.replace('Â·', ' Â· ')
-    normalized = re.sub(r'\s+â‚¬\s*', ' â‚¬ ', normalized)
+    normalized = normalized.replace('Ã‚Â·', ' Ã‚Â· ')
+    normalized = re.sub(r'\s+Ã¢â€šÂ¬\s*', ' Ã¢â€šÂ¬ ', normalized)
     normalized = re.sub(r'[ 	]+', ' ', normalized)
     normalized = re.sub(r'\n{3,}', '\n\n', normalized)
     return normalized.strip()
@@ -1962,7 +1969,7 @@ def _parse_action_pdf_result(text: str, filename: str) -> ReceiptParseResult | N
             purchase_at = datetime(datetime.utcnow().year, DUTCH_MONTHS[m.group(2).lower()], int(m.group(1)), int(m.group(3).split(':')[0]), int(m.group(3).split(':')[1])).isoformat()
         except Exception:
             purchase_at = None
-    total_amount = _parse_decimal(re.search(r'(?i)Totaal\s+\d+\s+â‚¬\s*([0-9]+,[0-9]{2})', text).group(1)) if re.search(r'(?i)Totaal\s+\d+\s+â‚¬\s*([0-9]+,[0-9]{2})', text) else None
+    total_amount = _parse_decimal(re.search(r'(?i)Totaal\s+\d+\s+Ã¢â€šÂ¬\s*([0-9]+,[0-9]{2})', text).group(1)) if re.search(r'(?i)Totaal\s+\d+\s+Ã¢â€šÂ¬\s*([0-9]+,[0-9]{2})', text) else None
     branch = 'Valburgseweg 16, 6661 EV Elst'
     start = next((i for i, line in enumerate(lines) if 'artikel aantal prijs' in line.lower()), None)
     end = next((i for i, line in enumerate(lines) if line.lower().startswith('totaal ')), None)
@@ -1970,7 +1977,7 @@ def _parse_action_pdf_result(text: str, filename: str) -> ReceiptParseResult | N
     if start is not None and end is not None and end > start:
         buffer: list[str] = []
         for line in lines[start + 1:end]:
-            match = re.match(r'^(?P<qty>\d+)\s+â‚¬\s*(?P<amount>\d+[\.,]\d{2})$', line)
+            match = re.match(r'^(?P<qty>\d+)\s+Ã¢â€šÂ¬\s*(?P<amount>\d+[\.,]\d{2})$', line)
             if match and buffer:
                 label = ' '.join(buffer)
                 label = re.sub(r'\s*-\s*\d{6,}$', '', label).strip()
@@ -2012,7 +2019,7 @@ def _parse_gamma_pdf_result(text: str, filename: str) -> ReceiptParseResult | No
         return None
     lines = _normalize_text_lines(_normalize_store_specific_text(text))
     purchase_at = _purchase_at_from_lines(lines, filename)
-    total_match = re.search(r'(?i)Totaal incl\. BTWâ‚¬\s*([0-9]+,[0-9]{2})', text)
+    total_match = re.search(r'(?i)Totaal incl\. BTWÃ¢â€šÂ¬\s*([0-9]+,[0-9]{2})', text)
     total_amount = _parse_decimal(total_match.group(1)) if total_match else None
     extracted: list[dict[str, Any]] = []
     for idx, line in enumerate(lines):
@@ -2021,14 +2028,14 @@ def _parse_gamma_pdf_result(text: str, filename: str) -> ReceiptParseResult | No
             continue
         label_parts = [m.group('label')]
         j = idx + 1
-        while j < len(lines) and not re.search(r'\d+%\s+\d+\s+â‚¬\s*\d+[\.,]\d{2}', lines[j]):
+        while j < len(lines) and not re.search(r'\d+%\s+\d+\s+Ã¢â€šÂ¬\s*\d+[\.,]\d{2}', lines[j]):
             if re.match(r'^Totaal', lines[j], re.I):
                 break
             label_parts.append(lines[j])
             j += 1
         if j < len(lines):
             detail = lines[j]
-            d = re.search(r'(?P<vat>\d+%)\s+(?P<qty>\d+(?:[\.,]\d+)?)\s+â‚¬\s*(?P<unit>\d+[\.,]\d{2})(?:\s+â‚¬\s*(?P<total>\d+[\.,]\d{2}))?', detail)
+            d = re.search(r'(?P<vat>\d+%)\s+(?P<qty>\d+(?:[\.,]\d+)?)\s+Ã¢â€šÂ¬\s*(?P<unit>\d+[\.,]\d{2})(?:\s+Ã¢â€šÂ¬\s*(?P<total>\d+[\.,]\d{2}))?', detail)
             if d:
                 qty = float(d.group('qty').replace(',', '.'))
                 unit_price = _parse_decimal(d.group('unit'))
@@ -2224,13 +2231,13 @@ def _parse_bol_email_result(text: str, html_text: str, filename: str, header_dat
             purchase_at = parsedate_to_datetime(header_date).replace(tzinfo=None).isoformat(timespec='seconds')
         except Exception:
             purchase_at = None
-    total_match = re.search(r'(?is)Totaal\s+â‚¬\s*([0-9]+,[0-9]{2})', haystack)
+    total_match = re.search(r'(?is)Totaal\s+Ã¢â€šÂ¬\s*([0-9]+,[0-9]{2})', haystack)
     total_amount = _parse_decimal(total_match.group(1)) if total_match else None
     order_product = re.search(r'(?is)Dit heb je besteld.*?Bestelnummer:\s*([A-Z0-9-]+).*?([A-Z0-9+\-][^\n]+?)\s+Verkoper:\s+([^\n]+).*?Bezorgdatum:', haystack)
     extracted: list[dict[str, Any]] = []
     if order_product:
         label = re.sub(r'\s+', ' ', order_product.group(2)).strip()
-        price_match = re.search(r'(?is)1x\s+â‚¬\s*([0-9]+,[0-9]{2})', haystack)
+        price_match = re.search(r'(?is)1x\s+Ã¢â€šÂ¬\s*([0-9]+,[0-9]{2})', haystack)
         price = _parse_decimal(price_match.group(1)) if price_match else total_amount
         append_structured_product_candidate(
             extracted,
@@ -2266,8 +2273,8 @@ def _parse_picnic_email_result(text: str, html_text: str, filename: str, header_
     raw_lines = _normalize_text_lines(haystack)
     lines = []
     for line in raw_lines:
-        cleaned = re.sub(r'[â€‹â€Œï»¿]+', '', line).strip()
-        if cleaned and cleaned not in {'.', 'â€¢'}:
+        cleaned = re.sub(r'[Ã¢â‚¬â€¹Ã¢â‚¬Å’Ã¯Â»Â¿]+', '', line).strip()
+        if cleaned and cleaned not in {'.', 'Ã¢â‚¬Â¢'}:
             lines.append(cleaned)
     purchase_at = _parse_dutch_textual_date(haystack, default_year=2026)
     if purchase_at and 'T' not in purchase_at:
@@ -2412,14 +2419,14 @@ def _parse_picnic_flattened_blocks(haystack: str) -> tuple[list[dict[str, Any]],
     if not compact:
         return [], None
     order_pattern = re.compile(r'(Toegevoegd op .*? Order [0-9-]+)\s+(?P<body>.*?)(?=(?:Toegevoegd op .*? Order [0-9-]+)|$)', re.I)
-    price_pattern = re.compile(r'(?:â‚¬\s*)?(?P<euros>-?\d+)\s*(?:[.,]|\s)\s*(?P<cents>\d{2})(?:\s*\.)?')
-    block_pattern = re.compile(r"(?:^|\s)(?P<qty>\d+)\s+(?=[A-Za-zÃ€-Ã¿'\(])")
+    price_pattern = re.compile(r'(?:Ã¢â€šÂ¬\s*)?(?P<euros>-?\d+)\s*(?:[.,]|\s)\s*(?P<cents>\d{2})(?:\s*\.)?')
+    block_pattern = re.compile(r"(?:^|\s)(?P<qty>\d+)\s+(?=[A-Za-zÃƒâ‚¬-ÃƒÂ¿'\(])")
     extracted: list[dict[str, Any]] = []
 
     def _cleanup_label(raw: str) -> str:
         value = re.sub(r'\s+', ' ', raw or '').strip(' .,-')
         value = re.sub(r'^(?:\[[^\]]+\]\s*)+', '', value)
-        value = re.split(r'(?:nu\s*â‚¬\s*\d+[.,]\d{2}|smaakmaker|\d+% korting|\d+e\s*=|\d+ voor â‚¬\s*\d+)', value, 1, flags=re.I)[0]
+        value = re.split(r'(?:nu\s*Ã¢â€šÂ¬\s*\d+[.,]\d{2}|smaakmaker|\d+% korting|\d+e\s*=|\d+ voor Ã¢â€šÂ¬\s*\d+)', value, 1, flags=re.I)[0]
         value = re.split(r'\d+(?:[.,]\d+)?\s*(?:gram|g|kg|ml|liter|l|stuks?|stuk|bosje|kilo|heel|pak|fles|rollen?)', value, 1, flags=re.I)[0]
         return _clean_receipt_label(value)
 
@@ -3154,4 +3161,5 @@ def serialize_receipt_row(row: dict[str, Any]) -> dict[str, Any]:
         key: (normalize_datetime(value) if key in datetime_keys else normalize_number(value))
         for key, value in row.items()
     }
+
 
