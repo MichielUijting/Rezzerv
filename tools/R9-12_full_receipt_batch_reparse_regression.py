@@ -18,6 +18,10 @@ DEFAULT_TOKEN = "rezzerv-dev-token::admin@rezzerv.local"
 DEFAULT_HOUSEHOLD_ID = "1"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf"}
 ZIP_EXTENSION = ".zip"
+FINAL_BATCH_STATUSES = {"completed", "completed_with_errors", "failed"}
+SUCCESS_BATCH_STATUSES = {"completed", "completed_with_errors"}
+DEFAULT_BATCH_TIMEOUT_SECONDS = 900
+DEFAULT_BATCH_POLL_SECONDS = 3
 
 
 def fail(message: str) -> None:
@@ -84,12 +88,49 @@ def archive_active_receipts(base_url: str, token: str, household_id: str) -> int
     return deleted
 
 
+def wait_for_batch_completion(base_url: str, token: str, household_id: str, batch_id: str, *, timeout_seconds: int = DEFAULT_BATCH_TIMEOUT_SECONDS, poll_seconds: int = DEFAULT_BATCH_POLL_SECONDS) -> dict:
+    deadline = time.time() + timeout_seconds
+    last_snapshot: dict | None = None
+    while time.time() < deadline:
+        payload = http_json(
+            f"{base_url}/api/receipts/import-batches/{quote(batch_id)}?householdId={quote(household_id)}",
+            token,
+        )
+        snapshot = {
+            "status": payload.get("status"),
+            "processed_files": payload.get("processed_files"),
+            "imported_files": payload.get("imported_files"),
+            "duplicate_files": payload.get("duplicate_files"),
+            "failed_files": payload.get("failed_files"),
+            "total_files": payload.get("total_files"),
+        }
+        if snapshot != last_snapshot:
+            print(f"R9-12 batch-status: {snapshot}")
+            last_snapshot = snapshot
+        status = str(payload.get("status") or "")
+        if status in FINAL_BATCH_STATUSES:
+            if status not in SUCCESS_BATCH_STATUSES:
+                fail(f"batchimport geëindigd met status={status}")
+            return payload
+        time.sleep(poll_seconds)
+    fail(f"timeout wachtend op batchimport completion: {batch_id}")
+
+
 def import_one(base_url: str, token: str, household_id: str, file_path: Path) -> dict:
     body, content_type = multipart({"household_id": household_id}, "file", file_path)
     result = http_json(f"{base_url}/api/receipts/import", token, method="POST", body=body, content_type=content_type)
     if result.get("batch"):
         batch_id = str(result.get("batch_id") or "")
         ok(f"zipbatch gestart voor {file_path.name}: {batch_id} files={result.get('file_count')}")
+        batch_result = wait_for_batch_completion(base_url, token, household_id, batch_id)
+        result["final_batch_status"] = batch_result.get("status")
+        result["processed_files"] = batch_result.get("processed_files")
+        result["imported_files"] = batch_result.get("imported_files")
+        result["duplicate_files"] = batch_result.get("duplicate_files")
+        result["failed_files"] = batch_result.get("failed_files")
+        ok(
+            f"zipbatch afgerond status={result.get('final_batch_status')} processed={result.get('processed_files')} imported={result.get('imported_files')} duplicates={result.get('duplicate_files')} failed={result.get('failed_files')}"
+        )
     else:
         status = "duplicate" if result.get("duplicate") else "imported"
         ok(f"{file_path.name}: {status} receipt_table_id={result.get('receipt_table_id')}")
@@ -205,7 +246,7 @@ def main() -> int:
     after = load_json(after_path)
     comparison = compare(before, after)
     report = {
-        "policy": "R9-12B full-batch regression via public API + R9-06 + R9-10; zip input is treated as one canonical source; no direct DB mutation; no status logic",
+        "policy": "R9-12C full-batch regression via public API + R9-06 + R9-10; waits for async batch completion; no direct DB mutation; no status logic",
         "input_mode": input_mode,
         "input_path": str(input_path),
         "files": [path.name for path in files],
