@@ -2948,3 +2948,4 @@ def serialize_receipt_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 
+
