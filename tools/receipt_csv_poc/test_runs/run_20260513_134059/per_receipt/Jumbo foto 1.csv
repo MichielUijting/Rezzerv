@@ -1,9 +1,0 @@
-source_file,store_hint,line_no,line_type,classifier_reason,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
-Jumbo foto 1.jpeg,jumbo,12,quantity_line,quantity_only_pattern,"2 X 4,99",2,stuk,4.99,9.98,EUR,0.55,"2 X 4,99 9,98",multiple_amounts_detected;quantity_line_requires_merge
-Jumbo foto 1.jpeg,jumbo,14,product_line,amount_and_text,KASTANJE CHAMPIG VD,,,,2.79,EUR,0.78,"KASTANJE CHAMPIG VD 2,79",
-Jumbo foto 1.jpeg,jumbo,15,product_line,amount_and_text,BIO RODE BIET VACUM,,,,1.45,EUR,0.78,"BIO RODE BIET VACUM 1,45",
-Jumbo foto 1.jpeg,jumbo,16,product_line,amount_and_text,COURGETTE,,,,0.69,EUR,0.78,"COURGETTE 0,69",
-Jumbo foto 1.jpeg,jumbo,17,product_line,amount_and_text,JUMBO RISOTTO ARBORI,,,,1.75,EUR,0.78,"JUMBO RISOTTO ARBORI 1,75",
-Jumbo foto 1.jpeg,jumbo,18,product_line,amount_and_text,VP ASPERGESOEP,,,,6.49,EUR,0.78,"VP ASPERGESOEP 6,49",
-Jumbo foto 1.jpeg,jumbo,19,product_line,amount_and_text,REMIA MOSTERDSAUS,,,,2.15,EUR,0.78,"REMIA MOSTERDSAUS 2,15",
-Jumbo foto 1.jpeg,jumbo,22,product_line,amount_and_text,VPAY a,,,,22.82,EUR,0.78,"VPAY a 22,82",

@@ -1,9 +1,0 @@
-source_file,store_hint,line_no,line_type,classifier_reason,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
-Plus foto 2.jpeg,albert_heijn,23,product_line,amount_and_text,4 aie ch i es PUFFS PIZZA,,,,1.49,EUR,0.78,"4 aie ch i es PUFFS PIZZA 1,49 . Wag) thy f",
-Plus foto 2.jpeg,albert_heijn,24,product_line,amount_and_text,i eat int UAT WELTY VEGGIE STICKS,,,,1.29,EUR,0.78,"| i eat int UAT WELTY VEGGIE STICKS 1,29 Tal",
-Plus foto 2.jpeg,albert_heijn,25,product_line,amount_and_text,"MAURY ign 4 ye py 4+ CARROTS, APPLES +",,,,1.99,EUR,0.78,"MAURY ign 4 ye py 4+ CARROTS, APPLES + 1,99 Vey?",
-Plus foto 2.jpeg,albert_heijn,26,product_line,amount_and_text,"Mii i Ma, Yat aan APPLE PEACH HANGO",,,,1.49,EUR,0.78,"Mii i Ma, Yat aan APPLE PEACH HANGO 1,49",
-Plus foto 2.jpeg,albert_heijn,28,product_line,amount_and_text,i i ih a UMW GROENTE RINGEN +12H,,,,1.15,EUR,0.78,"i i ih a UMW GROENTE RINGEN +12H 1,15",
-Plus foto 2.jpeg,albert_heijn,51,product_line,amount_and_text,44,,,,70.08,EUR,0.78,"44 70,08 ; rtserienunner: ne 0 -",
-Plus foto 2.jpeg,albert_heijn,68,product_line,amount_and_text,"30,89 EUR ; iH 175 zegels +",,,,30.00,EUR,0.62,"30,89 EUR ; iH 175 zegels + €30,00 tegoed",multiple_amounts_detected
-Plus foto 2.jpeg,albert_heijn,80,product_line,amount_and_text,"Lt 4,16",,,,14.08,EUR,0.62,"Lt 4,16 14,08",multiple_amounts_detected

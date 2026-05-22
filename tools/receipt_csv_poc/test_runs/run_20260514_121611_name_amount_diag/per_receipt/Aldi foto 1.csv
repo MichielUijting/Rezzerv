@@ -1,4 +1,0 @@
-source_file,store_hint,profile_name,line_no,line_type,item_text,quantity,unit,unit_price,line_total,parser_confidence,raw_line,warning
-Aldi foto 1.jpg,aldi,aldi,7,product_line,GOUDSE KAAS 48Ü GESN. JONG,,,,2.39,0.75,"GOUDSE KAAS 48Ü GESN. JONG 2,39",
-Aldi foto 1.jpg,aldi,aldi,9,product_line,WADDENBOLLEN,,,,1.50,0.75,"WADDENBOLLEN 1,50",
-Aldi foto 1.jpg,aldi,aldi,13,product_line,7-GRANEN ONTBIJT,,,,1.25,0.75,"7-GRANEN ONTBIJT 1,25",

@@ -1,6 +1,0 @@
-opencv-python
-pytesseract
-pandas
-numpy
-Pillow
-python-dateutil

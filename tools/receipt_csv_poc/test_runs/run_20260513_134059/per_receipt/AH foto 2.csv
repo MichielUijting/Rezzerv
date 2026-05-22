@@ -1,4 +1,0 @@
-source_file,store_hint,line_no,line_type,classifier_reason,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
-AH foto 2.jpeg,albert_heijn,6,product_line,amount_and_text,4 AMM GEHAKT,,,,6.99,EUR,0.78,"4 AMM GEHAKT 6,99 |",
-AH foto 2.jpeg,albert_heijn,7,product_line,amount_and_text,i od SOEPGR BASIS,,,,1.29,EUR,0.78,"i od SOEPGR BASIS 1,29 !",
-AH foto 2.jpeg,albert_heijn,26,product_line,amount_and_text,"OY \ 7,60",,,,0.68,EUR,0.62,"OY \ 7,60 0,68 ,",multiple_amounts_detected

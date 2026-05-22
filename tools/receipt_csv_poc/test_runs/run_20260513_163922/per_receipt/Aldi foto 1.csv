@@ -1,5 +1,0 @@
-source_file,store_hint,profile_name,line_no,line_type,classifier_reason,in_product_block,item_text,quantity,unit,unit_price,line_total,currency,parser_confidence,raw_line,warning
-Aldi foto 1.jpg,aldi,aldi,5,product_line,amount_and_text,True,"GOUDSE KAAS 48i} GESN, JONG",,,,2.39,EUR,0.45,"GOUDSE KAAS 48i} GESN, JONG 2,39",ocr_noise
-Aldi foto 1.jpg,aldi,aldi,6,product_line,amount_and_text,True,WADDENBOLLEN ;,,,,1.50,EUR,0.78,"WADDENBOLLEN ; 1,50",
-Aldi foto 1.jpg,aldi,aldi,7,product_line,amount_and_text,True,CHOCOPOPS / CHOCO SHELLS. °,,,,1.41,EUR,0.78,"CHOCOPOPS / CHOCO SHELLS. ° 1,41",
-Aldi foto 1.jpg,aldi,aldi,8,product_line,amount_and_text,True,7-GRANEN ONTBIJT ~,,,,1.25,EUR,0.45,"7-GRANEN ONTBIJT ~ . 1,25",ocr_noise

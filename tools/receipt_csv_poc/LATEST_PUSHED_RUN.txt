@@ -1,6 +1,0 @@
-run_name=run_20260514_140310_preprocessing_diag
-run_path=tools/receipt_csv_poc/test_runs/run_20260514_140310_preprocessing_diag
-benchmark_summary=tools/receipt_csv_poc/test_runs/run_20260514_140310_preprocessing_diag/benchmark_summary.json
-branch=sync/local-rezzerv-receipt-basis-v2
-diagnostics=ocr_region_amount_diagnostics,preprocessing_variant_diagnostics
-created_local=do 14-05-2026 14:07:21,75
