@@ -17,6 +17,7 @@ DEFAULT_BASE_URL = "http://localhost:8011"
 DEFAULT_TOKEN = "rezzerv-dev-token::admin@rezzerv.local"
 DEFAULT_HOUSEHOLD_ID = "1"
 SUPPORTED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".pdf"}
+ZIP_EXTENSION = ".zip"
 
 
 def fail(message: str) -> None:
@@ -88,11 +89,28 @@ def import_one(base_url: str, token: str, household_id: str, file_path: Path) ->
     result = http_json(f"{base_url}/api/receipts/import", token, method="POST", body=body, content_type=content_type)
     if result.get("batch"):
         batch_id = str(result.get("batch_id") or "")
-        ok(f"zipbatch gestart voor {file_path.name}: {batch_id}")
+        ok(f"zipbatch gestart voor {file_path.name}: {batch_id} files={result.get('file_count')}")
     else:
         status = "duplicate" if result.get("duplicate") else "imported"
         ok(f"{file_path.name}: {status} receipt_table_id={result.get('receipt_table_id')}")
     return result
+
+
+def resolve_input(input_path: Path) -> tuple[str, list[Path]]:
+    if not input_path.exists():
+        fail(f"input bestaat niet: {input_path}")
+    if input_path.is_file():
+        if input_path.suffix.lower() == ZIP_EXTENSION:
+            return "zip", [input_path]
+        if input_path.suffix.lower() in SUPPORTED_EXTENSIONS:
+            return "single_file", [input_path]
+        fail(f"bestandstype wordt niet ondersteund voor regressie-input: {input_path.name}")
+    if input_path.is_dir():
+        files = sorted(path for path in input_path.iterdir() if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS)
+        if not files:
+            fail(f"geen ondersteunde kassabonbestanden gevonden in {input_path}")
+        return "directory", files
+    fail(f"input is geen bestand of map: {input_path}")
 
 
 def latest_scorematrix() -> Path | None:
@@ -162,20 +180,16 @@ def write_report(data: dict) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="R9-12 full receipt batch regression runner")
-    parser.add_argument("input_dir", help="Map met alle kassabonnen voor regressietest")
+    parser.add_argument("input_path", help="Map, los bonbestand of ZIP met alle kassabonnen voor regressietest")
     parser.add_argument("--base-url", default=DEFAULT_BASE_URL)
     parser.add_argument("--token", default=DEFAULT_TOKEN)
     parser.add_argument("--household-id", default=DEFAULT_HOUSEHOLD_ID)
     parser.add_argument("--fail-on-regression", action="store_true")
     args = parser.parse_args()
 
-    input_dir = Path(args.input_dir).expanduser().resolve()
-    if not input_dir.exists() or not input_dir.is_dir():
-        fail(f"input_dir bestaat niet of is geen map: {input_dir}")
-    files = sorted(path for path in input_dir.iterdir() if path.is_file() and path.suffix.lower() in SUPPORTED_EXTENSIONS)
-    if not files:
-        fail(f"geen ondersteunde kassabonbestanden gevonden in {input_dir}")
-    ok(f"{len(files)} kassabonbestanden gevonden in {input_dir}")
+    input_path = Path(args.input_path).expanduser().resolve()
+    input_mode, files = resolve_input(input_path)
+    ok(f"input_mode={input_mode} files={len(files)} input={input_path}")
 
     before_path = latest_scorematrix()
     before = load_json(before_path)
@@ -191,8 +205,9 @@ def main() -> int:
     after = load_json(after_path)
     comparison = compare(before, after)
     report = {
-        "policy": "R9-12 full-batch regression via public API + R9-06 + R9-10; no direct DB mutation; no status logic",
-        "input_dir": str(input_dir),
+        "policy": "R9-12B full-batch regression via public API + R9-06 + R9-10; zip input is treated as one canonical source; no direct DB mutation; no status logic",
+        "input_mode": input_mode,
+        "input_path": str(input_path),
         "files": [path.name for path in files],
         "import_results": import_results,
         "before_scorematrix": str(before_path) if before_path else None,
