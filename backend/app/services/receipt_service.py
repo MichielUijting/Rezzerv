@@ -400,7 +400,7 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
 
     De parser mag intern streng blijven voor diagnose, maar de database moet
     weergeven of een bon voor de gebruiker bruikbaar is. Daarom wordt een bon
-    als 'parsed' opgeslagen zodra de essentiÃƒÂ«le kopgegevens betrouwbaar zijn:
+    als 'parsed' opgeslagen zodra de essentiële kopgegevens betrouwbaar zijn:
     winkelnaam en totaalbedrag. Waar mogelijk controleren we daarnaast of de
     netto regelsom binnen tolerantie klopt, maar een imperfecte artikel-extractie
     mag een verder bruikbare bon niet onnodig op 'review_needed' houden.
@@ -440,7 +440,7 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
         # totaalbedrag leidend voor de database-classificatie.
         return 'parsed'
 
-    # EssentiÃƒÂ«le kopgegevens zijn aanwezig; artikelregels kunnen later handmatig
+    # Essentiële kopgegevens zijn aanwezig; artikelregels kunnen later handmatig
     # worden verbeterd zonder dat de hele bon in de controlebak hoeft te blijven.
     return 'parsed'
 
@@ -852,6 +852,11 @@ RECEIPT_NON_PRODUCT_LABEL_TOKENS = (
 )
 
 
+
+
+def _contains_letter(value: str | None) -> bool:
+    return any(ch.isalpha() for ch in str(value or ''))
+
 def _looks_like_non_product_receipt_label(label: str | None) -> bool:
     """Return True for OCR lines that should never become inventory articles."""
     candidate = re.sub(r'\s+', ' ', str(label or '')).strip(' .:-')
@@ -936,7 +941,7 @@ def _looks_like_item_label_only(line: str, *, store_name: str | None = None, fil
     candidate = re.sub(r'\s+', ' ', str(line or '')).strip()
     if not candidate or _should_skip_receipt_line(candidate, store_name=store_name, filename=filename):
         return False
-    if not re.search(r'[A-Za-z]', candidate):
+    if not _contains_letter(candidate):
         return False
     if re.search(r'\d+[\.,]\d{2}', candidate):
         return False
@@ -1635,7 +1640,7 @@ def _ocr_image_text_with_tesseract(file_bytes: bytes, filename: str) -> tuple[li
 def _normalize_store_specific_text(text: str) -> str:
     normalized = str(text or '').replace('\u00a0', ' ').replace('/uni00A0', ' ').replace('/uni00A01', ' 1 ')
     normalized = normalized.replace('/uni00A02', ' 2 ').replace('/uni00A03', ' 3 ').replace('/uni00A04', ' 4 ')
-    normalized = normalized.replace('Ã‚Â·', ' Ã‚Â· ')
+    normalized = normalized.replace('·', ' · ')
     normalized = re.sub(r'\s+Ã¢â€šÂ¬\s*', ' Ã¢â€šÂ¬ ', normalized)
     normalized = re.sub(r'[ 	]+', ' ', normalized)
     normalized = re.sub(r'\n{3,}', '\n\n', normalized)
@@ -2057,8 +2062,8 @@ def _parse_picnic_email_result(text: str, html_text: str, filename: str, header_
     raw_lines = _normalize_text_lines(haystack)
     lines = []
     for line in raw_lines:
-        cleaned = re.sub(r'[Ã¢â‚¬â€¹Ã¢â‚¬Å’Ã¯Â»Â¿]+', '', line).strip()
-        if cleaned and cleaned not in {'.', 'Ã¢â‚¬Â¢'}:
+        cleaned = re.sub(r'[Ã¢â‚¬Å’]+', '', line).strip()
+        if cleaned and cleaned not in {'.', '•'}:
             lines.append(cleaned)
     purchase_at = _parse_dutch_textual_date(haystack, default_year=2026)
     if purchase_at and 'T' not in purchase_at:
@@ -2108,7 +2113,7 @@ def _parse_picnic_email_result(text: str, html_text: str, filename: str, header_
         qty = float(lines[i])
         name = lines[i + 1].strip()
         if (
-            not re.search(r'[A-Za-z]', name)
+            not _contains_letter(name)
             or any(name.lower().startswith(prefix) for prefix in noise_prefixes)
             or _is_picnic_summary_line(name)
         ):
@@ -2125,7 +2130,7 @@ def _parse_picnic_email_result(text: str, html_text: str, filename: str, header_
                     prices.append(price)
                 j += 2
                 continue
-            if j + 1 < len(lines) and re.fullmatch(r'\d+', lines[j]) and re.search(r'[A-Za-z]', lines[j + 1]):
+            if j + 1 < len(lines) and re.fullmatch(r'\d+', lines[j]) and _contains_letter(lines[j + 1]):
                 break
             j += 1
 
@@ -2162,7 +2167,7 @@ def _parse_picnic_email_result(text: str, html_text: str, filename: str, header_
             i = j
             continue
 
-        if j < len(lines) and j + 1 < len(lines) and re.fullmatch(r'\d+', lines[j]) and re.search(r'[A-Za-z]', lines[j + 1]):
+        if j < len(lines) and j + 1 < len(lines) and re.fullmatch(r'\d+', lines[j]) and _contains_letter(lines[j + 1]):
             append_structured_product_candidate(
                 extracted,
                 label=name,
@@ -2204,7 +2209,7 @@ def _parse_picnic_flattened_blocks(haystack: str) -> tuple[list[dict[str, Any]],
         return [], None
     order_pattern = re.compile(r'(Toegevoegd op .*? Order [0-9-]+)\s+(?P<body>.*?)(?=(?:Toegevoegd op .*? Order [0-9-]+)|$)', re.I)
     price_pattern = re.compile(r'(?:Ã¢â€šÂ¬\s*)?(?P<euros>-?\d+)\s*(?:[.,]|\s)\s*(?P<cents>\d{2})(?:\s*\.)?')
-    block_pattern = re.compile(r"(?:^|\s)(?P<qty>\d+)\s+(?=[A-Za-zÃƒâ‚¬-ÃƒÂ¿'\(])")
+    block_pattern = re.compile(r"(?:^|\s)(?P<qty>\d+)\s+(?=[A-Za-zÀ-ÿ'\(])")
     extracted: list[dict[str, Any]] = []
 
     def _cleanup_label(raw: str) -> str:
@@ -2945,6 +2950,7 @@ def serialize_receipt_row(row: dict[str, Any]) -> dict[str, Any]:
         key: (normalize_datetime(value) if key in datetime_keys else normalize_number(value))
         for key, value in row.items()
     }
+
 
 
 
