@@ -45,6 +45,9 @@ def append_product_candidate(
     The gateway is intentionally parser-status neutral: it only decides whether a
     parsed line may become a product candidate. Receipt status remains outside
     receipt ingestion and must stay with the SSOT status service.
+
+    R9-14B: the existing producer_trace is the single runtime diagnostic carrier.
+    No separate export path is introduced.
     """
     label_value = clean_label(label)
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
@@ -57,6 +60,14 @@ def append_product_candidate(
     append_allowed = classification_allows_append(classification)
     if not append_allowed:
         return None
+
+    if not classification_trace:
+        classification_trace = {
+            'classification': classification,
+            'stage': 'runtime_gateway',
+            'rule': 'CLASSIFY_LINE_CALLBACK',
+            'matched': label_value,
+        }
 
     quantity = parse_quantity((qty_raw or '').replace('kg', '').replace('KG', '').strip()) if qty_raw else None
     try:
@@ -92,14 +103,11 @@ def append_product_candidate(
         'classification_allows_append': append_allowed,
         'append_allowed': append_allowed,
         'caller_line_hint': caller_line_hint,
+        'classification_rule': classification_trace.get('rule'),
+        'classification_stage': classification_trace.get('stage'),
+        'classification_matched': classification_trace.get('matched'),
+        'classification_trace': classification_trace,
     }
-    if classification_trace:
-        producer_trace.update({
-            'classification_rule': classification_trace.get('rule'),
-            'classification_stage': classification_trace.get('stage'),
-            'classification_matched': classification_trace.get('matched'),
-            'classification_trace': classification_trace,
-        })
 
     extracted.append(
         {
