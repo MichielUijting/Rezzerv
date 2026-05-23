@@ -45,6 +45,14 @@ GENERIC_DEPOSIT_RETURN_TOKENS = (
     'statiegeld retour', 'retour statiegeld', 'emballage retour', 'fust retour',
 )
 
+PRICED_DISCOUNT_ARTICLE_TOKENS = (
+    'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
+    'lidl plus korting', 'totaal korting',
+)
+PRICED_LOYALTY_ARTICLE_TOKENS = (
+    'zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'pluspunt',
+)
+
 
 def _default_false(_: str) -> bool:
     return False
@@ -56,6 +64,31 @@ def _normalize_store(value: str | None) -> str:
 
 def _has_amount(value: str) -> bool:
     return bool(re.search(r'(?<!\d)-?\d+[\.,]\d{2}(?!\d)', value))
+
+
+def _priced_article_value_token(lowered: str) -> str | None:
+    """Return a value-token when a discount/loyalty line with price may affect articles.
+
+    R9-17 keeps this in the existing runtime classifier. It prevents priced
+    discounts, koopzegels and pluspunten from being blocked as metadata before
+    the parser can append them as article value lines. Payment, tax and return
+    lines remain blocking, regardless of amount.
+    """
+    if not _has_amount(lowered):
+        return None
+    if _token_match(lowered, GENERIC_PAYMENT_TOKENS):
+        return None
+    if _token_match(lowered, GENERIC_TAX_TOKENS):
+        return None
+    if _token_match(lowered, GENERIC_DEPOSIT_RETURN_TOKENS):
+        return None
+    token = _token_match(lowered, PRICED_LOYALTY_ARTICLE_TOKENS)
+    if token:
+        return token
+    token = _token_match(lowered, PRICED_DISCOUNT_ARTICLE_TOKENS)
+    if token:
+        return token
+    return None
 
 
 def _footer_or_metadata(lowered: str) -> str:
@@ -119,6 +152,9 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
     token = _token_match(lowered, GENERIC_DEPOSIT_RETURN_TOKENS)
     if token:
         return _decision('footer_payment_tax', 'GENERIC_DEPOSIT_RETURN_TOKENS', token)
+    token = _priced_article_value_token(lowered)
+    if token:
+        return _decision('product_candidate', 'GENERIC_PRICED_DISCOUNT_OR_LOYALTY_LINE', token)
     token = _token_match(lowered, GENERIC_TOTAL_TOKENS)
     if token:
         return _decision('footer_payment_tax', 'GENERIC_TOTAL_TOKENS', token)
@@ -191,6 +227,9 @@ def _store_specific_non_article_trace(line: str, store_name: str | None = None, 
             'plus', 'bedankt', 'welkom', 'filiaal', 'kassabon', 'www.',
             'kvk', 'iban', 'tel', 'servicebalie', 'klantenservice',
         )
+        token = _priced_article_value_token(lowered)
+        if token:
+            return _decision('product_candidate', 'PLUS_PRICED_DISCOUNT_OR_LOYALTY_LINE', token, stage='store_specific')
         token = _token_match(lowered, plus_loyalty_tokens)
         if token:
             return _decision('metadata', 'PLUS_LOYALTY_TOKENS', token, stage='store_specific')
