@@ -16,6 +16,10 @@ class ParserDiagnosticEvent:
     parser_path: str | None = None
     append_branch: str | None = None
     classification: str | None = None
+    classification_rule: str | None = None
+    classification_stage: str | None = None
+    classification_matched: str | None = None
+    classification_trace: dict[str, Any] | None = None
     append_allowed: bool | None = None
     blocked_reason: str | None = None
     source_index: int | None = None
@@ -66,8 +70,14 @@ def _coerce_float(value: Any) -> float | None:
         return None
 
 
+def _coerce_trace(value: Any) -> dict[str, Any] | None:
+    if isinstance(value, dict):
+        return dict(value)
+    return None
+
+
 def normalize_producer_trace(trace: dict[str, Any] | None) -> ParserDiagnosticEvent:
-    """Convert a raw producer_trace dict to the stable R4 diagnostic shape."""
+    """Convert a raw producer_trace dict to the stable diagnostic shape."""
     raw = trace or {}
     append_allowed = _coerce_bool(raw.get('append_allowed'))
     classification_allows_append = _coerce_bool(raw.get('classification_allows_append'))
@@ -81,6 +91,10 @@ def normalize_producer_trace(trace: dict[str, Any] | None) -> ParserDiagnosticEv
         parser_path=raw.get('parser_path'),
         append_branch=raw.get('append_branch'),
         classification=raw.get('classification'),
+        classification_rule=raw.get('classification_rule'),
+        classification_stage=raw.get('classification_stage'),
+        classification_matched=raw.get('classification_matched'),
+        classification_trace=_coerce_trace(raw.get('classification_trace')),
         append_allowed=append_allowed,
         blocked_reason=blocked_reason,
         source_index=_coerce_int(raw.get('source_index')),
@@ -113,6 +127,8 @@ def summarize_parser_diagnostics(events: list[ParserDiagnosticEvent] | None) -> 
     normalized_events = list(events or [])
     by_branch = Counter(event.append_branch or 'unknown' for event in normalized_events)
     by_classification = Counter(event.classification or 'unknown' for event in normalized_events)
+    by_classification_rule = Counter(event.classification_rule or 'unknown' for event in normalized_events)
+    by_classification_stage = Counter(event.classification_stage or 'unknown' for event in normalized_events)
     by_blocked_reason = Counter(event.blocked_reason or 'none' for event in normalized_events)
     appended_candidates = sum(1 for event in normalized_events if event.append_allowed is True)
     blocked_candidates = sum(1 for event in normalized_events if event.append_allowed is False)
@@ -122,6 +138,8 @@ def summarize_parser_diagnostics(events: list[ParserDiagnosticEvent] | None) -> 
         'blocked_candidates': blocked_candidates,
         'by_branch': dict(sorted(by_branch.items())),
         'by_classification': dict(sorted(by_classification.items())),
+        'by_classification_rule': dict(sorted(by_classification_rule.items())),
+        'by_classification_stage': dict(sorted(by_classification_stage.items())),
         'by_blocked_reason': dict(sorted(by_blocked_reason.items())),
     }
 
