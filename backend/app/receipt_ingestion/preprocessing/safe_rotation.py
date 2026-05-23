@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import math
 from dataclasses import asdict, dataclass
@@ -14,6 +14,7 @@ except Exception:
 
 SAFE_ABS_ANGLE_LIMIT = 45.0
 MIN_CONFIDENCE = 0.55
+LANDSCAPE_ASPECT_LIMIT = 1.20
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 
 
@@ -124,6 +125,11 @@ def _estimate(image) -> tuple[float, float, float, int, float | None, list[float
     return round(angle, 2), confidence, round(consensus, 4), len(hough), rect, candidates[:20]
 
 
+
+def _is_landscape_image(image) -> bool:
+    height, width = image.shape[:2]
+    return height > 0 and (width / height) >= LANDSCAPE_ASPECT_LIMIT
+
 def apply_safe_rotation_preprocessing(file_bytes: bytes, filename: str) -> tuple[bytes, SafeRotationDecision]:
     suffix = Path(filename or "").suffix.lower()
     if suffix and suffix not in IMAGE_SUFFIXES:
@@ -132,6 +138,14 @@ def apply_safe_rotation_preprocessing(file_bytes: bytes, filename: str) -> tuple
     image = _decode(file_bytes)
     if image is None:
         return file_bytes, _fallback("image_decode_failed_or_cv2_unavailable")
+
+    if _is_landscape_image(image):
+        rotated_bytes = _encode_png(cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE))
+        if rotated_bytes:
+            return rotated_bytes, SafeRotationDecision(
+                "safe_rotation", True, "rotate_90_landscape", 90.0, 1.0, 1.0,
+                0, None, [], [90.0]
+            )
 
     angle, confidence, consensus, hough_count, rect, candidates = _estimate(image)
     reasons: list[str] = []

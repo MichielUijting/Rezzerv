@@ -6,6 +6,7 @@ import zipfile
 from pathlib import Path
 
 from PIL import Image, ImageOps
+from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import apply_receipt_image_preprocessing
 
 try:
     import cv2  # type: ignore
@@ -75,6 +76,10 @@ def export_debug(input_path: Path, member: str | None, out_dir: Path) -> Path:
         rotated_90 = image.rotate(90, expand=True)
     _save_pil(rotated_90, case_dir / '02_rotated_90_if_landscape.png')
 
+    runtime_bytes, runtime_decision = apply_receipt_image_preprocessing(data, filename)
+    runtime_image = Image.open(io.BytesIO(runtime_bytes)).convert('RGB')
+    _save_pil(runtime_image, case_dir / '03_runtime_preprocessed.png')
+
     deskewed = _deskew_pil(rotated_90)
     _save_pil(deskewed, case_dir / '03_deskewed.png')
 
@@ -83,7 +88,7 @@ def export_debug(input_path: Path, member: str | None, out_dir: Path) -> Path:
 
     manifest = case_dir / 'manifest.txt'
     manifest.write_text(
-        f'input={input_path}\nmember={member or filename}\noriginal_size={image.width}x{image.height}\nrotated_size={rotated_90.width}x{rotated_90.height}\noutput_dir={case_dir}\n',
+        f'input={input_path}\nmember={member or filename}\noriginal_size={image.width}x{image.height}\nrotated_size={rotated_90.width}x{rotated_90.height}\noutput_dir={case_dir}\nruntime_decision={runtime_decision.to_dict()}\n',
         encoding='utf-8',
     )
     return case_dir

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import io
@@ -28,7 +28,7 @@ from app.receipt_ingestion.product_candidate_gateway import append_product_candi
 from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
-from app.receipt_ingestion.preprocessing.safe_rotation import apply_safe_rotation_preprocessing
+from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import apply_receipt_image_preprocessing
 from app.receipt_ingestion.amounts import (
     amount_to_float as _amount_to_float,
     parse_decimal as _parse_decimal,
@@ -867,6 +867,8 @@ def _looks_like_non_product_receipt_label(label: str | None) -> bool:
         return True
     if re.fullmatch(r'[\d\s,\.:%/\-+xX]+', candidate):
         return True
+    if re.search(r'-?\d{1,6}(?:[\.,]\d{2})', lowered) and any(token in lowered for token in ('koopzegel', 'koopzegels', 'pluspunten', 'korting')):
+        return False
     if any(token in lowered for token in RECEIPT_NON_PRODUCT_LABEL_TOKENS):
         return True
     if re.search(r'\b\d{1,2}:\d{2}\b', lowered):
@@ -2396,8 +2398,8 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
         ocr_filename = filename
         safe_rotation_decision = None
         try:
-            ocr_file_bytes, safe_rotation_decision = apply_safe_rotation_preprocessing(file_bytes, filename)
-            if safe_rotation_decision and safe_rotation_decision.selected_route == 'rotate_only':
+            ocr_file_bytes, safe_rotation_decision = apply_receipt_image_preprocessing(file_bytes, filename)
+            if safe_rotation_decision and safe_rotation_decision.selected_route != 'original':
                 ocr_filename = f"{Path(filename).stem}-safe-rotation.png"
         except Exception as exc:
             LOGGER.warning('Safe rotation preprocessing mislukt voor %s: %s', filename, exc)
