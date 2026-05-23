@@ -11,6 +11,7 @@ ParseQuantity = Callable[[str | None], Any]
 ParseDecimal = Callable[[str | None], Any]
 AmountToFloat = Callable[[Any], float | None]
 ClassifyLine = Callable[[str], str]
+TraceLine = Callable[[str], dict[str, Any]]
 InvalidLabelCheck = Callable[[str], bool]
 
 
@@ -35,6 +36,7 @@ def append_product_candidate(
     parse_decimal: ParseDecimal,
     amount_to_float: AmountToFloat,
     classify_line: ClassifyLine,
+    trace_line: TraceLine | None = None,
     is_invalid_label: InvalidLabelCheck | None = None,
     confidence_score: float = 0.85,
 ) -> int | None:
@@ -50,7 +52,8 @@ def append_product_candidate(
     if is_invalid_label is not None and is_invalid_label(label_value):
         return None
 
-    classification = classify_line(label_value)
+    classification_trace = trace_line(label_value) if trace_line is not None else None
+    classification = str((classification_trace or {}).get('classification') or classify_line(label_value))
     append_allowed = classification_allows_append(classification)
     if not append_allowed:
         return None
@@ -74,6 +77,30 @@ def append_product_candidate(
         unit_price = amount1
         line_total = amount1
 
+    producer_trace = {
+        'filename': filename,
+        'store_name': store_name,
+        'function_name': function_name,
+        'append_branch': append_branch,
+        'parser_path': parser_path,
+        'source_index': source_index,
+        'raw_line': raw_line,
+        'normalized_line': normalized_line,
+        'label': label_value,
+        'amount': amount_to_float(line_total),
+        'classification': classification,
+        'classification_allows_append': append_allowed,
+        'append_allowed': append_allowed,
+        'caller_line_hint': caller_line_hint,
+    }
+    if classification_trace:
+        producer_trace.update({
+            'classification_rule': classification_trace.get('rule'),
+            'classification_stage': classification_trace.get('stage'),
+            'classification_matched': classification_trace.get('matched'),
+            'classification_trace': classification_trace,
+        })
+
     extracted.append(
         {
             'raw_label': label_value,
@@ -86,22 +113,7 @@ def append_product_candidate(
             'barcode': None,
             'confidence_score': confidence_score,
             'source_index': source_index,
-            'producer_trace': {
-                'filename': filename,
-                'store_name': store_name,
-                'function_name': function_name,
-                'append_branch': append_branch,
-                'parser_path': parser_path,
-                'source_index': source_index,
-                'raw_line': raw_line,
-                'normalized_line': normalized_line,
-                'label': label_value,
-                'amount': amount_to_float(line_total),
-                'classification': classification,
-                'classification_allows_append': append_allowed,
-                'append_allowed': append_allowed,
-                'caller_line_hint': caller_line_hint,
-            },
+            'producer_trace': producer_trace,
         }
     )
     return len(extracted) - 1
