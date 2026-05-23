@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -11,9 +12,21 @@ except Exception:
     cv2 = None
     np = None
 
+try:
+    from PIL import Image
+except Exception:
+    Image = None
+
+try:
+    from rembg import remove as rembg_remove
+except Exception:
+    rembg_remove = None
+
+
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 LANDSCAPE_ASPECT_LIMIT = 1.20
 MIN_DOCUMENT_AREA_RATIO = 0.04
+ALPHA_THRESHOLD = 12
 
 
 @dataclass
@@ -40,6 +53,68 @@ def _encode_image_png(image) -> bytes | None:
         return None
     ok, encoded = cv2.imencode(".png", image)
     return bytes(encoded.tobytes()) if ok else None
+
+
+def _pil_rgb_to_bgr(image):
+    if cv2 is None or np is None:
+        return None
+    rgb = image.convert("RGB")
+    return cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
+
+
+def _remove_background_with_rembg(file_bytes: bytes):
+    """AI-background-removal before geometry/OCR.
+
+    R9-21K:
+    The previous OpenCV-only approach failed when receipt paper and background
+    had similar brightness/saturation. `rembg` performs object segmentation
+    first, after which OpenCV can crop/warp the receipt more reliably.
+    """
+    if rembg_remove is None:
+        return None, "rembg_unavailable"
+    if Image is None:
+        return None, "pillow_unavailable"
+    if cv2 is None or np is None:
+        return None, "cv2_or_numpy_unavailable"
+
+    try:
+        rgba_bytes = rembg_remove(file_bytes)
+        rgba = Image.open(BytesIO(rgba_bytes)).convert("RGBA")
+    except Exception as exc:
+        return None, f"rembg_failed:{type(exc).__name__}"
+
+    alpha = np.array(rgba.getchannel("A"))
+    ys, xs = np.where(alpha > ALPHA_THRESHOLD)
+
+    if len(xs) == 0 or len(ys) == 0:
+        return None, "rembg_empty_alpha_mask"
+
+    x0, x1 = int(xs.min()), int(xs.max())
+    y0, y1 = int(ys.min()), int(ys.max())
+
+    width, height = rgba.size
+    box_w = x1 - x0 + 1
+    box_h = y1 - y0 + 1
+
+    if box_w < 120 or box_h < 180:
+        return None, "rembg_mask_too_small"
+
+    pad = max(16, int(min(box_w, box_h) * 0.04))
+    x0 = max(0, x0 - pad)
+    y0 = max(0, y0 - pad)
+    x1 = min(width - 1, x1 + pad)
+    y1 = min(height - 1, y1 + pad)
+
+    # Composite segmented foreground on white so OCR sees a clean document image.
+    white = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+    composed = Image.alpha_composite(white, rgba)
+    cropped = composed.crop((x0, y0, x1 + 1, y1 + 1)).convert("RGB")
+
+    bgr = _pil_rgb_to_bgr(cropped)
+    if bgr is None:
+        return None, "rembg_bgr_conversion_failed"
+
+    return bgr, None
 
 
 def _order_points(points):
@@ -97,13 +172,12 @@ def _find_document_quadrilateral(image):
     gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
     gray = cv2.bilateralFilter(gray, 9, 75, 75)
 
-    # Document scanner style: edges, not color/brightness thresholds.
     edges = cv2.Canny(gray, 35, 110)
     edges = cv2.dilate(edges, np.ones((5, 5), np.uint8), iterations=2)
     edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8), iterations=2)
 
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:20]
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:30]
 
     best_quad = None
     best_score = 0.0
@@ -115,7 +189,7 @@ def _find_document_quadrilateral(image):
             continue
 
         perimeter = cv2.arcLength(contour, True)
-        for epsilon in (0.015, 0.02, 0.03, 0.04, 0.06):
+        for epsilon in (0.015, 0.02, 0.03, 0.04, 0.06, 0.08):
             approx = cv2.approxPolyDP(contour, epsilon * perimeter, True)
             if len(approx) != 4:
                 continue
@@ -126,7 +200,7 @@ def _find_document_quadrilateral(image):
                 continue
 
             aspect = max(w, h) / max(1, min(w, h))
-            if aspect < 1.7:
+            if aspect < 1.45:
                 continue
 
             rect_area = float(w * h)
@@ -137,23 +211,47 @@ def _find_document_quadrilateral(image):
                 best_quad = quad
                 best_score = score
 
-    # Fallback: use min-area rectangle of the largest sufficiently receipt-shaped edge contour.
-    if best_quad is None:
-        for contour in contours:
-            area_small = float(cv2.contourArea(contour))
-            area = area_small * (ratio ** 2)
-            if image_area <= 0 or (area / image_area) < MIN_DOCUMENT_AREA_RATIO:
-                continue
+    if best_quad is not None:
+        return best_quad
 
-            rect = cv2.minAreaRect(contour)
-            box = cv2.boxPoints(rect).astype("float32") * ratio
-            x, y, w, h = cv2.boundingRect(box.astype("int32"))
-            aspect = max(w, h) / max(1, min(w, h))
-            if w >= 160 and h >= 260 and aspect >= 1.7:
-                best_quad = box
-                break
+    joined = cv2.dilate(edges, np.ones((23, 23), np.uint8), iterations=2)
+    joined = cv2.morphologyEx(joined, cv2.MORPH_CLOSE, np.ones((31, 31), np.uint8), iterations=2)
 
-    return best_quad
+    relaxed_contours, _ = cv2.findContours(joined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    relaxed_contours = sorted(relaxed_contours, key=cv2.contourArea, reverse=True)[:10]
+
+    best_box = None
+    best_relaxed_score = 0.0
+
+    for contour in relaxed_contours:
+        area_small = float(cv2.contourArea(contour))
+        area = area_small * (ratio ** 2)
+        if image_area <= 0 or (area / image_area) < MIN_DOCUMENT_AREA_RATIO:
+            continue
+
+        rect = cv2.minAreaRect(contour)
+        box_small = cv2.boxPoints(rect).astype("float32")
+        box = box_small * ratio
+
+        x, y, w, h = cv2.boundingRect(box.astype("int32"))
+        if w < 160 or h < 260:
+            continue
+
+        aspect = max(w, h) / max(1, min(w, h))
+        if aspect < 1.35:
+            continue
+
+        box_area = float(w * h)
+        box_ratio = box_area / image_area if image_area else 0.0
+        if box_ratio < 0.04 or box_ratio > 0.98:
+            continue
+
+        score = area * aspect
+        if score > best_relaxed_score:
+            best_box = box
+            best_relaxed_score = score
+
+    return best_box
 
 
 def _remove_background_by_document_edges(image):
@@ -182,17 +280,26 @@ def apply_receipt_image_preprocessing(file_bytes: bytes, filename: str) -> tuple
             None,
         )
 
-    image = _decode_image(file_bytes)
+    applied_steps: list[str] = []
+    fallback_reason: list[str] = []
+
+    image, ai_reason = _remove_background_with_rembg(file_bytes)
+    if image is not None:
+        applied_steps.append("ai_background_removed")
+    elif ai_reason:
+        fallback_reason.append(ai_reason)
+
+    if image is None:
+        image = _decode_image(file_bytes)
+
     if image is None:
         return file_bytes, ReceiptImagePreprocessingDecision(
             "receipt_image_preprocessing",
             "original",
             [],
-            ["image_decode_failed_or_cv2_unavailable"],
+            fallback_reason + ["image_decode_failed_or_cv2_unavailable"],
             None,
         )
-
-    applied_steps: list[str] = []
 
     image, document_extracted = _remove_background_by_document_edges(image)
     if document_extracted:
@@ -204,7 +311,7 @@ def apply_receipt_image_preprocessing(file_bytes: bytes, filename: str) -> tuple
             "receipt_image_preprocessing",
             "original",
             applied_steps,
-            ["output_encode_failed"],
+            fallback_reason + ["output_encode_failed"],
             None,
         )
 
@@ -213,6 +320,6 @@ def apply_receipt_image_preprocessing(file_bytes: bytes, filename: str) -> tuple
         "receipt_image_preprocessing",
         route,
         applied_steps,
-        [],
+        fallback_reason,
         None,
     )
