@@ -15,7 +15,7 @@ from app.receipt_ingestion.preprocessing.perspective_normalization import normal
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 LANDSCAPE_ASPECT_LIMIT = 1.20
-MIN_FOREGROUND_AREA_RATIO = 0.05
+MIN_RECEIPT_AREA_RATIO = 0.035
 
 
 @dataclass
@@ -51,27 +51,48 @@ def _rotate_landscape_to_portrait(image):
     return image, False
 
 
-def _build_receipt_paper_mask(image):
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    _h, s, v = cv2.split(hsv)
+def _mask_receipt_paper(image):
+    """Return a mask for the receipt paper itself, not the table/background.
 
-    bright = cv2.inRange(v, 130, 255)
-    low_saturation = cv2.inRange(s, 0, 95)
+    R9-21F:
+    - The previous foreground step still left the photographed background visible.
+    - This routine detects the bright/low-saturation paper component first.
+    - The OCR pipeline must continue only with the isolated document area.
+    """
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    _h, saturation, value = cv2.split(hsv)
+
+    otsu_threshold, _ = cv2.threshold(
+        value,
+        0,
+        255,
+        cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+    )
+    value_threshold = int(max(130, min(190, otsu_threshold + 15)))
+
+    bright = cv2.inRange(value, value_threshold, 255)
+    low_saturation = cv2.inRange(saturation, 0, 115)
     mask = cv2.bitwise_and(bright, low_saturation)
 
-    kernel_close = np.ones((11, 11), np.uint8)
-    kernel_open = np.ones((5, 5), np.uint8)
-
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel_close, iterations=3)
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel_open, iterations=1)
-    mask = cv2.dilate(mask, kernel_open, iterations=1)
+    mask = cv2.morphologyEx(
+        mask,
+        cv2.MORPH_CLOSE,
+        np.ones((17, 17), np.uint8),
+        iterations=3,
+    )
+    mask = cv2.morphologyEx(
+        mask,
+        cv2.MORPH_OPEN,
+        np.ones((7, 7), np.uint8),
+        iterations=1,
+    )
+    mask = cv2.dilate(mask, np.ones((5, 5), np.uint8), iterations=1)
     return mask
 
 
-def _largest_receipt_paper_component(mask, image_shape):
+def _select_receipt_contour(mask, image_shape):
     height, width = image_shape[:2]
     image_area = float(height * width)
-
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     best = None
@@ -79,11 +100,7 @@ def _largest_receipt_paper_component(mask, image_shape):
 
     for contour in contours:
         area = float(cv2.contourArea(contour))
-        if image_area <= 0:
-            continue
-
-        ratio = area / image_area
-        if ratio < MIN_FOREGROUND_AREA_RATIO:
+        if image_area <= 0 or (area / image_area) < MIN_RECEIPT_AREA_RATIO:
             continue
 
         x, y, w, h = cv2.boundingRect(contour)
@@ -91,12 +108,12 @@ def _largest_receipt_paper_component(mask, image_shape):
             continue
 
         aspect = max(w, h) / max(1, min(w, h))
-        if aspect < 1.6:
+        if aspect < 1.45:
             continue
 
         rect_area = float(w * h)
-        fill = area / rect_area if rect_area else 0.0
-        score = area * max(0.2, fill)
+        fill_ratio = area / rect_area if rect_area else 0.0
+        score = area * max(0.25, fill_ratio)
 
         if score > best_score:
             best = contour
@@ -105,37 +122,39 @@ def _largest_receipt_paper_component(mask, image_shape):
     return best
 
 
-def _isolate_receipt_foreground(image):
+def _remove_background_and_crop_to_receipt(image):
     if cv2 is None or np is None:
         return image, False
 
-    paper_mask = _build_receipt_paper_mask(image)
-    contour = _largest_receipt_paper_component(paper_mask, image.shape)
-
+    mask = _mask_receipt_paper(image)
+    contour = _select_receipt_contour(mask, image.shape)
     if contour is None:
         return image, False
 
+    hull = cv2.convexHull(contour)
+
     receipt_mask = np.zeros(image.shape[:2], dtype=np.uint8)
-    cv2.drawContours(receipt_mask, [contour], -1, 255, thickness=cv2.FILLED)
+    cv2.drawContours(receipt_mask, [hull], -1, 255, thickness=cv2.FILLED)
     receipt_mask = cv2.morphologyEx(
         receipt_mask,
         cv2.MORPH_CLOSE,
-        np.ones((11, 11), np.uint8),
+        np.ones((13, 13), np.uint8),
         iterations=2,
     )
 
-    white = np.full_like(image, 255)
-    isolated = np.where(receipt_mask[:, :, None] == 255, image, white)
+    white_canvas = np.full_like(image, 255)
+    isolated = np.where(receipt_mask[:, :, None] == 255, image, white_canvas)
 
-    x, y, w, h = cv2.boundingRect(contour)
-    pad = max(16, int(min(w, h) * 0.04))
+    x, y, w, h = cv2.boundingRect(hull)
+    pad = max(20, int(min(w, h) * 0.035))
 
     x0 = max(0, x - pad)
     y0 = max(0, y - pad)
     x1 = min(image.shape[1], x + w + pad)
     y1 = min(image.shape[0], y + h + pad)
 
-    return isolated[y0:y1, x0:x1], True
+    cropped = isolated[y0:y1, x0:x1]
+    return cropped, True
 
 
 def apply_receipt_image_preprocessing(file_bytes: bytes, filename: str) -> tuple[bytes, ReceiptImagePreprocessingDecision]:
@@ -161,9 +180,9 @@ def apply_receipt_image_preprocessing(file_bytes: bytes, filename: str) -> tuple
 
     applied_steps: list[str] = []
 
-    image, isolated = _isolate_receipt_foreground(image)
-    if isolated:
-        applied_steps.append("foreground_isolation")
+    image, background_removed = _remove_background_and_crop_to_receipt(image)
+    if background_removed:
+        applied_steps.append("background_removed")
 
     image, rotated = _rotate_landscape_to_portrait(image)
     if rotated:
