@@ -1465,7 +1465,7 @@ function ReceiptSourceHubContent({
             ) : null}
 
             {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
-            {emailRouteError && currentUserDisplayRole === 'admin' && technicalUploadError?.detail ? (
+            {emailRouteError && ['admin','owner'].includes(String(currentUserDisplayRole || '').trim().toLowerCase()) && (technicalUploadError?.detail || String(emailRouteError || '').startsWith('Upload mislukt. De server gaf een technische fout terug.')) ? (
               <div style={{ display: 'grid', gap: '8px' }}>
                 <Button
                   type="button"
@@ -1492,7 +1492,7 @@ function ReceiptSourceHubContent({
                       fontSize: '12px',
                     }}
                   >
-                    {technicalUploadError.detail}
+                    {technicalUploadError?.detail || `Technische foutmelding niet vastgelegd in deze route.\nFoutmelding: ${emailRouteError}`}
                   </pre>
                 ) : null}
               </div>
