@@ -1,0 +1,1 @@
+R9-31E.2 placeholder note: backend startup warmup should skip heavy model initialization unless explicitly enabled.
