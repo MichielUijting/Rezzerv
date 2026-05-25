@@ -16,6 +16,8 @@ HARD_NON_ARTICLE_TOKENS = (
 
 DISCOUNT_TOKENS = ('bonus', 'korting', 'persoonlijke bonus', 'bonus box', 'uw voordeel')
 AH_SAVINGS_STAMPS_RE = re.compile(r'^(?:(?P<qty>\d+)\s+)?koopzegels(?:\s+premium)?\s+(?P<amount>\d{1,5}(?:[\.,]\d{2}))$', re.I)
+AH_SAVINGS_STAMPS_LABEL_RE = re.compile(r'^(?:(?P<qty>\d+)\s+)?koopzegels(?:\s+premium)?$', re.I)
+AMOUNT_ONLY_RE = re.compile(r'^(?P<amount>\d{1,5}(?:[\.,]\d{2}))$')
 
 
 def _norm(value: Any) -> str:
@@ -56,6 +58,27 @@ def _extract_amounts(line: str) -> list[Decimal]:
     return values
 
 
+def _build_savings_stamps_candidate(quantity: Decimal, line_total: Decimal, *, hint: str) -> dict[str, Any] | None:
+    if quantity <= 0 or line_total <= Decimal('0.00'):
+        return None
+    try:
+        unit_price = (line_total / quantity).quantize(Decimal('0.01'))
+    except Exception:
+        unit_price = line_total
+    amount_label = str(line_total).replace('.', ',')
+    return {
+        'label': f'KOOPZEGELS PREMIUM {amount_label}',
+        'quantity': float(quantity),
+        'unit': None,
+        'unit_price': unit_price,
+        'line_total': line_total,
+        'append_branch': 'ah_koopzegels_premium_detected',
+        'parser_path': 'AhReceiptProfile.runtime.savings_stamps_positive_contributor',
+        'caller_line_hint': hint,
+        'confidence_score': 0.91,
+    }
+
+
 def _parse_ah_savings_stamps_line(line: str) -> dict[str, Any] | None:
     normalized = _norm(line)
     match = AH_SAVINGS_STAMPS_RE.match(normalized.lower())
@@ -66,27 +89,34 @@ def _parse_ah_savings_stamps_line(line: str) -> dict[str, Any] | None:
         line_total = Decimal(match.group('amount').replace(',', '.')).quantize(Decimal('0.01'))
     except Exception:
         return None
-    if quantity <= 0 or line_total <= Decimal('0.00'):
+    return _build_savings_stamps_candidate(
+        quantity,
+        line_total,
+        hint='R9-32B AH koopzegels same-line positive total contributor',
+    )
+
+
+def _parse_ah_savings_stamps_adjacent_amount_line(line: str, following_lines: list[str]) -> dict[str, Any] | None:
+    normalized = _norm(line)
+    match = AH_SAVINGS_STAMPS_LABEL_RE.match(normalized.lower())
+    if not match:
         return None
-    try:
-        unit_price = (line_total / quantity).quantize(Decimal('0.01'))
-    except Exception:
-        unit_price = line_total
-    amount_label = str(line_total).replace('.', ',')
-    return {
-        # Keep the amount in the generated label so the existing generic
-        # non-product guard accepts this as an explicit positive savings-stamp
-        # contributor, without adding AH-only report or status logic.
-        'label': f'KOOPZEGELS PREMIUM {amount_label}',
-        'quantity': float(quantity),
-        'unit': None,
-        'unit_price': unit_price,
-        'line_total': line_total,
-        'append_branch': 'ah_koopzegels_premium_detected',
-        'parser_path': 'AhReceiptProfile.runtime.savings_stamps_positive_contributor',
-        'caller_line_hint': 'R9-32A AH koopzegels positive total contributor',
-        'confidence_score': 0.91,
-    }
+    quantity = Decimal(match.group('qty') or '1').quantize(Decimal('1'))
+    for next_line in following_lines[:2]:
+        next_normalized = _norm(next_line)
+        amount_match = AMOUNT_ONLY_RE.match(next_normalized)
+        if not amount_match:
+            continue
+        try:
+            line_total = Decimal(amount_match.group('amount').replace(',', '.')).quantize(Decimal('0.01'))
+        except Exception:
+            continue
+        return _build_savings_stamps_candidate(
+            quantity,
+            line_total,
+            hint='R9-32B AH koopzegels adjacent-amount positive total contributor',
+        )
+    return None
 
 
 def _parse_ah_article_line(line: str) -> dict[str, Any] | None:
@@ -111,7 +141,6 @@ def _parse_ah_article_line(line: str) -> dict[str, Any] | None:
         text_without_last_amount = AMOUNT1_RE.sub('', normalized, count=1)
     else:
         text_without_last_amount = normalized
-        # Remove the textual last amount conservatively by cutting at the last occurrence of an amount pattern.
         matches = list(AMOUNT2_RE.finditer(normalized))
         if matches:
             last = matches[-1]
@@ -133,7 +162,6 @@ def _parse_ah_article_line(line: str) -> dict[str, Any] | None:
             quantity = Decimal('1.00')
 
     label = re.sub(r'\s+', ' ', label).strip(' .:-')
-    # Remove unit price when line shape is qty label unitprice total, e.g. 2 AH CHIPS 0,39 1.17.
     embedded_amounts = AMOUNT2_RE.findall(label)
     if embedded_amounts:
         label = AMOUNT2_RE.sub('', label).strip(' .:-')
@@ -188,7 +216,12 @@ def build_ah_profile_article_lines(
 
     generated: list[dict[str, Any]] = []
     for source_index, raw_line in enumerate(text_lines):
-        parsed = _parse_ah_savings_stamps_line(raw_line) or _parse_ah_article_line(raw_line)
+        following = text_lines[source_index + 1:source_index + 3]
+        parsed = (
+            _parse_ah_savings_stamps_line(raw_line)
+            or _parse_ah_savings_stamps_adjacent_amount_line(raw_line, following)
+            or _parse_ah_article_line(raw_line)
+        )
         if not parsed:
             continue
         candidate_key = _key(str(parsed['label']), parsed['line_total'])
