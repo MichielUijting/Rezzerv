@@ -424,6 +424,7 @@ def _parse_filename_query(filenames: str | None) -> list[str] | None:
 def install_receipt_line_diagnosis_routes(app, engine) -> None:
     paths = {'/api/testing/receipt-line-diagnosis', '/api/testing/receipt-line-diagnosis/download'}
     app.router.routes = [route for route in app.router.routes if getattr(route, 'path', None) not in paths]
+    app.openapi_schema = None
     app.state.receipt_line_diagnosis_routes_installed = True
 
     @app.get('/api/testing/receipt-line-diagnosis')
