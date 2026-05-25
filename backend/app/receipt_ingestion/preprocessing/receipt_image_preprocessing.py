@@ -1,21 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from io import BytesIO
+import os
 from pathlib import Path
 from typing import Any
 
-try:
-    import cv2
-    import numpy as np
-except Exception:
-    cv2 = None
-    np = None
+from PIL import Image, ImageOps
 
 try:
-    from PIL import Image
+    import numpy as np
 except Exception:
-    Image = None
+    np = None
 
 try:
     from rembg import remove as rembg_remove
@@ -24,9 +20,11 @@ except Exception:
 
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
-LANDSCAPE_ASPECT_LIMIT = 1.20
-MIN_DOCUMENT_AREA_RATIO = 0.04
 ALPHA_THRESHOLD = 12
+MIN_MASK_COVERAGE = 0.01
+MAX_MASK_COVERAGE = 0.98
+MIN_CROP_WIDTH = 120
+MIN_CROP_HEIGHT = 180
 
 
 @dataclass
@@ -36,241 +34,144 @@ class ReceiptImagePreprocessingDecision:
     applied_steps: list[str]
     fallback_reason: list[str]
     perspective_normalization: dict[str, Any] | None
+    diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
 
-def _decode_image(file_bytes: bytes):
-    if cv2 is None or np is None:
+def _debug_dir() -> Path | None:
+    value = os.environ.get("REZZERV_RECEIPT_PREPROCESS_DEBUG_DIR")
+    if not value:
         return None
-    data = np.frombuffer(file_bytes, dtype=np.uint8)
-    return cv2.imdecode(data, cv2.IMREAD_COLOR)
+    path = Path(value)
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
-def _encode_image_png(image) -> bytes | None:
-    if cv2 is None:
-        return None
-    ok, encoded = cv2.imencode(".png", image)
-    return bytes(encoded.tobytes()) if ok else None
+def _save_debug(name: str, image: Image.Image, diagnostics: dict[str, Any]) -> None:
+    out = _debug_dir()
+    if out is None:
+        return
+    path = out / name
+    image.save(path)
+    diagnostics.setdefault("debug_files", []).append(str(path))
 
 
-def _pil_rgb_to_bgr(image):
-    if cv2 is None or np is None:
-        return None
-    rgb = image.convert("RGB")
-    return cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)
+def _encode_png(image: Image.Image) -> bytes:
+    buf = BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
 
 
-def _remove_background_with_rembg(file_bytes: bytes):
-    """AI-background-removal before geometry/OCR.
-
-    R9-21K:
-    The previous OpenCV-only approach failed when receipt paper and background
-    had similar brightness/saturation. `rembg` performs object segmentation
-    first, after which OpenCV can crop/warp the receipt more reliably.
-    """
-    if rembg_remove is None:
-        return None, "rembg_unavailable"
-    if Image is None:
-        return None, "pillow_unavailable"
-    if cv2 is None or np is None:
-        return None, "cv2_or_numpy_unavailable"
-
+def _safe_original(file_bytes: bytes, reasons: list[str], diagnostics: dict[str, Any]) -> tuple[bytes, ReceiptImagePreprocessingDecision]:
     try:
-        rgba_bytes = rembg_remove(file_bytes)
-        rgba = Image.open(BytesIO(rgba_bytes)).convert("RGBA")
+        img = Image.open(BytesIO(file_bytes))
+        img = ImageOps.exif_transpose(img).convert("RGB")
+        diagnostics["original_size"] = [img.width, img.height]
+        diagnostics["final_size"] = [img.width, img.height]
+        _save_debug("00_input_original.png", img, diagnostics)
+        _save_debug("40_final_runtime_preprocessed.png", img, diagnostics)
+        return _encode_png(img), ReceiptImagePreprocessingDecision(
+            "receipt_image_preprocessing",
+            "original_safe_fallback",
+            [],
+            reasons,
+            None,
+            diagnostics,
+        )
     except Exception as exc:
-        return None, f"rembg_failed:{type(exc).__name__}"
+        reasons.append(f"fallback_decode_failed:{type(exc).__name__}")
+        return file_bytes, ReceiptImagePreprocessingDecision(
+            "receipt_image_preprocessing",
+            "original_bytes_fallback",
+            [],
+            reasons,
+            None,
+            diagnostics,
+        )
+
+
+def _alpha_bbox_crop(rgba: Image.Image, diagnostics: dict[str, Any]) -> tuple[Image.Image | None, str | None]:
+    if np is None:
+        return None, "numpy_unavailable"
 
     alpha = np.array(rgba.getchannel("A"))
     ys, xs = np.where(alpha > ALPHA_THRESHOLD)
 
-    if len(xs) == 0 or len(ys) == 0:
+    total = int(alpha.shape[0] * alpha.shape[1])
+    count = int(len(xs))
+    coverage = float(count / total) if total else 0.0
+
+    diagnostics["rembg_alpha"] = {
+        "mask_pixels": count,
+        "total_pixels": total,
+        "coverage": coverage,
+        "threshold": ALPHA_THRESHOLD,
+    }
+    _save_debug("10_rembg_alpha_mask.png", Image.fromarray(alpha), diagnostics)
+
+    if count <= 0:
         return None, "rembg_empty_alpha_mask"
+    if coverage < MIN_MASK_COVERAGE:
+        return None, "rembg_mask_coverage_too_low"
+    if coverage > MAX_MASK_COVERAGE:
+        return None, "rembg_mask_coverage_too_high"
 
     x0, x1 = int(xs.min()), int(xs.max())
     y0, y1 = int(ys.min()), int(ys.max())
-
     width, height = rgba.size
+
     box_w = x1 - x0 + 1
     box_h = y1 - y0 + 1
+    if box_w < MIN_CROP_WIDTH or box_h < MIN_CROP_HEIGHT:
+        diagnostics["rembg_bbox_rejected"] = {
+            "bbox_size": [box_w, box_h],
+            "minimum_size": [MIN_CROP_WIDTH, MIN_CROP_HEIGHT],
+        }
+        return None, "rembg_bbox_too_small"
 
-    if box_w < 120 or box_h < 180:
-        return None, "rembg_mask_too_small"
-
-    pad = max(16, int(min(box_w, box_h) * 0.04))
+    pad = max(24, int(min(box_w, box_h) * 0.04))
     x0 = max(0, x0 - pad)
     y0 = max(0, y0 - pad)
     x1 = min(width - 1, x1 + pad)
     y1 = min(height - 1, y1 + pad)
 
-    # Composite segmented foreground on white so OCR sees a clean document image.
     white = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
-    composed = Image.alpha_composite(white, rgba)
+    composed = Image.alpha_composite(white, rgba).convert("RGB")
+    _save_debug("11_rembg_composited_full.png", composed, diagnostics)
+
     cropped = composed.crop((x0, y0, x1 + 1, y1 + 1)).convert("RGB")
+    _save_debug("12_rembg_cropped.png", cropped, diagnostics)
 
-    bgr = _pil_rgb_to_bgr(cropped)
-    if bgr is None:
-        return None, "rembg_bgr_conversion_failed"
-
-    return bgr, None
-
-
-def _order_points(points):
-    rect = np.zeros((4, 2), dtype="float32")
-    s = points.sum(axis=1)
-    rect[0] = points[np.argmin(s)]
-    rect[2] = points[np.argmax(s)]
-    diff = np.diff(points, axis=1)
-    rect[1] = points[np.argmin(diff)]
-    rect[3] = points[np.argmax(diff)]
-    return rect
-
-
-def _four_point_warp(image, points):
-    rect = _order_points(points.astype("float32"))
-    tl, tr, br, bl = rect
-
-    width_a = np.linalg.norm(br - bl)
-    width_b = np.linalg.norm(tr - tl)
-    max_width = int(max(width_a, width_b))
-
-    height_a = np.linalg.norm(tr - br)
-    height_b = np.linalg.norm(tl - bl)
-    max_height = int(max(height_a, height_b))
-
-    if max_width < 160 or max_height < 260:
-        return None
-
-    dst = np.array(
-        [
-            [0, 0],
-            [max_width - 1, 0],
-            [max_width - 1, max_height - 1],
-            [0, max_height - 1],
-        ],
-        dtype="float32",
-    )
-
-    matrix = cv2.getPerspectiveTransform(rect, dst)
-    warped = cv2.warpPerspective(image, matrix, (max_width, max_height), borderMode=cv2.BORDER_REPLICATE)
-
-    if warped.shape[1] > warped.shape[0]:
-        warped = cv2.rotate(warped, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-    return warped
-
-
-def _find_document_quadrilateral(image):
-    height, width = image.shape[:2]
-    image_area = float(height * width)
-
-    ratio = height / 900.0 if height > 900 else 1.0
-    small = cv2.resize(image, (int(width / ratio), int(height / ratio)))
-
-    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-    gray = cv2.bilateralFilter(gray, 9, 75, 75)
-
-    edges = cv2.Canny(gray, 35, 110)
-    edges = cv2.dilate(edges, np.ones((5, 5), np.uint8), iterations=2)
-    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8), iterations=2)
-
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    contours = sorted(contours, key=cv2.contourArea, reverse=True)[:30]
-
-    best_quad = None
-    best_score = 0.0
-
-    for contour in contours:
-        area_small = float(cv2.contourArea(contour))
-        area = area_small * (ratio ** 2)
-        if image_area <= 0 or (area / image_area) < MIN_DOCUMENT_AREA_RATIO:
-            continue
-
-        perimeter = cv2.arcLength(contour, True)
-        for epsilon in (0.015, 0.02, 0.03, 0.04, 0.06, 0.08):
-            approx = cv2.approxPolyDP(contour, epsilon * perimeter, True)
-            if len(approx) != 4:
-                continue
-
-            quad = approx.reshape(4, 2).astype("float32") * ratio
-            x, y, w, h = cv2.boundingRect(quad.astype("int32"))
-            if w < 160 or h < 260:
-                continue
-
-            aspect = max(w, h) / max(1, min(w, h))
-            if aspect < 1.45:
-                continue
-
-            rect_area = float(w * h)
-            fill = area / rect_area if rect_area else 0.0
-            score = area * max(0.2, min(fill, 1.0))
-
-            if score > best_score:
-                best_quad = quad
-                best_score = score
-
-    if best_quad is not None:
-        return best_quad
-
-    joined = cv2.dilate(edges, np.ones((23, 23), np.uint8), iterations=2)
-    joined = cv2.morphologyEx(joined, cv2.MORPH_CLOSE, np.ones((31, 31), np.uint8), iterations=2)
-
-    relaxed_contours, _ = cv2.findContours(joined, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    relaxed_contours = sorted(relaxed_contours, key=cv2.contourArea, reverse=True)[:10]
-
-    best_box = None
-    best_relaxed_score = 0.0
-
-    for contour in relaxed_contours:
-        area_small = float(cv2.contourArea(contour))
-        area = area_small * (ratio ** 2)
-        if image_area <= 0 or (area / image_area) < MIN_DOCUMENT_AREA_RATIO:
-            continue
-
-        rect = cv2.minAreaRect(contour)
-        box_small = cv2.boxPoints(rect).astype("float32")
-        box = box_small * ratio
-
-        x, y, w, h = cv2.boundingRect(box.astype("int32"))
-        if w < 160 or h < 260:
-            continue
-
-        aspect = max(w, h) / max(1, min(w, h))
-        if aspect < 1.35:
-            continue
-
-        box_area = float(w * h)
-        box_ratio = box_area / image_area if image_area else 0.0
-        if box_ratio < 0.04 or box_ratio > 0.98:
-            continue
-
-        score = area * aspect
-        if score > best_relaxed_score:
-            best_box = box
-            best_relaxed_score = score
-
-    return best_box
-
-
-def _remove_background_by_document_edges(image):
-    if cv2 is None or np is None:
-        return image, False
-
-    quad = _find_document_quadrilateral(image)
-    if quad is None:
-        return image, False
-
-    warped = _four_point_warp(image, quad)
-    if warped is None:
-        return image, False
-
-    return warped, True
+    diagnostics["rembg_bbox"] = {
+        "image_size": [width, height],
+        "bbox": [x0, y0, x1, y1],
+        "bbox_size": [cropped.width, cropped.height],
+        "crop_reduces_image": cropped.width < width or cropped.height < height,
+    }
+    return cropped, None
 
 
 def apply_receipt_image_preprocessing(file_bytes: bytes, filename: str) -> tuple[bytes, ReceiptImagePreprocessingDecision]:
+    """R9-30A: generic rembg background neutralization.
+
+    Runtime route:
+    rembg -> white_composite -> alpha_bbox_crop.
+
+    Guardrails:
+    - No status logic.
+    - No OCR/parser branching by filename.
+    - No PCA pilot filenames.
+    - No contour forcing, perspective normalization, deskew, or edge-join reconstruction.
+    - Safe fallback preserves processing by returning the original image encoded as PNG where possible.
+    """
+    diagnostics: dict[str, Any] = {
+        "filename": filename,
+        "route_policy": "generic_no_filename_gate",
+    }
     suffix = Path(filename or "").suffix.lower()
+
     if suffix and suffix not in IMAGE_SUFFIXES:
         return file_bytes, ReceiptImagePreprocessingDecision(
             "receipt_image_preprocessing",
@@ -278,48 +179,48 @@ def apply_receipt_image_preprocessing(file_bytes: bytes, filename: str) -> tuple
             [],
             ["unsupported_image_suffix"],
             None,
+            diagnostics,
         )
 
-    applied_steps: list[str] = []
-    fallback_reason: list[str] = []
+    if rembg_remove is None:
+        return _safe_original(file_bytes, ["rembg_unavailable"], diagnostics)
 
-    image, ai_reason = _remove_background_with_rembg(file_bytes)
-    if image is not None:
-        applied_steps.append("ai_background_removed")
-    elif ai_reason:
-        fallback_reason.append(ai_reason)
-
-    if image is None:
-        image = _decode_image(file_bytes)
-
-    if image is None:
+    try:
+        original = Image.open(BytesIO(file_bytes))
+        original = ImageOps.exif_transpose(original).convert("RGB")
+        diagnostics["original_size"] = [original.width, original.height]
+        _save_debug("00_input_original.png", original, diagnostics)
+    except Exception as exc:
         return file_bytes, ReceiptImagePreprocessingDecision(
             "receipt_image_preprocessing",
-            "original",
+            "original_bytes_fallback",
             [],
-            fallback_reason + ["image_decode_failed_or_cv2_unavailable"],
+            [f"image_decode_failed:{type(exc).__name__}"],
             None,
+            diagnostics,
         )
 
-    image, document_extracted = _remove_background_by_document_edges(image)
-    if document_extracted:
-        applied_steps.append("document_edge_background_removed")
+    try:
+        rgba_bytes = rembg_remove(file_bytes)
+        rgba = Image.open(BytesIO(rgba_bytes)).convert("RGBA")
+        rgba = ImageOps.exif_transpose(rgba)
+        diagnostics["rembg"] = {"available": True, "size": [rgba.width, rgba.height]}
+        _save_debug("09_rembg_raw_rgba.png", rgba, diagnostics)
+    except Exception as exc:
+        return _safe_original(file_bytes, [f"rembg_failed:{type(exc).__name__}"], diagnostics)
 
-    output = _encode_image_png(image)
-    if not output:
-        return file_bytes, ReceiptImagePreprocessingDecision(
-            "receipt_image_preprocessing",
-            "original",
-            applied_steps,
-            fallback_reason + ["output_encode_failed"],
-            None,
-        )
+    cropped, reason = _alpha_bbox_crop(rgba, diagnostics)
+    if cropped is None:
+        return _safe_original(file_bytes, [reason or "rembg_crop_failed"], diagnostics)
 
-    route = "original" if not applied_steps else "+".join(applied_steps)
-    return output, ReceiptImagePreprocessingDecision(
+    _save_debug("40_final_runtime_preprocessed.png", cropped, diagnostics)
+    diagnostics["final_size"] = [cropped.width, cropped.height]
+
+    return _encode_png(cropped), ReceiptImagePreprocessingDecision(
         "receipt_image_preprocessing",
-        route,
-        applied_steps,
-        fallback_reason,
+        "R9-30A_generic_rembg_alpha_bbox_crop",
+        ["rembg_remove_background", "white_composite", "alpha_bbox_crop"],
+        [],
         None,
+        diagnostics,
     )
