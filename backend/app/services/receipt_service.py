@@ -722,6 +722,50 @@ def _choose_better_receipt_result(primary: ReceiptParseResult, secondary: Receip
     secondary_score = _result_quality_score(secondary)
     return secondary if secondary_score > primary_score else primary
 
+def _attach_preprocessing_diagnostics(
+    result: ReceiptParseResult,
+    preprocessing_decision: Any | None,
+) -> ReceiptParseResult:
+    # R9-29A3: attach read-only preprocessing diagnostics to the parse result.
+    #
+    # Guardrails:
+    # - Preserve existing R9-27C rembg/PCA route-gates.
+    # - Do not broaden rembg/PCA usage.
+    # - Do not change parse_status, store detection, line extraction or PO status.
+    # - Do not mutate receipt_status_baseline_service_v4.py.
+    if result is None or preprocessing_decision is None:
+        return result
+
+    try:
+        decision_payload = (
+            preprocessing_decision.to_dict()
+            if hasattr(preprocessing_decision, "to_dict")
+            else dict(preprocessing_decision)
+        )
+    except Exception:
+        decision_payload = {"repr": repr(preprocessing_decision)}
+
+    current = result.parser_diagnostics
+    if not isinstance(current, dict):
+        current = {"parser_diagnostics": current}
+    else:
+        current = dict(current)
+
+    current["preprocessing_decision"] = decision_payload
+    current["preprocessing_guardrail"] = {
+        "r9_step": "R9-29A3",
+        "status_determination": "not_performed",
+        "status_service": "receipt_status_baseline_service_v4.py",
+        "diagnostics_promoted_to_parser": False,
+        "preprocessing_functional_change": False,
+        "pca_pilot_gate_broadened": False,
+        "rembg_default_route_changed": False,
+    }
+
+    result.parser_diagnostics = current
+    return result
+
+
 def _looks_like_non_receipt(lines: list[str]) -> bool:
     if not lines:
         return True
@@ -2402,7 +2446,7 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
             if safe_rotation_decision and safe_rotation_decision.selected_route != 'original':
                 ocr_filename = f"{Path(filename).stem}-safe-rotation.png"
         except Exception as exc:
-            LOGGER.warning('Safe rotation preprocessing mislukt voor %s: %s', filename, exc)
+            LOGGER.warning('Receipt image preprocessing mislukt voor %s: %s', filename, exc)
             ocr_file_bytes = file_bytes
             ocr_filename = filename
 
@@ -2424,6 +2468,9 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
             review_confidence=0.34,
         ) if tesseract_lines else _failed_receipt_result(0.0)
 
+        _attach_preprocessing_diagnostics(paddle_result, safe_rotation_decision)
+        _attach_preprocessing_diagnostics(tesseract_result, safe_rotation_decision)
+
         image_result = _choose_better_receipt_result(paddle_result, tesseract_result)
         chosen_confidence = paddle_confidence if image_result is paddle_result else tesseract_confidence
         chosen_lines = paddle_lines if image_result is paddle_result else tesseract_lines
@@ -2439,14 +2486,14 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                 image_result.confidence_score = round(min(image_result.confidence_score, chosen_confidence), 4)
             elif chosen_confidence is not None:
                 image_result.confidence_score = round(chosen_confidence, 4)
-            return image_result
+            return _attach_preprocessing_diagnostics(image_result, safe_rotation_decision)
 
         fallback_lines = chosen_lines or paddle_lines or tesseract_lines
         store_name = _store_from_text(fallback_lines, filename)
         purchase_at = _purchase_at_from_lines(fallback_lines, filename)
         total_amount, _ = _total_amount_from_lines(fallback_lines, filename)
         confidence = 0.35 if (store_name or purchase_at or total_amount) else 0.20
-        return ReceiptParseResult(
+        fallback_result = ReceiptParseResult(
             is_receipt=True,
             parse_status='review_needed',
             confidence_score=confidence,
@@ -2458,6 +2505,7 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
             lines=[],
             parser_diagnostics=summarize_lines_parser_diagnostics([]),
         )
+        return _attach_preprocessing_diagnostics(fallback_result, safe_rotation_decision)
 
     if mime_type in {'text/html', 'text/plain'} or suffix in {'.html', '.htm', '.txt'}:
         raw_text = file_bytes.decode('utf-8', errors='ignore')

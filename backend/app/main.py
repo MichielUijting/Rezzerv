@@ -122,6 +122,154 @@ def build_receipt_upload_error_detail(path: str, exc: Exception) -> str:
 RECEIPT_STORAGE_ROOT = Path(os.getenv('RECEIPT_STORAGE_ROOT', '/app/data/receipts/raw'))
 RECEIPT_PREVIEW_NORMALIZER = ReceiptPhotoNormalizer()
 
+# R9-29A4 — expose existing preprocessing diagnostics through existing diagnostics routes.
+# Guardrails:
+# - no new endpoint
+# - no parser mutation
+# - no OCR-engine mutation
+# - no database mutation
+# - no status determination
+# - no change to receipt_status_baseline_service_v4.py
+# - uses existing apply_receipt_image_preprocessing(...) only for read-only diagnostics
+R9_29A4_DIAGNOSTIC_PATH_RE = re.compile(
+    r"^/api/receipts/(?P<receipt_table_id>[^/]+)/(?:debug-export|explainability)$"
+)
+
+
+def _r9_29a4_build_preprocessing_diagnostics(receipt_table_id: str) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "r9_step": "R9-29A4",
+        "source": "existing_apply_receipt_image_preprocessing",
+        "available": False,
+        "guardrail": {
+            "status_determination": "not_performed",
+            "status_service": "receipt_status_baseline_service_v4.py",
+            "parser_mutated": False,
+            "ocr_engine_mutated": False,
+            "database_mutated": False,
+            "diagnostics_promoted_to_parser": False,
+            "new_endpoint_created": False,
+        },
+    }
+
+    try:
+        with engine.begin() as conn:
+            record = conn.execute(
+                text(
+                    """
+                    SELECT
+                        rt.id AS receipt_table_id,
+                        rr.id AS raw_receipt_id,
+                        rr.original_filename,
+                        rr.mime_type,
+                        rr.storage_path
+                    FROM receipt_tables rt
+                    JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                    WHERE rt.id = :receipt_table_id
+                    LIMIT 1
+                    """
+                ),
+                {"receipt_table_id": str(receipt_table_id)},
+            ).mappings().first()
+    except Exception as exc:
+        payload["error"] = f"database_lookup_failed: {exc}"
+        return payload
+
+    if not record:
+        payload["error"] = "receipt_not_found"
+        return payload
+
+    filename = str(record.get("original_filename") or "receipt")
+    mime_type = str(record.get("mime_type") or "")
+    storage_path = Path(str(record.get("storage_path") or ""))
+    suffix = storage_path.suffix.lower() or Path(filename).suffix.lower()
+
+    payload["receipt_table_id"] = str(record.get("receipt_table_id") or receipt_table_id)
+    payload["raw_receipt_id"] = str(record.get("raw_receipt_id") or "")
+    payload["filename"] = filename
+    payload["mime_type"] = mime_type
+    payload["suffix"] = suffix
+
+    if not (mime_type.startswith("image/") or suffix in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}):
+        payload["available"] = False
+        payload["skip_reason"] = "not_an_image_receipt"
+        return payload
+
+    if not storage_path.exists():
+        payload["available"] = False
+        payload["skip_reason"] = "raw_storage_file_missing"
+        payload["storage_path"] = str(storage_path)
+        return payload
+
+    try:
+        from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import apply_receipt_image_preprocessing
+
+        _processed_bytes, decision = apply_receipt_image_preprocessing(storage_path.read_bytes(), filename)
+        decision_payload = decision.to_dict() if hasattr(decision, "to_dict") else dict(decision)
+        payload["available"] = True
+        payload["preprocessing_decision"] = decision_payload
+        payload["selected_route"] = decision_payload.get("selected_route")
+        payload["applied_steps"] = decision_payload.get("applied_steps")
+        payload["fallback_reason"] = decision_payload.get("fallback_reason")
+        payload["diagnostics"] = decision_payload.get("diagnostics")
+        return payload
+    except Exception as exc:
+        payload["available"] = False
+        payload["error"] = f"preprocessing_diagnostics_failed: {exc}"
+        return payload
+
+
+@app.middleware("http")
+async def r9_29a4_preprocessing_diagnostics_middleware(request: Request, call_next):
+    response = await call_next(request)
+
+    match = R9_29A4_DIAGNOSTIC_PATH_RE.match(request.url.path)
+    if not match or response.status_code != 200:
+        return response
+
+    content_type = str(response.headers.get("content-type") or "").lower()
+    if "application/json" not in content_type:
+        return response
+
+    body = b""
+    async for chunk in response.body_iterator:
+        body += chunk
+
+    try:
+        data = json.loads(body.decode("utf-8") if body else "{}")
+    except Exception:
+        return Response(
+            content=body,
+            status_code=response.status_code,
+            media_type=response.media_type,
+            headers=dict(response.headers),
+        )
+
+    if isinstance(data, dict):
+        receipt_table_id = match.group("receipt_table_id")
+        preprocessing_payload = _r9_29a4_build_preprocessing_diagnostics(receipt_table_id)
+        data.setdefault("diagnostics", {})
+        if isinstance(data["diagnostics"], dict):
+            data["diagnostics"]["preprocessing"] = preprocessing_payload
+        else:
+            data["diagnostics"] = {
+                "previous_diagnostics": data["diagnostics"],
+                "preprocessing": preprocessing_payload,
+            }
+        data["preprocessing_diagnostics"] = preprocessing_payload
+
+    new_body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+    headers = dict(response.headers)
+    headers.pop("content-length", None)
+    return Response(
+        content=new_body,
+        status_code=response.status_code,
+        media_type="application/json",
+        headers=headers,
+    )
+
+
+
 
 RECEIPT_INBOUND_PATH = '/api/receipts/inbound'
 VERSION_FILE_PATH = Path(__file__).resolve().parents[2] / 'VERSION.txt'
