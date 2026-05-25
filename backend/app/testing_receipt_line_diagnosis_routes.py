@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import Response
+from fastapi import Request, Response
 from sqlalchemy import text
 
 from app.services.receipt_service import parse_receipt_content
@@ -38,6 +38,30 @@ def _parse_limit(value: Any) -> int | None:
     except Exception:
         return None
     return parsed if parsed > 0 else None
+
+
+def _query_param(request: Request, name: str, fallback: Any = None) -> Any:
+    """R9-31D.2: read query params explicitly.
+
+    The dynamic route installer exposed the params in OpenAPI, but runtime binding
+    still returned defaults in the user's environment. Query string is therefore
+    the source of truth for these diagnostic flags.
+    """
+    if request is None:
+        return fallback
+    try:
+        value = request.query_params.get(name)
+    except Exception:
+        value = None
+    return fallback if value is None else value
+
+
+def _query_bool(request: Request, name: str, fallback: Any = False) -> bool:
+    return _bool_query(_query_param(request, name, fallback), default=_bool_query(fallback))
+
+
+def _query_limit(request: Request, name: str = 'limit', fallback: Any = None) -> int | None:
+    return _parse_limit(_query_param(request, name, fallback))
 
 
 def _now_ms() -> float:
@@ -429,6 +453,7 @@ def install_receipt_line_diagnosis_routes(app, engine) -> None:
 
     @app.get('/api/testing/receipt-line-diagnosis')
     def receipt_line_diagnosis(
+        request: Request,
         householdId: str = '1',
         filenames: str | None = None,
         includeLiveReparse: bool = False,
@@ -438,16 +463,17 @@ def install_receipt_line_diagnosis_routes(app, engine) -> None:
     ):
         return build_receipt_line_diagnosis(
             engine,
-            household_id=householdId,
+            household_id=str(_query_param(request, 'householdId', householdId)),
             filenames=None,
-            include_live_reparse=_bool_query(includeLiveReparse),
-            include_raw_parser_input=_bool_query(includeRawParserInput),
-            only_failed=_bool_query(onlyFailed),
-            limit=_parse_limit(limit),
+            include_live_reparse=_query_bool(request, 'includeLiveReparse', includeLiveReparse),
+            include_raw_parser_input=_query_bool(request, 'includeRawParserInput', includeRawParserInput),
+            only_failed=_query_bool(request, 'onlyFailed', onlyFailed),
+            limit=_query_limit(request, 'limit', limit),
         )
 
     @app.get('/api/testing/receipt-line-diagnosis/download')
     def receipt_line_diagnosis_download(
+        request: Request,
         householdId: str = '1',
         filenames: str | None = None,
         includeLiveReparse: bool = False,
@@ -455,13 +481,13 @@ def install_receipt_line_diagnosis_routes(app, engine) -> None:
         onlyFailed: bool = False,
         limit: int | None = None,
     ):
-        include_live_reparse = _bool_query(includeLiveReparse)
-        include_raw_parser_input = _bool_query(includeRawParserInput)
-        only_failed = _bool_query(onlyFailed)
-        parsed_limit = _parse_limit(limit)
+        include_live_reparse = _query_bool(request, 'includeLiveReparse', includeLiveReparse)
+        include_raw_parser_input = _query_bool(request, 'includeRawParserInput', includeRawParserInput)
+        only_failed = _query_bool(request, 'onlyFailed', onlyFailed)
+        parsed_limit = _query_limit(request, 'limit', limit)
         payload = build_receipt_line_diagnosis(
             engine,
-            household_id=householdId,
+            household_id=str(_query_param(request, 'householdId', householdId)),
             filenames=None,
             include_live_reparse=include_live_reparse,
             include_raw_parser_input=include_raw_parser_input,
