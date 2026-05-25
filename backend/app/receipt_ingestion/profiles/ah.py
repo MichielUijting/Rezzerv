@@ -93,7 +93,9 @@ class AhReceiptProfile:
             return 'header', ['header_marker']
         if self._amount(line):
             return 'article_block', ['amount_present']
-        return prior_section if prior_section in {'article_block', 'discount'} else 'header'
+        if prior_section in {'article_block', 'discount'}:
+            return prior_section, ['inherited_section']
+        return 'header', ['default_header_context']
 
     def classify_lines(self, lines: list[str]) -> list[ProfileLineClassification]:
         result: list[ProfileLineClassification] = []
