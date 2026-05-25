@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -162,6 +162,7 @@ const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: 
 const MAX_CAMERA_UPLOAD_BYTES = 4 * 1024 * 1024
 const MAX_CAMERA_DIMENSION = 1800
 const RECEIPT_INBOX_AUTO_REFRESH_MS = 60000
+const RECEIPT_DETAIL_PANEL_HEIGHT = 560
 
 function formatQuantity(value) {
   if (value === null || value === undefined || value === '') return '-'
@@ -666,7 +667,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
   }, [receipt?.id, receipt?.mime_type, selectedVariant, transientPreview?.originalUrl, transientPreview?.processedUrl, hasTransientPreview])
 
   return (
-    <ScreenCard>
+    <ScreenCard style={{ height: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
       {isCollapsed ? (
         <div
           style={{
@@ -723,8 +724,8 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
               overflow: 'auto',
               display: 'block',
               padding: previewState.isImage ? '16px' : '0',
-              height: '72vh',
-              maxHeight: '72vh',
+              height: `${RECEIPT_DETAIL_PANEL_HEIGHT - 126}px`,
+              maxHeight: `${RECEIPT_DETAIL_PANEL_HEIGHT - 126}px`,
             }}
           >
             {previewState.status === 'loading' ? (
@@ -1111,8 +1112,8 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   }
 
   return (
-    <ScreenCard>
-      <div data-testid="receipt-detail-page" style={{ display: 'grid', gap: '16px' }}>
+    <ScreenCard style={{ height: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
+      <div data-testid="receipt-detail-page" style={{ display: 'grid', gap: '16px', height: '100%', minHeight: 0, overflow: 'hidden' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: '24px' }} data-testid="receipt-detail-title">{receipt?.store_name || 'Kassabon'}</div>
@@ -1260,7 +1261,7 @@ function ReceiptDetailView({ receipt = null, transientPreview = null, uploadProg
         display: 'grid',
         gap: '16px',
         gridTemplateColumns: isPreviewCollapsed ? '44px minmax(0, 1fr)' : 'minmax(0, 1fr) minmax(0, 1fr)',
-        alignItems: 'start',
+        alignItems: 'stretch',
         width: '100%',
         maxWidth: '900px',
         margin: '0 auto',
@@ -1268,7 +1269,7 @@ function ReceiptDetailView({ receipt = null, transientPreview = null, uploadProg
         overflow: 'visible',
       }}
     >
-      <div style={{ minWidth: 0, width: '100%', overflow: 'visible' }}>
+      <div style={{ minWidth: 0, width: '100%', overflow: 'visible', height: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
         <ReceiptPreviewCard
           receipt={receipt}
           transientPreview={transientPreview}
@@ -1276,7 +1277,7 @@ function ReceiptDetailView({ receipt = null, transientPreview = null, uploadProg
           onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
         />
       </div>
-      <div style={{ minWidth: 0, width: '100%', overflow: 'visible' }}>
+      <div style={{ minWidth: 0, width: '100%', overflow: 'visible', height: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
         {receipt ? (
           <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} />
         ) : (

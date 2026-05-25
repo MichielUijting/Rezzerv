@@ -1,7 +1,7 @@
 
 import React from "react";
 
-export default function ScreenCard({children, fullWidth=false}){
+export default function ScreenCard({children, fullWidth=false, style: styleOverride={}}){
 
   const style = {
     background:"#fff",
@@ -13,9 +13,10 @@ export default function ScreenCard({children, fullWidth=false}){
     minWidth: 0,
     overflow: "hidden"
   };
+  const mergedStyle = {...style, ...styleOverride};
 
   return (
-    <div style={style} data-testid="screen-card">
+    <div style={mergedStyle} data-testid="screen-card">
       {children}
     </div>
   );

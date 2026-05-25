@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import hashlib
 import io
@@ -1619,6 +1619,23 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
 
 
 
+def warm_receipt_ocr_runtime() -> dict[str, Any]:
+    """Warm OCR dependencies before the first user upload."""
+    result: dict[str, Any] = {"warmup": "receipt_ocr_runtime"}
+    try:
+        if Image is None:
+            result["paddle"] = "pillow_unavailable"
+            return result
+        sample = Image.new("RGB", (320, 220), "white")
+        buffer = io.BytesIO()
+        sample.save(buffer, format="PNG")
+        paddle_lines, _ = _ocr_image_text_with_paddle(buffer.getvalue(), "warmup.png")
+        result["paddle"] = "ok" if paddle_lines is not None else "no_lines"
+    except Exception as exc:
+        result["paddle"] = f"failed:{type(exc).__name__}"
+    return result
+
+
 def _ocr_image_text_with_tesseract(file_bytes: bytes, filename: str) -> tuple[list[str], float | None]:
     suffix = Path(filename).suffix.lower() or '.png'
     language = 'nld+eng'
@@ -2427,6 +2444,34 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
         image_result = _choose_better_receipt_result(paddle_result, tesseract_result)
         chosen_confidence = paddle_confidence if image_result is paddle_result else tesseract_confidence
         chosen_lines = paddle_lines if image_result is paddle_result else tesseract_lines
+
+        if ocr_file_bytes != file_bytes:
+            original_paddle_lines, original_paddle_confidence = _ocr_image_text_with_paddle(file_bytes, filename)
+            original_tesseract_lines, original_tesseract_confidence = _ocr_image_text_with_tesseract(file_bytes, filename)
+            original_paddle_result = _parse_result_from_text_lines(
+                original_paddle_lines,
+                filename,
+                rich_confidence=0.82,
+                partial_confidence=0.62,
+                review_confidence=0.34,
+            ) if original_paddle_lines else _failed_receipt_result(0.0)
+            original_tesseract_result = _parse_result_from_text_lines(
+                original_tesseract_lines,
+                filename,
+                rich_confidence=0.80,
+                partial_confidence=0.60,
+                review_confidence=0.32,
+            ) if original_tesseract_lines else _failed_receipt_result(0.0)
+            original_result = _choose_better_receipt_result(original_paddle_result, original_tesseract_result)
+            best_result = _choose_better_receipt_result(image_result, original_result)
+            if best_result is not image_result:
+                image_result = best_result
+                if best_result is original_paddle_result:
+                    chosen_confidence = original_paddle_confidence
+                    chosen_lines = original_paddle_lines
+                else:
+                    chosen_confidence = original_tesseract_confidence
+                    chosen_lines = original_tesseract_lines
 
         if image_result.is_receipt:
             if not image_result.lines:

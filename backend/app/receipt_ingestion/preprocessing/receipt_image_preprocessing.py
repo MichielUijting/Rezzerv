@@ -224,3 +224,22 @@ def apply_receipt_image_preprocessing(file_bytes: bytes, filename: str) -> tuple
         None,
         diagnostics,
     )
+
+
+
+def warm_receipt_image_preprocessing() -> dict[str, Any]:
+    """Warm the rembg runtime so the first user upload does not pay model initialization."""
+    diagnostics: dict[str, Any] = {"warmup": "receipt_image_preprocessing"}
+    if rembg_remove is None:
+        diagnostics["status"] = "rembg_unavailable"
+        return diagnostics
+    try:
+        sample = Image.new("RGB", (96, 160), (245, 245, 245))
+        buffer = BytesIO()
+        sample.save(buffer, format="PNG")
+        _ = rembg_remove(buffer.getvalue())
+        diagnostics["status"] = "ok"
+    except Exception as exc:
+        diagnostics["status"] = "failed"
+        diagnostics["error"] = f"{type(exc).__name__}: {exc}"
+    return diagnostics
