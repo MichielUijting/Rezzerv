@@ -29,6 +29,7 @@ from app.receipt_ingestion.structured_product_gateway import append_structured_p
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
 from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import apply_receipt_image_preprocessing
+from app.receipt_ingestion.profiles.ah_runtime import build_ah_profile_article_lines
 from app.receipt_ingestion.amounts import (
     amount_to_float as _amount_to_float,
     parse_decimal as _parse_decimal,
@@ -1295,6 +1296,27 @@ def _parse_result_from_text_lines(
             existing_keys.add(extra_key)
         lines.sort(key=lambda item: int(item.get('source_index') or 0))
     lines = _filter_non_product_receipt_lines(lines)
+    ah_profile_lines = build_ah_profile_article_lines(
+        text_lines,
+        lines,
+        store_name=store_name,
+        filename=filename,
+        append_product_candidate=append_product_candidate,
+        clean_label=_clean_receipt_label,
+        parse_quantity=_parse_quantity,
+        parse_decimal=_parse_decimal,
+        amount_to_float=_amount_to_float,
+        classify_line=lambda value: _classify_receipt_text_line(
+            value,
+            store_name=store_name,
+            filename=filename,
+        ),
+        is_invalid_label=_looks_like_non_product_receipt_label,
+    )
+    if ah_profile_lines:
+        lines.extend(ah_profile_lines)
+        lines.sort(key=lambda item: int(item.get('source_index') or 0))
+        lines = _filter_non_product_receipt_lines(lines)
     discount_total = _apply_discount_entries(lines, _extract_discount_entries(text_lines))
     lines = _filter_non_product_receipt_lines(lines)
     if (filename or '').strip().lower() == 'jumbo foto 3.jpg' and not lines:
