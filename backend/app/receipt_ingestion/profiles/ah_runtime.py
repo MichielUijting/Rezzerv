@@ -15,6 +15,7 @@ HARD_NON_ARTICLE_TOKENS = (
 )
 
 DISCOUNT_TOKENS = ('bonus', 'korting', 'persoonlijke bonus', 'bonus box', 'uw voordeel')
+AH_SAVINGS_STAMPS_RE = re.compile(r'^(?P<qty>\d+)\s+koopzegels(?:\s+premium)?\s+(?P<amount>\d{1,5}(?:[\.,]\d{2}))$', re.I)
 
 
 def _norm(value: Any) -> str:
@@ -53,6 +54,35 @@ def _extract_amounts(line: str) -> list[Decimal]:
             except Exception:
                 pass
     return values
+
+
+def _parse_ah_savings_stamps_line(line: str) -> dict[str, Any] | None:
+    normalized = _norm(line)
+    match = AH_SAVINGS_STAMPS_RE.match(normalized.lower())
+    if not match:
+        return None
+    try:
+        quantity = Decimal(match.group('qty')).quantize(Decimal('1'))
+        line_total = Decimal(match.group('amount').replace(',', '.')).quantize(Decimal('0.01'))
+    except Exception:
+        return None
+    if quantity <= 0 or line_total <= Decimal('0.00'):
+        return None
+    try:
+        unit_price = (line_total / quantity).quantize(Decimal('0.01'))
+    except Exception:
+        unit_price = line_total
+    return {
+        'label': 'KOOPZEGELS PREMIUM',
+        'quantity': float(quantity),
+        'unit': None,
+        'unit_price': unit_price,
+        'line_total': line_total,
+        'append_branch': 'ah_koopzegels_premium_detected',
+        'parser_path': 'AhReceiptProfile.runtime.savings_stamps_positive_contributor',
+        'caller_line_hint': 'R9-31C AH koopzegels positive total contributor',
+        'confidence_score': 0.91,
+    }
 
 
 def _parse_ah_article_line(line: str) -> dict[str, Any] | None:
@@ -155,7 +185,7 @@ def build_ah_profile_article_lines(
 
     generated: list[dict[str, Any]] = []
     for source_index, raw_line in enumerate(text_lines):
-        parsed = _parse_ah_article_line(raw_line)
+        parsed = _parse_ah_savings_stamps_line(raw_line) or _parse_ah_article_line(raw_line)
         if not parsed:
             continue
         candidate_key = _key(str(parsed['label']), parsed['line_total'])
@@ -173,16 +203,16 @@ def build_ah_profile_article_lines(
             filename=filename,
             store_name=store_name,
             function_name='build_ah_profile_article_lines',
-            append_branch='ah_profile_safe_article_line',
-            parser_path='AhReceiptProfile.runtime.safe_article_line',
-            caller_line_hint='R9-31B AH profile safe article construction',
+            append_branch=str(parsed.get('append_branch') or 'ah_profile_safe_article_line'),
+            parser_path=str(parsed.get('parser_path') or 'AhReceiptProfile.runtime.safe_article_line'),
+            caller_line_hint=str(parsed.get('caller_line_hint') or 'R9-31B AH profile safe article construction'),
             clean_label=clean_label,
             parse_quantity=parse_quantity,
             parse_decimal=parse_decimal,
             amount_to_float=amount_to_float,
             classify_line=classify_line,
             is_invalid_label=is_invalid_label,
-            confidence_score=0.82,
+            confidence_score=float(parsed.get('confidence_score') or 0.82),
         )
         existing_keys.add(candidate_key)
     return generated
