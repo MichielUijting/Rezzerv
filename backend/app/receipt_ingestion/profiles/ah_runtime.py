@@ -15,7 +15,7 @@ HARD_NON_ARTICLE_TOKENS = (
 )
 
 DISCOUNT_TOKENS = ('bonus', 'korting', 'persoonlijke bonus', 'bonus box', 'uw voordeel')
-AH_SAVINGS_STAMPS_RE = re.compile(r'^(?P<qty>\d+)\s+koopzegels(?:\s+premium)?\s+(?P<amount>\d{1,5}(?:[\.,]\d{2}))$', re.I)
+AH_SAVINGS_STAMPS_RE = re.compile(r'^(?:(?P<qty>\d+)\s+)?koopzegels(?:\s+premium)?\s+(?P<amount>\d{1,5}(?:[\.,]\d{2}))$', re.I)
 
 
 def _norm(value: Any) -> str:
@@ -62,7 +62,7 @@ def _parse_ah_savings_stamps_line(line: str) -> dict[str, Any] | None:
     if not match:
         return None
     try:
-        quantity = Decimal(match.group('qty')).quantize(Decimal('1'))
+        quantity = Decimal(match.group('qty') or '1').quantize(Decimal('1'))
         line_total = Decimal(match.group('amount').replace(',', '.')).quantize(Decimal('0.01'))
     except Exception:
         return None
@@ -72,15 +72,19 @@ def _parse_ah_savings_stamps_line(line: str) -> dict[str, Any] | None:
         unit_price = (line_total / quantity).quantize(Decimal('0.01'))
     except Exception:
         unit_price = line_total
+    amount_label = str(line_total).replace('.', ',')
     return {
-        'label': 'KOOPZEGELS PREMIUM',
+        # Keep the amount in the generated label so the existing generic
+        # non-product guard accepts this as an explicit positive savings-stamp
+        # contributor, without adding AH-only report or status logic.
+        'label': f'KOOPZEGELS PREMIUM {amount_label}',
         'quantity': float(quantity),
         'unit': None,
         'unit_price': unit_price,
         'line_total': line_total,
         'append_branch': 'ah_koopzegels_premium_detected',
         'parser_path': 'AhReceiptProfile.runtime.savings_stamps_positive_contributor',
-        'caller_line_hint': 'R9-31C AH koopzegels positive total contributor',
+        'caller_line_hint': 'R9-32A AH koopzegels positive total contributor',
         'confidence_score': 0.91,
     }
 
@@ -106,7 +110,6 @@ def _parse_ah_article_line(line: str) -> dict[str, Any] | None:
     if amounts and len(amounts) == 1 and AMOUNT1_RE.search(normalized) and not AMOUNT2_RE.search(normalized):
         text_without_last_amount = AMOUNT1_RE.sub('', normalized, count=1)
     else:
-        last_amount = re.escape(str(amounts[-1]).replace('.', ','))
         text_without_last_amount = normalized
         # Remove the textual last amount conservatively by cutting at the last occurrence of an amount pattern.
         matches = list(AMOUNT2_RE.finditer(normalized))
