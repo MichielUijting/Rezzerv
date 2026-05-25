@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import Button from '../../ui/Button'
 import demoData from '../../demo-articles.json'
 import { sortOptionObjects } from '../../ui/sorting'
@@ -13,7 +13,7 @@ export function normalizeErrorMessage(value) {
       return "De foto is te groot om te uploaden. Probeer opnieuw; camerafoto's worden in Rezzerv automatisch verkleind."
     }
     if (/^<html[\s>]/i.test(normalized) || /^<!doctype\s+html/i.test(normalized)) {
-      return 'De server gaf een onleesbare foutmelding terug.'
+      return 'Upload mislukt. De server gaf een technische fout terug.'
     }
     return normalized
   }
@@ -77,7 +77,7 @@ export const articleFallbackOptions = sortOptionObjects(demoData.articles.map((a
 })), (article) => articleLabel(article))
 
 export function articleLabel(article) {
-  return article.brand ? `${article.name} — ${article.brand}` : article.name
+  return article.brand ? `${article.name} â€” ${article.brand}` : article.name
 }
 
 export function StoreArticleSelector({
@@ -238,7 +238,7 @@ export function deriveBatchUiState(batch) {
   const openCount = Math.max(visibleLines.length - readyLines.length, 0)
   const isProcessed = (batch?.import_status || '') === 'processed'
   const canResume = !isProcessed
-  const countsReason = `${readyLines.length} klaar · ${openCount} open · ${blockedLines} geblokkeerd · ${processedCount} verwerkt`
+  const countsReason = `${readyLines.length} klaar Â· ${openCount} open Â· ${blockedLines} geblokkeerd Â· ${processedCount} verwerkt`
 
   if (isProcessed) {
     return {
@@ -378,3 +378,4 @@ const createArticleButtonStyle = {
   fontWeight: 600,
   cursor: 'pointer',
 }
+

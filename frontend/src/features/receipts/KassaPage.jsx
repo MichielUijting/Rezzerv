@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -281,6 +281,26 @@ function inboxStatusAccentColor(value) {
 }
 
 
+function createUploadTechnicalError(response, responseText, endpoint) {
+  const contentType = response?.headers?.get?.('content-type') || ''
+  const body = String(responseText || '').trim()
+  const isHtml = /^<html[\s>]/i.test(body) || /^<!doctype\s+html/i.test(body)
+  const detail = [
+    `Endpoint: ${endpoint}`,
+    `HTTP-status: ${response?.status || '-'}`,
+    `StatusText: ${response?.statusText || '-'}`,
+    `Content-Type: ${contentType || '-'}`,
+    `Response-type: ${isHtml ? 'HTML in plaats van JSON' : 'niet-JSON of foutresponse'}`,
+    '',
+    body.slice(0, 4000) || '(lege response-body)',
+  ].join('\n')
+  return {
+    userMessage: 'Upload mislukt. De server gaf een technische fout terug.',
+    detail,
+  }
+}
+
+
 async function fetchReceiptImportBatchStatus(householdId, batchId) {
   return fetchJson(`/api/receipts/import-batches/${encodeURIComponent(batchId)}?householdId=${encodeURIComponent(householdId)}`)
 }
@@ -306,7 +326,9 @@ async function uploadReceiptFile(householdId, file) {
     }
   }
   if (!response.ok) {
-    throw new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+    const error = new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+    error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/import')
+    throw error
   }
   return data
 }
@@ -336,7 +358,9 @@ async function uploadSharedReceiptFile(householdId, file, sourceContext = 'share
     }
   }
   if (!response.ok) {
-    throw new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+    const error = new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+    error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/import')
+    throw error
   }
   return data
 }
@@ -362,7 +386,9 @@ async function uploadEmailReceiptFile(householdId, emailFile) {
     }
   }
   if (!response.ok) {
-    throw new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+    const error = new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
+    error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/import')
+    throw error
   }
   return data
 }
@@ -683,7 +709,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
                 className="rz-expand-chip"
                 style={{ width: '32px', height: '32px' }}
               >
-                −
+                âˆ’
               </button>
             </div>
           </div>
@@ -702,7 +728,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
             }}
           >
             {previewState.status === 'loading' ? (
-              <div style={{ color: '#475467', fontWeight: 600, padding: '16px' }}>Preview laden…</div>
+              <div style={{ color: '#475467', fontWeight: 600, padding: '16px' }}>Preview ladenâ€¦</div>
             ) : null}
 
             {previewState.status === 'error' ? (
@@ -784,7 +810,7 @@ function ReceiptProcessingInfoCard({ transientPreview, uploadProgress }) {
         <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           <DetailInfoRow label="Bestand" value={transientPreview?.filename || '-'} />
           <DetailInfoRow label="Weergaven" value="Origineel / Bewerkt" />
-          <DetailInfoRow label="Status" value={uploadProgress?.label || 'Kassabon verwerken…'} />
+          <DetailInfoRow label="Status" value={uploadProgress?.label || 'Kassabon verwerkenâ€¦'} />
           <DetailInfoRow label="Voortgang" value={`${Math.max(5, Math.min(100, Math.round(uploadProgress?.percent || 0)))}%`} />
         </div>
 
@@ -1091,13 +1117,13 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
           <div>
             <div style={{ fontWeight: 700, fontSize: '24px' }} data-testid="receipt-detail-title">{receipt?.store_name || 'Kassabon'}</div>
             <div style={{ color: detailAmountsMatch ? '#027A48' : '#B54708', fontWeight: 600 }}>{detailAmountsMatch ? 'Bonbedragen sluiten aan' : 'Totaalbedrag wijkt af van de bonregels'}</div>
-            {totalsMismatchWarningVisible ? <div style={{ color: '#B54708', fontSize: 13 }}>Je kunt deze afwijking overrulen via ‘Goedkeuren voor Uitpakken’. De bon gaat dan naar Gecontroleerd.</div> : null}
+            {totalsMismatchWarningVisible ? <div style={{ color: '#B54708', fontSize: 13 }}>Je kunt deze afwijking overrulen via â€˜Goedkeuren voor Uitpakkenâ€™. De bon gaat dan naar Gecontroleerd.</div> : null}
           </div>
           {canEdit ? (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <Button type="button" variant="secondary" onClick={downloadParsingDebug} data-testid="receipt-debug-download-button">Download parsing (JSON)</Button>
-              <Button type="button" variant="secondary" onClick={saveHeader} disabled={isSavingHeader}>{isSavingHeader ? 'Opslaan…' : 'Bonkop opslaan'}</Button>
-              <Button type="button" onClick={approveReceipt} disabled={isApproving}>{isApproving ? 'Goedkeuren…' : 'Goedkeuren voor Uitpakken'}</Button>
+              <Button type="button" variant="secondary" onClick={saveHeader} disabled={isSavingHeader}>{isSavingHeader ? 'Opslaanâ€¦' : 'Bonkop opslaan'}</Button>
+              <Button type="button" onClick={approveReceipt} disabled={isApproving}>{isApproving ? 'Goedkeurenâ€¦' : 'Goedkeuren voor Uitpakken'}</Button>
             </div>
           ) : null}
         </div>
@@ -1142,12 +1168,12 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
                   <DetailInfoRow label="Plaats" value={branchParts.city} />
                   <DetailInfoRow label="Oorspronkelijk bestand" value={receipt?.original_filename || 'Niet beschikbaar in deze release'} />
                   <DetailInfoRow label="Bestandstype" value={receipt?.mime_type || 'Niet beschikbaar in deze release'} />
-                  <DetailInfoRow label="Geïmporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
+                  <DetailInfoRow label="GeÃ¯mporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
                   <DetailInfoRow label="Aangemaakt op" value={formatDateTime(receipt?.created_at)} />
                   <DetailInfoRow label="Bijgewerkt op" value={formatDateTime(receipt?.updated_at)} />
                   <DetailInfoRow label="Goedgekeurd op" value={formatDateTime(receipt?.approved_at)} />
                   <DetailInfoRow label="Goedgekeurd door" value={receipt?.approved_by_user_email} />
-                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` · ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` · ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
+                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` Â· ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` Â· ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
                 </div>
               )
             }
@@ -1274,6 +1300,10 @@ function ReceiptSourceHubContent({
   feedbackVariant = 'success',
   isUploading,
   uploadProgress,
+  technicalUploadError,
+  isTechnicalUploadErrorOpen = false,
+  onToggleTechnicalUploadError,
+  currentUserDisplayRole = 'viewer',
   showHeading = true,
   showSupportPanels = true,
 }) {
@@ -1336,7 +1366,7 @@ function ReceiptSourceHubContent({
   const latestInbound = emailRoute?.latest || null
   const webhookEndpointPath = emailRoute?.webhook_endpoint_path || '/api/receipts/inbound'
   const forwardingStatusLabel = isEmailRouteLoading
-    ? 'Doorstuuradres laden…'
+    ? 'Doorstuuradres ladenâ€¦'
     : routeIsPublic && resendConfigured
       ? 'Automatische ontvangst mogelijk'
       : routeIsPublic
@@ -1415,7 +1445,7 @@ function ReceiptSourceHubContent({
                 style={{ display: 'grid', gap: '8px' }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div style={{ fontWeight: 700 }}>{uploadProgress.label || 'Kassabon verwerken…'}</div>
+                  <div style={{ fontWeight: 700 }}>{uploadProgress.label || 'Kassabon verwerkenâ€¦'}</div>
                   <div style={{ fontSize: '13px', color: '#667085' }}>{Math.max(5, Math.min(100, Math.round(uploadProgress.percent || 0)))}%</div>
                 </div>
                 <div style={{ height: '10px', borderRadius: '999px', background: '#D1FADF', overflow: 'hidden' }}>
@@ -1434,6 +1464,38 @@ function ReceiptSourceHubContent({
             ) : null}
 
             {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
+            {emailRouteError && currentUserDisplayRole === 'admin' && technicalUploadError?.detail ? (
+              <div style={{ display: 'grid', gap: '8px' }}>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={onToggleTechnicalUploadError}
+                  data-testid="kassa-admin-technical-error-toggle"
+                  style={{ width: 'fit-content' }}
+                >
+                  {isTechnicalUploadErrorOpen ? 'Verberg technische foutmelding' : 'Toon technische foutmelding'}
+                </Button>
+                {isTechnicalUploadErrorOpen ? (
+                  <pre
+                    data-testid="kassa-admin-technical-error-details"
+                    style={{
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      maxHeight: '320px',
+                      overflow: 'auto',
+                      padding: '12px',
+                      border: '1px solid #D0D5DD',
+                      borderRadius: '8px',
+                      background: '#101828',
+                      color: '#F9FAFB',
+                      fontSize: '12px',
+                    }}
+                  >
+                    {technicalUploadError.detail}
+                  </pre>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </ScreenCard>
 
@@ -1457,7 +1519,7 @@ function ReceiptSourceHubContent({
               <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', padding: '12px 14px', display: 'grid', gap: '6px' }}>
                 <div style={{ fontSize: '13px', color: '#667085', fontWeight: 700 }}>Adres</div>
                 <div style={{ fontSize: '15px', fontWeight: 700, wordBreak: 'break-all' }}>
-                  {isEmailRouteLoading ? 'E-mailroute laden…' : routeAddress}
+                  {isEmailRouteLoading ? 'E-mailroute ladenâ€¦' : routeAddress}
                 </div>
               </div>
             </div>
@@ -1489,11 +1551,11 @@ function ReceiptSourceHubContent({
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ fontSize: '18px', fontWeight: 700 }}>Importuitleg</div>
-              <div style={{ color: '#667085' }}>De schermopbouw is nu gericht op één centrale actie. De extra uitleg blijft zichtbaar, maar staat bewust lager op het scherm.</div>
+              <div style={{ color: '#667085' }}>De schermopbouw is nu gericht op Ã©Ã©n centrale actie. De extra uitleg blijft zichtbaar, maar staat bewust lager op het scherm.</div>
               <div style={{ color: '#344054', fontSize: '14px', display: 'grid', gap: '6px' }}>
                 <div><strong>.eml</strong> blijft via de bestaande e-mailimport lopen.</div>
                 <div><strong>.pdf</strong>, <strong>.zip</strong> en ondersteunde afbeeldingsbestanden lopen via de bestaande bonbestand-import.</div>
-                <div><strong>Slepen, plakken en kiezen via Verkenner</strong> komen hiermee samen in één centrale landingsroute.</div>
+                <div><strong>Slepen, plakken en kiezen via Verkenner</strong> komen hiermee samen in Ã©Ã©n centrale landingsroute.</div>
               </div>
             </div>
           </ScreenCard>
@@ -1525,10 +1587,10 @@ function ReceiptSourceHubContent({
                 onClick={onCopyEmailRoute}
                 disabled
                 aria-disabled="true"
-                title="Adres kopiëren wordt later weer geactiveerd."
+                title="Adres kopiÃ«ren wordt later weer geactiveerd."
                 style={{ width: 'fit-content', minWidth: '180px', opacity: 0.55, cursor: 'not-allowed' }}
               >
-                Adres kopiëren
+                Adres kopiÃ«ren
               </Button>
             </div>
           </ScreenCard>
@@ -1583,7 +1645,7 @@ function CameraCaptureModal({
 
         <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
           <Button type="button" variant="secondary" onClick={onRetake} disabled={isUploading} data-testid="kassa-camera-retake">Opnieuw</Button>
-          <Button type="button" variant="primary" onClick={onConfirm} disabled={isUploading} data-testid="kassa-camera-confirm">{isUploading ? 'Opslaan…' : 'Bevestigen'}</Button>
+          <Button type="button" variant="primary" onClick={onConfirm} disabled={isUploading} data-testid="kassa-camera-confirm">{isUploading ? 'Opslaanâ€¦' : 'Bevestigen'}</Button>
         </div>
       </div>
     </div>
@@ -1649,6 +1711,8 @@ export default function KassaPage() {
   const [emailRouteError, setEmailRouteError] = useState('')
   const [receiptInboxFocusId, setReceiptInboxFocusId] = useState('')
   const [transientReceiptPreview, setTransientReceiptPreview] = useState(null)
+  const [technicalUploadError, setTechnicalUploadError] = useState(null)
+  const [isTechnicalUploadErrorOpen, setIsTechnicalUploadErrorOpen] = useState(false)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const emailInputRef = useRef(null)
@@ -1706,7 +1770,7 @@ export default function KassaPage() {
     const processed = Number(statusPayload?.processed_files || 0)
     const percentage = Number(statusPayload?.percentage || 0)
     return {
-      label: 'Zip-batch verwerken…',
+      label: 'Zip-batch verwerkenâ€¦',
       detail: `${processed} van ${total} kassabonnen verwerkt (${percentage}%).`,
       percent: percentage,
     }
@@ -2061,6 +2125,11 @@ export default function KassaPage() {
     setUploadProgress({ active: false, label: '', detail: '', percent: 0 })
   }
 
+  function clearTechnicalUploadError() {
+    setTechnicalUploadError(null)
+    setIsTechnicalUploadErrorOpen(false)
+  }
+
   function buildPostImportProgressMessage(kindLabel) {
     return `${kindLabel} wordt gecontroleerd en daarna wordt Kassa opnieuw geladen.`
   }
@@ -2142,14 +2211,14 @@ export default function KassaPage() {
   async function confirmCameraDraft() {
     if (!cameraDraft?.file) return
     setIsUploading(true)
-    setUploadProgressState(true, 'Kassabon verwerken…', 'Rezzerv bereidt de foto voor en verwerkt daarna de bon.', 15)
+    setUploadProgressState(true, 'Kassabon verwerkenâ€¦', 'Rezzerv bereidt de foto voor en verwerkt daarna de bon.', 15)
     setError('')
     setCameraError('')
     setStatus('')
     setDuplicateNotice('')
     try {
       const preparedFile = await prepareCameraUploadFile(cameraDraft.file)
-      setUploadProgressState(true, 'Kassabon verwerken…', 'De gefotografeerde kassabon wordt nu geanalyseerd.', 45)
+      setUploadProgressState(true, 'Kassabon verwerkenâ€¦', 'De gefotografeerde kassabon wordt nu geanalyseerd.', 45)
       const result = await uploadSharedReceiptFile(householdId, preparedFile, 'camera_capture', 'Foto gemaakt in Rezzerv')
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
@@ -2162,7 +2231,7 @@ export default function KassaPage() {
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
 
-        setUploadProgressState(true, 'Kassa laden…', buildPostImportProgressMessage('De foto'), 85)
+        setUploadProgressState(true, 'Kassa ladenâ€¦', buildPostImportProgressMessage('De foto'), 85)
         const refreshedItems = await loadReceipts(householdId)
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
@@ -2187,7 +2256,7 @@ export default function KassaPage() {
           setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')
         }
 
-        setUploadProgressState(true, 'Kassa openen…', 'De nieuwe bon staat klaar in Kassa.', 100)
+        setUploadProgressState(true, 'Kassa openenâ€¦', 'De nieuwe bon staat klaar in Kassa.', 100)
         if (isAddReceiptRoute) navigate('/kassa')
 
         try {
@@ -2238,7 +2307,7 @@ export default function KassaPage() {
       return
     }
     setIsUploading(true)
-    setUploadProgressState(true, 'E-mail verwerken…', 'Rezzerv leest de e-mailbon en zet die klaar voor Kassa.', 20)
+    setUploadProgressState(true, 'E-mail verwerkenâ€¦', 'Rezzerv leest de e-mailbon en zet die klaar voor Kassa.', 20)
     setError('')
     setStatus('')
     setDuplicateNotice('')
@@ -2253,7 +2322,7 @@ export default function KassaPage() {
         setOpenedReceipt(null)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
-        setUploadProgressState(true, 'Kassa laden…', buildPostImportProgressMessage('De e-mailbon'), 85)
+        setUploadProgressState(true, 'Kassa ladenâ€¦', buildPostImportProgressMessage('De e-mailbon'), 85)
         const refreshedItems = await loadReceipts(householdId)
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
@@ -2278,7 +2347,7 @@ export default function KassaPage() {
           setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')
         }
 
-        setUploadProgressState(true, 'Kassa openen…', 'De nieuwe e-mailbon staat klaar in Kassa.', 100)
+        setUploadProgressState(true, 'Kassa openenâ€¦', 'De nieuwe e-mailbon staat klaar in Kassa.', 100)
         if (isAddReceiptRoute) navigate('/kassa')
 
         try {
@@ -2331,7 +2400,7 @@ export default function KassaPage() {
     }
 
     setIsUploading(true)
-    setUploadProgressState(true, 'Kassabon verwerken…', 'Rezzerv verwerkt het bestand en bereidt Kassa voor.', 20)
+    setUploadProgressState(true, 'Kassabon verwerkenâ€¦', 'Rezzerv verwerkt het bestand en bereidt Kassa voor.', 20)
     setError('')
     setStatus('')
     setDuplicateNotice('')
@@ -2357,7 +2426,7 @@ export default function KassaPage() {
         setOpenedReceipt(null)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
-        setUploadProgressState(true, 'Kassa laden…', buildPostImportProgressMessage('De kassabon'), 85)
+        setUploadProgressState(true, 'Kassa ladenâ€¦', buildPostImportProgressMessage('De kassabon'), 85)
         const refreshedItems = await loadReceipts(householdId)
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
@@ -2382,7 +2451,7 @@ export default function KassaPage() {
           setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')
         }
 
-        setUploadProgressState(true, 'Kassa openen…', 'De nieuwe kassabon staat klaar in Kassa.', 100)
+        setUploadProgressState(true, 'Kassa openenâ€¦', 'De nieuwe kassabon staat klaar in Kassa.', 100)
         if (isAddReceiptRoute) navigate('/kassa')
 
         try {
@@ -2402,7 +2471,9 @@ export default function KassaPage() {
         resetUploadProgress()
       }
     } catch (err) {
-      setEmailRouteError(normalizeErrorMessage(err?.message) || 'Upload van het bonbestand is mislukt.')
+      const technical = err?.technicalUploadError || null
+      if (technical) setTechnicalUploadError(technical)
+      setEmailRouteError(technical?.userMessage || normalizeErrorMessage(err?.message) || 'Upload van het bonbestand is mislukt.')
       setError('')
       setIsUploading(false)
       resetUploadProgress()
@@ -2474,6 +2545,10 @@ export default function KassaPage() {
             feedbackVariant={landingFeedback?.variant || 'success'}
             isUploading={isUploading}
             uploadProgress={uploadProgress}
+            technicalUploadError={technicalUploadError}
+            isTechnicalUploadErrorOpen={isTechnicalUploadErrorOpen}
+            onToggleTechnicalUploadError={() => setIsTechnicalUploadErrorOpen((current) => !current)}
+            currentUserDisplayRole={currentUserDisplayRole}
           />
         </div>
       ) : (
@@ -2488,7 +2563,7 @@ export default function KassaPage() {
                   </div>
                 </div>
                 <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
-                  <Button type="button" variant="primary" onClick={openSourceHub} disabled={isUploading} data-testid="kassa-add-receipt-button">{isUploading ? 'Uploaden…' : 'Bon toevoegen'}</Button>
+                  <Button type="button" variant="primary" onClick={openSourceHub} disabled={isUploading} data-testid="kassa-add-receipt-button">{isUploading ? 'Uploadenâ€¦' : 'Bon toevoegen'}</Button>
                 </div>
               </div>
 
@@ -2505,6 +2580,10 @@ export default function KassaPage() {
                 feedbackVariant={landingFeedback?.variant || 'success'}
                 isUploading={isUploading}
                 uploadProgress={uploadProgress}
+            technicalUploadError={technicalUploadError}
+            isTechnicalUploadErrorOpen={isTechnicalUploadErrorOpen}
+            onToggleTechnicalUploadError={() => setIsTechnicalUploadErrorOpen((current) => !current)}
+            currentUserDisplayRole={currentUserDisplayRole}
                 showHeading={false}
                 showSupportPanels={false}
               />
@@ -2584,7 +2663,7 @@ export default function KassaPage() {
                   </thead>
                   <tbody>
                     {isLoading ? (
-                      <tr><td colSpan={5}>Bonnen laden…</td></tr>
+                      <tr><td colSpan={5}>Bonnen ladenâ€¦</td></tr>
                     ) : listItems.length === 0 ? (
                       <tr><td colSpan={5}>Er zijn nog geen bonnen in de inbox beschikbaar.</td></tr>
                     ) : listItems.map((item) => {
@@ -2653,3 +2732,4 @@ export default function KassaPage() {
     </AppShell>
   )
 }
+
