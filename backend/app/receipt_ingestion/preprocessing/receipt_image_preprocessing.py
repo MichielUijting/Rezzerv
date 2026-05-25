@@ -230,6 +230,10 @@ def apply_receipt_image_preprocessing(file_bytes: bytes, filename: str) -> tuple
 def warm_receipt_image_preprocessing() -> dict[str, Any]:
     """Warm the rembg runtime so the first user upload does not pay model initialization."""
     diagnostics: dict[str, Any] = {"warmup": "receipt_image_preprocessing"}
+    if str(os.getenv("REZZERV_RECEIPT_STARTUP_REMBG_WARMUP", "false") or "false").strip().lower() not in {"1", "true", "yes", "on"}:
+        diagnostics["status"] = "skipped"
+        diagnostics["reason"] = "startup_rembg_warmup_disabled"
+        return diagnostics
     if rembg_remove is None:
         diagnostics["status"] = "rembg_unavailable"
         return diagnostics

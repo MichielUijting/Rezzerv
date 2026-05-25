@@ -5,6 +5,7 @@ import io
 import logging
 import unicodedata
 import mimetypes
+import os
 import re
 from email import policy
 from email.parser import BytesParser
@@ -1644,6 +1645,10 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
 def warm_receipt_ocr_runtime() -> dict[str, Any]:
     """Warm OCR dependencies before the first user upload."""
     result: dict[str, Any] = {"warmup": "receipt_ocr_runtime"}
+    if str(os.getenv("REZZERV_RECEIPT_STARTUP_OCR_WARMUP", "false") or "false").strip().lower() not in {"1", "true", "yes", "on"}:
+        result["paddle"] = "skipped"
+        result["reason"] = "startup_ocr_warmup_disabled"
+        return result
     try:
         if Image is None:
             result["paddle"] = "pillow_unavailable"
