@@ -55,7 +55,7 @@ def _ah_candidate_selection_reason(line: str | None) -> dict[str, Any]:
     receipt status, parser status, po_norm_status_label, or UI category fields.
     """
     raw = str(line or '').strip()
-    norm = _norm(raw)
+    norm = _norm(raw).lower()
     non_product_reasons: list[str] = []
 
     if not raw:
@@ -71,9 +71,9 @@ def _ah_candidate_selection_reason(line: str | None) -> dict[str, Any]:
         non_product_reasons.append('ah_total_or_payment_total_line')
     if any(token in norm for token in ('pinnen', 'pin ', 'v pay', 'v-pay', 'betaling', 'betaald met')):
         non_product_reasons.append('ah_payment_line')
-    if any(token in norm for token in ('app deals', 'bonus', 'voordeel', 'korting')):
+    if any(token in norm for token in ('app deals', 'bonus', 'voordeel', 'korting', 'actie', 'gratis')):
         non_product_reasons.append('ah_promotion_or_advantage_line')
-    if any(token in norm for token in ('btw', 'over', 'eur')) and len(_extract_amounts(raw)) >= 2:
+    if any(token in norm for token in ('btw', 'bedr.excl', 'bedr. excl', 'bedr.incl', 'bedr. incl', 'eur')) and len(_extract_amounts(raw)) >= 2:
         non_product_reasons.append('ah_vat_or_tax_line')
     if any(token in norm for token in ('terminal', 'merchant', 'transactie', 'kaart', 'autorisatiecode', 'klantticket', 'poi:')):
         non_product_reasons.append('ah_payment_terminal_metadata')
