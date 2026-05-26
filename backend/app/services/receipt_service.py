@@ -30,7 +30,7 @@ from app.receipt_ingestion.structured_product_gateway import append_structured_p
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
 from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import apply_receipt_image_preprocessing
-from app.receipt_ingestion.profiles.ah_runtime import build_ah_profile_article_lines
+from app.receipt_ingestion.profiles.ah_runtime import build_ah_profile_article_lines, extract_positive_contributors
 from app.receipt_ingestion.amounts import (
     amount_to_float as _amount_to_float,
     parse_decimal as _parse_decimal,
@@ -1295,6 +1295,32 @@ def _parse_result_from_text_lines(
                 continue
             lines.append(extra_line)
             existing_keys.add(extra_key)
+        lines.sort(key=lambda item: int(item.get('source_index') or 0))
+    profile_positive_contributor_lines = extract_positive_contributors(
+        text_lines,
+        lines,
+        store_name=store_name,
+        filename=filename,
+    )
+    if profile_positive_contributor_lines:
+        existing_positive_keys = {
+            (
+                str(line.get('raw_label') or line.get('normalized_label') or '').strip().lower(),
+                str(line.get('line_total') or ''),
+                str(line.get('source_index') or ''),
+            )
+            for line in lines
+        }
+        for contributor_line in profile_positive_contributor_lines:
+            contributor_key = (
+                str(contributor_line.get('raw_label') or contributor_line.get('normalized_label') or '').strip().lower(),
+                str(contributor_line.get('line_total') or ''),
+                str(contributor_line.get('source_index') or ''),
+            )
+            if contributor_key in existing_positive_keys:
+                continue
+            lines.append(contributor_line)
+            existing_positive_keys.add(contributor_key)
         lines.sort(key=lambda item: int(item.get('source_index') or 0))
     lines = _filter_non_product_receipt_lines(lines)
     ah_profile_lines = build_ah_profile_article_lines(
