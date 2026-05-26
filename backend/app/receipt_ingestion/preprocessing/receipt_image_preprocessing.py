@@ -101,16 +101,30 @@ def _safe_original(file_bytes: bytes, reasons: list[str], diagnostics: dict[str,
 
 def _order_quad_points(points: Any) -> Any:
     pts = np.array(points, dtype="float32").reshape(4, 2)
-    ordered = np.zeros((4, 2), dtype="float32")
-    sums = pts.sum(axis=1)
-    diffs = np.diff(pts, axis=1).reshape(4)
-    ordered[0] = pts[np.argmin(sums)]
-    ordered[2] = pts[np.argmax(sums)]
-    ordered[1] = pts[np.argmin(diffs)]
-    ordered[3] = pts[np.argmax(diffs)]
-    return ordered
+    center = pts.mean(axis=0)
+    angles = np.arctan2(pts[:, 1] - center[1], pts[:, 0] - center[0])
+    ring = pts[np.argsort(angles)]
 
+    edges = []
+    for index in range(4):
+        first = ring[index]
+        second = ring[(index + 1) % 4]
+        edges.append((float((first[1] + second[1]) / 2.0), index, first, second))
+    _, top_index, top_a, top_b = min(edges, key=lambda item: item[0])
 
+    if top_a[0] <= top_b[0]:
+        tl, tr = top_a, top_b
+    else:
+        tl, tr = top_b, top_a
+
+    bottom_a = ring[(top_index + 2) % 4]
+    bottom_b = ring[(top_index + 3) % 4]
+    if bottom_a[0] <= bottom_b[0]:
+        bl, br = bottom_a, bottom_b
+    else:
+        bl, br = bottom_b, bottom_a
+
+    return np.array([tl, tr, br, bl], dtype="float32")
 
 
 def _perspective_normalize_from_dark_receipt_region(rgba: Image.Image, diagnostics: dict[str, Any]) -> tuple[Image.Image | None, dict[str, Any] | None, str | None]:
