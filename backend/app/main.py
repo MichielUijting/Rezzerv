@@ -59,6 +59,7 @@ from app.api.receipt_ingestion_review_routes import (
 from app.api.dev_test_routes import create_dev_test_router
 from app.services.receipt_baseline_service import run_receipt_parsing_baseline_suite
 from app.services.receipt_status_baseline_service import diagnose_receipt_status_baseline, validate_receipt_status_baseline
+from app.testing_receipt_line_diagnosis_routes import install_receipt_line_diagnosis_routes
 from app.services.receipt_gmail_helper_service import (
     gmail_is_configured,
     resolve_gmail_redirect_uri,
@@ -178,6 +179,7 @@ app.include_router(system_router)
 app.include_router(receipt_diagnosis_router)
 app.include_router(receipt_kpi_router)
 app.include_router(receipt_import_diagnosis_router)
+install_receipt_line_diagnosis_routes(app, engine)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
