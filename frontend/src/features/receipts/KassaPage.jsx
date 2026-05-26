@@ -831,7 +831,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   const [headerDraft, setHeaderDraft] = useState({
     store_name: receipt?.store_name || '',
     purchase_at: receipt?.purchase_at || '',
-    total_amount: receipt?.total_amount ?? '',
+    total_amount: receipt?.total_amount  '',
     reference: receipt?.reference || '',
     notes: receipt?.notes || '',
   })
@@ -844,18 +844,18 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     setHeaderDraft({
       store_name: receipt?.store_name || '',
       purchase_at: receipt?.purchase_at || '',
-      total_amount: receipt?.total_amount ?? '',
+      total_amount: receipt?.total_amount  '',
       reference: receipt?.reference || '',
       notes: receipt?.notes || '',
     })
     const nextDrafts = {}
     ;(receipt?.lines || []).forEach((line) => {
       nextDrafts[line.id] = {
-        article_name: line?.display_label ?? line?.corrected_raw_label ?? line?.raw_label ?? '',
-        quantity: line?.display_quantity ?? line?.corrected_quantity ?? line?.quantity ?? '',
-        unit: line?.display_unit ?? line?.corrected_unit ?? line?.unit ?? '',
-        unit_price: line?.display_unit_price ?? line?.corrected_unit_price ?? line?.unit_price ?? '',
-        line_total: line?.display_line_total ?? line?.corrected_line_total ?? line?.line_total ?? '',
+        article_name: line?.display_label  line?.corrected_raw_label  line?.raw_label  '',
+        quantity: line?.display_quantity  line?.corrected_quantity  line?.quantity  '',
+        unit: line?.display_unit  line?.corrected_unit  line?.unit  '',
+        unit_price: line?.display_unit_price  line?.corrected_unit_price  line?.unit_price  '',
+        line_total: line?.display_line_total  line?.corrected_line_total  line?.line_total  '',
         is_validated: Boolean(line?.is_validated),
         is_deleted: Boolean(line?.is_deleted),
       }
@@ -866,26 +866,26 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   }, [receipt?.id, receipt?.updated_at])
 
   const baseLines = receipt?.lines || []
-  const lines = baseLines.filter((line) => !Boolean(lineDrafts[line.id]?.is_deleted ?? line?.is_deleted))
+  const lines = baseLines.filter((line) => !Boolean(lineDrafts[line.id]?.is_deleted  line?.is_deleted))
   const sortedLines = useMemo(() => sortItems(lines, lineSort, {
-    lineIndex: (line) => Number(line?.line_index ?? 0),
+    lineIndex: (line) => Number(line?.line_index  0),
     article: (line) => lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || '',
-    quantity: (line) => Number(lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? 0),
+    quantity: (line) => Number(lineDrafts[line.id]?.quantity  line?.display_quantity  line?.quantity  0),
     unit: (line) => lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || '',
-    unitPrice: (line) => Number(lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? 0),
-    lineTotal: (line) => Number(lineDrafts[line.id]?.line_total ?? line?.display_line_total ?? line?.line_total ?? 0),
-    discount: (line) => Number(line?.discount_amount ?? 0),
+    unitPrice: (line) => Number(lineDrafts[line.id]?.unit_price  line?.display_unit_price  line?.unit_price  0),
+    lineTotal: (line) => Number(lineDrafts[line.id]?.line_total  line?.display_line_total  line?.line_total  0),
+    discount: (line) => Number(line?.discount_amount  0),
   }), [lines, lineSort, lineDrafts])
   const allSelected = lines.length > 0 && lines.every((line) => selectedLineIds.includes(line.id))
   const visibleLineTotalSum = lines.reduce((sum, line) => {
-    const value = Number(lineDrafts[line.id]?.line_total ?? line?.display_line_total ?? line?.line_total)
+    const value = Number(lineDrafts[line.id]?.line_total  line?.display_line_total  line?.line_total)
     return Number.isFinite(value) ? sum + value : sum
   }, 0)
   const visibleDiscountSum = lines.reduce((sum, line) => {
     const value = Number(line?.discount_amount)
     return Number.isFinite(value) ? sum + value : sum
   }, 0)
-  const receiptLevelDiscount = Number(receipt?.discount_total_effective ?? receipt?.discount_total)
+  const receiptLevelDiscount = Number(receipt?.discount_total_effective  receipt?.discount_total)
   const hasLineLevelDiscounts = lines.some((line) => Number.isFinite(Number(line?.discount_amount)) && Math.abs(Number(line.discount_amount)) > 0.0001)
   const effectiveDiscountTotal = hasLineLevelDiscounts ? visibleDiscountSum : (Number.isFinite(receiptLevelDiscount) ? receiptLevelDiscount : visibleDiscountSum)
   const visibleNetTotalSum = visibleLineTotalSum + effectiveDiscountTotal
@@ -1058,9 +1058,9 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     const exportLines = lines.filter((line) => selectedSet.has(line.id))
     const rows = exportLines.map((line) => {
       const draft = lineDrafts[line.id] || {}
-      return [draft.article_name || line.display_label || line.raw_label || '', draft.quantity ?? '', draft.unit || '', draft.unit_price ?? '', draft.line_total ?? '', line.discount_amount ?? '', line.barcode || '']
+      return [draft.article_name || line.display_label || line.raw_label || '', draft.quantity  '', draft.unit || '', draft.unit_price  '', draft.line_total  '', line.discount_amount  '', line.barcode || '']
     })
-    const csv = [['Artikel in bon', 'Aantal', 'Eenheid', 'Stukprijs', 'Regelbedrag', 'Korting', 'Barcode'], ...rows].map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
+    const csv = [['Artikel in bon', 'Aantal', 'Eenheid', 'Stukprijs', 'Regelbedrag', 'Korting', 'Barcode'], ...rows].map((row) => row.map((value) => `"${String(value  '').replace(/"/g, '""')}"`).join(';')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -1208,11 +1208,11 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
                         return (
                           <tr key={line.id} data-testid={`receipt-line-row-${line.id}`} className={selected ? 'rz-row-selected' : ''}>
                             <td><input type="checkbox" data-testid={`receipt-line-select-${line.id}`} checked={selected} onChange={() => toggleLine(line.id)} aria-label={`Selecteer regel ${draft.article_name || line.display_label || line.id}`} /></td>
-                            <td>{canEdit ? <input className="rz-input" value={draft.article_name ?? ''} onChange={(event) => updateLineDraft(line.id, 'article_name', event.target.value)} onBlur={(event) => saveLine(line.id, { article_name: event.target.value })} /> : <span data-testid={`receipt-line-status-${line.id}`}>{draft.article_name || line.display_label || '-'}</span>}</td>
-                            <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.001" value={draft.quantity ?? ''} onChange={(event) => updateLineDraft(line.id, 'quantity', event.target.value)} onBlur={(event) => saveLine(line.id, { quantity: event.target.value })} /> : formatQuantity(draft.quantity ?? line.display_quantity ?? line.quantity)}</td>
-                            <td>{canEdit ? <input className="rz-input" value={draft.unit ?? ''} onChange={(event) => updateLineDraft(line.id, 'unit', event.target.value)} onBlur={(event) => saveLine(line.id, { unit: event.target.value })} /> : (draft.unit || line.display_unit || '-')}</td>
-                            <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.unit_price ?? ''} onChange={(event) => updateLineDraft(line.id, 'unit_price', event.target.value)} onBlur={(event) => saveLine(line.id, { unit_price: event.target.value })} /> : formatMoney(draft.unit_price ?? line.display_unit_price ?? line.unit_price, receipt?.currency)}</td>
-                            <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.line_total ?? ''} onChange={(event) => updateLineDraft(line.id, 'line_total', event.target.value)} onBlur={(event) => saveLine(line.id, { line_total: event.target.value })} /> : formatMoney(draft.line_total ?? line.display_line_total ?? line.line_total, receipt?.currency)}</td>
+                            <td>{canEdit ? <input className="rz-input" value={draft.article_name  ''} onChange={(event) => updateLineDraft(line.id, 'article_name', event.target.value)} onBlur={(event) => saveLine(line.id, { article_name: event.target.value })} /> : <span data-testid={`receipt-line-status-${line.id}`}>{draft.article_name || line.display_label || '-'}</span>}</td>
+                            <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.001" value={draft.quantity  ''} onChange={(event) => updateLineDraft(line.id, 'quantity', event.target.value)} onBlur={(event) => saveLine(line.id, { quantity: event.target.value })} /> : formatQuantity(draft.quantity  line.display_quantity  line.quantity)}</td>
+                            <td>{canEdit ? <input className="rz-input" value={draft.unit  ''} onChange={(event) => updateLineDraft(line.id, 'unit', event.target.value)} onBlur={(event) => saveLine(line.id, { unit: event.target.value })} /> : (draft.unit || line.display_unit || '-')}</td>
+                            <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.unit_price  ''} onChange={(event) => updateLineDraft(line.id, 'unit_price', event.target.value)} onBlur={(event) => saveLine(line.id, { unit_price: event.target.value })} /> : formatMoney(draft.unit_price  line.display_unit_price  line.unit_price, receipt?.currency)}</td>
+                            <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.line_total  ''} onChange={(event) => updateLineDraft(line.id, 'line_total', event.target.value)} onBlur={(event) => saveLine(line.id, { line_total: event.target.value })} /> : formatMoney(draft.line_total  line.display_line_total  line.line_total, receipt?.currency)}</td>
                             <td className="rz-num">{formatMoney(line.discount_amount, receipt?.currency)}</td>
                           </tr>
                         )
@@ -2055,13 +2055,13 @@ export default function KassaPage() {
       .filter((item) => String(item.store_name || '').toLowerCase().includes(filters.winkel.trim().toLowerCase()))
       .filter((item) => formatDateTime(item.purchase_at).toLowerCase().includes(filters.datum.trim().toLowerCase()))
       .filter((item) => formatMoney(item.total_amount, item.currency).toLowerCase().includes(filters.totaal.trim().toLowerCase()))
-      .filter((item) => String(item.line_count ?? 0).includes(filters.artikelen.trim()))
+      .filter((item) => String(item.line_count  0).includes(filters.artikelen.trim()))
       .filter((item) => (filters.status ? item.inbox_status === filters.status : true))
     return sortItems(filteredItems, inboxSort, {
       store: (item) => item.store_name || '',
       date: (item) => item.purchase_at || item.created_at || '',
-      total: (item) => Number(item.total_amount ?? 0),
-      items: (item) => Number(item.line_count ?? 0),
+      total: (item) => Number(item.total_amount  0),
+      items: (item) => Number(item.line_count  0),
     })
   }, [inboxItems, filters, inboxSort])
 
@@ -2723,7 +2723,7 @@ export default function KassaPage() {
                           </td>
                           <td className="rz-receipts-cell">{formatDateTime(item.purchase_at)}</td>
                           <td className="rz-num rz-receipts-cell">{formatMoney(item.total_amount, item.currency)}</td>
-                          <td className="rz-num rz-receipts-cell">{item.line_count ?? 0}</td>
+                          <td className="rz-num rz-receipts-cell">{item.line_count  0}</td>
                         </tr>
                       )
                     })}
