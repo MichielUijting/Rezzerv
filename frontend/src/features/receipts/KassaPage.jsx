@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -2474,8 +2474,24 @@ export default function KassaPage() {
     } catch (err) {
       const technical = err?.technicalUploadError || null
       if (technical) setTechnicalUploadError(technical)
-      setEmailRouteError(technical?.userMessage || normalizeErrorMessage(err?.message) || 'Upload van het bonbestand is mislukt.')
-      setError('')
+
+      let refreshedItems = []
+      try {
+        refreshedItems = await loadReceipts(householdId, { preserveDuplicateNotice: true })
+      } catch {
+        refreshedItems = []
+      }
+
+      const visibleReceiptCount = Array.isArray(refreshedItems) ? refreshedItems.length : 0
+      if (visibleReceiptCount > 0) {
+        setEmailRouteError('')
+        setError('')
+        setDuplicateNotice('')
+        setStatus(`Kassa is geladen met ${visibleReceiptCount} bon${visibleReceiptCount === 1 ? '' : 'nen'}. Er was wel een technische uploadmelding; details zijn alleen voor de admin beschikbaar.`)
+      } else {
+        setEmailRouteError(technical?.userMessage || normalizeErrorMessage(err?.message) || 'Upload van het bonbestand is mislukt.')
+        setError('')
+      }
       setIsUploading(false)
       resetUploadProgress()
     } finally {
@@ -2733,4 +2749,5 @@ export default function KassaPage() {
     </AppShell>
   )
 }
+
 
