@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -52,6 +53,68 @@ def _safe_excerpt(value: str | None, max_chars: int = 12000) -> str:
     text_value = str(value or '')
     return text_value[:max_chars]
 
+
+
+
+AMOUNT_LINE_PATTERN = re.compile(
+    r'(?<![A-Za-z0-9])(?:[?????$]|EUR|E|C)?\s*-?\d{1,6}(?:[\.,]\d{2})(?!\d)',
+    re.IGNORECASE,
+)
+COMPACT_AMOUNT_LINE_PATTERN = re.compile(
+    r'(?<![A-Za-z0-9])\d+\s*[xX]\s*\d{1,6}(?:[\.,]\d{2})\s+\d{1,6}(?:[\.,]\d{2})(?!\d)',
+    re.IGNORECASE,
+)
+
+
+def _normalize_ocr_amount_token(value: str | None) -> str:
+    token = re.sub(r'\s+', '', str(value or '').strip())
+    token = re.sub(r'^(?:EUR|???|E|C|??|\$)', '', token, flags=re.IGNORECASE)
+    return token
+
+
+def _extract_ocr_amounts(line: str | None) -> list[str]:
+    normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
+    amounts = [_normalize_ocr_amount_token(match.group(0)) for match in AMOUNT_LINE_PATTERN.finditer(normalized)]
+    return [amount for amount in amounts if amount]
+
+
+def _build_amount_line_candidates(engine_name: str, raw_lines: list[str] | None) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    for index, raw_line in enumerate(raw_lines or []):
+        normalized = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
+        if not normalized:
+            continue
+        amounts = _extract_ocr_amounts(normalized)
+        compact_match = bool(COMPACT_AMOUNT_LINE_PATTERN.search(normalized))
+        if not amounts and not compact_match:
+            continue
+        candidates.append({
+            'source_engine': engine_name,
+            'source_line_index': index,
+            'raw_line': raw_line,
+            'normalized_line': normalized,
+            'amounts_detected': amounts,
+            'last_amount': amounts[-1] if amounts else None,
+            'candidate_type_unclassified': True,
+            'classification_applied': False,
+            'store_filtering_applied': False,
+            'reason': 'amount_pattern_detected_before_store_filtering',
+        })
+    return candidates
+
+
+def _ocr_amount_line_candidate_summary(paddle_lines: list[str] | None, tesseract_lines: list[str] | None) -> dict[str, Any]:
+    paddle_candidates = _build_amount_line_candidates('paddle', paddle_lines)
+    tesseract_candidates = _build_amount_line_candidates('tesseract', tesseract_lines)
+    all_candidates = paddle_candidates + tesseract_candidates
+    return {
+        'count': len(all_candidates),
+        'paddle_count': len(paddle_candidates),
+        'tesseract_count': len(tesseract_candidates),
+        'candidates': all_candidates,
+        'truncated': False,
+        'scope': 'image_ocr_amount_lines_before_parser_and_store_filtering',
+    }
 
 def _line_summary(lines: list[str]) -> dict[str, Any]:
     return {
@@ -285,6 +348,7 @@ def _extract_source_text_for_receipt(row: dict[str, Any]) -> dict[str, Any]:
                 preprocessing = {'executed': True, 'error': f'{exc.__class__.__name__}: {exc}'}
             paddle_lines, paddle_confidence = _ocr_image_text_with_paddle(ocr_file_bytes, ocr_filename)
             tesseract_lines, tesseract_confidence = _ocr_image_text_with_tesseract(ocr_file_bytes, ocr_filename)
+            amount_line_candidates = _ocr_amount_line_candidate_summary(paddle_lines, tesseract_lines)
             return {
                 **base_payload,
                 'source_kind': 'image',
@@ -299,6 +363,7 @@ def _extract_source_text_for_receipt(row: dict[str, Any]) -> dict[str, Any]:
                     'confidence': tesseract_confidence,
                     'raw_lines': _line_summary(tesseract_lines),
                 },
+                'ocr_amount_line_candidates': amount_line_candidates,
                 'parser_preprocessing_not_applied_here': True,
                 'duration_ms': _elapsed_ms(start),
             }
