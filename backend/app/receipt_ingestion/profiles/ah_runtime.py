@@ -18,6 +18,7 @@ DISCOUNT_TOKENS = ('bonus', 'korting', 'persoonlijke bonus', 'bonus box', 'uw vo
 AH_SAVINGS_STAMPS_RE = re.compile(r'^(?:(?P<qty>\d+)\s+)?koopzegels(?:\s+premium)?\s+(?P<amount>\d{1,5}(?:[\.,]\d{2}))$', re.I)
 AH_SAVINGS_STAMPS_LABEL_RE = re.compile(r'^(?:(?P<qty>\d+)\s+)?koopzegels(?:\s+premium)?$', re.I)
 AMOUNT_ONLY_RE = re.compile(r'^(?P<amount>\d{1,5}(?:[\.,]\d{2}))$')
+POSITIVE_CONTRIBUTOR_BRANCH = 'positive_savings_contribution'
 
 
 def _norm(value: Any) -> str:
@@ -39,6 +40,8 @@ def _looks_like_ah_context(store_name: str | None, text_lines: list[str]) -> boo
         return True
     if re.search(r'\bah\b', haystack) and any(token in haystack for token in ('bonus', 'totaal', 'betaling', 'kassabon')):
         return True
+    if any('koopzegels premium' in str(line or '').lower() for line in text_lines):
+        return True
     return False
 
 
@@ -56,6 +59,109 @@ def _extract_amounts(line: str) -> list[Decimal]:
             except Exception:
                 pass
     return values
+
+
+def _positive_contributor_line(*, quantity: Decimal, line_total: Decimal, source_index: int, raw_line: str | None, normalized_line: str | None, filename: str | None, store_name: str | None, hint: str) -> dict[str, Any] | None:
+    if quantity <= 0 or line_total <= Decimal('0.00'):
+        return None
+    try:
+        unit_price = (line_total / quantity).quantize(Decimal('0.01'))
+    except Exception:
+        unit_price = line_total
+    amount_label = str(line_total).replace('.', ',')
+    label = f'KOOPZEGELS PREMIUM {amount_label}'
+    return {
+        'raw_label': label,
+        'normalized_label': label,
+        'quantity': float(quantity),
+        'unit': None,
+        'unit_price': float(unit_price),
+        'line_total': float(line_total),
+        'discount_amount': None,
+        'barcode': None,
+        'confidence_score': 0.94,
+        'source_index': source_index,
+        'producer_trace': {
+            'filename': filename,
+            'store_name': store_name,
+            'profile': 'ah',
+            'profile_hook': 'positive_contributors',
+            'function_name': 'extract_positive_contributors',
+            'append_branch': POSITIVE_CONTRIBUTOR_BRANCH,
+            'parser_path': 'AhReceiptProfile.runtime.positive_contributors.koopzegels_premium',
+            'source_index': source_index,
+            'raw_line': raw_line,
+            'normalized_line': normalized_line,
+            'label': 'KOOPZEGELS PREMIUM',
+            'display_label': 'KOOPZEGELS PREMIUM',
+            'quantity': float(quantity),
+            'unit_price': float(unit_price),
+            'amount': float(line_total),
+            'classification': 'product_candidate',
+            'classification_allows_append': True,
+            'append_allowed': True,
+            'caller_line_hint': hint,
+            'contributor_type': 'positive_total_contributor',
+            'inventory_article': False,
+            'status_neutral': True,
+        },
+    }
+
+
+def _positive_contributor_from_line(line: str, *, source_index: int, following_lines: list[str], filename: str | None, store_name: str | None) -> dict[str, Any] | None:
+    normalized = _norm(line)
+    match = AH_SAVINGS_STAMPS_RE.match(normalized.lower())
+    if match:
+        try:
+            quantity = Decimal(match.group('qty') or '1').quantize(Decimal('1'))
+            line_total = Decimal(match.group('amount').replace(',', '.')).quantize(Decimal('0.01'))
+        except Exception:
+            return None
+        return _positive_contributor_line(quantity=quantity, line_total=line_total, source_index=source_index, raw_line=line, normalized_line=normalized, filename=filename, store_name=store_name, hint='R9-32E AH positive_contributors same-line KOOPZEGELS PREMIUM')
+    label_match = AH_SAVINGS_STAMPS_LABEL_RE.match(normalized.lower())
+    if not label_match:
+        return None
+    quantity = Decimal(label_match.group('qty') or '1').quantize(Decimal('1'))
+    for next_line in following_lines[:2]:
+        next_normalized = _norm(next_line)
+        amount_match = AMOUNT_ONLY_RE.match(next_normalized)
+        if not amount_match:
+            continue
+        try:
+            line_total = Decimal(amount_match.group('amount').replace(',', '.')).quantize(Decimal('0.01'))
+        except Exception:
+            continue
+        return _positive_contributor_line(quantity=quantity, line_total=line_total, source_index=source_index, raw_line=line, normalized_line=normalized, filename=filename, store_name=store_name, hint='R9-32E AH positive_contributors adjacent-amount KOOPZEGELS PREMIUM')
+    return None
+
+
+def extract_positive_contributors(text_lines: list[str], existing_lines: list[dict[str, Any]], *, store_name: str | None, filename: str | None) -> list[dict[str, Any]]:
+    if not _looks_like_ah_context(store_name, text_lines):
+        return []
+    existing_keys = set()
+    for line in existing_lines or []:
+        raw_label = str(line.get('raw_label') or line.get('normalized_label') or '')
+        line_total = None
+        try:
+            if line.get('line_total') is not None:
+                line_total = Decimal(str(line.get('line_total'))).quantize(Decimal('0.01'))
+        except Exception:
+            line_total = None
+        existing_keys.add(_key(raw_label, line_total))
+    generated = []
+    for source_index, raw_line in enumerate(text_lines):
+        candidate = _positive_contributor_from_line(raw_line, source_index=source_index, following_lines=text_lines[source_index + 1:source_index + 3], filename=filename, store_name=store_name)
+        if not candidate:
+            continue
+        try:
+            candidate_key = _key(str(candidate.get('raw_label') or ''), Decimal(str(candidate.get('line_total'))).quantize(Decimal('0.01')))
+        except Exception:
+            candidate_key = _key(str(candidate.get('raw_label') or ''), None)
+        if candidate_key in existing_keys:
+            continue
+        generated.append(candidate)
+        existing_keys.add(candidate_key)
+    return generated
 
 
 def _build_savings_stamps_candidate(quantity: Decimal, line_total: Decimal, *, hint: str) -> dict[str, Any] | None:
@@ -127,6 +233,8 @@ def _parse_ah_article_line(line: str) -> dict[str, Any] | None:
     if any(token in lowered for token in HARD_NON_ARTICLE_TOKENS):
         return None
     if any(token in lowered for token in DISCOUNT_TOKENS):
+        return None
+    if 'koopzegels' in lowered:
         return None
 
     amounts = _extract_amounts(normalized)
@@ -214,14 +322,14 @@ def build_ah_profile_article_lines(
             line_total = None
         existing_keys.add(_key(raw_label, line_total))
 
-    generated: list[dict[str, Any]] = []
+    generated: list[dict[str, Any]] = extract_positive_contributors(
+        text_lines,
+        existing_lines,
+        store_name=store_name,
+        filename=filename,
+    )
     for source_index, raw_line in enumerate(text_lines):
-        following = text_lines[source_index + 1:source_index + 3]
-        parsed = (
-            _parse_ah_savings_stamps_line(raw_line)
-            or _parse_ah_savings_stamps_adjacent_amount_line(raw_line, following)
-            or _parse_ah_article_line(raw_line)
-        )
+        parsed = _parse_ah_article_line(raw_line)
         if not parsed:
             continue
         candidate_key = _key(str(parsed['label']), parsed['line_total'])
