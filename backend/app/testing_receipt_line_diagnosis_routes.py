@@ -216,6 +216,36 @@ def _deduplicate_amount_line_candidates(candidates: list[dict[str, Any]]) -> tup
     return unique, duplicates
 
 
+
+
+def _maybe_enrich_ah_candidate_summary(amount_line_candidates: dict[str, Any], *, store_name: str | None, store_chain: str | None, text_lines: list[str]) -> dict[str, Any]:
+    try:
+        from app.receipt_ingestion.profiles.ah_runtime import _looks_like_ah_context, enrich_ah_amount_line_candidates
+    except Exception:
+        return amount_line_candidates
+
+    if not _looks_like_ah_context(store_name or store_chain, text_lines):
+        return amount_line_candidates
+
+    enriched = dict(amount_line_candidates or {})
+    candidates = enrich_ah_amount_line_candidates(enriched.get('candidates') or [])
+    duplicates = enrich_ah_amount_line_candidates(enriched.get('duplicates') or [])
+    enriched['candidates'] = candidates
+    enriched['duplicates'] = duplicates
+    enriched['ah_candidate_selection'] = {
+        'applied': True,
+        'scope': 'ah_profile_read_only_candidate_diagnostics',
+        'ssot_safe': True,
+        'status_classification_applied': False,
+        'po_norm_status_label_touched': False,
+        'store_filtering_effect_on_other_chains': False,
+        'product_candidate_count': sum(1 for item in candidates if item.get('is_ah_product_candidate')),
+        'non_product_candidate_count': sum(1 for item in candidates if item.get('is_ah_non_product_candidate')),
+    }
+    enriched['ah_product_candidate_count'] = enriched['ah_candidate_selection']['product_candidate_count']
+    enriched['ah_non_product_candidate_count'] = enriched['ah_candidate_selection']['non_product_candidate_count']
+    return enriched
+
 def _ocr_amount_line_candidate_summary(paddle_lines: list[str] | None, tesseract_lines: list[str] | None) -> dict[str, Any]:
     paddle_candidates = _build_amount_line_candidates('paddle', paddle_lines)
     tesseract_candidates = _build_amount_line_candidates('tesseract', tesseract_lines)
@@ -470,6 +500,12 @@ def _extract_source_text_for_receipt(row: dict[str, Any]) -> dict[str, Any]:
             paddle_lines, paddle_confidence = _ocr_image_text_with_paddle(ocr_file_bytes, ocr_filename)
             tesseract_lines, tesseract_confidence = _ocr_image_text_with_tesseract(ocr_file_bytes, ocr_filename)
             amount_line_candidates = _ocr_amount_line_candidate_summary(paddle_lines, tesseract_lines)
+            amount_line_candidates = _maybe_enrich_ah_candidate_summary(
+                amount_line_candidates,
+                store_name=str(row.get('store_name') or ''),
+                store_chain=str(row.get('store_chain') or ''),
+                text_lines=list(paddle_lines or []) + list(tesseract_lines or []),
+            )
             return {
                 **base_payload,
                 'source_kind': 'image',
