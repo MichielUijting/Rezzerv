@@ -57,7 +57,9 @@ def _safe_excerpt(value: str | None, max_chars: int = 12000) -> str:
 
 
 AMOUNT_LINE_PATTERN = re.compile(
-    r'(?<![A-Za-z0-9])(?:[?????$]|EUR|E|C)?\s*-?\d{1,6}(?:[\.,]\d{2})(?!\d)',
+    # ASCII-only on purpose: OCR/report scripts have shown currency symbols can be mojibaked.
+    # This layer only detects amount-bearing lines; store-specific interpretation comes later.
+    r'(?<![A-Za-z0-9])(?:EUR|EURO|E|C)?\s*-?\d{1,6}(?:[\.,]\d{2})(?!\d)',
     re.IGNORECASE,
 )
 COMPACT_AMOUNT_LINE_PATTERN = re.compile(
@@ -68,7 +70,7 @@ COMPACT_AMOUNT_LINE_PATTERN = re.compile(
 
 def _normalize_ocr_amount_token(value: str | None) -> str:
     token = re.sub(r'\s+', '', str(value or '').strip())
-    token = re.sub(r'^(?:EUR|???|E|C|??|\$)', '', token, flags=re.IGNORECASE)
+    token = re.sub(r'^(?:EUR|EURO|E|C)', '', token, flags=re.IGNORECASE)
     return token
 
 
