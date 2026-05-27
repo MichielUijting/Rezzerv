@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import tempfile
 from pathlib import Path
@@ -124,7 +124,9 @@ def get_receipt_preview(receipt_table_id: str, variant: str = Query('original'),
             raise HTTPException(status_code=404, detail='Bewerkte bonpreview is niet beschikbaar voor dit bestandstype')
         normalized = receipt_preview_normalizer.normalize(str(storage_path), mime_type)
         processed_path = None
-        if normalized.success and normalized.ocr_ready_path and Path(normalized.ocr_ready_path).exists():
+        if normalized.success and normalized.normalized_path and Path(normalized.normalized_path).exists():
+            processed_path = Path(normalized.normalized_path)
+        elif normalized.success and normalized.ocr_ready_path and Path(normalized.ocr_ready_path).exists():
             processed_path = Path(normalized.ocr_ready_path)
         if processed_path is None:
             processed_path = _generate_fallback_processed_preview(storage_path)

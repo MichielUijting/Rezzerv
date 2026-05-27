@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import tempfile
 from pathlib import Path
@@ -207,10 +207,11 @@ class ReceiptPhotoNormalizer:
             'fill_ratio': round(float(best_fill), 4),
         }
 
-        # Keep near-full-frame good receipts intact, but reject a full-frame background masquerading as a receipt.
-        if best_area_ratio > MAX_RECEIPT_AREA_RATIO_FOR_BACKGROUND and best_continuity < 0.82:
-            diagnostics['region_isolation_reason'] = 'mask_too_large_without_continuity'
-            return None, best_score, 'region_isolation_mask_too_large', diagnostics
+        # Reject near-full-frame masks. In oblique receipt photos this means the background/table/floor
+        # has been selected instead of the receipt. Do not let that background drive rotation/cropping.
+        if best_area_ratio > MAX_RECEIPT_AREA_RATIO_FOR_BACKGROUND:
+            diagnostics['region_isolation_reason'] = 'mask_too_large_background_candidate'
+            return None, best_score, 'region_isolation_mask_too_large_background_candidate', diagnostics
         if best_continuity < MIN_RECEIPT_CONTINUITY_SCORE:
             diagnostics['region_isolation_reason'] = 'low_vertical_continuity'
             return None, best_score, 'region_isolation_low_vertical_continuity', diagnostics
