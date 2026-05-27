@@ -20,6 +20,7 @@ AH_SAVINGS_STAMPS_LABEL_RE = re.compile(r'^(?:(?P<qty>\d+)\s+)?koopzegels(?:\s+p
 AMOUNT_ONLY_RE = re.compile(r'^(?P<amount>\d{1,5}(?:[\.,]\d{2}))$')
 POSITIVE_CONTRIBUTOR_BRANCH = 'positive_savings_contribution'
 AH_CANDIDATE_SELECTION_BRANCH = 'ah_candidate_selection_ssot_safe'
+AH_PRODUCT_CANDIDATE_BRANCH = 'ah_product_candidate_selection_to_parser_input'
 
 
 def _norm(value: Any) -> str:
@@ -44,7 +45,6 @@ def _looks_like_ah_context(store_name: str | None, text_lines: list[str]) -> boo
     if any('koopzegels premium' in str(line or '').lower() for line in text_lines):
         return True
     return False
-
 
 
 
@@ -115,6 +115,7 @@ def enrich_ah_amount_line_candidates(candidates: list[dict[str, Any]] | None) ->
         item['po_norm_status_label_touched'] = False
         enriched.append(item)
     return enriched
+
 
 def _extract_amounts(line: str) -> list[Decimal]:
     values: list[Decimal] = []
@@ -400,13 +401,20 @@ def build_ah_profile_article_lines(
         filename=filename,
     )
     for source_index, raw_line in enumerate(text_lines):
+        candidate_evidence = _ah_candidate_selection_reason(raw_line)
+        if not candidate_evidence.get('is_ah_product_candidate'):
+            continue
+        if candidate_evidence.get('is_ah_non_product_candidate'):
+            continue
+        if not _extract_amounts(str(raw_line or '')):
+            continue
         parsed = _parse_ah_article_line(raw_line)
         if not parsed:
             continue
         candidate_key = _key(str(parsed['label']), parsed['line_total'])
         if candidate_key in existing_keys:
             continue
-        append_product_candidate(
+        appended_index = append_product_candidate(
             generated,
             label=str(parsed['label']),
             qty_raw=str(parsed['quantity']),
@@ -418,16 +426,32 @@ def build_ah_profile_article_lines(
             filename=filename,
             store_name=store_name,
             function_name='build_ah_profile_article_lines',
-            append_branch=str(parsed.get('append_branch') or 'ah_profile_safe_article_line'),
-            parser_path=str(parsed.get('parser_path') or 'AhReceiptProfile.runtime.safe_article_line'),
-            caller_line_hint=str(parsed.get('caller_line_hint') or 'R9-31B AH profile safe article construction'),
+            append_branch=AH_PRODUCT_CANDIDATE_BRANCH,
+            parser_path='AhReceiptProfile.runtime.product_candidate_selection.parser_input',
+            caller_line_hint='R9-34F AH product candidate selection to parser input; SSOT-status-neutral',
             clean_label=clean_label,
             parse_quantity=parse_quantity,
             parse_decimal=parse_decimal,
             amount_to_float=amount_to_float,
             classify_line=classify_line,
             is_invalid_label=is_invalid_label,
-            confidence_score=float(parsed.get('confidence_score') or 0.82),
+            confidence_score=float(parsed.get('confidence_score') or 0.88),
         )
+        if isinstance(appended_index, int) and 0 <= appended_index < len(generated):
+            trace = dict(generated[appended_index].get('producer_trace') or {})
+            trace.update({
+                'profile': 'ah',
+                'profile_hook': 'product_candidate_selection',
+                'ah_candidate_selection_branch': candidate_evidence.get('ah_candidate_selection_branch'),
+                'is_ah_product_candidate': True,
+                'is_ah_non_product_candidate': False,
+                'ah_candidate_reasons': candidate_evidence.get('ah_candidate_reasons') or [],
+                'ah_non_product_reasons': candidate_evidence.get('ah_non_product_reasons') or [],
+                'status_neutral': True,
+                'status_classification_applied': False,
+                'po_norm_status_label_touched': False,
+                'parser_status_touched': False,
+            })
+            generated[appended_index]['producer_trace'] = trace
         existing_keys.add(candidate_key)
     return generated
