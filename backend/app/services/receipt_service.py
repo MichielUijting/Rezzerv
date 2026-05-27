@@ -1283,11 +1283,11 @@ def _parse_result_from_text_lines(
         explicit_total_found = ah_total_result.explicit_total_found
     else:
         if looks_like_ah_context(text_lines, filename, store_name=store_name):
-        ah_total_result = extract_ah_total_amount(text_lines, filename, store_name=store_name)
-        total_amount = ah_total_result.amount
-        explicit_total_found = ah_total_result.explicit_total_found
-    else:
-        total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
+            ah_total_result = extract_ah_total_amount(text_lines, filename, store_name=store_name)
+            total_amount = ah_total_result.amount
+            explicit_total_found = ah_total_result.explicit_total_found
+        else:
+            total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
     lines = _extract_receipt_lines(text_lines, store_name=store_name, filename=filename)
     savings_action_lines = _extract_savings_action_lines(text_lines, store_name=store_name)
     if savings_action_lines:
