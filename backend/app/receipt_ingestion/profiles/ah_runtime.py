@@ -80,7 +80,7 @@ def _ah_candidate_selection_reason(line: str | None) -> dict[str, Any]:
         non_product_reasons.append('ah_vat_or_tax_line')
     elif 'eur' in norm and len(amounts_for_context) >= 1 and not any(ch.isalpha() for ch in norm.replace('eur', '').replace('euro', '').replace('btw', '')):
         non_product_reasons.append('ah_currency_only_amount_line')
-    if any(token in norm for token in ('terminal', 'merchant', 'transactie', 'kaart', 'autorisatiecode', 'klantticket', 'poi:')):
+    if any(token in norm for token in ('terminal', 'merchant', 'transactie', 'kaart', 'autorisatiecode', 'klantticket', 'poi:', 'contactless', 'leesmethode', 'chip', 'nfc', 'akkoord', 'kaartbetaling', 'auth. code', 'auth code')):
         non_product_reasons.append('ah_payment_terminal_metadata')
     if any(token in norm for token in ('download nu de ah', 'spaar automatisch', 'gratis een product')):
         non_product_reasons.append('ah_footer_marketing_line')
