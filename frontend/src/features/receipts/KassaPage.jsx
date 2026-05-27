@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -1269,7 +1269,7 @@ function ReceiptDetailView({ receipt = null, transientPreview = null, uploadProg
         overflow: 'visible',
       }}
     >
-      <div style={{ minWidth: 0, width: '100%', overflow: 'visible', height: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
+      <div style={{ minWidth: 0, width: '100%', overflow: 'visible', minHeight: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
         <ReceiptPreviewCard
           receipt={receipt}
           transientPreview={transientPreview}
@@ -1277,7 +1277,7 @@ function ReceiptDetailView({ receipt = null, transientPreview = null, uploadProg
           onToggleCollapse={() => setIsPreviewCollapsed((current) => !current)}
         />
       </div>
-      <div style={{ minWidth: 0, width: '100%', overflow: 'visible', height: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
+      <div style={{ minWidth: 0, width: '100%', overflow: 'visible', minHeight: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
         {receipt ? (
           <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} />
         ) : (
@@ -1876,6 +1876,35 @@ export default function KassaPage() {
     setSelectedReceiptIds((current) => current.filter((id) => apiItemIds.has(String(id))))
     setReceiptInboxFocusId((current) => (current && !apiItemIds.has(String(current)) ? '' : current))
   }
+  function mergeUploadedReceiptIntoItems(apiItems = [], result = null) {
+    const uploadedReceiptId = String(result?.receipt_table_id || '')
+    if (!uploadedReceiptId) return apiItems
+    if ((apiItems || []).some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)) return apiItems
+    return [
+      {
+        receipt_table_id: uploadedReceiptId,
+        store_name: result?.store_name || result?.parsed?.store_name || result?.receipt?.store_name || 'Onbekende winkel',
+        purchase_at: result?.purchase_at || result?.parsed?.purchase_at || result?.receipt?.purchase_at || null,
+        total_amount: result?.total_amount ?? result?.parsed?.total_amount ?? result?.receipt?.total_amount ?? null,
+        currency: result?.currency || result?.parsed?.currency || result?.receipt?.currency || 'EUR',
+        line_count: Number(result?.line_count ?? result?.parsed?.line_count ?? result?.receipt?.line_count ?? 0),
+        inbox_status: result?.inbox_status || result?.po_norm_status_label || 'Controle nodig',
+        po_norm_status_label: result?.po_norm_status_label || 'Controle nodig',
+        _optimistic_after_upload: true,
+      },
+      ...(apiItems || []),
+    ]
+  }
+
+  async function loadReceiptsWithUploadedFallback(result, options = {}) {
+    const uploadedReceiptId = String(result?.receipt_table_id || '')
+    const items = await loadReceipts(householdId, options)
+    if (!uploadedReceiptId || items.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)) return items
+    const mergedItems = mergeUploadedReceiptIntoItems(items, result)
+    setReceipts([...mergedItems])
+    pruneReceiptUiState(mergedItems)
+    return mergedItems
+  }
   async function loadReceipts(nextHouseholdId = householdId, options = {}) {
     if (!options?.silent) setIsLoading(true)
     if (!options?.silent) setError('')
@@ -2233,7 +2262,7 @@ export default function KassaPage() {
         setReceiptInboxFocusId(uploadedReceiptId)
 
         setUploadProgressState(true, 'Kassa laden...', buildPostImportProgressMessage('De foto'), 85)
-        const refreshedItems = await loadReceipts(householdId)
+        const refreshedItems = await loadReceiptsWithUploadedFallback(result, { openReceiptId: uploadedReceiptId })
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
           : false
@@ -2254,7 +2283,7 @@ export default function KassaPage() {
         }
 
         if (uploadedReceiptId && !receiptExistsInInbox) {
-          setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')
+          setStatus('Bon toegevoegd. De bon staat nu in de Kassa. De lijst is direct bijgewerkt.')
         }
 
         setUploadProgressState(true, 'Kassa openen...', 'De nieuwe bon staat klaar in Kassa.', 100)
@@ -2324,7 +2353,7 @@ export default function KassaPage() {
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
         setUploadProgressState(true, 'Kassa laden...', buildPostImportProgressMessage('De e-mailbon'), 85)
-        const refreshedItems = await loadReceipts(householdId)
+        const refreshedItems = await loadReceiptsWithUploadedFallback(result, { openReceiptId: uploadedReceiptId })
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
           : false
@@ -2345,7 +2374,7 @@ export default function KassaPage() {
         }
 
         if (uploadedReceiptId && !receiptExistsInInbox) {
-          setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')
+          setStatus('E-mailbon ontvangen. De lijst is direct bijgewerkt.')
         }
 
         setUploadProgressState(true, 'Kassa openen...', 'De nieuwe e-mailbon staat klaar in Kassa.', 100)
@@ -2428,7 +2457,7 @@ export default function KassaPage() {
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
         setUploadProgressState(true, 'Kassa laden...', buildPostImportProgressMessage('De kassabon'), 85)
-        const refreshedItems = await loadReceipts(householdId)
+        const refreshedItems = await loadReceiptsWithUploadedFallback(result, { openReceiptId: uploadedReceiptId })
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
           : false
@@ -2449,7 +2478,7 @@ export default function KassaPage() {
         }
 
         if (uploadedReceiptId && !receiptExistsInInbox) {
-          setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')
+          setStatus('Bon toegevoegd. De bon staat nu in de Kassa. De lijst is direct bijgewerkt.')
         }
 
         setUploadProgressState(true, 'Kassa openen...', 'De nieuwe kassabon staat klaar in Kassa.', 100)
@@ -2569,7 +2598,7 @@ export default function KassaPage() {
           />
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: '16px' }} data-testid="kassa-page">
+        <div className="rz-kassa-page" style={{ display: 'grid', gap: '16px' }} data-testid="kassa-page">
           <ScreenCard>
             <div style={{ display: 'grid', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
@@ -2644,7 +2673,7 @@ export default function KassaPage() {
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
-              <Table dataTestId="kassa-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
+              <Table wrapperClassName="rz-kassa-inbox-table-wrapper" tableClassName="rz-kassa-inbox-table" dataTestId="kassa-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
                   <colgroup>
                     <col style={{ width: `${inboxColumnWidths.select}px` }} />
                     <col style={{ width: `${inboxColumnWidths.store}px` }} />

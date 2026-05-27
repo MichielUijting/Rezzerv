@@ -1637,3 +1637,49 @@ button.rz-tab.rz-tab-active {
   color: #667085;
   overflow-wrap: anywhere;
 }
+
+/* R9-34K Kassa scroll/stateflow polish */
+html,
+body,
+#root {
+  min-height: 100%;
+  height: auto;
+}
+
+.rz-screen,
+.rz-content,
+.rz-content-inner,
+.rz-kassa-page {
+  min-height: 0;
+  overflow: visible;
+}
+
+.rz-kassa-page {
+  width: 100%;
+  padding-bottom: 96px;
+}
+
+.rz-kassa-inbox-table-wrapper {
+  max-height: calc(var(--rz-table-header-row-height) + var(--rz-table-filter-row-height) + (var(--rz-table-body-row-height) * 10) + 2px);
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.rz-kassa-inbox-table thead tr.rz-table-header th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: var(--color-brand-primary);
+}
+
+.rz-kassa-inbox-table thead tr.rz-table-filters th {
+  position: sticky;
+  top: var(--rz-table-header-row-height);
+  z-index: 3;
+  background: var(--color-brand-light);
+}
+
+.rz-kassa-inbox-table thead tr.rz-table-header th:first-child,
+.rz-kassa-inbox-table thead tr.rz-table-filters th:first-child {
+  left: 0;
+}
