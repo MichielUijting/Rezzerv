@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import tempfile
 from pathlib import Path
@@ -8,6 +8,8 @@ import cv2
 from fastapi import APIRouter, Header, HTTPException, Query, Response
 from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy import text
+
+from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import apply_receipt_image_preprocessing
 
 router = APIRouter(
     prefix="/api/receipts",
@@ -41,7 +43,7 @@ def configure_receipt_preview_routes(
 
 def _require_configured() -> tuple[object, Path, object, Callable]:
     if _engine is None or _receipt_storage_root is None or _receipt_preview_normalizer is None or _require_entity_household_access is None:
-        raise HTTPException(status_code=500, detail='Receipt preview router is niet geconfigureerd')
+        raise HTTPException(status_code=500, detail="Receipt preview router is niet geconfigureerd")
     return _engine, _receipt_storage_root, _receipt_preview_normalizer, _require_entity_household_access
 
 
@@ -54,19 +56,19 @@ def _generate_fallback_processed_preview(storage_path: Path) -> Path | None:
             image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         processed = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
-        temp_dir = Path(tempfile.mkdtemp(prefix='rezzerv_receipt_preview_'))
-        output_path = temp_dir / 'processed_preview.png'
+        temp_dir = Path(tempfile.mkdtemp(prefix="rezzerv_receipt_preview_"))
+        output_path = temp_dir / "processed_preview.png"
         cv2.imwrite(str(output_path), processed)
         return output_path
     except Exception:
         return None
 
 
-@router.get('/{receipt_table_id}/preview')
-def get_receipt_preview(receipt_table_id: str, variant: str = Query('original'), authorization: Optional[str] = Header(None)):
+@router.get("/{receipt_table_id}/preview")
+def get_receipt_preview(receipt_table_id: str, variant: str = Query("original"), authorization: Optional[str] = Header(None)):
     engine, receipt_storage_root, receipt_preview_normalizer, require_entity_household_access = _require_configured()
     with engine.begin() as conn:
-        require_entity_household_access(conn, 'receipt_tables', receipt_table_id, authorization, admin_only=False)
+        require_entity_household_access(conn, "receipt_tables", receipt_table_id, authorization, admin_only=False)
         record = conn.execute(
             text(
                 """
@@ -87,52 +89,68 @@ def get_receipt_preview(receipt_table_id: str, variant: str = Query('original'),
                 LIMIT 1
                 """
             ),
-            {'receipt_table_id': receipt_table_id},
+            {"receipt_table_id": receipt_table_id},
         ).mappings().first()
     if not record:
-        raise HTTPException(status_code=404, detail='Bon niet gevonden')
+        raise HTTPException(status_code=404, detail="Bon niet gevonden")
 
-    selected_part_type = str(record.get('selected_part_type') or '').strip().lower()
-    body_html = record.get('body_html')
-    body_text = record.get('body_text')
-    variant_value = str(variant or 'original').strip().lower()
+    selected_part_type = str(record.get("selected_part_type") or "").strip().lower()
+    body_html = record.get("body_html")
+    body_text = record.get("body_text")
+    variant_value = str(variant or "original").strip().lower()
 
-    if variant_value not in {'original', 'processed'}:
-        raise HTTPException(status_code=400, detail='Onbekende previewvariant')
+    if variant_value not in {"original", "processed"}:
+        raise HTTPException(status_code=400, detail="Onbekende previewvariant")
 
-    if variant_value == 'original':
-        if selected_part_type in {'html_body', 'text_body'} and body_html:
-            return HTMLResponse(content=str(body_html), headers={'Content-Disposition': 'inline'})
-        if selected_part_type == 'text_body' and body_text:
-            return Response(content=str(body_text), media_type='text/plain', headers={'Content-Disposition': 'inline'})
+    if variant_value == "original":
+        if selected_part_type in {"html_body", "text_body"} and body_html:
+            return HTMLResponse(content=str(body_html), headers={"Content-Disposition": "inline"})
+        if selected_part_type == "text_body" and body_text:
+            return Response(content=str(body_text), media_type="text/plain", headers={"Content-Disposition": "inline"})
 
-    storage_path = Path(record['storage_path'] or '')
+    storage_path = Path(record["storage_path"] or "")
     if not storage_path.exists() or not storage_path.is_file():
-        raise HTTPException(status_code=404, detail='Originele bon ontbreekt')
+        raise HTTPException(status_code=404, detail="Originele bon ontbreekt")
 
     try:
         storage_path.resolve().relative_to(receipt_storage_root.resolve())
     except Exception:
-        raise HTTPException(status_code=403, detail='Bonbestand ligt buiten de toegestane opslag')
+        raise HTTPException(status_code=403, detail="Bonbestand ligt buiten de toegestane opslag")
 
-    mime_type = str(record['mime_type'] or 'application/octet-stream')
-    filename = str(record['original_filename'] or storage_path.name)
-    headers = {'Content-Disposition': f'inline; filename="{Path(filename).name}"'}
+    mime_type = str(record["mime_type"] or "application/octet-stream")
+    filename = str(record["original_filename"] or storage_path.name)
+    headers = {"Content-Disposition": f"inline; filename=\"{Path(filename).name}\""}
 
-    if variant_value == 'processed':
-        if not str(mime_type).lower().startswith('image/'):
-            raise HTTPException(status_code=404, detail='Bewerkte bonpreview is niet beschikbaar voor dit bestandstype')
-        normalized = receipt_preview_normalizer.normalize(str(storage_path), mime_type)
-        processed_path = None
-        if normalized.success and normalized.normalized_path and Path(normalized.normalized_path).exists():
-            processed_path = Path(normalized.normalized_path)
-        elif normalized.success and normalized.ocr_ready_path and Path(normalized.ocr_ready_path).exists():
-            processed_path = Path(normalized.ocr_ready_path)
-        if processed_path is None:
-            processed_path = _generate_fallback_processed_preview(storage_path)
-        if processed_path is None or not processed_path.exists():
-            raise HTTPException(status_code=404, detail='Bewerkte bonpreview is niet beschikbaar')
-        processed_name = f'{Path(filename).stem}-processed.png'
-        return FileResponse(path=processed_path, media_type='image/png', filename=processed_name, headers={'Content-Disposition': f'inline; filename="{processed_name}"'})
+    if variant_value == "processed":
+        if not str(mime_type).lower().startswith("image/"):
+            raise HTTPException(status_code=404, detail="Bewerkte bonpreview is niet beschikbaar voor dit bestandstype")
+        try:
+            processed_bytes, decision = apply_receipt_image_preprocessing(storage_path.read_bytes(), filename)
+            processed_name = f"{Path(filename).stem}-processed.png"
+            return Response(
+                content=processed_bytes,
+                media_type="image/png",
+                headers={
+                    "Content-Disposition": f"inline; filename=\"{processed_name}\"",
+                    "X-Rezzerv-Preview-Route": str(getattr(decision, "selected_route", "runtime_preprocessing")),
+                },
+            )
+        except Exception:
+            # Keep the endpoint usable if the runtime preprocessing engine fails unexpectedly.
+            processed_path = None
+            try:
+                normalized = receipt_preview_normalizer.normalize(str(storage_path), mime_type)
+                if normalized.success and normalized.normalized_path and Path(normalized.normalized_path).exists():
+                    processed_path = Path(normalized.normalized_path)
+                elif normalized.success and normalized.ocr_ready_path and Path(normalized.ocr_ready_path).exists():
+                    processed_path = Path(normalized.ocr_ready_path)
+            except Exception:
+                processed_path = None
+            if processed_path is None:
+                processed_path = _generate_fallback_processed_preview(storage_path)
+            if processed_path is None or not processed_path.exists():
+                raise HTTPException(status_code=404, detail="Bewerkte bonpreview is niet beschikbaar")
+            processed_name = f"{Path(filename).stem}-processed.png"
+            return FileResponse(path=processed_path, media_type="image/png", filename=processed_name, headers={"Content-Disposition": f"inline; filename=\"{processed_name}\""})
 
     return FileResponse(path=storage_path, media_type=mime_type, filename=Path(filename).name, headers=headers)
