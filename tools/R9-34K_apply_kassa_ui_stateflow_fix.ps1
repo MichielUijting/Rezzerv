@@ -57,16 +57,43 @@ $helperInsert = @'
 '@
 $kassa = Replace-OrFail $kassa $helperNeedle ($helperInsert + $helperNeedle) 'insert uploaded fallback helpers before loadReceipts'
 
-$kassa = $kassa.Replace("const refreshedItems = await loadReceipts(householdId)`r`n        const receiptExistsInInbox = uploadedReceiptId", "const refreshedItems = await loadReceiptsWithUploadedFallback(result, { openReceiptId: uploadedReceiptId })`r`n        const receiptExistsInInbox = uploadedReceiptId")
-$kassa = $kassa.Replace("const refreshedItems = await loadReceipts(householdId)`n        const receiptExistsInInbox = uploadedReceiptId", "const refreshedItems = await loadReceiptsWithUploadedFallback(result, { openReceiptId: uploadedReceiptId })`n        const receiptExistsInInbox = uploadedReceiptId")
+$oldLoad = @'
+const refreshedItems = await loadReceipts(householdId)
+        const receiptExistsInInbox = uploadedReceiptId
+'@
+$newLoad = @'
+const refreshedItems = await loadReceiptsWithUploadedFallback(result, { openReceiptId: uploadedReceiptId })
+        const receiptExistsInInbox = uploadedReceiptId
+'@
+$kassa = $kassa.Replace($oldLoad, $newLoad)
 
 $kassa = $kassa.Replace("setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')", "setStatus('Bon toegevoegd. De bon staat nu in de Kassa. De lijst is direct bijgewerkt.')")
 $kassa = $kassa.Replace("setError('De e-mailbon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')", "setStatus('E-mailbon ontvangen. De lijst is direct bijgewerkt.')")
 $kassa = $kassa.Replace("setError('De kassabon is opgeslagen, maar kon nog niet direct als nieuwe rij in de Kassa worden geladen.')", "setStatus('Bon toegevoegd. De lijst is direct bijgewerkt.')")
 
-$kassa = $kassa.Replace("<div style={{ display: 'grid', gap: '16px' }} data-testid=\"kassa-page\">", "<div className=\"rz-kassa-page\" style={{ display: 'grid', gap: '16px' }} data-testid=\"kassa-page\">")
-$kassa = $kassa.Replace("<Table dataTestId=\"kassa-table\" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>", "<Table wrapperClassName=\"rz-kassa-inbox-table-wrapper\" tableClassName=\"rz-kassa-inbox-table\" dataTestId=\"kassa-table\" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>")
-$kassa = $kassa.Replace("<div style={{ minWidth: 0, width: '100%', overflow: 'visible', height: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>", "<div style={{ minWidth: 0, width: '100%', overflow: 'visible', minHeight: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>")
+$oldPageDiv = @'
+<div style={{ display: 'grid', gap: '16px' }} data-testid="kassa-page">
+'@
+$newPageDiv = @'
+<div className="rz-kassa-page" style={{ display: 'grid', gap: '16px' }} data-testid="kassa-page">
+'@
+$kassa = Replace-OrFail $kassa $oldPageDiv $newPageDiv 'kassa page class'
+
+$oldTable = @'
+<Table dataTestId="kassa-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
+'@
+$newTable = @'
+<Table wrapperClassName="rz-kassa-inbox-table-wrapper" tableClassName="rz-kassa-inbox-table" dataTestId="kassa-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
+'@
+$kassa = Replace-OrFail $kassa $oldTable $newTable 'kassa inbox table classes'
+
+$oldDetailPanel = @'
+<div style={{ minWidth: 0, width: '100%', overflow: 'visible', height: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
+'@
+$newDetailPanel = @'
+<div style={{ minWidth: 0, width: '100%', overflow: 'visible', minHeight: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
+'@
+$kassa = $kassa.Replace($oldDetailPanel, $newDetailPanel)
 
 Write-Utf8File $kassaPath $kassa
 
