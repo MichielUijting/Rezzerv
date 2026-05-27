@@ -1072,11 +1072,14 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     window.URL.revokeObjectURL(url)
   }
 
-  async function downloadParsingDebug() {
-    if (!receipt?.id) return
+  async function downloadParsingDebug(event) {
+    event?.preventDefault?.()
+    event?.stopPropagation?.()
+    const receiptId = String(receipt?.id || '')
+    if (!receiptId) return
     try {
       const token = localStorage.getItem('rezzerv_token') || ''
-      const response = await fetch(`/api/receipts/${encodeURIComponent(receipt.id)}/debug-export`, {
+      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: 'include',
       })
@@ -1089,18 +1092,21 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
         throw new Error(message)
       }
       const payload = await response.json()
+      const debugReceiptId = String(payload?.receipt?.id || receiptId)
       const json = JSON.stringify(payload, null, 2)
+      const downloadFilename = `rezzerv-kassa-debug-${debugReceiptId}.json`
       window.__rezzervLastDownload = {
-        filename: `rezzerv-kassa-debug-${receipt?.id || 'bon'}.json`,
+        filename: downloadFilename,
         source: 'receipt-debug',
-        receiptId: receipt?.id || null,
+        receiptId: debugReceiptId,
+        requestedReceiptId: receiptId,
         json,
       }
       const blob = new Blob([json], { type: 'application/json;charset=utf-8;' })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `rezzerv-kassa-debug-${receipt?.id || 'bon'}.json`
+      link.download = downloadFilename
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -1703,6 +1709,7 @@ export default function KassaPage() {
   const [selectedReceiptIds, setSelectedReceiptIds] = useState([])
   const [openedReceiptId, setOpenedReceiptId] = useState('')
   const [openedReceipt, setOpenedReceipt] = useState(null)
+  const openedReceiptIdRef = useRef('')
   const [deletedReceiptIds, setDeletedReceiptIds] = useState(() => loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY))
   const [uploadMode, setUploadMode] = useState('manual')
   const [cameraDraft, setCameraDraft] = useState(null)
@@ -1740,6 +1747,10 @@ export default function KassaPage() {
       if (transientReceiptPreview?.processedUrl) window.URL.revokeObjectURL(transientReceiptPreview.processedUrl)
     }
   }, [transientReceiptPreview])
+
+  useEffect(() => {
+    openedReceiptIdRef.current = String(openedReceiptId || '')
+  }, [openedReceiptId])
 
   useEffect(() => {
     return () => {
@@ -1916,7 +1927,7 @@ export default function KassaPage() {
       pruneReceiptUiState(items)
       setError('')
       if (!options?.preserveDuplicateNotice) setDuplicateNotice('')
-      const activeReceiptId = String(options?.openReceiptId || openedReceiptId || '')
+      const activeReceiptId = String(options?.openReceiptId || openedReceiptIdRef.current || openedReceiptId || '')
       if (activeReceiptId) {
         const sourceItem = items.find((item) => String(item.receipt_table_id) === activeReceiptId) || null
         if (!sourceItem && !options?.prefetchedDetail) {
