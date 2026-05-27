@@ -1378,21 +1378,10 @@ def _parse_result_from_text_lines(
         lines = manual_lines
         if total_amount is None:
             total_amount = Decimal('0.00')
-    if total_amount is None and len(lines) >= 2:
-        line_sum = Decimal('0.00')
-        line_sum_has_value = False
-        for line in lines:
-            value = _parse_decimal(str(line.get('line_total')))
-            if value is None:
-                continue
-            line_sum += value
-            line_sum_has_value = True
-        if line_sum_has_value:
-            candidate_total = line_sum + (discount_total or Decimal('0.00'))
-            if _is_plausible_total_amount(candidate_total):
-                total_amount = candidate_total.quantize(Decimal('0.01'))
-            elif _is_plausible_total_amount(line_sum):
-                total_amount = line_sum.quantize(Decimal('0.01'))
+    # R9-34T SSOT:
+    # total_amount must come from an explicit receipt total source.
+    # It may not be inferred from accepted article line sums.
+    # Article line sums are validation input only for downstream PO/status checks.
     if total_amount is not None and not _is_plausible_total_amount(total_amount):
         total_amount = None
     if purchase_at and not _is_plausible_purchase_at(purchase_at):
