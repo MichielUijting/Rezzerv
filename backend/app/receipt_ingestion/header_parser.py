@@ -176,35 +176,108 @@ def _purchase_at_from_lines(lines: Iterable[str], filename: str) -> str | None:
     return candidates[0][1]
 
 
+def _looks_like_ah_context(lines: list[str], filename: str) -> bool:
+    haystack = ' '.join(str(line or '') for line in lines[:20]).lower()
+    lower_filename = str(filename or '').lower()
+    return (
+        'ah ' in lower_filename
+        or 'ah_' in lower_filename
+        or 'albert heijn' in haystack
+        or 'ah to go' in haystack
+        or re.search(r'\bah\b', haystack) is not None
+    )
+
+
+def _normalize_ah_total_anchor(value: str | None) -> str:
+    normalized = str(value or '').upper()
+    normalized = re.sub(r'[^A-Z\s]+', ' ', normalized)
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return normalized
+
+
+def _amounts_from_text(value: str | None) -> list[Decimal]:
+    amounts: list[Decimal] = []
+    for match in re.finditer(r'(?<!\d)(-?\d{1,6}(?:[\.,]\d{2}))(?!\d)', str(value or '')):
+        parsed = _parse_decimal(match.group(1))
+        if parsed is not None and _is_plausible_total_amount(parsed):
+            amounts.append(parsed)
+    return amounts
+
+
+def _line_without_amounts(value: str | None) -> str:
+    cleaned = re.sub(r'(?<!\d)-?\d{1,6}(?:[\.,]\d{2})(?!\d)', ' ', str(value or ''))
+    cleaned = re.sub(r'\b(?:EUR|EURO)\b|€', ' ', cleaned, flags=re.IGNORECASE)
+    return cleaned
+
+
+def _ah_strict_total_amount_from_lines(lines: list[str]) -> tuple[Decimal | None, bool]:
+    """AH total extraction: only exact TOTAAL / TE BETALEN anchors may carry total_amount.
+
+    SSOT guardrail: article line sums are never used as source for total_amount.
+    """
+    for index, raw_line in enumerate(lines):
+        line = str(raw_line or '').strip()
+        if not line:
+            continue
+
+        # Same-line form: valid only if removing the amount leaves exactly the anchor.
+        same_line_amounts = _amounts_from_text(line)
+        if same_line_amounts:
+            anchor_after_amount_removal = _normalize_ah_total_anchor(_line_without_amounts(line))
+            if anchor_after_amount_removal in {'TOTAAL', 'TE BETALEN'}:
+                return same_line_amounts[-1], True
+            continue
+
+        # Separate-line form: context line must be exactly TOTAAL or TE BETALEN.
+        anchor = _normalize_ah_total_anchor(line)
+        if anchor not in {'TOTAAL', 'TE BETALEN'}:
+            continue
+
+        # Strict: only the direct next OCR line may carry the amount.
+        if index + 1 >= len(lines):
+            continue
+        next_line = str(lines[index + 1] or '').strip()
+        next_amounts = _amounts_from_text(next_line)
+        if not next_amounts:
+            continue
+
+        return next_amounts[-1], True
+
+    return None, False
+
+
 def _total_amount_from_lines(lines: list[str], filename: str) -> tuple[Decimal | None, bool]:
+    # R9-34P-CORRECTED-STRICT:
+    # AH uses only exact total anchors:
+    # - TOTAAL
+    # - TE BETALEN
+    # No article line sum fallback. No generic "contains totaal" matching for AH.
+    if _looks_like_ah_context(lines, filename):
+        return _ah_strict_total_amount_from_lines(lines)
+
     amount_pattern = re.compile(r'(-?\d{1,6}(?:[\.,]\d{2}))')
     explicit_total_pattern = re.compile(r'(?i)\b(totaal|te betalen|te voldoen|eindtotaal|total due|amount due)\b')
     subtotal_pattern = re.compile(r'(?i)\b(subtotaal|subtotal)\b')
     payment_pattern = re.compile(r'(?i)\b(bankpas|pinnen|pin|betaald|betaling)\b')
     vat_pattern = re.compile(r'(?i)\b(btw|bedr\.excl|bedr\.incl|bedrag excl|bedrag incl)\b')
     refund_pattern = re.compile(r'(?i)\b(retour|refund|credit)\b')
-    ah_context = (
-        'ah ' in str(filename or '').lower()
-        or 'ah_' in str(filename or '').lower()
-        or 'albert heijn' in ' '.join(str(line or '') for line in lines[:20]).lower()
-        or 'ah to go' in ' '.join(str(line or '') for line in lines[:20]).lower()
-    )
     candidates: list[tuple[int, int, Decimal, bool]] = []
     in_vat_block = False
-
-    def _amounts(value: str) -> list[Decimal]:
-        parsed = [_parse_decimal(item) for item in amount_pattern.findall(str(value or ''))]
-        return [item for item in parsed if item is not None and _is_plausible_total_amount(item)]
 
     for index, line in enumerate(lines):
         lowered = str(line or '').lower()
         if vat_pattern.search(lowered) or lowered.startswith('%'):
             in_vat_block = True
-        parsed_matches = _amounts(str(line or ''))
 
+        matches = amount_pattern.findall(str(line or ''))
+        parsed_matches = [_parse_decimal(item) for item in matches]
+        parsed_matches = [item for item in parsed_matches if item is not None]
+
+        if not parsed_matches:
+            continue
         if subtotal_pattern.search(lowered):
             continue
-        if any(token in lowered for token in ('voordeel', 'korting', 'waarvan', 'bonus box', 'app deals')):
+        if any(token in lowered for token in ('voordeel', 'korting', 'waarvan', 'bonus box')):
             continue
 
         explicit = bool(explicit_total_pattern.search(lowered))
@@ -212,56 +285,27 @@ def _total_amount_from_lines(lines: list[str], filename: str) -> tuple[Decimal |
         if not explicit and not payment:
             continue
 
-        if parsed_matches:
-            amount = parsed_matches[-1]
-            score = 0
-            if explicit:
-                score += 40
-            if payment:
-                score += 25
-            if 'te betalen' in lowered:
-                score += 35
-            if 'eur' in lowered:
-                score += 10
-            if in_vat_block or vat_pattern.search(lowered):
-                score -= 100
-            if refund_pattern.search(lowered):
-                score -= 60
-            if len(parsed_matches) > 1:
-                score -= 10 * (len(parsed_matches) - 1)
-            candidates.append((score, index, amount, explicit))
-            continue
+        amount = parsed_matches[-1]
+        score = 0
+        if explicit:
+            score += 40
+        if payment:
+            score += 25
+        if 'eur' in lowered:
+            score += 10
+        if in_vat_block or vat_pattern.search(lowered):
+            score -= 100
+        if refund_pattern.search(lowered):
+            score -= 60
+        if len(parsed_matches) > 1:
+            score -= 10 * (len(parsed_matches) - 1)
 
-        # R9-34M: AH-photo receipts can have the total context on one line
-        # and the amount on the next OCR line, e.g. "TE BETALEN" followed by "5,40".
-        if ah_context and (explicit or payment):
-            for offset, next_line in enumerate(lines[index + 1:index + 5], start=1):
-                next_lowered = str(next_line or '').lower()
-                if subtotal_pattern.search(next_lowered):
-                    break
-                if any(token in next_lowered for token in ('voordeel', 'korting', 'waarvan', 'bonus box', 'app deals')):
-                    break
-                if vat_pattern.search(next_lowered) or next_lowered.startswith('%'):
-                    break
-                next_amounts = _amounts(str(next_line or ''))
-                if not next_amounts:
-                    if offset >= 2 and re.search(r'[A-Za-z]', str(next_line or '')):
-                        break
-                    continue
-                amount = next_amounts[-1]
-                score = 0
-                if explicit:
-                    score += 55
-                if payment:
-                    score += 30
-                if 'te betalen' in lowered:
-                    score += 45
-                score -= offset * 5
-                candidates.append((score, index, amount, explicit))
-                break
+        if _is_plausible_total_amount(amount):
+            candidates.append((score, index, amount, explicit))
 
     if not candidates:
         return None, False
+
     valid_candidates = [candidate for candidate in candidates if candidate[0] > 0]
     chosen = sorted(valid_candidates or candidates, key=lambda item: (item[0], item[1]))[-1]
     return chosen[2], chosen[3]
