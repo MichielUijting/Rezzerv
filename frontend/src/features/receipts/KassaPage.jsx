@@ -1112,8 +1112,8 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   }
 
   return (
-    <ScreenCard style={{ height: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
-      <div data-testid="receipt-detail-page" style={{ display: 'grid', gap: '16px', height: '100%', minHeight: 0, overflow: 'hidden' }}>
+    <ScreenCard style={{ minHeight: `${RECEIPT_DETAIL_PANEL_HEIGHT}px`, overflow: 'visible' }}>
+      <div data-testid="receipt-detail-page" style={{ display: 'grid', gap: '16px', minHeight: 0, overflow: 'visible' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: '24px' }} data-testid="receipt-detail-title">{receipt?.store_name || 'Kassabon'}</div>
@@ -1180,7 +1180,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
             }
             return (
               <div style={{ display: 'grid', gap: '12px' }}>
-                <Table dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }}>
+                <Table wrapperClassName="rz-receipt-lines-table-wrapper" tableClassName="rz-receipt-lines-table" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }}>
                     <colgroup>
                       <col style={{ width: `${lineColumnWidths.select}px` }} />
                       <col style={{ width: `${lineColumnWidths.article}px` }} />

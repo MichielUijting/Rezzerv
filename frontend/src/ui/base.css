@@ -1683,3 +1683,55 @@ body,
 .rz-kassa-inbox-table thead tr.rz-table-filters th:first-child {
   left: 0;
 }
+/* R9-34L Kassa table sticky-header and detail-scroll corrections */
+.rz-kassa-inbox-table-wrapper {
+  max-height: 318px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.rz-kassa-inbox-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.rz-kassa-inbox-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.rz-kassa-inbox-table thead tr.rz-table-header th,
+.rz-kassa-inbox-table thead tr.rz-table-filters th {
+  position: sticky;
+  z-index: 31;
+  background-clip: padding-box;
+}
+
+.rz-kassa-inbox-table thead tr.rz-table-header th {
+  top: 0;
+  background: var(--color-brand-primary);
+}
+
+.rz-kassa-inbox-table thead tr.rz-table-filters th {
+  top: 30px;
+  background: var(--color-brand-light);
+  z-index: 30;
+}
+
+.rz-receipt-lines-table-wrapper {
+  max-height: min(56vh, 520px);
+  overflow-y: auto;
+  overflow-x: auto;
+  padding-bottom: 72px;
+  scrollbar-gutter: stable both-edges;
+}
+
+.rz-receipt-lines-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.rz-receipt-lines-table tfoot td {
+  background: #ffffff;
+}
