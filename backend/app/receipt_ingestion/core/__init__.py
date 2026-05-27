@@ -1,0 +1,1 @@
+"""Generic receipt parsing primitives."""
