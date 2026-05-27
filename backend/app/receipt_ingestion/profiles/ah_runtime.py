@@ -73,14 +73,19 @@ def _ah_candidate_selection_reason(line: str | None) -> dict[str, Any]:
         non_product_reasons.append('ah_payment_line')
     if any(token in norm for token in ('app deals', 'bonus', 'voordeel', 'korting', 'actie', 'gratis')):
         non_product_reasons.append('ah_promotion_or_advantage_line')
-    if any(token in norm for token in ('btw', 'bedr.excl', 'bedr. excl', 'bedr.incl', 'bedr. incl', 'eur')) and len(_extract_amounts(raw)) >= 2:
+    amounts_for_context = _extract_amounts(raw)
+    if 'btw' in norm:
         non_product_reasons.append('ah_vat_or_tax_line')
+    elif any(token in norm for token in ('bedr.excl', 'bedr. excl', 'bedr.incl', 'bedr. incl')):
+        non_product_reasons.append('ah_vat_or_tax_line')
+    elif 'eur' in norm and len(amounts_for_context) >= 1 and not any(ch.isalpha() for ch in norm.replace('eur', '').replace('euro', '').replace('btw', '')):
+        non_product_reasons.append('ah_currency_only_amount_line')
     if any(token in norm for token in ('terminal', 'merchant', 'transactie', 'kaart', 'autorisatiecode', 'klantticket', 'poi:')):
         non_product_reasons.append('ah_payment_terminal_metadata')
     if any(token in norm for token in ('download nu de ah', 'spaar automatisch', 'gratis een product')):
         non_product_reasons.append('ah_footer_marketing_line')
 
-    amounts = _extract_amounts(raw)
+    amounts = amounts_for_context
     has_amount = bool(amounts)
     has_letters = any(ch.isalpha() for ch in raw)
     has_non_product_reason = bool(non_product_reasons)
