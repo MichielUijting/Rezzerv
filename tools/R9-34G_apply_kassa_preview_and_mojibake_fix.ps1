@@ -11,6 +11,14 @@ function Write-Utf8File([string]$Path, [string]$Content) {
   [System.IO.File]::WriteAllText($Path, $Content, [System.Text.UTF8Encoding]::new($true))
 }
 
+function TextFromCodes([int[]]$Codes) {
+  $chars = New-Object char[] ($Codes.Count)
+  for ($i = 0; $i -lt $Codes.Count; $i += 1) {
+    $chars[$i] = [char]$Codes[$i]
+  }
+  return [string]::new($chars)
+}
+
 function Replace-OrFail([string]$Content, [string]$Needle, [string]$Replacement, [string]$Label) {
   if (-not $Content.Contains($Needle)) {
     throw "Verwachte tekst niet gevonden voor: $Label"
@@ -23,23 +31,27 @@ $kassaPath = Join-Path $repoRoot 'frontend\src\features\receipts\KassaPage.jsx'
 $previewRoutesPath = Join-Path $repoRoot 'backend\app\api\receipt_preview_routes.py'
 $normalizerPath = Join-Path $repoRoot 'backend\app\domains\receipts\image\receipt_photo_normalizer.py'
 
-# 1. Frontend mojibake: replace only known broken UTF-8 sequences. Do not touch JS operators such as ?? or ?.
+# 1. Frontend mojibake: ASCII-safe repair.
+# No literal mojibake characters are used here, because those broke PowerShell parsing on Windows.
 $kassa = Read-Utf8File $kassaPath
 $kassaOriginal = $kassa
-$kassa = $kassa.Replace('â€¦', '...')
-$kassa = $kassa.Replace('âˆ’', '-')
-$kassa = $kassa.Replace('Uploadenâ€¦', 'Uploaden...')
-$kassa = $kassa.Replace('Kassabon verwerkenâ€¦', 'Kassabon verwerken...')
-$kassa = $kassa.Replace('E-mail verwerkenâ€¦', 'E-mail verwerken...')
-$kassa = $kassa.Replace('Kassa ladenâ€¦', 'Kassa laden...')
-$kassa = $kassa.Replace('Kassa openenâ€¦', 'Kassa openen...')
-$kassa = $kassa.Replace('Preview ladenâ€¦', 'Preview laden...')
+
+$ellipsisActual = TextFromCodes @(0x00E2, 0x20AC, 0x00A6)
+$ellipsisDouble = TextFromCodes @(0x00C3, 0x00A2, 0x00E2, 0x201A, 0x00AC, 0x00C2, 0x00A6)
+$minusActual = TextFromCodes @(0x00E2, 0x02C6, 0x2019)
+$minusDouble = TextFromCodes @(0x00C3, 0x00A2, 0x00CB, 0x2020, 0x00E2, 0x20AC, 0x2122)
+
+$kassa = $kassa.Replace($ellipsisActual, '...')
+$kassa = $kassa.Replace($ellipsisDouble, '...')
+$kassa = $kassa.Replace($minusActual, '-')
+$kassa = $kassa.Replace($minusDouble, '-')
+
 if ($kassa -ne $kassaOriginal) {
   Write-Utf8File $kassaPath $kassa
 }
 
 # 2. Kassa processed preview: show the visual normalized receipt first, not the OCR-threshold image.
-#    OCR-ready remains a fallback only. This restores the preview to the receipt image that the user can inspect.
+# OCR-ready remains a fallback only. This restores the preview to the receipt image that the user can inspect.
 $preview = Read-Utf8File $previewRoutesPath
 $oldPreviewBlock = @'
         processed_path = None
@@ -61,7 +73,7 @@ $preview = Replace-OrFail $preview $oldPreviewBlock $newPreviewBlock 'processed 
 Write-Utf8File $previewRoutesPath $preview
 
 # 3. Photo normalizer: never accept a near-full-frame paper mask as the receipt region.
-#    AH foto 3 showed exactly this failure: the background/floor became the selected region.
+# AH foto 3 showed exactly this failure: the background/floor became the selected region.
 $normalizer = Read-Utf8File $normalizerPath
 $oldNormalizerBlock = @'
         # Keep near-full-frame good receipts intact, but reject a full-frame background masquerading as a receipt.
@@ -81,13 +93,13 @@ Write-Utf8File $normalizerPath $normalizer
 
 # Lightweight validation: no known mojibake remains in KassaPage and Python files still compile.
 $kassaCheck = Read-Utf8File $kassaPath
-if ($kassaCheck.Contains('â€¦') -or $kassaCheck.Contains('âˆ’')) {
+if ($kassaCheck.Contains($ellipsisActual) -or $kassaCheck.Contains($ellipsisDouble) -or $kassaCheck.Contains($minusActual) -or $kassaCheck.Contains($minusDouble)) {
   throw 'Mojibake-resten gevonden in KassaPage.jsx'
 }
 
 python -m py_compile $previewRoutesPath $normalizerPath
 
-Write-Host 'R9-34G applied:'
+Write-Host 'R9-34G-FIX applied:'
 Write-Host '- KassaPage mojibake labels replaced with ASCII-safe text'
 Write-Host '- processed preview now prefers normalized_path over ocr_ready_path'
 Write-Host '- photo normalizer rejects near-full-frame background masks'
@@ -98,4 +110,4 @@ git add frontend/src/features/receipts/KassaPage.jsx backend/app/api/receipt_pre
 git commit -m 'R9-34G fix Kassa mojibake and processed preview route'
 git push
 
-Write-Host 'R9-34G toegepast en gepusht.'
+Write-Host 'R9-34G-FIX toegepast en gepusht.'
