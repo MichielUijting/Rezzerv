@@ -1,7 +1,7 @@
 """Persisted ingest-debug artifacts for receipt parsing.
 
-R9-36D rule: debug downloads must read a stored JSON artifact.
-They must not trigger OCR, parse_receipt_content, reparse_receipt, or any parser route.
+Debug downloads must read stored JSON and must not run OCR, parse_receipt_content,
+reparse_receipt, or any parser route.
 """
 
 from __future__ import annotations
@@ -158,6 +158,7 @@ def build_ingest_debug_artifact(
     parse_result: Any | None = None,
     source_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    source_context = dict(source_context or {})
     header, lines = _load_receipt_snapshot(engine, receipt_table_id)
     now = datetime.now(timezone.utc).isoformat()
     if not header:
@@ -168,7 +169,8 @@ def build_ingest_debug_artifact(
             'receipt_table_id': receipt_table_id,
             'error': 'receipt_table_not_found',
         }
-
+    source_lines = list(source_context.get('source_lines') or [])
+    merged_lines = list(source_context.get('merged_lines') or [])
     return {
         'artifact_type': 'receipt_ingest_debug',
         'artifact_version': ARTIFACT_VERSION,
@@ -181,7 +183,13 @@ def build_ingest_debug_artifact(
         'sha256_hash': header.get('sha256_hash'),
         'raw_status': header.get('raw_status'),
         'imported_at': _json_safe(header.get('imported_at')),
-        'source_context': _json_safe(source_context or {}),
+        'source_context': _json_safe(source_context),
+        'source_lines': {
+            'count': len(source_lines),
+            'lines': _json_safe(source_lines),
+            'merged_count': len(merged_lines),
+            'merged_lines': _json_safe(merged_lines),
+        },
         'parse_result': _parse_result_payload(parse_result),
         'parser_diagnostics': _diagnostics_payload(parse_result),
         'stored_receipt': _json_safe(header),
@@ -220,6 +228,30 @@ def persist_ingest_debug_artifact(
     tmp_path.write_text(json.dumps(artifact, ensure_ascii=False, indent=2), encoding='utf-8')
     tmp_path.replace(path)
     return path
+
+
+def _latest_parser_capture_for_filename(original_filename: Any) -> tuple[Any | None, dict[str, Any]]:
+    try:
+        from app.services.receipt_parser_quality_patch import get_latest_ingest_debug_capture
+        capture = get_latest_ingest_debug_capture()
+    except Exception:
+        return None, {}
+    if not isinstance(capture, dict) or not capture:
+        return None, {}
+    capture_filename = str(capture.get('filename') or '').strip()
+    wanted = str(original_filename or '').strip()
+    if capture_filename and wanted and capture_filename != wanted:
+        # Safe fallback: only attach in-memory parser capture when it clearly belongs
+        # to the same upload filename.
+        return None, {}
+    return capture.get('parse_result'), {
+        'route': 'latest_parser_capture_without_reparse',
+        'original_filename': original_filename,
+        'capture_filename': capture_filename,
+        'source_lines': capture.get('source_lines') or [],
+        'merged_lines': capture.get('merged_lines') or [],
+        'note': 'Artifact gemaakt uit de laatst vastgelegde parsercapture; er is geen OCR of parser opnieuw uitgevoerd.',
+    }
 
 
 def read_ingest_debug_artifact_for_receipt(
@@ -262,18 +294,21 @@ def read_ingest_debug_artifact_for_receipt(
         imported_at=row.get('imported_at'),
     )
     if not path.exists():
+        parse_result, source_context = _latest_parser_capture_for_filename(row.get('original_filename'))
+        if parse_result is None:
+            source_context = {
+                'route': 'stored_db_snapshot_without_reparse',
+                'original_filename': row.get('original_filename'),
+                'note': 'Artifact gemaakt uit opgeslagen databasevelden; er is geen OCR of parser opnieuw uitgevoerd.',
+            }
         created_path = persist_ingest_debug_artifact(
             engine=engine,
             receipt_storage_root=Path(receipt_storage_root),
             receipt_table_id=str(row.get('receipt_table_id')),
             raw_receipt_id=str(row.get('raw_receipt_id')),
             household_id=str(row.get('household_id')),
-            parse_result=None,
-            source_context={
-                'route': 'stored_db_snapshot_without_reparse',
-                'original_filename': row.get('original_filename'),
-                'note': 'Artifact gemaakt uit opgeslagen databasevelden; er is geen OCR of parser opnieuw uitgevoerd.',
-            },
+            parse_result=parse_result,
+            source_context=source_context,
         )
         if created_path is None or not created_path.exists():
             return {
