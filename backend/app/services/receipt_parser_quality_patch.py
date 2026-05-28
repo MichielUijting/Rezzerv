@@ -4,6 +4,9 @@ import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+from app.receipt_ingestion.profiles.ah.detect import looks_like_ah_context
+from app.receipt_ingestion.profiles.ah.diagnostics import build_ah_total_diagnostics
+from app.receipt_ingestion.profiles.ah.totals import extract_ah_total_amount
 from app.services import receipt_service as _receipt_service
 from app.services.receipt_line_classifier import (
     LINE_CATEGORY_ITEM,
@@ -174,6 +177,25 @@ def _normalize_receipt_lines(lines: list[dict[str, Any]] | None) -> list[dict[st
     return _dedupe_lines(normalized)
 
 
+def _attach_ah_total_result(result: Any, text_lines: list[str], filename: str) -> Any:
+    if result is None or not getattr(result, 'is_receipt', False):
+        return result
+
+    store_name = getattr(result, 'store_name', None)
+    if not looks_like_ah_context(text_lines, filename, store_name=store_name):
+        return result
+
+    ah_total_result = extract_ah_total_amount(text_lines, filename, store_name=store_name)
+    diagnostics = dict(getattr(result, 'parser_diagnostics', None) or {})
+    diagnostics['ah_total'] = build_ah_total_diagnostics(ah_total_result)
+    result.parser_diagnostics = diagnostics
+
+    if ah_total_result.amount is not None:
+        result.total_amount = ah_total_result.amount
+
+    return result
+
+
 def _reclassify_result(result: Any) -> Any:
     if result is None or not getattr(result, 'is_receipt', False):
         return result
@@ -193,6 +215,7 @@ def _reclassify_result(result: Any) -> Any:
 def _parse_result_from_text_lines_with_merge(text_lines: list[str], filename: str, **kwargs: Any):
     merged_lines = merge_lines(text_lines, filename=filename)
     result = _ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES(merged_lines, filename, **kwargs)
+    result = _attach_ah_total_result(result, text_lines, filename)
 
     if getattr(result, 'is_receipt', False):
         fallback_lines = _generic_lines_from_merged_text(
