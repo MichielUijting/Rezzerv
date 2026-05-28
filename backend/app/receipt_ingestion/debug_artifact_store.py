@@ -1,6 +1,6 @@
 """Persisted ingest-debug artifacts for receipt parsing.
 
-R9-36D rule: debug downloads must read the JSON captured at ingest time.
+R9-36D rule: debug downloads must read a stored JSON artifact.
 They must not trigger OCR, parse_receipt_content, reparse_receipt, or any parser route.
 """
 
@@ -187,7 +187,8 @@ def build_ingest_debug_artifact(
         'stored_receipt': _json_safe(header),
         'stored_lines': _json_safe(lines),
         'debug_download_policy': {
-            'persisted_at_ingest': True,
+            'persisted_at_ingest': parse_result is not None,
+            'snapshot_from_stored_db': parse_result is None,
             'download_may_reparse': False,
             'download_may_run_ocr': False,
         },
@@ -261,21 +262,36 @@ def read_ingest_debug_artifact_for_receipt(
         imported_at=row.get('imported_at'),
     )
     if not path.exists():
-        return {
-            'artifact_type': 'receipt_ingest_debug',
-            'artifact_version': ARTIFACT_VERSION,
-            'receipt_table_id': str(row.get('receipt_table_id')),
-            'raw_receipt_id': str(row.get('raw_receipt_id')),
-            'original_filename': row.get('original_filename'),
-            'available': False,
-            'reason': 'missing_ingest_debug_artifact',
-            'message': 'Geen ingest-debugartifact beschikbaar voor deze oude bon. Deze bon is waarschijnlijk vóór R9-36D ingelezen. Downloaden voert bewust geen reparse/OCR uit.',
-            'debug_download_policy': {
-                'persisted_at_ingest': False,
-                'download_may_reparse': False,
-                'download_may_run_ocr': False,
+        created_path = persist_ingest_debug_artifact(
+            engine=engine,
+            receipt_storage_root=Path(receipt_storage_root),
+            receipt_table_id=str(row.get('receipt_table_id')),
+            raw_receipt_id=str(row.get('raw_receipt_id')),
+            household_id=str(row.get('household_id')),
+            parse_result=None,
+            source_context={
+                'route': 'stored_db_snapshot_without_reparse',
+                'original_filename': row.get('original_filename'),
+                'note': 'Artifact gemaakt uit opgeslagen databasevelden; er is geen OCR of parser opnieuw uitgevoerd.',
             },
-        }
+        )
+        if created_path is None or not created_path.exists():
+            return {
+                'artifact_type': 'receipt_ingest_debug',
+                'artifact_version': ARTIFACT_VERSION,
+                'receipt_table_id': str(row.get('receipt_table_id')),
+                'raw_receipt_id': str(row.get('raw_receipt_id')),
+                'original_filename': row.get('original_filename'),
+                'available': False,
+                'reason': 'missing_ingest_debug_artifact',
+                'message': 'Geen ingest-debugartifact beschikbaar en snapshot kon niet worden aangemaakt. Downloaden voert bewust geen reparse/OCR uit.',
+                'debug_download_policy': {
+                    'persisted_at_ingest': False,
+                    'download_may_reparse': False,
+                    'download_may_run_ocr': False,
+                },
+            }
+        path = created_path
     try:
         payload = json.loads(path.read_text(encoding='utf-8'))
     except Exception as exc:
