@@ -7,6 +7,8 @@ from typing import Any
 from app.receipt_ingestion.amounts import parse_decimal as _parse_decimal
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 
+
+@dataclass
 class ReceiptParseResult:
     is_receipt: bool
     parse_status: str
@@ -26,7 +28,7 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
 
     De parser mag intern streng blijven voor diagnose, maar de database moet
     weergeven of een bon voor de gebruiker bruikbaar is. Daarom wordt een bon
-    als 'parsed' opgeslagen zodra de essentiÃ«le kopgegevens betrouwbaar zijn:
+    als 'parsed' opgeslagen zodra de essentiele kopgegevens betrouwbaar zijn:
     winkelnaam en totaalbedrag. Waar mogelijk controleren we daarnaast of de
     netto regelsom binnen tolerantie klopt, maar een imperfecte artikel-extractie
     mag een verder bruikbare bon niet onnodig op 'review_needed' houden.
@@ -66,7 +68,7 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
         # totaalbedrag leidend voor de database-classificatie.
         return 'parsed'
 
-    # EssentiÃ«le kopgegevens zijn aanwezig; artikelregels kunnen later handmatig
+    # Essentiele kopgegevens zijn aanwezig; artikelregels kunnen later handmatig
     # worden verbeterd zonder dat de hele bon in de controlebak hoeft te blijven.
     return 'parsed'
 
