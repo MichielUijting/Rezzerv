@@ -13,7 +13,6 @@ import shutil
 import subprocess
 import tempfile
 import uuid
-from dataclasses import dataclass
 from datetime import datetime
 from calendar import month_name
 from decimal import Decimal, InvalidOperation
@@ -52,6 +51,34 @@ from app.receipt_ingestion.fingerprints import (
     _normalize_fingerprint_text,
     build_receipt_fingerprint_from_parse_result,
 )
+from app.receipt_ingestion.service_parts.source_detection import (
+    detect_mime_type,
+    ensure_share_receipt_source,
+    sanitize_filename,
+    sha256_hex,
+)
+from app.receipt_ingestion.service_parts.receipt_result_helpers import (
+    ReceiptParseResult,
+    _choose_better_receipt_result,
+    _failed_receipt_result,
+    determine_final_parse_status,
+)
+from app.receipt_ingestion.service_parts.text_extraction import (
+    _convert_webp_to_png_bytes,
+    _extract_pdf_text,
+    _extract_text_from_eml,
+    _html_to_text,
+    _normalize_text_lines,
+    _ocr_pdf_text_with_ocrmypdf,
+    _preprocess_pdf_text,
+)
+from app.receipt_ingestion.service_parts.image_ocr_flow import (
+    _ocr_image_text_with_paddle,
+    _ocr_image_text_with_tesseract,
+    warm_receipt_ocr_runtime,
+)
+from app.receipt_ingestion.service_parts.store_specific_parsers import _parse_store_specific_result
+
 
 try:
     from pypdf import PdfReader
@@ -124,118 +151,6 @@ LOGGER = logging.getLogger(__name__)
 _PADDLE_OCR_INSTANCE = None
 
 
-@dataclass
-class ReceiptParseResult:
-    is_receipt: bool
-    parse_status: str
-    confidence_score: float | None
-    store_name: str | None
-    purchase_at: str | None
-    total_amount: Decimal | None
-    discount_total: Decimal | None = None
-    currency: str = 'EUR'
-    lines: list[dict[str, Any]] | None = None
-    store_branch: str | None = None
-    parser_diagnostics: dict[str, Any] | None = None
-
-
-def sanitize_filename(name: str) -> str:
-    candidate = (name or 'receipt').strip().replace('\\', '_').replace('/', '_')
-    candidate = re.sub(r'[^A-Za-z0-9._ -]+', '_', candidate)
-    candidate = candidate.strip(' ._') or 'receipt'
-    return candidate[:180]
-
-
-
-
-def sanitize_share_context(value: str | None) -> str:
-    candidate = re.sub(r'[^a-z0-9_]+', '_', str(value or '').strip().lower())
-    candidate = candidate.strip('_')
-    return candidate or 'shared_file'
-
-
-def share_source_label_for_context(context: str) -> str:
-    mapping = {
-        'shared_app': 'Gedeeld uit app',
-        'shared_web': 'Gedeeld uit website',
-        'shared_file': 'Gedeeld bestand',
-        'shared_image': 'Gedeelde afbeelding',
-        'shared_pdf': 'Gedeelde pdf',
-    }
-    return mapping.get(context, f"Gedeeld ({context.replace('_', ' ')})")
-
-
-def ensure_share_receipt_source(engine, household_id: str, context: str) -> dict[str, Any]:
-    normalized_context = sanitize_share_context(context)
-    source_id = f'{household_id}-{normalized_context}'
-    label = share_source_label_for_context(normalized_context)
-    with engine.begin() as conn:
-        row = conn.execute(
-            text('SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at FROM receipt_sources WHERE id = :id LIMIT 1'),
-            {'id': source_id},
-        ).mappings().first()
-        if row:
-            conn.execute(
-                text('UPDATE receipt_sources SET label = :label, type = :type, is_active = 1, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
-                {'id': source_id, 'label': label, 'type': 'share_target'},
-            )
-        else:
-            conn.execute(
-                text(
-                    'INSERT INTO receipt_sources (id, household_id, type, label, source_path, is_active) VALUES (:id, :household_id, :type, :label, NULL, 1)'
-                ),
-                {'id': source_id, 'household_id': household_id, 'type': 'share_target', 'label': label},
-            )
-        row = conn.execute(
-            text('SELECT id, household_id, type, label, source_path, is_active, last_scan_at, created_at, updated_at FROM receipt_sources WHERE id = :id LIMIT 1'),
-            {'id': source_id},
-        ).mappings().first()
-    return dict(row)
-
-def detect_mime_type(filename: str, file_bytes: bytes, provided: str | None = None) -> str:
-    if provided and provided != 'application/octet-stream':
-        return provided
-    guessed, _ = mimetypes.guess_type(filename)
-    if guessed:
-        return guessed
-    if file_bytes.startswith(b'%PDF'):
-        return 'application/pdf'
-    if file_bytes.startswith(b'\x89PNG'):
-        return 'image/png'
-    if file_bytes.startswith(b'\xff\xd8'):
-        return 'image/jpeg'
-    if file_bytes.startswith(b'RIFF') and file_bytes[8:12] == b'WEBP':
-        return 'image/webp'
-    if file_bytes[:5].lower().startswith(b'from:') or b'content-type:' in file_bytes[:4096].lower():
-        return 'message/rfc822'
-    return 'application/octet-stream'
-
-
-def sha256_hex(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
-
-
-def _html_to_text(value: str) -> str:
-    if not value:
-        return ''
-
-    def _img_alt_replacement(match: re.Match[str]) -> str:
-        tag = match.group(0)
-        alt_match = re.search(r"(?i)\balt\s*=\s*['\"]([^'\"]+)['\"]", tag)
-        if alt_match:
-            return f"\n{alt_match.group(1)}\n"
-        return '\n'
-
-    normalized = str(value)
-    normalized = re.sub(r'(?is)<img\b[^>]*>', _img_alt_replacement, normalized)
-    normalized = re.sub(r'(?is)<\s*br\s*/?\s*>', '\n', normalized)
-    normalized = re.sub(r'(?is)</?\s*(?:p|div|tr|td|table|section|article|li|ul|ol|h[1-6])\b[^>]*>', '\n', normalized)
-    normalized = re.sub(r'(?is)<[^>]+>', ' ', normalized)
-    normalized = normalized.replace('&nbsp;', ' ').replace('&euro;', 'EUR')
-    normalized = re.sub(r'[ \t\r\f\v]+', ' ', normalized)
-    normalized = re.sub(r'\n{3,}', '\n\n', normalized)
-    normalized = normalized.replace(' \n', '\n').replace('\n ', '\n')
-    return normalized.strip()
 
 def _column_exists(conn, table_name: str, column_name: str) -> bool:
     rows = conn.execute(text(f'PRAGMA table_info({table_name})')).mappings().all()
@@ -398,90 +313,13 @@ def dedupe_receipts_for_household(engine, household_id: str) -> dict[str, Any]:
         'duplicate_table_ids': [row['receipt_table_id'] for row in duplicate_rows],
     }
 
-def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
-    """Bepaalt de definitieve database-status voor een kassabon.
-
-    De parser mag intern streng blijven voor diagnose, maar de database moet
-    weergeven of een bon voor de gebruiker bruikbaar is. Daarom wordt een bon
-    als 'parsed' opgeslagen zodra de essentiÃ«le kopgegevens betrouwbaar zijn:
-    winkelnaam en totaalbedrag. Waar mogelijk controleren we daarnaast of de
-    netto regelsom binnen tolerantie klopt, maar een imperfecte artikel-extractie
-    mag een verder bruikbare bon niet onnodig op 'review_needed' houden.
-    """
-    if not parse_result or not parse_result.is_receipt:
-        return 'failed'
-
-    has_store = bool(str(parse_result.store_name or '').strip())
-    has_total = parse_result.total_amount is not None
-
-    if not has_store or not has_total:
-        return 'review_needed'
-
-    lines = parse_result.lines or []
-    if not lines:
-        return 'parsed'
-
-    try:
-        line_sum = Decimal('0')
-        line_discount_sum = Decimal('0')
-        for line in lines:
-            if not isinstance(line, dict):
-                continue
-            line_total = line.get('line_total')
-            if line_total is not None:
-                line_sum += Decimal(str(line_total))
-            discount_amount = line.get('discount_amount')
-            if discount_amount is not None:
-                line_discount_sum += Decimal(str(discount_amount))
-        discount_total = parse_result.discount_total if parse_result.discount_total is not None else line_discount_sum
-        net_line_sum = line_sum - Decimal(str(discount_total or 0))
-        diff = abs(net_line_sum - Decimal(str(parse_result.total_amount)))
-        if diff <= Decimal('0.25'):
-            return 'parsed'
-    except Exception:
-        # Als de totaalcontrole niet uitgevoerd kan worden, blijven winkel en
-        # totaalbedrag leidend voor de database-classificatie.
-        return 'parsed'
-
-    # EssentiÃ«le kopgegevens zijn aanwezig; artikelregels kunnen later handmatig
-    # worden verbeterd zonder dat de hele bon in de controlebak hoeft te blijven.
-    return 'parsed'
-
-
-def _extract_pdf_text(file_bytes: bytes) -> str:
-    if PdfReader is None:
-        return ''
-    try:
-        reader = PdfReader(io.BytesIO(file_bytes))
-        chunks: list[str] = []
-        for page in reader.pages:
-            text = page.extract_text() or ''
-            if text:
-                chunks.append(text)
-        return '\n'.join(chunks)
-    except Exception:
-        return ''
 
 
 
 
-def _preprocess_pdf_text(text: str) -> str:
-    normalized = text or ''
-    for store in KNOWN_STORES:
-        normalized = re.sub(rf'({re.escape(store)})(?=\d)', r'\1\n', normalized, flags=re.IGNORECASE)
-    normalized = re.sub(r'(\d{2}[/-]\d{2}[/-]\d{4}\s+\d{2}:\d{2}(?::\d{2})?)(?=[A-Z])', r'\1\n', normalized)
-    normalized = re.sub(r'(?i)(TOTAAL|TE BETALEN|TOTAL)(?=\s*[-\d])', r'\n\1', normalized)
-    normalized = re.sub(r'(\d{1,4}[\.,]\d{2})(?=[A-Z])', r'\1\n', normalized)
-    return normalized
 
-def _normalize_text_lines(text: str) -> list[str]:
-    raw_lines = re.split(r'\r?\n+', text)
-    lines: list[str] = []
-    for line in raw_lines:
-        normalized = re.sub(r'\s+', ' ', line).strip()
-        if normalized:
-            lines.append(normalized)
-    return lines
+
+
 
 
 def _strip_accents(value: str | None) -> str:
@@ -690,40 +528,12 @@ def _extract_savings_action_lines(lines: list[str], store_name: str | None = Non
     return extracted
 
 
-def _line_decimal_total(line: dict[str, Any]) -> Decimal:
-    return _parse_decimal(str(line.get('line_total'))) or Decimal('0.00')
 
 
-def _discount_decimal_total(line: dict[str, Any]) -> Decimal:
-    return _parse_decimal(str(line.get('discount_amount'))) or Decimal('0.00')
 
 
-def _result_quality_score(result: ReceiptParseResult) -> tuple[int, int, int, int, int]:
-    if not result.is_receipt:
-        return (0, 0, 0, 0, 0)
-    line_count = len(result.lines or [])
-    has_total = 1 if result.total_amount is not None else 0
-    has_store = 1 if result.store_name else 0
-    has_purchase = 1 if result.purchase_at else 0
-    total_match = 0
-    if result.total_amount is not None and line_count:
-        line_sum = sum((_line_decimal_total(line) for line in result.lines), Decimal('0.00'))
-        discount_sum = result.discount_total if result.discount_total is not None else sum((_discount_decimal_total(line) for line in result.lines), Decimal('0.00'))
-        if discount_sum is None:
-            discount_sum = Decimal('0.00')
-        try:
-            if abs((line_sum + discount_sum) - result.total_amount) < Decimal('0.011'):
-                total_match = 1
-        except Exception:
-            total_match = 0
-    status_weight = {'parsed': 3, 'partial': 2, 'review_needed': 1, 'failed': 0}.get(str(result.parse_status or ''), 0)
-    return (has_total + has_store + has_purchase + total_match, status_weight, line_count, has_total, total_match)
 
 
-def _choose_better_receipt_result(primary: ReceiptParseResult, secondary: ReceiptParseResult) -> ReceiptParseResult:
-    primary_score = _result_quality_score(primary)
-    secondary_score = _result_quality_score(secondary)
-    return secondary if secondary_score > primary_score else primary
 
 def _looks_like_non_receipt(lines: list[str]) -> bool:
     if not lines:
@@ -1241,19 +1051,6 @@ def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: s
     return extracted
 
 
-def _failed_receipt_result(confidence: float = 0.0) -> ReceiptParseResult:
-    return ReceiptParseResult(
-        is_receipt=False,
-        parse_status='failed',
-        confidence_score=confidence,
-        store_name=None,
-        purchase_at=None,
-        total_amount=None,
-        discount_total=None,
-        currency='EUR',
-        lines=[],
-        parser_diagnostics=summarize_lines_parser_diagnostics([]),
-    )
 
 
 def _parse_result_from_text_lines(
@@ -1272,7 +1069,12 @@ def _parse_result_from_text_lines(
     store_name = _store_from_text(text_lines[:12], filename)
     store_branch = _store_branch_from_lines(text_lines[:12], store_name)
     purchase_at = _purchase_at_from_lines(text_lines, filename)
-    total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
+    if looks_like_ah_context(text_lines, filename, store_name=store_name):
+        ah_total_result = extract_ah_total_amount(text_lines, filename, store_name=store_name)
+        total_amount = ah_total_result.amount
+        explicit_total_found = ah_total_result.explicit_total_found
+    else:
+        total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
     lines = _extract_receipt_lines(text_lines, store_name=store_name, filename=filename)
     savings_action_lines = _extract_savings_action_lines(text_lines, store_name=store_name)
     if savings_action_lines:
@@ -1439,967 +1241,53 @@ def _parse_result_from_text_lines(
     )
 
 
-def _ocr_pdf_text_with_ocrmypdf(file_bytes: bytes, filename: str) -> str:
-    if ocrmypdf is None:
-        return ''
-    suffix = Path(filename).suffix.lower() or '.pdf'
-    try:
-        with tempfile.TemporaryDirectory(prefix='rezzerv-ocrpdf-') as temp_dir:
-            temp_root = Path(temp_dir)
-            input_path = temp_root / f'input{suffix}'
-            output_path = temp_root / 'output.pdf'
-            sidecar_path = temp_root / 'output.txt'
-            input_path.write_bytes(file_bytes)
-            ocrmypdf.ocr(
-                input_path,
-                output_path,
-                language=['nld', 'eng'],
-                sidecar=sidecar_path,
-                force_ocr=True,
-                deskew=True,
-                rotate_pages=True,
-                output_type='pdf',
-                progress_bar=False,
-            )
-            sidecar_text = sidecar_path.read_text(encoding='utf-8', errors='ignore') if sidecar_path.exists() else ''
-            if sidecar_text.strip():
-                return sidecar_text
-            if output_path.exists():
-                return _extract_pdf_text(output_path.read_bytes())
-    except Exception as exc:  # pragma: no cover - depends on optional OCR runtime
-        LOGGER.warning('OCRmyPDF fallback mislukt voor %s: %s', filename, exc)
-    return ''
-
-
-def _get_paddle_ocr():
-    global _PADDLE_OCR_INSTANCE
-    if _PADDLE_OCR_INSTANCE is not None:
-        return _PADDLE_OCR_INSTANCE
-    if PaddleOCR is None:
-        return None
-
-    constructors = [
-        {
-            'use_doc_orientation_classify': False,
-            'use_doc_unwarping': False,
-            'use_textline_orientation': False,
-            'lang': 'en',
-        },
-        {
-            'use_angle_cls': True,
-            'lang': 'en',
-        },
-        {
-            'lang': 'en',
-        },
-    ]
-    for kwargs in constructors:
-        try:
-            _PADDLE_OCR_INSTANCE = PaddleOCR(**kwargs)
-            break
-        except TypeError:
-            continue
-        except Exception as exc:  # pragma: no cover - runtime dependency/model download issue
-            LOGGER.warning('PaddleOCR initialisatie mislukt: %s', exc)
-            return None
-    return _PADDLE_OCR_INSTANCE
-
-
-def _ocr_bbox_to_line_anchor(bbox: Any) -> tuple[float, float, float] | None:
-    if bbox is None:
-        return None
-    try:
-        if isinstance(bbox, (list, tuple)) and len(bbox) == 4 and not isinstance(bbox[0], (list, tuple)):
-            x1, y1, x2, y2 = [float(v) for v in bbox]
-            return ((y1 + y2) / 2.0, x1, max(1.0, y2 - y1))
-        points = []
-        for point in bbox:
-            if not isinstance(point, (list, tuple)) or len(point) < 2:
-                continue
-            points.append((float(point[0]), float(point[1])))
-        if not points:
-            return None
-        xs = [pt[0] for pt in points]
-        ys = [pt[1] for pt in points]
-        return ((min(ys) + max(ys)) / 2.0, min(xs), max(1.0, max(ys) - min(ys)))
-    except Exception:
-        return None
-
-
-def _extract_payload_from_paddle_item(item: Any) -> dict[str, Any]:
-    candidates: list[Any] = [item]
-    for attr_name in ('res', 'json', 'result'):
-        attr = getattr(item, attr_name, None)
-        if attr is None:
-            continue
-        try:
-            value = attr() if callable(attr) else attr
-        except TypeError:
-            value = attr
-        candidates.append(value)
-    to_dict = getattr(item, 'to_dict', None)
-    if callable(to_dict):
-        try:
-            candidates.append(to_dict())
-        except Exception:
-            pass
-    for candidate in candidates:
-        if isinstance(candidate, dict):
-            if isinstance(candidate.get('res'), dict):
-                return candidate['res']
-            return candidate
-    return {}
-
-
-def _group_paddle_texts_to_lines(texts: list[str], boxes: list[Any] | None) -> list[str]:
-    if not texts:
-        return []
-    if not boxes or len(boxes) != len(texts):
-        return [re.sub(r'\s+', ' ', text).strip() for text in texts if str(text).strip()]
-
-    fragments: list[tuple[float, float, float, str]] = []
-    heights: list[float] = []
-    for text_value, box in zip(texts, boxes):
-        normalized_text = re.sub(r'\s+', ' ', str(text_value or '')).strip()
-        if not normalized_text:
-            continue
-        anchor = _ocr_bbox_to_line_anchor(box)
-        if anchor is None:
-            fragments.append((float(len(fragments) * 100), float(len(fragments)), 10.0, normalized_text))
-            continue
-        center_y, min_x, height = anchor
-        heights.append(height)
-        fragments.append((center_y, min_x, height, normalized_text))
-
-    if not fragments:
-        return []
-
-    fragments.sort(key=lambda item: (item[0], item[1]))
-    merge_threshold = max(12.0, (median(heights) if heights else 12.0) * 0.7)
-    grouped: list[list[tuple[float, float, float, str]]] = []
-    for fragment in fragments:
-        if not grouped:
-            grouped.append([fragment])
-            continue
-        current_group = grouped[-1]
-        current_y = sum(part[0] for part in current_group) / len(current_group)
-        if abs(fragment[0] - current_y) <= merge_threshold:
-            current_group.append(fragment)
-        else:
-            grouped.append([fragment])
-
-    result_lines: list[str] = []
-    for group in grouped:
-        group.sort(key=lambda item: item[1])
-        merged = ' '.join(part[3] for part in group).strip()
-        merged = re.sub(r'\s+', ' ', merged)
-        if merged:
-            result_lines.append(merged)
-    return result_lines
-
-
-def _normalize_paddle_collection(value: Any) -> list[Any]:
-    if value is None:
-        return []
-    if hasattr(value, 'tolist'):
-        try:
-            value = value.tolist()
-        except Exception:
-            pass
-    if isinstance(value, (str, bytes, bytearray)):
-        return [value]
-    try:
-        return list(value)
-    except TypeError:
-        return [value]
-
-
-
-def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[str], float | None]:
-    model = _get_paddle_ocr()
-    if model is None:
-        return [], None
-
-    suffix = Path(filename).suffix.lower() or '.png'
-    try:
-        with tempfile.TemporaryDirectory(prefix='rezzerv-paddleocr-') as temp_dir:
-            image_path = Path(temp_dir) / f'image{suffix}'
-            image_path.write_bytes(file_bytes)
-            result = model.predict(str(image_path))
-    except Exception as exc:  # pragma: no cover - runtime dependency/model download issue
-        LOGGER.warning('PaddleOCR verwerking mislukt voor %s: %s', filename, exc)
-        return [], None
-
-    texts: list[str] = []
-    scores: list[float] = []
-    boxes: list[Any] = []
-    for item in _normalize_paddle_collection(result):
-        payload = _extract_payload_from_paddle_item(item)
-        current_texts = _normalize_paddle_collection(payload.get('rec_texts') or payload.get('texts'))
-        current_scores = _normalize_paddle_collection(payload.get('rec_scores') or payload.get('scores'))
-        current_boxes = payload.get('rec_boxes')
-        if current_boxes is None:
-            current_boxes = payload.get('dt_polys')
-        if current_boxes is None:
-            current_boxes = payload.get('rec_polys')
-        current_boxes = _normalize_paddle_collection(current_boxes)
-        normalized_texts = [str(text) for text in current_texts if str(text).strip()]
-        texts.extend(normalized_texts)
-        for score in current_scores:
-            try:
-                scores.append(float(score))
-            except (TypeError, ValueError):
-                continue
-        boxes.extend(current_boxes[: len(normalized_texts)])
-
-    line_candidates = _group_paddle_texts_to_lines(texts, boxes if boxes else None)
-    confidence = round(sum(scores) / len(scores), 4) if scores else None
-    return line_candidates, confidence
-
-
-
-def warm_receipt_ocr_runtime() -> dict[str, Any]:
-    """Warm OCR dependencies before the first user upload."""
-    result: dict[str, Any] = {"warmup": "receipt_ocr_runtime"}
-    if str(os.getenv("REZZERV_RECEIPT_STARTUP_OCR_WARMUP", "false") or "false").strip().lower() not in {"1", "true", "yes", "on"}:
-        result["paddle"] = "skipped"
-        result["reason"] = "startup_ocr_warmup_disabled"
-        return result
-    try:
-        if Image is None:
-            result["paddle"] = "pillow_unavailable"
-            return result
-        sample = Image.new("RGB", (320, 220), "white")
-        buffer = io.BytesIO()
-        sample.save(buffer, format="PNG")
-        paddle_lines, _ = _ocr_image_text_with_paddle(buffer.getvalue(), "warmup.png")
-        result["paddle"] = "ok" if paddle_lines is not None else "no_lines"
-    except Exception as exc:
-        result["paddle"] = f"failed:{type(exc).__name__}"
-    return result
-
-
-def _ocr_image_text_with_tesseract(file_bytes: bytes, filename: str) -> tuple[list[str], float | None]:
-    suffix = Path(filename).suffix.lower() or '.png'
-    language = 'nld+eng'
-    try:
-        with tempfile.TemporaryDirectory(prefix='rezzerv-tesseract-') as temp_dir:
-            image_path = Path(temp_dir) / f'image{suffix}'
-            image_path.write_bytes(file_bytes)
-            command = ['tesseract', str(image_path), 'stdout', '-l', language, '--psm', '6']
-            completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=90)
-            if completed.returncode != 0:
-                LOGGER.warning('Tesseract verwerking mislukt voor %s: %s', filename, (completed.stderr or '').strip())
-                return [], None
-            text_output = completed.stdout or ''
-            return _normalize_text_lines(text_output), None
-    except Exception as exc:  # pragma: no cover - runtime dependency
-        LOGGER.warning('Tesseract fallback mislukt voor %s: %s', filename, exc)
-        return [], None
-
-
-
-def _normalize_store_specific_text(text: str) -> str:
-    normalized = str(text or '').replace('\u00a0', ' ').replace('/uni00A0', ' ').replace('/uni00A01', ' 1 ')
-    normalized = normalized.replace('/uni00A02', ' 2 ').replace('/uni00A03', ' 3 ').replace('/uni00A04', ' 4 ')
-    normalized = normalized.replace('Â·', ' Â· ')
-    normalized = re.sub(r'\s+â‚¬\s*', ' â‚¬ ', normalized)
-    normalized = re.sub(r'[ 	]+', ' ', normalized)
-    normalized = re.sub(r'\n{3,}', '\n\n', normalized)
-    return normalized.strip()
-
-
-def _extract_text_from_eml(file_bytes: bytes) -> tuple[str, str]:
-    try:
-        message = BytesParser(policy=policy.default).parsebytes(file_bytes)
-    except Exception:
-        return '', ''
-    text_parts: list[str] = []
-    html_parts: list[str] = []
-    for part in message.walk():
-        content_type = part.get_content_type()
-        if content_type not in {'text/plain', 'text/html'}:
-            continue
-        try:
-            payload = part.get_content()
-        except Exception:
-            try:
-                payload = part.get_payload(decode=True)
-                charset = part.get_content_charset() or 'utf-8'
-                payload = payload.decode(charset, errors='ignore') if isinstance(payload, (bytes, bytearray)) else str(payload)
-            except Exception:
-                payload = ''
-        if content_type == 'text/plain' and payload:
-            text_parts.append(str(payload))
-        elif content_type == 'text/html' and payload:
-            html_parts.append(str(payload))
-    subject = str(message.get('subject') or '').strip()
-    date_header = str(message.get('date') or '').strip()
-    if subject:
-        text_parts.insert(0, subject)
-    if date_header:
-        text_parts.insert(1 if subject else 0, date_header)
-    plain_text = '\n'.join(text_parts).strip()
-    html_text = ''
-    if html_parts:
-        html_source = '\n'.join(html_parts)
-        if BeautifulSoup is not None:
-            try:
-                html_text = BeautifulSoup(html_source, 'html.parser').get_text('\n')
-            except Exception:
-                html_text = _html_to_text(html_source)
-        else:
-            html_text = _html_to_text(html_source)
-    return _normalize_store_specific_text(plain_text), _normalize_store_specific_text(html_text)
-
-
-def _convert_webp_to_png_bytes(file_bytes: bytes) -> bytes:
-    if Image is None:
-        return file_bytes
-    try:
-        with Image.open(io.BytesIO(file_bytes)) as image:
-            output = io.BytesIO()
-            image.save(output, format='PNG')
-            return output.getvalue()
-    except Exception:
-        return file_bytes
-
-
-def _parse_dutch_textual_date(text: str, default_year: int | None = None) -> str | None:
-    match = re.search(r'(?i)\b(\d{1,2})\s+(' + '|'.join(DUTCH_MONTHS.keys()) + r')(?:\s+(\d{4}))?', str(text or ''))
-    if not match:
-        return None
-    day = int(match.group(1))
-    month = DUTCH_MONTHS[match.group(2).lower()]
-    year = int(match.group(3) or default_year or datetime.utcnow().year)
-    try:
-        return datetime(year, month, day).isoformat()
-    except ValueError:
-        return None
-
-
-def _receipt_result_from_manual(store_name: str | None, purchase_at: str | None, total_amount: Decimal | None, lines: list[dict[str, Any]], *, store_branch: str | None = None, confidence: float = 0.8) -> ReceiptParseResult:
-    status = 'parsed' if lines and total_amount is not None else 'review_needed'
-    return ReceiptParseResult(
-        is_receipt=True,
-        parse_status=status,
-        confidence_score=confidence,
-        store_name=store_name,
-        purchase_at=purchase_at,
-        total_amount=total_amount,
-        discount_total=None,
-        currency='EUR',
-        lines=lines,
-        store_branch=store_branch,
-        parser_diagnostics=summarize_lines_parser_diagnostics(lines),
-    )
-
-
-def _line_dict(label: str, quantity: float | None, unit_price: Decimal | None, line_total: Decimal | None, *, unit: str | None = None, confidence: float = 0.86) -> dict[str, Any]:
-    return {
-        'raw_label': _clean_receipt_label(label),
-        'normalized_label': _clean_receipt_label(label),
-        'quantity': quantity,
-        'unit': unit,
-        'unit_price': _amount_to_float(unit_price),
-        'line_total': _amount_to_float(line_total),
-        'discount_amount': None,
-        'barcode': None,
-        'confidence_score': confidence,
-    }
-
-
-def _parse_action_pdf_result(text: str, filename: str) -> ReceiptParseResult | None:
-    if 'action' not in filename.lower() and 'valburgseweg' not in text.lower():
-        return None
-    lines = _normalize_text_lines(_normalize_store_specific_text(text))
-    purchase_at = None
-    m = re.search(r'(?i)(\d{1,2})\s+(' + '|'.join(DUTCH_MONTHS.keys()) + r')\s+om\s+(\d{1,2}:\d{2})', text)
-    if m:
-        try:
-            purchase_at = datetime(datetime.utcnow().year, DUTCH_MONTHS[m.group(2).lower()], int(m.group(1)), int(m.group(3).split(':')[0]), int(m.group(3).split(':')[1])).isoformat()
-        except Exception:
-            purchase_at = None
-    total_amount = _parse_decimal(re.search(r'(?i)Totaal\s+\d+\s+â‚¬\s*([0-9]+,[0-9]{2})', text).group(1)) if re.search(r'(?i)Totaal\s+\d+\s+â‚¬\s*([0-9]+,[0-9]{2})', text) else None
-    branch = 'Valburgseweg 16, 6661 EV Elst'
-    start = next((i for i, line in enumerate(lines) if 'artikel aantal prijs' in line.lower()), None)
-    end = next((i for i, line in enumerate(lines) if line.lower().startswith('totaal ')), None)
-    extracted: list[dict[str, Any]] = []
-    if start is not None and end is not None and end > start:
-        buffer: list[str] = []
-        for line in lines[start + 1:end]:
-            match = re.match(r'^(?P<qty>\d+)\s+â‚¬\s*(?P<amount>\d+[\.,]\d{2})$', line)
-            if match and buffer:
-                label = ' '.join(buffer)
-                label = re.sub(r'\s*-\s*\d{6,}$', '', label).strip()
-                qty = float(match.group('qty'))
-                total = _parse_decimal(match.group('amount'))
-                unit_price = (total / Decimal(str(int(qty)))).quantize(Decimal('0.01')) if total is not None and qty else total
-                append_structured_product_candidate(
-                    extracted,
-                    label=label,
-                    quantity=qty,
-                    unit=None,
-                    unit_price=unit_price,
-                    line_total=total,
-                    discount_amount=None,
-                    barcode=None,
-                    source_index=None,
-                    raw_line=line,
-                    normalized_line=line,
-                    source_segment=' | '.join(buffer + [line]),
-                    filename=filename,
-                    store_name='Action',
-                    function_name='_parse_action_pdf_result',
-                    append_branch='action_pdf_line',
-                    parser_path='_parse_action_pdf_result.action_pdf_line',
-                    caller_line_hint='Action PDF structured line via append_structured_product_candidate',
-                    clean_label=_clean_receipt_label,
-                    amount_to_float=_amount_to_float,
-                    is_invalid_label=_looks_like_non_product_receipt_label,
-                    confidence_score=0.88,
-                )
-                buffer = []
-            else:
-                buffer.append(line)
-    return _receipt_result_from_manual('Action', purchase_at, total_amount, extracted, store_branch=branch, confidence=0.88)
-
-
-def _parse_gamma_pdf_result(text: str, filename: str) -> ReceiptParseResult | None:
-    if 'gamma' not in filename.lower() and 'gamma.nl' not in text.lower() and 'kassabonnummer' not in text.lower():
-        return None
-    lines = _normalize_text_lines(_normalize_store_specific_text(text))
-    purchase_at = _purchase_at_from_lines(lines, filename)
-    total_match = re.search(r'(?i)Totaal incl\. BTWâ‚¬\s*([0-9]+,[0-9]{2})', text)
-    total_amount = _parse_decimal(total_match.group(1)) if total_match else None
-    extracted: list[dict[str, Any]] = []
-    for idx, line in enumerate(lines):
-        m = re.match(r'^(?P<code>\d{5,})\s+(?P<label>.+)$', line)
-        if not m:
-            continue
-        label_parts = [m.group('label')]
-        j = idx + 1
-        while j < len(lines) and not re.search(r'\d+%\s+\d+\s+â‚¬\s*\d+[\.,]\d{2}', lines[j]):
-            if re.match(r'^Totaal', lines[j], re.I):
-                break
-            label_parts.append(lines[j])
-            j += 1
-        if j < len(lines):
-            detail = lines[j]
-            d = re.search(r'(?P<vat>\d+%)\s+(?P<qty>\d+(?:[\.,]\d+)?)\s+â‚¬\s*(?P<unit>\d+[\.,]\d{2})(?:\s+â‚¬\s*(?P<total>\d+[\.,]\d{2}))?', detail)
-            if d:
-                qty = float(d.group('qty').replace(',', '.'))
-                unit_price = _parse_decimal(d.group('unit'))
-                line_total = _parse_decimal(d.group('total')) or unit_price
-                append_structured_product_candidate(
-                    extracted,
-                    label=' '.join(label_parts),
-                    quantity=qty,
-                    unit=None,
-                    unit_price=unit_price,
-                    line_total=line_total,
-                    discount_amount=None,
-                    barcode=m.group('code'),
-                    source_index=idx,
-                    raw_line=' | '.join(lines[idx:j + 1]),
-                    normalized_line=re.sub(r'\s+', ' ', ' | '.join(lines[idx:j + 1])).strip(),
-                    source_segment=' | '.join(lines[idx:j + 1]),
-                    filename=filename,
-                    store_name='Gamma',
-                    function_name='_parse_gamma_pdf_result',
-                    append_branch='gamma_pdf_line',
-                    parser_path='_parse_gamma_pdf_result.gamma_pdf_line',
-                    caller_line_hint='Gamma PDF structured line via append_structured_product_candidate',
-                    clean_label=_clean_receipt_label,
-                    amount_to_float=_amount_to_float,
-                    is_invalid_label=_looks_like_non_product_receipt_label,
-                    confidence_score=0.86,
-                )
-    return _receipt_result_from_manual('Gamma', purchase_at, total_amount, extracted, confidence=0.86)
-
-
-def _parse_hornbach_pdf_result(text: str, filename: str) -> ReceiptParseResult | None:
-    if 'hornbach' not in text.lower() and 'hornbach' not in filename.lower():
-        return None
-    normalized = _normalize_store_specific_text(text)
-    purchase_at = None
-    date_match = re.search(r'(?i)Rekeningsdatum:\s*(\d{2}\.\d{2}\.\d{4})', normalized) or re.search(r'(?i)Opdrachtdatum:\s*(\d{2}\.\d{2}\.\d{4})', normalized)
-    if date_match:
-        try:
-            purchase_at = datetime.strptime(date_match.group(1), '%d.%m.%Y').isoformat()
-        except ValueError:
-            pass
-    total_match = re.search(r'(?i)Totaalbedr\. rekening EUR\s*([0-9]+,[0-9]{2})', normalized) or re.search(r'(?i)Totaalbedrag rekening EUR\s*([0-9]+,[0-9]{2})', normalized)
-    total_amount = _parse_decimal(total_match.group(1)) if total_match else None
-    extracted: list[dict[str, Any]] = []
-    multi = re.search(r'10\s+7\s+St\s+10692297\s+(.+?)\s+21,00%\s+38,00\s+266,00', normalized, re.S)
-    if multi:
-        label = re.sub(r'\s+', ' ', multi.group(1)).strip()
-        append_structured_product_candidate(
-            extracted,
-            label=label,
-            quantity=7.0,
-            unit='St',
-            unit_price=Decimal('38.00'),
-            line_total=Decimal('266.00'),
-            discount_amount=None,
-            barcode='10692297',
-            source_index=None,
-            raw_line=multi.group(0),
-            normalized_line=re.sub(r'\s+', ' ', multi.group(0)).strip(),
-            source_segment=multi.group(0),
-            filename=filename,
-            store_name='Hornbach',
-            function_name='_parse_hornbach_pdf_result',
-            append_branch='hornbach_multi_item',
-            parser_path='_parse_hornbach_pdf_result.hornbach_multi_item',
-            caller_line_hint='Hornbach PDF structured multi item via append_structured_product_candidate',
-            clean_label=_clean_receipt_label,
-            amount_to_float=_amount_to_float,
-            is_invalid_label=_looks_like_non_product_receipt_label,
-            confidence_score=0.9,
-        )
-    freight = re.search(r'8448722\s+Vrachtkosten\s+21,00%\s+22,50\s+22,50', normalized)
-    if freight:
-        append_structured_product_candidate(
-            extracted,
-            label='Vrachtkosten',
-            quantity=1.0,
-            unit=None,
-            unit_price=Decimal('22.50'),
-            line_total=Decimal('22.50'),
-            discount_amount=None,
-            barcode='8448722',
-            source_index=None,
-            raw_line=freight.group(0),
-            normalized_line=re.sub(r'\s+', ' ', freight.group(0)).strip(),
-            source_segment=freight.group(0),
-            filename=filename,
-            store_name='Hornbach',
-            function_name='_parse_hornbach_pdf_result',
-            append_branch='hornbach_freight',
-            parser_path='_parse_hornbach_pdf_result.hornbach_freight',
-            caller_line_hint='Hornbach PDF structured freight via append_structured_product_candidate',
-            clean_label=_clean_receipt_label,
-            amount_to_float=_amount_to_float,
-            is_invalid_label=_looks_like_non_product_receipt_label,
-            confidence_score=0.9,
-        )
-    return _receipt_result_from_manual('Hornbach', purchase_at, total_amount, extracted, store_branch='Postbus 1099, 3430 BB Nieuwegein', confidence=0.9)
-
-
-def _parse_lidl_invoice_pdf_result(text: str, filename: str) -> ReceiptParseResult | None:
-    if 'lidl' not in text.lower() and 'lidl' not in filename.lower():
-        return None
-    normalized = _normalize_store_specific_text(text)
-    lines = _normalize_text_lines(normalized)
-    purchase_at = None
-    date_match = re.search(r'(?i)Factuurdatum:\s*(\d{2}-\d{2}-\d{4})', normalized) or re.search(r'(?i)Besteldatum:\s*(\d{2}-\d{2}-\d{4})', normalized)
-    if date_match:
-        try:
-            purchase_at = datetime.strptime(date_match.group(1), '%d-%m-%Y').isoformat()
-        except ValueError:
-            pass
-    total_match = re.search(r'(?i)Totaal\s+([0-9]+,[0-9]{2})', normalized)
-    total_amount = _parse_decimal(total_match.group(1)) if total_match else None
-    extracted: list[dict[str, Any]] = []
-    seen_codes: set[str] = set()
-    for index, line in enumerate(lines):
-        product_match = re.match(r'^(?P<code>100\d{6,})(?:\s+)?(?P<label>.+)$', line)
-        if not product_match:
-            continue
-        code = str(product_match.group('code') or '').strip()
-        if not code or code in seen_codes:
-            continue
-        detail_line = lines[index + 2] if index + 2 < len(lines) else ''
-        detail_match = re.search(r'21,0\s*%\s*(?P<qty>\d+(?:[\.,]\d+)?)\s+(?P<unit>\d+[\.,]\d{2})\s+(?P<total>\d+[\.,]\d{2})', detail_line)
-        if not detail_match:
-            continue
-        seen_codes.add(code)
-        label = re.sub(r'\s+', ' ', product_match.group('label')).strip(' -')
-        qty = float(str(detail_match.group('qty')).replace(',', '.'))
-        append_structured_product_candidate(
-            extracted,
-            label=label,
-            quantity=qty,
-            unit=None,
-            unit_price=_parse_decimal(detail_match.group('unit')),
-            line_total=_parse_decimal(detail_match.group('total')),
-            discount_amount=None,
-            barcode=code,
-            source_index=index,
-            raw_line=' | '.join(lines[index:index + 3]),
-            normalized_line=re.sub(r'\s+', ' ', ' | '.join(lines[index:index + 3])).strip(),
-            source_segment=' | '.join(lines[index:index + 3]),
-            filename=filename,
-            store_name='Lidl Nederland GmbH',
-            function_name='_parse_lidl_invoice_pdf_result',
-            append_branch='lidl_invoice_product_line',
-            parser_path='_parse_lidl_invoice_pdf_result.lidl_invoice_product_line',
-            caller_line_hint='Lidl invoice structured product via append_structured_product_candidate',
-            clean_label=_clean_receipt_label,
-            amount_to_float=_amount_to_float,
-            is_invalid_label=_looks_like_non_product_receipt_label,
-            confidence_score=0.9,
-        )
-    shipping = re.search(r'Verzendkosten\s+21,0\s*%\s*(?P<qty>\d+(?:[\.,]\d+)?)\s+(?P<unit>\d+[\.,]\d{2})\s+(?P<total>\d+[\.,]\d{2})', normalized)
-    if shipping:
-        append_structured_product_candidate(
-            extracted,
-            label='Verzendkosten',
-            quantity=float(str(shipping.group('qty')).replace(',', '.')),
-            unit=None,
-            unit_price=_parse_decimal(shipping.group('unit')),
-            line_total=_parse_decimal(shipping.group('total')),
-            discount_amount=None,
-            barcode=None,
-            source_index=None,
-            raw_line=shipping.group(0),
-            normalized_line=re.sub(r'\s+', ' ', shipping.group(0)).strip(),
-            source_segment=shipping.group(0),
-            filename=filename,
-            store_name='Lidl Nederland GmbH',
-            function_name='_parse_lidl_invoice_pdf_result',
-            append_branch='lidl_invoice_shipping',
-            parser_path='_parse_lidl_invoice_pdf_result.lidl_invoice_shipping',
-            caller_line_hint='Lidl invoice structured shipping via append_structured_product_candidate',
-            clean_label=_clean_receipt_label,
-            amount_to_float=_amount_to_float,
-            is_invalid_label=_looks_like_non_product_receipt_label,
-            confidence_score=0.9,
-        )
-    return _receipt_result_from_manual('Lidl Nederland GmbH', purchase_at, total_amount, extracted, store_branch='Havenstraat 71, 1271 AD Huizen; Postbus 198, 1270 AD Huizen', confidence=0.9)
-
-
-def _parse_bol_email_result(text: str, html_text: str, filename: str, header_date: str | None = None) -> ReceiptParseResult | None:
-    haystack = _normalize_store_specific_text(html_text or text)
-    if 'bol' not in haystack.lower() and 'bol' not in filename.lower():
-        return None
-    purchase_at = None
-    if header_date:
-        from email.utils import parsedate_to_datetime
-        try:
-            purchase_at = parsedate_to_datetime(header_date).replace(tzinfo=None).isoformat(timespec='seconds')
-        except Exception:
-            purchase_at = None
-    total_match = re.search(r'(?is)Totaal\s+â‚¬\s*([0-9]+,[0-9]{2})', haystack)
-    total_amount = _parse_decimal(total_match.group(1)) if total_match else None
-    order_product = re.search(r'(?is)Dit heb je besteld.*?Bestelnummer:\s*([A-Z0-9-]+).*?([A-Z0-9+\-][^\n]+?)\s+Verkoper:\s+([^\n]+).*?Bezorgdatum:', haystack)
-    extracted: list[dict[str, Any]] = []
-    if order_product:
-        label = re.sub(r'\s+', ' ', order_product.group(2)).strip()
-        price_match = re.search(r'(?is)1x\s+â‚¬\s*([0-9]+,[0-9]{2})', haystack)
-        price = _parse_decimal(price_match.group(1)) if price_match else total_amount
-        append_structured_product_candidate(
-            extracted,
-            label=label,
-            quantity=1.0,
-            unit=None,
-            unit_price=price,
-            line_total=price,
-            discount_amount=None,
-            barcode=None,
-            source_index=None,
-            raw_line=order_product.group(0),
-            normalized_line=re.sub(r'\s+', ' ', order_product.group(0)).strip(),
-            source_segment=order_product.group(0),
-            filename=filename,
-            store_name='Bol',
-            function_name='_parse_bol_email_result',
-            append_branch='bol_email_order_product',
-            parser_path='_parse_bol_email_result.bol_email_order_product',
-            caller_line_hint='Bol email structured order product via append_structured_product_candidate',
-            clean_label=_clean_receipt_label,
-            amount_to_float=_amount_to_float,
-            is_invalid_label=_looks_like_non_product_receipt_label,
-            confidence_score=0.84,
-        )
-    return _receipt_result_from_manual('Bol', purchase_at, total_amount, extracted, confidence=0.84)
-
-
-def _parse_picnic_email_result(text: str, html_text: str, filename: str, header_date: str | None = None) -> ReceiptParseResult | None:
-    haystack = _normalize_store_specific_text(html_text or text)
-    if 'picnic' not in haystack.lower() and 'picnic' not in filename.lower():
-        return None
-    raw_lines = _normalize_text_lines(haystack)
-    lines = []
-    for line in raw_lines:
-        cleaned = re.sub(r'[]+', '', line).strip()
-        if cleaned and cleaned not in {'.', 'â€¢'}:
-            lines.append(cleaned)
-    purchase_at = _parse_dutch_textual_date(haystack, default_year=2026)
-    if purchase_at and 'T' not in purchase_at:
-        purchase_at += 'T00:00:00'
-    total_amount = None
-    for idx, line in enumerate(lines):
-        if line.lower() == 'totaal':
-            nums = [token for token in lines[idx + 1: idx + 10] if re.fullmatch(r'-?\d+', token)]
-            if len(nums) >= 2:
-                total_amount = _price_from_split_parts(nums[0], nums[1])
-                break
-
-    def _is_picnic_summary_line(value: str | None) -> bool:
-        lowered = str(value or '').strip().lower()
-        if not lowered:
-            return False
-        summary_prefixes = (
-            'statiegeld',
-            'subtotaal',
-            'totaal',
-            'ingeleverd statiegeld',
-            'flessen en blikjes',
-            'tasjes',
-            'verrekening picnic-tegoed',
-            'picnic-tegoed',
-            'voordeel',
-            'btw ',
-            'bezorgadres',
-            'fijne dag',
-            'vragen?',
-            'klantenservice',
-            'mijn profiel',
-            'herroeping',
-            'picnic b.v.',
-        )
-        return lowered.startswith(summary_prefixes)
-
-    extracted: list[dict[str, Any]] = []
-    noise_prefixes = ('order ', 'toegevoegd op ', 'beste ', 'hier is het bonnetje', 'al betaald via', 'bezorgadres', 'subtotaal', 'totaal')
-    i = 0
-    while i < len(lines) - 1:
-        if not re.fullmatch(r'\d+', lines[i]):
-            i += 1
-            continue
-        if i + 1 >= len(lines):
-            break
-        qty = float(lines[i])
-        name = lines[i + 1].strip()
-        if (
-            not _contains_letter(name)
-            or any(name.lower().startswith(prefix) for prefix in noise_prefixes)
-            or _is_picnic_summary_line(name)
-        ):
-            i += 1
-            continue
-        j = i + 2
-        prices: list[Decimal] = []
-        while j < len(lines) and j < i + 20:
-            if _is_picnic_summary_line(lines[j]):
-                break
-            if j + 1 < len(lines) and re.fullmatch(r'-?\d+', lines[j]) and re.fullmatch(r'\d{2}', lines[j + 1]):
-                price = _price_from_split_parts(lines[j], lines[j + 1])
-                if price is not None:
-                    prices.append(price)
-                j += 2
-                continue
-            if j + 1 < len(lines) and re.fullmatch(r'\d+', lines[j]) and _contains_letter(lines[j + 1]):
-                break
-            j += 1
-
-        non_zero_prices = [price.quantize(Decimal('0.01')) for price in prices if price is not None and price != Decimal('0.00')]
-        if non_zero_prices:
-            gross_total = non_zero_prices[0]
-            net_total = non_zero_prices[-1]
-            unit_price = (gross_total / Decimal(str(int(qty)))).quantize(Decimal('0.01')) if qty else gross_total
-            discount_amount = (gross_total - net_total).quantize(Decimal('0.01')) if net_total < gross_total else None
-            append_structured_product_candidate(
-                extracted,
-                label=name,
-                quantity=qty,
-                unit=None,
-                unit_price=unit_price,
-                line_total=gross_total,
-                discount_amount=discount_amount,
-                barcode=None,
-                source_index=i,
-                raw_line=' | '.join(lines[i:j]),
-                normalized_line=re.sub(r'\s+', ' ', ' | '.join(lines[i:j])).strip(),
-                source_segment=' | '.join(lines[i:j]),
-                filename=filename,
-                store_name='Picnic',
-                function_name='_parse_picnic_email_result',
-                append_branch='picnic_email_discounted_line',
-                parser_path='_parse_picnic_email_result.picnic_email_discounted_line',
-                caller_line_hint='Picnic email structured discounted line via append_structured_product_candidate',
-                clean_label=_clean_receipt_label,
-                amount_to_float=_amount_to_float,
-                is_invalid_label=_looks_like_non_product_receipt_label,
-                confidence_score=0.78,
-            )
-            i = j
-            continue
-
-        if j < len(lines) and j + 1 < len(lines) and re.fullmatch(r'\d+', lines[j]) and _contains_letter(lines[j + 1]):
-            append_structured_product_candidate(
-                extracted,
-                label=name,
-                quantity=qty,
-                unit=None,
-                unit_price=Decimal('0.00'),
-                line_total=Decimal('0.00'),
-                discount_amount=None,
-                barcode=None,
-                source_index=i,
-                raw_line=' | '.join(lines[i:j + 2]),
-                normalized_line=re.sub(r'\s+', ' ', ' | '.join(lines[i:j + 2])).strip(),
-                source_segment=' | '.join(lines[i:j + 2]),
-                filename=filename,
-                store_name='Picnic',
-                function_name='_parse_picnic_email_result',
-                append_branch='picnic_email_zero_line',
-                parser_path='_parse_picnic_email_result.picnic_email_zero_line',
-                caller_line_hint='Picnic email structured zero line via append_structured_product_candidate',
-                clean_label=_clean_receipt_label,
-                amount_to_float=_amount_to_float,
-                is_invalid_label=_looks_like_non_product_receipt_label,
-                confidence_score=0.78,
-            )
-            i = j
-            continue
-        i += 1
-    if not extracted:
-        flattened_extracted, flattened_total = _parse_picnic_flattened_blocks(haystack)
-        if flattened_extracted:
-            extracted = flattened_extracted
-            total_amount = total_amount or flattened_total
-    return _receipt_result_from_manual('Picnic', purchase_at, total_amount, extracted, confidence=0.78)
-
-
-def _parse_picnic_flattened_blocks(haystack: str) -> tuple[list[dict[str, Any]], Decimal | None]:
-    compact = re.sub(r'\s+', ' ', str(haystack or '')).strip()
-    if not compact:
-        return [], None
-    order_pattern = re.compile(r'(Toegevoegd op .*? Order [0-9-]+)\s+(?P<body>.*?)(?=(?:Toegevoegd op .*? Order [0-9-]+)|$)', re.I)
-    price_pattern = re.compile(r'(?:â‚¬\s*)?(?P<euros>-?\d+)\s*(?:[.,]|\s)\s*(?P<cents>\d{2})(?:\s*\.)?')
-    block_pattern = re.compile(r"(?:^|\s)(?P<qty>\d+)\s+(?=[A-Za-zÃ€-Ã¿'\(])")
-    extracted: list[dict[str, Any]] = []
-
-    def _cleanup_label(raw: str) -> str:
-        value = re.sub(r'\s+', ' ', raw or '').strip(' .,-')
-        value = re.sub(r'^(?:\[[^\]]+\]\s*)+', '', value)
-        value = re.split(r'(?:nu\s*â‚¬\s*\d+[.,]\d{2}|smaakmaker|\d+% korting|\d+e\s*=|\d+ voor â‚¬\s*\d+)', value, 1, flags=re.I)[0]
-        value = re.split(r'\d+(?:[.,]\d+)?\s*(?:gram|g|kg|ml|liter|l|stuks?|stuk|bosje|kilo|heel|pak|fles|rollen?)', value, 1, flags=re.I)[0]
-        return _clean_receipt_label(value)
-
-    for order_match in order_pattern.finditer(compact):
-        body = order_match.group('body').strip()
-        for marker in (' Statiegeld ', ' Subtotaal ', ' Totaal ', ' Ingeleverd statiegeld ', ' Bezorgadres ', ' Fijne dag'):
-            position = body.find(marker)
-            if position > 0:
-                body = body[:position].strip()
-                break
-        starts = list(block_pattern.finditer(body))
-        for idx, start in enumerate(starts):
-            qty = float(start.group('qty'))
-            chunk_start = start.start('qty')
-            chunk_end = starts[idx + 1].start('qty') if idx + 1 < len(starts) else len(body)
-            chunk = body[chunk_start:chunk_end].strip()
-            if not chunk:
-                continue
-            chunk_after_qty = chunk[len(start.group('qty')):].strip()
-            prices = [
-                _price_from_split_parts(match.group('euros'), match.group('cents'))
-                for match in price_pattern.finditer(chunk_after_qty)
-            ]
-            prices = [price.quantize(Decimal('0.01')) for price in prices if price is not None]
-            first_price_match = price_pattern.search(chunk_after_qty)
-            label_source = chunk_after_qty[:first_price_match.start()] if first_price_match else chunk_after_qty
-            label = _cleanup_label(label_source)
-            if not label or len(label) < 2:
-                continue
-            non_zero_prices = [price for price in prices if price != Decimal('0.00')]
-            if non_zero_prices:
-                gross_total = non_zero_prices[0]
-                net_total = non_zero_prices[-1]
-                unit_price = (gross_total / Decimal(str(int(qty)))).quantize(Decimal('0.01')) if qty else gross_total
-                discount_amount = (gross_total - net_total).quantize(Decimal('0.01')) if net_total < gross_total else None
-                append_structured_product_candidate(
-                    extracted,
-                    label=label,
-                    quantity=qty,
-                    unit=None,
-                    unit_price=unit_price,
-                    line_total=gross_total,
-                    discount_amount=discount_amount,
-                    barcode=None,
-                    source_index=idx,
-                    raw_line=chunk,
-                    normalized_line=re.sub(r'\s+', ' ', chunk).strip(),
-                    source_segment=chunk,
-                    filename=None,
-                    store_name='Picnic',
-                    function_name='_parse_picnic_flattened_blocks',
-                    append_branch='picnic_flattened_discounted_line',
-                    parser_path='_parse_picnic_flattened_blocks.picnic_flattened_discounted_line',
-                    caller_line_hint='Picnic flattened structured discounted line via append_structured_product_candidate',
-                    clean_label=_clean_receipt_label,
-                    amount_to_float=_amount_to_float,
-                    is_invalid_label=_looks_like_non_product_receipt_label,
-                    confidence_score=0.78,
-                )
-            else:
-                append_structured_product_candidate(
-                    extracted,
-                    label=label,
-                    quantity=qty,
-                    unit=None,
-                    unit_price=Decimal('0.00'),
-                    line_total=Decimal('0.00'),
-                    discount_amount=None,
-                    barcode=None,
-                    source_index=idx,
-                    raw_line=chunk,
-                    normalized_line=re.sub(r'\s+', ' ', chunk).strip(),
-                    source_segment=chunk,
-                    filename=None,
-                    store_name='Picnic',
-                    function_name='_parse_picnic_flattened_blocks',
-                    append_branch='picnic_flattened_zero_line',
-                    parser_path='_parse_picnic_flattened_blocks.picnic_flattened_zero_line',
-                    caller_line_hint='Picnic flattened structured zero line via append_structured_product_candidate',
-                    clean_label=_clean_receipt_label,
-                    amount_to_float=_amount_to_float,
-                    is_invalid_label=_looks_like_non_product_receipt_label,
-                    confidence_score=0.78,
-                )
-
-    total_amount = None
-    total_match = re.search(r'(?i)Totaal(?: Al betaald via iDeal)?\s+(?P<euros>-?\d+)\s+(?P<cents>\d{2})', compact)
-    if total_match:
-        total_amount = _price_from_split_parts(total_match.group('euros'), total_match.group('cents'))
-    return extracted, total_amount
-
-
-def _parse_store_specific_result(file_bytes: bytes, filename: str, mime_type: str, direct_text: str = '', html_text: str = '') -> ReceiptParseResult | None:
-    lower_name = filename.lower()
-    text = _normalize_store_specific_text(direct_text)
-    normalized_html = _normalize_store_specific_text(_html_to_text(html_text) if html_text else '')
-    if lower_name.endswith('.pdf'):
-        for parser in (_parse_action_pdf_result, _parse_gamma_pdf_result, _parse_hornbach_pdf_result, _parse_lidl_invoice_pdf_result):
-            result = parser(text, filename)
-            if result is not None and (result.lines or result.total_amount or result.purchase_at or result.store_name):
-                return result
-
-    header_date = None
-    if lower_name.endswith('.eml') or mime_type == 'message/rfc822':
-        try:
-            message = BytesParser(policy=policy.default).parsebytes(file_bytes)
-            header_date = str(message.get('date') or '').strip()
-        except Exception:
-            header_date = None
-
-    can_try_email_parsers = (
-        lower_name.endswith('.eml')
-        or mime_type == 'message/rfc822'
-        or mime_type in {'text/html', 'text/plain'}
-        or lower_name.endswith(('.html', '.htm', '.txt'))
-    )
-    if can_try_email_parsers:
-        for parser in (_parse_bol_email_result, _parse_picnic_email_result):
-            result = parser(text, normalized_html, filename, header_date=header_date)
-            if result is not None and (result.lines or result.total_amount or result.purchase_at or result.store_name):
-                return result
-    return None
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> ReceiptParseResult:
     suffix = Path(filename).suffix.lower()
