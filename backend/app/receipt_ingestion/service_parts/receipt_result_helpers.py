@@ -8,19 +8,54 @@ from app.receipt_ingestion.amounts import parse_decimal as _parse_decimal
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 
 
-@dataclass
+@dataclass(init=False)
 class ReceiptParseResult:
+    """Parser result DTO with an explicit constructor contract.
+
+    R9-36E guardrail: the active parser calls ReceiptParseResult(...) with
+    keyword arguments in multiple code paths. The constructor must therefore be
+    explicit and stable, independent of dataclass auto-init generation.
+    """
+
     is_receipt: bool
     parse_status: str
     confidence_score: float | None
     store_name: str | None
     purchase_at: str | None
     total_amount: Decimal | None
-    discount_total: Decimal | None = None
-    currency: str = 'EUR'
-    lines: list[dict[str, Any]] | None = None
-    store_branch: str | None = None
-    parser_diagnostics: dict[str, Any] | None = None
+    discount_total: Decimal | None
+    currency: str
+    lines: list[dict[str, Any]] | None
+    store_branch: str | None
+    parser_diagnostics: dict[str, Any] | None
+
+    def __init__(
+        self,
+        *,
+        is_receipt: bool,
+        parse_status: str,
+        confidence_score: float | None,
+        store_name: str | None,
+        purchase_at: str | None,
+        total_amount: Decimal | None,
+        discount_total: Decimal | None = None,
+        currency: str = 'EUR',
+        lines: list[dict[str, Any]] | None = None,
+        store_branch: str | None = None,
+        parser_diagnostics: dict[str, Any] | None = None,
+    ) -> None:
+        self.is_receipt = bool(is_receipt)
+        self.parse_status = str(parse_status or '')
+        self.confidence_score = confidence_score
+        self.store_name = store_name
+        self.purchase_at = purchase_at
+        self.total_amount = total_amount
+        self.discount_total = discount_total
+        self.currency = currency or 'EUR'
+        self.lines = lines if lines is not None else []
+        self.store_branch = store_branch
+        self.parser_diagnostics = parser_diagnostics
+
 
 
 def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
@@ -73,12 +108,15 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
     return 'parsed'
 
 
+
 def _line_decimal_total(line: dict[str, Any]) -> Decimal:
     return _parse_decimal(str(line.get('line_total'))) or Decimal('0.00')
 
 
+
 def _discount_decimal_total(line: dict[str, Any]) -> Decimal:
     return _parse_decimal(str(line.get('discount_amount'))) or Decimal('0.00')
+
 
 
 def _result_quality_score(result: ReceiptParseResult) -> tuple[int, int, int, int, int]:
@@ -103,10 +141,12 @@ def _result_quality_score(result: ReceiptParseResult) -> tuple[int, int, int, in
     return (has_total + has_store + has_purchase + total_match, status_weight, line_count, has_total, total_match)
 
 
+
 def _choose_better_receipt_result(primary: ReceiptParseResult, secondary: ReceiptParseResult) -> ReceiptParseResult:
     primary_score = _result_quality_score(primary)
     secondary_score = _result_quality_score(secondary)
     return secondary if secondary_score > primary_score else primary
+
 
 
 def _failed_receipt_result(confidence: float = 0.0) -> ReceiptParseResult:
