@@ -57,7 +57,9 @@ def _normalize(value: object) -> str:
 
 
 def _anchor_normalized(value: object) -> str:
-    return re.sub(r'\s+', ' ', str(value or '')).strip().upper()
+    normalized = str(value or '').upper().replace('€', 'E')
+    normalized = re.sub(r'[^A-Z]+', ' ', normalized)
+    return re.sub(r'\s+', ' ', normalized).strip()
 
 
 def _parse_amount(value: str) -> Decimal | None:
@@ -86,11 +88,34 @@ def _contains_reject_token(line: str) -> str | None:
     return None
 
 
+def _edit_distance_zero_or_one(value: str, target: str) -> int | None:
+    if value == target:
+        return 0
+    if abs(len(value) - len(target)) > 1:
+        return None
+    if len(value) == len(target):
+        return 1 if sum(1 for left, right in zip(value, target) if left != right) <= 1 else None
+    longer, shorter = (value, target) if len(value) > len(target) else (target, value)
+    long_i = short_i = edits = 0
+    while long_i < len(longer) and short_i < len(shorter):
+        if longer[long_i] == shorter[short_i]:
+            long_i += 1
+            short_i += 1
+            continue
+        edits += 1
+        if edits > 1:
+            return None
+        long_i += 1
+    if long_i < len(longer):
+        edits += 1
+    return edits if edits <= 1 else None
+
+
 def _line_anchor(line_without_amount: str) -> str | None:
-    normalized = _anchor_normalized(line_without_amount.strip(' .:-\t'))
-    if normalized == 'TE BETALEN':
+    normalized = _anchor_normalized(line_without_amount.strip(' .:-\t|'))
+    if _edit_distance_zero_or_one(normalized, 'TE BETALEN') is not None:
         return 'TE BETALEN'
-    if normalized == 'TOTAAL':
+    if _edit_distance_zero_or_one(normalized, 'TOTAAL') is not None:
         return 'TOTAAL'
     return None
 
@@ -158,16 +183,7 @@ def extract_ah_total_amount(
     *,
     store_name: str | None = None,
 ) -> AhTotalResult:
-    """Extract explicit AH total amount from same-line anchors only.
-
-    Valid examples:
-    - "TE BETALEN 5,40"
-    - "TOTAAL 8,28"
-
-    Invalid by design:
-    - line N: "TE BETALEN", line N+1: "5,40"
-    - article line sums or inferred totals
-    """
+    """Extract explicit AH total amount from same-line anchors only."""
     if not looks_like_ah_context(text_lines, filename, store_name=store_name):
         return AhTotalResult(
             amount=None,
