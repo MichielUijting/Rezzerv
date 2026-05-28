@@ -9,6 +9,12 @@ from app.services import receipt_service as _receipt_service
 LOGGER = logging.getLogger(__name__)
 
 
+try:
+    from . import receipt_debug_artifacts_patch  # noqa: F401
+except Exception as exc:  # pragma: no cover - diagnostics must not break startup
+    LOGGER.warning('receipt_debug_artifacts_patch_activation_failed error=%s', exc)
+
+
 def _has_pattern(pattern: str, text: str) -> bool:
     return bool(re.search(pattern, text, flags=re.IGNORECASE))
 
