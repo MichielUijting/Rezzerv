@@ -4,7 +4,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, HTTPException, Response
+from sqlalchemy import text
 
 from app.db import engine
 from app.receipt_ingestion.debug_artifact_store import read_ingest_debug_artifact_for_receipt
@@ -17,6 +18,24 @@ router = APIRouter(
 )
 
 RECEIPT_STORAGE_ROOT = Path('/app/data/receipts/raw')
+
+
+def _debug_download_response(payload: dict, filename_hint: str) -> Response:
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    safe_hint = ''.join(ch if ch.isalnum() or ch in {'-', '_'} else '-' for ch in filename_hint).strip('-') or 'receipt'
+    filename = f'rezzerv-kassa-ingest-debug-{safe_hint}-{timestamp}.json'
+    return Response(
+        content=json.dumps(payload, ensure_ascii=False, indent=2),
+        media_type='application/json; charset=utf-8',
+        headers={
+            'Content-Disposition': f'attachment; filename="{filename}"',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'X-Rezzerv-Debug-Artifact': 'persisted-ingest-json',
+            'X-Rezzerv-Debug-Reparse': 'disabled',
+        },
+    )
 
 
 @router.get('/receipt-line-diagnosis')
@@ -65,6 +84,41 @@ def receipt_parser_diagnosis_download(householdId: str = '1'):
     )
 
 
+@router.get('/receipts/latest/ingest-debug/download')
+def latest_receipt_ingest_debug_download(householdId: str = '1'):
+    """Find the latest active receipt and download its ingest-debug JSON."""
+    with engine.begin() as conn:
+        row = conn.execute(
+            text(
+                """
+                SELECT rt.id AS receipt_table_id, rt.raw_receipt_id
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                WHERE rt.household_id = :household_id
+                  AND rt.deleted_at IS NULL
+                  AND rr.deleted_at IS NULL
+                ORDER BY rt.created_at DESC, rt.id DESC
+                LIMIT 1
+                """
+            ),
+            {'household_id': str(householdId or '1')},
+        ).mappings().first()
+    if not row:
+        raise HTTPException(status_code=404, detail='Geen kassabon gevonden voor dit huishouden')
+    payload = read_ingest_debug_artifact_for_receipt(
+        engine=engine,
+        receipt_storage_root=RECEIPT_STORAGE_ROOT,
+        receipt_table_id=str(row['receipt_table_id']),
+    )
+    payload['selection'] = {
+        'mode': 'latest_active_receipt',
+        'household_id': str(householdId or '1'),
+        'receipt_table_id': str(row['receipt_table_id']),
+        'raw_receipt_id': str(row['raw_receipt_id']),
+    }
+    return _debug_download_response(payload, f"latest-{row['raw_receipt_id']}")
+
+
 @router.get('/receipts/{receipt_table_id}/ingest-debug/download')
 def receipt_ingest_debug_download(receipt_table_id: str):
     """Download the persisted ingest-debug JSON without OCR or reparse."""
@@ -73,18 +127,5 @@ def receipt_ingest_debug_download(receipt_table_id: str):
         receipt_storage_root=RECEIPT_STORAGE_ROOT,
         receipt_table_id=receipt_table_id,
     )
-    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
     raw_id = str(payload.get('raw_receipt_id') or receipt_table_id)
-    filename = f'rezzerv-kassa-ingest-debug-{raw_id}-{timestamp}.json'
-    return Response(
-        content=json.dumps(payload, ensure_ascii=False, indent=2),
-        media_type='application/json; charset=utf-8',
-        headers={
-            'Content-Disposition': f'attachment; filename="{filename}"',
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
-            'Pragma': 'no-cache',
-            'Expires': '0',
-            'X-Rezzerv-Debug-Artifact': 'persisted-ingest-json',
-            'X-Rezzerv-Debug-Reparse': 'disabled',
-        },
-    )
+    return _debug_download_response(payload, raw_id)
