@@ -16,11 +16,27 @@ from app.services.store_profiles.base import classify_line_for_store
 
 _ORIGINAL_PARSE_RECEIPT_CONTENT = _receipt_service.parse_receipt_content
 _ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES = _receipt_service._parse_result_from_text_lines
+_LAST_INGEST_DEBUG_CAPTURE: dict[str, Any] = {}
 
 PRODUCT_LINE_BLACKLIST = (
     'totaal', 'btw', 'betaling', 'betaald', 'pin', 'pinnen', 'bankpas', 'kaart',
     'terminal', 'transactie', 'autorisatie', 'subtotaal', 'wisselgeld',
 )
+
+
+def _set_latest_capture(*, filename: str, text_lines: list[str], merged_lines: list[str], result: Any) -> None:
+    global _LAST_INGEST_DEBUG_CAPTURE
+    _LAST_INGEST_DEBUG_CAPTURE = {
+        'filename': filename,
+        'source_lines': list(text_lines or []),
+        'merged_lines': list(merged_lines or []),
+        'parse_result': result,
+        'parser_diagnostics': dict(getattr(result, 'parser_diagnostics', None) or {}),
+    }
+
+
+def get_latest_ingest_debug_capture() -> dict[str, Any]:
+    return dict(_LAST_INGEST_DEBUG_CAPTURE or {})
 
 
 def _parse_decimal(value: Any) -> Decimal | None:
@@ -220,7 +236,9 @@ def _parse_result_from_text_lines_with_merge(text_lines: list[str], filename: st
         if fallback_lines:
             result.lines = fallback_lines
 
-    return _reclassify_result(result)
+    result = _reclassify_result(result)
+    _set_latest_capture(filename=filename, text_lines=text_lines, merged_lines=merged_lines, result=result)
+    return result
 
 
 def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str):
@@ -239,7 +257,9 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str):
         result.parser_diagnostics = diagnostics
         if diagnostics.get('total_resolution', {}).get('source') != 'profile':
             result.total_amount = None
-    return _reclassify_result(result)
+    result = _reclassify_result(result)
+    _set_latest_capture(filename=filename, text_lines=[], merged_lines=[], result=result)
+    return result
 
 
 def install_parser_quality_patch(*_: Any) -> bool:
