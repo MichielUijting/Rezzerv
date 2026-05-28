@@ -29,8 +29,6 @@ from app.receipt_ingestion.structured_product_gateway import append_structured_p
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 from app.receipt_ingestion.parser_debug_serializer import build_parser_debug_payload
 from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import apply_receipt_image_preprocessing
-from app.receipt_ingestion.profiles.ah_runtime import build_ah_profile_article_lines, extract_positive_contributors
-from app.receipt_ingestion.profiles.ah.totals import extract_ah_total_amount, looks_like_ah_context
 from app.receipt_ingestion.amounts import (
     amount_to_float as _amount_to_float,
     parse_decimal as _parse_decimal,
@@ -1069,12 +1067,7 @@ def _parse_result_from_text_lines(
     store_name = _store_from_text(text_lines[:12], filename)
     store_branch = _store_branch_from_lines(text_lines[:12], store_name)
     purchase_at = _purchase_at_from_lines(text_lines, filename)
-    if looks_like_ah_context(text_lines, filename, store_name=store_name):
-        ah_total_result = extract_ah_total_amount(text_lines, filename, store_name=store_name)
-        total_amount = ah_total_result.amount
-        explicit_total_found = ah_total_result.explicit_total_found
-    else:
-        total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
+    total_amount, explicit_total_found = _total_amount_from_lines(text_lines, filename)
     lines = _extract_receipt_lines(text_lines, store_name=store_name, filename=filename)
     savings_action_lines = _extract_savings_action_lines(text_lines, store_name=store_name)
     if savings_action_lines:
@@ -1099,54 +1092,7 @@ def _parse_result_from_text_lines(
             lines.append(extra_line)
             existing_keys.add(extra_key)
         lines.sort(key=lambda item: int(item.get('source_index') or 0))
-    profile_positive_contributor_lines = extract_positive_contributors(
-        text_lines,
-        lines,
-        store_name=store_name,
-        filename=filename,
-    )
-    if profile_positive_contributor_lines:
-        existing_positive_keys = {
-            (
-                str(line.get('raw_label') or line.get('normalized_label') or '').strip().lower(),
-                str(line.get('line_total') or ''),
-                str(line.get('source_index') or ''),
-            )
-            for line in lines
-        }
-        for contributor_line in profile_positive_contributor_lines:
-            contributor_key = (
-                str(contributor_line.get('raw_label') or contributor_line.get('normalized_label') or '').strip().lower(),
-                str(contributor_line.get('line_total') or ''),
-                str(contributor_line.get('source_index') or ''),
-            )
-            if contributor_key in existing_positive_keys:
-                continue
-            lines.append(contributor_line)
-            existing_positive_keys.add(contributor_key)
-        lines.sort(key=lambda item: int(item.get('source_index') or 0))
     lines = _filter_non_product_receipt_lines(lines)
-    ah_profile_lines = build_ah_profile_article_lines(
-        text_lines,
-        lines,
-        store_name=store_name,
-        filename=filename,
-        append_product_candidate=append_product_candidate,
-        clean_label=_clean_receipt_label,
-        parse_quantity=_parse_quantity,
-        parse_decimal=_parse_decimal,
-        amount_to_float=_amount_to_float,
-        classify_line=lambda value: _classify_receipt_text_line(
-            value,
-            store_name=store_name,
-            filename=filename,
-        ),
-        is_invalid_label=_looks_like_non_product_receipt_label,
-    )
-    if ah_profile_lines:
-        lines.extend(ah_profile_lines)
-        lines.sort(key=lambda item: int(item.get('source_index') or 0))
-        lines = _filter_non_product_receipt_lines(lines)
     discount_total = _apply_discount_entries(lines, _extract_discount_entries(text_lines))
     lines = _filter_non_product_receipt_lines(lines)
     if (filename or '').strip().lower() == 'jumbo foto 3.jpg' and not lines:

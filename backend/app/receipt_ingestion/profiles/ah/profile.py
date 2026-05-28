@@ -1,9 +1,10 @@
-"""Albert Heijn profile skeleton.
+"""Albert Heijn profile metadata boundary.
 
-Actual AH runtime logic remains in existing modules until R9-35B/R9-35C.
+R9-36A hard reset: no active AH parser rules are exposed from this module.
 """
 
 from __future__ import annotations
 
-CHAIN_ID = 'ah'
-DISPLAY_NAME = 'Albert Heijn'
+CHAIN_ID = "ah"
+DISPLAY_NAME = "Albert Heijn"
+ACTIVE_RULES = False
