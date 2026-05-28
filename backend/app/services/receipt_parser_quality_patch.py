@@ -4,9 +4,7 @@ import re
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from app.receipt_ingestion.profiles.ah.detect import looks_like_ah_context
-from app.receipt_ingestion.profiles.ah.diagnostics import build_ah_total_diagnostics
-from app.receipt_ingestion.profiles.ah.totals import extract_ah_total_amount
+from app.receipt_ingestion.profiles.totals_router import resolve_profile_total_amount
 from app.services import receipt_service as _receipt_service
 from app.services.receipt_line_classifier import (
     LINE_CATEGORY_ITEM,
@@ -177,22 +175,18 @@ def _normalize_receipt_lines(lines: list[dict[str, Any]] | None) -> list[dict[st
     return _dedupe_lines(normalized)
 
 
-def _attach_ah_total_result(result: Any, text_lines: list[str], filename: str) -> Any:
+def _apply_profile_total_resolution(result: Any, text_lines: list[str], filename: str) -> Any:
     if result is None or not getattr(result, 'is_receipt', False):
         return result
 
-    store_name = getattr(result, 'store_name', None)
-    if not looks_like_ah_context(text_lines, filename, store_name=store_name):
-        return result
-
-    ah_total_result = extract_ah_total_amount(text_lines, filename, store_name=store_name)
+    resolution = resolve_profile_total_amount(text_lines, filename, store_name=getattr(result, 'store_name', None))
     diagnostics = dict(getattr(result, 'parser_diagnostics', None) or {})
-    diagnostics['ah_total'] = build_ah_total_diagnostics(ah_total_result)
+    diagnostics.update(resolution.diagnostics)
     result.parser_diagnostics = diagnostics
 
-    if ah_total_result.amount is not None:
-        result.total_amount = ah_total_result.amount
-
+    # R9-36C: total_amount is profile-only. If no profile total is available,
+    # it must remain None. Generic total detection may not mask this.
+    result.total_amount = resolution.amount
     return result
 
 
@@ -215,7 +209,7 @@ def _reclassify_result(result: Any) -> Any:
 def _parse_result_from_text_lines_with_merge(text_lines: list[str], filename: str, **kwargs: Any):
     merged_lines = merge_lines(text_lines, filename=filename)
     result = _ORIGINAL_PARSE_RESULT_FROM_TEXT_LINES(merged_lines, filename, **kwargs)
-    result = _attach_ah_total_result(result, text_lines, filename)
+    result = _apply_profile_total_resolution(result, text_lines, filename)
 
     if getattr(result, 'is_receipt', False):
         fallback_lines = _generic_lines_from_merged_text(
@@ -230,7 +224,22 @@ def _parse_result_from_text_lines_with_merge(text_lines: list[str], filename: st
 
 
 def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str):
-    return _reclassify_result(_ORIGINAL_PARSE_RECEIPT_CONTENT(file_bytes, filename, mime_type))
+    result = _ORIGINAL_PARSE_RECEIPT_CONTENT(file_bytes, filename, mime_type)
+    # If this route bypasses _parse_result_from_text_lines, do not keep a hidden
+    # generic total. A later profile route/debug reparse may restore it explicitly.
+    if result is not None and getattr(result, 'is_receipt', False):
+        diagnostics = dict(getattr(result, 'parser_diagnostics', None) or {})
+        diagnostics.setdefault('total_resolution', {
+            'source': 'none',
+            'profile': None,
+            'amount': None,
+            'explicit_total_found': False,
+            'reason': 'profile_total_not_resolved_on_parse_receipt_content_wrapper',
+        })
+        result.parser_diagnostics = diagnostics
+        if diagnostics.get('total_resolution', {}).get('source') != 'profile':
+            result.total_amount = None
+    return _reclassify_result(result)
 
 
 def install_parser_quality_patch(*_: Any) -> bool:
