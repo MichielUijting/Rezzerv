@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, Response
 
 from app.db import engine
+from app.receipt_ingestion.debug_artifact_store import read_ingest_debug_artifact_for_receipt
 from app.testing_receipt_line_diagnosis_routes import build_receipt_line_diagnosis
 from app.testing_receipt_parser_diagnosis_routes import build_receipt_parser_diagnosis
 
@@ -13,6 +15,8 @@ router = APIRouter(
     prefix="/api/testing",
     tags=["receipt-diagnosis"],
 )
+
+RECEIPT_STORAGE_ROOT = Path('/app/data/receipts/raw')
 
 
 @router.get('/receipt-line-diagnosis')
@@ -58,4 +62,29 @@ def receipt_parser_diagnosis_download(householdId: str = '1'):
         content=json.dumps(payload, ensure_ascii=False, indent=2),
         media_type='application/json',
         headers={'Content-Disposition': f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get('/receipts/{receipt_table_id}/ingest-debug/download')
+def receipt_ingest_debug_download(receipt_table_id: str):
+    """Download the persisted ingest-debug JSON without OCR or reparse."""
+    payload = read_ingest_debug_artifact_for_receipt(
+        engine=engine,
+        receipt_storage_root=RECEIPT_STORAGE_ROOT,
+        receipt_table_id=receipt_table_id,
+    )
+    timestamp = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    raw_id = str(payload.get('raw_receipt_id') or receipt_table_id)
+    filename = f'rezzerv-kassa-ingest-debug-{raw_id}-{timestamp}.json'
+    return Response(
+        content=json.dumps(payload, ensure_ascii=False, indent=2),
+        media_type='application/json; charset=utf-8',
+        headers={
+            'Content-Disposition': f'attachment; filename="{filename}"',
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+            'X-Rezzerv-Debug-Artifact': 'persisted-ingest-json',
+            'X-Rezzerv-Debug-Reparse': 'disabled',
+        },
     )
