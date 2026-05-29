@@ -52,6 +52,10 @@ PRICED_DISCOUNT_ARTICLE_TOKENS = (
 PRICED_LOYALTY_ARTICLE_TOKENS = (
     'zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'pluspunt',
 )
+VALUE_LINE_LABEL_PATTERNS = (
+    r'koopzegels?(?:\s+premium)?',
+    r'pluspunten?',
+)
 
 
 def _default_false(_: str) -> bool:
@@ -66,13 +70,17 @@ def _has_amount(value: str) -> bool:
     return bool(re.search(r'(?<!\d)-?\d+[\.,]\d{2}(?!\d)', value))
 
 
+def _is_value_line_label_without_amount(lowered: str) -> bool:
+    normalized = re.sub(r'\s+', ' ', str(lowered or '').strip().lower())
+    return any(re.fullmatch(pattern, normalized) for pattern in VALUE_LINE_LABEL_PATTERNS)
+
+
 def _priced_article_value_token(lowered: str) -> str | None:
     """Return a value-token when a discount/loyalty line with price may affect articles.
 
-    R9-17 keeps this in the existing runtime classifier. It prevents priced
-    discounts, koopzegels and pluspunten from being blocked as metadata before
-    the parser can append them as article value lines. Payment, tax and return
-    lines remain blocking, regardless of amount.
+    This prevents priced discounts, koopzegels and pluspunten from being blocked as
+    metadata before the parser can append them as article value lines. Payment,
+    tax and return lines remain blocking, regardless of amount.
     """
     if not _has_amount(lowered):
         return None
@@ -114,16 +122,19 @@ def _decision(classification: str, rule: str, matched: str | None = None, *, sta
 
 
 def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
-    """Trace generic conservative non-article rules.
-
-    R9-14: returns the exact rule that fired. It does not change status, totals,
-    or parsing side effects.
-    """
+    """Trace generic conservative non-article rules."""
     normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
     if not normalized:
         return _decision('ignore', 'EMPTY_OR_WHITESPACE_LINE')
     lowered = normalized.lower()
     upper = normalized.upper().replace(',', '.')
+
+    # R9-36K: value-line labels such as "KOOPZEGELS PREMIUM" are produced by the
+    # existing savings/action parser after it has already matched a source line
+    # with a positive amount, e.g. "8 KOOPZEGELS PREMIUM 0,80". These labels must
+    # not be blocked as generic loyalty metadata at append time.
+    if _is_value_line_label_without_amount(lowered):
+        return _decision('product_candidate', 'GENERIC_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION', normalized)
 
     if re.fullmatch(r'(?:ZA|ZO|ZON)\s+\d{1,2}\.\d{2}', upper):
         return _decision('metadata', 'GENERIC_REGEX_SHORT_DAY_TIME', normalized)
@@ -183,6 +194,9 @@ def _store_specific_non_article_trace(line: str, store_name: str | None = None, 
         return _decision('ignore', 'EMPTY_OR_WHITESPACE_LINE', stage='store_specific')
     lowered = normalized.lower()
     store_key = _normalize_store(store_name) or _normalize_store(filename)
+
+    if _is_value_line_label_without_amount(lowered):
+        return _decision('product_candidate', 'STORE_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION', normalized, stage='store_specific')
 
     common_payment_footer_tokens = (
         'te betalen', 'totaal', 'subtotaal', 'totaal incl', 'btw', 'vat',
@@ -364,15 +378,7 @@ def diagnose_article_line_classification(
     looks_like_item_label_only: LegacyLineCheck | None = None,
     extra_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return explicit article-vs-non-article diagnostics without changing parsing.
-
-    R9-11A/R9-11B/R9-13/R9-14 contract:
-    - ARTIKEL_MET_PRIJS is a standalone product candidate with price.
-    - GEEN_ARTIKEL is metadata/footer/payment/VAT/noise.
-    - Supporting lines are diagnostic only and need parser context before they can
-      become part of an article. This function does not set status or totals.
-    - R9-14 includes rule/stage/matched so regressions can be explained.
-    """
+    """Return explicit article-vs-non-article diagnostics without changing parsing."""
     normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
     trace = trace_receipt_text_line_classification(
         normalized,
