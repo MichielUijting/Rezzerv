@@ -1,0 +1,29 @@
+[
+  {
+    "type": "source_file_mismatch",
+    "receipt_id": "R016",
+    "receipt_source_file": "Jumbo app 1.png",
+    "line_source_files": [
+      "Jumbo App 1.png"
+    ],
+    "impact": "geen blokkade; verschil is alleen hoofdlettergebruik in bestandsnaam"
+  },
+  {
+    "type": "source_file_mismatch",
+    "receipt_id": "R017",
+    "receipt_source_file": "Jumbo foto 3.jpg",
+    "line_source_files": [
+      "Jumbo foto 3.jpeg"
+    ],
+    "impact": "aandachtspunt; Receipts gebruikt .jpg, Receipt_Lines gebruikt .jpeg"
+  },
+  {
+    "type": "source_file_mismatch",
+    "receipt_id": "R027",
+    "receipt_source_file": "AH foto 3.jpg",
+    "line_source_files": [
+      "AH foto 3.jpeg"
+    ],
+    "impact": "aandachtspunt; Receipts gebruikt .jpg, Receipt_Lines gebruikt .jpeg, maar Receipt_ID is nu wel consistent R027 en de twee regels tellen mee"
+  }
+]
