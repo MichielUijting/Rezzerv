@@ -45,12 +45,7 @@ def append_product_candidate(
     is_invalid_label: InvalidLabelCheck | None = None,
     confidence_score: float = 0.85,
 ) -> int | None:
-    """Single guarded gateway for appending receipt product candidates.
-
-    The gateway is intentionally parser-status neutral: it only decides whether a
-    parsed line may become a product candidate. Receipt status remains outside
-    receipt ingestion and must stay with the SSOT status service.
-    """
+    """Single guarded gateway for appending receipt product candidates."""
     label_value = clean_label(label)
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
@@ -61,7 +56,8 @@ def append_product_candidate(
 
     classification_trace = trace_line(label_value) if trace_line is not None else None
     classification = str((classification_trace or {}).get('classification') or classify_line(label_value))
-    append_allowed = classification_allows_append(classification)
+    classification_allowed = classification_allows_append(classification)
+    append_allowed = classification_allowed or savings_action_path
     if not append_allowed:
         return None
 
@@ -107,7 +103,7 @@ def append_product_candidate(
         'raw_label': raw_label_value,
         'amount': amount_to_float(line_total),
         'classification': classification,
-        'classification_allows_append': append_allowed,
+        'classification_allows_append': classification_allowed,
         'append_allowed': append_allowed,
         'caller_line_hint': caller_line_hint,
         'classification_rule': classification_trace.get('rule'),
