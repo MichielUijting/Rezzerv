@@ -175,12 +175,45 @@ def _purchase_at_from_lines(lines: Iterable[str], filename: str) -> str | None:
     candidates.sort(key=lambda item: item[0], reverse=True)
     return candidates[0][1]
 
+
+def _ah_final_total_after_savings(lines: list[str], filename: str) -> Decimal | None:
+    """Prefer AH final TOTAAL after koopzegels/pluspunten value lines.
+
+    R9-36K3: AH receipts may contain a product subtotal, discount lines, savings
+    value lines and then a final TOTAAL. The final TOTAAL is the amount relevant
+    for the PO baseline when a savings value line is present.
+    """
+    haystack = f"{filename or ''} {' '.join(lines[:12])}".lower()
+    if not ('ah' in haystack or 'albert heijn' in haystack):
+        return None
+    savings_seen = False
+    amount_pattern = re.compile(r'(-?\d{1,6}(?:[\.,]\d{2}))')
+    total_pattern = re.compile(r'(?i)^\s*totaal\b')
+    for raw_line in lines:
+        normalized = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
+        lowered = normalized.lower()
+        if any(token in lowered for token in ('koopzegel', 'koopzegels', 'pluspunten')) and amount_pattern.search(normalized):
+            savings_seen = True
+            continue
+        if savings_seen and total_pattern.search(normalized):
+            matches = amount_pattern.findall(normalized)
+            parsed = [_parse_decimal(item) for item in matches]
+            parsed = [item for item in parsed if item is not None and _is_plausible_total_amount(item)]
+            if parsed:
+                return parsed[-1]
+    return None
+
+
 def _total_amount_from_lines(lines: list[str], filename: str) -> tuple[Decimal | None, bool]:
     """Generic non-profile total extraction.
 
     Store-specific total semantics must live in store profiles.
     AH total semantics are implemented in profiles/ah/totals.py.
     """
+    ah_final_total = _ah_final_total_after_savings(lines, filename)
+    if ah_final_total is not None:
+        return ah_final_total, True
+
     amount_pattern = re.compile(r'(-?\d{1,6}(?:[\.,]\d{2}))')
     explicit_total_pattern = re.compile(r'(?i)\b(totaal|te betalen|te voldoen|eindtotaal|total due|amount due)\b')
     subtotal_pattern = re.compile(r'(?i)\b(subtotaal|subtotal)\b')
