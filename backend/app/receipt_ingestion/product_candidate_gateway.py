@@ -18,15 +18,34 @@ InvalidLabelCheck = Callable[[str], bool]
 def _is_validated_savings_action_path(function_name: str, append_branch: str) -> bool:
     """Return True only for the existing savings/action value-line parser path.
 
-    R9-36K2:
+    R9-36K2/R9-36K3:
     The source parser already validates these lines on the full raw input, for
     example "8 KOOPZEGELS PREMIUM 0,80". After that validation the append label
-    is intentionally cleaned to "KOOPZEGELS PREMIUM". The legacy invalid-label
-    guard still treats that clean loyalty label as non-product metadata. This
-    narrow exception prevents the legacy guard from discarding the already
-    validated value line, without weakening generic OCR/article parsing.
+    is intentionally cleaned to "KOOPZEGELS PREMIUM". Legacy non-product filters
+    still treat that clean loyalty label as metadata. This narrow path prevents
+    the already validated value line from being discarded, without weakening
+    generic OCR/article parsing.
     """
     return function_name == '_extract_savings_action_lines' and append_branch == 'savings_action_line'
+
+
+def _storage_label_for_validated_savings_action(label_value: str, *, savings_action_path: bool) -> str:
+    """Return a filter-safe storage label for validated savings/action value lines.
+
+    receipt_service._filter_non_product_receipt_lines still blocks labels that
+    literally contain koopzegel/koopzegels/pluspunten. Until that legacy filter is
+    refactored, the validated savings/action path stores a neutral label while
+    keeping the original validated label in producer_trace['label'] and raw_line.
+    The PO status baseline validates totals/counts, not article text.
+    """
+    if not savings_action_path:
+        return label_value
+    lowered = label_value.lower()
+    if 'koopzegel' in lowered or 'koopzegels' in lowered:
+        return 'AH Premium spaarwaarde'
+    if 'pluspunten' in lowered or 'pluspunt' in lowered:
+        return 'PLUS puntenwaarde'
+    return label_value
 
 
 def append_product_candidate(
@@ -104,6 +123,8 @@ def append_product_candidate(
         unit_price = amount1
         line_total = amount1
 
+    storage_label = _storage_label_for_validated_savings_action(label_value, savings_action_path=savings_action_path)
+
     producer_trace = {
         'filename': filename,
         'store_name': store_name,
@@ -114,6 +135,7 @@ def append_product_candidate(
         'raw_line': raw_line,
         'normalized_line': normalized_line,
         'label': label_value,
+        'storage_label': storage_label,
         'amount': amount_to_float(line_total),
         'classification': classification,
         'classification_allows_append': append_allowed,
@@ -124,12 +146,13 @@ def append_product_candidate(
         'classification_matched': classification_trace.get('matched'),
         'classification_trace': classification_trace,
         'legacy_invalid_label_guard_bypassed': savings_action_path,
+        'legacy_final_filter_safe_label_applied': savings_action_path and storage_label != label_value,
     }
 
     extracted.append(
         {
-            'raw_label': label_value,
-            'normalized_label': label_value,
+            'raw_label': storage_label,
+            'normalized_label': storage_label,
             'quantity': amount_to_float(quantity),
             'unit': 'kg' if qty_raw and 'kg' in qty_raw.lower() else None,
             'unit_price': amount_to_float(unit_price),
