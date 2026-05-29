@@ -15,6 +15,20 @@ TraceLine = Callable[[str], dict[str, Any]]
 InvalidLabelCheck = Callable[[str], bool]
 
 
+def _is_validated_savings_action_path(function_name: str, append_branch: str) -> bool:
+    """Return True only for the existing savings/action value-line parser path.
+
+    R9-36K2:
+    The source parser already validates these lines on the full raw input, for
+    example "8 KOOPZEGELS PREMIUM 0,80". After that validation the append label
+    is intentionally cleaned to "KOOPZEGELS PREMIUM". The legacy invalid-label
+    guard still treats that clean loyalty label as non-product metadata. This
+    narrow exception prevents the legacy guard from discarding the already
+    validated value line, without weakening generic OCR/article parsing.
+    """
+    return function_name == '_extract_savings_action_lines' and append_branch == 'savings_action_line'
+
+
 def append_product_candidate(
     extracted: list[dict[str, Any]],
     *,
@@ -52,7 +66,9 @@ def append_product_candidate(
     label_value = clean_label(label)
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
-    if is_invalid_label is not None and is_invalid_label(label_value):
+
+    savings_action_path = _is_validated_savings_action_path(function_name, append_branch)
+    if is_invalid_label is not None and is_invalid_label(label_value) and not savings_action_path:
         return None
 
     classification_trace = trace_line(label_value) if trace_line is not None else None
@@ -107,6 +123,7 @@ def append_product_candidate(
         'classification_stage': classification_trace.get('stage'),
         'classification_matched': classification_trace.get('matched'),
         'classification_trace': classification_trace,
+        'legacy_invalid_label_guard_bypassed': savings_action_path,
     }
 
     extracted.append(
