@@ -4,6 +4,8 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from app.receipt_ingestion.profiles.aldi import is_aldi_context, is_aldi_non_product_line
+
 BLOCKING_CLASSIFICATIONS = {'ignore', 'metadata', 'footer_payment_tax'}
 FOOTER_TOKENS = ('btw', 'vat', 'totaal', 'subtotaal', 'betaal', 'bankpas', 'pin', 'terminal', 'transactie')
 DUTCH_DAY_TOKENS = ('maandag', 'dinsdag', 'woensdag', 'woernsdag', 'donderdag', 'vrijdag', 'zaterdag', 'zondag')
@@ -44,18 +46,12 @@ GENERIC_METADATA_TOKENS = (
 GENERIC_DEPOSIT_RETURN_TOKENS = (
     'statiegeld retour', 'retour statiegeld', 'emballage retour', 'fust retour',
 )
-
 PRICED_DISCOUNT_ARTICLE_TOKENS = (
     'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
     'lidl plus korting', 'totaal korting',
 )
-PRICED_LOYALTY_ARTICLE_TOKENS = (
-    'zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'pluspunt',
-)
-VALUE_LINE_LABEL_PATTERNS = (
-    r'koopzegels?(?:\s+premium)?',
-    r'pluspunten?',
-)
+PRICED_LOYALTY_ARTICLE_TOKENS = ('zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'pluspunt')
+VALUE_LINE_LABEL_PATTERNS = (r'koopzegels?(?:\s+premium)?', r'pluspunten?')
 
 
 def _default_false(_: str) -> bool:
@@ -75,13 +71,14 @@ def _is_value_line_label_without_amount(lowered: str) -> bool:
     return any(re.fullmatch(pattern, normalized) for pattern in VALUE_LINE_LABEL_PATTERNS)
 
 
-def _priced_article_value_token(lowered: str) -> str | None:
-    """Return a value-token when a discount/loyalty line with price may affect articles.
+def _token_match(lowered: str, tokens: tuple[str, ...]) -> str | None:
+    for token in tokens:
+        if token in lowered:
+            return token
+    return None
 
-    This prevents priced discounts, koopzegels and pluspunten from being blocked as
-    metadata before the parser can append them as article value lines. Payment,
-    tax and return lines remain blocking, regardless of amount.
-    """
+
+def _priced_article_value_token(lowered: str) -> str | None:
     if not _has_amount(lowered):
         return None
     if _token_match(lowered, GENERIC_PAYMENT_TOKENS):
@@ -90,13 +87,7 @@ def _priced_article_value_token(lowered: str) -> str | None:
         return None
     if _token_match(lowered, GENERIC_DEPOSIT_RETURN_TOKENS):
         return None
-    token = _token_match(lowered, PRICED_LOYALTY_ARTICLE_TOKENS)
-    if token:
-        return token
-    token = _token_match(lowered, PRICED_DISCOUNT_ARTICLE_TOKENS)
-    if token:
-        return token
-    return None
+    return _token_match(lowered, PRICED_LOYALTY_ARTICLE_TOKENS) or _token_match(lowered, PRICED_DISCOUNT_ARTICLE_TOKENS)
 
 
 def _footer_or_metadata(lowered: str) -> str:
@@ -105,37 +96,18 @@ def _footer_or_metadata(lowered: str) -> str:
     return 'metadata'
 
 
-def _token_match(lowered: str, tokens: tuple[str, ...]) -> str | None:
-    for token in tokens:
-        if token in lowered:
-            return token
-    return None
-
-
 def _decision(classification: str, rule: str, matched: str | None = None, *, stage: str = 'generic') -> dict[str, Any]:
-    return {
-        'classification': classification,
-        'stage': stage,
-        'rule': rule,
-        'matched': matched,
-    }
+    return {'classification': classification, 'stage': stage, 'rule': rule, 'matched': matched}
 
 
 def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
-    """Trace generic conservative non-article rules."""
     normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
     if not normalized:
         return _decision('ignore', 'EMPTY_OR_WHITESPACE_LINE')
     lowered = normalized.lower()
     upper = normalized.upper().replace(',', '.')
-
-    # R9-36K: value-line labels such as "KOOPZEGELS PREMIUM" are produced by the
-    # existing savings/action parser after it has already matched a source line
-    # with a positive amount, e.g. "8 KOOPZEGELS PREMIUM 0,80". These labels must
-    # not be blocked as generic loyalty metadata at append time.
     if _is_value_line_label_without_amount(lowered):
         return _decision('product_candidate', 'GENERIC_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION', normalized)
-
     if re.fullmatch(r'(?:ZA|ZO|ZON)\s+\d{1,2}\.\d{2}', upper):
         return _decision('metadata', 'GENERIC_REGEX_SHORT_DAY_TIME', normalized)
     if re.fullmatch(r'\d{1,2}:\d{2}(?::\d{2})?', lowered):
@@ -146,39 +118,34 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
         return _decision('metadata', 'GENERIC_REGEX_DATE_ANYWHERE', normalized)
     if any(day in lowered for day in DUTCH_DAY_TOKENS) and ('t/m' in lowered or ' tot ' in lowered):
         return _decision('metadata', 'GENERIC_DUTCH_DAY_RANGE', _token_match(lowered, DUTCH_DAY_TOKENS))
-
     if re.match(r'^[A-Z]\s+\d{1,2}[,.]\d{2}%\b', normalized.upper()):
         return _decision('footer_payment_tax', 'GENERIC_REGEX_VAT_CODE_PERCENT', normalized)
     if re.fullmatch(r'(?:[a-z]\s*)?\d{1,2}[,.]\d{2}\s*%.*', lowered):
         return _decision('footer_payment_tax', 'GENERIC_REGEX_PERCENT_LINE', normalized)
     if re.fullmatch(r'\d{1,4}[.]\d{2}', normalized) or re.fullmatch(r'\d{1,4},\d{2}', normalized):
         return _decision('footer_payment_tax', 'GENERIC_REGEX_STANDALONE_AMOUNT', normalized)
-
-    token = _token_match(lowered, GENERIC_PAYMENT_TOKENS)
-    if token:
-        return _decision('footer_payment_tax', 'GENERIC_PAYMENT_TOKENS', token)
-    token = _token_match(lowered, GENERIC_TAX_TOKENS)
-    if token:
-        return _decision('footer_payment_tax', 'GENERIC_TAX_TOKENS', token)
-    token = _token_match(lowered, GENERIC_DEPOSIT_RETURN_TOKENS)
-    if token:
-        return _decision('footer_payment_tax', 'GENERIC_DEPOSIT_RETURN_TOKENS', token)
+    for tokens, classification, rule in (
+        (GENERIC_PAYMENT_TOKENS, 'footer_payment_tax', 'GENERIC_PAYMENT_TOKENS'),
+        (GENERIC_TAX_TOKENS, 'footer_payment_tax', 'GENERIC_TAX_TOKENS'),
+        (GENERIC_DEPOSIT_RETURN_TOKENS, 'footer_payment_tax', 'GENERIC_DEPOSIT_RETURN_TOKENS'),
+    ):
+        token = _token_match(lowered, tokens)
+        if token:
+            return _decision(classification, rule, token)
     token = _priced_article_value_token(lowered)
     if token:
         return _decision('product_candidate', 'GENERIC_PRICED_DISCOUNT_OR_LOYALTY_LINE', token)
-    token = _token_match(lowered, GENERIC_TOTAL_TOKENS)
-    if token:
-        return _decision('footer_payment_tax', 'GENERIC_TOTAL_TOKENS', token)
-    token = _token_match(lowered, GENERIC_DISCOUNT_TOKENS)
-    if token:
-        return _decision('footer_payment_tax', 'GENERIC_DISCOUNT_TOKENS', token)
-    token = _token_match(lowered, GENERIC_LOYALTY_TOKENS)
-    if token:
-        return _decision('metadata', 'GENERIC_LOYALTY_TOKENS', token)
+    for tokens, classification, rule in (
+        (GENERIC_TOTAL_TOKENS, 'footer_payment_tax', 'GENERIC_TOTAL_TOKENS'),
+        (GENERIC_DISCOUNT_TOKENS, 'footer_payment_tax', 'GENERIC_DISCOUNT_TOKENS'),
+        (GENERIC_LOYALTY_TOKENS, 'metadata', 'GENERIC_LOYALTY_TOKENS'),
+    ):
+        token = _token_match(lowered, tokens)
+        if token:
+            return _decision(classification, rule, token)
     token = _token_match(lowered, GENERIC_METADATA_TOKENS)
     if token and not _has_amount(lowered):
         return _decision('metadata', 'GENERIC_METADATA_TOKENS_NO_AMOUNT', token)
-
     return None
 
 
@@ -188,16 +155,13 @@ def _generic_non_article_classification(line: str) -> str | None:
 
 
 def _store_specific_non_article_trace(line: str, store_name: str | None = None, filename: str | None = None) -> dict[str, Any] | None:
-    """Trace conservative chain-specific non-article rules."""
     normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
     if not normalized:
         return _decision('ignore', 'EMPTY_OR_WHITESPACE_LINE', stage='store_specific')
     lowered = normalized.lower()
     store_key = _normalize_store(store_name) or _normalize_store(filename)
-
     if _is_value_line_label_without_amount(lowered):
         return _decision('product_candidate', 'STORE_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION', normalized, stage='store_specific')
-
     common_payment_footer_tokens = (
         'te betalen', 'totaal', 'subtotaal', 'totaal incl', 'btw', 'vat',
         'pin', 'bankpas', 'maestro', 'visa', 'mastercard', 'contactloos',
@@ -207,50 +171,31 @@ def _store_specific_non_article_trace(line: str, store_name: str | None = None, 
     token = _token_match(lowered, common_payment_footer_tokens)
     if token:
         return _decision(_footer_or_metadata(lowered), 'STORE_COMMON_PAYMENT_FOOTER_TOKENS', token, stage='store_specific')
-
     if re.fullmatch(r'(?:[a-z]\s*)?\d{1,2}[,.]\d{2}\s*%.*', lowered):
         return _decision('footer_payment_tax', 'STORE_REGEX_PERCENT_LINE', normalized, stage='store_specific')
     if re.fullmatch(r'\d{1,2}:\d{2}(?::\d{2})?', lowered):
         return _decision('metadata', 'STORE_REGEX_STANDALONE_TIME', normalized, stage='store_specific')
     if re.fullmatch(r'\d{1,2}[/-]\d{1,2}[/-]\d{2,4}.*', lowered):
         return _decision('metadata', 'STORE_REGEX_DATE_PREFIX', normalized, stage='store_specific')
-
-    if 'aldi' in store_key:
-        aldi_metadata_tokens = (
-            'aldi', 'aldi markt', 'filiaal', 'welkom', 'klantbon', 'kassabon',
-            'uw voordeel', 'bedankt', 'tot ziens', 'www.', 'kvk', 'iban', 'tel',
-        )
-        aldi_non_article_tokens = (
-            'statiegeld retour', 'emballage retour', 'retour statiegeld',
-            'saldo', 'kaart', 'autoriseert', 'autorisatie',
-        )
-        token = _token_match(lowered, aldi_non_article_tokens)
+    if is_aldi_context(store_name, filename) or 'aldi' in store_key:
+        if is_aldi_non_product_line(normalized):
+            return _decision('metadata', 'ALDI_FRAME_NON_PRODUCT_LINE', normalized, stage='store_specific')
+        token = _token_match(lowered, ('statiegeld retour', 'emballage retour', 'retour statiegeld', 'saldo', 'kaart', 'autoriseert', 'autorisatie'))
         if token:
             return _decision('footer_payment_tax', 'ALDI_NON_ARTICLE_TOKENS', token, stage='store_specific')
-        token = _token_match(lowered, aldi_metadata_tokens)
+        token = _token_match(lowered, ('aldi', 'aldi markt', 'filiaal', 'welkom', 'klantbon', 'kassabon', 'uw voordeel', 'bedankt', 'tot ziens', 'www.', 'kvk', 'iban', 'tel'))
         if token:
             return _decision('metadata', 'ALDI_METADATA_TOKENS', token, stage='store_specific')
-
     if 'plus' in store_key:
-        plus_loyalty_tokens = (
-            'pluspunten', 'plus punten', 'digitale spaarkaart', 'spaarkaart',
-            'klant:', 'klantnummer', 'koopzegels', 'zegels', 'zegel',
-            'punten saldo', 'saldo punten', 'persoonlijke bonus',
-        )
-        plus_metadata_tokens = (
-            'plus', 'bedankt', 'welkom', 'filiaal', 'kassabon', 'www.',
-            'kvk', 'iban', 'tel', 'servicebalie', 'klantenservice',
-        )
         token = _priced_article_value_token(lowered)
         if token:
             return _decision('product_candidate', 'PLUS_PRICED_DISCOUNT_OR_LOYALTY_LINE', token, stage='store_specific')
-        token = _token_match(lowered, plus_loyalty_tokens)
+        token = _token_match(lowered, ('pluspunten', 'plus punten', 'digitale spaarkaart', 'spaarkaart', 'klant:', 'klantnummer', 'koopzegels', 'zegels', 'zegel', 'punten saldo', 'saldo punten', 'persoonlijke bonus'))
         if token:
             return _decision('metadata', 'PLUS_LOYALTY_TOKENS', token, stage='store_specific')
-        token = _token_match(lowered, plus_metadata_tokens)
+        token = _token_match(lowered, ('plus', 'bedankt', 'welkom', 'filiaal', 'kassabon', 'www.', 'kvk', 'iban', 'tel', 'servicebalie', 'klantenservice'))
         if token and not re.search(r'\d+[,.]\d{2}', lowered):
             return _decision('metadata', 'PLUS_METADATA_TOKENS_NO_AMOUNT', token, stage='store_specific')
-
     return None
 
 
@@ -308,31 +253,25 @@ def trace_receipt_text_line_classification(
     normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
     if len(normalized) < 2:
         return _decision('ignore', 'TOO_SHORT_LINE', normalized, stage='precheck')
-
     generic_non_article = _generic_non_article_trace(normalized)
     if generic_non_article is not None:
         return generic_non_article
-
     store_specific = _store_specific_non_article_trace(normalized, store_name=store_name, filename=filename)
     if store_specific is not None:
         return store_specific
-
     lowered = normalized.lower()
     should_skip = should_skip_receipt_line or _default_false
     if should_skip(normalized):
         return _decision(_footer_or_metadata(lowered), 'LEGACY_SHOULD_SKIP_RECEIPT_LINE', normalized, stage='legacy_callback')
-
     looks_non_product = looks_like_non_product_receipt_label or _default_false
     if looks_non_product(normalized):
         return _decision(_footer_or_metadata(lowered), 'LEGACY_LOOKS_LIKE_NON_PRODUCT_LABEL', normalized, stage='legacy_callback')
-
     if detail_only_re is not None and detail_only_re.match(normalized):
         return _decision('amount_detail', 'DETAIL_ONLY_RE', normalized, stage='parser_regex')
     if qty_first_re is not None and qty_first_re.match(normalized):
         return _decision('product_candidate', 'QTY_FIRST_RE', normalized, stage='parser_regex')
     if label_first_re is not None and label_first_re.match(normalized):
         return _decision('product_candidate', 'LABEL_FIRST_RE', normalized, stage='parser_regex')
-
     looks_item_label = looks_like_item_label_only or _default_false
     if looks_item_label(normalized):
         return _decision('continuation', 'LEGACY_LOOKS_LIKE_ITEM_LABEL_ONLY', normalized, stage='legacy_callback')
@@ -378,7 +317,6 @@ def diagnose_article_line_classification(
     looks_like_item_label_only: LegacyLineCheck | None = None,
     extra_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Return explicit article-vs-non-article diagnostics without changing parsing."""
     normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
     trace = trace_receipt_text_line_classification(
         normalized,
