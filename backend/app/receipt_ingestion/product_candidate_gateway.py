@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from app.receipt_ingestion.duplicate_lines import is_near_duplicate_of_previous
 from app.receipt_ingestion.line_classifier import classification_allows_append
 
 
@@ -89,6 +90,22 @@ def append_product_candidate(
         line_total = amount1
 
     raw_label_value = clean_label(raw_line) if savings_action_path and raw_line else label_value
+    line_total_float = amount_to_float(line_total)
+
+    candidate_line = {
+        'raw_label': raw_label_value,
+        'normalized_label': label_value,
+        'quantity': amount_to_float(quantity),
+        'unit': 'kg' if qty_raw and 'kg' in qty_raw.lower() else None,
+        'unit_price': amount_to_float(unit_price),
+        'line_total': line_total_float,
+        'discount_amount': None,
+        'barcode': None,
+        'confidence_score': confidence_score,
+        'source_index': source_index,
+    }
+    if is_near_duplicate_of_previous(candidate_line, extracted[-1] if extracted else None):
+        return None
 
     producer_trace = {
         'filename': filename,
@@ -101,7 +118,7 @@ def append_product_candidate(
         'normalized_line': normalized_line,
         'label': label_value,
         'raw_label': raw_label_value,
-        'amount': amount_to_float(line_total),
+        'amount': line_total_float,
         'classification': classification,
         'classification_allows_append': classification_allowed,
         'append_allowed': append_allowed,
@@ -113,19 +130,6 @@ def append_product_candidate(
         'validated_savings_action_path': savings_action_path,
     }
 
-    extracted.append(
-        {
-            'raw_label': raw_label_value,
-            'normalized_label': label_value,
-            'quantity': amount_to_float(quantity),
-            'unit': 'kg' if qty_raw and 'kg' in qty_raw.lower() else None,
-            'unit_price': amount_to_float(unit_price),
-            'line_total': amount_to_float(line_total),
-            'discount_amount': None,
-            'barcode': None,
-            'confidence_score': confidence_score,
-            'source_index': source_index,
-            'producer_trace': producer_trace,
-        }
-    )
+    candidate_line['producer_trace'] = producer_trace
+    extracted.append(candidate_line)
     return len(extracted) - 1
