@@ -16,14 +16,7 @@ InvalidLabelCheck = Callable[[str], bool]
 
 
 def _is_validated_savings_action_path(function_name: str, append_branch: str) -> bool:
-    """Return True only for the existing savings/action value-line parser path.
-
-    The source parser validates these lines on the full raw input, for example
-    "8 KOOPZEGELS PREMIUM 0,80". After validation the label is intentionally
-    cleaned to "KOOPZEGELS PREMIUM". The gateway may pass this validated value
-    line through the legacy invalid-label guard; the final receipt filter remains
-    responsible for accepting it based on producer_trace.
-    """
+    """Return True only for the existing savings/action value-line parser path."""
     return function_name == '_extract_savings_action_lines' and append_branch == 'savings_action_line'
 
 
@@ -57,9 +50,6 @@ def append_product_candidate(
     The gateway is intentionally parser-status neutral: it only decides whether a
     parsed line may become a product candidate. Receipt status remains outside
     receipt ingestion and must stay with the SSOT status service.
-
-    R9-14B: the existing producer_trace is the single runtime diagnostic carrier.
-    No separate export path is introduced.
     """
     label_value = clean_label(label)
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
@@ -102,6 +92,8 @@ def append_product_candidate(
         unit_price = amount1
         line_total = amount1
 
+    raw_label_value = clean_label(raw_line) if savings_action_path and raw_line else label_value
+
     producer_trace = {
         'filename': filename,
         'store_name': store_name,
@@ -112,6 +104,7 @@ def append_product_candidate(
         'raw_line': raw_line,
         'normalized_line': normalized_line,
         'label': label_value,
+        'raw_label': raw_label_value,
         'amount': amount_to_float(line_total),
         'classification': classification,
         'classification_allows_append': append_allowed,
@@ -121,12 +114,12 @@ def append_product_candidate(
         'classification_stage': classification_trace.get('stage'),
         'classification_matched': classification_trace.get('matched'),
         'classification_trace': classification_trace,
-        'legacy_invalid_label_guard_bypassed': savings_action_path,
+        'validated_savings_action_path': savings_action_path,
     }
 
     extracted.append(
         {
-            'raw_label': label_value,
+            'raw_label': raw_label_value,
             'normalized_label': label_value,
             'quantity': amount_to_float(quantity),
             'unit': 'kg' if qty_raw and 'kg' in qty_raw.lower() else None,
