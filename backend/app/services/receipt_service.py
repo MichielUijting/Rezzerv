@@ -125,7 +125,7 @@ KNOWN_STORES = [
 ]
 
 DUTCH_MONTHS = {
-    'januari': 1, 'februari': 2, 'maart': 3, 'april': 4, 'mei': 5, 'juni': 6,
+    'januari': 1, 'februari': 2, 'maart': 2, 'april': 4, 'mei': 5, 'juni': 6,
     'juli': 7, 'augustus': 8, 'september': 9, 'oktober': 10, 'november': 11, 'december': 12,
 }
 RECEIPT_KEYWORDS = {
@@ -310,6 +310,7 @@ def dedupe_receipts_for_household(engine, household_id: str) -> dict[str, Any]:
         'kept_count': len(rows) - len(duplicate_rows),
         'duplicate_table_ids': [row['receipt_table_id'] for row in duplicate_rows],
     }
+
 
 
 
@@ -533,6 +534,7 @@ def _extract_savings_action_lines(lines: list[str], store_name: str | None = Non
 
 
 
+
 def _looks_like_non_receipt(lines: list[str]) -> bool:
     if not lines:
         return True
@@ -695,12 +697,31 @@ def _looks_like_non_product_receipt_label(label: str | None) -> bool:
     return False
 
 
+def _is_validated_savings_action_line(line: dict[str, Any]) -> bool:
+    """Return True for value lines already validated by the savings/action parser.
+
+    This is intentionally narrow. It does not make generic loyalty text a product:
+    only lines produced by _extract_savings_action_lines with append_branch
+    savings_action_line are allowed to pass the final non-product label filter.
+    """
+    if not isinstance(line, dict):
+        return False
+    producer_trace = line.get('producer_trace') or {}
+    if not isinstance(producer_trace, dict):
+        return False
+    return (
+        producer_trace.get('function_name') == '_extract_savings_action_lines'
+        and producer_trace.get('append_branch') == 'savings_action_line'
+    )
+
+
 def _filter_non_product_receipt_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     filtered: list[dict[str, Any]] = []
     seen: set[tuple[str, str, str]] = set()
     for line in lines or []:
         label = str(line.get('raw_label') or line.get('normalized_label') or '').strip()
-        if _looks_like_non_product_receipt_label(label):
+        is_validated_savings_action_line = _is_validated_savings_action_line(line)
+        if _looks_like_non_product_receipt_label(label) and not is_validated_savings_action_line:
             continue
         key = (
             re.sub(r'\s+', ' ', label).strip().lower(),
@@ -1185,6 +1206,8 @@ def _parse_result_from_text_lines(
         store_branch=store_branch,
         parser_diagnostics=summarize_lines_parser_diagnostics(lines),
     )
+
+
 
 
 
@@ -2006,7 +2029,6 @@ def serialize_receipt_row(row: dict[str, Any]) -> dict[str, Any]:
         key: (normalize_datetime(value) if key in datetime_keys else normalize_number(value))
         for key, value in row.items()
     }
-
 
 
 
