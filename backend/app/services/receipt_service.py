@@ -682,8 +682,13 @@ def _looks_like_non_product_receipt_label(label: str | None) -> bool:
         return True
     if re.search(r'-?\d{1,6}(?:[\.,]\d{2})', lowered) and any(token in lowered for token in ('koopzegel', 'koopzegels', 'pluspunten', 'korting')):
         return False
-    if any(token in lowered for token in RECEIPT_NON_PRODUCT_LABEL_TOKENS):
-        return True
+    for token in RECEIPT_NON_PRODUCT_LABEL_TOKENS:
+        if token in {'www.', 'http'}:
+            if token in lowered:
+                return True
+            continue
+        if re.search(rf'(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])', lowered):
+            return True
     if re.search(r'\b\d{1,2}:\d{2}\b', lowered):
         return True
     if re.search(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b', lowered):
