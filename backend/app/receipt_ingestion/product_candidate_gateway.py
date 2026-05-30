@@ -21,6 +21,33 @@ def _is_validated_savings_action_path(function_name: str, append_branch: str) ->
     return function_name == '_extract_savings_action_lines' and append_branch == 'savings_action_line'
 
 
+def _as_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _consolidate_with_previous(previous: dict[str, Any], current: dict[str, Any]) -> None:
+    previous_total = _as_float(previous.get('line_total'))
+    current_total = _as_float(current.get('line_total'))
+    if previous_total is not None and current_total is not None:
+        previous['line_total'] = round(previous_total + current_total, 2)
+    previous_quantity = _as_float(previous.get('quantity'))
+    current_quantity = _as_float(current.get('quantity'))
+    if previous_quantity is not None or current_quantity is not None:
+        previous['quantity'] = round((previous_quantity or 1.0) + (current_quantity or 1.0), 3)
+    else:
+        previous['quantity'] = 2.0
+    trace = previous.get('producer_trace')
+    if isinstance(trace, dict):
+        trace['near_duplicate_consolidated'] = True
+        trace['near_duplicate_consolidated_label'] = current.get('normalized_label') or current.get('raw_label')
+        trace['near_duplicate_consolidated_amount'] = current_total
+
+
 def append_product_candidate(
     extracted: list[dict[str, Any]],
     *,
@@ -104,8 +131,9 @@ def append_product_candidate(
         'confidence_score': confidence_score,
         'source_index': source_index,
     }
-    if is_near_duplicate_of_previous(candidate_line, extracted[-1] if extracted else None):
-        return None
+    if extracted and is_near_duplicate_of_previous(candidate_line, extracted[-1]):
+        _consolidate_with_previous(extracted[-1], candidate_line)
+        return len(extracted) - 1
 
     producer_trace = {
         'filename': filename,
