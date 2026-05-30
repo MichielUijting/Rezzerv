@@ -13,6 +13,7 @@ from app.receipt_ingestion.amounts import (
     price_from_split_parts as _price_from_split_parts,
 )
 from app.receipt_ingestion.structured_product_gateway import append_structured_product_candidate
+from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
 from app.receipt_ingestion.service_parts.receipt_result_helpers import ReceiptParseResult
 from app.receipt_ingestion.service_parts.text_extraction import (
     _html_to_text,
@@ -708,3 +709,4 @@ def _parse_store_specific_result(file_bytes: bytes, filename: str, mime_type: st
             if result is not None and (result.lines or result.total_amount or result.purchase_at or result.store_name):
                 return result
     return None
+
