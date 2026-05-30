@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import traceback
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -150,6 +151,7 @@ def main() -> int:
         "target_filenames": list(TARGET_FILENAMES),
         "results": [],
         "missing_files": [],
+        "parse_errors": [],
     }
 
     for filename in TARGET_FILENAMES:
@@ -157,13 +159,27 @@ def main() -> int:
         if source_path is None:
             output["missing_files"].append(filename)
             continue
-        output["results"].append(_summarize_result(filename, source_path))
+        try:
+            output["results"].append(_summarize_result(filename, source_path))
+        except Exception as exc:
+            output["parse_errors"].append(
+                {
+                    "filename": filename,
+                    "source_path": str(source_path),
+                    "error_type": type(exc).__name__,
+                    "error": str(exc),
+                    "traceback_tail": traceback.format_exc().splitlines()[-8:],
+                }
+            )
 
     print(json.dumps(output, indent=2, ensure_ascii=False))
 
     if output["missing_files"]:
         print("R9-38A1C LIVE PARSER VERIFICATION INCOMPLETE: source files not found")
         return 2
+    if output["parse_errors"]:
+        print("R9-38A1C LIVE PARSER VERIFICATION COMPLETED WITH PARSE ERRORS")
+        return 1
     print("R9-38A1C LIVE PARSER VERIFICATION COMPLETED")
     return 0
 
