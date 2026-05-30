@@ -35,7 +35,9 @@ def _line_label(line: dict[str, Any]) -> str:
     return str(line.get('normalized_label') or line.get('raw_label') or '')
 
 
-def _is_duplicate_of_previous(candidate: dict[str, Any], previous: dict[str, Any]) -> bool:
+def is_near_duplicate_of_previous(candidate: dict[str, Any], previous: dict[str, Any] | None) -> bool:
+    if not previous:
+        return False
     candidate_key = _label_key(_line_label(candidate))
     previous_key = _label_key(_line_label(previous))
     if len(candidate_key) < 8 or len(previous_key) < 8:
@@ -54,7 +56,7 @@ def _is_duplicate_of_previous(candidate: dict[str, Any], previous: dict[str, Any
 def filter_near_duplicate_product_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
     filtered: list[dict[str, Any]] = []
     for line in list(lines or []):
-        if filtered and _is_duplicate_of_previous(line, filtered[-1]):
+        if filtered and is_near_duplicate_of_previous(line, filtered[-1]):
             continue
         filtered.append(line)
     return filtered
