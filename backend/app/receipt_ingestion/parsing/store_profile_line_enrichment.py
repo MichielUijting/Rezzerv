@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from app.receipt_ingestion.parsing.line_discount_normalization import (
+    should_append_generic_article_discount_cluster,
+)
 from app.receipt_ingestion.profiles.jumbo.app_quantity_pairs import (
     should_append_jumbo_app_quantity_detail_pair,
     should_append_jumbo_app_savings_detail_pair,
@@ -34,8 +37,8 @@ def _append_enrichment_candidate(
     caller_line_hint: str,
     confidence_score: float,
     savings_action_path: bool = False,
-) -> None:
-    append_product_candidate_fn(
+) -> int | None:
+    return append_product_candidate_fn(
         enriched,
         label=candidate["label"],
         qty_raw=candidate["qty_raw"],
@@ -58,6 +61,37 @@ def _append_enrichment_candidate(
         is_invalid_label=looks_like_non_product_receipt_label,
         confidence_score=confidence_score,
     )
+
+
+def _set_discount_amount_on_appended_line(
+    *,
+    enriched: list[dict[str, Any]],
+    appended_index: int | None,
+    candidate: dict[str, Any],
+    amount_to_float: AmountToFloat,
+) -> None:
+    if appended_index is None or appended_index < 0 or appended_index >= len(enriched):
+        return
+    discount_amount = candidate.get("discount_amount")
+    if discount_amount is None:
+        return
+    enriched[appended_index]["discount_amount"] = amount_to_float(discount_amount)
+    trace = enriched[appended_index].get("producer_trace")
+    if isinstance(trace, dict):
+        trace["discount_amount"] = amount_to_float(discount_amount)
+        trace["discount_source_index"] = candidate.get("discount_source_index")
+        trace["discount_raw_line"] = candidate.get("discount_raw_line")
+        trace["line_total_semantics"] = "gross_line_total"
+        trace["net_line_total"] = amount_to_float(
+            (parse_decimal := None)  # placeholder intentionally overwritten below by caller-free float math
+        )
+    line_total = enriched[appended_index].get("line_total")
+    try:
+        net_line_total = round(float(line_total or 0) + float(discount_amount or 0), 2)
+    except Exception:
+        net_line_total = None
+    if isinstance(trace, dict):
+        trace["net_line_total"] = net_line_total
 
 
 def enrich_lines_with_store_profile_pairs(
@@ -87,6 +121,38 @@ def enrich_lines_with_store_profile_pairs(
     source_lines = list(text_lines or [])
 
     for source_index, _raw_line in enumerate(source_lines):
+        article_discount_cluster = should_append_generic_article_discount_cluster(
+            lines=source_lines,
+            extracted=enriched,
+            source_index=source_index,
+            is_invalid_label=looks_like_non_product_receipt_label,
+        )
+        if article_discount_cluster is not None:
+            appended_index = _append_enrichment_candidate(
+                enriched=enriched,
+                candidate=article_discount_cluster,
+                filename=filename,
+                store_name=store_name,
+                append_product_candidate_fn=append_product_candidate_fn,
+                clean_label=clean_label,
+                parse_quantity=parse_quantity,
+                parse_decimal=parse_decimal,
+                amount_to_float=amount_to_float,
+                classify_line=classify_line,
+                looks_like_non_product_receipt_label=looks_like_non_product_receipt_label,
+                append_branch="generic_article_discount_cluster",
+                parser_path="store_profile_line_enrichment.generic_article_discount_cluster",
+                caller_line_hint="generic article discount cluster via append_product_candidate",
+                confidence_score=0.82,
+            )
+            _set_discount_amount_on_appended_line(
+                enriched=enriched,
+                appended_index=appended_index,
+                candidate=article_discount_cluster,
+                amount_to_float=amount_to_float,
+            )
+            continue
+
         jumbo_pair = should_append_jumbo_app_quantity_detail_pair(
             lines=source_lines,
             extracted=enriched,
