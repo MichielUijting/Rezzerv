@@ -112,6 +112,7 @@ def should_append_generic_article_discount_cluster(
     extracted: list[dict[str, Any]],
     source_index: int,
     is_invalid_label: Callable[[str], bool] | None = None,
+    allow_existing_line: bool = False,
 ) -> dict[str, Any] | None:
     """Detect a generic article discount/free-product cluster.
 
@@ -148,7 +149,7 @@ def should_append_generic_article_discount_cluster(
     if not _labels_are_related(product_label_raw, discount_label):
         return None
 
-    if _has_existing_line_for_label(extracted, product_label):
+    if not allow_existing_line and _has_existing_line_for_label(extracted, product_label):
         return None
 
     return {
