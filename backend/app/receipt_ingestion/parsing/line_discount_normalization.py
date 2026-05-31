@@ -54,6 +54,21 @@ def _label_key(value: str | None) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
 
 
+def _gateway_safe_label(value: str | None) -> str:
+    """Normalize noisy all-caps OCR product labels for the append gateway.
+
+    Some OCR lines classify as ignore when the label is entirely uppercase, even
+    though the product/discount cluster itself is valid. The canonical stored
+    product label should remain readable and gateway-acceptable without changing
+    the financial semantics.
+    """
+    label = _clean_text(value).strip(" .:-")
+    if label and label.upper() == label and re.search(r"[A-ZÀ-ÖØ-Þ]", label):
+        words = [word.capitalize() if word.isupper() else word for word in label.split()]
+        return " ".join(words)
+    return label
+
+
 def _looks_like_safe_article_label(value: str | None, *, is_invalid_label: Callable[[str], bool] | None = None) -> bool:
     label = _clean_text(value).strip(" .:-")
     if len(label) < 3:
@@ -117,10 +132,8 @@ def should_append_generic_article_discount_cluster(
     product_amount = _decimal(product_match.group("amount"))
     if product_amount is None or product_amount <= 0:
         return None
-    product_label = product_line[: product_match.start()].strip(" .:-")
-    if not _looks_like_safe_article_label(product_label, is_invalid_label=is_invalid_label):
-        return None
-    if _has_existing_line_for_label(extracted, product_label):
+    product_label_raw = product_line[: product_match.start()].strip(" .:-")
+    if not _looks_like_safe_article_label(product_label_raw, is_invalid_label=is_invalid_label):
         return None
 
     discount_line = _clean_text(lines[source_index + 1])
@@ -131,7 +144,11 @@ def should_append_generic_article_discount_cluster(
     if discount_amount is None or discount_amount >= 0:
         return None
     discount_label = _clean_text(discount_match.group("label"))
-    if not _labels_are_related(product_label, discount_label):
+    if not _labels_are_related(product_label_raw, discount_label):
+        return None
+
+    product_label = _gateway_safe_label(product_label_raw)
+    if _has_existing_line_for_label(extracted, product_label):
         return None
 
     return {
