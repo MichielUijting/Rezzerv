@@ -80,6 +80,11 @@ from app.receipt_ingestion.parsing.discount_helpers import (
     _extract_discount_entries,
     _is_validated_savings_action_line,
 )
+from app.receipt_ingestion.parsing.financial_helpers import (
+    _discount_or_free_total_zero_case as _financial_discount_or_free_total_zero_case,
+    _receipt_line_financials as _financial_receipt_line_financials,
+    _totals_match_receipt_lines as _financial_totals_match_receipt_lines,
+)
 
 
 try:
@@ -588,39 +593,29 @@ def _filter_non_product_receipt_lines(lines: list[dict[str, Any]]) -> list[dict[
     return filtered
 
 
+
 def _receipt_line_financials(lines: list[dict[str, Any]], discount_total: Decimal | None = None) -> tuple[Decimal, Decimal, Decimal]:
-    gross_sum = Decimal('0.00')
-    line_discount_sum = Decimal('0.00')
-    for line in lines or []:
-        gross_sum += _parse_decimal(str(line.get('line_total'))) or Decimal('0.00')
-        line_discount_sum += _parse_decimal(str(line.get('discount_amount'))) or Decimal('0.00')
-    effective_discount = discount_total if discount_total is not None else line_discount_sum
-    if effective_discount is None:
-        effective_discount = Decimal('0.00')
-    net_sum = (gross_sum + effective_discount).quantize(Decimal('0.01'))
-    return gross_sum.quantize(Decimal('0.01')), effective_discount.quantize(Decimal('0.01')), net_sum
+    return _financial_receipt_line_financials(lines, discount_total, parse_decimal=_parse_decimal)
 
 
 def _totals_match_receipt_lines(total_amount: Decimal | None, lines: list[dict[str, Any]], discount_total: Decimal | None = None, tolerance: Decimal = Decimal('0.05')) -> bool:
-    if total_amount is None or not lines:
-        return False
-    _, _, net_sum = _receipt_line_financials(lines, discount_total)
-    try:
-        return abs(net_sum - Decimal(total_amount).quantize(Decimal('0.01'))) <= tolerance
-    except Exception:
-        return False
+    return _financial_totals_match_receipt_lines(
+        total_amount,
+        lines,
+        discount_total,
+        tolerance,
+        parse_decimal=_parse_decimal,
+    )
 
 
 def _discount_or_free_total_zero_case(total_amount: Decimal | None, lines: list[dict[str, Any]], discount_total: Decimal | None = None) -> bool:
-    if total_amount is None:
-        return False
-    try:
-        if Decimal(total_amount).quantize(Decimal('0.01')) != Decimal('0.00'):
-            return False
-    except Exception:
-        return False
-    gross_sum, effective_discount, net_sum = _receipt_line_financials(lines, discount_total)
-    return bool(lines) and gross_sum >= Decimal('0.00') and abs(net_sum) <= Decimal('0.05')
+    return _financial_discount_or_free_total_zero_case(
+        total_amount,
+        lines,
+        discount_total,
+        parse_decimal=_parse_decimal,
+    )
+
 
 def _looks_like_item_label_only(line: str, *, store_name: str | None = None, filename: str | None = None) -> bool:
     candidate = re.sub(r'\s+', ' ', str(line or '')).strip()
