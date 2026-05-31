@@ -160,6 +160,6 @@ def should_append_generic_article_discount_cluster(
         "source_index": source_index,
         "discount_source_index": source_index + 1,
         "raw_line": product_line,
-        "normalized_line": product_line,
+        "normalized_line": product_label,
         "discount_raw_line": discount_line,
     }
