@@ -76,6 +76,7 @@ from app.receipt_ingestion.service_parts.image_ocr_flow import (
     warm_receipt_ocr_runtime,
 )
 from app.receipt_ingestion.service_parts.store_specific_parsers import _parse_store_specific_result
+from app.receipt_ingestion.parsing.store_profile_line_enrichment import enrich_lines_with_store_profile_pairs
 
 
 try:
@@ -934,7 +935,23 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
         pending_label = normalized if classification == 'continuation' else None
         pending_line_index = None
 
-    return extracted
+    return enrich_lines_with_store_profile_pairs(
+        text_lines=lines,
+        extracted_lines=extracted,
+        store_name=store_name,
+        filename=filename,
+        append_product_candidate_fn=append_product_candidate,
+        clean_label=_clean_receipt_label,
+        parse_quantity=_parse_quantity,
+        parse_decimal=_parse_decimal,
+        amount_to_float=_amount_to_float,
+        classify_line=lambda value: _classify_receipt_text_line(
+            value,
+            store_name=store_name,
+            filename=filename,
+        ),
+        looks_like_non_product_receipt_label=_looks_like_non_product_receipt_label,
+    )
 
 
 def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: str | None = None) -> list[dict[str, Any]]:
