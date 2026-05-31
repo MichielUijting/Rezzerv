@@ -90,6 +90,17 @@ def _set_discount_amount_on_appended_line(
         trace["net_line_total"] = net_line_total
 
 
+def _validated_article_discount_classify_line(_value: str) -> str:
+    """Classifier override for already validated article discount clusters.
+
+    This is intentionally scoped to clusters that have already passed the
+    generic product-line plus discount-line checks. It prevents a valid cluster
+    from being rejected because the standalone OCR product label is classified
+    as ignore outside its discount context.
+    """
+    return "product_candidate"
+
+
 def enrich_lines_with_store_profile_pairs(
     *,
     text_lines: list[str],
@@ -134,11 +145,11 @@ def enrich_lines_with_store_profile_pairs(
                 parse_quantity=parse_quantity,
                 parse_decimal=parse_decimal,
                 amount_to_float=amount_to_float,
-                classify_line=classify_line,
+                classify_line=_validated_article_discount_classify_line,
                 looks_like_non_product_receipt_label=looks_like_non_product_receipt_label,
                 append_branch="generic_article_discount_cluster",
                 parser_path="store_profile_line_enrichment.generic_article_discount_cluster",
-                caller_line_hint="generic article discount cluster via append_product_candidate",
+                caller_line_hint="validated generic article discount cluster via append_product_candidate",
                 confidence_score=0.82,
             )
             _set_discount_amount_on_appended_line(
