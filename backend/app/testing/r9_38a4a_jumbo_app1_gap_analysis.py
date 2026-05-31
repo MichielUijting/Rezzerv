@@ -45,9 +45,18 @@ def _decimal(value: Any) -> Decimal:
         return Decimal("0.00")
 
 
+def _normalize_filename(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
 def _find_source_file(filename: str) -> Path | None:
     seen_roots: set[Path] = set()
-    exact_names = {filename, filename.replace("App", "app"), filename.replace("app", "App")}
+    target_key = _normalize_filename(filename)
+    expected_keys = {
+        target_key,
+        _normalize_filename("Jumbo app 1.png"),
+        _normalize_filename("Jumbo App 1.png"),
+    }
     for root in SEARCH_ROOTS:
         try:
             resolved = root.resolve()
@@ -57,16 +66,13 @@ def _find_source_file(filename: str) -> Path | None:
             continue
         seen_roots.add(resolved)
 
-        for candidate_name in exact_names:
-            direct = resolved / candidate_name
-            if direct.is_file():
-                return direct
-
         try:
-            for path in resolved.rglob("Jumbo*1.*"):
+            for path in resolved.rglob("*"):
                 if any(part in SKIP_DIR_NAMES for part in path.parts):
                     continue
-                if path.is_file() and path.name.lower() in {name.lower() for name in exact_names}:
+                if not path.is_file():
+                    continue
+                if _normalize_filename(path.name) in expected_keys:
                     return path
         except Exception:
             continue
