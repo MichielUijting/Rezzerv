@@ -24,6 +24,11 @@ _JUMBO_NON_PRODUCT_LABEL_TOKENS = (
     "betaling",
 )
 
+_JUMBO_SAVINGS_LABEL_RE = re.compile(
+    r"\b(?:koopzegel|koopzegels|zegel|zegels)\b",
+    re.IGNORECASE,
+)
+
 
 def is_jumbo_context(store_name: str | None = None, filename: str | None = None) -> bool:
     haystack = f"{store_name or ''} {filename or ''}".lower()
@@ -59,6 +64,13 @@ def looks_like_safe_jumbo_app_pair_label(
     return True
 
 
+def looks_like_jumbo_app_savings_pair_label(value: str | None) -> bool:
+    label = normalize_jumbo_app_label(value)
+    if len(label) < 3:
+        return False
+    return bool(_JUMBO_SAVINGS_LABEL_RE.search(label))
+
+
 def _decimal(value: str | None) -> Decimal | None:
     try:
         return Decimal(str(value or "").replace(",", ".")).quantize(Decimal("0.01"))
@@ -81,6 +93,34 @@ def has_existing_line_for_label(lines: list[dict[str, Any]], label: str) -> bool
     return False
 
 
+def _detail_pair_payload(
+    *,
+    lines: list[str],
+    source_index: int,
+) -> tuple[str, re.Match[str]] | None:
+    if source_index <= 0 or source_index >= len(lines):
+        return None
+    detail_line = re.sub(r"\s+", " ", str(lines[source_index] or "")).strip()
+    detail_match = JUMBO_APP_QUANTITY_DETAIL_RE.match(detail_line)
+    if not detail_match:
+        return None
+    return detail_line, detail_match
+
+
+def _financials_are_plausible(detail_match: re.Match[str]) -> bool:
+    quantity = _decimal(detail_match.group("qty"))
+    amount1 = _decimal(detail_match.group("amount1"))
+    amount2 = _decimal(detail_match.group("amount2")) if detail_match.group("amount2") else amount1
+    if quantity is None or amount1 is None or amount2 is None:
+        return False
+    if quantity <= 0 or amount1 <= 0 or amount2 <= 0:
+        return False
+    calculated_total = (quantity * amount1).quantize(Decimal("0.01"))
+    if detail_match.group("amount2") and abs(calculated_total - amount2) > Decimal("0.01"):
+        return False
+    return True
+
+
 def should_append_jumbo_app_quantity_detail_pair(
     *,
     lines: list[str],
@@ -92,13 +132,10 @@ def should_append_jumbo_app_quantity_detail_pair(
 ) -> dict[str, Any] | None:
     if not is_jumbo_context(store_name=store_name, filename=filename):
         return None
-    if source_index <= 0 or source_index >= len(lines):
+    detail_payload = _detail_pair_payload(lines=lines, source_index=source_index)
+    if detail_payload is None:
         return None
-
-    detail_line = re.sub(r"\s+", " ", str(lines[source_index] or "")).strip()
-    detail_match = JUMBO_APP_QUANTITY_DETAIL_RE.match(detail_line)
-    if not detail_match:
-        return None
+    detail_line, detail_match = detail_payload
 
     label = normalize_jumbo_app_label(lines[source_index - 1])
     if not looks_like_safe_jumbo_app_pair_label(
@@ -108,16 +145,41 @@ def should_append_jumbo_app_quantity_detail_pair(
         return None
     if has_existing_line_for_label(extracted, label):
         return None
+    if not _financials_are_plausible(detail_match):
+        return None
 
-    quantity = _decimal(detail_match.group("qty"))
-    amount1 = _decimal(detail_match.group("amount1"))
-    amount2 = _decimal(detail_match.group("amount2")) if detail_match.group("amount2") else amount1
-    if quantity is None or amount1 is None or amount2 is None:
+    return {
+        "label": label,
+        "qty_raw": detail_match.group("qty"),
+        "amount1_raw": detail_match.group("amount1"),
+        "amount2_raw": detail_match.group("amount2") or detail_match.group("amount1"),
+        "source_index": source_index,
+        "raw_line": detail_line,
+        "normalized_line": detail_line,
+    }
+
+
+def should_append_jumbo_app_savings_detail_pair(
+    *,
+    lines: list[str],
+    extracted: list[dict[str, Any]],
+    source_index: int,
+    store_name: str | None = None,
+    filename: str | None = None,
+) -> dict[str, Any] | None:
+    if not is_jumbo_context(store_name=store_name, filename=filename):
         return None
-    if quantity <= 0 or amount1 <= 0 or amount2 <= 0:
+    detail_payload = _detail_pair_payload(lines=lines, source_index=source_index)
+    if detail_payload is None:
         return None
-    calculated_total = (quantity * amount1).quantize(Decimal("0.01"))
-    if detail_match.group("amount2") and abs(calculated_total - amount2) > Decimal("0.01"):
+    detail_line, detail_match = detail_payload
+
+    label = normalize_jumbo_app_label(lines[source_index - 1])
+    if not looks_like_jumbo_app_savings_pair_label(label):
+        return None
+    if has_existing_line_for_label(extracted, label):
+        return None
+    if not _financials_are_plausible(detail_match):
         return None
 
     return {
