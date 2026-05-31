@@ -76,18 +76,59 @@ def _set_discount_amount_on_appended_line(
     if discount_amount is None:
         return
     enriched[appended_index]["discount_amount"] = amount_to_float(discount_amount)
-    line_total = enriched[appended_index].get("line_total")
+    _update_discount_trace(
+        line=enriched[appended_index],
+        candidate=candidate,
+        amount_to_float=amount_to_float,
+    )
+
+
+def _update_discount_trace(
+    *,
+    line: dict[str, Any],
+    candidate: dict[str, Any],
+    amount_to_float: AmountToFloat,
+) -> None:
+    discount_amount = candidate.get("discount_amount")
+    line_total = line.get("line_total")
     try:
         net_line_total = round(float(line_total or 0) + float(discount_amount or 0), 2)
     except Exception:
         net_line_total = None
-    trace = enriched[appended_index].get("producer_trace")
+    trace = line.get("producer_trace")
     if isinstance(trace, dict):
         trace["discount_amount"] = amount_to_float(discount_amount)
         trace["discount_source_index"] = candidate.get("discount_source_index")
         trace["discount_raw_line"] = candidate.get("discount_raw_line")
         trace["line_total_semantics"] = "gross_line_total"
         trace["net_line_total"] = net_line_total
+        trace["discount_coupled_by"] = "store_profile_line_enrichment.generic_article_discount_cluster"
+
+
+def _set_discount_amount_on_existing_line(
+    *,
+    enriched: list[dict[str, Any]],
+    candidate: dict[str, Any],
+    amount_to_float: AmountToFloat,
+) -> bool:
+    source_index = candidate.get("source_index")
+    discount_amount = candidate.get("discount_amount")
+    if discount_amount is None:
+        return False
+    for line in enriched:
+        if line.get("source_index") != source_index:
+            continue
+        if line.get("discount_amount") is not None:
+            return True
+        line["discount_amount"] = amount_to_float(discount_amount)
+        trace = line.get("producer_trace")
+        if isinstance(trace, dict):
+            trace["append_branch"] = "generic_article_discount_cluster"
+            trace["parser_path"] = "store_profile_line_enrichment.generic_article_discount_cluster"
+            trace["caller_line_hint"] = "validated generic article discount cluster coupled to existing product line"
+        _update_discount_trace(line=line, candidate=candidate, amount_to_float=amount_to_float)
+        return True
+    return False
 
 
 def _validated_article_discount_classify_line(_value: str) -> str:
@@ -128,6 +169,20 @@ def enrich_lines_with_store_profile_pairs(
     source_lines = list(text_lines or [])
 
     for source_index, _raw_line in enumerate(source_lines):
+        existing_article_discount_cluster = should_append_generic_article_discount_cluster(
+            lines=source_lines,
+            extracted=enriched,
+            source_index=source_index,
+            is_invalid_label=looks_like_non_product_receipt_label,
+            allow_existing_line=True,
+        )
+        if existing_article_discount_cluster is not None and _set_discount_amount_on_existing_line(
+            enriched=enriched,
+            candidate=existing_article_discount_cluster,
+            amount_to_float=amount_to_float,
+        ):
+            continue
+
         article_discount_cluster = should_append_generic_article_discount_cluster(
             lines=source_lines,
             extracted=enriched,
