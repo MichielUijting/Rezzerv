@@ -1138,38 +1138,6 @@ def _parse_result_from_text_lines(
     lines = _filter_non_product_receipt_lines(lines)
     discount_total = _apply_discount_entries(lines, _extract_discount_entries(text_lines))
     lines = _filter_non_product_receipt_lines(lines)
-    if (filename or '').strip().lower() == 'jumbo foto 3.jpg' and not lines:
-        manual_lines: list[dict[str, Any]] = []
-        append_product_candidate(
-            manual_lines,
-            label='Jumbo stroopwafels',
-            qty_raw='1',
-            amount1_raw='0.00',
-            amount2_raw='0.00',
-            source_index=0,
-            raw_line=None,
-            normalized_line='Jumbo stroopwafels',
-            filename=filename,
-            store_name=store_name,
-            function_name='_parse_result_from_text_lines',
-            append_branch='jumbo_foto_3_manual_fallback',
-            parser_path='_parse_result_from_text_lines.jumbo_foto_3_manual_fallback',
-            caller_line_hint='manual Jumbo foto 3 fallback via append_product_candidate',
-            clean_label=_clean_receipt_label,
-            parse_quantity=_parse_quantity,
-            parse_decimal=_parse_decimal,
-            amount_to_float=_amount_to_float,
-            classify_line=lambda value: _classify_receipt_text_line(
-                value,
-                store_name=store_name,
-                filename=filename,
-            ),
-            is_invalid_label=_looks_like_non_product_receipt_label,
-            confidence_score=0.8,
-        )
-        lines = manual_lines
-        if total_amount is None:
-            total_amount = Decimal('0.00')
     # R9-34T SSOT:
     # total_amount must come from an explicit receipt total source.
     # It may not be inferred from accepted article line sums.
