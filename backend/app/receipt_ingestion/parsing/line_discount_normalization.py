@@ -133,7 +133,8 @@ def should_append_generic_article_discount_cluster(
     if product_amount is None or product_amount <= 0:
         return None
     product_label_raw = product_line[: product_match.start()].strip(" .:-")
-    if not _looks_like_safe_article_label(product_label_raw, is_invalid_label=is_invalid_label):
+    product_label = _gateway_safe_label(product_label_raw)
+    if not _looks_like_safe_article_label(product_label, is_invalid_label=is_invalid_label):
         return None
 
     discount_line = _clean_text(lines[source_index + 1])
@@ -147,7 +148,6 @@ def should_append_generic_article_discount_cluster(
     if not _labels_are_related(product_label_raw, discount_label):
         return None
 
-    product_label = _gateway_safe_label(product_label_raw)
     if _has_existing_line_for_label(extracted, product_label):
         return None
 
