@@ -85,6 +85,14 @@ from app.receipt_ingestion.parsing.financial_helpers import (
     _receipt_line_financials as _financial_receipt_line_financials,
     _totals_match_receipt_lines as _financial_totals_match_receipt_lines,
 )
+from app.receipt_ingestion.parsing.line_classification_helpers import (
+    _classify_receipt_text_line as _classification_classify_receipt_text_line,
+    _contains_letter,
+    _filter_non_product_receipt_lines as _classification_filter_non_product_receipt_lines,
+    _is_invalid_aldi_article_candidate,
+    _looks_like_item_label_only as _classification_looks_like_item_label_only,
+    _looks_like_non_product_receipt_label,
+)
 
 
 try:
@@ -457,20 +465,6 @@ def _looks_like_aldi_vat_summary_line(line: str) -> bool:
     return False
 
 
-def _is_invalid_aldi_article_candidate(label: str) -> bool:
-    candidate = re.sub(r'\s+', ' ', str(label or '')).strip()
-    if not candidate:
-        return True
-    lowered = candidate.lower()
-    if 'btw' in lowered or 'bruto' in lowered or 'netto' in lowered:
-        return True
-    if re.fullmatch(r'[\d\s,\.%xX-]+', candidate):
-        return True
-    if re.match(r'^\d{1,2}(?:[\.,]\d{2})?[%xX]?\s+\d{1,6}(?:[\.,]\d{2})$', candidate):
-        return True
-    return False
-
-
 def _looks_like_aldi_payment_line(line: str) -> bool:
     normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
     if not normalized:
@@ -536,62 +530,56 @@ RECEIPT_NON_PRODUCT_LABEL_TOKENS = (
 
 
 
-def _contains_letter(value: str | None) -> bool:
-    return any(ch.isalpha() for ch in str(value or ''))
 
-def _looks_like_non_product_receipt_label(label: str | None) -> bool:
-    """Return True for OCR lines that should never become inventory articles."""
-    candidate = re.sub(r'\s+', ' ', str(label or '')).strip(' .:-')
-    if not candidate:
-        return True
-    lowered = candidate.lower()
-    if re.fullmatch(r'[-+]?\d+(?:[\.,]\d+)?(?:\s+[-+]?\d+(?:[\.,]\d+)?)*', candidate):
-        return True
-    if re.fullmatch(r'[\d\s,\.:%/\-+xX]+', candidate):
-        return True
-    if re.search(r'-?\d{1,6}(?:[\.,]\d{2})', lowered) and any(token in lowered for token in ('koopzegel', 'koopzegels', 'pluspunten', 'korting')):
-        return False
-    for token in RECEIPT_NON_PRODUCT_LABEL_TOKENS:
-        if token in {'www.', 'http'}:
-            if token in lowered:
-                return True
-            continue
-        if re.search(rf'(?<![a-z0-9]){re.escape(token)}(?![a-z0-9])', lowered):
-            return True
-    if re.search(r'\b\d{1,2}:\d{2}\b', lowered):
-        return True
-    if re.search(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b', lowered):
-        return True
-    letters = [ch for ch in candidate if ch.isalpha()]
-    digits = re.findall(r'\d', candidate)
-    if len(letters) < 2 and len(digits) >= 2:
-        return True
-    if len(candidate) > 80 and sum(ch.isdigit() for ch in candidate) > 10:
-        return True
-    return False
+def _looks_like_item_label_only(line: str, *, store_name: str | None = None, filename: str | None = None) -> bool:
+    return _classification_looks_like_item_label_only(
+        line,
+        store_name=store_name,
+        filename=filename,
+        should_skip_receipt_line=lambda value: _should_skip_receipt_line(
+            value,
+            store_name=store_name,
+            filename=filename,
+        ),
+    )
+
+
+def _classify_receipt_text_line(
+    line: str,
+    *,
+    store_name: str | None = None,
+    filename: str | None = None,
+    detail_only_re: re.Pattern | None = None,
+    qty_first_re: re.Pattern | None = None,
+    label_first_re: re.Pattern | None = None,
+) -> str:
+    return _classification_classify_receipt_text_line(
+        line,
+        store_name=store_name,
+        filename=filename,
+        detail_only_re=detail_only_re,
+        qty_first_re=qty_first_re,
+        label_first_re=label_first_re,
+        should_skip_receipt_line=lambda value: _should_skip_receipt_line(
+            value,
+            store_name=store_name,
+            filename=filename,
+        ),
+        looks_like_non_product_receipt_label=_looks_like_non_product_receipt_label,
+        looks_like_item_label_only=lambda value: _looks_like_item_label_only(
+            value,
+            store_name=store_name,
+            filename=filename,
+        ),
+    )
 
 
 def _filter_non_product_receipt_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    filtered: list[dict[str, Any]] = []
-    seen: set[tuple[str, str, str]] = set()
-    for line in lines or []:
-        label = str(line.get('raw_label') or line.get('normalized_label') or '').strip()
-        is_validated_savings_action_line = _is_validated_savings_action_line(line)
-        if _looks_like_non_product_receipt_label(label) and not is_validated_savings_action_line:
-            continue
-        key = (
-            re.sub(r'\s+', ' ', label).strip().lower(),
-            str(line.get('line_total') or ''),
-            str(line.get('source_index') or ''),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        # 8K-G: preserve diagnostic/runtime-only fields such as producer_trace.
-        # Keep a shallow copy so later mutations cannot strip trace metadata from the original append path.
-        filtered.append(dict(line))
-    return filtered
-
+    return _classification_filter_non_product_receipt_lines(
+        lines,
+        looks_like_non_product_receipt_label=_looks_like_non_product_receipt_label,
+        is_validated_savings_action_line=_is_validated_savings_action_line,
+    )
 
 
 def _receipt_line_financials(lines: list[dict[str, Any]], discount_total: Decimal | None = None) -> tuple[Decimal, Decimal, Decimal]:
@@ -614,46 +602,6 @@ def _discount_or_free_total_zero_case(total_amount: Decimal | None, lines: list[
         lines,
         discount_total,
         parse_decimal=_parse_decimal,
-    )
-
-
-def _looks_like_item_label_only(line: str, *, store_name: str | None = None, filename: str | None = None) -> bool:
-    candidate = re.sub(r'\s+', ' ', str(line or '')).strip()
-    if not candidate or _should_skip_receipt_line(candidate, store_name=store_name, filename=filename):
-        return False
-    if not _contains_letter(candidate):
-        return False
-    if re.search(r'\d+[\.,]\d{2}', candidate):
-        return False
-    return True
-
-def _classify_receipt_text_line(
-    line: str,
-    *,
-    store_name: str | None = None,
-    filename: str | None = None,
-    detail_only_re: re.Pattern | None = None,
-    qty_first_re: re.Pattern | None = None,
-    label_first_re: re.Pattern | None = None,
-) -> str:
-    return classify_receipt_text_line(
-        line,
-        store_name=store_name,
-        filename=filename,
-        detail_only_re=detail_only_re,
-        qty_first_re=qty_first_re,
-        label_first_re=label_first_re,
-        should_skip_receipt_line=lambda value: _should_skip_receipt_line(
-            value,
-            store_name=store_name,
-            filename=filename,
-        ),
-        looks_like_non_product_receipt_label=_looks_like_non_product_receipt_label,
-        looks_like_item_label_only=lambda value: _looks_like_item_label_only(
-            value,
-            store_name=store_name,
-            filename=filename,
-        ),
     )
 
 
