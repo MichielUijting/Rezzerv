@@ -76,21 +76,17 @@ def _set_discount_amount_on_appended_line(
     if discount_amount is None:
         return
     enriched[appended_index]["discount_amount"] = amount_to_float(discount_amount)
+    line_total = enriched[appended_index].get("line_total")
+    try:
+        net_line_total = round(float(line_total or 0) + float(discount_amount or 0), 2)
+    except Exception:
+        net_line_total = None
     trace = enriched[appended_index].get("producer_trace")
     if isinstance(trace, dict):
         trace["discount_amount"] = amount_to_float(discount_amount)
         trace["discount_source_index"] = candidate.get("discount_source_index")
         trace["discount_raw_line"] = candidate.get("discount_raw_line")
         trace["line_total_semantics"] = "gross_line_total"
-        trace["net_line_total"] = amount_to_float(
-            (parse_decimal := None)  # placeholder intentionally overwritten below by caller-free float math
-        )
-    line_total = enriched[appended_index].get("line_total")
-    try:
-        net_line_total = round(float(line_total or 0) + float(discount_amount or 0), 2)
-    except Exception:
-        net_line_total = None
-    if isinstance(trace, dict):
         trace["net_line_total"] = net_line_total
 
 
