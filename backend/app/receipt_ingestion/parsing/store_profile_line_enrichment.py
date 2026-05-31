@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from app.receipt_ingestion.profiles.jumbo.app_quantity_pairs import should_append_jumbo_app_quantity_detail_pair
+from app.receipt_ingestion.profiles.jumbo.app_quantity_pairs import (
+    should_append_jumbo_app_quantity_detail_pair,
+    should_append_jumbo_app_savings_detail_pair,
+)
 
 AppendProductCandidate = Callable[..., int | None]
 CleanLabel = Callable[[str | None], str]
@@ -11,6 +14,50 @@ ParseDecimal = Callable[[str | None], Any]
 AmountToFloat = Callable[[Any], float | None]
 ClassifyLine = Callable[[str], str]
 NonProductLabelCheck = Callable[[str], bool]
+
+
+def _append_enrichment_candidate(
+    *,
+    enriched: list[dict[str, Any]],
+    candidate: dict[str, Any],
+    filename: str | None,
+    store_name: str | None,
+    append_product_candidate_fn: AppendProductCandidate,
+    clean_label: CleanLabel,
+    parse_quantity: ParseQuantity,
+    parse_decimal: ParseDecimal,
+    amount_to_float: AmountToFloat,
+    classify_line: ClassifyLine,
+    looks_like_non_product_receipt_label: NonProductLabelCheck,
+    append_branch: str,
+    parser_path: str,
+    caller_line_hint: str,
+    confidence_score: float,
+    savings_action_path: bool = False,
+) -> None:
+    append_product_candidate_fn(
+        enriched,
+        label=candidate["label"],
+        qty_raw=candidate["qty_raw"],
+        amount1_raw=candidate["amount1_raw"],
+        amount2_raw=candidate["amount2_raw"],
+        source_index=candidate["source_index"],
+        raw_line=candidate["raw_line"],
+        normalized_line=candidate["normalized_line"],
+        filename=filename,
+        store_name=store_name,
+        function_name="_extract_savings_action_lines" if savings_action_path else "enrich_lines_with_store_profile_pairs",
+        append_branch="savings_action_line" if savings_action_path else append_branch,
+        parser_path=parser_path,
+        caller_line_hint=caller_line_hint,
+        clean_label=clean_label,
+        parse_quantity=parse_quantity,
+        parse_decimal=parse_decimal,
+        amount_to_float=amount_to_float,
+        classify_line=classify_line,
+        is_invalid_label=looks_like_non_product_receipt_label,
+        confidence_score=confidence_score,
+    )
 
 
 def enrich_lines_with_store_profile_pairs(
@@ -48,31 +95,51 @@ def enrich_lines_with_store_profile_pairs(
             filename=filename,
             looks_like_non_product_receipt_label=looks_like_non_product_receipt_label,
         )
-        if jumbo_pair is None:
+        if jumbo_pair is not None:
+            _append_enrichment_candidate(
+                enriched=enriched,
+                candidate=jumbo_pair,
+                filename=filename,
+                store_name=store_name,
+                append_product_candidate_fn=append_product_candidate_fn,
+                clean_label=clean_label,
+                parse_quantity=parse_quantity,
+                parse_decimal=parse_decimal,
+                amount_to_float=amount_to_float,
+                classify_line=classify_line,
+                looks_like_non_product_receipt_label=looks_like_non_product_receipt_label,
+                append_branch="jumbo_app_quantity_detail_pair",
+                parser_path="store_profile_line_enrichment.jumbo_app_quantity_detail_pair",
+                caller_line_hint="store profile line enrichment via append_product_candidate",
+                confidence_score=0.86,
+            )
             continue
 
-        append_product_candidate_fn(
-            enriched,
-            label=jumbo_pair["label"],
-            qty_raw=jumbo_pair["qty_raw"],
-            amount1_raw=jumbo_pair["amount1_raw"],
-            amount2_raw=jumbo_pair["amount2_raw"],
-            source_index=jumbo_pair["source_index"],
-            raw_line=jumbo_pair["raw_line"],
-            normalized_line=jumbo_pair["normalized_line"],
-            filename=filename,
+        jumbo_savings_pair = should_append_jumbo_app_savings_detail_pair(
+            lines=source_lines,
+            extracted=enriched,
+            source_index=source_index,
             store_name=store_name,
-            function_name="enrich_lines_with_store_profile_pairs",
-            append_branch="jumbo_app_quantity_detail_pair",
-            parser_path="store_profile_line_enrichment.jumbo_app_quantity_detail_pair",
-            caller_line_hint="store profile line enrichment via append_product_candidate",
-            clean_label=clean_label,
-            parse_quantity=parse_quantity,
-            parse_decimal=parse_decimal,
-            amount_to_float=amount_to_float,
-            classify_line=classify_line,
-            is_invalid_label=looks_like_non_product_receipt_label,
-            confidence_score=0.86,
+            filename=filename,
         )
+        if jumbo_savings_pair is not None:
+            _append_enrichment_candidate(
+                enriched=enriched,
+                candidate=jumbo_savings_pair,
+                filename=filename,
+                store_name=store_name,
+                append_product_candidate_fn=append_product_candidate_fn,
+                clean_label=clean_label,
+                parse_quantity=parse_quantity,
+                parse_decimal=parse_decimal,
+                amount_to_float=amount_to_float,
+                classify_line=classify_line,
+                looks_like_non_product_receipt_label=looks_like_non_product_receipt_label,
+                append_branch="jumbo_app_savings_detail_pair",
+                parser_path="store_profile_line_enrichment.jumbo_app_savings_detail_pair",
+                caller_line_hint="store profile savings/detail pair via validated savings/action path",
+                confidence_score=0.8,
+                savings_action_path=True,
+            )
 
     return enriched
