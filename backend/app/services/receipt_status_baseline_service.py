@@ -108,6 +108,10 @@ def _actual_line_total_expr(conn) -> str:
     return 'COALESCE(rtl.corrected_line_total, rtl.line_total)' if 'corrected_line_total' in cols else 'rtl.line_total'
 
 
+def _actual_line_discount_expr(conn) -> str:
+    cols = _column_names(conn, 'receipt_table_lines')
+    return 'COALESCE(rtl.discount_amount, 0)' if 'discount_amount' in cols else '0'
+
 def load_expected_receipt_statuses() -> list[dict[str, Any]]:
     return json.loads(EXPECTED_STATUS_PATH.read_text(encoding='utf-8'))
 
@@ -123,6 +127,7 @@ def load_baseline_receipt_lines() -> list[dict[str, Any]]:
 def _fetch_active_actual_rows(conn, household_id: str | None = None) -> list[dict[str, Any]]:
     _ensure_receipt_store_chain_schema(conn)
     line_total_expr = _actual_line_total_expr(conn)
+    line_discount_expr = _actual_line_discount_expr(conn)
     params: dict[str, Any] = {}
     household_clause = ''
     if household_id is not None:
@@ -147,6 +152,7 @@ def _fetch_active_actual_rows(conn, household_id: str | None = None) -> list[dic
                     rt.deleted_at,
                     rr.original_filename,
                     COALESCE(SUM(CASE WHEN COALESCE(rtl.is_deleted, 0) = 0 THEN COALESCE({line_total_expr}, 0) ELSE 0 END), 0) AS actual_line_sum,
+                    COALESCE(SUM(CASE WHEN COALESCE(rtl.is_deleted, 0) = 0 THEN COALESCE({line_discount_expr}, 0) ELSE 0 END), 0) AS actual_line_discount_sum,
                     SUM(CASE WHEN COALESCE(rtl.is_deleted, 0) = 0 AND TRIM(COALESCE(rtl.corrected_raw_label, rtl.raw_label, '')) <> '' THEN 1 ELSE 0 END) AS active_line_count
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
@@ -166,11 +172,19 @@ def _fetch_active_actual_rows(conn, household_id: str | None = None) -> list[dic
         row['active_line_count'] = int(row.get('active_line_count') or 0)
         row['line_count'] = row['active_line_count']
         actual_line_sum = _to_decimal(row.get('actual_line_sum')) or Decimal('0')
+        actual_line_discount_sum = _to_decimal(row.get('actual_line_discount_sum')) or Decimal('0')
         discount_total = _to_decimal(row.get('discount_total')) or Decimal('0')
         total_amount = _to_decimal(row.get('total_amount')) or Decimal('0')
-        candidates = [actual_line_sum, actual_line_sum + discount_total, actual_line_sum - discount_total]
+        line_level_net_sum = actual_line_sum + actual_line_discount_sum
+        candidates = [
+            line_level_net_sum,
+            actual_line_sum,
+            actual_line_sum + discount_total,
+            actual_line_sum - discount_total,
+        ]
         net_line_sum = min(candidates, key=lambda candidate: abs(candidate - total_amount))
         row['sum_line_total_used_for_decision'] = float(actual_line_sum)
+        row['line_discount_total_used_for_decision'] = float(actual_line_discount_sum)
         row['discount_total_used_for_decision'] = float(discount_total)
         row['net_line_sum_used_for_decision'] = float(net_line_sum)
     return rows
@@ -352,6 +366,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             'expected_line_count': expected.get('line_count'),
             'line_count': best_actual.get('line_count'),
             'sum_line_total_used_for_decision': best_actual.get('sum_line_total_used_for_decision'),
+            'line_discount_total_used_for_decision': best_actual.get('line_discount_total_used_for_decision'),
             'discount_total_used_for_decision': best_actual.get('discount_total_used_for_decision'),
             'net_line_sum_used_for_decision': best_actual.get('net_line_sum_used_for_decision'),
             'criteria': criteria,
@@ -420,7 +435,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
                 'winkelketen gelijk aan baseline',
                 'totaalbedrag gelijk aan baseline',
                 'aantal artikelen gelijk aan baseline',
-                'som van artikelregels gelijk aan kassabontotaal',
+                'som van artikelregels inclusief artikelkortingen gelijk aan kassabontotaal',
             ],
             'store_name_is_display_field': True,
             'store_chain_is_status_field': True,
