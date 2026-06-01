@@ -10,6 +10,7 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from app.receipt_ingestion.service_parts.plus_photo_line_grouping_fallback import apply_plus_photo_line_grouping_fallback
 from app.receipt_ingestion.service_parts.text_extraction import _normalize_text_lines
 
 try:
@@ -24,6 +25,7 @@ except Exception:  # pragma: no cover
 
 LOGGER = logging.getLogger(__name__)
 _PADDLE_OCR_INSTANCE = None
+
 
 def _get_paddle_ocr():
     global _PADDLE_OCR_INSTANCE
@@ -206,6 +208,14 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
         boxes.extend(current_boxes[: len(normalized_texts)])
 
     line_candidates = _group_paddle_texts_to_lines(texts, boxes if boxes else None)
+    plus_fallback_lines = apply_plus_photo_line_grouping_fallback(
+        filename=filename,
+        texts=texts,
+        boxes=boxes,
+        current_lines=line_candidates,
+    )
+    if plus_fallback_lines is not None:
+        line_candidates = plus_fallback_lines
     confidence = round(sum(scores) / len(scores), 4) if scores else None
     return line_candidates, confidence
 
