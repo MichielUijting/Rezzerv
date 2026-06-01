@@ -12,14 +12,17 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter, ImageOps
 from sqlalchemy import text
 
 from app.db import engine
+from app.receipt_ingestion.service_parts.image_ocr_flow import _ocr_image_text_with_paddle
 from app.services.receipt_service import _resolve_reparse_source_payload
 
-TARGET_PATTERNS = (
-    'plus foto 1',
-    'plus foto 2',
+ACTIVE_TARGET_RECEIPT_TABLE_IDS = (
+    '7323172c2f364be5b53be9e11efb1ef4',  # plus foto 1.jpg
+    '4ebdf7bf8a344093b6232ec5dd05b3c9',  # Plus foto 2.jpeg
 )
-OUTPUT_ROOT = Path('/tmp/rezzerv_preprocessing_diagnostics/r9_38b1')
+OUTPUT_ROOT = Path('/tmp/rezzerv_preprocessing_diagnostics/r9_38b1a')
 MAX_PREVIEW_SIDE = 1800
+_AMOUNT_RE = re.compile(r'-?\d{1,6}(?:[\.,]\d{2})')
+ARTICLE_HINT_RE = re.compile(r'[A-Za-zÀ-ÖØ-öø-ÿ]{3,}')
 
 
 def _safe_name(value: str) -> str:
@@ -61,11 +64,17 @@ def _save_preview(image: Image.Image, path: Path) -> str:
     return str(path)
 
 
+def _image_to_jpeg_bytes(image: Image.Image) -> bytes:
+    buffer = io.BytesIO()
+    image.convert('RGB').save(buffer, format='JPEG', quality=95)
+    return buffer.getvalue()
+
+
 def _estimate_receipt_bbox(image: Image.Image) -> tuple[int, int, int, int] | None:
     """Estimate receipt rectangle using only generic brightness/background contrast.
 
-    This intentionally avoids store/file-specific assumptions and does not alter
-    runtime OCR. It is diagnostic-only and conservative.
+    Diagnostic-only. This does not alter runtime OCR and intentionally avoids
+    filename/store-specific assumptions.
     """
     gray = ImageOps.grayscale(image)
     small_max = 900
@@ -75,7 +84,6 @@ def _estimate_receipt_bbox(image: Image.Image) -> tuple[int, int, int, int] | No
     pixels = blurred.load()
     width, height = blurred.size
 
-    # Estimate dark background / light paper separation by using relative local brightness.
     hist = blurred.histogram()
     total = sum(hist) or 1
     cumulative = 0
@@ -139,7 +147,6 @@ def _contrast_score(image: Image.Image, bbox: tuple[int, int, int, int] | None) 
     receipt = gray.crop((left, top, right, bottom))
     receipt_mean = mean(list(receipt.resize((80, 160)).getdata()))
 
-    # Background sample from corners outside the bbox.
     samples: list[int] = []
     w, h = gray.size
     corner_boxes = [
@@ -171,8 +178,20 @@ def _crop_receipt(image: Image.Image, bbox: tuple[int, int, int, int] | None) ->
 def _prepare_contrast(image: Image.Image) -> Image.Image:
     gray = ImageOps.grayscale(image)
     autocontrast = ImageOps.autocontrast(gray, cutoff=1)
-    enhanced = ImageEnhance.Contrast(autocontrast).enhance(1.8)
-    return enhanced
+    return ImageEnhance.Contrast(autocontrast).enhance(1.8)
+
+
+def _local_contrast(image: Image.Image) -> Image.Image:
+    gray = ImageOps.grayscale(image)
+    autocontrast = ImageOps.autocontrast(gray, cutoff=0.5)
+    sharp = autocontrast.filter(ImageFilter.UnsharpMask(radius=1.2, percent=120, threshold=4))
+    return ImageEnhance.Contrast(sharp).enhance(1.35)
+
+
+def _light_sharpen(image: Image.Image) -> Image.Image:
+    gray = ImageOps.grayscale(image)
+    autocontrast = ImageOps.autocontrast(gray, cutoff=0.5)
+    return autocontrast.filter(ImageFilter.UnsharpMask(radius=1.0, percent=80, threshold=6))
 
 
 def _threshold_image(image: Image.Image) -> Image.Image:
@@ -190,14 +209,14 @@ def _threshold_image(image: Image.Image) -> Image.Image:
 
 
 def _line_detection_preview(image: Image.Image) -> tuple[Image.Image, dict[str, Any]]:
-    gray = _prepare_contrast(image)
     threshold = _threshold_image(image)
     data = threshold.load()
     width, height = threshold.size
     row_dark_counts: list[int] = []
+    step = max(1, width // 600)
     for y in range(height):
         dark = 0
-        for x in range(0, width, max(1, width // 600)):
+        for x in range(0, width, step):
             if data[x, y] < 128:
                 dark += 1
         row_dark_counts.append(dark)
@@ -215,7 +234,6 @@ def _line_detection_preview(image: Image.Image) -> tuple[Image.Image, dict[str, 
     if start is not None and height - start >= 2:
         bands.append((start, height - 1))
 
-    # Merge very close bands caused by letter ascenders/descenders.
     merged: list[tuple[int, int]] = []
     for band in bands:
         if not merged or band[0] - merged[-1][1] > 5:
@@ -232,13 +250,12 @@ def _line_detection_preview(image: Image.Image) -> tuple[Image.Image, dict[str, 
         'detected_line_band_count': len(merged),
         'line_band_heights': [bottom - top + 1 for top, bottom in merged[:80]],
         'line_band_y_ranges': [[top, bottom] for top, bottom in merged[:80]],
+        'diagnostic_quality': 'failed_single_full_image_band' if len(merged) == 1 and merged[0][1] - merged[0][0] > height * 0.80 else 'diagnostic_only',
     }
     return overlay, metrics
 
 
 def _estimate_skew_angle_from_bbox(bbox: tuple[int, int, int, int] | None, image: Image.Image) -> dict[str, Any]:
-    # Without OpenCV/Hough transforms this diagnostic intentionally reports only
-    # coarse geometry. It avoids pretending to have a reliable deskew angle.
     if bbox is None:
         return {'estimated_skew_angle_degrees': None, 'method': 'not_available_no_bbox'}
     left, top, right, bottom = bbox
@@ -253,8 +270,8 @@ def _estimate_skew_angle_from_bbox(bbox: tuple[int, int, int, int] | None, image
 
 
 def _fetch_targets() -> list[dict[str, Any]]:
-    where = ' OR '.join(['LOWER(rr.original_filename) LIKE :pattern_' + str(index) for index, _ in enumerate(TARGET_PATTERNS)])
-    params = {f'pattern_{index}': f'%{pattern}%' for index, pattern in enumerate(TARGET_PATTERNS)}
+    placeholders = ', '.join([f':id_{index}' for index, _ in enumerate(ACTIVE_TARGET_RECEIPT_TABLE_IDS)])
+    params = {f'id_{index}': receipt_table_id for index, receipt_table_id in enumerate(ACTIVE_TARGET_RECEIPT_TABLE_IDS)}
     query = text(f'''
         SELECT
             rr.id AS raw_receipt_id,
@@ -267,19 +284,65 @@ def _fetch_targets() -> list[dict[str, Any]]:
             rem.body_html,
             rem.body_text,
             rem.selected_part_type
-        FROM raw_receipts rr
-        LEFT JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id AND rt.deleted_at IS NULL
+        FROM receipt_tables rt
+        JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
         LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
-        WHERE {where}
-        ORDER BY rr.original_filename, rt.id
+        WHERE rt.deleted_at IS NULL
+          AND rt.id IN ({placeholders})
+        ORDER BY CASE rt.id
+            WHEN :id_0 THEN 0
+            WHEN :id_1 THEN 1
+            ELSE 99
+        END
     ''')
     with engine.connect() as conn:
         return [dict(row) for row in conn.execute(query, params).mappings().all()]
 
 
+def _ocr_metrics(lines: list[str], confidence: float | None, expected_total: Any) -> dict[str, Any]:
+    normalized_lines = [re.sub(r'\s+', ' ', str(line or '')).strip() for line in lines or [] if str(line or '').strip()]
+    amount_lines = [line for line in normalized_lines if _AMOUNT_RE.search(line)]
+    expected_total_str = str(expected_total).replace('.', ',') if expected_total is not None else ''
+    expected_total_dot = str(expected_total) if expected_total is not None else ''
+    known_total_detected = bool(expected_total_str and any(expected_total_str in line or expected_total_dot in line for line in normalized_lines))
+    article_like_lines = [line for line in normalized_lines if ARTICLE_HINT_RE.search(line) and _AMOUNT_RE.search(line)]
+    return {
+        'ocr_line_count': len(normalized_lines),
+        'ocr_confidence': confidence,
+        'amount_token_count': sum(len(_AMOUNT_RE.findall(line)) for line in normalized_lines),
+        'amount_bearing_line_count': len(amount_lines),
+        'article_block_candidate_line_count': len(article_like_lines),
+        'known_total_detected': known_total_detected,
+        'sample_lines': normalized_lines[:35],
+        'amount_bearing_sample_lines': amount_lines[:20],
+    }
+
+
+def _ocr_variant(*, image: Image.Image, variant_name: str, original_filename: str, expected_total: Any) -> dict[str, Any]:
+    lines, confidence = _ocr_image_text_with_paddle(_image_to_jpeg_bytes(image), f'{Path(original_filename).stem}_{variant_name}.jpg')
+    return {
+        'variant': variant_name,
+        'image_dimensions': {'width': image.width, 'height': image.height},
+        'image_stats': _image_stats(image),
+        **_ocr_metrics(lines, confidence, expected_total),
+    }
+
+
+def _build_variants(original: Image.Image, cropped: Image.Image) -> dict[str, Image.Image]:
+    return {
+        'original': original.convert('RGB'),
+        'crop_only': cropped.convert('RGB'),
+        'crop_grayscale_no_threshold': ImageOps.grayscale(cropped).convert('RGB'),
+        'crop_autocontrast': _prepare_contrast(cropped).convert('RGB'),
+        'crop_sharpen_light': _light_sharpen(cropped).convert('RGB'),
+        'crop_local_contrast': _local_contrast(cropped).convert('RGB'),
+        'crop_threshold_diagnostic_only': _threshold_image(cropped).convert('RGB'),
+    }
+
+
 def _diagnose_target(record: dict[str, Any]) -> dict[str, Any]:
     filename = str(record.get('original_filename') or 'receipt')
-    out_dir = OUTPUT_ROOT / _safe_name(filename)
+    out_dir = OUTPUT_ROOT / f"{_safe_name(str(record.get('receipt_table_id') or 'unknown'))}_{_safe_name(filename)}"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     storage_path = Path(str(record.get('storage_path') or ''))
@@ -287,6 +350,7 @@ def _diagnose_target(record: dict[str, Any]) -> dict[str, Any]:
         return {
             'original_filename': filename,
             'raw_receipt_id': record.get('raw_receipt_id'),
+            'receipt_table_id': record.get('receipt_table_id'),
             'error': f'raw receipt file not found: {storage_path}',
             'read_only': True,
         }
@@ -296,17 +360,29 @@ def _diagnose_target(record: dict[str, Any]) -> dict[str, Any]:
     image = Image.open(io.BytesIO(parse_bytes)).convert('RGB')
     bbox = _estimate_receipt_bbox(image)
     cropped = _crop_receipt(image, bbox)
-    contrast = _prepare_contrast(cropped)
-    threshold = _threshold_image(cropped)
     line_overlay, line_metrics = _line_detection_preview(cropped)
+    variants = _build_variants(image, cropped)
+
+    variant_paths: dict[str, str] = {}
+    for variant_name, variant_image in variants.items():
+        variant_paths[variant_name] = _save_preview(variant_image, out_dir / f'variant_{variant_name}.jpg')
+
+    ocr_comparison = [
+        _ocr_variant(
+            image=variant_image,
+            variant_name=variant_name,
+            original_filename=filename,
+            expected_total=record.get('total_amount'),
+        )
+        for variant_name, variant_image in variants.items()
+    ]
 
     paths = {
         'original_preview_path': _save_preview(image, out_dir / '01_original_preview.jpg'),
         'bbox_overlay_path': _save_preview(_bbox_overlay(image, bbox), out_dir / '02_receipt_bbox_overlay.jpg'),
         'cropped_receipt_preview_path': _save_preview(cropped, out_dir / '03_cropped_receipt.jpg'),
-        'contrast_preview_path': _save_preview(contrast.convert('RGB'), out_dir / '04_contrast_receipt.jpg'),
-        'threshold_preview_path': _save_preview(threshold.convert('RGB'), out_dir / '05_threshold_receipt.jpg'),
-        'line_detection_preview_path': _save_preview(line_overlay, out_dir / '06_line_detection_overlay.jpg'),
+        'line_detection_preview_path': _save_preview(line_overlay, out_dir / '04_line_detection_overlay.jpg'),
+        'variant_preview_paths': variant_paths,
     }
 
     report = {
@@ -325,12 +401,15 @@ def _diagnose_target(record: dict[str, Any]) -> dict[str, Any]:
         'contrast_metrics': _contrast_score(image, bbox),
         'skew_diagnostics': _estimate_skew_angle_from_bbox(bbox, image),
         'line_detection_metrics': line_metrics,
+        'ocr_before_after_comparison': ocr_comparison,
         'preview_paths': paths,
         'diagnostic_limitations': [
             'read-only diagnostic only; runtime parser/OCR is unchanged',
-            'bbox detection uses generic brightness segmentation and can be wrong on low-contrast images',
+            'only the two active PLUS receipt_table_id targets are analysed',
+            'bbox detection uses generic brightness segmentation and can be wrong on low-contrast or multi-receipt images',
+            'threshold variant is diagnostic-only and not recommended for runtime without separate acceptance evidence',
             'skew angle is intentionally not estimated without a reliable Hough/perspective transform',
-            'line bands are image-preprocessing hints, not OCR truth',
+            'OCR comparison is observational and writes no OCR result to the database',
         ],
         'read_only': True,
         'database_write_intent': False,
@@ -346,8 +425,8 @@ def build_report() -> dict[str, Any]:
     reports = [_diagnose_target(record) for record in targets]
     index_path = OUTPUT_ROOT / 'index.json'
     result = {
-        'test': 'R9-38B1 pre-OCR receipt photo preprocessing diagnostics',
-        'target_patterns': TARGET_PATTERNS,
+        'test': 'R9-38B1a pre-OCR preprocessing diagnostics with OCR variant comparison',
+        'active_target_receipt_table_ids': ACTIVE_TARGET_RECEIPT_TABLE_IDS,
         'output_root': str(OUTPUT_ROOT),
         'target_count': len(targets),
         'reports': reports,
