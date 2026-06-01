@@ -32,8 +32,6 @@ def _safe_name(value: str) -> str:
 def _jsonable(value: Any) -> Any:
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
-    if isinstance(value, dict):
-        return {str(k): _jsonable(v) for k, v in value.items()}
     if isinstance(value, (list, tuple)):
         return [_jsonable(v) for v in value]
     if hasattr(value, 'tolist'):
@@ -87,9 +85,11 @@ def _estimate_receipt_bbox(image: Image.Image) -> tuple[int, int, int, int] | No
                 ys.append(y)
     if len(xs) < 100:
         return None
+
     def pct(values: list[int], fraction: float) -> int:
         ordered = sorted(values)
         return ordered[min(len(ordered) - 1, max(0, int(len(ordered) * fraction)))]
+
     left, right, top, bottom = pct(xs, 0.02), pct(xs, 0.98), pct(ys, 0.02), pct(ys, 0.98)
     mx, my = max(4, int((right - left) * 0.025)), max(4, int((bottom - top) * 0.025))
     inv = 1.0 / scale
@@ -114,20 +114,27 @@ def _bbox_anchor(bbox: Any) -> dict[str, Any]:
         if not points:
             return {'center_y': None, 'height': None, 'min_x': None, 'max_x': None}
         xs, ys = [p[0] for p in points], [p[1] for p in points]
-        return {'center_y': round((min(ys) + max(ys)) / 2, 3), 'height': round(max(ys) - min(ys), 3), 'min_x': round(min(xs), 3), 'max_x': round(max(xs), 3), 'min_y': round(min(ys), 3), 'max_y': round(max(ys), 3)}
+        return {
+            'center_y': round((min(ys) + max(ys)) / 2, 3),
+            'height': round(max(ys) - min(ys), 3),
+            'min_x': round(min(xs), 3),
+            'max_x': round(max(xs), 3),
+            'min_y': round(min(ys), 3),
+            'max_y': round(max(ys), 3),
+        }
     except Exception as exc:
         return {'center_y': None, 'height': None, 'min_x': None, 'max_x': None, 'error': str(exc)}
 
 
-def _extract_raw_payload(result: Any) -> dict[str, Any]:
-    payloads: list[dict[str, Any]] = []
+def _extract_compact_payload(result: Any) -> dict[str, Any]:
     fragments: list[dict[str, Any]] = []
+    compact_payloads: list[dict[str, Any]] = []
     all_texts: list[str] = []
     all_boxes: list[Any] = []
     all_scores: list[float] = []
+
     for item_index, item in enumerate(_normalize_paddle_collection(result)):
         payload = _extract_payload_from_paddle_item(item)
-        payloads.append(_jsonable(payload))
         texts = [str(t) for t in _normalize_paddle_collection(payload.get('rec_texts') or payload.get('texts')) if str(t).strip()]
         scores_raw = _normalize_paddle_collection(payload.get('rec_scores') or payload.get('scores'))
         boxes = payload.get('rec_boxes'); box_source = 'rec_boxes'
@@ -136,21 +143,41 @@ def _extract_raw_payload(result: Any) -> dict[str, Any]:
         if boxes is None:
             boxes = payload.get('rec_polys'); box_source = 'rec_polys'
         boxes_list = _normalize_paddle_collection(boxes)
+        compact_payloads.append({
+            'item_index': item_index,
+            'available_payload_keys': sorted(str(key) for key in payload.keys()),
+            'rec_texts': texts,
+            'rec_scores': _jsonable(scores_raw[:len(texts)]),
+            box_source: _jsonable(boxes_list[:len(texts)]),
+            'omitted_large_fields': [key for key in ('input_img', 'doc_preprocessor_res', 'dt_polys', 'rec_polys', 'rec_boxes') if key in payload and key != box_source],
+        })
         for local_index, text_value in enumerate(texts):
             bbox = boxes_list[local_index] if local_index < len(boxes_list) else None
             score = None
             if local_index < len(scores_raw):
-                try: score = float(scores_raw[local_index])
-                except Exception: score = None
+                try:
+                    score = float(scores_raw[local_index])
+                except Exception:
+                    score = None
             if score is not None:
                 all_scores.append(score)
             all_texts.append(text_value)
             if bbox is not None:
                 all_boxes.append(bbox)
-            fragments.append({'global_index': len(fragments), 'item_index': item_index, 'local_index': local_index, 'text': text_value, 'score': score, 'bbox_source': box_source if bbox is not None else None, 'bbox': _jsonable(bbox), **_bbox_anchor(bbox)})
+            fragments.append({
+                'global_index': len(fragments),
+                'item_index': item_index,
+                'local_index': local_index,
+                'text': text_value,
+                'score': score,
+                'bbox_source': box_source if bbox is not None else None,
+                'bbox': _jsonable(bbox),
+                **_bbox_anchor(bbox),
+            })
+
     heights = [float(a['height']) for a in (_bbox_anchor(b) for b in all_boxes) if isinstance(a.get('height'), (int, float)) and a['height'] > 0]
     return {
-        'raw_result_payloads': payloads,
+        'compact_raw_payloads_without_images': compact_payloads,
         'raw_fragment_table': fragments,
         'current_grouped_lines_for_comparison_only': _group_paddle_texts_to_lines(all_texts, all_boxes if all_boxes else None),
         'current_grouping_parameters_for_comparison_only': {
@@ -183,20 +210,29 @@ def build_report() -> dict[str, Any]:
         variant.save(image_path, format='JPEG', quality=95)
         raw_result = model.predict(str(image_path))
     result = {
-        'test': 'R9-38B2 raw PaddleOCR output export',
+        'test': 'R9-38B2a compact raw PaddleOCR output export',
         'read_only': True,
         'database_write_intent': False,
         'parser_invoked': False,
         'line_grouping_applied_to_raw_output': False,
         'normalization_applied_to_raw_output': False,
-        'target': {'receipt_table_id': TARGET_RECEIPT_TABLE_ID, 'raw_receipt_id': record.get('raw_receipt_id'), 'original_filename': filename, 'parse_filename': parse_filename, 'parse_mime_type': parse_mime_type, 'stored_total_amount': record.get('total_amount'), 'stored_line_count': record.get('line_count')},
+        'large_image_payloads_omitted': True,
+        'target': {
+            'receipt_table_id': TARGET_RECEIPT_TABLE_ID,
+            'raw_receipt_id': record.get('raw_receipt_id'),
+            'original_filename': filename,
+            'parse_filename': parse_filename,
+            'parse_mime_type': parse_mime_type,
+            'stored_total_amount': record.get('total_amount'),
+            'stored_line_count': record.get('line_count'),
+        },
         'source_variant': SOURCE_VARIANT,
         'variant_image_path': str(variant_path),
         'detected_receipt_bounding_box': list(bbox) if bbox else None,
         'variant_image_dimensions': {'width': variant.width, 'height': variant.height},
-        **_extract_raw_payload(raw_result),
+        **_extract_compact_payload(raw_result),
     }
-    output_path = out_dir / 'raw_paddleocr_output.json'
+    output_path = out_dir / 'raw_paddleocr_output_compact.json'
     output_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
     result['output_json_path'] = str(output_path)
     (OUTPUT_ROOT / 'index.json').write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding='utf-8')
