@@ -163,11 +163,14 @@ def _fetch_active_actual_rows(conn, household_id: str | None = None) -> list[dic
         discount_total = _to_decimal(row.get('discount_total')) or Decimal('0')
         total_amount = _to_decimal(row.get('total_amount')) or Decimal('0')
         line_level_net_sum = actual_line_sum + actual_line_discount_sum
+        # R9-38B10: include combined line-level and receipt-level corrections.
         candidates = [
             line_level_net_sum,
             actual_line_sum,
             actual_line_sum + discount_total,
             actual_line_sum - discount_total,
+            line_level_net_sum + discount_total,
+            line_level_net_sum - discount_total,
         ]
         net_line_sum = min(candidates, key=lambda candidate: abs(candidate - total_amount))
         row['sum_line_total_used_for_decision'] = float(actual_line_sum)

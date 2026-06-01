@@ -85,6 +85,7 @@ from app.receipt_ingestion.parsing.financial_helpers import (
     _receipt_line_financials as _financial_receipt_line_financials,
     _totals_match_receipt_lines as _financial_totals_match_receipt_lines,
 )
+from app.receipt_ingestion.parsing.plus_correction_runtime import apply_plus_runtime_corrections
 from app.receipt_ingestion.parsing.line_classification_helpers import (
     _classify_receipt_text_line as _classification_classify_receipt_text_line,
     _contains_letter,
@@ -925,6 +926,13 @@ def _parse_result_from_text_lines(
         lines.sort(key=lambda item: int(item.get('source_index') or 0))
     lines = _filter_non_product_receipt_lines(lines)
     discount_total = _apply_discount_entries(lines, _extract_discount_entries(text_lines))
+    lines, discount_total, plus_correction_diagnostics = apply_plus_runtime_corrections(
+        text_lines=text_lines,
+        lines=lines,
+        discount_total=discount_total,
+        store_name=store_name,
+        filename=filename,
+    )
     lines = _filter_non_product_receipt_lines(lines)
     # R9-34T SSOT:
     # total_amount must come from an explicit receipt total source.
@@ -982,7 +990,10 @@ def _parse_result_from_text_lines(
         currency='EUR',
         lines=lines,
         store_branch=store_branch,
-        parser_diagnostics=summarize_lines_parser_diagnostics(lines),
+        parser_diagnostics={
+            **summarize_lines_parser_diagnostics(lines),
+            **(plus_correction_diagnostics or {}),
+        },
     )
 
 
