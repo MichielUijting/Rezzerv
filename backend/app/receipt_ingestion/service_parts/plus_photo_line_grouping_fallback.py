@@ -15,6 +15,7 @@ _STOP_TOKENS = ('subtotaal', 'totaal', 'klantticket', 'terminal', 'betaling', 'b
 _DISCOUNT_TOKENS = ('plus geeft', 'korting', 'actie', 'voordeel')
 _HEADER_TOKENS = ('omschrijving', 'onschrijving', 'p st/kg', 'bedrag')
 _PLUS_PROFILE_TOKENS = ('plus', 'pluspunten')
+_PLUSPUNTEN_TOKENS = ('pluspunten', 'piuspunten')
 
 
 def _norm(value: Any) -> str:
@@ -123,6 +124,11 @@ def _has_suspicious_article_merges(lines: list[str]) -> bool:
     return False
 
 
+def _has_pluspunten_correction(texts: list[str]) -> bool:
+    normalized = [_norm(text).lower() for text in texts]
+    return any(any(token in text for token in _PLUSPUNTEN_TOKENS) for text in normalized)
+
+
 def _detect_article_block(fragments: list[dict[str, Any]]) -> tuple[float, float, list[dict[str, Any]]]:
     ordered = sorted(fragments, key=_sort_key)
     start_y = None
@@ -197,6 +203,11 @@ def _previous_label_row(rows: list[dict[str, Any]], amount_y: float) -> dict[str
     return candidates[-1] if candidates else None
 
 
+def _next_label_row(rows: list[dict[str, Any]], amount_y: float, max_delta: float) -> dict[str, Any] | None:
+    candidates = [row for row in rows if 0 <= float(row['center_y']) - amount_y <= max_delta and not row.get('is_discount_context')]
+    return candidates[0] if candidates else None
+
+
 def _nearest_discount_row(rows: list[dict[str, Any]], amount_y: float, max_delta: float) -> dict[str, Any] | None:
     best = None
     best_delta = None
@@ -210,14 +221,18 @@ def _nearest_discount_row(rows: list[dict[str, Any]], amount_y: float, max_delta
     return best
 
 
-def _assign_amounts(rows: list[dict[str, Any]], amounts: list[dict[str, Any]], median_height: float) -> None:
+def _assign_amounts(rows: list[dict[str, Any]], amounts: list[dict[str, Any]], median_height: float, *, amount_pairing_mode: str = 'previous_or_nearest') -> None:
     max_delta = max(16.0, median_height * 0.72)
+    if amount_pairing_mode == 'amount_above_label':
+        max_delta = max(18.0, median_height * 0.85)
     for amount in sorted(amounts, key=_sort_key):
         value = _amount_value(amount.get('text'))
         amount_y = float(amount.get('center_y') or 0)
         assigned_row = None
         if value is not None and value < 0:
             assigned_row = _nearest_discount_row(rows, amount_y, max_delta)
+        elif amount_pairing_mode == 'amount_above_label':
+            assigned_row = _next_label_row(rows, amount_y, max_delta)
         else:
             prev = _previous_label_row(rows, amount_y)
             if prev is not None and abs(amount_y - float(prev['center_y'])) <= max_delta:
@@ -257,8 +272,8 @@ def _render_row(row: dict[str, Any]) -> str:
     return _norm(f"{row.get('label')} {amount_text}")
 
 
-def _reconstruct_article_block(fragments: list[dict[str, Any]]) -> list[str] | None:
-    heights = [float(item.get('height')) for item in fragments if float(item.get('height') or 0) > 0]
+def _reconstruct_article_block(fragments: list[dict[str, Any]], *, amount_pairing_mode: str = 'previous_or_nearest') -> list[str] | None:
+    heights = [float(item.get('height') or 0) for item in fragments if item.get('height')]
     median_height = median(heights) if heights else 27.0
     _start_y, _stop_y, block = _detect_article_block(fragments)
     if len(block) < 8:
@@ -267,15 +282,23 @@ def _reconstruct_article_block(fragments: list[dict[str, Any]]) -> list[str] | N
     amounts = _amount_fragments(block)
     if len(rows) < 5 or len(amounts) < 5:
         return None
-    _assign_amounts(rows, amounts, median_height)
+    _assign_amounts(rows, amounts, median_height, amount_pairing_mode=amount_pairing_mode)
     classifications = [_classify_row(row) for row in rows]
     invalid = [kind for kind in classifications if kind in {'missing_amount', 'invalid_discount', 'multi_amount_review_needed'}]
     valid_articles = [kind for kind in classifications if kind in {'single_article', 'quantity_unit_and_line_total'}]
     if invalid or len(valid_articles) < 5:
         return None
     rendered = [_render_row(row) for row in rows]
-    if not any('plus geeft' in line.lower() for line in rendered):
-        return None
+    if amount_pairing_mode == 'previous_or_nearest':
+        if not any('plus geeft' in line.lower() for line in rendered):
+            return None
+    else:
+        if len(valid_articles) < 8:
+            return None
+        subtotal_amounts = [_amount_value(item.get('text')) for item in block if _is_amount(item.get('text'))]
+        article_sum = sum(Decimal(str(amount.get('value') or '0')) for row in rows for amount in (row.get('amounts') or []))
+        if not any(value is not None and abs(Decimal(str(value)) - article_sum) <= Decimal('0.02') for value in subtotal_amounts):
+            return None
     return rendered
 
 
@@ -330,6 +353,7 @@ def diagnose_plus_photo_line_grouping_fallback(
         'replacement_valid': False,
         'fallback_applied': False,
         'fallback_reject_reason': None,
+        'applied_pairing_mode': None,
         'current_lines_before_fallback': list(current_lines or []),
         'raw_texts_sample': [_norm(text) for text in (texts or [])[:80]],
         'reconstructed_article_lines': [],
@@ -346,6 +370,7 @@ def diagnose_plus_photo_line_grouping_fallback(
         diagnostics['fallback_reject_reason'] = 'not_plus_profile'
         return diagnostics
     diagnostics['has_suspicious_article_merges'] = _has_suspicious_article_merges(current_lines)
+    diagnostics['has_pluspunten_correction'] = _has_pluspunten_correction(texts)
     if not diagnostics['has_suspicious_article_merges']:
         diagnostics['fallback_reject_reason'] = 'no_suspicious_article_merges'
         return diagnostics
@@ -358,9 +383,15 @@ def diagnose_plus_photo_line_grouping_fallback(
     if not block:
         diagnostics['fallback_reject_reason'] = 'article_block_not_detected'
         return diagnostics
+
     reconstructed = _reconstruct_article_block(fragments)
+    pairing_mode = 'previous_or_nearest'
+    if not reconstructed and diagnostics.get('has_pluspunten_correction'):
+        reconstructed = _reconstruct_article_block(fragments, amount_pairing_mode='amount_above_label')
+        pairing_mode = 'amount_above_label' if reconstructed else pairing_mode
     diagnostics['reconstructed_article_lines'] = list(reconstructed or [])
     diagnostics['reconstruction_valid'] = bool(reconstructed)
+    diagnostics['applied_pairing_mode'] = pairing_mode if reconstructed else None
     if not reconstructed:
         diagnostics['fallback_reject_reason'] = 'reconstruction_invalid'
         return diagnostics
