@@ -9,9 +9,6 @@ from app.receipt_ingestion.profiles.jumbo.app_quantity_pairs import (
     should_append_jumbo_app_quantity_detail_pair,
     should_append_jumbo_app_savings_detail_pair,
 )
-from app.receipt_ingestion.profiles.plus.multi_amount_lines import (
-    plus_multi_amount_candidates,
-)
 
 AppendProductCandidate = Callable[..., int | None]
 CleanLabel = Callable[[str | None], str]
@@ -216,36 +213,6 @@ def enrich_lines_with_store_profile_pairs(
                 candidate=article_discount_cluster,
                 amount_to_float=amount_to_float,
             )
-            continue
-
-        plus_candidates = plus_multi_amount_candidates(
-            lines=source_lines,
-            extracted=enriched,
-            source_index=source_index,
-            store_name=store_name,
-            filename=filename,
-            parse_decimal=parse_decimal,
-            is_invalid_label=looks_like_non_product_receipt_label,
-        )
-        if plus_candidates:
-            for plus_candidate in plus_candidates:
-                _append_enrichment_candidate(
-                    enriched=enriched,
-                    candidate=plus_candidate,
-                    filename=filename,
-                    store_name=store_name,
-                    append_product_candidate_fn=append_product_candidate_fn,
-                    clean_label=clean_label,
-                    parse_quantity=parse_quantity,
-                    parse_decimal=parse_decimal,
-                    amount_to_float=amount_to_float,
-                    classify_line=classify_line,
-                    looks_like_non_product_receipt_label=looks_like_non_product_receipt_label,
-                    append_branch="plus_multi_amount_line_refinement",
-                    parser_path="store_profile_line_enrichment.plus_multi_amount_line_refinement",
-                    caller_line_hint="PLUS multi-amount OCR line split via profile refinement",
-                    confidence_score=0.72,
-                )
             continue
 
         jumbo_pair = should_append_jumbo_app_quantity_detail_pair(
