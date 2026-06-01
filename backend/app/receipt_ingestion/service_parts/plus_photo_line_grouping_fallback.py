@@ -305,6 +305,76 @@ def _replace_article_block(current_lines: list[str], reconstructed_article_lines
     return current_lines[:start_index] + reconstructed_article_lines + current_lines[stop_index:]
 
 
+def diagnose_plus_photo_line_grouping_fallback(
+    *,
+    filename: str,
+    texts: list[str],
+    boxes: list[Any],
+    current_lines: list[str],
+) -> dict[str, Any]:
+    suffix = Path(filename or '').suffix.lower()
+    diagnostics: dict[str, Any] = {
+        'filename': filename,
+        'suffix': suffix,
+        'is_image_receipt': suffix in _IMAGE_EXTENSIONS,
+        'has_texts': bool(texts),
+        'text_count': len(texts or []),
+        'has_boxes': bool(boxes),
+        'box_count': len(boxes or []),
+        'texts_boxes_same_length': bool(texts and boxes and len(texts) == len(boxes)),
+        'looks_like_plus_receipt': False,
+        'has_suspicious_article_merges': False,
+        'article_block_detected': False,
+        'article_block_fragment_count': 0,
+        'reconstruction_valid': False,
+        'replacement_valid': False,
+        'fallback_applied': False,
+        'fallback_reject_reason': None,
+        'current_lines_before_fallback': list(current_lines or []),
+        'raw_texts_sample': [_norm(text) for text in (texts or [])[:80]],
+        'reconstructed_article_lines': [],
+        'final_lines_after_fallback': list(current_lines or []),
+    }
+    if not diagnostics['is_image_receipt']:
+        diagnostics['fallback_reject_reason'] = 'not_image_receipt'
+        return diagnostics
+    if not diagnostics['texts_boxes_same_length']:
+        diagnostics['fallback_reject_reason'] = 'missing_or_mismatched_texts_boxes'
+        return diagnostics
+    diagnostics['looks_like_plus_receipt'] = _looks_like_plus_receipt(texts)
+    if not diagnostics['looks_like_plus_receipt']:
+        diagnostics['fallback_reject_reason'] = 'not_plus_profile'
+        return diagnostics
+    diagnostics['has_suspicious_article_merges'] = _has_suspicious_article_merges(current_lines)
+    if not diagnostics['has_suspicious_article_merges']:
+        diagnostics['fallback_reject_reason'] = 'no_suspicious_article_merges'
+        return diagnostics
+    fragments = _fragments_from_ocr(texts, boxes)
+    _start_y, _stop_y, block = _detect_article_block(fragments)
+    diagnostics['article_block_detected'] = bool(block)
+    diagnostics['article_block_fragment_count'] = len(block)
+    diagnostics['article_block_start_y'] = _start_y
+    diagnostics['article_block_stop_y'] = _stop_y
+    if not block:
+        diagnostics['fallback_reject_reason'] = 'article_block_not_detected'
+        return diagnostics
+    reconstructed = _reconstruct_article_block(fragments)
+    diagnostics['reconstructed_article_lines'] = list(reconstructed or [])
+    diagnostics['reconstruction_valid'] = bool(reconstructed)
+    if not reconstructed:
+        diagnostics['fallback_reject_reason'] = 'reconstruction_invalid'
+        return diagnostics
+    replaced = _replace_article_block(current_lines, reconstructed)
+    diagnostics['replacement_valid'] = bool(replaced and len(replaced) >= len(current_lines))
+    if not diagnostics['replacement_valid']:
+        diagnostics['fallback_reject_reason'] = 'replacement_invalid'
+        return diagnostics
+    diagnostics['fallback_applied'] = True
+    diagnostics['fallback_reject_reason'] = None
+    diagnostics['final_lines_after_fallback'] = list(replaced or [])
+    return diagnostics
+
+
 def apply_plus_photo_line_grouping_fallback(
     *,
     filename: str,
@@ -319,20 +389,12 @@ def apply_plus_photo_line_grouping_fallback(
     results with PLUS profile evidence, raw boxes, an article block, and proven
     suspicious current line merges.
     """
-    suffix = Path(filename or '').suffix.lower()
-    if suffix not in _IMAGE_EXTENSIONS:
+    diagnostics = diagnose_plus_photo_line_grouping_fallback(
+        filename=filename,
+        texts=texts,
+        boxes=boxes,
+        current_lines=current_lines,
+    )
+    if not diagnostics.get('fallback_applied'):
         return None
-    if not texts or not boxes or len(texts) != len(boxes):
-        return None
-    if not _looks_like_plus_receipt(texts):
-        return None
-    if not _has_suspicious_article_merges(current_lines):
-        return None
-    fragments = _fragments_from_ocr(texts, boxes)
-    reconstructed = _reconstruct_article_block(fragments)
-    if not reconstructed:
-        return None
-    replaced = _replace_article_block(current_lines, reconstructed)
-    if not replaced or len(replaced) < len(current_lines):
-        return None
-    return replaced
+    return list(diagnostics.get('final_lines_after_fallback') or [])
