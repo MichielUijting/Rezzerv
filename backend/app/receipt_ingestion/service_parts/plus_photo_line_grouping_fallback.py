@@ -16,6 +16,7 @@ _DISCOUNT_TOKENS = ('plus geeft', 'korting', 'actie', 'voordeel')
 _HEADER_TOKENS = ('omschrijving', 'onschrijving', 'p st/kg', 'bedrag')
 _PLUS_PROFILE_TOKENS = ('plus', 'pluspunten')
 _PLUSPUNTEN_TOKENS = ('pluspunten', 'piuspunten')
+_PAYMENT_TOKENS = ('contactless', 'terminal', 'merchant', 'betaling', 'kaart:', 'visa debit', 'pin', 'wisselgeld')
 
 
 def _norm(value: Any) -> str:
@@ -78,11 +79,7 @@ def _fragments_from_ocr(texts: list[str], boxes: list[Any]) -> list[dict[str, An
         anchor = _ocr_bbox_to_anchor(box)
         if anchor is None:
             continue
-        fragments.append({
-            'global_index': index,
-            'text': normalized,
-            **anchor,
-        })
+        fragments.append({'global_index': index, 'text': normalized, **anchor})
     return fragments
 
 
@@ -96,11 +93,14 @@ def _line_key(fragment: dict[str, Any]) -> str:
 
 def _is_text_label(fragment: dict[str, Any]) -> bool:
     text = _norm(fragment.get('text'))
+    lowered = text.lower()
     if not text or _is_amount(text):
         return False
     if not _ARTICLE_HINT_RE.search(text):
         return False
-    if text.lower().startswith('2ee'):
+    if lowered.startswith('2ee'):
+        return False
+    if any(token in lowered for token in _PAYMENT_TOKENS):
         return False
     return True
 
@@ -151,9 +151,7 @@ def _detect_article_block(fragments: list[dict[str, Any]]) -> tuple[float, float
         if any(token in text for token in _STOP_TOKENS):
             stop_y = y
             break
-    if start_y is None:
-        return 0.0, 0.0, []
-    if stop_y is None:
+    if start_y is None or stop_y is None:
         return 0.0, 0.0, []
     block = [item for item in ordered if start_y < float(item.get('center_y') or 0) < stop_y]
     return start_y, stop_y, block
@@ -244,11 +242,7 @@ def _assign_amounts(rows: list[dict[str, Any]], amounts: list[dict[str, Any]], m
                     assigned_row = None
         if assigned_row is None:
             continue
-        assigned_row['amounts'].append({
-            'text': _norm(amount.get('text')),
-            'value': value,
-            'min_x': float(amount.get('min_x') or 0),
-        })
+        assigned_row['amounts'].append({'text': _norm(amount.get('text')), 'value': value, 'min_x': float(amount.get('min_x') or 0)})
     for row in rows:
         row['amounts'].sort(key=lambda item: float(item.get('min_x') or 0))
 
@@ -272,6 +266,10 @@ def _render_row(row: dict[str, Any]) -> str:
     return _norm(f"{row.get('label')} {amount_text}")
 
 
+def _article_sum(rows: list[dict[str, Any]]) -> Decimal:
+    return sum(Decimal(str(amount.get('value') or '0')) for row in rows for amount in (row.get('amounts') or []))
+
+
 def _reconstruct_article_block(fragments: list[dict[str, Any]], *, amount_pairing_mode: str = 'previous_or_nearest') -> list[str] | None:
     heights = [float(item.get('height') or 0) for item in fragments if item.get('height')]
     median_height = median(heights) if heights else 27.0
@@ -282,6 +280,9 @@ def _reconstruct_article_block(fragments: list[dict[str, Any]], *, amount_pairin
     amounts = _amount_fragments(block)
     if len(rows) < 5 or len(amounts) < 5:
         return None
+    if amount_pairing_mode == 'amount_above_label':
+        first_amount_y = min(float(item.get('center_y') or 0) for item in amounts)
+        rows = [row for row in rows if float(row.get('center_y') or 0) > first_amount_y]
     _assign_amounts(rows, amounts, median_height, amount_pairing_mode=amount_pairing_mode)
     classifications = [_classify_row(row) for row in rows]
     invalid = [kind for kind in classifications if kind in {'missing_amount', 'invalid_discount', 'multi_amount_review_needed'}]
@@ -296,13 +297,13 @@ def _reconstruct_article_block(fragments: list[dict[str, Any]], *, amount_pairin
         if len(valid_articles) < 8:
             return None
         subtotal_amounts = [_amount_value(item.get('text')) for item in block if _is_amount(item.get('text'))]
-        article_sum = sum(Decimal(str(amount.get('value') or '0')) for row in rows for amount in (row.get('amounts') or []))
+        article_sum = _article_sum(rows)
         if not any(value is not None and abs(Decimal(str(value)) - article_sum) <= Decimal('0.02') for value in subtotal_amounts):
             return None
     return rendered
 
 
-def _replace_article_block(current_lines: list[str], reconstructed_article_lines: list[str]) -> list[str] | None:
+def _replace_article_block(current_lines: list[str], reconstructed_article_lines: list[str], *, prune_payment_tail: bool = False) -> list[str] | None:
     start_index = None
     for index, line in enumerate(current_lines):
         lowered = line.lower()
@@ -310,7 +311,6 @@ def _replace_article_block(current_lines: list[str], reconstructed_article_lines
             start_index = index + 1
             break
     if start_index is None:
-        # Fallback for OCR variants where the header is split or missing: first product-ish line after header area.
         for index, line in enumerate(current_lines):
             if _ARTICLE_HINT_RE.search(line) and _AMOUNT_TOKEN_RE.search(line):
                 start_index = index
@@ -325,7 +325,19 @@ def _replace_article_block(current_lines: list[str], reconstructed_article_lines
             break
     if stop_index is None or stop_index <= start_index:
         return None
-    return current_lines[:start_index] + reconstructed_article_lines + current_lines[stop_index:]
+    tail = current_lines[stop_index:]
+    if prune_payment_tail:
+        pruned: list[str] = []
+        seen_total = False
+        for line in tail:
+            lowered = line.lower()
+            if any(token in lowered for token in _PAYMENT_TOKENS) and seen_total:
+                break
+            pruned.append(line)
+            if 'totaal' in lowered:
+                seen_total = True
+        tail = pruned
+    return current_lines[:start_index] + reconstructed_article_lines + tail
 
 
 def diagnose_plus_photo_line_grouping_fallback(
@@ -347,6 +359,7 @@ def diagnose_plus_photo_line_grouping_fallback(
         'texts_boxes_same_length': bool(texts and boxes and len(texts) == len(boxes)),
         'looks_like_plus_receipt': False,
         'has_suspicious_article_merges': False,
+        'has_pluspunten_correction': False,
         'article_block_detected': False,
         'article_block_fragment_count': 0,
         'reconstruction_valid': False,
@@ -384,19 +397,23 @@ def diagnose_plus_photo_line_grouping_fallback(
         diagnostics['fallback_reject_reason'] = 'article_block_not_detected'
         return diagnostics
 
-    reconstructed = _reconstruct_article_block(fragments)
+    reconstructed = None
     pairing_mode = 'previous_or_nearest'
-    if not reconstructed and diagnostics.get('has_pluspunten_correction'):
+    if diagnostics.get('has_pluspunten_correction'):
         reconstructed = _reconstruct_article_block(fragments, amount_pairing_mode='amount_above_label')
         pairing_mode = 'amount_above_label' if reconstructed else pairing_mode
+    if not reconstructed:
+        reconstructed = _reconstruct_article_block(fragments)
+        pairing_mode = 'previous_or_nearest' if reconstructed else pairing_mode
+
     diagnostics['reconstructed_article_lines'] = list(reconstructed or [])
     diagnostics['reconstruction_valid'] = bool(reconstructed)
     diagnostics['applied_pairing_mode'] = pairing_mode if reconstructed else None
     if not reconstructed:
         diagnostics['fallback_reject_reason'] = 'reconstruction_invalid'
         return diagnostics
-    replaced = _replace_article_block(current_lines, reconstructed)
-    diagnostics['replacement_valid'] = bool(replaced and len(replaced) >= len(current_lines))
+    replaced = _replace_article_block(current_lines, reconstructed, prune_payment_tail=(pairing_mode == 'amount_above_label'))
+    diagnostics['replacement_valid'] = bool(replaced and len(replaced) >= len(reconstructed))
     if not diagnostics['replacement_valid']:
         diagnostics['fallback_reject_reason'] = 'replacement_invalid'
         return diagnostics
