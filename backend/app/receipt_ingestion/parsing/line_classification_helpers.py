@@ -14,7 +14,8 @@ IsValidatedSavingsActionLine = Callable[[dict[str, Any]], bool]
 RECEIPT_NON_PRODUCT_LABEL_TOKENS = (
     'btw', 'vat', 'totaal', 'subtotaal', 'netto', 'bruto', 'bedrag', 'betaling',
     'betaald', 'bankpas', 'pin', 'pinnen', 'vpay', 'v-pay', 'maestro', 'terminal',
-    'transactie', 'autorisatie', 'auth', 'kaart', 'kaartserienummer', 'datum', 'tijd',
+    'transactie', 'autorisatie', 'autorisatiecode', 'auth', 'kaart', 'kaartserienummer',
+    'merchant', 'contactless', 'contactloos', 'nfc chip', 'datum', 'tijd',
     'groep', 'incl', 'excl', 'periode', 'leesmethod', 'contactloos', 'klantticket',
     'kopie', 'bonnummer', 'kassanr', 'kassa', 'filiaal', 'openingstijden', 'www.',
     'http', 'welkom', 'bedankt', 'dank u', 'tot ziens', 'coupon', 'actiecode',
