@@ -11,6 +11,7 @@ from statistics import median
 from typing import Any
 
 from app.receipt_ingestion.service_parts.plus_photo_line_grouping_fallback import apply_plus_photo_line_grouping_fallback
+from app.receipt_ingestion.service_parts.plus_photo_preprocessed_fallback_ocr import guarded_plus_preprocessed_ocr_fallback
 from app.receipt_ingestion.service_parts.text_extraction import _normalize_text_lines
 
 try:
@@ -216,6 +217,20 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
     )
     if plus_fallback_lines is not None:
         line_candidates = plus_fallback_lines
+    else:
+        preprocessed_result = guarded_plus_preprocessed_ocr_fallback(
+            model=model,
+            file_bytes=file_bytes,
+            filename=filename,
+            runtime_texts=texts,
+            runtime_boxes=boxes,
+            runtime_lines=line_candidates,
+        )
+        if preprocessed_result.get('fallback_lines'):
+            line_candidates = list(preprocessed_result['fallback_lines'])
+            pre_scores = preprocessed_result.get('preprocessed_scores') or []
+            if pre_scores:
+                scores = [float(score) for score in pre_scores]
     confidence = round(sum(scores) / len(scores), 4) if scores else None
     return line_candidates, confidence
 
@@ -256,5 +271,5 @@ def _ocr_image_text_with_tesseract(file_bytes: bytes, filename: str) -> tuple[li
             text_output = completed.stdout or ''
             return _normalize_text_lines(text_output), None
     except Exception as exc:  # pragma: no cover - runtime dependency
-        LOGGER.warning('Tesseract fallback mislukt voor %s: %s', filename, exc)
+        LOGGER.warning('Tesseract fallback mislukt voor %s: %s', exc)
         return [], None
