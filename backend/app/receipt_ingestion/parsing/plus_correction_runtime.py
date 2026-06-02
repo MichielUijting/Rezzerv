@@ -64,6 +64,36 @@ def _quantity_from_line(line: str) -> Decimal | None:
     return _parse_quantity_token(match.group('qty'))
 
 
+def _quantity_for_pluspunten_line(line: str) -> Decimal | None:
+    normalized = _norm(line)
+    lowered = normalized.lower()
+    token_positions = [
+        pos for token in _PLUSPUNTEN_TOKENS
+        for pos in [lowered.find(token)]
+        if pos >= 0
+    ]
+    if not token_positions:
+        return None
+    token_pos = min(token_positions)
+    matches = list(_QUANTITY_X_RE.finditer(normalized))
+    before_token = [match for match in matches if match.start() < token_pos]
+    if before_token:
+        return _parse_quantity_token(before_token[-1].group('qty'))
+    if matches:
+        return _parse_quantity_token(matches[-1].group('qty'))
+    return None
+
+
+def _pluspunten_norm_label(line: str) -> str:
+    return 'PLUSPunten DIGITAAL' if 'digitaal' in _norm(line).lower() else 'PLUSPunten'
+
+
+def _synthetic_pluspunten_raw_line(label: str, quantity: Decimal, amount: Decimal) -> str:
+    quantity_text = str(quantity.normalize()).replace('.', ',')
+    amount_text = str(amount.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)).replace('.', ',')
+    return f"{quantity_text}X {label} {amount_text}"
+
+
 def _float_decimal(value: Decimal | None) -> float | None:
     return float(value) if value is not None else None
 
@@ -307,46 +337,73 @@ def _correction_norm_line_candidate(
     receipt_correction_total: Decimal | None,
     filename: str | None,
 ) -> tuple[dict[str, Any], Decimal] | None:
-    """Return a validated PLUS correction norm line for PLUS photo baselines.
-
-    R9-38B15/B16: PLUS PO baselines can count the zegel/actie/PLUSPunten value
-    as a norm line. We only add such a line when the current article net sum
-    matches the explicit subtotal and adding the correction total matches the
-    explicit receipt total. This prevents double counting and stays outside
-    non-PLUS receipts.
-    """
     if receipt_correction_total is None or receipt_correction_total == Decimal('0.00'):
         return None
+
     subtotal_amount, total_amount = _explicit_subtotal_total_amounts(text_lines)
     if subtotal_amount is None or total_amount is None:
         return None
+
     window = _subtotal_total_window(text_lines)
     if not window:
         return None
-    article_sum = sum((_money(line.get('line_total')) + _money(line.get('discount_amount')) for line in lines), Decimal('0.00')).quantize(Decimal('0.01'))
+
+    article_sum = sum(
+        (_money(line.get('line_total')) + _money(line.get('discount_amount')) for line in lines),
+        Decimal('0.00')
+    ).quantize(Decimal('0.01'))
+
     if abs(article_sum - subtotal_amount) > Decimal('0.02'):
         return None
     if abs((article_sum + receipt_correction_total) - total_amount) > Decimal('0.02'):
         return None
+
     correction_tokens = _CORRECTION_TOKENS
     if any(any(token in _norm_key(line.get('raw_label') or line.get('normalized_label')) for token in correction_tokens) for line in lines):
         return None
 
     subtotal_index = _subtotal_index(text_lines) or 0
-    pluspoints_line: tuple[int, str, Decimal] | None = None
+    pluspoints_line: tuple[int, str, str, Decimal, Decimal] | None = None
+    explicit_zegel_line: tuple[int, str, Decimal] | None = None
     correction_lines: list[tuple[int, str, Decimal]] = []
+
     for offset, raw_line in enumerate(window, start=subtotal_index + 1):
         line = _norm(raw_line)
         lowered = line.lower()
         correction_amount = _classify_receipt_level_correction(line)
         if correction_amount is None:
             continue
-        correction_lines.append((offset, line, correction_amount))
-        if any(token in lowered for token in _PLUSPUNTEN_TOKENS):
-            pluspoints_line = (offset, line, correction_amount)
 
-    if pluspoints_line and receipt_correction_total > Decimal('0.00'):
-        source_index, raw_line, amount = pluspoints_line
+        correction_lines.append((offset, line, correction_amount))
+
+        # Generiek PLUS: PLUSPunten/PiUSPunten wint altijd als zichtbare normregel.
+        if any(token in lowered for token in _PLUSPUNTEN_TOKENS):
+            quantity = _quantity_for_pluspunten_line(line)
+            amounts = _amounts_from_line(line)
+            if quantity is not None and amounts:
+                label = _pluspunten_norm_label(line)
+                amount = abs(amounts[-1])
+                pluspoints_line = (offset, line, label, quantity, amount)
+                continue
+
+        # Fallback alleen als er géén PLUSPunten-regel is.
+        if 'zegel' in lowered and _quantity_from_line(line) is not None:
+            amounts = _amounts_from_line(line)
+            if amounts:
+                explicit_zegel_line = (offset, line, abs(amounts[-1]))
+
+    if pluspoints_line is not None:
+        source_index, raw_line, label, quantity, amount = pluspoints_line
+        return _build_correction_norm_line(
+            label=label,
+            amount=amount,
+            source_index=source_index,
+            raw_line=_synthetic_pluspunten_raw_line(label, quantity, amount),
+            filename=filename,
+        ), amount
+
+    if explicit_zegel_line is not None:
+        source_index, raw_line, amount = explicit_zegel_line
         return _build_correction_norm_line(
             label=_label_without_amount(raw_line),
             amount=amount,
@@ -357,18 +414,16 @@ def _correction_norm_line_candidate(
 
     if not correction_lines:
         return None
-    source_index, raw_line, _amount = correction_lines[-1]
-    aggregate_label = _label_without_amount(raw_line)
-    if len(correction_lines) > 1 or _norm_key(aggregate_label) == '':
-        aggregate_label = 'PLUS zegel/actie correctie'
+
+    source_index, raw_line, correction_amount = correction_lines[-1]
+    aggregate_label = _label_without_amount(raw_line) or 'PLUS correctieregel'
     return _build_correction_norm_line(
         label=aggregate_label,
-        amount=receipt_correction_total,
+        amount=correction_amount,
         source_index=source_index,
-        raw_line=' | '.join(line for _idx, line, _amount in correction_lines),
+        raw_line=raw_line,
         filename=filename,
-    ), receipt_correction_total
-
+    ), correction_amount
 
 def apply_plus_runtime_corrections(
     *,
