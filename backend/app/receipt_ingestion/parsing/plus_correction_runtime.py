@@ -13,6 +13,7 @@ _SUBTOTAL_TOKENS = ('subtotaal',)
 _TOTAL_TOKENS = ('totaal',)
 _DISCOUNT_CONTEXT_TOKENS = ('plus geeft', 'voordeel', 'korting')
 _CORRECTION_TOKENS = ('zegel', 'actie', 'pluspunten', 'piuspunten')
+_QUANTITY_X_RE = re.compile(r'(?<![A-Za-z0-9])(?P<qty>\d{1,4}(?:[\.,]\d+)?)\s*[xX]\b')
 
 
 def _money(value: Any) -> Decimal:
@@ -37,6 +38,34 @@ def _parse_amount_token(token: str) -> Decimal | None:
         return (Decimal(raw) * sign).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     except Exception:
         return None
+
+
+def _parse_quantity_token(raw: Any) -> Decimal | None:
+    cleaned = _norm(raw).replace(',', '.')
+    cleaned = re.sub(r'[^0-9\-.]', '', cleaned)
+    if not cleaned:
+        return None
+    try:
+        value = Decimal(cleaned)
+    except Exception:
+        return None
+    if value <= 0:
+        return None
+    return value.quantize(Decimal('0.001')).normalize()
+
+
+def _quantity_from_line(line: str) -> Decimal | None:
+    normalized = _norm(line)
+    if not normalized:
+        return None
+    match = _QUANTITY_X_RE.search(normalized)
+    if not match:
+        return None
+    return _parse_quantity_token(match.group('qty'))
+
+
+def _float_decimal(value: Decimal | None) -> float | None:
+    return float(value) if value is not None else None
 
 
 def _amounts_from_line(line: str) -> list[Decimal]:
@@ -173,6 +202,51 @@ def _apply_plus_line_discounts(text_lines: list[str], lines: list[dict[str, Any]
     return adjusted
 
 
+def _enrich_plus_quantities_from_text_lines(text_lines: list[str], lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Infer visible `nX` quantities for PLUS photo rows without changing totals.
+
+    This is deliberately conservative: it only fills an empty quantity from the
+    exact source OCR line (or its producer trace), and it does not recalculate
+    line totals. Existing parser quantities/unit prices win.
+    """
+    enriched: list[dict[str, Any]] = []
+    for line in lines:
+        adjusted = dict(line)
+        if adjusted.get('quantity') not in (None, ''):
+            enriched.append(adjusted)
+            continue
+        source_text = ''
+        source_index = adjusted.get('source_index')
+        if isinstance(source_index, int) and 0 <= source_index < len(text_lines):
+            source_text = _norm(text_lines[source_index])
+        if not source_text:
+            producer_trace = adjusted.get('producer_trace') or {}
+            if isinstance(producer_trace, dict):
+                source_text = _norm(producer_trace.get('raw_line') or producer_trace.get('normalized_line'))
+        if not source_text:
+            source_text = _norm(adjusted.get('raw_label') or adjusted.get('normalized_label'))
+        quantity = _quantity_from_line(source_text)
+        if quantity is None:
+            enriched.append(adjusted)
+            continue
+        adjusted['quantity'] = _float_decimal(quantity)
+        if adjusted.get('unit_price') in (None, ''):
+            line_total = _money(adjusted.get('line_total'))
+            if line_total != Decimal('0.00'):
+                adjusted['unit_price'] = _float_decimal((line_total / quantity).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP))
+        trace = dict(adjusted.get('producer_trace') or {})
+        trace['quantity_enrichment'] = {
+            'applied': True,
+            'source': 'R9-38B17_PLUS_visible_nX_quantity',
+            'source_text': source_text,
+            'quantity': float(quantity),
+            'totals_unchanged': True,
+        }
+        adjusted['producer_trace'] = trace
+        enriched.append(adjusted)
+    return enriched
+
+
 def _receipt_level_correction_total(text_lines: list[str]) -> Decimal | None:
     window = _subtotal_total_window(text_lines)
     if not window:
@@ -190,12 +264,16 @@ def _receipt_level_correction_total(text_lines: list[str]) -> Decimal | None:
 
 def _build_correction_norm_line(*, label: str, amount: Decimal, source_index: int, raw_line: str, filename: str | None) -> dict[str, Any]:
     cleaned_label = re.sub(r'^[^A-Za-z0-9]+', '', label).strip(' .:-') or 'PLUS correctieregel'
+    quantity = _quantity_from_line(raw_line)
+    unit_price = amount
+    if quantity is not None and quantity > 0:
+        unit_price = (amount / quantity).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     return {
         'raw_label': cleaned_label,
         'normalized_label': cleaned_label,
-        'quantity': None,
+        'quantity': _float_decimal(quantity),
         'unit': None,
-        'unit_price': float(amount),
+        'unit_price': float(unit_price),
         'line_total': float(amount),
         'discount_amount': None,
         'barcode': None,
@@ -213,6 +291,7 @@ def _build_correction_norm_line(*, label: str, amount: Decimal, source_index: in
             'label': cleaned_label,
             'raw_label': cleaned_label,
             'amount': float(amount),
+            'quantity': float(quantity) if quantity is not None else None,
             'classification': 'validated_savings_action_line',
             'classification_allows_append': True,
             'append_allowed': True,
@@ -302,6 +381,7 @@ def apply_plus_runtime_corrections(
     if not _looks_like_plus_image_context(text_lines, store_name, filename):
         return lines, discount_total, None
     corrected_lines = _apply_plus_line_discounts(text_lines, lines)
+    corrected_lines = _enrich_plus_quantities_from_text_lines(text_lines, corrected_lines)
     receipt_correction_total = _receipt_level_correction_total(text_lines)
     norm_line_candidate = _correction_norm_line_candidate(text_lines, corrected_lines, receipt_correction_total, filename)
     if norm_line_candidate is not None:
@@ -318,6 +398,10 @@ def apply_plus_runtime_corrections(
                 'receipt_level_correction_total_before_norm_line': float(receipt_correction_total or Decimal('0.00')),
                 'receipt_level_correction_total_after_norm_line': float(remaining_receipt_correction or Decimal('0.00')),
                 'double_counting_prevented': True,
+                'quantity_enrichment_applied': any(
+                    bool((line.get('producer_trace') or {}).get('quantity_enrichment'))
+                    for line in corrected_lines
+                ),
                 'scope': 'PLUS image receipts only',
             }
         }
@@ -341,6 +425,10 @@ def apply_plus_runtime_corrections(
             'pluspunten_precedence': True,
             'subtotal_action_zegel_as_receipt_level_corrections': True,
             'status_neutral': False,
+            'quantity_enrichment_applied': any(
+                bool((line.get('producer_trace') or {}).get('quantity_enrichment'))
+                for line in corrected_lines
+            ),
             'scope': 'PLUS image receipts only',
         }
     }
