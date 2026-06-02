@@ -202,11 +202,11 @@
     "store_name": "PLUS",
     "total_amount": 14.33,
     "currency": "EUR",
-    "line_count": 10,
+    "line_count": 11,
     "sum_line_total": 25.56,
     "net_line_total": 14.33,
     "discount_total": 11.23,
-    "reason": "R9-38B11: productregelcount gecorrigeerd naar 10; kortingen en subtotal-correcties tellen niet mee als productregels",
+    "reason": "R9-38B16: baseline hersteld naar 11 normregels; PLUS zegel/actiecorrectie telt mee als normregel zonder dubbele discount_total-telling",
     "baseline_origin": "official_baseline_v7"
   },
   {
