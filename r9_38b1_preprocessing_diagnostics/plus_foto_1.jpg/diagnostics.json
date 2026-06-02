@@ -1,0 +1,231 @@
+{
+  "original_filename": "plus foto 1.jpg",
+  "parse_filename": "plus foto 1.jpg",
+  "parse_mime_type": "image/jpeg",
+  "raw_receipt_id": "8183ab83ec3b4c828f125900411f2756",
+  "receipt_table_id": "7323172c2f364be5b53be9e11efb1ef4",
+  "stored_total_amount": 14.33,
+  "stored_line_count": 8,
+  "original_image_dimensions": {
+    "width": 2736,
+    "height": 4864
+  },
+  "original_image_stats": {
+    "width": 2736,
+    "height": 4864,
+    "mean_luminance": 60.37,
+    "luminance_stddev": 42.67,
+    "dark_pixel_ratio": 0.6757,
+    "mid_pixel_ratio": 0.3243,
+    "bright_pixel_ratio": 0.0
+  },
+  "detected_receipt_bounding_box": [
+    929,
+    464,
+    1934,
+    3383
+  ],
+  "cropped_image_dimensions": {
+    "width": 1005,
+    "height": 2919
+  },
+  "cropped_image_stats": {
+    "width": 1005,
+    "height": 2919,
+    "mean_luminance": 120.05,
+    "luminance_stddev": 26.27,
+    "dark_pixel_ratio": 0.0764,
+    "mid_pixel_ratio": 0.9236,
+    "bright_pixel_ratio": 0.0
+  },
+  "contrast_metrics": {
+    "receipt_mean_luminance": 120.05,
+    "background_mean_luminance": 27.71,
+    "receipt_background_contrast_score": 92.34,
+    "contrast_quality": "high"
+  },
+  "skew_diagnostics": {
+    "estimated_skew_angle_degrees": null,
+    "method": "not_computed_without_hough_transform",
+    "bbox_aspect_ratio": 0.3443,
+    "bbox_area_ratio": 0.2204
+  },
+  "line_detection_metrics": {
+    "detected_line_band_count": 31,
+    "line_band_heights": [
+      1075,
+      20,
+      42,
+      73,
+      124,
+      19,
+      38,
+      29,
+      26,
+      23,
+      21,
+      25,
+      26,
+      18,
+      30,
+      25,
+      28,
+      24,
+      27,
+      31,
+      32,
+      32,
+      28,
+      21,
+      33,
+      33,
+      38,
+      39,
+      16,
+      34,
+      110
+    ],
+    "line_band_y_ranges": [
+      [
+        0,
+        1074
+      ],
+      [
+        1089,
+        1108
+      ],
+      [
+        1115,
+        1156
+      ],
+      [
+        1191,
+        1263
+      ],
+      [
+        1272,
+        1395
+      ],
+      [
+        1414,
+        1432
+      ],
+      [
+        1444,
+        1481
+      ],
+      [
+        1523,
+        1551
+      ],
+      [
+        1565,
+        1590
+      ],
+      [
+        1608,
+        1630
+      ],
+      [
+        1641,
+        1661
+      ],
+      [
+        1674,
+        1698
+      ],
+      [
+        1713,
+        1738
+      ],
+      [
+        1829,
+        1846
+      ],
+      [
+        1865,
+        1894
+      ],
+      [
+        1906,
+        1930
+      ],
+      [
+        1961,
+        1988
+      ],
+      [
+        2000,
+        2023
+      ],
+      [
+        2080,
+        2106
+      ],
+      [
+        2130,
+        2160
+      ],
+      [
+        2174,
+        2205
+      ],
+      [
+        2263,
+        2294
+      ],
+      [
+        2350,
+        2377
+      ],
+      [
+        2445,
+        2465
+      ],
+      [
+        2486,
+        2518
+      ],
+      [
+        2578,
+        2610
+      ],
+      [
+        2619,
+        2656
+      ],
+      [
+        2665,
+        2703
+      ],
+      [
+        2726,
+        2741
+      ],
+      [
+        2756,
+        2789
+      ],
+      [
+        2809,
+        2918
+      ]
+    ]
+  },
+  "preview_paths": {
+    "original_preview_path": "/tmp/rezzerv_preprocessing_diagnostics/r9_38b1/plus_foto_1.jpg/01_original_preview.jpg",
+    "bbox_overlay_path": "/tmp/rezzerv_preprocessing_diagnostics/r9_38b1/plus_foto_1.jpg/02_receipt_bbox_overlay.jpg",
+    "cropped_receipt_preview_path": "/tmp/rezzerv_preprocessing_diagnostics/r9_38b1/plus_foto_1.jpg/03_cropped_receipt.jpg",
+    "contrast_preview_path": "/tmp/rezzerv_preprocessing_diagnostics/r9_38b1/plus_foto_1.jpg/04_contrast_receipt.jpg",
+    "threshold_preview_path": "/tmp/rezzerv_preprocessing_diagnostics/r9_38b1/plus_foto_1.jpg/05_threshold_receipt.jpg",
+    "line_detection_preview_path": "/tmp/rezzerv_preprocessing_diagnostics/r9_38b1/plus_foto_1.jpg/06_line_detection_overlay.jpg"
+  },
+  "diagnostic_limitations": [
+    "read-only diagnostic only; runtime parser/OCR is unchanged",
+    "bbox detection uses generic brightness segmentation and can be wrong on low-contrast images",
+    "skew angle is intentionally not estimated without a reliable Hough/perspective transform",
+    "line bands are image-preprocessing hints, not OCR truth"
+  ],
+  "read_only": true,
+  "database_write_intent": false
+}

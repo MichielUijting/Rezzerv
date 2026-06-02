@@ -1,0 +1,1895 @@
+{
+  "audit": "R9-28B6 AH Paddle-box section and column reconstruction",
+  "created_at": "2026-05-24T20:01:30",
+  "scope": "diagnostic only; no parser/OCR/database/status/baseline/UI mutation",
+  "ssot_compliance": {
+    "status_determination": "not_performed",
+    "status_service": "receipt_status_baseline_service_v4.py",
+    "parse_status_used_as_truth": false,
+    "parser_mutated": false,
+    "ocr_mutated": false,
+    "database_mutated": false,
+    "baseline_mutated": false,
+    "ui_touched": false,
+    "diagnostics_promoted_to_parser": false
+  },
+  "source_report": "/tmp/R9-28B6B_batch_ah_validation/per_member/AH_foto_2/R9-28B5_AH_foto_2.json",
+  "input": {
+    "input_path": "/tmp/supermarkten.zip",
+    "zip_member": "AH foto 2.jpeg",
+    "filename": "AH foto 2.jpeg",
+    "mime_type_guess": "image/jpeg",
+    "original_bytes": 151625,
+    "ocr_bytes": 1119423
+  },
+  "anchors": {
+    "description_x": 404.5,
+    "description_min_x": 228.0,
+    "quantity_x": 179.5,
+    "amount_min_x": 662.0
+  },
+  "article_band": {
+    "y_min": 441.0,
+    "y_max": 620.0
+  },
+  "summary": {
+    "paddle_item_count": 69,
+    "blocked_non_article_count": 31,
+    "reconstructed_article_count": 2,
+    "reconstructed_article_sum": 8.28
+  },
+  "reconstructed_articles": [
+    {
+      "article_name": "AH M GEHAKT",
+      "amount": 6.99,
+      "amount_text": "6,99",
+      "name_item_indexes": [
+        6
+      ],
+      "amount_item_index": 7,
+      "confidence_min": 0.9817306399345398,
+      "y_center": 500.0,
+      "rule_id": "AH_PADDLE_BOX_DESCRIPTION_AMOUNT_PAIR_RULE",
+      "reason": "Omschrijving-item in artikelband gekoppeld aan rechter bedrag-item via bounding-box y/x positie."
+    },
+    {
+      "article_name": "SOEPGR BASIS",
+      "amount": 1.29,
+      "amount_text": "1,29",
+      "name_item_indexes": [
+        9
+      ],
+      "amount_item_index": 10,
+      "confidence_min": 0.9557912349700928,
+      "y_center": 541.0,
+      "rule_id": "AH_PADDLE_BOX_DESCRIPTION_AMOUNT_PAIR_RULE",
+      "reason": "Omschrijving-item in artikelband gekoppeld aan rechter bedrag-item via bounding-box y/x positie."
+    }
+  ],
+  "blocked_non_article_items": [
+    {
+      "index": 0,
+      "text": "Albert Heijn Ger Koopman",
+      "section_type": "AH_HEADER",
+      "bbox": [
+        299.0,
+        236.0,
+        787.0,
+        283.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 5,
+      "text": "PRIJS BEDRAG",
+      "section_type": "AH_COLUMN_HEADER",
+      "bbox": [
+        556.0,
+        393.0,
+        811.0,
+        442.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 4,
+      "text": "OMSCHRIJVING",
+      "section_type": "AH_COLUMN_HEADER",
+      "bbox": [
+        278.0,
+        399.0,
+        531.0,
+        443.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 3,
+      "text": "AANTAL",
+      "section_type": "AH_COLUMN_HEADER",
+      "bbox": [
+        117.0,
+        402.0,
+        242.0,
+        442.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 13,
+      "text": "SUBTOTAAL",
+      "section_type": "AH_TOTAL_OR_SUBTOTAL",
+      "bbox": [
+        277.0,
+        604.0,
+        467.0,
+        646.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 15,
+      "text": "JOUW VOORDEEL",
+      "section_type": "AH_DISCOUNT",
+      "bbox": [
+        113.0,
+        685.0,
+        645.0,
+        728.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 17,
+      "text": "waarvan",
+      "section_type": "AH_DISCOUNT",
+      "bbox": [
+        275.0,
+        736.0,
+        424.0,
+        768.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 18,
+      "text": "BONUS BOX",
+      "section_type": "AH_DISCOUNT",
+      "bbox": [
+        271.0,
+        768.0,
+        465.0,
+        810.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 20,
+      "text": "TOTAAL",
+      "section_type": "AH_TOTAL_OR_SUBTOTAL",
+      "bbox": [
+        109.0,
+        851.0,
+        359.0,
+        894.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 22,
+      "text": "BETAALD MET:",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        103.0,
+        934.0,
+        354.0,
+        975.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 23,
+      "text": "PINNEN",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        267.0,
+        974.0,
+        403.0,
+        1017.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 25,
+      "text": "POI: 50100891",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        97.0,
+        1060.0,
+        316.0,
+        1101.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 29,
+      "text": "Merchant",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        567.0,
+        1103.0,
+        701.0,
+        1142.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 27,
+      "text": "Terminal",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        97.0,
+        1102.0,
+        233.0,
+        1145.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 33,
+      "text": "Transactie",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        569.0,
+        1146.0,
+        734.0,
+        1185.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 31,
+      "text": "Periode",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        96.0,
+        1148.0,
+        219.0,
+        1188.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 35,
+      "text": "Token 1",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        96.0,
+        1190.0,
+        247.0,
+        1232.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 39,
+      "text": "Kaart",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        569.0,
+        1230.0,
+        662.0,
+        1270.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 43,
+      "text": "BETALING",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        568.0,
+        1272.0,
+        706.0,
+        1315.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 41,
+      "text": "Kaartserienummer",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        94.0,
+        1275.0,
+        365.0,
+        1320.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 45,
+      "text": "Autorisatiecode",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        569.0,
+        1314.0,
+        817.0,
+        1358.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 50,
+      "text": "Contactless",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        566.0,
+        1358.0,
+        754.0,
+        1402.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 49,
+      "text": "8,28 EUR",
+      "section_type": "AH_TAX",
+      "bbox": [
+        407.0,
+        1358.0,
+        548.0,
+        1406.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 48,
+      "text": "Totaal",
+      "section_type": "AH_TOTAL_OR_SUBTOTAL",
+      "bbox": [
+        93.0,
+        1365.0,
+        196.0,
+        1410.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 51,
+      "text": "Leesmethode CHIP",
+      "section_type": "AH_PAYMENT",
+      "bbox": [
+        91.0,
+        1406.0,
+        365.0,
+        1456.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 53,
+      "text": "EUR",
+      "section_type": "AH_TAX",
+      "bbox": [
+        750.0,
+        1485.0,
+        827.0,
+        1533.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 52,
+      "text": "OVER",
+      "section_type": "AH_TAX",
+      "bbox": [
+        455.0,
+        1488.0,
+        553.0,
+        1539.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 54,
+      "text": "BTW",
+      "section_type": "AH_TAX",
+      "bbox": [
+        86.0,
+        1498.0,
+        165.0,
+        1549.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 57,
+      "text": "9%",
+      "section_type": "AH_TAX",
+      "bbox": [
+        87.0,
+        1546.0,
+        144.0,
+        1593.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 60,
+      "text": "TOTAAL",
+      "section_type": "AH_TOTAL_OR_SUBTOTAL",
+      "bbox": [
+        88.0,
+        1592.0,
+        225.0,
+        1639.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    },
+    {
+      "index": 66,
+      "text": "Vragen over je kassabon?",
+      "section_type": "AH_TAX",
+      "bbox": [
+        287.0,
+        1911.0,
+        809.0,
+        1987.0
+      ],
+      "reason": "Niet-artikel sectie volgens AH Paddle-box section classifier."
+    }
+  ],
+  "classified_items": [
+    {
+      "index": 0,
+      "text": "Albert Heijn Ger Koopman",
+      "confidence": 0.9875208735466003,
+      "bbox": [
+        299.0,
+        236.0,
+        787.0,
+        283.0
+      ],
+      "x1": 299.0,
+      "y1": 236.0,
+      "x2": 787.0,
+      "y2": 283.0,
+      "cx": 543.0,
+      "cy": 259.5,
+      "w": 488.0,
+      "h": 47.0,
+      "section_type": "AH_HEADER",
+      "column_role": "description"
+    },
+    {
+      "index": 1,
+      "text": "Polenplein 24a Driel",
+      "confidence": 0.9667065739631653,
+      "bbox": [
+        339.0,
+        277.0,
+        743.0,
+        322.0
+      ],
+      "x1": 339.0,
+      "y1": 277.0,
+      "x2": 743.0,
+      "y2": 322.0,
+      "cx": 541.0,
+      "cy": 299.5,
+      "w": 404.0,
+      "h": 45.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    },
+    {
+      "index": 2,
+      "text": "tel: 026-4742394",
+      "confidence": 0.9794554114341736,
+      "bbox": [
+        379.0,
+        315.0,
+        708.0,
+        360.0
+      ],
+      "x1": 379.0,
+      "y1": 315.0,
+      "x2": 708.0,
+      "y2": 360.0,
+      "cx": 543.5,
+      "cy": 337.5,
+      "w": 329.0,
+      "h": 45.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    },
+    {
+      "index": 5,
+      "text": "PRIJS BEDRAG",
+      "confidence": 0.9953269958496094,
+      "bbox": [
+        556.0,
+        393.0,
+        811.0,
+        442.0
+      ],
+      "x1": 556.0,
+      "y1": 393.0,
+      "x2": 811.0,
+      "y2": 442.0,
+      "cx": 683.5,
+      "cy": 417.5,
+      "w": 255.0,
+      "h": 49.0,
+      "section_type": "AH_COLUMN_HEADER",
+      "column_role": "amount_text_or_right_margin"
+    },
+    {
+      "index": 4,
+      "text": "OMSCHRIJVING",
+      "confidence": 0.999354362487793,
+      "bbox": [
+        278.0,
+        399.0,
+        531.0,
+        443.0
+      ],
+      "x1": 278.0,
+      "y1": 399.0,
+      "x2": 531.0,
+      "y2": 443.0,
+      "cx": 404.5,
+      "cy": 421.0,
+      "w": 253.0,
+      "h": 44.0,
+      "section_type": "AH_COLUMN_HEADER",
+      "column_role": "column_header"
+    },
+    {
+      "index": 3,
+      "text": "AANTAL",
+      "confidence": 0.9994552135467529,
+      "bbox": [
+        117.0,
+        402.0,
+        242.0,
+        442.0
+      ],
+      "x1": 117.0,
+      "y1": 402.0,
+      "x2": 242.0,
+      "y2": 442.0,
+      "cx": 179.5,
+      "cy": 422.0,
+      "w": 125.0,
+      "h": 40.0,
+      "section_type": "AH_COLUMN_HEADER",
+      "column_role": "column_header"
+    },
+    {
+      "index": 7,
+      "text": "6,99",
+      "confidence": 0.9970831871032715,
+      "bbox": [
+        718.0,
+        471.0,
+        817.0,
+        524.0
+      ],
+      "x1": 718.0,
+      "y1": 471.0,
+      "x2": 817.0,
+      "y2": 524.0,
+      "cx": 767.5,
+      "cy": 497.5,
+      "w": 99.0,
+      "h": 53.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount"
+    },
+    {
+      "index": 6,
+      "text": "AH M GEHAKT",
+      "confidence": 0.9817306399345398,
+      "bbox": [
+        277.0,
+        482.0,
+        505.0,
+        523.0
+      ],
+      "x1": 277.0,
+      "y1": 482.0,
+      "x2": 505.0,
+      "y2": 523.0,
+      "cx": 391.0,
+      "cy": 502.5,
+      "w": 228.0,
+      "h": 41.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    },
+    {
+      "index": 8,
+      "text": "T",
+      "confidence": 0.4579624533653259,
+      "bbox": [
+        118.0,
+        489.0,
+        137.0,
+        521.0
+      ],
+      "x1": 118.0,
+      "y1": 489.0,
+      "x2": 137.0,
+      "y2": 521.0,
+      "cx": 127.5,
+      "cy": 505.0,
+      "w": 19.0,
+      "h": 32.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 10,
+      "text": "1,29",
+      "confidence": 0.9557912349700928,
+      "bbox": [
+        721.0,
+        513.0,
+        817.0,
+        564.0
+      ],
+      "x1": 721.0,
+      "y1": 513.0,
+      "x2": 817.0,
+      "y2": 564.0,
+      "cx": 769.0,
+      "cy": 538.5,
+      "w": 96.0,
+      "h": 51.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount"
+    },
+    {
+      "index": 9,
+      "text": "SOEPGR BASIS",
+      "confidence": 0.9990439414978027,
+      "bbox": [
+        277.0,
+        523.0,
+        529.0,
+        564.0
+      ],
+      "x1": 277.0,
+      "y1": 523.0,
+      "x2": 529.0,
+      "y2": 564.0,
+      "cx": 403.0,
+      "cy": 543.5,
+      "w": 252.0,
+      "h": 41.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    },
+    {
+      "index": 11,
+      "text": "T",
+      "confidence": 0.4602851867675781,
+      "bbox": [
+        118.0,
+        531.0,
+        138.0,
+        563.0
+      ],
+      "x1": 118.0,
+      "y1": 531.0,
+      "x2": 138.0,
+      "y2": 563.0,
+      "cx": 128.0,
+      "cy": 547.0,
+      "w": 20.0,
+      "h": 32.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 14,
+      "text": "8,28",
+      "confidence": 0.9957828521728516,
+      "bbox": [
+        721.0,
+        595.0,
+        819.0,
+        645.0
+      ],
+      "x1": 721.0,
+      "y1": 595.0,
+      "x2": 819.0,
+      "y2": 645.0,
+      "cx": 770.0,
+      "cy": 620.0,
+      "w": 98.0,
+      "h": 50.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount"
+    },
+    {
+      "index": 12,
+      "text": "2",
+      "confidence": 0.9999327659606934,
+      "bbox": [
+        112.0,
+        604.0,
+        145.0,
+        646.0
+      ],
+      "x1": 112.0,
+      "y1": 604.0,
+      "x2": 145.0,
+      "y2": 646.0,
+      "cx": 128.5,
+      "cy": 625.0,
+      "w": 33.0,
+      "h": 42.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity"
+    },
+    {
+      "index": 13,
+      "text": "SUBTOTAAL",
+      "confidence": 0.9925912022590637,
+      "bbox": [
+        277.0,
+        604.0,
+        467.0,
+        646.0
+      ],
+      "x1": 277.0,
+      "y1": 604.0,
+      "x2": 467.0,
+      "y2": 646.0,
+      "cx": 372.0,
+      "cy": 625.0,
+      "w": 190.0,
+      "h": 42.0,
+      "section_type": "AH_TOTAL_OR_SUBTOTAL",
+      "column_role": "description"
+    },
+    {
+      "index": 16,
+      "text": "0,00",
+      "confidence": 0.9320977330207825,
+      "bbox": [
+        725.0,
+        679.0,
+        897.0,
+        728.0
+      ],
+      "x1": 725.0,
+      "y1": 679.0,
+      "x2": 897.0,
+      "y2": 728.0,
+      "cx": 811.0,
+      "cy": 703.5,
+      "w": 172.0,
+      "h": 49.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount"
+    },
+    {
+      "index": 15,
+      "text": "JOUW VOORDEEL",
+      "confidence": 0.9952101111412048,
+      "bbox": [
+        113.0,
+        685.0,
+        645.0,
+        728.0
+      ],
+      "x1": 113.0,
+      "y1": 685.0,
+      "x2": 645.0,
+      "y2": 728.0,
+      "cx": 379.0,
+      "cy": 706.5,
+      "w": 532.0,
+      "h": 43.0,
+      "section_type": "AH_DISCOUNT",
+      "column_role": "description"
+    },
+    {
+      "index": 17,
+      "text": "waarvan",
+      "confidence": 0.9990052580833435,
+      "bbox": [
+        275.0,
+        736.0,
+        424.0,
+        768.0
+      ],
+      "x1": 275.0,
+      "y1": 736.0,
+      "x2": 424.0,
+      "y2": 768.0,
+      "cx": 349.5,
+      "cy": 752.0,
+      "w": 149.0,
+      "h": 32.0,
+      "section_type": "AH_DISCOUNT",
+      "column_role": "description"
+    },
+    {
+      "index": 19,
+      "text": "0,00",
+      "confidence": 0.977285623550415,
+      "bbox": [
+        721.0,
+        763.0,
+        818.0,
+        814.0
+      ],
+      "x1": 721.0,
+      "y1": 763.0,
+      "x2": 818.0,
+      "y2": 814.0,
+      "cx": 769.5,
+      "cy": 788.5,
+      "w": 97.0,
+      "h": 51.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount"
+    },
+    {
+      "index": 18,
+      "text": "BONUS BOX",
+      "confidence": 0.9963448643684387,
+      "bbox": [
+        271.0,
+        768.0,
+        465.0,
+        810.0
+      ],
+      "x1": 271.0,
+      "y1": 768.0,
+      "x2": 465.0,
+      "y2": 810.0,
+      "cx": 368.0,
+      "cy": 789.0,
+      "w": 194.0,
+      "h": 42.0,
+      "section_type": "AH_DISCOUNT",
+      "column_role": "description"
+    },
+    {
+      "index": 20,
+      "text": "TOTAAL",
+      "confidence": 0.9995691180229187,
+      "bbox": [
+        109.0,
+        851.0,
+        359.0,
+        894.0
+      ],
+      "x1": 109.0,
+      "y1": 851.0,
+      "x2": 359.0,
+      "y2": 894.0,
+      "cx": 234.0,
+      "cy": 872.5,
+      "w": 250.0,
+      "h": 43.0,
+      "section_type": "AH_TOTAL_OR_SUBTOTAL",
+      "column_role": "description"
+    },
+    {
+      "index": 21,
+      "text": "8,28",
+      "confidence": 0.9784018993377686,
+      "bbox": [
+        724.0,
+        848.0,
+        900.0,
+        898.0
+      ],
+      "x1": 724.0,
+      "y1": 848.0,
+      "x2": 900.0,
+      "y2": 898.0,
+      "cx": 812.0,
+      "cy": 873.0,
+      "w": 176.0,
+      "h": 50.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount"
+    },
+    {
+      "index": 22,
+      "text": "BETAALD MET:",
+      "confidence": 0.9940560460090637,
+      "bbox": [
+        103.0,
+        934.0,
+        354.0,
+        975.0
+      ],
+      "x1": 103.0,
+      "y1": 934.0,
+      "x2": 354.0,
+      "y2": 975.0,
+      "cx": 228.5,
+      "cy": 954.5,
+      "w": 251.0,
+      "h": 41.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "description"
+    },
+    {
+      "index": 23,
+      "text": "PINNEN",
+      "confidence": 0.9998820424079895,
+      "bbox": [
+        267.0,
+        974.0,
+        403.0,
+        1017.0
+      ],
+      "x1": 267.0,
+      "y1": 974.0,
+      "x2": 403.0,
+      "y2": 1017.0,
+      "cx": 335.0,
+      "cy": 995.5,
+      "w": 136.0,
+      "h": 43.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "description"
+    },
+    {
+      "index": 24,
+      "text": "8,28",
+      "confidence": 0.9803627729415894,
+      "bbox": [
+        725.0,
+        972.0,
+        822.0,
+        1021.0
+      ],
+      "x1": 725.0,
+      "y1": 972.0,
+      "x2": 822.0,
+      "y2": 1021.0,
+      "cx": 773.5,
+      "cy": 996.5,
+      "w": 97.0,
+      "h": 49.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount"
+    },
+    {
+      "index": 26,
+      "text": "KLANTTICKET",
+      "confidence": 0.9994852542877197,
+      "bbox": [
+        569.0,
+        1059.0,
+        749.0,
+        1101.0
+      ],
+      "x1": 569.0,
+      "y1": 1059.0,
+      "x2": 749.0,
+      "y2": 1101.0,
+      "cx": 659.0,
+      "cy": 1080.0,
+      "w": 180.0,
+      "h": 42.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    },
+    {
+      "index": 25,
+      "text": "POI: 50100891",
+      "confidence": 0.9932782053947449,
+      "bbox": [
+        97.0,
+        1060.0,
+        316.0,
+        1101.0
+      ],
+      "x1": 97.0,
+      "y1": 1060.0,
+      "x2": 316.0,
+      "y2": 1101.0,
+      "cx": 206.5,
+      "cy": 1080.5,
+      "w": 219.0,
+      "h": 41.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 28,
+      "text": "BS171970",
+      "confidence": 0.9899311661720276,
+      "bbox": [
+        407.0,
+        1099.0,
+        544.0,
+        1144.0
+      ],
+      "x1": 407.0,
+      "y1": 1099.0,
+      "x2": 544.0,
+      "y2": 1144.0,
+      "cx": 475.5,
+      "cy": 1121.5,
+      "w": 137.0,
+      "h": 45.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    },
+    {
+      "index": 30,
+      "text": "3732071002",
+      "confidence": 0.9999227523803711,
+      "bbox": [
+        839.0,
+        1101.0,
+        1007.0,
+        1143.0
+      ],
+      "x1": 839.0,
+      "y1": 1101.0,
+      "x2": 1007.0,
+      "y2": 1143.0,
+      "cx": 923.0,
+      "cy": 1122.0,
+      "w": 168.0,
+      "h": 42.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity"
+    },
+    {
+      "index": 29,
+      "text": "Merchant",
+      "confidence": 0.9995266795158386,
+      "bbox": [
+        567.0,
+        1103.0,
+        701.0,
+        1142.0
+      ],
+      "x1": 567.0,
+      "y1": 1103.0,
+      "x2": 701.0,
+      "y2": 1142.0,
+      "cx": 634.0,
+      "cy": 1122.5,
+      "w": 134.0,
+      "h": 39.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "description"
+    },
+    {
+      "index": 27,
+      "text": "Terminal",
+      "confidence": 0.9995156526565552,
+      "bbox": [
+        97.0,
+        1102.0,
+        233.0,
+        1145.0
+      ],
+      "x1": 97.0,
+      "y1": 1102.0,
+      "x2": 233.0,
+      "y2": 1145.0,
+      "cx": 165.0,
+      "cy": 1123.5,
+      "w": 136.0,
+      "h": 43.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 34,
+      "text": "00093286",
+      "confidence": 0.9992873072624207,
+      "bbox": [
+        871.0,
+        1143.0,
+        1007.0,
+        1185.0
+      ],
+      "x1": 871.0,
+      "y1": 1143.0,
+      "x2": 1007.0,
+      "y2": 1185.0,
+      "cx": 939.0,
+      "cy": 1164.0,
+      "w": 136.0,
+      "h": 42.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity"
+    },
+    {
+      "index": 32,
+      "text": "6085",
+      "confidence": 0.9993571639060974,
+      "bbox": [
+        471.0,
+        1144.0,
+        545.0,
+        1187.0
+      ],
+      "x1": 471.0,
+      "y1": 1144.0,
+      "x2": 545.0,
+      "y2": 1187.0,
+      "cx": 508.0,
+      "cy": 1165.5,
+      "w": 74.0,
+      "h": 43.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity"
+    },
+    {
+      "index": 33,
+      "text": "Transactie",
+      "confidence": 0.9994403123855591,
+      "bbox": [
+        569.0,
+        1146.0,
+        734.0,
+        1185.0
+      ],
+      "x1": 569.0,
+      "y1": 1146.0,
+      "x2": 734.0,
+      "y2": 1185.0,
+      "cx": 651.5,
+      "cy": 1165.5,
+      "w": 165.0,
+      "h": 39.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "description"
+    },
+    {
+      "index": 31,
+      "text": "Periode",
+      "confidence": 0.9987508654594421,
+      "bbox": [
+        96.0,
+        1148.0,
+        219.0,
+        1188.0
+      ],
+      "x1": 96.0,
+      "y1": 1148.0,
+      "x2": 219.0,
+      "y2": 1188.0,
+      "cx": 157.5,
+      "cy": 1168.0,
+      "w": 123.0,
+      "h": 40.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 37,
+      "text": "V PAY",
+      "confidence": 0.9974611401557922,
+      "bbox": [
+        565.0,
+        1185.0,
+        658.0,
+        1229.0
+      ],
+      "x1": 565.0,
+      "y1": 1185.0,
+      "x2": 658.0,
+      "y2": 1229.0,
+      "cx": 611.5,
+      "cy": 1207.0,
+      "w": 93.0,
+      "h": 44.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    },
+    {
+      "index": 36,
+      "text": "1003030534301033342",
+      "confidence": 0.9995165467262268,
+      "bbox": [
+        225.0,
+        1186.0,
+        544.0,
+        1232.0
+      ],
+      "x1": 225.0,
+      "y1": 1186.0,
+      "x2": 544.0,
+      "y2": 1232.0,
+      "cx": 384.5,
+      "cy": 1209.0,
+      "w": 319.0,
+      "h": 46.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity"
+    },
+    {
+      "index": 35,
+      "text": "Token 1",
+      "confidence": 0.9983786344528198,
+      "bbox": [
+        96.0,
+        1190.0,
+        247.0,
+        1232.0
+      ],
+      "x1": 96.0,
+      "y1": 1190.0,
+      "x2": 247.0,
+      "y2": 1232.0,
+      "cx": 171.5,
+      "cy": 1211.0,
+      "w": 151.0,
+      "h": 42.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 40,
+      "text": "487512xxxxxxxxx3334",
+      "confidence": 0.8569442629814148,
+      "bbox": [
+        696.0,
+        1227.0,
+        1010.0,
+        1270.0
+      ],
+      "x1": 696.0,
+      "y1": 1227.0,
+      "x2": 1010.0,
+      "y2": 1270.0,
+      "cx": 853.0,
+      "cy": 1248.5,
+      "w": 314.0,
+      "h": 43.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount_text_or_right_margin"
+    },
+    {
+      "index": 39,
+      "text": "Kaart",
+      "confidence": 0.9985322952270508,
+      "bbox": [
+        569.0,
+        1230.0,
+        662.0,
+        1270.0
+      ],
+      "x1": 569.0,
+      "y1": 1230.0,
+      "x2": 662.0,
+      "y2": 1270.0,
+      "cx": 615.5,
+      "cy": 1250.0,
+      "w": 93.0,
+      "h": 40.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "description"
+    },
+    {
+      "index": 38,
+      "text": "(A0000000032020)",
+      "confidence": 0.9680975079536438,
+      "bbox": [
+        97.0,
+        1231.0,
+        364.0,
+        1275.0
+      ],
+      "x1": 97.0,
+      "y1": 1231.0,
+      "x2": 364.0,
+      "y2": 1275.0,
+      "cx": 230.5,
+      "cy": 1253.0,
+      "w": 267.0,
+      "h": 44.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    },
+    {
+      "index": 43,
+      "text": "BETALING",
+      "confidence": 0.9993653297424316,
+      "bbox": [
+        568.0,
+        1272.0,
+        706.0,
+        1315.0
+      ],
+      "x1": 568.0,
+      "y1": 1272.0,
+      "x2": 706.0,
+      "y2": 1315.0,
+      "cx": 637.0,
+      "cy": 1293.5,
+      "w": 138.0,
+      "h": 43.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "description"
+    },
+    {
+      "index": 42,
+      "text": "2",
+      "confidence": 0.5946075916290283,
+      "bbox": [
+        522.0,
+        1275.0,
+        545.0,
+        1314.0
+      ],
+      "x1": 522.0,
+      "y1": 1275.0,
+      "x2": 545.0,
+      "y2": 1314.0,
+      "cx": 533.5,
+      "cy": 1294.5,
+      "w": 23.0,
+      "h": 39.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity"
+    },
+    {
+      "index": 41,
+      "text": "Kaartserienummer",
+      "confidence": 0.9990791082382202,
+      "bbox": [
+        94.0,
+        1275.0,
+        365.0,
+        1320.0
+      ],
+      "x1": 94.0,
+      "y1": 1275.0,
+      "x2": 365.0,
+      "y2": 1320.0,
+      "cx": 229.5,
+      "cy": 1297.5,
+      "w": 271.0,
+      "h": 45.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "description"
+    },
+    {
+      "index": 46,
+      "text": "W01081",
+      "confidence": 0.9967802166938782,
+      "bbox": [
+        902.0,
+        1310.0,
+        1013.0,
+        1360.0
+      ],
+      "x1": 902.0,
+      "y1": 1310.0,
+      "x2": 1013.0,
+      "y2": 1360.0,
+      "cx": 957.5,
+      "cy": 1335.0,
+      "w": 111.0,
+      "h": 50.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount_text_or_right_margin"
+    },
+    {
+      "index": 45,
+      "text": "Autorisatiecode",
+      "confidence": 0.9992462396621704,
+      "bbox": [
+        569.0,
+        1314.0,
+        817.0,
+        1358.0
+      ],
+      "x1": 569.0,
+      "y1": 1314.0,
+      "x2": 817.0,
+      "y2": 1358.0,
+      "cx": 693.0,
+      "cy": 1336.0,
+      "w": 248.0,
+      "h": 44.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "amount_text_or_right_margin"
+    },
+    {
+      "index": 44,
+      "text": "26/03/2026 15:18",
+      "confidence": 0.9980624914169312,
+      "bbox": [
+        276.0,
+        1315.0,
+        547.0,
+        1363.0
+      ],
+      "x1": 276.0,
+      "y1": 1315.0,
+      "x2": 547.0,
+      "y2": 1363.0,
+      "cx": 411.5,
+      "cy": 1339.0,
+      "w": 271.0,
+      "h": 48.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    },
+    {
+      "index": 47,
+      "text": "Datum",
+      "confidence": 0.9991413354873657,
+      "bbox": [
+        92.0,
+        1322.0,
+        185.0,
+        1366.0
+      ],
+      "x1": 92.0,
+      "y1": 1322.0,
+      "x2": 185.0,
+      "y2": 1366.0,
+      "cx": 138.5,
+      "cy": 1344.0,
+      "w": 93.0,
+      "h": 44.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 50,
+      "text": "Contactless",
+      "confidence": 0.9997594356536865,
+      "bbox": [
+        566.0,
+        1358.0,
+        754.0,
+        1402.0
+      ],
+      "x1": 566.0,
+      "y1": 1358.0,
+      "x2": 754.0,
+      "y2": 1402.0,
+      "cx": 660.0,
+      "cy": 1380.0,
+      "w": 188.0,
+      "h": 44.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "description"
+    },
+    {
+      "index": 49,
+      "text": "8,28 EUR",
+      "confidence": 0.9973757266998291,
+      "bbox": [
+        407.0,
+        1358.0,
+        548.0,
+        1406.0
+      ],
+      "x1": 407.0,
+      "y1": 1358.0,
+      "x2": 548.0,
+      "y2": 1406.0,
+      "cx": 477.5,
+      "cy": 1382.0,
+      "w": 141.0,
+      "h": 48.0,
+      "section_type": "AH_TAX",
+      "column_role": "description"
+    },
+    {
+      "index": 48,
+      "text": "Totaal",
+      "confidence": 0.9996201395988464,
+      "bbox": [
+        93.0,
+        1365.0,
+        196.0,
+        1410.0
+      ],
+      "x1": 93.0,
+      "y1": 1365.0,
+      "x2": 196.0,
+      "y2": 1410.0,
+      "cx": 144.5,
+      "cy": 1387.5,
+      "w": 103.0,
+      "h": 45.0,
+      "section_type": "AH_TOTAL_OR_SUBTOTAL",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 51,
+      "text": "Leesmethode CHIP",
+      "confidence": 0.9766512513160706,
+      "bbox": [
+        91.0,
+        1406.0,
+        365.0,
+        1456.0
+      ],
+      "x1": 91.0,
+      "y1": 1406.0,
+      "x2": 365.0,
+      "y2": 1456.0,
+      "cx": 228.0,
+      "cy": 1431.0,
+      "w": 274.0,
+      "h": 50.0,
+      "section_type": "AH_PAYMENT",
+      "column_role": "description"
+    },
+    {
+      "index": 53,
+      "text": "EUR",
+      "confidence": 0.9992391467094421,
+      "bbox": [
+        750.0,
+        1485.0,
+        827.0,
+        1533.0
+      ],
+      "x1": 750.0,
+      "y1": 1485.0,
+      "x2": 827.0,
+      "y2": 1533.0,
+      "cx": 788.5,
+      "cy": 1509.0,
+      "w": 77.0,
+      "h": 48.0,
+      "section_type": "AH_TAX",
+      "column_role": "amount_text_or_right_margin"
+    },
+    {
+      "index": 52,
+      "text": "OVER",
+      "confidence": 0.9992763996124268,
+      "bbox": [
+        455.0,
+        1488.0,
+        553.0,
+        1539.0
+      ],
+      "x1": 455.0,
+      "y1": 1488.0,
+      "x2": 553.0,
+      "y2": 1539.0,
+      "cx": 504.0,
+      "cy": 1513.5,
+      "w": 98.0,
+      "h": 51.0,
+      "section_type": "AH_TAX",
+      "column_role": "description"
+    },
+    {
+      "index": 54,
+      "text": "BTW",
+      "confidence": 0.9996647834777832,
+      "bbox": [
+        86.0,
+        1498.0,
+        165.0,
+        1549.0
+      ],
+      "x1": 86.0,
+      "y1": 1498.0,
+      "x2": 165.0,
+      "y2": 1549.0,
+      "cx": 125.5,
+      "cy": 1523.5,
+      "w": 79.0,
+      "h": 51.0,
+      "section_type": "AH_TAX",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 56,
+      "text": "0,68",
+      "confidence": 0.9553210139274597,
+      "bbox": [
+        729.0,
+        1527.0,
+        827.0,
+        1579.0
+      ],
+      "x1": 729.0,
+      "y1": 1527.0,
+      "x2": 827.0,
+      "y2": 1579.0,
+      "cx": 778.0,
+      "cy": 1553.0,
+      "w": 98.0,
+      "h": 52.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount"
+    },
+    {
+      "index": 55,
+      "text": "7,60",
+      "confidence": 0.9901264905929565,
+      "bbox": [
+        455.0,
+        1532.0,
+        554.0,
+        1587.0
+      ],
+      "x1": 455.0,
+      "y1": 1532.0,
+      "x2": 554.0,
+      "y2": 1587.0,
+      "cx": 504.5,
+      "cy": 1559.5,
+      "w": 99.0,
+      "h": 55.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "price"
+    },
+    {
+      "index": 57,
+      "text": "9%",
+      "confidence": 0.9974933862686157,
+      "bbox": [
+        87.0,
+        1546.0,
+        144.0,
+        1593.0
+      ],
+      "x1": 87.0,
+      "y1": 1546.0,
+      "x2": 144.0,
+      "y2": 1593.0,
+      "cx": 115.5,
+      "cy": 1569.5,
+      "w": 57.0,
+      "h": 47.0,
+      "section_type": "AH_TAX",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 59,
+      "text": "0.68",
+      "confidence": 0.9240386486053467,
+      "bbox": [
+        729.0,
+        1572.0,
+        828.0,
+        1624.0
+      ],
+      "x1": 729.0,
+      "y1": 1572.0,
+      "x2": 828.0,
+      "y2": 1624.0,
+      "cx": 778.5,
+      "cy": 1598.0,
+      "w": 99.0,
+      "h": 52.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount"
+    },
+    {
+      "index": 58,
+      "text": "7,60",
+      "confidence": 0.9840251207351685,
+      "bbox": [
+        454.0,
+        1576.0,
+        555.0,
+        1631.0
+      ],
+      "x1": 454.0,
+      "y1": 1576.0,
+      "x2": 555.0,
+      "y2": 1631.0,
+      "cx": 504.5,
+      "cy": 1603.5,
+      "w": 101.0,
+      "h": 55.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "price"
+    },
+    {
+      "index": 60,
+      "text": "TOTAAL",
+      "confidence": 0.9995561242103577,
+      "bbox": [
+        88.0,
+        1592.0,
+        225.0,
+        1639.0
+      ],
+      "x1": 88.0,
+      "y1": 1592.0,
+      "x2": 225.0,
+      "y2": 1639.0,
+      "cx": 156.5,
+      "cy": 1615.5,
+      "w": 137.0,
+      "h": 47.0,
+      "section_type": "AH_TOTAL_OR_SUBTOTAL",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 61,
+      "text": "107",
+      "confidence": 0.9991352558135986,
+      "bbox": [
+        755.0,
+        1781.0,
+        828.0,
+        1829.0
+      ],
+      "x1": 755.0,
+      "y1": 1781.0,
+      "x2": 828.0,
+      "y2": 1829.0,
+      "cx": 791.5,
+      "cy": 1805.0,
+      "w": 73.0,
+      "h": 48.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity"
+    },
+    {
+      "index": 62,
+      "text": "32",
+      "confidence": 0.9998764991760254,
+      "bbox": [
+        409.0,
+        1798.0,
+        473.0,
+        1855.0
+      ],
+      "x1": 409.0,
+      "y1": 1798.0,
+      "x2": 473.0,
+      "y2": 1855.0,
+      "cx": 441.0,
+      "cy": 1826.5,
+      "w": 64.0,
+      "h": 57.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity"
+    },
+    {
+      "index": 63,
+      "text": "8521",
+      "confidence": 0.9999650716781616,
+      "bbox": [
+        85.0,
+        1805.0,
+        182.0,
+        1853.0
+      ],
+      "x1": 85.0,
+      "y1": 1805.0,
+      "x2": 182.0,
+      "y2": 1853.0,
+      "cx": 133.5,
+      "cy": 1829.0,
+      "w": 97.0,
+      "h": 48.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity"
+    },
+    {
+      "index": 64,
+      "text": "26-03-2026",
+      "confidence": 0.9997090101242065,
+      "bbox": [
+        607.0,
+        1823.0,
+        829.0,
+        1884.0
+      ],
+      "x1": 607.0,
+      "y1": 1823.0,
+      "x2": 829.0,
+      "y2": 1884.0,
+      "cx": 718.0,
+      "cy": 1853.5,
+      "w": 222.0,
+      "h": 61.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "amount_text_or_right_margin"
+    },
+    {
+      "index": 65,
+      "text": "15:18",
+      "confidence": 0.9992058873176575,
+      "bbox": [
+        90.0,
+        1844.0,
+        209.0,
+        1893.0
+      ],
+      "x1": 90.0,
+      "y1": 1844.0,
+      "x2": 209.0,
+      "y2": 1893.0,
+      "cx": 149.5,
+      "cy": 1868.5,
+      "w": 119.0,
+      "h": 49.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "quantity_or_left_margin"
+    },
+    {
+      "index": 66,
+      "text": "Vragen over je kassabon?",
+      "confidence": 0.9962620735168457,
+      "bbox": [
+        287.0,
+        1911.0,
+        809.0,
+        1987.0
+      ],
+      "x1": 287.0,
+      "y1": 1911.0,
+      "x2": 809.0,
+      "y2": 1987.0,
+      "cx": 548.0,
+      "cy": 1949.0,
+      "w": 522.0,
+      "h": 76.0,
+      "section_type": "AH_TAX",
+      "column_role": "description"
+    },
+    {
+      "index": 67,
+      "text": "Onze kassamedewerkers",
+      "confidence": 0.9800626039505005,
+      "bbox": [
+        329.0,
+        1961.0,
+        786.0,
+        2023.0
+      ],
+      "x1": 329.0,
+      "y1": 1961.0,
+      "x2": 786.0,
+      "y2": 2023.0,
+      "cx": 557.5,
+      "cy": 1992.0,
+      "w": 457.0,
+      "h": 62.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    },
+    {
+      "index": 68,
+      "text": "helpen je graag.",
+      "confidence": 0.9447508454322815,
+      "bbox": [
+        370.0,
+        2009.0,
+        714.0,
+        2048.0
+      ],
+      "x1": 370.0,
+      "y1": 2009.0,
+      "x2": 714.0,
+      "y2": 2048.0,
+      "cx": 542.0,
+      "cy": 2028.5,
+      "w": 344.0,
+      "h": 39.0,
+      "section_type": "AH_UNKNOWN",
+      "column_role": "description"
+    }
+  ],
+  "next_step_hint": "Use this diagnostic result to validate AH chain rules across all AH receipts before touching runtime parser logic."
+}

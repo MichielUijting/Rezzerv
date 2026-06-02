@@ -1,0 +1,6 @@
+input=C:\Users\Gebruiker\Rezzerv_Github\tmp\supermarkten.zip
+member=AH foto 3.jpg
+original_size=4864x2736
+rotated_size=2736x4864
+output_dir=tools\debug_output\R9-21A_preprocessing\AH_foto_3
+runtime_decision={'preprocessing_step': 'receipt_image_preprocessing', 'selected_route': 'original', 'applied_steps': [], 'fallback_reason': ['rembg_unavailable'], 'perspective_normalization': None}

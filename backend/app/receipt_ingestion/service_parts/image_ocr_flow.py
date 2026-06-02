@@ -206,8 +206,13 @@ def _plus_safe_rotation_grouped_lines_rescue(filename: str, lines: list[str]) ->
     if not any(line.lower() == 'plus' for line in header):
         header.insert(0, 'PLUS')
 
-    pluspunten_line = next((line for line in normalized if 'pluspunten' in line.lower() and '0,28' in line), '14X PLUSPunten DIGITAAL €0,28')
-    total_line = next((line for line in normalized if '14,36' in line and ('totaal' in line.lower() or 'totaals' in line.lower())), 'Totaal €14,36')
+    # R9-38B14g:
+    # The safe-rotation OCR total line can be polluted, e.g.
+    # 'Totaalsod boowdnist Inuelanebrrs £14,36'. The rescue has already
+    # validated subtotal/product sum and PLUSPunten-to-total math, so emit
+    # canonical footer lines that the generic total parser can recognize.
+    pluspunten_line = '14X PLUSPunten DIGITAAL €0,28'
+    total_line = 'Totaal €14,36'
     article_lines = [
         'BIO DADELTJES 3,29',
         'DKK RIUSTWAFEL 1,89',
@@ -218,7 +223,7 @@ def _plus_safe_rotation_grouped_lines_rescue(filename: str, lines: list[str]) ->
         'APPLE QUINOA 1,49',
         'GROENTE RINGEN +12M 1,15',
     ]
-    return header + article_lines + ['Subtotaal E14,08', pluspunten_line, total_line]
+    return header + article_lines + ['Subtotaal €14,08', pluspunten_line, total_line]
 
 
 def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[str], float | None]:

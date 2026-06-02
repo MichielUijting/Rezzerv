@@ -1,0 +1,368 @@
+{
+  "artifact_type": "receipt_ingest_debug",
+  "artifact_version": "R9-36D",
+  "created_at": "2026-05-29T08:54:29.617877+00:00",
+  "raw_receipt_id": "d02008189b7848df8d7248bc30494a09",
+  "receipt_table_id": "9e5c77916acf4e6e871ad38f5516ebfb",
+  "original_filename": "AH App 1.pdf",
+  "mime_type": "application/pdf",
+  "storage_path": "/app/data/receipts/raw/1/2026/05/d02008189b7848df8d7248bc30494a09-AH App 1.pdf",
+  "sha256_hash": "afd4ac77e00bca8274cbae172e74838480e8485ff530100b1528dfc34ec4be55",
+  "raw_status": "parsed",
+  "imported_at": "2026-05-29 08:54:29",
+  "source_context": {
+    "route": "ingest_receipt_upload_flow_parse_capture",
+    "original_filename": "AH App 1.pdf",
+    "mime_type": "application/pdf",
+    "include_debug": false,
+    "parser_debug_available_in_response": false,
+    "parse_result_available": true,
+    "parser_input_filename": "AH App 1.pdf",
+    "parser_input_kwargs": {
+      "rich_confidence": 0.92,
+      "partial_confidence": 0.74,
+      "review_confidence": 0.48
+    },
+    "source_lines": [
+      "AIRMILES NR. * xx7484",
+      "1 POEDERSUIKER 1,19",
+      "1 CARE INLEGKR 0,99 BB",
+      "1 AH POFFERTJE 2,19",
+      "3 SUB",
+      "TOTAAL 4,37",
+      "BBOX Care menstr -0,15",
+      "UW VOORDEEL 0,15",
+      "BONUS BOX PREMIUM 0,15",
+      "SUB",
+      "TOTAAL 4,22",
+      "8 KOOPZEGELS PREMIUM 0,80",
+      "TOTAAL 5,02",
+      "2 MIJN AH MILES PREMIUM",
+      "PINNEN 5,02",
+      "9% 3,87 0,35",
+      "TOTAAL 3,87 0,35",
+      "helpen je graag."
+    ],
+    "merged_lines": []
+  },
+  "source_lines": {
+    "count": 18,
+    "lines": [
+      "AIRMILES NR. * xx7484",
+      "1 POEDERSUIKER 1,19",
+      "1 CARE INLEGKR 0,99 BB",
+      "1 AH POFFERTJE 2,19",
+      "3 SUB",
+      "TOTAAL 4,37",
+      "BBOX Care menstr -0,15",
+      "UW VOORDEEL 0,15",
+      "BONUS BOX PREMIUM 0,15",
+      "SUB",
+      "TOTAAL 4,22",
+      "8 KOOPZEGELS PREMIUM 0,80",
+      "TOTAAL 5,02",
+      "2 MIJN AH MILES PREMIUM",
+      "PINNEN 5,02",
+      "9% 3,87 0,35",
+      "TOTAAL 3,87 0,35",
+      "helpen je graag."
+    ],
+    "merged_count": 0,
+    "merged_lines": []
+  },
+  "parse_result": {
+    "is_receipt": true,
+    "parse_status": "parsed",
+    "store_name": "Albert Heijn",
+    "store_branch": "3 SUB, TOTAAL 4,37",
+    "purchase_at": null,
+    "total_amount": "4.37",
+    "discount_total": "-0.15",
+    "currency": "EUR",
+    "confidence_score": 0.82,
+    "line_count": 3,
+    "lines": [
+      {
+        "raw_label": "1 POEDERSUIKER",
+        "normalized_label": "1 POEDERSUIKER",
+        "quantity": null,
+        "unit": null,
+        "unit_price": 1.19,
+        "line_total": 1.19,
+        "discount_amount": null,
+        "barcode": null,
+        "confidence_score": 0.58,
+        "source_index": 1
+      },
+      {
+        "raw_label": "1 CARE INLEGKR",
+        "normalized_label": "1 CARE INLEGKR",
+        "quantity": null,
+        "unit": null,
+        "unit_price": 0.99,
+        "line_total": 0.99,
+        "discount_amount": null,
+        "barcode": null,
+        "confidence_score": 0.58,
+        "source_index": 2
+      },
+      {
+        "raw_label": "1 AH POFFERTJE",
+        "normalized_label": "1 AH POFFERTJE",
+        "quantity": null,
+        "unit": null,
+        "unit_price": 2.19,
+        "line_total": 2.19,
+        "discount_amount": null,
+        "barcode": null,
+        "confidence_score": 0.58,
+        "source_index": 3
+      }
+    ]
+  },
+  "parser_diagnostics": {
+    "total_candidates": 3,
+    "appended_candidates": 3,
+    "blocked_candidates": 0,
+    "by_branch": {
+      "append_line": 3
+    },
+    "by_classification": {
+      "continuation": 3
+    },
+    "by_classification_rule": {
+      "CLASSIFY_LINE_CALLBACK": 3
+    },
+    "by_classification_stage": {
+      "runtime_gateway": 3
+    },
+    "by_blocked_reason": {
+      "none": 3
+    },
+    "ingest_debug_source": {
+      "source": "active_parse_result_from_text_lines",
+      "filename": "AH App 1.pdf",
+      "source_line_count": 18,
+      "parser_kwargs": {
+        "rich_confidence": 0.92,
+        "partial_confidence": 0.74,
+        "review_confidence": 0.48
+      }
+    },
+    "total_resolution": {
+      "source": "profile",
+      "profile": "ah",
+      "amount": "4.37",
+      "explicit_total_found": true,
+      "source_lines_count": 34
+    },
+    "ah_total": {
+      "profile": "ah",
+      "component": "totals",
+      "selected_amount": "4.37",
+      "selected_anchor": "TOTAAL",
+      "selected": {
+        "anchor": "TOTAAL",
+        "amount": "4.37",
+        "line_index": 8,
+        "raw_line": "TOTAAL 4,37",
+        "priority": 1,
+        "source": "same_line"
+      },
+      "explicit_total_found": true,
+      "candidates": [
+        {
+          "anchor": "TOTAAL",
+          "amount": "4.37",
+          "line_index": 8,
+          "raw_line": "TOTAAL 4,37",
+          "priority": 1,
+          "source": "same_line"
+        },
+        {
+          "anchor": "TOTAAL",
+          "amount": "4.22",
+          "line_index": 14,
+          "raw_line": "TOTAAL 4,22",
+          "priority": 1,
+          "source": "same_line"
+        },
+        {
+          "anchor": "TOTAAL",
+          "amount": "5.02",
+          "line_index": 16,
+          "raw_line": "TOTAAL 5,02",
+          "priority": 1,
+          "source": "same_line"
+        }
+      ],
+      "rejected": [
+        {
+          "line_index": 2,
+          "raw_line": "BONUSKAART xx6095",
+          "reason": "reject_token",
+          "token": "bonus"
+        },
+        {
+          "line_index": 10,
+          "raw_line": "UW VOORDEEL 0,15",
+          "reason": "reject_token",
+          "token": "voordeel"
+        },
+        {
+          "line_index": 12,
+          "raw_line": "BONUS BOX PREMIUM 0,15",
+          "reason": "reject_token",
+          "token": "bonus"
+        },
+        {
+          "line_index": 15,
+          "raw_line": "8 KOOPZEGELS PREMIUM 0,80",
+          "reason": "reject_token",
+          "token": "koopzegels"
+        },
+        {
+          "line_index": 19,
+          "raw_line": "BETAALD MET:",
+          "reason": "reject_token",
+          "token": "betaald"
+        },
+        {
+          "line_index": 20,
+          "raw_line": "PINNEN 5,02",
+          "reason": "reject_token",
+          "token": "pin"
+        },
+        {
+          "line_index": 26,
+          "raw_line": "BTW OVER EUR",
+          "reason": "reject_token",
+          "token": "btw"
+        },
+        {
+          "line_index": 27,
+          "raw_line": "9% 3,87 0,35",
+          "reason": "multiple_amounts",
+          "amounts": [
+            "3,87",
+            "0,35"
+          ]
+        },
+        {
+          "line_index": 28,
+          "raw_line": "TOTAAL 3,87 0,35",
+          "reason": "multiple_amounts",
+          "amounts": [
+            "3,87",
+            "0,35"
+          ]
+        }
+      ]
+    }
+  },
+  "stored_receipt": {
+    "receipt_table_id": "9e5c77916acf4e6e871ad38f5516ebfb",
+    "raw_receipt_id": "d02008189b7848df8d7248bc30494a09",
+    "household_id": "1",
+    "store_name": "Albert Heijn",
+    "store_branch": "3 SUB, TOTAAL 4,37",
+    "purchase_at": null,
+    "total_amount": 4.37,
+    "discount_total": -0.15,
+    "currency": "EUR",
+    "parse_status": "parsed",
+    "confidence_score": 0.82,
+    "line_count": 3,
+    "created_at": "2026-05-29 08:54:29",
+    "updated_at": "2026-05-29 08:54:29",
+    "original_filename": "AH App 1.pdf",
+    "mime_type": "application/pdf",
+    "storage_path": "/app/data/receipts/raw/1/2026/05/d02008189b7848df8d7248bc30494a09-AH App 1.pdf",
+    "sha256_hash": "afd4ac77e00bca8274cbae172e74838480e8485ff530100b1528dfc34ec4be55",
+    "raw_status": "parsed",
+    "imported_at": "2026-05-29 08:54:29"
+  },
+  "stored_lines": [
+    {
+      "id": "dacbfea8459846b0b64b55ba49af921b",
+      "line_index": 0,
+      "raw_label": "1 POEDERSUIKER",
+      "corrected_raw_label": null,
+      "normalized_label": "1 POEDERSUIKER",
+      "quantity": null,
+      "corrected_quantity": null,
+      "unit": null,
+      "corrected_unit": null,
+      "unit_price": 1.19,
+      "corrected_unit_price": null,
+      "line_total": 1.19,
+      "corrected_line_total": null,
+      "discount_amount": null,
+      "barcode": null,
+      "article_match_status": "unmatched",
+      "matched_article_id": null,
+      "matched_global_product_id": null,
+      "confidence_score": 0.58,
+      "is_deleted": 0,
+      "is_validated": 0,
+      "created_at": "2026-05-29 08:54:29",
+      "updated_at": "2026-05-29 08:54:29"
+    },
+    {
+      "id": "b1b5683f31254bc9ac94a4794ef48f35",
+      "line_index": 1,
+      "raw_label": "1 CARE INLEGKR",
+      "corrected_raw_label": null,
+      "normalized_label": "1 CARE INLEGKR",
+      "quantity": null,
+      "corrected_quantity": null,
+      "unit": null,
+      "corrected_unit": null,
+      "unit_price": 0.99,
+      "corrected_unit_price": null,
+      "line_total": 0.99,
+      "corrected_line_total": null,
+      "discount_amount": null,
+      "barcode": null,
+      "article_match_status": "unmatched",
+      "matched_article_id": null,
+      "matched_global_product_id": null,
+      "confidence_score": 0.58,
+      "is_deleted": 0,
+      "is_validated": 0,
+      "created_at": "2026-05-29 08:54:29",
+      "updated_at": "2026-05-29 08:54:29"
+    },
+    {
+      "id": "4fcf253aab904b81b7c84c5c2a56cfd7",
+      "line_index": 2,
+      "raw_label": "1 AH POFFERTJE",
+      "corrected_raw_label": null,
+      "normalized_label": "1 AH POFFERTJE",
+      "quantity": null,
+      "corrected_quantity": null,
+      "unit": null,
+      "corrected_unit": null,
+      "unit_price": 2.19,
+      "corrected_unit_price": null,
+      "line_total": 2.19,
+      "corrected_line_total": null,
+      "discount_amount": null,
+      "barcode": null,
+      "article_match_status": "unmatched",
+      "matched_article_id": null,
+      "matched_global_product_id": null,
+      "confidence_score": 0.58,
+      "is_deleted": 0,
+      "is_validated": 0,
+      "created_at": "2026-05-29 08:54:29",
+      "updated_at": "2026-05-29 08:54:29"
+    }
+  ],
+  "debug_download_policy": {
+    "persisted_at_ingest": true,
+    "snapshot_from_stored_db": false,
+    "download_may_reparse": false,
+    "download_may_run_ocr": false
+  }
+}

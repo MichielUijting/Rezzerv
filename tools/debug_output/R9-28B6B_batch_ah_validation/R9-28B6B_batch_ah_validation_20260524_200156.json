@@ -1,0 +1,160 @@
+{
+  "audit": "R9-28B6B batch validation for all AH receipts",
+  "created_at": "2026-05-24T20:01:56",
+  "scope": "batch diagnostics only; no receipt-specific rules; no parser/OCR/database/status/baseline/UI mutation",
+  "ssot_compliance": {
+    "status_determination": "not_performed",
+    "status_service": "receipt_status_baseline_service_v4.py",
+    "parse_status_used_as_truth": false,
+    "parser_mutated": false,
+    "ocr_mutated": false,
+    "database_mutated": false,
+    "baseline_mutated": false,
+    "ui_touched": false,
+    "diagnostics_promoted_to_parser": false
+  },
+  "receipt_specific_rule_guardrail": {
+    "filename_specific_rules_allowed": false,
+    "member_specific_rules_allowed": false,
+    "hardcoded_receipt_ids_allowed": false,
+    "member_regex_used_only_for_batch_selection": "(?i)(^|[/\\\\])(AH|Albert|Albert\\s*Heijn)[^/\\\\]*\\.(jpg|jpeg|png|bmp|tif|tiff|webp)$",
+    "note": "The same R9-28B5/R9-28B6 generic pipeline is executed for every selected AH member."
+  },
+  "input": {
+    "zip_path": "/tmp/supermarkten.zip",
+    "member_regex": "(?i)(^|[/\\\\])(AH|Albert|Albert\\s*Heijn)[^/\\\\]*\\.(jpg|jpeg|png|bmp|tif|tiff|webp)$",
+    "preprocess": true
+  },
+  "aggregate": {
+    "ah_member_count": 2,
+    "passed_count": 1,
+    "failed_or_suspicious_count": 1,
+    "failure_types": {
+      "zero_amount_article_candidate": 1
+    },
+    "total_reconstructed_articles": 4,
+    "total_blocked_non_article_items": 68
+  },
+  "members": [
+    {
+      "member": "AH foto 2.jpeg",
+      "ocr_summary": {
+        "paddle_available": true,
+        "paddle_raw_text_count": 69,
+        "paddle_bbox_count": 69,
+        "paddle_grouped_line_count": 30,
+        "tesseract_line_count": 30,
+        "diagnostic_parser_input_choice": "paddle_grouped_lines"
+      },
+      "reconstruction_summary": {
+        "paddle_item_count": 69,
+        "blocked_non_article_count": 31,
+        "reconstructed_article_count": 2,
+        "reconstructed_article_sum": 8.28
+      },
+      "reconstructed_article_count": 2,
+      "reconstructed_article_sum": 8.28,
+      "reconstructed_articles": [
+        {
+          "article_name": "AH M GEHAKT",
+          "amount": 6.99,
+          "amount_text": "6,99",
+          "name_item_indexes": [
+            6
+          ],
+          "amount_item_index": 7,
+          "confidence_min": 0.9817306399345398,
+          "y_center": 500.0,
+          "rule_id": "AH_PADDLE_BOX_DESCRIPTION_AMOUNT_PAIR_RULE",
+          "reason": "Omschrijving-item in artikelband gekoppeld aan rechter bedrag-item via bounding-box y/x positie."
+        },
+        {
+          "article_name": "SOEPGR BASIS",
+          "amount": 1.29,
+          "amount_text": "1,29",
+          "name_item_indexes": [
+            9
+          ],
+          "amount_item_index": 10,
+          "confidence_min": 0.9557912349700928,
+          "y_center": 541.0,
+          "rule_id": "AH_PADDLE_BOX_DESCRIPTION_AMOUNT_PAIR_RULE",
+          "reason": "Omschrijving-item in artikelband gekoppeld aan rechter bedrag-item via bounding-box y/x positie."
+        }
+      ],
+      "blocked_non_article_count": 31,
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": true
+    },
+    {
+      "member": "AH foto 3.jpg",
+      "ocr_summary": {
+        "paddle_available": true,
+        "paddle_raw_text_count": 70,
+        "paddle_bbox_count": 70,
+        "paddle_grouped_line_count": 23,
+        "tesseract_line_count": 3,
+        "diagnostic_parser_input_choice": "paddle_grouped_lines"
+      },
+      "reconstruction_summary": {
+        "paddle_item_count": 70,
+        "blocked_non_article_count": 37,
+        "reconstructed_article_count": 2,
+        "reconstructed_article_sum": 5.4
+      },
+      "reconstructed_article_count": 2,
+      "reconstructed_article_sum": 5.4,
+      "reconstructed_articles": [
+        {
+          "article_name": "CHAUDF WATER",
+          "amount": 5.4,
+          "amount_text": "5,40",
+          "name_item_indexes": [
+            12
+          ],
+          "amount_item_index": 11,
+          "confidence_min": 0.9605472683906555,
+          "y_center": 1293.5,
+          "rule_id": "AH_PADDLE_BOX_DESCRIPTION_AMOUNT_PAIR_RULE",
+          "reason": "Omschrijving-item in artikelband gekoppeld aan rechter bedrag-item via bounding-box y/x positie."
+        },
+        {
+          "article_name": "AH SANDWICH",
+          "amount": 0.0,
+          "amount_text": "0,00",
+          "name_item_indexes": [
+            13
+          ],
+          "amount_item_index": 15,
+          "confidence_min": 0.9342355728149414,
+          "y_center": 1379.5,
+          "rule_id": "AH_PADDLE_BOX_DESCRIPTION_AMOUNT_PAIR_RULE",
+          "reason": "Omschrijving-item in artikelband gekoppeld aan rechter bedrag-item via bounding-box y/x positie."
+        }
+      ],
+      "blocked_non_article_count": 37,
+      "suspicious_findings": [
+        {
+          "type": "zero_amount_article_candidate",
+          "article": {
+            "article_name": "AH SANDWICH",
+            "amount": 0.0,
+            "amount_text": "0,00",
+            "name_item_indexes": [
+              13
+            ],
+            "amount_item_index": 15,
+            "confidence_min": 0.9342355728149414,
+            "y_center": 1379.5,
+            "rule_id": "AH_PADDLE_BOX_DESCRIPTION_AMOUNT_PAIR_RULE",
+            "reason": "Omschrijving-item in artikelband gekoppeld aan rechter bedrag-item via bounding-box y/x positie."
+          }
+        }
+      ],
+      "suspicious_finding_count": 1,
+      "pass_batch_diagnostic": false
+    }
+  ],
+  "next_step_hint": "Use batch-level recurring failure patterns only. Do not patch per receipt. If correction is needed, implement one generic AH rule and rerun this batch."
+}

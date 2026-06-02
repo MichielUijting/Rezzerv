@@ -1,0 +1,245 @@
+diff_main_py.patch:3: --- a/backend/app/main.py
+diff_main_py.patch:4: +++ b/backend/app/main.py
+diff_main_py.patch:5: @@ -122,6 +122,154 @@ def build_receipt_upload_error_detail(path: str, exc: Exception) -> str:
+diff_main_py.patch:9: +# R9-29A4 ÔÇö expose existing preprocessing diagnostics through existing diagnostics routes.
+diff_main_py.patch:13: +# - no OCR-engine mutation
+diff_main_py.patch:15: +# - no status determination
+diff_main_py.patch:16: +# - no change to receipt_status_baseline_service_v4.py
+diff_main_py.patch:17: +# - uses existing apply_receipt_image_preprocessing(...) only for read-only diagnostics
+diff_main_py.patch:18: +R9_29A4_DIAGNOSTIC_PATH_RE = re.compile(
+diff_main_py.patch:23: +def _r9_29a4_build_preprocessing_diagnostics(receipt_table_id: str) -> dict[str, Any]:
+diff_main_py.patch:26: +        "source": "existing_apply_receipt_image_preprocessing",
+diff_main_py.patch:29: +            "status_determination": "not_performed",
+diff_main_py.patch:30: +            "status_service": "receipt_status_baseline_service_v4.py",
+diff_main_py.patch:32: +            "ocr_engine_mutated": False,
+diff_main_py.patch:34: +            "diagnostics_promoted_to_parser": False,
+diff_main_py.patch:89: +        from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import apply_receipt_image_preprocessing
+diff_main_py.patch:91: +        _processed_bytes, decision = apply_receipt_image_preprocessing(storage_path.read_bytes(), filename)
+diff_main_py.patch:94: +        payload["preprocessing_decision"] = decision_payload
+diff_main_py.patch:98: +        payload["diagnostics"] = decision_payload.get("diagnostics")
+diff_main_py.patch:102: +        payload["error"] = f"preprocessing_diagnostics_failed: {exc}"
+diff_main_py.patch:107: +async def r9_29a4_preprocessing_diagnostics_middleware(request: Request, call_next):
+diff_main_py.patch:110: +    match = R9_29A4_DIAGNOSTIC_PATH_RE.match(request.url.path)
+diff_main_py.patch:111: +    if not match or response.status_code != 200:
+diff_main_py.patch:127: +            status_code=response.status_code,
+diff_main_py.patch:134: +        preprocessing_payload = _r9_29a4_build_preprocessing_diagnostics(receipt_table_id)
+diff_main_py.patch:135: +        data.setdefault("diagnostics", {})
+diff_main_py.patch:136: +        if isinstance(data["diagnostics"], dict):
+diff_main_py.patch:137: +            data["diagnostics"]["preprocessing"] = preprocessing_payload
+diff_main_py.patch:139: +            data["diagnostics"] = {
+diff_main_py.patch:140: +                "previous_diagnostics": data["diagnostics"],
+diff_main_py.patch:141: +                "preprocessing": preprocessing_payload,
+diff_main_py.patch:143: +        data["preprocessing_diagnostics"] = preprocessing_payload
+diff_main_py.patch:150: +        status_code=response.status_code,
+diff_R9-21A_export_receipt_preprocessing.patch:1: diff --git a/tools/R9-21A_export_receipt_preprocessing.py b/tools/R9-21A_export_receipt_preprocessing.py
+diff_R9-21A_export_receipt_preprocessing.patch:3: --- a/tools/R9-21A_export_receipt_preprocessing.py
+diff_R9-21A_export_receipt_preprocessing.patch:4: +++ b/tools/R9-21A_export_receipt_preprocessing.py
+diff_R9-21A_export_receipt_preprocessing.patch:5: @@ -2,7 +2,11 @@ from __future__ import annotations
+diff_R9-21A_export_receipt_preprocessing.patch:17: @@ -17,12 +21,12 @@ except Exception:  # pragma: no cover
+diff_R9-21A_export_receipt_preprocessing.patch:34: @@ -30,12 +34,14 @@ def _load_bytes(input_path: Path, member: str | None) -> tuple[bytes, str]:
+diff_R9-21A_export_receipt_preprocessing.patch:50: @@ -61,48 +67,97 @@ def _deskew_pil(image: Image.Image) -> Image.Image:
+diff_R9-21A_export_receipt_preprocessing.patch:54: +def _hard_reset_case_dir(case_dir: Path) -> None:
+diff_R9-21A_export_receipt_preprocessing.patch:60: +def _file_line(path: Path) -> str:
+diff_R9-21A_export_receipt_preprocessing.patch:92: +    os.environ['REZZERV_RECEIPT_PREPROCESS_DEBUG_DIR'] = str(case_dir / '99_preprocess_checkpoints')
+diff_R9-21A_export_receipt_preprocessing.patch:93:      runtime_bytes, runtime_decision = apply_receipt_image_preprocessing(data, filename)
+diff_R9-21A_export_receipt_preprocessing.patch:95: -    _save_pil(runtime_image, case_dir / '03_runtime_preprocessed.png')
+diff_R9-21A_export_receipt_preprocessing.patch:97: +    p = case_dir / "03_runtime_preprocessed.png"
+diff_R9-21A_export_receipt_preprocessing.patch:105: -    _save_pil(gray, case_dir / '04_ocr_input_grayscale.png')
+diff_R9-21A_export_receipt_preprocessing.patch:112: +    # R9-21L: OCR grayscale follows the actual runtime preprocessing output,
+diff_R9-21A_export_receipt_preprocessing.patch:115: +    p = case_dir / "04_ocr_input_grayscale.png"
+diff_R9-21A_export_receipt_preprocessing.patch:133: +                f"diagnostics={runtime_decision.to_dict().get('diagnostics')}",
+diff_R9-21A_export_receipt_preprocessing.patch:150: -    parser = argparse.ArgumentParser(description='R9-21A export visual receipt preprocessing stages.')
+diff_R9-21A_export_receipt_preprocessing.patch:153: -    parser.add_argument('--out', default='tools/debug_output/R9-21A_preprocessing', help='Output directory')
+diff_R9-21A_export_receipt_preprocessing.patch:154: +    parser = argparse.ArgumentParser(description="R9-21L hard-reset visual receipt preprocessing export.")
+diff_R9-21A_export_receipt_preprocessing.patch:157: +    parser.add_argument("--out", default="tools/debug_output/R9-21A_preprocessing", help="Output directory")
+diff_R9-21A_export_receipt_preprocessing.patch:160: -    print(f'R9-21A preprocessing export geschreven naar: {out}')
+diff_R9-21A_export_receipt_preprocessing.patch:161: +    print(f"R9-21L preprocessing export hard-reset geschreven naar: {out}")
+diff_receipt_image_preprocessing.patch:1: diff --git a/backend/app/receipt_ingestion/preprocessing/receipt_image_preprocessing.py b/backend/app/receipt_ingestion/preprocessing/receipt_image_preprocessing.py
+diff_receipt_image_preprocessing.patch:3: --- a/backend/app/receipt_ingestion/preprocessing/receipt_image_preprocessing.py
+diff_receipt_image_preprocessing.patch:4: +++ b/backend/app/receipt_ingestion/preprocessing/receipt_image_preprocessing.py
+diff_receipt_image_preprocessing.patch:5: @@ -1,10 +1,13 @@
+diff_receipt_image_preprocessing.patch:20: @@ -12,11 +15,6 @@ except Exception:
+diff_receipt_image_preprocessing.patch:30:      from rembg import remove as rembg_remove
+diff_receipt_image_preprocessing.patch:32: @@ -24,10 +22,25 @@ except Exception:
+diff_receipt_image_preprocessing.patch:59:  class ReceiptImagePreprocessingDecision:
+diff_receipt_image_preprocessing.patch:60: @@ -36,290 +49,430 @@ class ReceiptImagePreprocessingDecision:
+diff_receipt_image_preprocessing.patch:64: +    diagnostics: dict[str, Any] = field(default_factory=dict)
+diff_receipt_image_preprocessing.patch:70: -def _decode_image(file_bytes: bytes):
+diff_receipt_image_preprocessing.patch:77: -def _encode_image_png(image) -> bytes | None:
+diff_receipt_image_preprocessing.patch:79: +def _debug_dir() -> Path | None:
+diff_receipt_image_preprocessing.patch:80: +    value = os.environ.get("REZZERV_RECEIPT_PREPROCESS_DEBUG_DIR")
+diff_receipt_image_preprocessing.patch:87: -def _pil_rgb_to_bgr(image):
+diff_receipt_image_preprocessing.patch:94: -def _remove_background_with_rembg(file_bytes: bytes):
+diff_receipt_image_preprocessing.patch:95: -    """AI-background-removal before geometry/OCR.
+diff_receipt_image_preprocessing.patch:99: -    had similar brightness/saturation. `rembg` performs object segmentation
+diff_receipt_image_preprocessing.patch:102: -    if rembg_remove is None:
+diff_receipt_image_preprocessing.patch:103: -        return None, "rembg_unavailable"
+diff_receipt_image_preprocessing.patch:113: -        rgba_bytes = rembg_remove(file_bytes)
+diff_receipt_image_preprocessing.patch:116: -        return None, f"rembg_failed:{type(exc).__name__}"
+diff_receipt_image_preprocessing.patch:120: +def _save_debug(name: str, image: Image.Image, diagnostics: dict[str, Any]) -> None:
+diff_receipt_image_preprocessing.patch:126: +    diagnostics.setdefault("debug_files", []).append(str(path))
+diff_receipt_image_preprocessing.patch:129: -        return None, "rembg_empty_alpha_mask"
+diff_receipt_image_preprocessing.patch:133: +def _encode_png(image: Image.Image) -> bytes:
+diff_receipt_image_preprocessing.patch:143: -        return None, "rembg_mask_too_small"
+diff_receipt_image_preprocessing.patch:144: +def _load_original(file_bytes: bytes, diagnostics: dict[str, Any]) -> Image.Image:
+diff_receipt_image_preprocessing.patch:147: +    diagnostics["original_size"] = [original.width, original.height]
+diff_receipt_image_preprocessing.patch:148: +    _save_debug("00_input_original.png", original, diagnostics)
+diff_receipt_image_preprocessing.patch:157: -    # Composite segmented foreground on white so OCR sees a clean document image.
+diff_receipt_image_preprocessing.patch:158: +def _rgba_on_white(rgba: Image.Image) -> Image.Image:
+diff_receipt_image_preprocessing.patch:166: -        return None, "rembg_bgr_conversion_failed"
+diff_receipt_image_preprocessing.patch:171: -def _order_points(points):
+diff_receipt_image_preprocessing.patch:182: -def _four_point_warp(image, points):
+diff_receipt_image_preprocessing.patch:205: +def _safe_original_response(original: Image.Image, diagnostics: dict[str, Any], reasons: list[str]) -> tuple[bytes, ReceiptImagePreprocessingDecision]:
+diff_receipt_image_preprocessing.patch:206: +    _save_debug("40_final_runtime_preprocessed.png", original, diagnostics)
+diff_receipt_image_preprocessing.patch:207: +    _save_debug("50_final_ocr_input.png", ImageOps.grayscale(original), diagnostics)
+diff_receipt_image_preprocessing.patch:208: +    diagnostics["final_size"] = [original.width, original.height]
+diff_receipt_image_preprocessing.patch:209: +    return _encode_png(original), ReceiptImagePreprocessingDecision(
+diff_receipt_image_preprocessing.patch:210: +        "receipt_image_preprocessing",
+diff_receipt_image_preprocessing.patch:215: +        diagnostics,
+diff_receipt_image_preprocessing.patch:223: +def _classify_input(filename: str, suffix: str) -> dict[str, Any]:
+diff_receipt_image_preprocessing.patch:235: +def _route_gate(filename: str, suffix: str, diagnostics: dict[str, Any]) -> tuple[bool, list[str]]:
+diff_receipt_image_preprocessing.patch:237: +    diagnostics["preprocessing_route_gate"] = {
+diff_receipt_image_preprocessing.patch:239: +        "candidate_routes": ["existing_safe_route_no_pca", "rembg_pca_receipt_axis_normalization"],
+diff_receipt_image_preprocessing.patch:242: -def _find_document_quadrilateral(image):
+diff_receipt_image_preprocessing.patch:261: +    diagnostics["preprocessing_route_gate"]["pca_accepted_initial"] = accepted
+diff_receipt_image_preprocessing.patch:262: +    diagnostics["preprocessing_route_gate"]["initial_reject_reasons"] = reasons
+diff_receipt_image_preprocessing.patch:271: +def _mask_largest_component(alpha: "np.ndarray", diagnostics: dict[str, Any]) -> tuple["np.ndarray | None", str | None]:
+diff_receipt_image_preprocessing.patch:282: +    diagnostics["pca_mask"] = {
+diff_receipt_image_preprocessing.patch:288: +    _save_debug("11_alpha_mask.png", Image.fromarray(mask), diagnostics)
+diff_receipt_image_preprocessing.patch:299: +    _save_debug("12_alpha_mask_cleaned.png", Image.fromarray(cleaned), diagnostics)
+diff_receipt_image_preprocessing.patch:311: +    diagnostics["pca_largest_component"] = {
+diff_receipt_image_preprocessing.patch:323: +    _save_debug("13_largest_component_mask.png", Image.fromarray(component), diagnostics)
+diff_receipt_image_preprocessing.patch:331: +def _normalize_angle_180(angle: float) -> float:
+diff_receipt_image_preprocessing.patch:339: +def _normalize_angle_90(angle: float) -> float:
+diff_receipt_image_preprocessing.patch:348: +def _estimate_pca_rotation(component_mask: "np.ndarray", diagnostics: dict[str, Any]) -> tuple[float | None, dict[str, Any] | None, str | None]:
+diff_receipt_image_preprocessing.patch:380: +    diagnostics["pca_axis"] = pca_info
+diff_receipt_image_preprocessing.patch:392: +def _draw_pca_axis_overlay(rgba: Image.Image, component_mask: "np.ndarray", pca_info: dict[str, Any], diagnostics: dict[str, Any]) -> None:
+diff_receipt_image_preprocessing.patch:423: +    _save_debug("14_pca_axis_overlay.png", Image.fromarray(overlay), diagnostics)
+diff_receipt_image_preprocessing.patch:432: +def _rotate_rgba_bound(rgba: Image.Image, rotation_degrees: float, diagnostics: dict[str, Any]) -> Image.Image:
+diff_receipt_image_preprocessing.patch:460: +    diagnostics["pca_rotation_output"] = {
+diff_receipt_image_preprocessing.patch:472: +def _crop_to_alpha(rgba: Image.Image, diagnostics: dict[str, Any]) -> Image.Image:
+diff_receipt_image_preprocessing.patch:481: +        diagnostics["pca_alpha_crop"] = {"applied": False, "reason": "no_alpha_after_rotation"}
+diff_receipt_image_preprocessing.patch:491: +    diagnostics["pca_alpha_crop"] = {
+diff_receipt_image_preprocessing.patch:499: +def _rembg_to_rgba(file_bytes: bytes, diagnostics: dict[str, Any]) -> tuple[Image.Image | None, str | None]:
+diff_receipt_image_preprocessing.patch:500: +    if rembg_remove is None:
+diff_receipt_image_preprocessing.patch:501: +        return None, "rembg_unavailable"
+diff_receipt_image_preprocessing.patch:506: +        rgba_bytes = rembg_remove(file_bytes)
+diff_receipt_image_preprocessing.patch:509: +        diagnostics["rembg"] = {"available": True, "size": [rgba.width, rgba.height]}
+diff_receipt_image_preprocessing.patch:510: +        _save_debug("09_rembg_raw_rgba.png", rgba, diagnostics)
+diff_receipt_image_preprocessing.patch:511: +        _save_debug("10_rembg_neutralized.png", _rgba_on_white(rgba), diagnostics)
+diff_receipt_image_preprocessing.patch:514: +        return None, f"rembg_failed:{type(exc).__name__}"
+diff_receipt_image_preprocessing.patch:525: +def _quality_check_output(image: Image.Image, diagnostics: dict[str, Any]) -> tuple[bool, str | None]:
+diff_receipt_image_preprocessing.patch:535: +    diagnostics["pca_output_quality"] = {
+diff_receipt_image_preprocessing.patch:561: +def _apply_pca_axis_normalization(rgba: Image.Image, diagnostics: dict[str, Any]) -> tuple[Image.Image | None, dict[str, Any] | None, str | None]:
+diff_receipt_image_preprocessing.patch:567: +    component, reason = _mask_largest_component(alpha, diagnostics)
+diff_receipt_image_preprocessing.patch:571: +    rotation, pca_info, reason = _estimate_pca_rotation(component, diagnostics)
+diff_receipt_image_preprocessing.patch:573: +        _draw_pca_axis_overlay(rgba, component, pca_info, diagnostics)
+diff_receipt_image_preprocessing.patch:577: -def _remove_background_by_document_edges(image):
+diff_receipt_image_preprocessing.patch:580: +    rotated_rgba = _rotate_rgba_bound(rgba, rotation, diagnostics)
+diff_receipt_image_preprocessing.patch:581: +    _save_debug("20_pca_rotated_uncropped.png", _rgba_on_white(rotated_rgba), diagnostics)
+diff_receipt_image_preprocessing.patch:586: +    cropped_rgba = _crop_to_alpha(rotated_rgba, diagnostics)
+diff_receipt_image_preprocessing.patch:588: +    _save_debug("30_pca_vertical_cropped.png", final, diagnostics)
+diff_receipt_image_preprocessing.patch:593: +    ok, quality_reason = _quality_check_output(final, diagnostics)
+diff_receipt_image_preprocessing.patch:601:  def apply_receipt_image_preprocessing(file_bytes: bytes, filename: str) -> tuple[bytes, ReceiptImagePreprocessingDecision]:
+diff_receipt_image_preprocessing.patch:604: -        return file_bytes, ReceiptImagePreprocessingDecision(
+diff_receipt_image_preprocessing.patch:605: -            "receipt_image_preprocessing",
+diff_receipt_image_preprocessing.patch:615: -    image, ai_reason = _remove_background_with_rembg(file_bytes)
+diff_receipt_image_preprocessing.patch:620: +    """R9-27C: gated rembg + PCA receipt-axis normalization.
+diff_receipt_image_preprocessing.patch:626: +    - No status logic changes.
+diff_receipt_image_preprocessing.patch:630: +    diagnostics: dict[str, Any] = {"filename": filename}
+diff_receipt_image_preprocessing.patch:635: +        original = _load_original(file_bytes, diagnostics)
+diff_receipt_image_preprocessing.patch:637:          return file_bytes, ReceiptImagePreprocessingDecision(
+diff_receipt_image_preprocessing.patch:638:              "receipt_image_preprocessing",
+diff_receipt_image_preprocessing.patch:645: +            diagnostics,
+diff_receipt_image_preprocessing.patch:654: -        return file_bytes, ReceiptImagePreprocessingDecision(
+diff_receipt_image_preprocessing.patch:655: +    accepted_by_gate, gate_reasons = _route_gate(filename, suffix, diagnostics)
+diff_receipt_image_preprocessing.patch:657: +        diagnostics["preprocessing_route_gate"]["selected_preprocessing_route"] = "existing_safe_route_no_pca"
+diff_receipt_image_preprocessing.patch:658: +        diagnostics["preprocessing_route_gate"]["pca_accepted_final"] = False
+diff_receipt_image_preprocessing.patch:659: +        diagnostics["preprocessing_route_gate"]["pca_reject_reason"] = gate_reasons
+diff_receipt_image_preprocessing.patch:660: +        return _safe_original_response(original, diagnostics, gate_reasons)
+diff_receipt_image_preprocessing.patch:662: +    rgba, rembg_reason = _rembg_to_rgba(file_bytes, diagnostics)
+diff_receipt_image_preprocessing.patch:664: +        diagnostics["preprocessing_route_gate"]["selected_preprocessing_route"] = "existing_safe_route_no_pca"
+diff_receipt_image_preprocessing.patch:665: +        diagnostics["preprocessing_route_gate"]["pca_accepted_final"] = False
+diff_receipt_image_preprocessing.patch:666: +        diagnostics["preprocessing_route_gate"]["pca_reject_reason"] = [rembg_reason or "rembg_failed"]
+diff_receipt_image_preprocessing.patch:667: +        return _safe_original_response(original, diagnostics, [rembg_reason or "rembg_failed"])
+diff_receipt_image_preprocessing.patch:669: +    normalized, pca_info, pca_reason = _apply_pca_axis_normalization(rgba, diagnostics)
+diff_receipt_image_preprocessing.patch:672: +        _save_debug("40_final_runtime_preprocessed.png", fallback, diagnostics)
+diff_receipt_image_preprocessing.patch:673: +        _save_debug("50_final_ocr_input.png", ImageOps.grayscale(fallback), diagnostics)
+diff_receipt_image_preprocessing.patch:674: +        diagnostics["final_size"] = [fallback.width, fallback.height]
+diff_receipt_image_preprocessing.patch:675: +        diagnostics["preprocessing_route_gate"]["selected_preprocessing_route"] = "rembg_only_pca_rejected"
+diff_receipt_image_preprocessing.patch:676: +        diagnostics["preprocessing_route_gate"]["pca_accepted_final"] = False
+diff_receipt_image_preprocessing.patch:677: +        diagnostics["preprocessing_route_gate"]["pca_reject_reason"] = [pca_reason or "pca_axis_normalization_failed"]
+diff_receipt_image_preprocessing.patch:678: +        return _encode_png(fallback), ReceiptImagePreprocessingDecision(
+diff_receipt_image_preprocessing.patch:679:              "receipt_image_preprocessing",
+diff_receipt_image_preprocessing.patch:684: +            "R9-27C_rembg_only_pca_rejected",
+diff_receipt_image_preprocessing.patch:685: +            ["rembg_remove_background", "white_background_composite"],
+diff_receipt_image_preprocessing.patch:688: +            diagnostics,
+diff_receipt_image_preprocessing.patch:692: -    return output, ReceiptImagePreprocessingDecision(
+diff_receipt_image_preprocessing.patch:693: +    _save_debug("40_final_runtime_preprocessed.png", normalized, diagnostics)
+diff_receipt_image_preprocessing.patch:694: +    _save_debug("50_final_ocr_input.png", ImageOps.grayscale(normalized), diagnostics)
+diff_receipt_image_preprocessing.patch:695: +    diagnostics["final_size"] = [normalized.width, normalized.height]
+diff_receipt_image_preprocessing.patch:696: +    diagnostics["preprocessing_route_gate"]["selected_preprocessing_route"] = "rembg_pca_receipt_axis_normalization"
+diff_receipt_image_preprocessing.patch:697: +    diagnostics["preprocessing_route_gate"]["pca_accepted_final"] = True
+diff_receipt_image_preprocessing.patch:698: +    diagnostics["preprocessing_route_gate"]["pca_reject_reason"] = []
+diff_receipt_image_preprocessing.patch:700: +    return _encode_png(normalized), ReceiptImagePreprocessingDecision(
+diff_receipt_image_preprocessing.patch:701:          "receipt_image_preprocessing",
+diff_receipt_image_preprocessing.patch:706: +        "R9-27C_gated_rembg_pca_receipt_axis_normalized",
+diff_receipt_image_preprocessing.patch:707: +        ["route_gate", "rembg_remove_background", "alpha_largest_component", "pca_receipt_axis", "rotate_axis_to_vertical", "alpha_crop", "white_background_composite"],
+diff_receipt_image_preprocessing.patch:710: +        diagnostics,
+diff_receipt_service.patch:3: --- a/backend/app/services/receipt_service.py
+diff_receipt_service.patch:4: +++ b/backend/app/services/receipt_service.py
+diff_receipt_service.patch:5: @@ -722,6 +722,50 @@ def _choose_better_receipt_result(primary: ReceiptParseResult, secondary: Receip
+diff_receipt_service.patch:9: +def _attach_preprocessing_diagnostics(
+diff_receipt_service.patch:11: +    preprocessing_decision: Any | None,
+diff_receipt_service.patch:13: +    # R9-29A3: attach read-only preprocessing diagnostics to the parse result.
+diff_receipt_service.patch:16: +    # - Preserve existing R9-27C rembg/PCA route-gates.
+diff_receipt_service.patch:17: +    # - Do not broaden rembg/PCA usage.
+diff_receipt_service.patch:18: +    # - Do not change parse_status, store detection, line extraction or PO status.
+diff_receipt_service.patch:19: +    # - Do not mutate receipt_status_baseline_service_v4.py.
+diff_receipt_service.patch:20: +    if result is None or preprocessing_decision is None:
+diff_receipt_service.patch:25: +            preprocessing_decision.to_dict()
+diff_receipt_service.patch:26: +            if hasattr(preprocessing_decision, "to_dict")
+diff_receipt_service.patch:27: +            else dict(preprocessing_decision)
+diff_receipt_service.patch:30: +        decision_payload = {"repr": repr(preprocessing_decision)}
+diff_receipt_service.patch:32: +    current = result.parser_diagnostics
+diff_receipt_service.patch:34: +        current = {"parser_diagnostics": current}
+diff_receipt_service.patch:38: +    current["preprocessing_decision"] = decision_payload
+diff_receipt_service.patch:39: +    current["preprocessing_guardrail"] = {
+diff_receipt_service.patch:41: +        "status_determination": "not_performed",
+diff_receipt_service.patch:42: +        "status_service": "receipt_status_baseline_service_v4.py",
+diff_receipt_service.patch:43: +        "diagnostics_promoted_to_parser": False,
+diff_receipt_service.patch:44: +        "preprocessing_functional_change": False,
+diff_receipt_service.patch:46: +        "rembg_default_route_changed": False,
+diff_receipt_service.patch:49: +    result.parser_diagnostics = current
+diff_receipt_service.patch:56: @@ -2402,7 +2446,7 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
+diff_receipt_service.patch:58:                  ocr_filename = f"{Path(filename).stem}-safe-rotation.png"
+diff_receipt_service.patch:60: -            LOGGER.warning('Safe rotation preprocessing mislukt voor %s: %s', filename, exc)
+diff_receipt_service.patch:61: +            LOGGER.warning('Receipt image preprocessing mislukt voor %s: %s', filename, exc)
+diff_receipt_service.patch:62:              ocr_file_bytes = file_bytes
+diff_receipt_service.patch:63:              ocr_filename = filename
+diff_receipt_service.patch:65: @@ -2424,6 +2468,9 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
+diff_receipt_service.patch:69: +        _attach_preprocessing_diagnostics(paddle_result, safe_rotation_decision)
+diff_receipt_service.patch:70: +        _attach_preprocessing_diagnostics(tesseract_result, safe_rotation_decision)
+diff_receipt_service.patch:72:          image_result = _choose_better_receipt_result(paddle_result, tesseract_result)
+diff_receipt_service.patch:73:          chosen_confidence = paddle_confidence if image_result is paddle_result else tesseract_confidence
+diff_receipt_service.patch:74:          chosen_lines = paddle_lines if image_result is paddle_result else tesseract_lines
+diff_receipt_service.patch:75: @@ -2439,14 +2486,14 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
+diff_receipt_service.patch:80: +            return _attach_preprocessing_diagnostics(image_result, safe_rotation_decision)
+diff_receipt_service.patch:82:          fallback_lines = chosen_lines or paddle_lines or tesseract_lines
+diff_receipt_service.patch:90:              parse_status='review_needed',
+diff_receipt_service.patch:92: @@ -2458,6 +2505,7 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
+diff_receipt_service.patch:94:              parser_diagnostics=summarize_lines_parser_diagnostics([]),
+diff_receipt_service.patch:96: +        return _attach_preprocessing_diagnostics(fallback_result, safe_rotation_decision)
+diff_testing_receipt_line_diagnosis_routes.patch:3: --- a/backend/app/testing_receipt_line_diagnosis_routes.py
+diff_testing_receipt_line_diagnosis_routes.patch:4: +++ b/backend/app/testing_receipt_line_diagnosis_routes.py
+diff_testing_receipt_line_diagnosis_routes.patch:5: @@ -9,6 +9,7 @@ from fastapi import Response
+diff_testing_receipt_line_diagnosis_routes.patch:10:  from app.services.receipt_status_baseline_service_v4 import validate_receipt_status_baseline
+diff_testing_receipt_line_diagnosis_routes.patch:13: @@ -49,17 +50,47 @@ def _receipt_line_dict(row: dict[str, Any]) -> dict[str, Any]:
+diff_testing_receipt_line_diagnosis_routes.patch:17: -def _diagnostic_line_classification(value: Any, *, store_name: str | None, filename: str | None) -> str:
+diff_testing_receipt_line_diagnosis_routes.patch:18: +def _diagnostic_line_diagnosis(value: Any, *, store_name: str | None, filename: str | None) -> dict[str, Any]:
+diff_testing_receipt_line_diagnosis_routes.patch:46: +def _diagnostic_line_classification(value: Any, *, store_name: str | None, filename: str | None) -> str:
+diff_testing_receipt_line_diagnosis_routes.patch:47: +    return str(_diagnostic_line_diagnosis(value, store_name=store_name, filename=filename).get('classification') or 'ignore')
+diff_testing_receipt_line_diagnosis_routes.patch:53: -    classification = existing_trace.get('classification') or _diagnostic_line_classification(label, store_name=store_name, filename=filename)
+diff_testing_receipt_line_diagnosis_routes.patch:54: +    diagnosis = _diagnostic_line_diagnosis(label, store_name=store_name, filename=filename)
+diff_testing_receipt_line_diagnosis_routes.patch:65: @@ -69,9 +100,16 @@ def _build_producer_trace(line: dict[str, Any], *, filename: str, store_name: st
+diff_testing_receipt_line_diagnosis_routes.patch:78: -        'trace_source': 'parser_trace' if existing_trace else 'diagnostic_result_line_trace',

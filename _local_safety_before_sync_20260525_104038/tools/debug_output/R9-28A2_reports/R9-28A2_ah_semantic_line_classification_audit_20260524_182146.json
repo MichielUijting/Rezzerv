@@ -1,0 +1,27 @@
+{
+  "audit": "R9-28A2 AH semantic line classification audit from runtime sqlite",
+  "created_at": "2026-05-24T18:21:46",
+  "db": "/app/data/rezzerv.db",
+  "schema_strategy": {
+    "strategy": "not_found"
+  },
+  "scope": "AH only; audit only; no parser/status/baseline mutation",
+  "receipt_count": 0,
+  "receipts": [],
+  "schema_discovery": {
+    "receipt_candidates": [
+      "raw_receipts",
+      "receipt_email_messages",
+      "receipt_gmail_accounts",
+      "receipt_gmail_imports",
+      "receipt_import_batches",
+      "receipt_inbound_events",
+      "receipt_processing_runs",
+      "receipt_sources",
+      "receipt_tables"
+    ],
+    "line_candidates": [
+      "receipt_table_lines"
+    ]
+  }
+}

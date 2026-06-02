@@ -1,0 +1,439 @@
+{
+  "audit": "R9-28B2 AH raw OCR/source section classifier SSOT-safe",
+  "created_at": "2026-05-24T18:59:12",
+  "db": "/app/data/rezzerv.db",
+  "scope": "AH chain profile; raw/source section classification only; no parser/status/baseline/UI mutation",
+  "ssot_compliance": {
+    "status_determination": "not_performed",
+    "status_service": "receipt_status_baseline_service_v4.py",
+    "parse_status_used": false,
+    "po_status_label_used": false,
+    "ui_status_touched": false,
+    "parser_mutated": false,
+    "baseline_mutated": false,
+    "note": "R9-28B2 uses raw/full OCR-like source text when available. It does not compute or override Gecontroleerd/Controle nodig."
+  },
+  "why_b2_exists": {
+    "problem_in_R9_28B": "R9-28B classified receipt_table_lines, which are already post-parser article rows. That input cannot expose header/discount/stamps/total/tax/footer sections reliably.",
+    "correction": "R9-28B2 searches raw/full OCR source text before article parsing."
+  },
+  "discovery": {
+    "tables": {
+      "app_users": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "global_products": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "household_article_notes": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "household_article_settings": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "household_articles": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "household_memberships": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "household_permission_policies": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "household_registry": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "household_role_change_audit": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "household_settings": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "household_store_connections": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "households": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "inventory": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "inventory_events": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "product_enrichment_attempts": {
+        "text_columns": [
+          "response_excerpt"
+        ],
+        "sampled": true,
+        "sample_rows": 0,
+        "ah_text_matches": 0
+      },
+      "product_enrichment_audit": {
+        "text_columns": [
+          "response_excerpt"
+        ],
+        "sampled": true,
+        "sample_rows": 0,
+        "ah_text_matches": 0
+      },
+      "product_enrichments": {
+        "text_columns": [
+          "raw_payload_json"
+        ],
+        "sampled": true,
+        "sample_rows": 0,
+        "ah_text_matches": 0
+      },
+      "product_identities": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "purchase_import_batches": {
+        "text_columns": [
+          "raw_payload"
+        ],
+        "sampled": true,
+        "sample_rows": 17,
+        "ah_text_matches": 4
+      },
+      "purchase_import_lines": {
+        "text_columns": [
+          "article_name_raw",
+          "brand_raw",
+          "quantity_raw",
+          "unit_raw",
+          "line_price_raw",
+          "processing_diagnostics"
+        ],
+        "sampled": true,
+        "sample_rows": 117,
+        "ah_text_matches": 0
+      },
+      "raw_receipts": {
+        "text_columns": [
+          "duplicate_of_raw_receipt_id",
+          "raw_status"
+        ],
+        "sampled": true,
+        "sample_rows": 232,
+        "ah_text_matches": 0
+      },
+      "receipt_email_messages": {
+        "text_columns": [
+          "raw_receipt_id",
+          "body_text"
+        ],
+        "sampled": true,
+        "sample_rows": 0,
+        "ah_text_matches": 0
+      },
+      "receipt_gmail_accounts": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "receipt_gmail_imports": {
+        "text_columns": [
+          "raw_receipt_id"
+        ],
+        "sampled": true,
+        "sample_rows": 0,
+        "ah_text_matches": 0
+      },
+      "receipt_import_batches": {
+        "text_columns": [
+          "latest_raw_receipt_id",
+          "results_json"
+        ],
+        "sampled": true,
+        "sample_rows": 16,
+        "ah_text_matches": 0
+      },
+      "receipt_inbound_events": {
+        "text_columns": [
+          "raw_receipt_id"
+        ],
+        "sampled": true,
+        "sample_rows": 0,
+        "ah_text_matches": 0
+      },
+      "receipt_processing_runs": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "receipt_sources": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "receipt_table_lines": {
+        "text_columns": [
+          "raw_label",
+          "corrected_raw_label"
+        ],
+        "sampled": true,
+        "sample_rows": 1748,
+        "ah_text_matches": 2
+      },
+      "receipt_tables": {
+        "text_columns": [
+          "raw_receipt_id"
+        ],
+        "sampled": true,
+        "sample_rows": 232,
+        "ah_text_matches": 0
+      },
+      "spaces": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "store_import_memory": {
+        "text_columns": [
+          "raw_article_name",
+          "raw_brand"
+        ],
+        "sampled": true,
+        "sample_rows": 0,
+        "ah_text_matches": 0
+      },
+      "store_providers": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "sublocations": {
+        "text_columns": [],
+        "sampled": false
+      },
+      "user_settings": {
+        "text_columns": [],
+        "sampled": false
+      }
+    },
+    "note": "R9-28B2 searches raw/full OCR text sources; it deliberately avoids receipt_table_lines as primary input."
+  },
+  "chain_summary": {
+    "source_count": 6,
+    "line_count": 6,
+    "section_counts": {
+      "AH_STORE_HEADER": 4,
+      "AH_TEXT_CANDIDATE_OR_METADATA": 2
+    },
+    "section_group_counts": {
+      "header": 4,
+      "unknown_text": 2
+    }
+  },
+  "sources": [
+    {
+      "source": {
+        "table": "purchase_import_batches",
+        "row_id": "e77eb834-4270-49f6-a450-d3e06fdde6a5",
+        "receipt_table_id": null,
+        "raw_receipt_id": null,
+        "source_column": "raw_payload",
+        "text": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"d99b127dd1374972a5338ec1c7f47dde\", \"batch_metadata\": {\"purchase_date\": \"2026-05-19\", \"store_name\": \"Albert Heijn\", \"store_label\": \"Albert Heijn\"}}"
+      },
+      "line_count": 1,
+      "section_counts": {
+        "AH_STORE_HEADER": 1
+      },
+      "lines": [
+        {
+          "source_table": "purchase_import_batches",
+          "source_row_id": "e77eb834-4270-49f6-a450-d3e06fdde6a5",
+          "receipt_table_id": null,
+          "raw_receipt_id": null,
+          "line_index": 0,
+          "raw_line": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"d99b127dd1374972a5338ec1c7f47dde\", \"batch_metadata\": {\"purchase_date\": \"2026-05-19\", \"store_name\": \"Albert Heijn\", \"store_label\": \"Albert Heijn\"}}",
+          "normalized_line": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"d99b127dd1374972a5338ec1c7f47dde\", \"batch_metadata\": {\"purchase_date\": \"2026-05-19\", \"store_name\": \"albert heijn\", \"store_label\": \"albert heijn\"}}",
+          "amount_detected_from_text": null,
+          "section_type": "AH_STORE_HEADER",
+          "section_group": "header",
+          "may_be_article": false,
+          "may_affect_total": false,
+          "may_affect_loyalty": false,
+          "rule_id": "AH_STORE_HEADER_RULE",
+          "reason": "winkelheader; geen artikel"
+        }
+      ]
+    },
+    {
+      "source": {
+        "table": "purchase_import_batches",
+        "row_id": "95cbe6a7-8798-4781-965b-02e53ddffd88",
+        "receipt_table_id": null,
+        "raw_receipt_id": null,
+        "source_column": "raw_payload",
+        "text": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"8c9a447c281c470bab9a3c7e421433c6\", \"batch_metadata\": {\"purchase_date\": \"2026-05-19\", \"store_name\": \"Albert Heijn\", \"store_label\": \"Albert Heijn\"}}"
+      },
+      "line_count": 1,
+      "section_counts": {
+        "AH_STORE_HEADER": 1
+      },
+      "lines": [
+        {
+          "source_table": "purchase_import_batches",
+          "source_row_id": "95cbe6a7-8798-4781-965b-02e53ddffd88",
+          "receipt_table_id": null,
+          "raw_receipt_id": null,
+          "line_index": 0,
+          "raw_line": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"8c9a447c281c470bab9a3c7e421433c6\", \"batch_metadata\": {\"purchase_date\": \"2026-05-19\", \"store_name\": \"Albert Heijn\", \"store_label\": \"Albert Heijn\"}}",
+          "normalized_line": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"8c9a447c281c470bab9a3c7e421433c6\", \"batch_metadata\": {\"purchase_date\": \"2026-05-19\", \"store_name\": \"albert heijn\", \"store_label\": \"albert heijn\"}}",
+          "amount_detected_from_text": null,
+          "section_type": "AH_STORE_HEADER",
+          "section_group": "header",
+          "may_be_article": false,
+          "may_affect_total": false,
+          "may_affect_loyalty": false,
+          "rule_id": "AH_STORE_HEADER_RULE",
+          "reason": "winkelheader; geen artikel"
+        }
+      ]
+    },
+    {
+      "source": {
+        "table": "purchase_import_batches",
+        "row_id": "3113cbda-8564-4cd0-a1af-85a3ea80c02d",
+        "receipt_table_id": null,
+        "raw_receipt_id": null,
+        "source_column": "raw_payload",
+        "text": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"2492b6010ae747da90b0512dfae1e5bf\", \"batch_metadata\": {\"purchase_date\": \"2026-05-19\", \"store_name\": \"Albert Heijn\", \"store_label\": \"Albert Heijn\"}}"
+      },
+      "line_count": 1,
+      "section_counts": {
+        "AH_STORE_HEADER": 1
+      },
+      "lines": [
+        {
+          "source_table": "purchase_import_batches",
+          "source_row_id": "3113cbda-8564-4cd0-a1af-85a3ea80c02d",
+          "receipt_table_id": null,
+          "raw_receipt_id": null,
+          "line_index": 0,
+          "raw_line": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"2492b6010ae747da90b0512dfae1e5bf\", \"batch_metadata\": {\"purchase_date\": \"2026-05-19\", \"store_name\": \"Albert Heijn\", \"store_label\": \"Albert Heijn\"}}",
+          "normalized_line": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"2492b6010ae747da90b0512dfae1e5bf\", \"batch_metadata\": {\"purchase_date\": \"2026-05-19\", \"store_name\": \"albert heijn\", \"store_label\": \"albert heijn\"}}",
+          "amount_detected_from_text": null,
+          "section_type": "AH_STORE_HEADER",
+          "section_group": "header",
+          "may_be_article": false,
+          "may_affect_total": false,
+          "may_affect_loyalty": false,
+          "rule_id": "AH_STORE_HEADER_RULE",
+          "reason": "winkelheader; geen artikel"
+        }
+      ]
+    },
+    {
+      "source": {
+        "table": "purchase_import_batches",
+        "row_id": "441fd262-59e1-4bc0-8b2f-a653bbcdbe41",
+        "receipt_table_id": null,
+        "raw_receipt_id": null,
+        "source_column": "raw_payload",
+        "text": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"2b2333a6e0144b59acc3cf055c109fc5\", \"batch_metadata\": {\"purchase_date\": \"2019-05-11\", \"store_name\": \"Albert Heijn\", \"store_label\": \"Albert Heijn\"}}"
+      },
+      "line_count": 1,
+      "section_counts": {
+        "AH_STORE_HEADER": 1
+      },
+      "lines": [
+        {
+          "source_table": "purchase_import_batches",
+          "source_row_id": "441fd262-59e1-4bc0-8b2f-a653bbcdbe41",
+          "receipt_table_id": null,
+          "raw_receipt_id": null,
+          "line_index": 0,
+          "raw_line": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"2b2333a6e0144b59acc3cf055c109fc5\", \"batch_metadata\": {\"purchase_date\": \"2019-05-11\", \"store_name\": \"Albert Heijn\", \"store_label\": \"Albert Heijn\"}}",
+          "normalized_line": "{\"provider_code\": \"receipt\", \"receipt_table_id\": \"2b2333a6e0144b59acc3cf055c109fc5\", \"batch_metadata\": {\"purchase_date\": \"2019-05-11\", \"store_name\": \"albert heijn\", \"store_label\": \"albert heijn\"}}",
+          "amount_detected_from_text": null,
+          "section_type": "AH_STORE_HEADER",
+          "section_group": "header",
+          "may_be_article": false,
+          "may_affect_total": false,
+          "may_affect_loyalty": false,
+          "rule_id": "AH_STORE_HEADER_RULE",
+          "reason": "winkelheader; geen artikel"
+        }
+      ]
+    },
+    {
+      "source": {
+        "table": "receipt_table_lines",
+        "row_id": "1b6e141b2a7a4f79a85f59f78bbdbb6c",
+        "receipt_table_id": "522a3a00b855462a86132267be74bd66",
+        "raw_receipt_id": null,
+        "source_column": "raw_label",
+        "text": "OMSCHRIJVING CHAUDF WATER 0,00"
+      },
+      "line_count": 1,
+      "section_counts": {
+        "AH_TEXT_CANDIDATE_OR_METADATA": 1
+      },
+      "lines": [
+        {
+          "source_table": "receipt_table_lines",
+          "source_row_id": "1b6e141b2a7a4f79a85f59f78bbdbb6c",
+          "receipt_table_id": "522a3a00b855462a86132267be74bd66",
+          "raw_receipt_id": null,
+          "line_index": 0,
+          "raw_line": "OMSCHRIJVING CHAUDF WATER 0,00",
+          "normalized_line": "omschrijving chaudf water 0,00",
+          "amount_detected_from_text": 0.0,
+          "section_type": "AH_TEXT_CANDIDATE_OR_METADATA",
+          "section_group": "unknown_text",
+          "may_be_article": true,
+          "may_affect_total": false,
+          "may_affect_loyalty": false,
+          "rule_id": "AH_TEXT_FALLBACK_RULE",
+          "reason": "tekstregel zonder duidelijke AH-structuur; kandidaat voor vervolganalyse"
+        }
+      ]
+    },
+    {
+      "source": {
+        "table": "receipt_table_lines",
+        "row_id": "3d0b431e63754e7f8d1745f4c25d3a17",
+        "receipt_table_id": "10dd4c71cdd748898db203adfba167a7",
+        "raw_receipt_id": null,
+        "source_column": "raw_label",
+        "text": "OMSCHRIJVING CHAUDF WATER AH SANDWICH 0,00"
+      },
+      "line_count": 1,
+      "section_counts": {
+        "AH_TEXT_CANDIDATE_OR_METADATA": 1
+      },
+      "lines": [
+        {
+          "source_table": "receipt_table_lines",
+          "source_row_id": "3d0b431e63754e7f8d1745f4c25d3a17",
+          "receipt_table_id": "10dd4c71cdd748898db203adfba167a7",
+          "raw_receipt_id": null,
+          "line_index": 0,
+          "raw_line": "OMSCHRIJVING CHAUDF WATER AH SANDWICH 0,00",
+          "normalized_line": "omschrijving chaudf water ah sandwich 0,00",
+          "amount_detected_from_text": 0.0,
+          "section_type": "AH_TEXT_CANDIDATE_OR_METADATA",
+          "section_group": "unknown_text",
+          "may_be_article": true,
+          "may_affect_total": false,
+          "may_affect_loyalty": false,
+          "rule_id": "AH_TEXT_FALLBACK_RULE",
+          "reason": "tekstregel zonder duidelijke AH-structuur; kandidaat voor vervolganalyse"
+        }
+      ]
+    }
+  ]
+}

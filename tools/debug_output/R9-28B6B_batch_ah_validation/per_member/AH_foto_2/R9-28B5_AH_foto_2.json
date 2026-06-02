@@ -1,0 +1,1250 @@
+{
+  "audit": "R9-28B5 pre-parser OCR diagnostics export",
+  "created_at": "2026-05-24T20:01:30",
+  "scope": "diagnostic/export only; no parser/OCR/database/status/baseline/UI mutation",
+  "ssot_compliance": {
+    "status_determination": "not_performed",
+    "status_service": "receipt_status_baseline_service_v4.py",
+    "parse_status_used_as_truth": false,
+    "parser_mutated": false,
+    "ocr_mutated": false,
+    "database_mutated": false,
+    "baseline_mutated": false,
+    "ui_touched": false,
+    "diagnostics_promoted_to_parser": false
+  },
+  "input": {
+    "input_path": "/tmp/supermarkten.zip",
+    "zip_member": "AH foto 2.jpeg",
+    "filename": "AH foto 2.jpeg",
+    "mime_type_guess": "image/jpeg",
+    "original_bytes": 151625,
+    "ocr_bytes": 1119423
+  },
+  "preprocessing": {
+    "preprocessing_available": true,
+    "result_form": "tuple",
+    "decision": "ReceiptImagePreprocessingDecision(preprocessing_step='receipt_image_preprocessing', selected_route='R9-27C_existing_safe_route_no_pca', applied_steps=[], fallback_reason=['not_in_r9_27c_pca_pilot_gate'], perspective_normalization=None, diagnostics={'filename': 'AH foto 2.jpeg', 'original_size': [1152, 2048], 'preprocessing_route_gate': {'input_type': {'filename_normalized': 'ah foto 2.jpeg', 'suffix': '.jpeg', 'is_pdf_or_document': False, 'is_photo_candidate': True, 'is_pca_pilot': False}, 'candidate_routes': ['existing_safe_route_no_pca', 'rembg_pca_receipt_axis_normalization'], 'pca_accepted_initial': False, 'initial_reject_reasons': ['not_in_r9_27c_pca_pilot_gate'], 'selected_preprocessing_route': 'existing_safe_route_no_pca', 'pca_accepted_final': False, 'pca_reject_reason': ['not_in_r9_27c_pca_pilot_gate']}, 'final_size': [1152, 2048]})",
+    "requested": true
+  },
+  "paddle": {
+    "available": true,
+    "raw_result_type": "list",
+    "raw_text_count": 69,
+    "bbox_count": 69,
+    "items": [
+      {
+        "index": 0,
+        "text": "Albert Heijn Ger Koopman",
+        "confidence": 0.9875208735466003,
+        "bbox": [
+          299,
+          236,
+          787,
+          283
+        ],
+        "bbox_anchor": [
+          259.5,
+          299.0,
+          47.0
+        ]
+      },
+      {
+        "index": 1,
+        "text": "Polenplein 24a Driel",
+        "confidence": 0.9667065739631653,
+        "bbox": [
+          339,
+          277,
+          743,
+          322
+        ],
+        "bbox_anchor": [
+          299.5,
+          339.0,
+          45.0
+        ]
+      },
+      {
+        "index": 2,
+        "text": "tel: 026-4742394",
+        "confidence": 0.9794554114341736,
+        "bbox": [
+          379,
+          315,
+          708,
+          360
+        ],
+        "bbox_anchor": [
+          337.5,
+          379.0,
+          45.0
+        ]
+      },
+      {
+        "index": 3,
+        "text": "AANTAL",
+        "confidence": 0.9994552135467529,
+        "bbox": [
+          117,
+          402,
+          242,
+          442
+        ],
+        "bbox_anchor": [
+          422.0,
+          117.0,
+          40.0
+        ]
+      },
+      {
+        "index": 4,
+        "text": "OMSCHRIJVING",
+        "confidence": 0.999354362487793,
+        "bbox": [
+          278,
+          399,
+          531,
+          443
+        ],
+        "bbox_anchor": [
+          421.0,
+          278.0,
+          44.0
+        ]
+      },
+      {
+        "index": 5,
+        "text": "PRIJS BEDRAG",
+        "confidence": 0.9953269958496094,
+        "bbox": [
+          556,
+          393,
+          811,
+          442
+        ],
+        "bbox_anchor": [
+          417.5,
+          556.0,
+          49.0
+        ]
+      },
+      {
+        "index": 6,
+        "text": "AH M GEHAKT",
+        "confidence": 0.9817306399345398,
+        "bbox": [
+          277,
+          482,
+          505,
+          523
+        ],
+        "bbox_anchor": [
+          502.5,
+          277.0,
+          41.0
+        ]
+      },
+      {
+        "index": 7,
+        "text": "6,99",
+        "confidence": 0.9970831871032715,
+        "bbox": [
+          718,
+          471,
+          817,
+          524
+        ],
+        "bbox_anchor": [
+          497.5,
+          718.0,
+          53.0
+        ]
+      },
+      {
+        "index": 8,
+        "text": "T",
+        "confidence": 0.4579624533653259,
+        "bbox": [
+          118,
+          489,
+          137,
+          521
+        ],
+        "bbox_anchor": [
+          505.0,
+          118.0,
+          32.0
+        ]
+      },
+      {
+        "index": 9,
+        "text": "SOEPGR BASIS",
+        "confidence": 0.9990439414978027,
+        "bbox": [
+          277,
+          523,
+          529,
+          564
+        ],
+        "bbox_anchor": [
+          543.5,
+          277.0,
+          41.0
+        ]
+      },
+      {
+        "index": 10,
+        "text": "1,29",
+        "confidence": 0.9557912349700928,
+        "bbox": [
+          721,
+          513,
+          817,
+          564
+        ],
+        "bbox_anchor": [
+          538.5,
+          721.0,
+          51.0
+        ]
+      },
+      {
+        "index": 11,
+        "text": "T",
+        "confidence": 0.4602851867675781,
+        "bbox": [
+          118,
+          531,
+          138,
+          563
+        ],
+        "bbox_anchor": [
+          547.0,
+          118.0,
+          32.0
+        ]
+      },
+      {
+        "index": 12,
+        "text": "2",
+        "confidence": 0.9999327659606934,
+        "bbox": [
+          112,
+          604,
+          145,
+          646
+        ],
+        "bbox_anchor": [
+          625.0,
+          112.0,
+          42.0
+        ]
+      },
+      {
+        "index": 13,
+        "text": "SUBTOTAAL",
+        "confidence": 0.9925912022590637,
+        "bbox": [
+          277,
+          604,
+          467,
+          646
+        ],
+        "bbox_anchor": [
+          625.0,
+          277.0,
+          42.0
+        ]
+      },
+      {
+        "index": 14,
+        "text": "8,28",
+        "confidence": 0.9957828521728516,
+        "bbox": [
+          721,
+          595,
+          819,
+          645
+        ],
+        "bbox_anchor": [
+          620.0,
+          721.0,
+          50.0
+        ]
+      },
+      {
+        "index": 15,
+        "text": "JOUW VOORDEEL",
+        "confidence": 0.9952101111412048,
+        "bbox": [
+          113,
+          685,
+          645,
+          728
+        ],
+        "bbox_anchor": [
+          706.5,
+          113.0,
+          43.0
+        ]
+      },
+      {
+        "index": 16,
+        "text": "0,00",
+        "confidence": 0.9320977330207825,
+        "bbox": [
+          725,
+          679,
+          897,
+          728
+        ],
+        "bbox_anchor": [
+          703.5,
+          725.0,
+          49.0
+        ]
+      },
+      {
+        "index": 17,
+        "text": "waarvan",
+        "confidence": 0.9990052580833435,
+        "bbox": [
+          275,
+          736,
+          424,
+          768
+        ],
+        "bbox_anchor": [
+          752.0,
+          275.0,
+          32.0
+        ]
+      },
+      {
+        "index": 18,
+        "text": "BONUS BOX",
+        "confidence": 0.9963448643684387,
+        "bbox": [
+          271,
+          768,
+          465,
+          810
+        ],
+        "bbox_anchor": [
+          789.0,
+          271.0,
+          42.0
+        ]
+      },
+      {
+        "index": 19,
+        "text": "0,00",
+        "confidence": 0.977285623550415,
+        "bbox": [
+          721,
+          763,
+          818,
+          814
+        ],
+        "bbox_anchor": [
+          788.5,
+          721.0,
+          51.0
+        ]
+      },
+      {
+        "index": 20,
+        "text": "TOTAAL",
+        "confidence": 0.9995691180229187,
+        "bbox": [
+          109,
+          851,
+          359,
+          894
+        ],
+        "bbox_anchor": [
+          872.5,
+          109.0,
+          43.0
+        ]
+      },
+      {
+        "index": 21,
+        "text": "8,28",
+        "confidence": 0.9784018993377686,
+        "bbox": [
+          724,
+          848,
+          900,
+          898
+        ],
+        "bbox_anchor": [
+          873.0,
+          724.0,
+          50.0
+        ]
+      },
+      {
+        "index": 22,
+        "text": "BETAALD MET:",
+        "confidence": 0.9940560460090637,
+        "bbox": [
+          103,
+          934,
+          354,
+          975
+        ],
+        "bbox_anchor": [
+          954.5,
+          103.0,
+          41.0
+        ]
+      },
+      {
+        "index": 23,
+        "text": "PINNEN",
+        "confidence": 0.9998820424079895,
+        "bbox": [
+          267,
+          974,
+          403,
+          1017
+        ],
+        "bbox_anchor": [
+          995.5,
+          267.0,
+          43.0
+        ]
+      },
+      {
+        "index": 24,
+        "text": "8,28",
+        "confidence": 0.9803627729415894,
+        "bbox": [
+          725,
+          972,
+          822,
+          1021
+        ],
+        "bbox_anchor": [
+          996.5,
+          725.0,
+          49.0
+        ]
+      },
+      {
+        "index": 25,
+        "text": "POI: 50100891",
+        "confidence": 0.9932782053947449,
+        "bbox": [
+          97,
+          1060,
+          316,
+          1101
+        ],
+        "bbox_anchor": [
+          1080.5,
+          97.0,
+          41.0
+        ]
+      },
+      {
+        "index": 26,
+        "text": "KLANTTICKET",
+        "confidence": 0.9994852542877197,
+        "bbox": [
+          569,
+          1059,
+          749,
+          1101
+        ],
+        "bbox_anchor": [
+          1080.0,
+          569.0,
+          42.0
+        ]
+      },
+      {
+        "index": 27,
+        "text": "Terminal",
+        "confidence": 0.9995156526565552,
+        "bbox": [
+          97,
+          1102,
+          233,
+          1145
+        ],
+        "bbox_anchor": [
+          1123.5,
+          97.0,
+          43.0
+        ]
+      },
+      {
+        "index": 28,
+        "text": "BS171970",
+        "confidence": 0.9899311661720276,
+        "bbox": [
+          407,
+          1099,
+          544,
+          1144
+        ],
+        "bbox_anchor": [
+          1121.5,
+          407.0,
+          45.0
+        ]
+      },
+      {
+        "index": 29,
+        "text": "Merchant",
+        "confidence": 0.9995266795158386,
+        "bbox": [
+          567,
+          1103,
+          701,
+          1142
+        ],
+        "bbox_anchor": [
+          1122.5,
+          567.0,
+          39.0
+        ]
+      },
+      {
+        "index": 30,
+        "text": "3732071002",
+        "confidence": 0.9999227523803711,
+        "bbox": [
+          839,
+          1101,
+          1007,
+          1143
+        ],
+        "bbox_anchor": [
+          1122.0,
+          839.0,
+          42.0
+        ]
+      },
+      {
+        "index": 31,
+        "text": "Periode",
+        "confidence": 0.9987508654594421,
+        "bbox": [
+          96,
+          1148,
+          219,
+          1188
+        ],
+        "bbox_anchor": [
+          1168.0,
+          96.0,
+          40.0
+        ]
+      },
+      {
+        "index": 32,
+        "text": "6085",
+        "confidence": 0.9993571639060974,
+        "bbox": [
+          471,
+          1144,
+          545,
+          1187
+        ],
+        "bbox_anchor": [
+          1165.5,
+          471.0,
+          43.0
+        ]
+      },
+      {
+        "index": 33,
+        "text": "Transactie",
+        "confidence": 0.9994403123855591,
+        "bbox": [
+          569,
+          1146,
+          734,
+          1185
+        ],
+        "bbox_anchor": [
+          1165.5,
+          569.0,
+          39.0
+        ]
+      },
+      {
+        "index": 34,
+        "text": "00093286",
+        "confidence": 0.9992873072624207,
+        "bbox": [
+          871,
+          1143,
+          1007,
+          1185
+        ],
+        "bbox_anchor": [
+          1164.0,
+          871.0,
+          42.0
+        ]
+      },
+      {
+        "index": 35,
+        "text": "Token 1",
+        "confidence": 0.9983786344528198,
+        "bbox": [
+          96,
+          1190,
+          247,
+          1232
+        ],
+        "bbox_anchor": [
+          1211.0,
+          96.0,
+          42.0
+        ]
+      },
+      {
+        "index": 36,
+        "text": "1003030534301033342",
+        "confidence": 0.9995165467262268,
+        "bbox": [
+          225,
+          1186,
+          544,
+          1232
+        ],
+        "bbox_anchor": [
+          1209.0,
+          225.0,
+          46.0
+        ]
+      },
+      {
+        "index": 37,
+        "text": "V PAY",
+        "confidence": 0.9974611401557922,
+        "bbox": [
+          565,
+          1185,
+          658,
+          1229
+        ],
+        "bbox_anchor": [
+          1207.0,
+          565.0,
+          44.0
+        ]
+      },
+      {
+        "index": 38,
+        "text": "(A0000000032020)",
+        "confidence": 0.9680975079536438,
+        "bbox": [
+          97,
+          1231,
+          364,
+          1275
+        ],
+        "bbox_anchor": [
+          1253.0,
+          97.0,
+          44.0
+        ]
+      },
+      {
+        "index": 39,
+        "text": "Kaart",
+        "confidence": 0.9985322952270508,
+        "bbox": [
+          569,
+          1230,
+          662,
+          1270
+        ],
+        "bbox_anchor": [
+          1250.0,
+          569.0,
+          40.0
+        ]
+      },
+      {
+        "index": 40,
+        "text": "487512xxxxxxxxx3334",
+        "confidence": 0.8569442629814148,
+        "bbox": [
+          696,
+          1227,
+          1010,
+          1270
+        ],
+        "bbox_anchor": [
+          1248.5,
+          696.0,
+          43.0
+        ]
+      },
+      {
+        "index": 41,
+        "text": "Kaartserienummer",
+        "confidence": 0.9990791082382202,
+        "bbox": [
+          94,
+          1275,
+          365,
+          1320
+        ],
+        "bbox_anchor": [
+          1297.5,
+          94.0,
+          45.0
+        ]
+      },
+      {
+        "index": 42,
+        "text": "2",
+        "confidence": 0.5946075916290283,
+        "bbox": [
+          522,
+          1275,
+          545,
+          1314
+        ],
+        "bbox_anchor": [
+          1294.5,
+          522.0,
+          39.0
+        ]
+      },
+      {
+        "index": 43,
+        "text": "BETALING",
+        "confidence": 0.9993653297424316,
+        "bbox": [
+          568,
+          1272,
+          706,
+          1315
+        ],
+        "bbox_anchor": [
+          1293.5,
+          568.0,
+          43.0
+        ]
+      },
+      {
+        "index": 44,
+        "text": "26/03/2026 15:18",
+        "confidence": 0.9980624914169312,
+        "bbox": [
+          276,
+          1315,
+          547,
+          1363
+        ],
+        "bbox_anchor": [
+          1339.0,
+          276.0,
+          48.0
+        ]
+      },
+      {
+        "index": 45,
+        "text": "Autorisatiecode",
+        "confidence": 0.9992462396621704,
+        "bbox": [
+          569,
+          1314,
+          817,
+          1358
+        ],
+        "bbox_anchor": [
+          1336.0,
+          569.0,
+          44.0
+        ]
+      },
+      {
+        "index": 46,
+        "text": "W01081",
+        "confidence": 0.9967802166938782,
+        "bbox": [
+          902,
+          1310,
+          1013,
+          1360
+        ],
+        "bbox_anchor": [
+          1335.0,
+          902.0,
+          50.0
+        ]
+      },
+      {
+        "index": 47,
+        "text": "Datum",
+        "confidence": 0.9991413354873657,
+        "bbox": [
+          92,
+          1322,
+          185,
+          1366
+        ],
+        "bbox_anchor": [
+          1344.0,
+          92.0,
+          44.0
+        ]
+      },
+      {
+        "index": 48,
+        "text": "Totaal",
+        "confidence": 0.9996201395988464,
+        "bbox": [
+          93,
+          1365,
+          196,
+          1410
+        ],
+        "bbox_anchor": [
+          1387.5,
+          93.0,
+          45.0
+        ]
+      },
+      {
+        "index": 49,
+        "text": "8,28 EUR",
+        "confidence": 0.9973757266998291,
+        "bbox": [
+          407,
+          1358,
+          548,
+          1406
+        ],
+        "bbox_anchor": [
+          1382.0,
+          407.0,
+          48.0
+        ]
+      },
+      {
+        "index": 50,
+        "text": "Contactless",
+        "confidence": 0.9997594356536865,
+        "bbox": [
+          566,
+          1358,
+          754,
+          1402
+        ],
+        "bbox_anchor": [
+          1380.0,
+          566.0,
+          44.0
+        ]
+      },
+      {
+        "index": 51,
+        "text": "Leesmethode CHIP",
+        "confidence": 0.9766512513160706,
+        "bbox": [
+          91,
+          1406,
+          365,
+          1456
+        ],
+        "bbox_anchor": [
+          1431.0,
+          91.0,
+          50.0
+        ]
+      },
+      {
+        "index": 52,
+        "text": "OVER",
+        "confidence": 0.9992763996124268,
+        "bbox": [
+          455,
+          1488,
+          553,
+          1539
+        ],
+        "bbox_anchor": [
+          1513.5,
+          455.0,
+          51.0
+        ]
+      },
+      {
+        "index": 53,
+        "text": "EUR",
+        "confidence": 0.9992391467094421,
+        "bbox": [
+          750,
+          1485,
+          827,
+          1533
+        ],
+        "bbox_anchor": [
+          1509.0,
+          750.0,
+          48.0
+        ]
+      },
+      {
+        "index": 54,
+        "text": "BTW",
+        "confidence": 0.9996647834777832,
+        "bbox": [
+          86,
+          1498,
+          165,
+          1549
+        ],
+        "bbox_anchor": [
+          1523.5,
+          86.0,
+          51.0
+        ]
+      },
+      {
+        "index": 55,
+        "text": "7,60",
+        "confidence": 0.9901264905929565,
+        "bbox": [
+          455,
+          1532,
+          554,
+          1587
+        ],
+        "bbox_anchor": [
+          1559.5,
+          455.0,
+          55.0
+        ]
+      },
+      {
+        "index": 56,
+        "text": "0,68",
+        "confidence": 0.9553210139274597,
+        "bbox": [
+          729,
+          1527,
+          827,
+          1579
+        ],
+        "bbox_anchor": [
+          1553.0,
+          729.0,
+          52.0
+        ]
+      },
+      {
+        "index": 57,
+        "text": "9%",
+        "confidence": 0.9974933862686157,
+        "bbox": [
+          87,
+          1546,
+          144,
+          1593
+        ],
+        "bbox_anchor": [
+          1569.5,
+          87.0,
+          47.0
+        ]
+      },
+      {
+        "index": 58,
+        "text": "7,60",
+        "confidence": 0.9840251207351685,
+        "bbox": [
+          454,
+          1576,
+          555,
+          1631
+        ],
+        "bbox_anchor": [
+          1603.5,
+          454.0,
+          55.0
+        ]
+      },
+      {
+        "index": 59,
+        "text": "0.68",
+        "confidence": 0.9240386486053467,
+        "bbox": [
+          729,
+          1572,
+          828,
+          1624
+        ],
+        "bbox_anchor": [
+          1598.0,
+          729.0,
+          52.0
+        ]
+      },
+      {
+        "index": 60,
+        "text": "TOTAAL",
+        "confidence": 0.9995561242103577,
+        "bbox": [
+          88,
+          1592,
+          225,
+          1639
+        ],
+        "bbox_anchor": [
+          1615.5,
+          88.0,
+          47.0
+        ]
+      },
+      {
+        "index": 61,
+        "text": "107",
+        "confidence": 0.9991352558135986,
+        "bbox": [
+          755,
+          1781,
+          828,
+          1829
+        ],
+        "bbox_anchor": [
+          1805.0,
+          755.0,
+          48.0
+        ]
+      },
+      {
+        "index": 62,
+        "text": "32",
+        "confidence": 0.9998764991760254,
+        "bbox": [
+          409,
+          1798,
+          473,
+          1855
+        ],
+        "bbox_anchor": [
+          1826.5,
+          409.0,
+          57.0
+        ]
+      },
+      {
+        "index": 63,
+        "text": "8521",
+        "confidence": 0.9999650716781616,
+        "bbox": [
+          85,
+          1805,
+          182,
+          1853
+        ],
+        "bbox_anchor": [
+          1829.0,
+          85.0,
+          48.0
+        ]
+      },
+      {
+        "index": 64,
+        "text": "26-03-2026",
+        "confidence": 0.9997090101242065,
+        "bbox": [
+          607,
+          1823,
+          829,
+          1884
+        ],
+        "bbox_anchor": [
+          1853.5,
+          607.0,
+          61.0
+        ]
+      },
+      {
+        "index": 65,
+        "text": "15:18",
+        "confidence": 0.9992058873176575,
+        "bbox": [
+          90,
+          1844,
+          209,
+          1893
+        ],
+        "bbox_anchor": [
+          1868.5,
+          90.0,
+          49.0
+        ]
+      },
+      {
+        "index": 66,
+        "text": "Vragen over je kassabon?",
+        "confidence": 0.9962620735168457,
+        "bbox": [
+          287,
+          1911,
+          809,
+          1987
+        ],
+        "bbox_anchor": [
+          1949.0,
+          287.0,
+          76.0
+        ]
+      },
+      {
+        "index": 67,
+        "text": "Onze kassamedewerkers",
+        "confidence": 0.9800626039505005,
+        "bbox": [
+          329,
+          1961,
+          786,
+          2023
+        ],
+        "bbox_anchor": [
+          1992.0,
+          329.0,
+          62.0
+        ]
+      },
+      {
+        "index": 68,
+        "text": "helpen je graag.",
+        "confidence": 0.9447508454322815,
+        "bbox": [
+          370,
+          2009,
+          714,
+          2048
+        ],
+        "bbox_anchor": [
+          2028.5,
+          370.0,
+          39.0
+        ]
+      }
+    ],
+    "grouped_lines": [
+      "Albert Heijn Ger Koopman",
+      "Polenplein 24a Driel",
+      "tel: 026-4742394",
+      "AANTAL OMSCHRIJVING PRIJS BEDRAG",
+      "T AH M GEHAKT 6,99",
+      "T SOEPGR BASIS 1,29",
+      "2 SUBTOTAAL 8,28",
+      "JOUW VOORDEEL 0,00",
+      "waarvan",
+      "BONUS BOX 0,00",
+      "TOTAAL 8,28",
+      "BETAALD MET:",
+      "PINNEN 8,28",
+      "POI: 50100891 KLANTTICKET",
+      "Terminal BS171970 Merchant 3732071002",
+      "Periode 6085 Transactie 00093286",
+      "Token 1 1003030534301033342 V PAY",
+      "(A0000000032020) Kaart 487512xxxxxxxxx3334",
+      "Kaartserienummer 2 BETALING",
+      "Datum 26/03/2026 15:18 Autorisatiecode W01081",
+      "Totaal 8,28 EUR Contactless",
+      "Leesmethode CHIP",
+      "BTW OVER EUR",
+      "9% 7,60 0,68",
+      "TOTAAL 7,60 0.68",
+      "8521 32 107",
+      "15:18 26-03-2026",
+      "Vragen over je kassabon?",
+      "Onze kassamedewerkers",
+      "helpen je graag."
+    ],
+    "grouped_line_count": 30
+  },
+  "tesseract": {
+    "available": true,
+    "lines": [
+      "Albert Heijn Ger Koopman",
+      "Polenplein 24a Driel",
+      "tel: 026-4742394",
+      "AANTAL OMSCHRIJVING PRIJS BEDRAG",
+      "i AH M GEHAKT 6,99",
+      "1 SOEPGR BASIS 1,29",
+      "2 SUBTOTAAL 8,28",
+      "JOUW VOORDEEL O,00",
+      "waarvan j",
+      "BONUS BOX 0,00 |",
+      "TOTAAL ss, 25",
+      "BETAALD MET:",
+      "PINNEN 8,28",
+      "POI: 50100891 KLANTTICKET",
+      "Terminal BS171970 Merchant 3732071002",
+      "Periode 6085 Transactie 00093286",
+      "Token 1003030534301033342 V PAY",
+      "(A0000000032020) Kaart 487512xxxxxxxxx3334",
+      "Kaartserienummer 2 BETALING",
+      "Datum 26/03/2026 15:18 Autorisatiecode W01081",
+      "Totaal 8,28 EUR Contactless",
+      "_ Leesmethode CHIP",
+      "BTW OVER EUR",
+      "9% 7,60 0,68",
+      "À TOTAAL 7,60 0,68",
+      "zl 107 |",
+      "sf { :",
+      "Ve yr je kassabon?",
+      "fe: Pec samedewerKers",
+      "he Je graag . Ì"
+    ],
+    "line_count": 30,
+    "confidence": null
+  },
+  "parser_input_candidate_for_diagnostics_only": {
+    "diagnostic_choice": "paddle_grouped_lines",
+    "lines": [
+      "Albert Heijn Ger Koopman",
+      "Polenplein 24a Driel",
+      "tel: 026-4742394",
+      "AANTAL OMSCHRIJVING PRIJS BEDRAG",
+      "T AH M GEHAKT 6,99",
+      "T SOEPGR BASIS 1,29",
+      "2 SUBTOTAAL 8,28",
+      "JOUW VOORDEEL 0,00",
+      "waarvan",
+      "BONUS BOX 0,00",
+      "TOTAAL 8,28",
+      "BETAALD MET:",
+      "PINNEN 8,28",
+      "POI: 50100891 KLANTTICKET",
+      "Terminal BS171970 Merchant 3732071002",
+      "Periode 6085 Transactie 00093286",
+      "Token 1 1003030534301033342 V PAY",
+      "(A0000000032020) Kaart 487512xxxxxxxxx3334",
+      "Kaartserienummer 2 BETALING",
+      "Datum 26/03/2026 15:18 Autorisatiecode W01081",
+      "Totaal 8,28 EUR Contactless",
+      "Leesmethode CHIP",
+      "BTW OVER EUR",
+      "9% 7,60 0,68",
+      "TOTAAL 7,60 0.68",
+      "8521 32 107",
+      "15:18 26-03-2026",
+      "Vragen over je kassabon?",
+      "Onze kassamedewerkers",
+      "helpen je graag."
+    ],
+    "line_count": 30,
+    "reason": "Paddle grouped lines are available and at least as numerous as Tesseract lines."
+  },
+  "next_step_hint": "Use this report for R9-28B6 AH section classification on true pre-parser OCR lines and Paddle boxes."
+}

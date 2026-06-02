@@ -1,0 +1,381 @@
+{
+  "test": "R9-38B4 hybrid article-line reconstruction preview",
+  "read_only": true,
+  "database_write_intent": false,
+  "ocr_invoked": false,
+  "parser_invoked": false,
+  "runtime_change": false,
+  "input_json": "/tmp/rezzerv_raw_ocr_diagnostics/r9_38b2/raw_paddleocr_output_bounded.json",
+  "target": {
+    "receipt_table_id": "7323172c2f364be5b53be9e11efb1ef4",
+    "raw_receipt_id": "8183ab83ec3b4c828f125900411f2756",
+    "original_filename": "plus foto 1.jpg",
+    "parse_filename": "plus foto 1.jpg",
+    "parse_mime_type": "image/jpeg",
+    "stored_total_amount": 14.33,
+    "stored_line_count": 8
+  },
+  "source_variant": "variant_crop_autocontrast",
+  "parameters": {
+    "median_box_height": 27.0,
+    "article_block_start_y": 305.0,
+    "article_block_stop_y": 616.5,
+    "amount_pairing_max_delta_y": 15.659999999999998,
+    "method": "detect article block, keep label rows separate, attach amount fragments to nearest label by y-position"
+  },
+  "article_block_fragment_count": 29,
+  "article_block_amount_fragment_count": 14,
+  "reconstructed_article_lines": [
+    {
+      "index": 0,
+      "label": "BAMI NASI MIX VD",
+      "center_y": 374.5,
+      "classification": "label_without_amount",
+      "amounts": [],
+      "rendered_line": "BAMI NASI MIX VD",
+      "label_source_global_indexes": [
+        8
+      ]
+    },
+    {
+      "index": 1,
+      "label": "PLUS geeft meer voordeell",
+      "center_y": 395.0,
+      "classification": "discount_or_action_line",
+      "amounts": [
+        {
+          "text": "-0.50",
+          "value": -0.5,
+          "center_y": 401.0,
+          "min_x": 399.0,
+          "max_x": 450.0,
+          "source_global_index": 12,
+          "delta_y_to_label": 6.0
+        },
+        {
+          "text": "1.69",
+          "value": 1.69,
+          "center_y": 385.0,
+          "min_x": 403.0,
+          "max_x": 450.0,
+          "source_global_index": 10,
+          "delta_y_to_label": 10.0
+        }
+      ],
+      "rendered_line": "PLUS geeft meer voordeell -0.50 1.69",
+      "label_source_global_indexes": [
+        9
+      ]
+    },
+    {
+      "index": 2,
+      "label": "RONIGE KWARK KANEELB",
+      "center_y": 411.0,
+      "classification": "single_article_line",
+      "amounts": [
+        {
+          "text": "2,05",
+          "value": 2.05,
+          "center_y": 416.5,
+          "min_x": 405.0,
+          "max_x": 450.0,
+          "source_global_index": 13,
+          "delta_y_to_label": 5.5
+        }
+      ],
+      "rendered_line": "RONIGE KWARK KANEELB 2,05",
+      "label_source_global_indexes": [
+        11
+      ]
+    },
+    {
+      "index": 3,
+      "label": "ROMIGE KWARK WIT CHO",
+      "center_y": 429.0,
+      "classification": "single_article_line",
+      "amounts": [
+        {
+          "text": "2,05",
+          "value": 2.05,
+          "center_y": 433.5,
+          "min_x": 406.0,
+          "max_x": 451.0,
+          "source_global_index": 16,
+          "delta_y_to_label": 4.5
+        }
+      ],
+      "rendered_line": "ROMIGE KWARK WIT CHO 2,05",
+      "label_source_global_indexes": [
+        14
+      ]
+    },
+    {
+      "index": 4,
+      "label": "STRAWBERRY SCHNITTE",
+      "center_y": 446.0,
+      "classification": "single_article_line",
+      "amounts": [
+        {
+          "text": "1,99",
+          "value": 1.99,
+          "center_y": 451.5,
+          "min_x": 407.0,
+          "max_x": 452.0,
+          "source_global_index": 18,
+          "delta_y_to_label": 5.5
+        }
+      ],
+      "rendered_line": "STRAWBERRY SCHNITTE 1,99",
+      "label_source_global_indexes": [
+        15
+      ]
+    },
+    {
+      "index": 5,
+      "label": "2X WERELDGER. TERIYAKI",
+      "center_y": 463.0,
+      "classification": "quantity_unit_and_line_total_article_line",
+      "amounts": [
+        {
+          "text": "2,97",
+          "value": 2.97,
+          "center_y": 469.0,
+          "min_x": 316.0,
+          "max_x": 365.0,
+          "source_global_index": 20,
+          "delta_y_to_label": 6.0
+        },
+        {
+          "text": "5,94",
+          "value": 5.94,
+          "center_y": 469.0,
+          "min_x": 405.0,
+          "max_x": 453.0,
+          "source_global_index": 21,
+          "delta_y_to_label": 6.0
+        }
+      ],
+      "rendered_line": "2X WERELDGER. TERIYAKI 2,97 5,94",
+      "label_source_global_indexes": [
+        17
+      ]
+    },
+    {
+      "index": 6,
+      "label": "2X WERELDGER.Z-AFR B0BO",
+      "center_y": 480.5,
+      "classification": "quantity_unit_and_line_total_article_line",
+      "amounts": [
+        {
+          "text": "2,97",
+          "value": 2.97,
+          "center_y": 487.5,
+          "min_x": 317.0,
+          "max_x": 363.0,
+          "source_global_index": 23,
+          "delta_y_to_label": 7.0
+        },
+        {
+          "text": "5,94",
+          "value": 5.94,
+          "center_y": 487.5,
+          "min_x": 405.0,
+          "max_x": 454.0,
+          "source_global_index": 24,
+          "delta_y_to_label": 7.0
+        }
+      ],
+      "rendered_line": "2X WERELDGER.Z-AFR B0BO 2,97 5,94",
+      "label_source_global_indexes": [
+        19
+      ]
+    },
+    {
+      "index": 7,
+      "label": "BONENMIX MAIS",
+      "center_y": 496.5,
+      "classification": "label_without_amount",
+      "amounts": [],
+      "rendered_line": "BONENMIX MAIS",
+      "label_source_global_indexes": [
+        22
+      ]
+    },
+    {
+      "index": 8,
+      "label": "KIKKERERWTEN BIO",
+      "center_y": 515.0,
+      "classification": "single_article_line",
+      "amounts": [
+        {
+          "text": "1,33",
+          "value": 1.33,
+          "center_y": 506.0,
+          "min_x": 408.0,
+          "max_x": 455.0,
+          "source_global_index": 26,
+          "delta_y_to_label": 9.0
+        }
+      ],
+      "rendered_line": "KIKKERERWTEN BIO 1,33",
+      "label_source_global_indexes": [
+        25
+      ]
+    },
+    {
+      "index": 9,
+      "label": "KIKKERWTEN",
+      "center_y": 533.5,
+      "classification": "single_article_line",
+      "amounts": [
+        {
+          "text": "1,22",
+          "value": 1.22,
+          "center_y": 525.5,
+          "min_x": 408.0,
+          "max_x": 455.0,
+          "source_global_index": 28,
+          "delta_y_to_label": 8.0
+        }
+      ],
+      "rendered_line": "KIKKERWTEN 1,22",
+      "label_source_global_indexes": [
+        27
+      ]
+    },
+    {
+      "index": 10,
+      "label": "CASHEWNOTEN ONGEZOUT",
+      "center_y": 554.5,
+      "classification": "multi_amount_review_needed",
+      "amounts": [
+        {
+          "text": "1,02",
+          "value": 1.02,
+          "center_y": 545.0,
+          "min_x": 408.0,
+          "max_x": 456.0,
+          "source_global_index": 30,
+          "delta_y_to_label": 9.5
+        },
+        {
+          "text": "2,05",
+          "value": 2.05,
+          "center_y": 563.0,
+          "min_x": 408.0,
+          "max_x": 456.0,
+          "source_global_index": 31,
+          "delta_y_to_label": 8.5
+        }
+      ],
+      "rendered_line": "CASHEWNOTEN ONGEZOUT 1,02 2,05",
+      "label_source_global_indexes": [
+        29
+      ]
+    },
+    {
+      "index": 11,
+      "label": "PLUS geeft neer voordeel!",
+      "center_y": 577.0,
+      "classification": "discount_or_action_line",
+      "amounts": [
+        {
+          "text": "-0,16",
+          "value": -0.16,
+          "center_y": 582.5,
+          "min_x": 400.0,
+          "max_x": 457.0,
+          "source_global_index": 33,
+          "delta_y_to_label": 5.5
+        }
+      ],
+      "rendered_line": "PLUS geeft neer voordeel! -0,16",
+      "label_source_global_indexes": [
+        32
+      ]
+    }
+  ],
+  "rendered_article_block_preview": [
+    "BAMI NASI MIX VD",
+    "PLUS geeft meer voordeell -0.50 1.69",
+    "RONIGE KWARK KANEELB 2,05",
+    "ROMIGE KWARK WIT CHO 2,05",
+    "STRAWBERRY SCHNITTE 1,99",
+    "2X WERELDGER. TERIYAKI 2,97 5,94",
+    "2X WERELDGER.Z-AFR B0BO 2,97 5,94",
+    "BONENMIX MAIS",
+    "KIKKERERWTEN BIO 1,33",
+    "KIKKERWTEN 1,22",
+    "CASHEWNOTEN ONGEZOUT 1,02 2,05",
+    "PLUS geeft neer voordeel! -0,16"
+  ],
+  "expected_preview_hits": {
+    "bami_nasi_mix": true,
+    "romige_kwark_kaneelb": true,
+    "romige_kwark_wit": true,
+    "strawberry_schnitte": true,
+    "wereldger_teriyaki": true,
+    "wereldger_zafr_bobo": true,
+    "bonenmix_mais": false,
+    "kikkererwten_bio": false,
+    "kikkerwten": false,
+    "cashewnoten": true,
+    "discount_050": true,
+    "discount_016": true
+  },
+  "review_needed_lines": [
+    {
+      "index": 0,
+      "label": "BAMI NASI MIX VD",
+      "center_y": 374.5,
+      "classification": "label_without_amount",
+      "amounts": [],
+      "rendered_line": "BAMI NASI MIX VD",
+      "label_source_global_indexes": [
+        8
+      ]
+    },
+    {
+      "index": 7,
+      "label": "BONENMIX MAIS",
+      "center_y": 496.5,
+      "classification": "label_without_amount",
+      "amounts": [],
+      "rendered_line": "BONENMIX MAIS",
+      "label_source_global_indexes": [
+        22
+      ]
+    },
+    {
+      "index": 10,
+      "label": "CASHEWNOTEN ONGEZOUT",
+      "center_y": 554.5,
+      "classification": "multi_amount_review_needed",
+      "amounts": [
+        {
+          "text": "1,02",
+          "value": 1.02,
+          "center_y": 545.0,
+          "min_x": 408.0,
+          "max_x": 456.0,
+          "source_global_index": 30,
+          "delta_y_to_label": 9.5
+        },
+        {
+          "text": "2,05",
+          "value": 2.05,
+          "center_y": 563.0,
+          "min_x": 408.0,
+          "max_x": 456.0,
+          "source_global_index": 31,
+          "delta_y_to_label": 8.5
+        }
+      ],
+      "rendered_line": "CASHEWNOTEN ONGEZOUT 1,02 2,05",
+      "label_source_global_indexes": [
+        29
+      ]
+    }
+  ],
+  "runtime_seconds": 0.002
+}

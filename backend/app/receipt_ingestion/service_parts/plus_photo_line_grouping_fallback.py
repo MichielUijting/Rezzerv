@@ -384,8 +384,8 @@ def diagnose_plus_photo_line_grouping_fallback(
         return diagnostics
     diagnostics['has_suspicious_article_merges'] = _has_suspicious_article_merges(current_lines)
     diagnostics['has_pluspunten_correction'] = _has_pluspunten_correction(texts)
-    if not diagnostics['has_suspicious_article_merges']:
-        diagnostics['fallback_reject_reason'] = 'no_suspicious_article_merges'
+    if not diagnostics['has_suspicious_article_merges'] and not diagnostics['has_pluspunten_correction']:
+        diagnostics['fallback_reject_reason'] = 'no_suspicious_article_merges_or_pluspunten_path'
         return diagnostics
     fragments = _fragments_from_ocr(texts, boxes)
     _start_y, _stop_y, block = _detect_article_block(fragments)

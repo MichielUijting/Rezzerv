@@ -1,0 +1,356 @@
+{
+  "audit": "R9-28B6C3 resource-safe existing parser store detection batch",
+  "created_at": "2026-05-24T20:22:12",
+  "scope": "batch diagnostics; store selection via existing inleesproces/parser; heavy diagnostics only for existing-parser AH receipts; no parser/OCR/database/status/baseline/UI mutation",
+  "ssot_compliance": {
+    "status_determination": "not_performed",
+    "status_service": "receipt_status_baseline_service_v4.py",
+    "parse_status_used_as_truth": false,
+    "parser_mutated": false,
+    "ocr_mutated": false,
+    "database_mutated": false,
+    "baseline_mutated": false,
+    "ui_touched": false,
+    "diagnostics_promoted_to_parser": false
+  },
+  "guardrails": {
+    "existing_store_detection_used": true,
+    "filename_based_chain_classification_allowed": false,
+    "new_ocr_marker_chain_classifier_allowed": false,
+    "filename_specific_parser_rules_allowed": false,
+    "member_specific_rules_allowed": false,
+    "hardcoded_receipt_ids_allowed": false,
+    "selection_method": "existing app receipt parser/store-detection output from parse_receipt_content",
+    "resource_safety": "R9-28B5/R9-28B6 diagnostics are executed only for selected AH receipts."
+  },
+  "input": {
+    "zip_path": "/tmp/supermarkten.zip",
+    "preprocess_for_selected_b5_diagnostics": true,
+    "expected_ah_count": 4,
+    "max_selected_diagnostics": 1
+  },
+  "aggregate": {
+    "image_member_count": 11,
+    "ah_member_count_detected_by_existing_parser": 0,
+    "expected_ah_count": 4,
+    "selection_pass": false,
+    "diagnostics_executed_for_selected_ah_count": 0,
+    "passed_count": 0,
+    "failed_or_suspicious_count": 0,
+    "failure_types": {
+      "existing_parser_ah_selection_count_mismatch": 1
+    },
+    "total_reconstructed_articles": 0
+  },
+  "members": [
+    {
+      "member": "AH foto 2.jpeg",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    },
+    {
+      "member": "AH foto 3.jpg",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    },
+    {
+      "member": "Aldi foto 1.jpg",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    },
+    {
+      "member": "Aldi foto 2.jpg",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    },
+    {
+      "member": "Jumbo App 1.png",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    },
+    {
+      "member": "Jumbo foto 1.jpeg",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    },
+    {
+      "member": "Jumbo foto 3.jpg",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    },
+    {
+      "member": "Lidl App 1.png",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    },
+    {
+      "member": "Lidl App 2.png",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    },
+    {
+      "member": "Plus foto 2.jpeg",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    },
+    {
+      "member": "plus foto 1.jpg",
+      "store_detection": {
+        "source": "existing_parse_receipt_content",
+        "is_ah": false,
+        "store_chain_detected": null,
+        "store_fields": {},
+        "parse_call_ok": false,
+        "parse_call_error": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'",
+        "rule_id": "EXISTING_REZZERV_STORE_DETECTION_ONLY",
+        "reason": "Bestaande parser-call faalde; geen eigen OCR-marker fallback toegepast."
+      },
+      "parse_call_summary": {
+        "ok": false,
+        "call_style": null,
+        "error_type": "NoCompatibleCallStyle",
+        "error_message": "raw_bytes_filename_kwargs: parse_receipt_content() got an unexpected keyword argument 'raw_bytes'"
+      },
+      "selected_for_ah_reconstruction": false,
+      "diagnostics_executed": false,
+      "ocr_summary": null,
+      "reconstructed_article_count": 0,
+      "reconstructed_article_sum": 0,
+      "reconstructed_articles": [],
+      "suspicious_findings": [],
+      "suspicious_finding_count": 0,
+      "pass_batch_diagnostic": false
+    }
+  ],
+  "next_step_hint": "If selection finds all AH receipts, run diagnostics for all selected AH receipts. If memory still fails, process selected AH one-by-one with the same existing store-detection selection report."
+}
