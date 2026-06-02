@@ -885,12 +885,16 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     const value = Number(line?.discount_amount)
     return Number.isFinite(value) ? sum + value : sum
   }, 0)
-  const receiptLevelDiscount = Number(receipt?.discount_total_effective ?? receipt?.discount_total)
-  const hasLineLevelDiscounts = lines.some((line) => Number.isFinite(Number(line?.discount_amount)) && Math.abs(Number(line.discount_amount)) > 0.0001)
-  const effectiveDiscountTotal = hasLineLevelDiscounts ? visibleDiscountSum : (Number.isFinite(receiptLevelDiscount) ? receiptLevelDiscount : visibleDiscountSum)
+  const receiptLevelDiscount = Number(receipt?.discount_total_effective ?? receipt?.discount_total ?? 0)
+  const effectiveLineDiscountTotal = Number.isFinite(visibleDiscountSum) ? visibleDiscountSum : 0
+  const effectiveReceiptLevelDiscount = Number.isFinite(receiptLevelDiscount) ? receiptLevelDiscount : 0
+  const effectiveDiscountTotal = effectiveLineDiscountTotal + effectiveReceiptLevelDiscount
   const visibleNetTotalSum = visibleLineTotalSum + effectiveDiscountTotal
+  const poNormStatusLabel = String(receipt?.po_norm_status_label ?? receipt?.status_label ?? receipt?.norm_status_label ?? '').trim().toLowerCase()
+  const isPoNormControlled = poNormStatusLabel === 'gecontroleerd'
   const detailAmountsMatch = Number.isFinite(Number(headerDraft.total_amount)) && lines.length > 0 && Math.abs(Number(headerDraft.total_amount) - visibleNetTotalSum) < 0.01
-  const totalsMismatchWarningVisible = !detailAmountsMatch && Number.isFinite(Number(headerDraft.total_amount)) && lines.length > 0
+  const detailAmountsAccepted = detailAmountsMatch || isPoNormControlled
+  const totalsMismatchWarningVisible = !detailAmountsAccepted && Number.isFinite(Number(headerDraft.total_amount)) && lines.length > 0
   const branchParts = deriveBranchAddressPlace(receipt)
   const lineColumnDefaults = useMemo(() => Object.fromEntries(receiptLineTableColumns.map(({ key, width }) => [key, width])), [])
   const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
@@ -1123,7 +1127,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: '24px' }} data-testid="receipt-detail-title">{receipt?.store_name || 'Kassabon'}</div>
-            <div style={{ color: detailAmountsMatch ? '#027A48' : '#B54708', fontWeight: 600 }}>{detailAmountsMatch ? 'Bonbedragen sluiten aan' : 'Totaalbedrag wijkt af van de bonregels'}</div>
+            <div style={{ color: detailAmountsAccepted ? '#027A48' : '#B54708', fontWeight: 600 }}>{detailAmountsAccepted ? 'Bonbedragen sluiten aan' : 'Totaalbedrag wijkt af van de bonregels'}</div>
             {totalsMismatchWarningVisible ? <div style={{ color: '#B54708', fontSize: 13 }}>Je kunt deze afwijking overrulen via â€˜Goedkeuren voor Uitpakkenâ€™. De bon gaat dan naar Gecontroleerd.</div> : null}
           </div>
           {canEdit ? (
@@ -1135,7 +1139,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
           ) : null}
         </div>
 
-        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" activeColor={detailAmountsMatch ? '#166534' : '#B54708'}>
+        <Tabs tabs={['Bonregels', 'Bonkop', 'Bron']} defaultTab="Bonregels" activeColor={detailAmountsAccepted ? '#166534' : '#B54708'}>
           {(activeTab) => {
             if (activeTab === 'Bonkop') {
               return (
@@ -1160,7 +1164,8 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
                   <DetailInfoRow label="Adres" value={branchParts.address} />
                   <DetailInfoRow label="Plaats" value={branchParts.city} />
                   <DetailInfoRow label="Som bonregels" value={formatMoney(visibleLineTotalSum, receipt?.currency)} />
-                  <DetailInfoRow label="Korting" value={formatMoney(effectiveDiscountTotal, receipt?.currency)} />
+                  <DetailInfoRow label="Regelkortingen" value={formatMoney(effectiveLineDiscountTotal, receipt?.currency)} />
+                  <DetailInfoRow label="Boncorrectie" value={formatMoney(effectiveReceiptLevelDiscount, receipt?.currency)} />
                   <DetailInfoRow label="Netto bonregels" value={formatMoney(visibleNetTotalSum, receipt?.currency)} />
                   <DetailInfoRow label="Valuta" value={receipt?.currency || 'EUR'} />
                   <DetailInfoRow label="Regels" value={String(lines.length)} />
@@ -1236,7 +1241,8 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
                       ) : null}
                     </tbody>
                     <tfoot>
-                      <tr><td colSpan={5} style={{ fontWeight: 700 }}>Totaal bonregels</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(visibleLineTotalSum, receipt?.currency)}</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(effectiveDiscountTotal, receipt?.currency)}</td></tr>
+                      <tr><td colSpan={5} style={{ fontWeight: 700 }}>Totaal bonregels</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(visibleLineTotalSum, receipt?.currency)}</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(effectiveLineDiscountTotal, receipt?.currency)}</td></tr>
+                      <tr><td colSpan={5} style={{ fontWeight: 700 }}>Boncorrectie</td><td className="rz-num" style={{ fontWeight: 700 }}>-</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(effectiveReceiptLevelDiscount, receipt?.currency)}</td></tr>
                       <tr><td colSpan={5} style={{ fontWeight: 700 }}>Netto bonregels</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(visibleNetTotalSum, receipt?.currency)}</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(headerDraft.total_amount, receipt?.currency)}</td></tr>
                     </tfoot>
                   </Table>
