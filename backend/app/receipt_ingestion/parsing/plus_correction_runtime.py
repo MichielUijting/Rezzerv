@@ -77,24 +77,47 @@ def _classify_receipt_level_correction(line: str) -> Decimal | None:
     return amount
 
 
-def _subtotal_total_window(text_lines: list[str]) -> list[str]:
-    subtotal_index: int | None = None
+def _subtotal_index(text_lines: list[str]) -> int | None:
     for index, line in enumerate(text_lines):
         lowered = str(line or '').lower()
         if any(token in lowered for token in _SUBTOTAL_TOKENS):
-            subtotal_index = index
-            break
-    if subtotal_index is None:
-        return []
-    total_index: int | None = None
+            return index
+    return None
+
+
+def _total_index_after(text_lines: list[str], subtotal_index: int) -> int | None:
     for index in range(subtotal_index + 1, len(text_lines)):
         lowered = str(text_lines[index] or '').lower()
         if any(token in lowered for token in _TOTAL_TOKENS):
-            total_index = index
-            break
+            return index
+    return None
+
+
+def _subtotal_total_window(text_lines: list[str]) -> list[str]:
+    subtotal_index = _subtotal_index(text_lines)
+    if subtotal_index is None:
+        return []
+    total_index = _total_index_after(text_lines, subtotal_index)
     if total_index is None or total_index <= subtotal_index:
         return []
     return text_lines[subtotal_index + 1:total_index]
+
+
+def _explicit_subtotal_total_amounts(text_lines: list[str]) -> tuple[Decimal | None, Decimal | None]:
+    subtotal_index = _subtotal_index(text_lines)
+    if subtotal_index is None:
+        return None, None
+    subtotal_amounts = _amounts_from_line(str(text_lines[subtotal_index] or ''))
+    subtotal_amount = subtotal_amounts[-1] if subtotal_amounts else None
+    total_amount = None
+    total_index = _total_index_after(text_lines, subtotal_index)
+    if total_index is not None:
+        for line in text_lines[total_index: min(len(text_lines), total_index + 3)]:
+            amounts = _amounts_from_line(str(line or ''))
+            if amounts:
+                total_amount = amounts[-1]
+                break
+    return subtotal_amount, total_amount
 
 
 def _label_without_amount(line: str) -> str:
@@ -165,6 +188,81 @@ def _receipt_level_correction_total(text_lines: list[str]) -> Decimal | None:
     return total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) if found else None
 
 
+def _pluspunten_norm_line_candidate(text_lines: list[str], lines: list[dict[str, Any]]) -> tuple[dict[str, Any], Decimal] | None:
+    """Return a validated PLUSPunten/zegel norm line for PLUS photo baselines.
+
+    R9-38B15: some PO baselines count the PLUSPunten/zegel value as a norm
+    line instead of a receipt-level correction. We only create that line when
+    the product-line sum equals the explicit subtotal and adding the PLUSPunten
+    value equals the explicit receipt total. This avoids double counting and
+    avoids changing unrelated PLUS correction flows.
+    """
+    subtotal_amount, total_amount = _explicit_subtotal_total_amounts(text_lines)
+    if subtotal_amount is None or total_amount is None:
+        return None
+    window = _subtotal_total_window(text_lines)
+    if not window:
+        return None
+    plus_line_index: int | None = None
+    plus_line: str | None = None
+    plus_amount: Decimal | None = None
+    subtotal_index = _subtotal_index(text_lines) or 0
+    for offset, raw_line in enumerate(window, start=subtotal_index + 1):
+        line = _norm(raw_line)
+        lowered = line.lower()
+        if not any(token in lowered for token in _PLUSPUNTEN_TOKENS):
+            continue
+        amounts = _amounts_from_line(line)
+        if not amounts:
+            continue
+        plus_line_index = offset
+        plus_line = line
+        plus_amount = abs(amounts[-1])
+        break
+    if plus_line_index is None or plus_line is None or plus_amount is None:
+        return None
+    article_sum = sum((_money(line.get('line_total')) + _money(line.get('discount_amount')) for line in lines), Decimal('0.00')).quantize(Decimal('0.01'))
+    if abs(article_sum - subtotal_amount) > Decimal('0.02'):
+        return None
+    if abs((article_sum + plus_amount) - total_amount) > Decimal('0.02'):
+        return None
+    if any(any(token in _norm_key(line.get('raw_label') or line.get('normalized_label')) for token in _PLUSPUNTEN_TOKENS) for line in lines):
+        return None
+    label = _label_without_amount(plus_line)
+    label = re.sub(r'^[^A-Za-z0-9]+', '', label).strip(' .:-') or 'PLUSPunten DIGITAAL'
+    norm_line = {
+        'raw_label': label,
+        'normalized_label': label,
+        'quantity': None,
+        'unit': None,
+        'unit_price': float(plus_amount),
+        'line_total': float(plus_amount),
+        'discount_amount': None,
+        'barcode': None,
+        'confidence_score': 0.85,
+        'source_index': plus_line_index,
+        'producer_trace': {
+            'filename': None,
+            'store_name': 'PLUS',
+            'function_name': '_extract_savings_action_lines',
+            'append_branch': 'savings_action_line',
+            'parser_path': 'r9_38b15.pluspunten_norm_line',
+            'source_index': plus_line_index,
+            'raw_line': plus_line,
+            'normalized_line': plus_line,
+            'label': label,
+            'raw_label': label,
+            'amount': float(plus_amount),
+            'classification': 'validated_savings_action_line',
+            'classification_allows_append': True,
+            'append_allowed': True,
+            'caller_line_hint': 'R9-38B15 PLUSPunten baseline norm line',
+            'validated_savings_action_path': True,
+        },
+    }
+    return norm_line, plus_amount
+
+
 def apply_plus_runtime_corrections(
     *,
     text_lines: list[str],
@@ -177,6 +275,26 @@ def apply_plus_runtime_corrections(
         return lines, discount_total, None
     corrected_lines = _apply_plus_line_discounts(text_lines, lines)
     receipt_correction_total = _receipt_level_correction_total(text_lines)
+    norm_line_candidate = _pluspunten_norm_line_candidate(text_lines, corrected_lines)
+    if norm_line_candidate is not None:
+        norm_line, plus_amount = norm_line_candidate
+        norm_line['producer_trace']['filename'] = filename
+        corrected_lines = [*corrected_lines, norm_line]
+        remaining_receipt_correction = None
+        if receipt_correction_total is not None:
+            remaining = (receipt_correction_total - plus_amount).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+            remaining_receipt_correction = remaining if remaining != Decimal('0.00') else None
+        diagnostics = {
+            'r9_38b15_pluspunten_norm_line': {
+                'applied': True,
+                'pluspunten_as_norm_line_amount': float(plus_amount),
+                'receipt_level_correction_total_before_norm_line': float(receipt_correction_total or Decimal('0.00')),
+                'receipt_level_correction_total_after_norm_line': float(remaining_receipt_correction or Decimal('0.00')),
+                'double_counting_prevented': True,
+                'scope': 'PLUS image receipts only',
+            }
+        }
+        return corrected_lines, remaining_receipt_correction, diagnostics
     if receipt_correction_total is None:
         return corrected_lines, discount_total, {
             'r9_38b9_plus_corrections': {
