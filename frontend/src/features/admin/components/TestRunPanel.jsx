@@ -1,21 +1,5 @@
 import Button from '../../../ui/Button'
 
-function getAuthHeaders() {
-  const token = localStorage.getItem('rezzerv_token') || ''
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-async function runKassaRegressionFallback() {
-  await fetch('/api/dev/run-parsing-raw-tests', {
-    method: 'POST',
-    credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      ...getAuthHeaders(),
-    },
-  })
-}
-
 export default function TestRunPanel({
   isRunning,
   onRunLayer1,
@@ -31,7 +15,10 @@ export default function TestRunPanel({
     if (typeof onRunKassaSupermarketRegression === 'function') {
       return onRunKassaSupermarketRegression()
     }
-    return runKassaRegressionFallback()
+    const rawButton = document.querySelector('[data-testid="run-parsing-raw-tests-button"]')
+    if (rawButton && typeof rawButton.click === 'function') {
+      rawButton.click()
+    }
   }
 
   return (
