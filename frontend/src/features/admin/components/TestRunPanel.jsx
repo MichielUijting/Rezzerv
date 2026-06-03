@@ -13,7 +13,7 @@ export default function TestRunPanel({
   return (
     <div>
       {showSuiteNotice ? (
-        <div className="rz-admin-inline-note" data-testid="regression-suite-banner">Leidend: laag 1 / laag 2 / laag 3 / Kassa-scenario's. Almost-out backend self-test is apart zichtbaar.</div>
+        <div className="rz-admin-inline-note" data-testid="regression-suite-banner">Leidend: laag 1 / laag 2 / laag 3. Almost-out backend self-test is apart zichtbaar.</div>
       ) : null}
       <div className="rz-admin-actions">
       <Button variant="secondary" onClick={onRunLayer1} disabled={isRunning}>
@@ -24,9 +24,6 @@ export default function TestRunPanel({
       </Button>
       <Button variant="secondary" onClick={onRunLayer3} disabled={isRunning}>
         Laag-3 UI/styleguide-test uitvoeren
-      </Button>
-      <Button variant="secondary" onClick={onRunLayer2} disabled={isRunning} data-testid="run-kassa-supermarket-regression-button">
-        Kassa supermarktregressie
       </Button>
       <Button variant="secondary" onClick={onRunAlmostOutSelfTest} disabled={isRunning} data-testid="run-almost-out-self-test-button">
         Almost-out backend self-test
