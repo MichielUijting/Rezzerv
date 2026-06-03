@@ -62,6 +62,17 @@ async function request(path, options = {}) {
   return data
 }
 
+async function requestWithFallback(primaryPath, fallbackPath, options = {}) {
+  try {
+    return await request(primaryPath, options)
+  } catch (error) {
+    if (error?.status === 404 && fallbackPath) {
+      return request(fallbackPath, options)
+    }
+    throw error
+  }
+}
+
 function normalizeStatus(data) {
   return {
     ...EMPTY_STATUS,
@@ -127,4 +138,12 @@ export async function runParsingFixtureTests() {
 
 export async function runParsingRawTests() {
   return request('/api/dev/run-parsing-raw-tests', { method: 'POST', body: '{}' })
+}
+
+export async function runKassaSupermarketRegressionTests() {
+  return requestWithFallback(
+    '/api/dev/run-kassa-supermarket-regression-tests',
+    '/api/dev/run-parsing-raw-tests',
+    { method: 'POST', body: '{}' }
+  )
 }
