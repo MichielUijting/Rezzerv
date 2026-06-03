@@ -1,5 +1,21 @@
 import Button from '../../../ui/Button'
 
+function getAuthHeaders() {
+  const token = localStorage.getItem('rezzerv_token') || ''
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+async function runKassaRegressionFallback() {
+  await fetch('/api/dev/run-parsing-raw-tests', {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      ...getAuthHeaders(),
+    },
+  })
+}
+
 export default function TestRunPanel({
   isRunning,
   onRunLayer1,
@@ -11,6 +27,13 @@ export default function TestRunPanel({
   onViewReport,
   showSuiteNotice = true,
 }) {
+  async function handleRunKassaSupermarketRegression() {
+    if (typeof onRunKassaSupermarketRegression === 'function') {
+      return onRunKassaSupermarketRegression()
+    }
+    return runKassaRegressionFallback()
+  }
+
   return (
     <div>
       {showSuiteNotice ? (
@@ -26,7 +49,7 @@ export default function TestRunPanel({
       <Button variant="secondary" onClick={onRunLayer3} disabled={isRunning}>
         Laag-3 UI/styleguide-test uitvoeren
       </Button>
-      <Button variant="secondary" onClick={onRunKassaSupermarketRegression} disabled={isRunning || typeof onRunKassaSupermarketRegression !== 'function'}>
+      <Button variant="secondary" onClick={handleRunKassaSupermarketRegression} disabled={isRunning} data-testid="run-kassa-supermarket-regression-button">
         Kassa supermarktregressie
       </Button>
       <Button variant="secondary" onClick={onRunAlmostOutSelfTest} disabled={isRunning} data-testid="run-almost-out-self-test-button">
