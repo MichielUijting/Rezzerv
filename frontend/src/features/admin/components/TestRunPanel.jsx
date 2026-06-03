@@ -1,4 +1,5 @@
 import Button from '../../../ui/Button'
+import { runKassaSupermarketRegressionTests } from '../services/adminTestingService'
 
 export default function TestRunPanel({
   isRunning,
@@ -11,6 +12,20 @@ export default function TestRunPanel({
   onViewReport,
   showSuiteNotice = true,
 }) {
+  async function handleRunKassaSupermarketRegression() {
+    if (typeof onRunKassaSupermarketRegression === 'function') {
+      return onRunKassaSupermarketRegression()
+    }
+    const report = await runKassaSupermarketRegressionTests()
+    const failedCount = Array.isArray(report?.results)
+      ? report.results.filter((item) => item.status === 'failed').length
+      : 0
+    window.alert(failedCount > 0
+      ? `Kassa supermarktregressie afgerond: ${failedCount} fout(en). Klik op Laatste testrapport bekijken voor details.`
+      : 'Kassa supermarktregressie geslaagd. Klik op Laatste testrapport bekijken voor details.'
+    )
+  }
+
   return (
     <div>
       {showSuiteNotice ? (
@@ -26,7 +41,7 @@ export default function TestRunPanel({
       <Button variant="secondary" onClick={onRunLayer3} disabled={isRunning}>
         Laag-3 UI/styleguide-test uitvoeren
       </Button>
-      <Button variant="secondary" onClick={onRunKassaSupermarketRegression} disabled={isRunning} data-testid="run-kassa-supermarket-regression-button">
+      <Button variant="secondary" onClick={handleRunKassaSupermarketRegression} disabled={isRunning} data-testid="run-kassa-supermarket-regression-button">
         Kassa supermarktregressie
       </Button>
       <Button variant="secondary" onClick={onRunAlmostOutSelfTest} disabled={isRunning} data-testid="run-almost-out-self-test-button">
