@@ -1,5 +1,11 @@
 import Button from '../../../ui/Button'
 
+function findButtonByText(label) {
+  const normalizedLabel = String(label || '').trim().toLowerCase()
+  return Array.from(document.querySelectorAll('button'))
+    .find((button) => String(button.textContent || '').trim().toLowerCase() === normalizedLabel)
+}
+
 export default function TestRunPanel({
   isRunning,
   onRunLayer1,
@@ -15,7 +21,7 @@ export default function TestRunPanel({
     if (typeof onRunKassaSupermarketRegression === 'function') {
       return onRunKassaSupermarketRegression()
     }
-    const rawButton = document.querySelector('[data-testid="run-parsing-raw-tests-button"]')
+    const rawButton = findButtonByText('Parsing raw bestanden')
     if (rawButton && typeof rawButton.click === 'function') {
       rawButton.click()
     }
