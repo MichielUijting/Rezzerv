@@ -1,36 +1,19 @@
 import Button from '../../../ui/Button'
 
-function findButtonByText(label) {
-  const normalizedLabel = String(label || '').trim().toLowerCase()
-  return Array.from(document.querySelectorAll('button'))
-    .find((button) => String(button.textContent || '').trim().toLowerCase() === normalizedLabel)
-}
-
 export default function TestRunPanel({
   isRunning,
   onRunLayer1,
   onRunLayer2,
   onRunLayer3,
-  onRunKassaSupermarketRegression,
   onRunAll,
   onRunAlmostOutSelfTest,
   onViewReport,
   showSuiteNotice = true,
 }) {
-  async function handleRunKassaSupermarketRegression() {
-    if (typeof onRunKassaSupermarketRegression === 'function') {
-      return onRunKassaSupermarketRegression()
-    }
-    const rawButton = findButtonByText('Parsing raw bestanden')
-    if (rawButton && typeof rawButton.click === 'function') {
-      rawButton.click()
-    }
-  }
-
   return (
     <div>
       {showSuiteNotice ? (
-        <div className="rz-admin-inline-note" data-testid="regression-suite-banner">Leidend: laag 1 / laag 2 / laag 3 / Kassa-supermarkten. Almost-out backend self-test is apart zichtbaar.</div>
+        <div className="rz-admin-inline-note" data-testid="regression-suite-banner">Leidend: laag 1 / laag 2 / laag 3 / Kassa-scenario's. Almost-out backend self-test is apart zichtbaar.</div>
       ) : null}
       <div className="rz-admin-actions">
       <Button variant="secondary" onClick={onRunLayer1} disabled={isRunning}>
@@ -42,7 +25,7 @@ export default function TestRunPanel({
       <Button variant="secondary" onClick={onRunLayer3} disabled={isRunning}>
         Laag-3 UI/styleguide-test uitvoeren
       </Button>
-      <Button variant="secondary" onClick={handleRunKassaSupermarketRegression} disabled={isRunning} data-testid="run-kassa-supermarket-regression-button">
+      <Button variant="secondary" onClick={onRunLayer2} disabled={isRunning} data-testid="run-kassa-supermarket-regression-button">
         Kassa supermarktregressie
       </Button>
       <Button variant="secondary" onClick={onRunAlmostOutSelfTest} disabled={isRunning} data-testid="run-almost-out-self-test-button">
