@@ -62,17 +62,6 @@ async function request(path, options = {}) {
   return data
 }
 
-async function requestWithFallback(primaryPath, fallbackPath, options = {}) {
-  try {
-    return await request(primaryPath, options)
-  } catch (error) {
-    if (error?.status === 404 && fallbackPath) {
-      return request(fallbackPath, options)
-    }
-    throw error
-  }
-}
-
 function normalizeStatus(data) {
   return {
     ...EMPTY_STATUS,
@@ -89,61 +78,56 @@ function normalizeReport(data) {
 }
 
 export async function runSmokeTests() {
-  return request('/api/dev/run-smoke-tests', { method: 'POST', body: '{}' })
+  return request('/api/testing/regression/smoke/run', { method: 'POST', body: '{}' })
 }
 
 export async function runRegressionTests() {
-  return request('/api/dev/run-regression-tests', { method: 'POST', body: '{}' })
+  return request('/api/testing/regression/all/run', { method: 'POST', body: '{}' })
 }
 
 export async function runLayer1Tests() {
-  return request('/api/dev/run-layer1-tests', { method: 'POST', body: '{}' })
+  return request('/api/testing/regression/layer1/run', { method: 'POST', body: '{}' })
 }
 
 export async function runLayer2Tests() {
-  return request('/api/dev/run-layer2-tests', { method: 'POST', body: '{}' })
+  return request('/api/testing/regression/layer2/run', { method: 'POST', body: '{}' })
 }
 
 export async function runLayer3Tests() {
-  return request('/api/dev/run-layer3-tests', { method: 'POST', body: '{}' })
+  return request('/api/testing/regression/layer3/run', { method: 'POST', body: '{}' })
 }
-
 
 export async function runAlmostOutSelfTest() {
   return request('/api/dev/regression/almost-out-self-test', { method: 'POST', body: '{}' })
 }
 
 export async function fetchLatestTestStatus() {
-  const data = await request('/api/dev/test-status', { method: 'GET' })
+  const data = await request('/api/testing/reports/status', { method: 'GET' })
   return normalizeStatus(data)
 }
 
 export async function fetchLatestTestReport() {
-  const data = await request('/api/dev/test-report/latest', { method: 'GET' })
+  const data = await request('/api/testing/reports/latest', { method: 'GET' })
   return normalizeReport(data)
 }
 
 export { AdminTestingServiceError, EMPTY_STATUS, EMPTY_REPORT }
 
 export async function submitTestResults(testType, results) {
-  return request('/api/dev/test-report', {
+  return request('/api/testing/reports/complete', {
     method: 'POST',
     body: JSON.stringify({ test_type: testType, results }),
   })
 }
 
 export async function runParsingFixtureTests() {
-  return request('/api/dev/run-parsing-fixture-tests', { method: 'POST', body: '{}' })
+  return request('/api/testing/regression/parsing-fixtures/run', { method: 'POST', body: '{}' })
 }
 
 export async function runParsingRawTests() {
-  return request('/api/dev/run-parsing-raw-tests', { method: 'POST', body: '{}' })
+  return request('/api/testing/regression/parsing-raw/run', { method: 'POST', body: '{}' })
 }
 
 export async function runKassaSupermarketRegressionTests() {
-  return requestWithFallback(
-    '/api/dev/run-kassa-supermarket-regression-tests',
-    '/api/dev/run-parsing-raw-tests',
-    { method: 'POST', body: '{}' }
-  )
+  return runLayer2Tests()
 }
