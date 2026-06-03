@@ -34,6 +34,10 @@ def _normalize_chain_slug(value: Any) -> str:
     return text
 
 
+def _normalize_status_label(value: Any) -> str:
+    return str(value or '').strip().lower()
+
+
 def _passed_result(name: str, details: dict[str, Any] | None = None) -> dict[str, Any]:
     return {'name': name, 'status': 'passed', 'error': None, 'details': details or {}}
 
@@ -65,14 +69,21 @@ def run_kassa_supermarket_regression_suite() -> list[dict[str, Any]]:
     present_chains = set(chain_counts)
     missing_chains = [label for slug, label in REQUIRED_KASSA_SUPERMARKET_CHAINS.items() if slug not in present_chains]
 
-    non_approved_receipts = [
+    active_detail_rows = [
+        item for item in details
+        if item.get('result') in {'correct', 'different', 'extra'} and item.get('receipt_table_id')
+    ]
+    non_gecontroleerd_receipts = [
         {
-            'source_file': row.get('source_file'),
-            'store_name': row.get('store_name'),
-            'parse_status': row.get('parse_status'),
+            'source_file': item.get('matched_original_filename') or item.get('source_file'),
+            'store_name': item.get('store_name'),
+            'actual_parse_status': item.get('actual_parse_status'),
+            'actual_status_label': item.get('actual_status_label'),
+            'result': item.get('result'),
+            'difference_type': item.get('difference_type'),
         }
-        for row in included_scope
-        if str(row.get('parse_status') or '').strip().lower() != 'approved'
+        for item in active_detail_rows
+        if _normalize_status_label(item.get('actual_status_label')) != 'gecontroleerd'
     ]
 
     regression_counts = {
@@ -115,13 +126,13 @@ def run_kassa_supermarket_regression_suite() -> list[dict[str, Any]]:
             common_details,
         ))
 
-    if not non_approved_receipts and active_total > 0:
+    if not non_gecontroleerd_receipts and active_total > 0:
         results.append(_passed_result('Alle actieve supermarktbonnen staan op Gecontroleerd', common_details))
     else:
         results.append(_failed_result(
             'Alle actieve supermarktbonnen staan op Gecontroleerd',
-            f'{len(non_approved_receipts)} actieve supermarktbon(nen) staan niet op approved/Gecontroleerd.',
-            {**common_details, 'non_approved_receipts': non_approved_receipts},
+            f'{len(non_gecontroleerd_receipts)} actieve supermarktbon(nen) staan niet op Gecontroleerd volgens de SSOT-statuslabel.',
+            {**common_details, 'non_gecontroleerd_receipts': non_gecontroleerd_receipts},
         ))
 
     if not regression_failures:
