@@ -346,6 +346,17 @@ def read_ingest_debug_artifact_for_receipt(
         }
     if isinstance(payload, dict):
         payload['available'] = True
+
+        # R9-38E4c:
+        # Persisted debug artifacts are read-only snapshots, but status fields
+        # must be presented through the current SSOT runtime status contract.
+        try:
+            from app.services.receipt_ssot_status import apply_po_norm_status
+            if isinstance(payload.get('receipt'), dict):
+                payload['receipt'] = apply_po_norm_status(payload['receipt'])
+        except Exception:
+            pass
+
         payload.setdefault('debug_download_policy', {
             'persisted_at_ingest': True,
             'download_may_reparse': False,

@@ -8781,6 +8781,7 @@ def recompute_receipt_review_state(conn, receipt_table_id: str):
         **dict(receipt),
         'line_count': valid_line_count,
         'line_total_sum': line_total_sum,
+            'line_discount_total_sum': line_discount_sum,
         'discount_total_effective': receipt.get('discount_total'),
     })
     next_status = str(criteria.get('parse_status') or current_status or 'manual').strip().lower() or 'manual'

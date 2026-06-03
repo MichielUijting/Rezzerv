@@ -1,5 +1,25 @@
 from __future__ import annotations
 
+from app.receipt_ingestion.profiles.ah.corrections import (
+    _ah_remove_duplicate_receipt_discount,
+    _ah_fix_total_from_net_sum,
+    _ah_filter_ocr_conflict_footer_noise_lines,
+)
+from app.receipt_ingestion.profiles.ah.reconstruction import (
+    _r9_38e2_should_use_ah_paddle_reconstruction,
+    _r9_38e2_reconstruct_ah_lines_from_paddle,
+    _r9_38e2a_refine_ah_reconstructed_lines,
+    _r9_38e2b_fix_quantity_one_totals_and_swaps,
+    _r9_38e2c_fix_combined_paddle_pair_by_nearby_evidence,
+)
+from app.receipt_ingestion.profiles.lidl.corrections import (
+    _lidl_apply_plus_discount_total_to_lines,
+)
+from app.receipt_ingestion.profiles.jumbo.corrections import (
+    _jumbo_remove_duplicate_receipt_discount,
+)
+
+
 import hashlib
 import io
 import logging
@@ -883,6 +903,85 @@ def _extract_sparse_receipt_lines(lines: list[str], filename: str, store_name: s
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def _parse_result_from_text_lines(
     text_lines: list[str],
     filename: str,
@@ -932,6 +1031,31 @@ def _parse_result_from_text_lines(
         discount_total=discount_total,
         store_name=store_name,
         filename=filename,
+    )
+    discount_total = _ah_remove_duplicate_receipt_discount(
+        text_lines=text_lines,
+        lines=lines,
+        discount_total=discount_total,
+        store_name=store_name,
+    )
+    total_amount = _ah_fix_total_from_net_sum(
+        text_lines=text_lines,
+        lines=lines,
+        discount_total=discount_total,
+        store_name=store_name,
+        total_amount=total_amount,
+    )
+    lines, discount_total, lidl_correction_diagnostics = _lidl_apply_plus_discount_total_to_lines(
+        text_lines=text_lines,
+        lines=lines,
+        discount_total=discount_total,
+        store_name=store_name,
+    )
+    discount_total, jumbo_correction_diagnostics = _jumbo_remove_duplicate_receipt_discount(
+        text_lines=text_lines,
+        lines=lines,
+        discount_total=discount_total,
+        store_name=store_name,
     )
     lines = _filter_non_product_receipt_lines(lines)
     # R9-34T SSOT:
@@ -993,6 +1117,8 @@ def _parse_result_from_text_lines(
         parser_diagnostics={
             **summarize_lines_parser_diagnostics(lines),
             **(plus_correction_diagnostics or {}),
+            **(lidl_correction_diagnostics or {}),
+            **(jumbo_correction_diagnostics or {}),
         },
     )
 
@@ -1353,16 +1479,86 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                 image_result.confidence_score = round(chosen_confidence, 4)
             diagnostics = dict(image_result.parser_diagnostics or summarize_lines_parser_diagnostics(image_result.lines or []))
             if ah_ocr_context:
+                # R9-38D3b-AH:
+                # Final AH image-total repair after OCR arbitration.
+                # This rejects a final OCR total if the final parsed article lines
+                # match a better supported AH OCR total/payment/subtotal candidate.
+                ah_total_before = image_result.total_amount
+                ah_source_lines_for_total = chosen_lines or paddle_lines or tesseract_lines
+
+                ah_paddle_reconstruction_diagnostics = None
+                ah_paddle_refinement_diagnostics = None
+                ah_paddle_refinement_b_diagnostics = None
+                ah_paddle_refinement_c_diagnostics = None
+                if _r9_38e2_should_use_ah_paddle_reconstruction(
+                    store_name=image_result.store_name,
+                    paddle_lines=paddle_lines or [],
+                    current_lines=image_result.lines or [],
+                ):
+                    reconstructed_lines, ah_paddle_reconstruction_diagnostics = _r9_38e2_reconstruct_ah_lines_from_paddle(paddle_lines or [])
+                    if reconstructed_lines:
+                        image_result.lines = reconstructed_lines
+                        image_result.lines, ah_paddle_refinement_diagnostics = _r9_38e2a_refine_ah_reconstructed_lines(
+                            lines=image_result.lines or [],
+                            paddle_lines=paddle_lines or [],
+                            tesseract_lines=tesseract_lines or [],
+                            total_amount=image_result.total_amount,
+                        )
+                        image_result.lines, ah_paddle_refinement_b_diagnostics = _r9_38e2b_fix_quantity_one_totals_and_swaps(
+                            lines=image_result.lines or [],
+                            tesseract_lines=tesseract_lines or [],
+                            total_amount=image_result.total_amount,
+                        )
+                        image_result.lines, ah_paddle_refinement_c_diagnostics = _r9_38e2c_fix_combined_paddle_pair_by_nearby_evidence(
+                            lines=image_result.lines or [],
+                            tesseract_lines=tesseract_lines or [],
+                            total_amount=image_result.total_amount,
+                        )
+                        # No free/unexplained receipt-level correction. Visible
+                        # bonus is carried on article discount_amount.
+                        image_result.discount_total = None
+
+                image_result.lines, ah_footer_noise_diagnostics = _ah_filter_ocr_conflict_footer_noise_lines(
+                    reliable_footer_lines=paddle_lines or [],
+                    lines=image_result.lines or [],
+                    store_name=image_result.store_name,
+                )
+
+                image_result.total_amount = _ah_fix_total_from_net_sum(
+                    text_lines=ah_source_lines_for_total,
+                    lines=image_result.lines or [],
+                    discount_total=image_result.discount_total,
+                    store_name=image_result.store_name,
+                    total_amount=image_result.total_amount,
+                )
+
+                image_result.total_amount = _ah_fix_total_from_net_sum(
+                    text_lines=paddle_lines or [],
+                    lines=image_result.lines or [],
+                    discount_total=image_result.discount_total,
+                    store_name=image_result.store_name,
+                    total_amount=image_result.total_amount,
+                )
+
+                image_result.parse_status = determine_final_parse_status(image_result)
+
                 diagnostics['ah_ocr_arbitrage'] = {
                     'branch': 'R9-34J_ah_ocr_engine_arbitrage',
-                    'status_neutral': True,
-                    'status_classification_changed': False,
+                    'status_neutral': False,
+                    'status_classification_changed': True,
                     'po_norm_status_label_touched': False,
                     'preprocessing_route': getattr(safe_rotation_decision, 'selected_route', None) if safe_rotation_decision else None,
                     'paddle_merged_product_line_detected': ah_paddle_merged_product_line,
                     'forced_preprocessed_tesseract': ah_force_preprocessed_tesseract,
                     'chosen_engine': 'tesseract' if image_result is tesseract_result else 'paddle_or_original',
                     'removed_final_lines': ah_removed_final_lines,
+                    'ah_total_before_final_repair': float(ah_total_before) if ah_total_before is not None else None,
+                    'ah_total_after_final_repair': float(image_result.total_amount) if image_result.total_amount is not None else None,
+                    **(ah_footer_noise_diagnostics or {}),
+                    **(ah_paddle_reconstruction_diagnostics or {}),
+                    **(ah_paddle_refinement_diagnostics or {}),
+                    **(ah_paddle_refinement_b_diagnostics or {}),
+                    **(ah_paddle_refinement_c_diagnostics or {}),
                 }
                 image_result.parser_diagnostics = diagnostics
             return image_result
