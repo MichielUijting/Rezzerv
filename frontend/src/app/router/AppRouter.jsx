@@ -16,7 +16,6 @@ import SettingsHouseholdPage from '../../features/settings/SettingsHouseholdPage
 import SettingsLocationsPage from '../../features/settings/SettingsLocationsPage'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
 import Voorraad from '../../pages/Voorraad'
-import RegressionRunnerPage from '../../features/admin/RegressionRunnerPage'
 import ScannerLabPage from '../../pages/ScannerLabPage.jsx'
 import ReceiptReviewPreviewPage from '../../pages/ReceiptReviewPreviewPage.jsx'
 import IncidentalPurchasePage from '../../features/purchaseImport/IncidentalPurchasePage.jsx'
@@ -64,7 +63,6 @@ const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
-  { path: '/regression-runner', element: <ProtectedAdmin><RegressionRunnerPage /></ProtectedAdmin> },
   { path: '/home', element: <Protected><HomePage /></Protected> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
