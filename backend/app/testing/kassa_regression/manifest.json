@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "purpose": "Vaste regressieset voor het Kassa-inleesproces. Vul deze manifest aan met exact 14 testkassabonnen zodra de definitieve testbestanden in raw/ staan.",
+  "required_receipt_count": 14,
+  "required_chains": ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl"],
+  "database_isolation": "Elke run gebruikt een tijdelijke aparte SQLite-testdatabase; de applicatiedatabase wordt niet gebruikt voor acceptatie.",
+  "cases": []
+}
