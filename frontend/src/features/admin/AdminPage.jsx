@@ -11,6 +11,16 @@ function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+async function readJsonOrText(response) {
+  const text = await response.text();
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { detail: text.slice(0, 1200), non_json_response: true };
+  }
+}
+
 function chainStatusLabel(status) {
   if (status === "passed") return "Geslaagd";
   if (status === "missing") return "Ontbreekt";
@@ -24,6 +34,16 @@ function reportStatusLabel(status) {
   if (status === "blocked") return "Geblokkeerd";
   if (status === "failed") return "Gefaald";
   return "Aandacht nodig";
+}
+
+function summarizeKassaError(data, fallback) {
+  if (!data) return fallback;
+  if (Array.isArray(data.blocking_issues) && data.blocking_issues.length) {
+    return `Kassa inleesregressie geblokkeerd: ${data.blocking_issues[0]}`;
+  }
+  if (data.detail) return `Kassa inleesregressie kon niet worden uitgevoerd: ${data.detail}`;
+  if (data.message) return `Kassa inleesregressie kon niet worden uitgevoerd: ${data.message}`;
+  return fallback;
 }
 
 export default function AdminPage() {
@@ -137,22 +157,23 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: "{}",
       });
-      const data = await res.json();
+      const data = await readJsonOrText(res);
       if (!res.ok) {
-        setMessage(data.detail || "Kassa inleesregressie kon niet worden uitgevoerd");
+        setKassaRegressionReport(data && typeof data === "object" ? data : null);
+        setMessage(summarizeKassaError(data, `Kassa inleesregressie kon niet worden uitgevoerd. HTTP ${res.status}`));
         return;
       }
       setKassaRegressionReport(data);
-      const summary = data.summary || {};
-      if (data.status === "passed") {
+      const summary = data?.summary || {};
+      if (data?.status === "passed") {
         setMessage(`Kassa inleesregressie geslaagd: ${summary.passed_count || 0}/${summary.required_receipt_count || 14} bonnen akkoord.`);
-      } else if (data.status === "blocked") {
-        setMessage(`Kassa inleesregressie geblokkeerd: vaste 14-bonnen testset ontbreekt of is onvolledig.`);
+      } else if (data?.status === "blocked") {
+        setMessage(summarizeKassaError(data, "Kassa inleesregressie geblokkeerd: vaste 14-bonnen testset ontbreekt of is onvolledig."));
       } else {
         setMessage(`Kassa inleesregressie gefaald: ${summary.failed_count || 0} bon(nen) gefaald.`);
       }
-    } catch {
-      setMessage("Kassa inleesregressie kon niet worden uitgevoerd");
+    } catch (error) {
+      setMessage(`Kassa inleesregressie kon niet worden uitgevoerd: ${error?.message || "onbekende frontend/netwerkfout"}`);
     } finally {
       setIsRunningKassaRegression(false);
     }
