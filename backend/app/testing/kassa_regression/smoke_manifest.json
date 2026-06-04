@@ -1,14 +1,15 @@
 {
-  "version": 1,
-  "purpose": "Kassa smoke-set: 1 vaste kassabon per ondersteunde winkelketen, bedoeld als minimale releasecontrole.",
-  "required_receipt_count": 5,
-  "required_chains": ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl"],
-  "acceptance_rule": "Akkoord alleen bij 5 getest, 5 geslaagd, 0 gefaald en 0 geblokkeerd. Datum/tijd vormt nooit een validatiecriterium.",
+  "version": 8,
+  "purpose": "Kassa smoke-set: 1 vaste kassabon per ondersteunde winkelketen, bedoeld als minimale releasecontrole. Baseline V8 inclusief Picnic.",
+  "required_receipt_count": 6,
+  "required_chains": ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl", "Picnic"],
+  "acceptance_rule": "Akkoord alleen bij 6 getest, 6 geslaagd, 0 gefaald en 0 geblokkeerd. Datum/tijd vormt nooit een validatiecriterium.",
   "cases": [
     {"id": "ah_app_1", "chain": "Albert Heijn", "source_filename": "AH App 1.pdf", "filename": "ah_app_1.pdf", "mime_type": "application/pdf", "expected_min_line_count": 1},
     {"id": "aldi_foto_1", "chain": "ALDI", "source_filename": "Aldi foto 1.jpg", "filename": "aldi_foto_1.jpg", "mime_type": "image/jpeg", "expected_min_line_count": 1},
     {"id": "jumbo_app_1", "chain": "Jumbo", "source_filename": "Jumbo App 1.png", "filename": "jumbo_app_1.png", "mime_type": "image/png", "expected_min_line_count": 1},
     {"id": "plus_foto_1", "chain": "PLUS", "source_filename": "plus foto 1.jpg", "filename": "plus_foto_1.jpg", "mime_type": "image/jpeg", "expected_min_line_count": 1},
-    {"id": "lidl_app_1", "chain": "Lidl", "source_filename": "Lidl App 1.png", "filename": "lidl_app_1.png", "mime_type": "image/png", "expected_min_line_count": 1}
+    {"id": "lidl_app_1", "chain": "Lidl", "source_filename": "Lidl App 1.png", "filename": "lidl_app_1.png", "mime_type": "image/png", "expected_min_line_count": 1},
+    {"id": "picnic_app_1", "chain": "Picnic", "source_filename": "Picnic App 1.eml", "filename": "picnic_app_1.eml", "mime_type": "message/rfc822", "expected_min_line_count": 1}
   ]
 }
