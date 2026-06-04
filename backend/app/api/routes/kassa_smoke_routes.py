@@ -193,7 +193,7 @@ def _run_job(job_id: str) -> None:
                         payload, filename = regression._load_case_payload(case)
                         mime_type = str(case.get("mime_type") or detect_mime_type(filename, payload))
                         parsed = parse_receipt_content(payload, filename, mime_type)
-                        persisted = regression._write_parse_result(conn, case, parsed, filename, mime_type)
+                        persisted = regression._write_parse_result(conn, parsed, filename, mime_type)
                         ok, issues = _case_ok(case, parsed, persisted)
                         results.append({
                             "case_id": case_id,
