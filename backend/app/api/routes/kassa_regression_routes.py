@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import sqlite3
 import tempfile
@@ -18,6 +19,7 @@ router = APIRouter()
 REGRESSION_ROOT = Path(__file__).resolve().parents[2] / "testing" / "kassa_regression"
 MANIFEST_PATH = REGRESSION_ROOT / "manifest.json"
 RAW_DIR = REGRESSION_ROOT / "raw"
+RAW_B64_DIR = REGRESSION_ROOT / "raw_b64"
 
 REQUIRED_CHAINS = ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl"]
 REQUIRED_RECEIPT_COUNT = 14
@@ -67,6 +69,23 @@ def _load_manifest() -> tuple[dict[str, Any] | None, list[str]]:
     return manifest, issues
 
 
+def _case_source_exists(case: dict[str, Any]) -> bool:
+    filename = str(case.get("filename") or "").strip()
+    b64_filename = str(case.get("b64_filename") or "").strip()
+    return bool(filename and (RAW_DIR / filename).exists()) or bool(b64_filename and (RAW_B64_DIR / b64_filename).exists())
+
+
+def _load_case_payload(case: dict[str, Any]) -> tuple[bytes, str]:
+    filename = str(case.get("filename") or "").strip()
+    b64_filename = str(case.get("b64_filename") or "").strip()
+    if filename and (RAW_DIR / filename).exists():
+        return (RAW_DIR / filename).read_bytes(), filename
+    if b64_filename and (RAW_B64_DIR / b64_filename).exists():
+        raw = (RAW_B64_DIR / b64_filename).read_text(encoding="ascii")
+        return base64.b64decode(raw), filename or b64_filename.removesuffix(".b64")
+    raise FileNotFoundError(f"Geen fixturebestand gevonden voor {case.get('id') or filename or b64_filename or '-'}")
+
+
 def _validate_manifest_cases(manifest: dict[str, Any]) -> list[str]:
     issues: list[str] = []
     cases = manifest.get("cases") if isinstance(manifest.get("cases"), list) else []
@@ -77,13 +96,17 @@ def _validate_manifest_cases(manifest: dict[str, Any]) -> list[str]:
             continue
         case_id = str(case.get("id") or "").strip()
         filename = str(case.get("filename") or "").strip()
+        b64_filename = str(case.get("b64_filename") or "").strip()
         chain = _canonical_chain(str(case.get("chain") or ""))
         if not case_id:
             issues.append(f"Case {index}: id ontbreekt")
-        if not filename:
-            issues.append(f"Case {case_id or index}: filename ontbreekt")
-        elif not (RAW_DIR / filename).exists():
-            issues.append(f"Case {case_id or index}: bestand ontbreekt: raw/{filename}")
+        if not filename and not b64_filename:
+            issues.append(f"Case {case_id or index}: filename of b64_filename ontbreekt")
+        elif not _case_source_exists(case):
+            expected = f"raw/{filename}" if filename else f"raw_b64/{b64_filename}"
+            if filename and b64_filename:
+                expected = f"raw/{filename} of raw_b64/{b64_filename}"
+            issues.append(f"Case {case_id or index}: bestand ontbreekt: {expected}")
         if not chain:
             issues.append(f"Case {case_id or index}: onbekende keten {case.get('chain') or '-'}")
         else:
@@ -247,13 +270,11 @@ def run_kassa_receipt_regression() -> dict[str, Any]:
         try:
             _init_test_database(conn)
             for case in cases:
-                filename = str(case.get("filename") or "").strip()
-                file_path = RAW_DIR / filename
                 chain = _canonical_chain(str(case.get("chain") or "")) or str(case.get("chain") or "Onbekend")
                 chain_totals.setdefault(chain, {"receipt_count": 0, "passed_count": 0, "failed_count": 0})
                 chain_totals[chain]["receipt_count"] += 1
                 try:
-                    payload = file_path.read_bytes()
+                    payload, filename = _load_case_payload(case)
                     mime_type = str(case.get("mime_type") or detect_mime_type(filename, payload))
                     parsed = parse_receipt_content(payload, filename, mime_type)
                     persisted = _write_parse_result(conn, case, parsed, filename, mime_type)
@@ -279,7 +300,7 @@ def run_kassa_receipt_regression() -> dict[str, Any]:
                     results.append({
                         "case_id": case.get("id"),
                         "chain": chain,
-                        "filename": filename,
+                        "filename": case.get("filename") or case.get("b64_filename"),
                         "status": "failed",
                         "error": f"technische fout tijdens inlezen: {exc}",
                         "details": {},
