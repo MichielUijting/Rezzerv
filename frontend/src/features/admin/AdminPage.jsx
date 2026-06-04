@@ -31,6 +31,7 @@ function chainStatusLabel(status) {
 
 function reportStatusLabel(status) {
   if (status === "passed") return "Geslaagd";
+  if (status === "running") return "Bezig";
   if (status === "blocked") return "Geblokkeerd";
   if (status === "failed") return "Gefaald";
   return "Aandacht nodig";
@@ -54,6 +55,7 @@ export default function AdminPage() {
   const [householdId, setHouseholdId] = useState("demo-household");
   const [isPurgingArchivedReceipts, setIsPurgingArchivedReceipts] = useState(false);
   const [isRunningKassaRegression, setIsRunningKassaRegression] = useState(false);
+  const [kassaRegressionJob, setKassaRegressionJob] = useState(null);
   const [kassaRegressionReport, setKassaRegressionReport] = useState(null);
 
   const [spaceName, setSpaceName] = useState("");
@@ -77,8 +79,26 @@ export default function AdminPage() {
     }
   }
 
+  async function fetchKassaRegressionStatus() {
+    const res = await fetch("/api/admin/kassa-regression/status", {
+      headers: { Accept: "application/json", ...getAuthHeaders() },
+    });
+    const data = await readJsonOrText(res);
+    if (!res.ok) {
+      setMessage(summarizeKassaError(data, `Kassa regressiestatus kon niet worden opgehaald. HTTP ${res.status}`));
+      return null;
+    }
+    setKassaRegressionJob(data);
+    if (data?.report) {
+      setKassaRegressionReport(data.report);
+    }
+    setIsRunningKassaRegression(data?.status === "running");
+    return data;
+  }
+
   useEffect(() => {
     fetchStatus();
+    fetchKassaRegressionStatus().catch(() => {});
     const token = localStorage.getItem("rezzerv_token");
     fetch("/api/household", {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -89,6 +109,16 @@ export default function AdminPage() {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (!isRunningKassaRegression) return undefined;
+    const timer = window.setInterval(() => {
+      fetchKassaRegressionStatus().catch((error) => {
+        setMessage(`Kassa regressiestatus kon niet worden opgehaald: ${error?.message || "onbekende fout"}`);
+      });
+    }, 1500);
+    return () => window.clearInterval(timer);
+  }, [isRunningKassaRegression]);
 
   async function postJson(url, payload, successMessage) {
     setMessage("");
@@ -160,22 +190,17 @@ export default function AdminPage() {
       const data = await readJsonOrText(res);
       if (!res.ok) {
         setKassaRegressionReport(data && typeof data === "object" ? data : null);
-        setMessage(summarizeKassaError(data, `Kassa inleesregressie kon niet worden uitgevoerd. HTTP ${res.status}`));
+        setMessage(summarizeKassaError(data, `Kassa inleesregressie kon niet worden gestart. HTTP ${res.status}`));
+        setIsRunningKassaRegression(false);
         return;
       }
-      setKassaRegressionReport(data);
-      const summary = data?.summary || {};
-      if (data?.status === "passed") {
-        setMessage(`Kassa inleesregressie geslaagd: ${summary.passed_count || 0}/${summary.required_receipt_count || 14} bonnen akkoord.`);
-      } else if (data?.status === "blocked") {
-        setMessage(summarizeKassaError(data, "Kassa inleesregressie geblokkeerd: vaste 14-bonnen testset ontbreekt of is onvolledig."));
-      } else {
-        setMessage(`Kassa inleesregressie gefaald: ${summary.failed_count || 0} bon(nen) gefaald.`);
-      }
+      setKassaRegressionJob(data);
+      if (data?.report) setKassaRegressionReport(data.report);
+      setIsRunningKassaRegression(data?.status === "running");
+      setMessage(data?.status === "running" ? "Kassa inleesregressie gestart." : "Kassa inleesregressie bijgewerkt.");
     } catch (error) {
-      setMessage(`Kassa inleesregressie kon niet worden uitgevoerd: ${error?.message || "onbekende frontend/netwerkfout"}`);
-    } finally {
       setIsRunningKassaRegression(false);
+      setMessage(`Kassa inleesregressie kon niet worden gestart: ${error?.message || "onbekende frontend/netwerkfout"}`);
     }
   }
 
@@ -222,6 +247,10 @@ export default function AdminPage() {
     setInventorySublocationId("");
   }
 
+  const progressCurrent = Number(kassaRegressionJob?.progress_current || 0);
+  const progressTotal = Number(kassaRegressionJob?.progress_total || 14);
+  const progressPercent = progressTotal > 0 ? Math.round((progressCurrent / progressTotal) * 100) : 0;
+
   return (
     <AppShell title="Admin / Testdata" showExit={false}>
       <div data-testid="admin-page">
@@ -262,6 +291,19 @@ export default function AdminPage() {
                   {isRunningKassaRegression ? "Kassa inleesregressie draait…" : "Kassa inleesregressie uitvoeren"}
                 </Button>
               </div>
+              {kassaRegressionJob ? (
+                <div className="rz-admin-report" data-testid="kassa-regression-progress">
+                  <h4 className="rz-admin-status-title">Voortgang kassa inleesregressie</h4>
+                  <div className="rz-admin-report-meta">
+                    <div>Status: {reportStatusLabel(kassaRegressionJob.status)}</div>
+                    <div>Voortgang: bon {progressCurrent} van {progressTotal}</div>
+                    <div>Percentage: {progressPercent}%</div>
+                    <div>Huidige bon: {kassaRegressionJob.current_case_id || "-"}</div>
+                    <div>Bestand: {kassaRegressionJob.current_filename || "-"}</div>
+                    <div>Melding: {kassaRegressionJob.message || "-"}</div>
+                  </div>
+                </div>
+              ) : null}
               {kassaRegressionReport ? (
                 <div className="rz-admin-report" data-testid="kassa-regression-report">
                   <h4 className="rz-admin-status-title">Laatste kassa inleesregressie</h4>
