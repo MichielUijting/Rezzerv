@@ -11,6 +11,13 @@ function getAuthHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function chainStatusLabel(status) {
+  if (status === "passed") return "Geslaagd";
+  if (status === "missing") return "Ontbreekt";
+  if (status === "failed") return "Gefaald";
+  return status || "Onbekend";
+}
+
 export default function AdminPage() {
   const navigate = useNavigate();
 
@@ -18,6 +25,8 @@ export default function AdminPage() {
   const [message, setMessage] = useState("");
   const [householdId, setHouseholdId] = useState("demo-household");
   const [isPurgingArchivedReceipts, setIsPurgingArchivedReceipts] = useState(false);
+  const [isRunningKassaRegression, setIsRunningKassaRegression] = useState(false);
+  const [kassaRegressionReport, setKassaRegressionReport] = useState(null);
 
   const [spaceName, setSpaceName] = useState("");
   const [spaceId, setSpaceId] = useState("");
@@ -110,6 +119,35 @@ export default function AdminPage() {
     }
   }
 
+  async function handleRunKassaRegression() {
+    setMessage("");
+    setKassaRegressionReport(null);
+    setIsRunningKassaRegression(true);
+    try {
+      const res = await fetch("/api/admin/kassa-regression/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        body: "{}",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage(data.detail || "Kassa inleesregressie kon niet worden uitgevoerd");
+        return;
+      }
+      setKassaRegressionReport(data);
+      const summary = data.summary || {};
+      setMessage(
+        data.status === "passed"
+          ? `Kassa inleesregressie geslaagd: ${summary.passed_chain_count || 0} ketens akkoord.`
+          : `Kassa inleesregressie afgerond met aandachtspunten: ${summary.failed_chain_count || 0} gefaald, ${summary.missing_chain_count || 0} ontbrekend.`
+      );
+    } catch {
+      setMessage("Kassa inleesregressie kon niet worden uitgevoerd");
+    } finally {
+      setIsRunningKassaRegression(false);
+    }
+  }
+
   async function handleGenerateArticleTestdata() {
     await fetch("/api/dev/generate-article-testdata", { method: "POST", headers: getAuthHeaders() });
     navigate("/voorraad", { replace: false });
@@ -181,6 +219,44 @@ export default function AdminPage() {
                 <div>Sublocaties: {status.sublocations}</div>
                 <div>Voorraadregels: {status.inventory}</div>
               </div>
+            </div>
+
+            <div className="rz-admin-panel" data-testid="kassa-regression-panel">
+              <h3>Kassa inleesregressie</h3>
+              <p className="rz-admin-muted">
+                Controleert het inleesproces voor AH, Aldi, Jumbo, Plus en Lidl op winkelherkenning, datum/tijd, totaalbedrag, artikelregels en kortingen.
+              </p>
+              <div className="rz-admin-actions">
+                <Button variant="secondary" onClick={handleRunKassaRegression} disabled={isRunningKassaRegression} data-testid="run-kassa-regression-button">
+                  {isRunningKassaRegression ? "Kassa inleesregressie draait…" : "Kassa inleesregressie uitvoeren"}
+                </Button>
+              </div>
+              {kassaRegressionReport ? (
+                <div className="rz-admin-report" data-testid="kassa-regression-report">
+                  <h4 className="rz-admin-status-title">Laatste kassa inleesregressie</h4>
+                  <div className="rz-admin-report-meta">
+                    <div>Status: {kassaRegressionReport.status === "passed" ? "Geslaagd" : "Aandacht nodig"}</div>
+                    <div>Uitgevoerd: {kassaRegressionReport.ran_at || "Onbekend"}</div>
+                    <div>Geslaagd: {kassaRegressionReport.summary?.passed_chain_count || 0}</div>
+                    <div>Gefaald: {kassaRegressionReport.summary?.failed_chain_count || 0}</div>
+                    <div>Ontbrekend: {kassaRegressionReport.summary?.missing_chain_count || 0}</div>
+                  </div>
+                  <div className="rz-admin-report-list">
+                    {(kassaRegressionReport.chains || []).map((item) => (
+                      <div key={item.chain} className={`rz-admin-report-row rz-admin-report-row--${item.status === "passed" ? "passed" : "failed"}`}>
+                        <div className="rz-admin-report-main">
+                          <span>{item.chain}</span>
+                          <span>{chainStatusLabel(item.status)}</span>
+                        </div>
+                        <div className="rz-admin-report-meta-line">Bonnen: {item.receipt_count} · geslaagd {item.passed_count} · gefaald {item.failed_count}</div>
+                        {(item.failures || []).slice(0, 3).map((failure) => (
+                          <div key={failure.receipt_id} className="rz-admin-report-meta-line">{failure.receipt_id}: {failure.error || "onbekende fout"}</div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             <div className="rz-admin-panel">
