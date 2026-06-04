@@ -13,7 +13,7 @@ def repo_root() -> Path:
 
 def main() -> int:
     if len(sys.argv) != 2:
-        print("Gebruik: python tools/install_kassa_regression_fixtures.py <pad-naar-supermarkten.zip>")
+        print("Gebruik: python tools/install_kassa_regression_fixtures.py <pad-naar-supermarkten_incl_picnic.zip>")
         return 2
 
     zip_path = Path(sys.argv[1]).expanduser().resolve()
@@ -28,9 +28,15 @@ def main() -> int:
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     cases = manifest.get("cases") or []
-    if len(cases) != int(manifest.get("required_receipt_count") or 14):
-        print(f"Manifest bevat {len(cases)} cases; verwacht {manifest.get('required_receipt_count') or 14}.")
+    expected_count = int(manifest.get("required_receipt_count") or 18)
+    if len(cases) != expected_count:
+        print(f"Manifest bevat {len(cases)} cases; verwacht {expected_count}.")
         return 1
+
+    expected_targets = {str(case.get("filename") or "").strip() for case in cases if case.get("filename")}
+    for existing in raw_dir.iterdir():
+        if existing.is_file() and existing.name not in expected_targets:
+            existing.unlink()
 
     with zipfile.ZipFile(zip_path) as zf:
         names = {info.filename: info for info in zf.infolist() if not info.is_dir()}
@@ -56,7 +62,7 @@ def main() -> int:
             print(f"- {item}")
         return 1
 
-    print(f"Kassa-regressiefixtures geïnstalleerd: {len(copied)} bestand(en)")
+    print(f"Kassa baseline V8 fixtures geïnstalleerd: {len(copied)} bestand(en)")
     for item in copied:
         print(f"- backend/app/testing/kassa_regression/raw/{item}")
     return 0
