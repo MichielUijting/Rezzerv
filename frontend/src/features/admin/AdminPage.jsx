@@ -15,7 +15,15 @@ function chainStatusLabel(status) {
   if (status === "passed") return "Geslaagd";
   if (status === "missing") return "Ontbreekt";
   if (status === "failed") return "Gefaald";
+  if (status === "blocked") return "Geblokkeerd";
   return status || "Onbekend";
+}
+
+function reportStatusLabel(status) {
+  if (status === "passed") return "Geslaagd";
+  if (status === "blocked") return "Geblokkeerd";
+  if (status === "failed") return "Gefaald";
+  return "Aandacht nodig";
 }
 
 export default function AdminPage() {
@@ -136,11 +144,13 @@ export default function AdminPage() {
       }
       setKassaRegressionReport(data);
       const summary = data.summary || {};
-      setMessage(
-        data.status === "passed"
-          ? `Kassa inleesregressie geslaagd: ${summary.passed_chain_count || 0} ketens akkoord.`
-          : `Kassa inleesregressie afgerond met aandachtspunten: ${summary.failed_chain_count || 0} gefaald, ${summary.missing_chain_count || 0} ontbrekend.`
-      );
+      if (data.status === "passed") {
+        setMessage(`Kassa inleesregressie geslaagd: ${summary.passed_count || 0}/${summary.required_receipt_count || 14} bonnen akkoord.`);
+      } else if (data.status === "blocked") {
+        setMessage(`Kassa inleesregressie geblokkeerd: vaste 14-bonnen testset ontbreekt of is onvolledig.`);
+      } else {
+        setMessage(`Kassa inleesregressie gefaald: ${summary.failed_count || 0} bon(nen) gefaald.`);
+      }
     } catch {
       setMessage("Kassa inleesregressie kon niet worden uitgevoerd");
     } finally {
@@ -224,7 +234,7 @@ export default function AdminPage() {
             <div className="rz-admin-panel" data-testid="kassa-regression-panel">
               <h3>Kassa inleesregressie</h3>
               <p className="rz-admin-muted">
-                Controleert het inleesproces voor AH, Aldi, Jumbo, Plus en Lidl op winkelherkenning, datum/tijd, totaalbedrag, artikelregels en kortingen.
+                Voert de vaste 14 testkassabonnen opnieuw door het parser/inleesproces en schrijft het resultaat naar een tijdelijke aparte testdatabase. De gewone applicatiedatabase wordt niet als acceptatiebron gebruikt.
               </p>
               <div className="rz-admin-actions">
                 <Button variant="secondary" onClick={handleRunKassaRegression} disabled={isRunningKassaRegression} data-testid="run-kassa-regression-button">
@@ -235,12 +245,24 @@ export default function AdminPage() {
                 <div className="rz-admin-report" data-testid="kassa-regression-report">
                   <h4 className="rz-admin-status-title">Laatste kassa inleesregressie</h4>
                   <div className="rz-admin-report-meta">
-                    <div>Status: {kassaRegressionReport.status === "passed" ? "Geslaagd" : "Aandacht nodig"}</div>
+                    <div>Status: {reportStatusLabel(kassaRegressionReport.status)}</div>
                     <div>Uitgevoerd: {kassaRegressionReport.ran_at || "Onbekend"}</div>
-                    <div>Geslaagd: {kassaRegressionReport.summary?.passed_chain_count || 0}</div>
-                    <div>Gefaald: {kassaRegressionReport.summary?.failed_chain_count || 0}</div>
-                    <div>Ontbrekend: {kassaRegressionReport.summary?.missing_chain_count || 0}</div>
+                    <div>Testbron: {kassaRegressionReport.acceptance_basis || "Onbekend"}</div>
+                    <div>Vereist: {kassaRegressionReport.summary?.required_receipt_count || 14}</div>
+                    <div>Getest: {kassaRegressionReport.summary?.tested_receipt_count || 0}</div>
+                    <div>Geslaagd: {kassaRegressionReport.summary?.passed_count || 0}</div>
+                    <div>Gefaald: {kassaRegressionReport.summary?.failed_count || 0}</div>
+                    <div>Geblokkeerd: {kassaRegressionReport.summary?.blocked_count || 0}</div>
                   </div>
+                  {(kassaRegressionReport.blocking_issues || []).length ? (
+                    <div className="rz-admin-report-list">
+                      {(kassaRegressionReport.blocking_issues || []).map((issue) => (
+                        <div key={issue} className="rz-admin-report-row rz-admin-report-row--failed">
+                          <div className="rz-admin-report-main"><span>{issue}</span><span>Geblokkeerd</span></div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="rz-admin-report-list">
                     {(kassaRegressionReport.chains || []).map((item) => (
                       <div key={item.chain} className={`rz-admin-report-row rz-admin-report-row--${item.status === "passed" ? "passed" : "failed"}`}>
@@ -250,7 +272,7 @@ export default function AdminPage() {
                         </div>
                         <div className="rz-admin-report-meta-line">Bonnen: {item.receipt_count} · geslaagd {item.passed_count} · gefaald {item.failed_count}</div>
                         {(item.failures || []).slice(0, 3).map((failure) => (
-                          <div key={failure.receipt_id} className="rz-admin-report-meta-line">{failure.receipt_id}: {failure.error || "onbekende fout"}</div>
+                          <div key={failure.case_id || failure.receipt_id || failure.filename} className="rz-admin-report-meta-line">{failure.case_id || failure.receipt_id || failure.filename}: {failure.error || "onbekende fout"}</div>
                         ))}
                       </div>
                     ))}
