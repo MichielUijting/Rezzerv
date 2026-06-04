@@ -7,6 +7,8 @@ import Input from "../../ui/Input";
 import useDismissOnComponentClick from "../../lib/useDismissOnComponentClick.js";
 import KassaSmokePanel from "./components/KassaSmokePanel.jsx";
 
+const KASSA_REGRESSION_COUNT = 18;
+
 function getAuthHeaders() {
   const token = localStorage.getItem("rezzerv_token") || "";
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -90,9 +92,7 @@ export default function AdminPage() {
       return null;
     }
     setKassaRegressionJob(data);
-    if (data?.report) {
-      setKassaRegressionReport(data.report);
-    }
+    if (data?.report) setKassaRegressionReport(data.report);
     setIsRunningKassaRegression(data?.status === "running");
     return data;
   }
@@ -145,14 +145,6 @@ export default function AdminPage() {
     navigate("/voorraad", { replace: false });
   }
 
-  async function handleGenerateDemo() {
-    await postJson("/api/dev/generate-demo-data", {}, "Demo data gegenereerd");
-  }
-
-  async function handleReset() {
-    await postJson("/api/dev/reset-data", {}, "Demo data verwijderd");
-  }
-
   async function handlePurgeArchivedReceipts() {
     setMessage("");
     const confirmed = window.confirm("Gearchiveerde kassabonnen definitief verwijderen? Actieve bonnen blijven behouden.");
@@ -198,48 +190,28 @@ export default function AdminPage() {
       setKassaRegressionJob(data);
       if (data?.report) setKassaRegressionReport(data.report);
       setIsRunningKassaRegression(data?.status === "running");
-      setMessage(data?.status === "running" ? "Kassa inleesregressie gestart." : "Kassa inleesregressie bijgewerkt.");
+      setMessage(data?.status === "running" ? "Kassa inleesregressie baseline V8 gestart." : "Kassa inleesregressie bijgewerkt.");
     } catch (error) {
       setIsRunningKassaRegression(false);
       setMessage(`Kassa inleesregressie kon niet worden gestart: ${error?.message || "onbekende frontend/netwerkfout"}`);
     }
   }
 
-  async function handleGenerateArticleTestdata() {
-    await fetch("/api/dev/generate-article-testdata", { method: "POST", headers: getAuthHeaders() });
-    navigate("/voorraad", { replace: false });
-  }
-
   async function handleCreateSpace() {
-    const data = await postJson(
-      "/api/dev/spaces",
-      { naam: spaceName, household_id: householdId },
-      "Ruimte toegevoegd"
-    );
-    if (data?.id) {
-      setSpaceId(data.id);
-    }
+    const data = await postJson("/api/dev/spaces", { naam: spaceName, household_id: householdId }, "Ruimte toegevoegd");
+    if (data?.id) setSpaceId(data.id);
     setSpaceName("");
   }
 
   async function handleCreateSublocation() {
-    await postJson(
-      "/api/dev/sublocations",
-      { naam: sublocationName, space_id: spaceId },
-      "Sublocatie toegevoegd"
-    );
+    await postJson("/api/dev/sublocations", { naam: sublocationName, space_id: spaceId }, "Sublocatie toegevoegd");
     setSublocationName("");
   }
 
   async function handleCreateInventory() {
     await postJson(
       "/api/dev/inventory",
-      {
-        naam: artikel,
-        aantal: Number(aantal),
-        space_id: inventorySpaceId,
-        sublocation_id: inventorySublocationId || null,
-      },
+      { naam: artikel, aantal: Number(aantal), space_id: inventorySpaceId, sublocation_id: inventorySublocationId || null },
       "Voorraadregel toegevoegd"
     );
     setArtikel("");
@@ -249,7 +221,7 @@ export default function AdminPage() {
   }
 
   const progressCurrent = Number(kassaRegressionJob?.progress_current || 0);
-  const progressTotal = Number(kassaRegressionJob?.progress_total || 14);
+  const progressTotal = Number(kassaRegressionJob?.progress_total || KASSA_REGRESSION_COUNT);
   const progressPercent = progressTotal > 0 ? Math.round((progressCurrent / progressTotal) * 100) : 0;
 
   return (
@@ -259,17 +231,13 @@ export default function AdminPage() {
           <div className="rz-admin-grid">
             <div className="rz-admin-panel">
               <h3>Automatische demo data</h3>
-              <p className="rz-admin-muted">
-                Genereert ruimtes, sublocaties en voorraadregels voor snelle tests.
-              </p>
+              <p className="rz-admin-muted">Genereert ruimtes, sublocaties en voorraadregels voor snelle tests.</p>
               <div className="rz-admin-actions">
-                <Button variant="primary" onClick={handleGenerateDemo}>Genereer demo data</Button>
+                <Button variant="primary" onClick={() => postJson("/api/dev/generate-demo-data", {}, "Demo data gegenereerd")}>Genereer demo data</Button>
                 <Button variant="secondary" onClick={handleResetGenerate}>Reset + Demo data</Button>
-                <Button variant="secondary" onClick={handleReset}>Reset demo data</Button>
-                <Button variant="secondary" onClick={handlePurgeArchivedReceipts} disabled={isPurgingArchivedReceipts}>
-                  {isPurgingArchivedReceipts ? "Verwijderen…" : "Gearchiveerde bonnen definitief verwijderen"}
-                </Button>
-                <Button variant="secondary" onClick={handleGenerateArticleTestdata}>Artikel testdata</Button>
+                <Button variant="secondary" onClick={() => postJson("/api/dev/reset-data", {}, "Demo data verwijderd")}>Reset demo data</Button>
+                <Button variant="secondary" onClick={handlePurgeArchivedReceipts} disabled={isPurgingArchivedReceipts}>{isPurgingArchivedReceipts ? "Verwijderen…" : "Gearchiveerde bonnen definitief verwijderen"}</Button>
+                <Button variant="secondary" onClick={() => fetch("/api/dev/generate-article-testdata", { method: "POST", headers: getAuthHeaders() }).then(() => navigate("/voorraad", { replace: false }))}>Artikel testdata</Button>
               </div>
             </div>
 
@@ -284,13 +252,9 @@ export default function AdminPage() {
 
             <div className="rz-admin-panel" data-testid="kassa-regression-panel">
               <h3>Kassa inleesregressie</h3>
-              <p className="rz-admin-muted">
-                Voert de vaste 14 testkassabonnen opnieuw door het parser/inleesproces en schrijft het resultaat naar een tijdelijke aparte testdatabase. De gewone applicatiedatabase wordt niet als acceptatiebron gebruikt.
-              </p>
+              <p className="rz-admin-muted">Voert baseline V8 uit: 18 vaste testkassabonnen inclusief Picnic. De bonnen worden opnieuw door het parser/inleesproces gehaald en in een tijdelijke aparte testdatabase geschreven. Datum/tijd wordt nooit gevalideerd.</p>
               <div className="rz-admin-actions">
-                <Button variant="secondary" onClick={handleRunKassaRegression} disabled={isRunningKassaRegression} data-testid="run-kassa-regression-button">
-                  {isRunningKassaRegression ? "Kassa inleesregressie draait…" : "Kassa inleesregressie uitvoeren"}
-                </Button>
+                <Button variant="secondary" onClick={handleRunKassaRegression} disabled={isRunningKassaRegression} data-testid="run-kassa-regression-button">{isRunningKassaRegression ? "Kassa inleesregressie draait…" : "Kassa inleesregressie uitvoeren"}</Button>
               </div>
               {kassaRegressionJob ? (
                 <div className="rz-admin-report" data-testid="kassa-regression-progress">
@@ -312,32 +276,19 @@ export default function AdminPage() {
                     <div>Status: {reportStatusLabel(kassaRegressionReport.status)}</div>
                     <div>Uitgevoerd: {kassaRegressionReport.ran_at || "Onbekend"}</div>
                     <div>Testbron: {kassaRegressionReport.acceptance_basis || "Onbekend"}</div>
-                    <div>Vereist: {kassaRegressionReport.summary?.required_receipt_count || 14}</div>
+                    <div>Vereist: {kassaRegressionReport.summary?.required_receipt_count || KASSA_REGRESSION_COUNT}</div>
                     <div>Getest: {kassaRegressionReport.summary?.tested_receipt_count || 0}</div>
                     <div>Geslaagd: {kassaRegressionReport.summary?.passed_count || 0}</div>
                     <div>Gefaald: {kassaRegressionReport.summary?.failed_count || 0}</div>
                     <div>Geblokkeerd: {kassaRegressionReport.summary?.blocked_count || 0}</div>
                   </div>
-                  {(kassaRegressionReport.blocking_issues || []).length ? (
-                    <div className="rz-admin-report-list">
-                      {(kassaRegressionReport.blocking_issues || []).map((issue) => (
-                        <div key={issue} className="rz-admin-report-row rz-admin-report-row--failed">
-                          <div className="rz-admin-report-main"><span>{issue}</span><span>Geblokkeerd</span></div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
+                  {(kassaRegressionReport.blocking_issues || []).length ? <div className="rz-admin-report-list">{(kassaRegressionReport.blocking_issues || []).map((issue) => <div key={issue} className="rz-admin-report-row rz-admin-report-row--failed"><div className="rz-admin-report-main"><span>{issue}</span><span>Geblokkeerd</span></div></div>)}</div> : null}
                   <div className="rz-admin-report-list">
                     {(kassaRegressionReport.chains || []).map((item) => (
                       <div key={item.chain} className={`rz-admin-report-row rz-admin-report-row--${item.status === "passed" ? "passed" : "failed"}`}>
-                        <div className="rz-admin-report-main">
-                          <span>{item.chain}</span>
-                          <span>{chainStatusLabel(item.status)}</span>
-                        </div>
+                        <div className="rz-admin-report-main"><span>{item.chain}</span><span>{chainStatusLabel(item.status)}</span></div>
                         <div className="rz-admin-report-meta-line">Bonnen: {item.receipt_count} · geslaagd {item.passed_count} · gefaald {item.failed_count}</div>
-                        {(item.failures || []).slice(0, 3).map((failure) => (
-                          <div key={failure.case_id || failure.receipt_id || failure.filename} className="rz-admin-report-meta-line">{failure.case_id || failure.receipt_id || failure.filename}: {failure.error || "onbekende fout"}</div>
-                        ))}
+                        {(item.failures || []).slice(0, 3).map((failure) => <div key={failure.case_id || failure.receipt_id || failure.filename} className="rz-admin-report-meta-line">{failure.case_id || failure.receipt_id || failure.filename}: {failure.error || "onbekende fout"}</div>)}
                       </div>
                     ))}
                   </div>
@@ -349,26 +300,9 @@ export default function AdminPage() {
 
             <div className="rz-admin-panel">
               <h3>Handmatig testdata invoeren</h3>
-
-              <div className="rz-admin-form">
-                <Input placeholder="Naam ruimte" value={spaceName} onChange={(e) => setSpaceName(e.target.value)} />
-                <Button variant="secondary" onClick={handleCreateSpace}>Ruimte toevoegen</Button>
-              </div>
-
-              <div className="rz-admin-form">
-                <Input placeholder="Space ID voor sublocatie" value={spaceId} onChange={(e) => setSpaceId(e.target.value)} />
-                <Input placeholder="Naam sublocatie" value={sublocationName} onChange={(e) => setSublocationName(e.target.value)} />
-                <Button variant="secondary" onClick={handleCreateSublocation}>Sublocatie toevoegen</Button>
-              </div>
-
-              <div className="rz-admin-form">
-                <Input placeholder="Artikelnaam" value={artikel} onChange={(e) => setArtikel(e.target.value)} />
-                <Input placeholder="Aantal" value={aantal} onChange={(e) => setAantal(e.target.value)} />
-                <Input placeholder="Space ID" value={inventorySpaceId} onChange={(e) => setInventorySpaceId(e.target.value)} />
-                <Input placeholder="Sublocation ID (optioneel)" value={inventorySublocationId} onChange={(e) => setInventorySublocationId(e.target.value)} />
-                <Button variant="secondary" onClick={handleCreateInventory}>Voorraadregel toevoegen</Button>
-              </div>
-
+              <div className="rz-admin-form"><Input placeholder="Naam ruimte" value={spaceName} onChange={(e) => setSpaceName(e.target.value)} /><Button variant="secondary" onClick={handleCreateSpace}>Ruimte toevoegen</Button></div>
+              <div className="rz-admin-form"><Input placeholder="Space ID voor sublocatie" value={spaceId} onChange={(e) => setSpaceId(e.target.value)} /><Input placeholder="Naam sublocatie" value={sublocationName} onChange={(e) => setSublocationName(e.target.value)} /><Button variant="secondary" onClick={handleCreateSublocation}>Sublocatie toevoegen</Button></div>
+              <div className="rz-admin-form"><Input placeholder="Artikelnaam" value={artikel} onChange={(e) => setArtikel(e.target.value)} /><Input placeholder="Aantal" value={aantal} onChange={(e) => setAantal(e.target.value)} /><Input placeholder="Space ID" value={inventorySpaceId} onChange={(e) => setInventorySpaceId(e.target.value)} /><Input placeholder="Sublocation ID (optioneel)" value={inventorySublocationId} onChange={(e) => setInventorySublocationId(e.target.value)} /><Button variant="secondary" onClick={handleCreateInventory}>Voorraadregel toevoegen</Button></div>
               {message && <div className="rz-admin-message">{message}</div>}
             </div>
           </div>
