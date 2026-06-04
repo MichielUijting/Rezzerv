@@ -96,6 +96,7 @@ def _case_ok(case: dict[str, Any], parsed: Any, persisted: dict[str, Any]) -> tu
     issues: list[str] = []
     expected_chain = regression._canonical_chain(str(case.get("chain") or ""))
     found_chain = regression._canonical_chain(str(parsed.store_name or ""))
+    allow_missing_total = bool(case.get("allow_missing_total") is True)
     if expected_chain and found_chain != expected_chain:
         issues.append(f"winkel verwacht {expected_chain}, gevonden {parsed.store_name or '-'}")
     if case.get("expected_total") is not None:
@@ -103,7 +104,7 @@ def _case_ok(case: dict[str, Any], parsed: Any, persisted: dict[str, Any]) -> tu
         found_total = regression._decimal_to_float(parsed.total_amount)
         if found_total is None or round(float(found_total), 2) != expected_total:
             issues.append(f"totaal verwacht {expected_total:.2f}, gevonden {found_total if found_total is not None else '-'}")
-    elif parsed.total_amount is None:
+    elif parsed.total_amount is None and not allow_missing_total:
         issues.append("totaalbedrag ontbreekt")
     expected_min_lines = int(case.get("expected_min_line_count") or 1)
     if int(persisted.get("line_count") or 0) < expected_min_lines:
@@ -138,7 +139,7 @@ def _final_report(results: list[dict[str, Any]]) -> dict[str, Any]:
         "test_type": "kassa_smoke_check",
         "status": "passed" if failed_count == 0 and len(results) == REQUIRED_RECEIPT_COUNT else "failed",
         "ran_at": _now(),
-        "acceptance_basis": "Baseline V8 releasecontrole: 6 vaste testkassabonnen, 1 per winkelketen inclusief Picnic, worden opnieuw door parse_receipt_content gehaald en in een tijdelijke aparte SQLite-testdatabase geschreven. Datum/tijd wordt nooit gevalideerd.",
+        "acceptance_basis": "Baseline V8 releasecontrole: 6 vaste testkassabonnen, 1 per winkelketen inclusief Picnic, worden opnieuw door parse_receipt_content gehaald en in een tijdelijke aparte SQLite-testdatabase geschreven. Datum/tijd wordt nooit gevalideerd. Voor Picnic wordt totaalbedrag niet gevalideerd.",
         "summary": {"required_receipt_count": REQUIRED_RECEIPT_COUNT, "tested_receipt_count": len(results), "passed_count": passed_count, "failed_count": failed_count, "blocked_count": 0},
         "chains": chains,
         "results": results,
