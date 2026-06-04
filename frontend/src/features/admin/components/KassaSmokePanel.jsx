@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import Button from '../../../ui/Button'
 
+const KASSA_SMOKE_COUNT = 6
+
 function getAuthHeaders() {
   const token = localStorage.getItem('rezzerv_token') || ''
   return token ? { Authorization: `Bearer ${token}` } : {}
@@ -89,7 +91,7 @@ export default function KassaSmokePanel({ onMessage }) {
       setJob(data)
       if (data?.report) setReport(data.report)
       setIsRunning(data?.status === 'running')
-      onMessage?.(data?.status === 'running' ? 'Kassa releasecontrole gestart.' : 'Kassa releasecontrole bijgewerkt.')
+      onMessage?.(data?.status === 'running' ? 'Kassa releasecontrole baseline V8 gestart.' : 'Kassa releasecontrole bijgewerkt.')
     } catch (error) {
       setIsRunning(false)
       onMessage?.(`Kassa releasecontrole kon niet worden gestart: ${error?.message || 'onbekende frontend/netwerkfout'}`)
@@ -97,14 +99,14 @@ export default function KassaSmokePanel({ onMessage }) {
   }
 
   const progressCurrent = Number(job?.progress_current || 0)
-  const progressTotal = Number(job?.progress_total || 5)
+  const progressTotal = Number(job?.progress_total || KASSA_SMOKE_COUNT)
   const progressPercent = progressTotal > 0 ? Math.round((progressCurrent / progressTotal) * 100) : 0
 
   return (
     <div className="rz-admin-panel" data-testid="kassa-smoke-panel">
       <h3>Kassa releasecontrole</h3>
       <p className="rz-admin-muted">
-        Voert 1 vaste testkassabon per winkelketen opnieuw door het inleesproces. Release-gate: 5 getest, 5 geslaagd, 0 gefaald, 0 geblokkeerd. Datum/tijd wordt nooit gevalideerd.
+        Voert baseline V8 uit met 1 vaste testkassabon per winkelketen, inclusief Picnic. Release-gate: 6 getest, 6 geslaagd, 0 gefaald, 0 geblokkeerd. Datum/tijd wordt nooit gevalideerd.
       </p>
       <div className="rz-admin-actions">
         <Button variant="secondary" onClick={handleRunSmoke} disabled={isRunning} data-testid="run-kassa-smoke-button">
@@ -133,7 +135,7 @@ export default function KassaSmokePanel({ onMessage }) {
             <div>Status: {statusLabel(report.status)}</div>
             <div>Uitgevoerd: {report.ran_at || 'Onbekend'}</div>
             <div>Testbron: {report.acceptance_basis || 'Onbekend'}</div>
-            <div>Vereist: {report.summary?.required_receipt_count || 5}</div>
+            <div>Vereist: {report.summary?.required_receipt_count || KASSA_SMOKE_COUNT}</div>
             <div>Getest: {report.summary?.tested_receipt_count || 0}</div>
             <div>Geslaagd: {report.summary?.passed_count || 0}</div>
             <div>Gefaald: {report.summary?.failed_count || 0}</div>
