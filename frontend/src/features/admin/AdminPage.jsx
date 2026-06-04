@@ -5,6 +5,7 @@ import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import useDismissOnComponentClick from "../../lib/useDismissOnComponentClick.js";
+import KassaSmokePanel from "./components/KassaSmokePanel.jsx";
 
 function getAuthHeaders() {
   const token = localStorage.getItem("rezzerv_token") || "";
@@ -343,6 +344,8 @@ export default function AdminPage() {
                 </div>
               ) : null}
             </div>
+
+            <KassaSmokePanel onMessage={setMessage} />
 
             <div className="rz-admin-panel">
               <h3>Handmatig testdata invoeren</h3>
