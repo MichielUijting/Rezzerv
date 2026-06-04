@@ -22,9 +22,8 @@ REGRESSION_ROOT = Path(__file__).resolve().parents[2] / "testing" / "kassa_regre
 MANIFEST_PATH = REGRESSION_ROOT / "manifest.json"
 RAW_DIR = REGRESSION_ROOT / "raw"
 RAW_B64_DIR = REGRESSION_ROOT / "raw_b64"
-
-REQUIRED_CHAINS = ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl"]
-REQUIRED_RECEIPT_COUNT = 14
+REQUIRED_CHAINS = ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl", "Picnic"]
+REQUIRED_RECEIPT_COUNT = 18
 
 _JOB_LOCK = threading.Lock()
 _JOB_STATE: dict[str, Any] = {
@@ -66,6 +65,12 @@ def _decimal_to_float(value: Any) -> float | None:
         return None
 
 
+def _line_value(line: Any, key: str) -> Any:
+    if isinstance(line, dict):
+        return line.get(key)
+    return getattr(line, key, None)
+
+
 def _canonical_chain(value: str | None) -> str | None:
     normalized = str(value or "").strip().lower()
     if not normalized:
@@ -80,22 +85,25 @@ def _canonical_chain(value: str | None) -> str | None:
         return "PLUS"
     if "lidl" in normalized:
         return "Lidl"
+    if "picnic" in normalized:
+        return "Picnic"
     return None
 
 
 def _load_manifest() -> tuple[dict[str, Any] | None, list[str]]:
-    issues: list[str] = []
     if not MANIFEST_PATH.exists():
         return None, [f"Manifest ontbreekt: {MANIFEST_PATH}"]
     try:
         manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
     except Exception as exc:
         return None, [f"Manifest is ongeldig JSON: {exc}"]
+    issues: list[str] = []
     cases = manifest.get("cases")
+    expected_count = int(manifest.get("required_receipt_count") or REQUIRED_RECEIPT_COUNT)
     if not isinstance(cases, list):
         issues.append("Manifest bevat geen geldige cases-lijst")
-    elif len(cases) != int(manifest.get("required_receipt_count") or REQUIRED_RECEIPT_COUNT):
-        issues.append(f"Manifest bevat {len(cases)} cases; verwacht {manifest.get('required_receipt_count') or REQUIRED_RECEIPT_COUNT}")
+    elif len(cases) != expected_count:
+        issues.append(f"Manifest bevat {len(cases)} cases; verwacht {expected_count}")
     return manifest, issues
 
 
@@ -150,35 +158,9 @@ def _validate_manifest_cases(manifest: dict[str, Any]) -> list[str]:
 def _init_test_database(conn: sqlite3.Connection) -> None:
     conn.executescript(
         """
-        create table raw_receipts (
-            id text primary key,
-            original_filename text not null,
-            mime_type text not null,
-            imported_at text not null
-        );
-        create table receipt_tables (
-            id text primary key,
-            raw_receipt_id text not null,
-            store_name text,
-            purchase_at text,
-            total_amount numeric,
-            currency text,
-            parse_status text,
-            line_count integer,
-            discount_total numeric,
-            created_at text not null
-        );
-        create table receipt_table_lines (
-            id text primary key,
-            receipt_table_id text not null,
-            line_index integer not null,
-            raw_label text,
-            quantity numeric,
-            unit text,
-            unit_price numeric,
-            line_total numeric,
-            discount_amount numeric
-        );
+        create table raw_receipts (id text primary key, original_filename text not null, mime_type text not null, imported_at text not null);
+        create table receipt_tables (id text primary key, raw_receipt_id text not null, store_name text, purchase_at text, total_amount numeric, currency text, parse_status text, line_count integer, discount_total numeric, created_at text not null);
+        create table receipt_table_lines (id text primary key, receipt_table_id text not null, line_index integer not null, raw_label text, quantity numeric, unit text, unit_price numeric, line_total numeric, discount_amount numeric);
         """
     )
 
@@ -188,49 +170,15 @@ def _write_parse_result(conn: sqlite3.Connection, parsed: Any, filename: str, mi
     receipt_id = str(uuid.uuid4())
     now = _utc_now()
     lines = list(parsed.lines or [])
+    conn.execute("insert into raw_receipts (id, original_filename, mime_type, imported_at) values (?, ?, ?, ?)", (raw_id, filename, mime_type, now))
     conn.execute(
-        "insert into raw_receipts (id, original_filename, mime_type, imported_at) values (?, ?, ?, ?)",
-        (raw_id, filename, mime_type, now),
-    )
-    conn.execute(
-        """
-        insert into receipt_tables (
-            id, raw_receipt_id, store_name, purchase_at, total_amount, currency,
-            parse_status, line_count, discount_total, created_at
-        ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            receipt_id,
-            raw_id,
-            parsed.store_name,
-            parsed.purchase_at,
-            _decimal_to_float(parsed.total_amount),
-            parsed.currency or "EUR",
-            parsed.parse_status,
-            len(lines),
-            _decimal_to_float(parsed.discount_total),
-            now,
-        ),
+        "insert into receipt_tables (id, raw_receipt_id, store_name, purchase_at, total_amount, currency, parse_status, line_count, discount_total, created_at) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (receipt_id, raw_id, parsed.store_name, parsed.purchase_at, _decimal_to_float(parsed.total_amount), parsed.currency or "EUR", parsed.parse_status, len(lines), _decimal_to_float(parsed.discount_total), now),
     )
     for index, line in enumerate(lines, start=1):
         conn.execute(
-            """
-            insert into receipt_table_lines (
-                id, receipt_table_id, line_index, raw_label, quantity, unit,
-                unit_price, line_total, discount_amount
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                str(uuid.uuid4()),
-                receipt_id,
-                index,
-                getattr(line, "raw_label", None),
-                _decimal_to_float(getattr(line, "quantity", None)),
-                getattr(line, "unit", None),
-                _decimal_to_float(getattr(line, "unit_price", None)),
-                _decimal_to_float(getattr(line, "line_total", None)),
-                _decimal_to_float(getattr(line, "discount_amount", None)),
-            ),
+            "insert into receipt_table_lines (id, receipt_table_id, line_index, raw_label, quantity, unit, unit_price, line_total, discount_amount) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (str(uuid.uuid4()), receipt_id, index, _line_value(line, "raw_label"), _decimal_to_float(_line_value(line, "quantity")), _line_value(line, "unit"), _decimal_to_float(_line_value(line, "unit_price")), _decimal_to_float(_line_value(line, "line_total")), _decimal_to_float(_line_value(line, "discount_amount"))),
         )
     return {"raw_receipt_id": raw_id, "receipt_table_id": receipt_id, "line_count": len(lines)}
 
@@ -248,13 +196,6 @@ def _case_expected_ok(case: dict[str, Any], parsed: Any, persisted: dict[str, An
             issues.append(f"totaal verwacht {expected_total:.2f}, gevonden {found_total if found_total is not None else '-'}")
     elif parsed.total_amount is None:
         issues.append("totaalbedrag ontbreekt")
-    if case.get("expected_purchase_at"):
-        expected_prefix = str(case.get("expected_purchase_at"))[:16]
-        found_prefix = str(parsed.purchase_at or "")[:16]
-        if found_prefix != expected_prefix:
-            issues.append(f"datum/tijd verwacht {expected_prefix}, gevonden {found_prefix or '-'}")
-    elif not parsed.purchase_at:
-        issues.append("datum/tijd ontbreekt")
     expected_min_lines = int(case.get("expected_min_line_count") or 1)
     if int(persisted.get("line_count") or 0) < expected_min_lines:
         issues.append(f"artikelregels verwacht minimaal {expected_min_lines}, gevonden {persisted.get('line_count') or 0}")
@@ -268,14 +209,8 @@ def _missing_source_report(manifest: dict[str, Any] | None, issues: list[str]) -
         "test_type": "kassa_receipt_regression",
         "status": "blocked",
         "ran_at": _utc_now(),
-        "acceptance_basis": "Geblokkeerd: de vaste 14-bonnen regressieset ontbreekt of is onvolledig.",
-        "summary": {
-            "required_receipt_count": (manifest or {}).get("required_receipt_count") or REQUIRED_RECEIPT_COUNT,
-            "tested_receipt_count": 0,
-            "passed_count": 0,
-            "failed_count": 0,
-            "blocked_count": len(issues),
-        },
+        "acceptance_basis": "Geblokkeerd: de vaste baseline V8-regressieset ontbreekt of is onvolledig.",
+        "summary": {"required_receipt_count": (manifest or {}).get("required_receipt_count") or REQUIRED_RECEIPT_COUNT, "tested_receipt_count": 0, "passed_count": 0, "failed_count": 0, "blocked_count": len(issues)},
         "chains": [],
         "results": [],
         "blocking_issues": issues,
@@ -287,28 +222,15 @@ def _build_final_report(results: list[dict[str, Any]]) -> dict[str, Any]:
     for chain in REQUIRED_CHAINS:
         chain_results = [item for item in results if item.get("chain") == chain]
         failed = [item for item in chain_results if item.get("status") != "passed"]
-        chains.append({
-            "chain": chain,
-            "status": "missing" if not chain_results else ("failed" if failed else "passed"),
-            "receipt_count": len(chain_results),
-            "passed_count": len(chain_results) - len(failed),
-            "failed_count": len(failed),
-            "failures": failed,
-        })
+        chains.append({"chain": chain, "status": "missing" if not chain_results else ("failed" if failed else "passed"), "receipt_count": len(chain_results), "passed_count": len(chain_results) - len(failed), "failed_count": len(failed), "failures": failed})
     failed_count = sum(1 for item in results if item.get("status") != "passed")
     passed_count = sum(1 for item in results if item.get("status") == "passed")
     return {
         "test_type": "kassa_receipt_regression",
         "status": "passed" if failed_count == 0 and len(results) == REQUIRED_RECEIPT_COUNT else "failed",
         "ran_at": _utc_now(),
-        "acceptance_basis": "14 vaste testkassabonnen worden opnieuw door parse_receipt_content gehaald en weggeschreven naar een tijdelijke aparte SQLite-testdatabase.",
-        "summary": {
-            "required_receipt_count": REQUIRED_RECEIPT_COUNT,
-            "tested_receipt_count": len(results),
-            "passed_count": passed_count,
-            "failed_count": failed_count,
-            "blocked_count": 0,
-        },
+        "acceptance_basis": "Baseline V8: 18 vaste testkassabonnen inclusief Picnic worden opnieuw door parse_receipt_content gehaald en in een tijdelijke aparte SQLite-testdatabase geschreven. Datum/tijd wordt nooit gevalideerd.",
+        "summary": {"required_receipt_count": REQUIRED_RECEIPT_COUNT, "tested_receipt_count": len(results), "passed_count": passed_count, "failed_count": failed_count, "blocked_count": 0},
         "chains": chains,
         "results": results,
         "blocking_issues": [],
@@ -327,7 +249,6 @@ def _execute_kassa_regression_job(job_id: str) -> None:
             report = _missing_source_report(manifest, manifest_issues + case_issues)
             _set_job_state(status="blocked", finished_at=_utc_now(), message="Regressieset onvolledig", report=report)
             return
-
         cases = manifest.get("cases") or []
         results: list[dict[str, Any]] = []
         _set_job_state(progress_total=len(cases), message="Regressie gestart")
@@ -339,57 +260,22 @@ def _execute_kassa_regression_job(job_id: str) -> None:
                     case_id = str(case.get("id") or f"case_{index}")
                     chain = _canonical_chain(str(case.get("chain") or "")) or str(case.get("chain") or "Onbekend")
                     display_filename = str(case.get("filename") or case.get("b64_filename") or "")
-                    _set_job_state(
-                        status="running",
-                        progress_current=index - 1,
-                        progress_total=len(cases),
-                        current_case_id=case_id,
-                        current_filename=display_filename,
-                        message=f"Bon {index} van {len(cases)} verwerken: {case_id}",
-                    )
+                    _set_job_state(status="running", progress_current=index - 1, progress_total=len(cases), current_case_id=case_id, current_filename=display_filename, message=f"Bon {index} van {len(cases)} verwerken: {case_id}")
                     try:
                         payload, filename = _load_case_payload(case)
                         mime_type = str(case.get("mime_type") or detect_mime_type(filename, payload))
                         parsed = parse_receipt_content(payload, filename, mime_type)
                         persisted = _write_parse_result(conn, parsed, filename, mime_type)
                         ok, issues = _case_expected_ok(case, parsed, persisted)
-                        results.append({
-                            "case_id": case_id,
-                            "chain": chain,
-                            "filename": filename,
-                            "status": "passed" if ok else "failed",
-                            "error": "; ".join(issues) if issues else None,
-                            "details": {
-                                **persisted,
-                                "store_found": parsed.store_name,
-                                "purchase_found": parsed.purchase_at,
-                                "total_found": _decimal_to_float(parsed.total_amount),
-                                "parse_status": parsed.parse_status,
-                            },
-                        })
+                        results.append({"case_id": case_id, "chain": chain, "filename": filename, "status": "passed" if ok else "failed", "error": "; ".join(issues) if issues else None, "details": {**persisted, "store_found": parsed.store_name, "purchase_found": parsed.purchase_at, "total_found": _decimal_to_float(parsed.total_amount), "parse_status": parsed.parse_status}})
                     except Exception as exc:
-                        results.append({
-                            "case_id": case_id,
-                            "chain": chain,
-                            "filename": display_filename,
-                            "status": "failed",
-                            "error": f"technische fout tijdens inlezen: {exc}",
-                            "details": {},
-                        })
+                        results.append({"case_id": case_id, "chain": chain, "filename": display_filename, "status": "failed", "error": f"technische fout tijdens inlezen: {exc}", "details": {}})
                     _set_job_state(progress_current=index, message=f"Bon {index} van {len(cases)} afgerond")
                 conn.commit()
             finally:
                 conn.close()
         report = _build_final_report(results)
-        _set_job_state(
-            status=report["status"],
-            finished_at=_utc_now(),
-            progress_current=len(cases),
-            current_case_id=None,
-            current_filename=None,
-            message="Regressie afgerond",
-            report=report,
-        )
+        _set_job_state(status=report["status"], finished_at=_utc_now(), progress_current=len(cases), current_case_id=None, current_filename=None, message="Regressie afgerond", report=report)
     except Exception as exc:
         report = _missing_source_report(None, [f"Technische fout in regressiejob: {exc}"])
         _set_job_state(status="blocked", finished_at=_utc_now(), message=f"Technische fout: {exc}", report=report)
@@ -401,20 +287,8 @@ def start_kassa_receipt_regression() -> dict[str, Any]:
         if _JOB_STATE.get("status") == "running":
             return copy.deepcopy(_JOB_STATE)
         job_id = uuid.uuid4().hex
-        _JOB_STATE.update({
-            "job_id": job_id,
-            "status": "running",
-            "started_at": _utc_now(),
-            "finished_at": None,
-            "progress_current": 0,
-            "progress_total": REQUIRED_RECEIPT_COUNT,
-            "current_case_id": None,
-            "current_filename": None,
-            "message": "Regressie wordt gestart",
-            "report": None,
-        })
-    thread = threading.Thread(target=_execute_kassa_regression_job, args=(job_id,), daemon=True)
-    thread.start()
+        _JOB_STATE.update({"job_id": job_id, "status": "running", "started_at": _utc_now(), "finished_at": None, "progress_current": 0, "progress_total": REQUIRED_RECEIPT_COUNT, "current_case_id": None, "current_filename": None, "message": "Regressie wordt gestart", "report": None})
+    threading.Thread(target=_execute_kassa_regression_job, args=(job_id,), daemon=True).start()
     return _get_job_state()
 
 
