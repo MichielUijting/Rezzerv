@@ -2,17 +2,10 @@
   "version": 8,
   "purpose": "Vaste regressieset voor het Kassa-inleesproces op basis van baseline V8: 18 supermarktbonnen inclusief Picnic.",
   "required_receipt_count": 18,
-  "required_chains": [
-    "Albert Heijn",
-    "ALDI",
-    "Jumbo",
-    "PLUS",
-    "Lidl",
-    "Picnic"
-  ],
+  "required_chains": ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl", "Picnic"],
   "database_isolation": "Elke run gebruikt een tijdelijke aparte SQLite-testdatabase; de applicatiedatabase wordt niet gebruikt voor acceptatie.",
   "fixture_installation": "Plaats of installeer de bestanden in backend/app/testing/kassa_regression/raw/. Gebruik tools/install_kassa_regression_fixtures.py met supermarkten_incl_picnic.zip.",
-  "validation_rule": "Datum/tijd vormt nooit een validatiecriterium.",
+  "validation_rule": "Datum/tijd vormt nooit een validatiecriterium. Voor Picnic vormt totaalbedrag geen validatiecriterium omdat het totaalbedrag op deze bonnen ontbreekt.",
   "cases": [
     {"id": "plus_foto_2", "chain": "PLUS", "source_filename": "Plus foto 2.jpeg", "filename": "plus_foto_2.jpeg", "mime_type": "image/jpeg", "expected_min_line_count": 1},
     {"id": "ah_app_1", "chain": "Albert Heijn", "source_filename": "AH App 1.pdf", "filename": "ah_app_1.pdf", "mime_type": "application/pdf", "expected_min_line_count": 1},
@@ -28,9 +21,9 @@
     {"id": "lidl_app_2", "chain": "Lidl", "source_filename": "Lidl App 2.png", "filename": "lidl_app_2.png", "mime_type": "image/png", "expected_min_line_count": 1},
     {"id": "lidl_app_4", "chain": "Lidl", "source_filename": "Lidl App 4.pdf", "filename": "lidl_app_4.pdf", "mime_type": "application/pdf", "expected_min_line_count": 1},
     {"id": "plus_foto_1", "chain": "PLUS", "source_filename": "plus foto 1.jpg", "filename": "plus_foto_1.jpg", "mime_type": "image/jpeg", "expected_min_line_count": 1},
-    {"id": "picnic_app_1", "chain": "Picnic", "source_filename": "Picnic App 1.eml", "filename": "picnic_app_1.eml", "mime_type": "message/rfc822", "expected_min_line_count": 1},
-    {"id": "picnic_app_2", "chain": "Picnic", "source_filename": "Picnic App 2.eml", "filename": "picnic_app_2.eml", "mime_type": "message/rfc822", "expected_min_line_count": 1},
-    {"id": "picnic_app_3", "chain": "Picnic", "source_filename": "Picnic App 3.eml.eml", "filename": "picnic_app_3.eml", "mime_type": "message/rfc822", "expected_min_line_count": 1},
-    {"id": "picnic_app_4", "chain": "Picnic", "source_filename": "Picnic App 4.eml", "filename": "picnic_app_4.eml", "mime_type": "message/rfc822", "expected_min_line_count": 1}
+    {"id": "picnic_app_1", "chain": "Picnic", "source_filename": "Picnic App 1.eml", "filename": "picnic_app_1.eml", "mime_type": "message/rfc822", "expected_min_line_count": 1, "allow_missing_total": true},
+    {"id": "picnic_app_2", "chain": "Picnic", "source_filename": "Picnic App 2.eml", "filename": "picnic_app_2.eml", "mime_type": "message/rfc822", "expected_min_line_count": 1, "allow_missing_total": true},
+    {"id": "picnic_app_3", "chain": "Picnic", "source_filename": "Picnic App 3.eml.eml", "filename": "picnic_app_3.eml", "mime_type": "message/rfc822", "expected_min_line_count": 1, "allow_missing_total": true},
+    {"id": "picnic_app_4", "chain": "Picnic", "source_filename": "Picnic App 4.eml", "filename": "picnic_app_4.eml", "mime_type": "message/rfc822", "expected_min_line_count": 1, "allow_missing_total": true}
   ]
 }
