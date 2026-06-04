@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import base64
+import copy
 import json
 import sqlite3
 import tempfile
+import threading
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -23,6 +25,34 @@ RAW_B64_DIR = REGRESSION_ROOT / "raw_b64"
 
 REQUIRED_CHAINS = ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl"]
 REQUIRED_RECEIPT_COUNT = 14
+
+_JOB_LOCK = threading.Lock()
+_JOB_STATE: dict[str, Any] = {
+    "job_id": None,
+    "status": "idle",
+    "started_at": None,
+    "finished_at": None,
+    "progress_current": 0,
+    "progress_total": REQUIRED_RECEIPT_COUNT,
+    "current_case_id": None,
+    "current_filename": None,
+    "message": "Nog niet gestart",
+    "report": None,
+}
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _set_job_state(**updates: Any) -> None:
+    with _JOB_LOCK:
+        _JOB_STATE.update(updates)
+
+
+def _get_job_state() -> dict[str, Any]:
+    with _JOB_LOCK:
+        return copy.deepcopy(_JOB_STATE)
 
 
 def _decimal_to_float(value: Any) -> float | None:
@@ -153,10 +183,10 @@ def _init_test_database(conn: sqlite3.Connection) -> None:
     )
 
 
-def _write_parse_result(conn: sqlite3.Connection, case: dict[str, Any], parsed: Any, filename: str, mime_type: str) -> dict[str, Any]:
+def _write_parse_result(conn: sqlite3.Connection, parsed: Any, filename: str, mime_type: str) -> dict[str, Any]:
     raw_id = str(uuid.uuid4())
     receipt_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = _utc_now()
     lines = list(parsed.lines or [])
     conn.execute(
         "insert into raw_receipts (id, original_filename, mime_type, imported_at) values (?, ?, ?, ?)",
@@ -237,7 +267,7 @@ def _missing_source_report(manifest: dict[str, Any] | None, issues: list[str]) -
     return {
         "test_type": "kassa_receipt_regression",
         "status": "blocked",
-        "ran_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "ran_at": _utc_now(),
         "acceptance_basis": "Geblokkeerd: de vaste 14-bonnen regressieset ontbreekt of is onvolledig.",
         "summary": {
             "required_receipt_count": (manifest or {}).get("required_receipt_count") or REQUIRED_RECEIPT_COUNT,
@@ -252,83 +282,25 @@ def _missing_source_report(manifest: dict[str, Any] | None, issues: list[str]) -
     }
 
 
-@router.post("/api/admin/kassa-regression/run")
-def run_kassa_receipt_regression() -> dict[str, Any]:
-    manifest, manifest_issues = _load_manifest()
-    if manifest is None:
-        return _missing_source_report(manifest, manifest_issues)
-    case_issues = _validate_manifest_cases(manifest)
-    if manifest_issues or case_issues:
-        return _missing_source_report(manifest, manifest_issues + case_issues)
-
-    cases = manifest.get("cases") or []
-    results: list[dict[str, Any]] = []
-    chain_totals: dict[str, dict[str, int]] = {chain: {"receipt_count": 0, "passed_count": 0, "failed_count": 0} for chain in REQUIRED_CHAINS}
-
-    with tempfile.NamedTemporaryFile(prefix="rezzerv_kassa_regression_", suffix=".sqlite", delete=True) as tmp:
-        conn = sqlite3.connect(tmp.name)
-        try:
-            _init_test_database(conn)
-            for case in cases:
-                chain = _canonical_chain(str(case.get("chain") or "")) or str(case.get("chain") or "Onbekend")
-                chain_totals.setdefault(chain, {"receipt_count": 0, "passed_count": 0, "failed_count": 0})
-                chain_totals[chain]["receipt_count"] += 1
-                try:
-                    payload, filename = _load_case_payload(case)
-                    mime_type = str(case.get("mime_type") or detect_mime_type(filename, payload))
-                    parsed = parse_receipt_content(payload, filename, mime_type)
-                    persisted = _write_parse_result(conn, case, parsed, filename, mime_type)
-                    ok, issues = _case_expected_ok(case, parsed, persisted)
-                    status = "passed" if ok else "failed"
-                    chain_totals[chain]["passed_count" if ok else "failed_count"] += 1
-                    results.append({
-                        "case_id": case.get("id"),
-                        "chain": chain,
-                        "filename": filename,
-                        "status": status,
-                        "error": "; ".join(issues) if issues else None,
-                        "details": {
-                            **persisted,
-                            "store_found": parsed.store_name,
-                            "purchase_found": parsed.purchase_at,
-                            "total_found": _decimal_to_float(parsed.total_amount),
-                            "parse_status": parsed.parse_status,
-                        },
-                    })
-                except Exception as exc:
-                    chain_totals[chain]["failed_count"] += 1
-                    results.append({
-                        "case_id": case.get("id"),
-                        "chain": chain,
-                        "filename": case.get("filename") or case.get("b64_filename"),
-                        "status": "failed",
-                        "error": f"technische fout tijdens inlezen: {exc}",
-                        "details": {},
-                    })
-            conn.commit()
-        finally:
-            conn.close()
-
+def _build_final_report(results: list[dict[str, Any]]) -> dict[str, Any]:
     chains = []
     for chain in REQUIRED_CHAINS:
-        totals = chain_totals.get(chain, {"receipt_count": 0, "passed_count": 0, "failed_count": 0})
-        status = "missing" if totals["receipt_count"] == 0 else ("failed" if totals["failed_count"] else "passed")
-        failures = [item for item in results if item.get("chain") == chain and item.get("status") != "passed"]
+        chain_results = [item for item in results if item.get("chain") == chain]
+        failed = [item for item in chain_results if item.get("status") != "passed"]
         chains.append({
             "chain": chain,
-            "status": status,
-            "receipt_count": totals["receipt_count"],
-            "passed_count": totals["passed_count"],
-            "failed_count": totals["failed_count"],
-            "failures": failures,
+            "status": "missing" if not chain_results else ("failed" if failed else "passed"),
+            "receipt_count": len(chain_results),
+            "passed_count": len(chain_results) - len(failed),
+            "failed_count": len(failed),
+            "failures": failed,
         })
-
     failed_count = sum(1 for item in results if item.get("status") != "passed")
     passed_count = sum(1 for item in results if item.get("status") == "passed")
     return {
         "test_type": "kassa_receipt_regression",
         "status": "passed" if failed_count == 0 and len(results) == REQUIRED_RECEIPT_COUNT else "failed",
-        "ran_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "ran_at": _utc_now(),
         "acceptance_basis": "14 vaste testkassabonnen worden opnieuw door parse_receipt_content gehaald en weggeschreven naar een tijdelijke aparte SQLite-testdatabase.",
         "summary": {
             "required_receipt_count": REQUIRED_RECEIPT_COUNT,
@@ -341,3 +313,111 @@ def run_kassa_receipt_regression() -> dict[str, Any]:
         "results": results,
         "blocking_issues": [],
     }
+
+
+def _execute_kassa_regression_job(job_id: str) -> None:
+    try:
+        manifest, manifest_issues = _load_manifest()
+        if manifest is None:
+            report = _missing_source_report(manifest, manifest_issues)
+            _set_job_state(status="blocked", finished_at=_utc_now(), message="Regressieset ontbreekt", report=report)
+            return
+        case_issues = _validate_manifest_cases(manifest)
+        if manifest_issues or case_issues:
+            report = _missing_source_report(manifest, manifest_issues + case_issues)
+            _set_job_state(status="blocked", finished_at=_utc_now(), message="Regressieset onvolledig", report=report)
+            return
+
+        cases = manifest.get("cases") or []
+        results: list[dict[str, Any]] = []
+        _set_job_state(progress_total=len(cases), message="Regressie gestart")
+        with tempfile.NamedTemporaryFile(prefix="rezzerv_kassa_regression_", suffix=".sqlite", delete=True) as tmp:
+            conn = sqlite3.connect(tmp.name)
+            try:
+                _init_test_database(conn)
+                for index, case in enumerate(cases, start=1):
+                    case_id = str(case.get("id") or f"case_{index}")
+                    chain = _canonical_chain(str(case.get("chain") or "")) or str(case.get("chain") or "Onbekend")
+                    display_filename = str(case.get("filename") or case.get("b64_filename") or "")
+                    _set_job_state(
+                        status="running",
+                        progress_current=index - 1,
+                        progress_total=len(cases),
+                        current_case_id=case_id,
+                        current_filename=display_filename,
+                        message=f"Bon {index} van {len(cases)} verwerken: {case_id}",
+                    )
+                    try:
+                        payload, filename = _load_case_payload(case)
+                        mime_type = str(case.get("mime_type") or detect_mime_type(filename, payload))
+                        parsed = parse_receipt_content(payload, filename, mime_type)
+                        persisted = _write_parse_result(conn, parsed, filename, mime_type)
+                        ok, issues = _case_expected_ok(case, parsed, persisted)
+                        results.append({
+                            "case_id": case_id,
+                            "chain": chain,
+                            "filename": filename,
+                            "status": "passed" if ok else "failed",
+                            "error": "; ".join(issues) if issues else None,
+                            "details": {
+                                **persisted,
+                                "store_found": parsed.store_name,
+                                "purchase_found": parsed.purchase_at,
+                                "total_found": _decimal_to_float(parsed.total_amount),
+                                "parse_status": parsed.parse_status,
+                            },
+                        })
+                    except Exception as exc:
+                        results.append({
+                            "case_id": case_id,
+                            "chain": chain,
+                            "filename": display_filename,
+                            "status": "failed",
+                            "error": f"technische fout tijdens inlezen: {exc}",
+                            "details": {},
+                        })
+                    _set_job_state(progress_current=index, message=f"Bon {index} van {len(cases)} afgerond")
+                conn.commit()
+            finally:
+                conn.close()
+        report = _build_final_report(results)
+        _set_job_state(
+            status=report["status"],
+            finished_at=_utc_now(),
+            progress_current=len(cases),
+            current_case_id=None,
+            current_filename=None,
+            message="Regressie afgerond",
+            report=report,
+        )
+    except Exception as exc:
+        report = _missing_source_report(None, [f"Technische fout in regressiejob: {exc}"])
+        _set_job_state(status="blocked", finished_at=_utc_now(), message=f"Technische fout: {exc}", report=report)
+
+
+@router.post("/api/admin/kassa-regression/run")
+def start_kassa_receipt_regression() -> dict[str, Any]:
+    with _JOB_LOCK:
+        if _JOB_STATE.get("status") == "running":
+            return copy.deepcopy(_JOB_STATE)
+        job_id = uuid.uuid4().hex
+        _JOB_STATE.update({
+            "job_id": job_id,
+            "status": "running",
+            "started_at": _utc_now(),
+            "finished_at": None,
+            "progress_current": 0,
+            "progress_total": REQUIRED_RECEIPT_COUNT,
+            "current_case_id": None,
+            "current_filename": None,
+            "message": "Regressie wordt gestart",
+            "report": None,
+        })
+    thread = threading.Thread(target=_execute_kassa_regression_job, args=(job_id,), daemon=True)
+    thread.start()
+    return _get_job_state()
+
+
+@router.get("/api/admin/kassa-regression/status")
+def get_kassa_receipt_regression_status() -> dict[str, Any]:
+    return _get_job_state()
