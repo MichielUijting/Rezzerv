@@ -18,8 +18,8 @@ from app.services.receipt_service import detect_mime_type, parse_receipt_content
 router = APIRouter()
 
 SMOKE_MANIFEST_PATH = regression.REGRESSION_ROOT / "smoke_manifest.json"
-REQUIRED_CHAINS = ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl"]
-REQUIRED_RECEIPT_COUNT = 5
+REQUIRED_CHAINS = ["Albert Heijn", "ALDI", "Jumbo", "PLUS", "Lidl", "Picnic"]
+REQUIRED_RECEIPT_COUNT = 6
 
 _JOB_LOCK = threading.Lock()
 _JOB_STATE: dict[str, Any] = {
@@ -118,14 +118,8 @@ def _blocked_report(manifest: dict[str, Any] | None, issues: list[str]) -> dict[
         "test_type": "kassa_smoke_check",
         "status": "blocked",
         "ran_at": _now(),
-        "acceptance_basis": "Geblokkeerd: de minimale 5-bonnen Kassa-controleset ontbreekt of is onvolledig.",
-        "summary": {
-            "required_receipt_count": (manifest or {}).get("required_receipt_count") or REQUIRED_RECEIPT_COUNT,
-            "tested_receipt_count": 0,
-            "passed_count": 0,
-            "failed_count": 0,
-            "blocked_count": len(issues),
-        },
+        "acceptance_basis": "Geblokkeerd: de minimale baseline V8 Kassa-controleset ontbreekt of is onvolledig.",
+        "summary": {"required_receipt_count": (manifest or {}).get("required_receipt_count") or REQUIRED_RECEIPT_COUNT, "tested_receipt_count": 0, "passed_count": 0, "failed_count": 0, "blocked_count": len(issues)},
         "chains": [],
         "results": [],
         "blocking_issues": issues,
@@ -137,28 +131,15 @@ def _final_report(results: list[dict[str, Any]]) -> dict[str, Any]:
     for chain in REQUIRED_CHAINS:
         items = [item for item in results if item.get("chain") == chain]
         failures = [item for item in items if item.get("status") != "passed"]
-        chains.append({
-            "chain": chain,
-            "status": "missing" if not items else ("failed" if failures else "passed"),
-            "receipt_count": len(items),
-            "passed_count": len(items) - len(failures),
-            "failed_count": len(failures),
-            "failures": failures,
-        })
+        chains.append({"chain": chain, "status": "missing" if not items else ("failed" if failures else "passed"), "receipt_count": len(items), "passed_count": len(items) - len(failures), "failed_count": len(failures), "failures": failures})
     failed_count = sum(1 for item in results if item.get("status") != "passed")
     passed_count = sum(1 for item in results if item.get("status") == "passed")
     return {
         "test_type": "kassa_smoke_check",
         "status": "passed" if failed_count == 0 and len(results) == REQUIRED_RECEIPT_COUNT else "failed",
         "ran_at": _now(),
-        "acceptance_basis": "5 vaste testkassabonnen, 1 per winkelketen, worden opnieuw door parse_receipt_content gehaald en in een tijdelijke aparte SQLite-testdatabase geschreven. Datum/tijd wordt nooit gevalideerd.",
-        "summary": {
-            "required_receipt_count": REQUIRED_RECEIPT_COUNT,
-            "tested_receipt_count": len(results),
-            "passed_count": passed_count,
-            "failed_count": failed_count,
-            "blocked_count": 0,
-        },
+        "acceptance_basis": "Baseline V8 releasecontrole: 6 vaste testkassabonnen, 1 per winkelketen inclusief Picnic, worden opnieuw door parse_receipt_content gehaald en in een tijdelijke aparte SQLite-testdatabase geschreven. Datum/tijd wordt nooit gevalideerd.",
+        "summary": {"required_receipt_count": REQUIRED_RECEIPT_COUNT, "tested_receipt_count": len(results), "passed_count": passed_count, "failed_count": failed_count, "blocked_count": 0},
         "chains": chains,
         "results": results,
         "blocking_issues": [],
@@ -195,20 +176,7 @@ def _run_job(job_id: str) -> None:
                         parsed = parse_receipt_content(payload, filename, mime_type)
                         persisted = regression._write_parse_result(conn, parsed, filename, mime_type)
                         ok, issues = _case_ok(case, parsed, persisted)
-                        results.append({
-                            "case_id": case_id,
-                            "chain": chain,
-                            "filename": filename,
-                            "status": "passed" if ok else "failed",
-                            "error": "; ".join(issues) if issues else None,
-                            "details": {
-                                **persisted,
-                                "store_found": parsed.store_name,
-                                "purchase_found": parsed.purchase_at,
-                                "total_found": regression._decimal_to_float(parsed.total_amount),
-                                "parse_status": parsed.parse_status,
-                            },
-                        })
+                        results.append({"case_id": case_id, "chain": chain, "filename": filename, "status": "passed" if ok else "failed", "error": "; ".join(issues) if issues else None, "details": {**persisted, "store_found": parsed.store_name, "purchase_found": parsed.purchase_at, "total_found": regression._decimal_to_float(parsed.total_amount), "parse_status": parsed.parse_status}})
                     except Exception as exc:
                         results.append({"case_id": case_id, "chain": chain, "filename": display_filename, "status": "failed", "error": f"technische fout tijdens inlezen: {exc}", "details": {}})
                     _set_state(progress_current=index, message=f"Bon {index} van {len(cases)} afgerond")
@@ -228,18 +196,7 @@ def start_kassa_smoke_check() -> dict[str, Any]:
         if _JOB_STATE.get("status") == "running":
             return copy.deepcopy(_JOB_STATE)
         job_id = uuid.uuid4().hex
-        _JOB_STATE.update({
-            "job_id": job_id,
-            "status": "running",
-            "started_at": _now(),
-            "finished_at": None,
-            "progress_current": 0,
-            "progress_total": REQUIRED_RECEIPT_COUNT,
-            "current_case_id": None,
-            "current_filename": None,
-            "message": "Kassa smoke-check wordt gestart",
-            "report": None,
-        })
+        _JOB_STATE.update({"job_id": job_id, "status": "running", "started_at": _now(), "finished_at": None, "progress_current": 0, "progress_total": REQUIRED_RECEIPT_COUNT, "current_case_id": None, "current_filename": None, "message": "Kassa smoke-check wordt gestart", "report": None})
     threading.Thread(target=_run_job, args=(job_id,), daemon=True).start()
     return _state()
 
