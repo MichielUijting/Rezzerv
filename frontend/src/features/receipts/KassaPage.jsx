@@ -897,9 +897,11 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   const visibleNetTotalSum = visibleLineTotalSum + effectiveDiscountTotal
   const poNormStatusLabel = String(receipt?.po_norm_status_label ?? receipt?.status_label ?? receipt?.norm_status_label ?? '').trim().toLowerCase()
   const isPoNormControlled = poNormStatusLabel === 'gecontroleerd'
+  const receiptStoreName = String(receipt?.store_name || receipt?.store_chain || '').trim().toLowerCase()
+  const isPicnicReceipt = receiptStoreName.includes('picnic')
   const detailAmountsMatch = Number.isFinite(Number(headerDraft.total_amount)) && lines.length > 0 && Math.abs(Number(headerDraft.total_amount) - visibleNetTotalSum) < 0.01
-  const detailAmountsAccepted = detailAmountsMatch || isPoNormControlled
-  const totalsMismatchWarningVisible = !detailAmountsAccepted && Number.isFinite(Number(headerDraft.total_amount)) && lines.length > 0
+  const detailAmountsAccepted = detailAmountsMatch || isPoNormControlled || isPicnicReceipt
+  const totalsMismatchWarningVisible = !isPicnicReceipt && !detailAmountsAccepted && Number.isFinite(Number(headerDraft.total_amount)) && lines.length > 0
   const branchParts = deriveBranchAddressPlace(receipt)
   const lineColumnDefaults = useMemo(() => Object.fromEntries(receiptLineTableColumns.map(({ key, width }) => [key, width])), [])
   const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
@@ -1132,8 +1134,8 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: '24px' }} data-testid="receipt-detail-title">{receipt?.store_name || 'Kassabon'}</div>
-            <div style={{ color: detailAmountsAccepted ? '#027A48' : '#B54708', fontWeight: 600 }}>{detailAmountsAccepted ? 'Bonbedragen sluiten aan' : 'Totaalbedrag wijkt af van de bonregels'}</div>
-            {totalsMismatchWarningVisible ? <div style={{ color: '#B54708', fontSize: 13 }}>Je kunt deze afwijking overrulen via â€˜Goedkeuren voor Uitpakkenâ€™. De bon gaat dan naar Gecontroleerd.</div> : null}
+            <div style={{ color: detailAmountsAccepted ? '#027A48' : '#B54708', fontWeight: 600 }}>{isPicnicReceipt ? 'Picnic: totaalbedrag wordt niet als controlecriterium gebruikt' : (detailAmountsAccepted ? 'Bonbedragen sluiten aan' : 'Totaalbedrag wijkt af van de bonregels')}</div>
+            {totalsMismatchWarningVisible ? <div style={{ color: '#B54708', fontSize: 13 }}>Je kunt deze afwijking overrulen via 'Goedkeuren voor Uitpakken'. De bon gaat dan naar Gecontroleerd.</div> : null}
           </div>
           {canEdit ? (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -1185,12 +1187,12 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
                   <DetailInfoRow label="Plaats" value={branchParts.city} />
                   <DetailInfoRow label="Oorspronkelijk bestand" value={receipt?.original_filename || 'Niet beschikbaar in deze release'} />
                   <DetailInfoRow label="Bestandstype" value={receipt?.mime_type || 'Niet beschikbaar in deze release'} />
-                  <DetailInfoRow label="GeÃ¯mporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
+                  <DetailInfoRow label="Geïmporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
                   <DetailInfoRow label="Aangemaakt op" value={formatDateTime(receipt?.created_at)} />
                   <DetailInfoRow label="Bijgewerkt op" value={formatDateTime(receipt?.updated_at)} />
                   <DetailInfoRow label="Goedgekeurd op" value={formatDateTime(receipt?.approved_at)} />
                   <DetailInfoRow label="Goedgekeurd door" value={receipt?.approved_by_user_email} />
-                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` Â· ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` Â· ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
+                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` · ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` · ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
                 </div>
               )
             }
