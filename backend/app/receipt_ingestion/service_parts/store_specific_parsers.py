@@ -433,7 +433,7 @@ def _parse_picnic_email_result(text: str, html_text: str, filename: str, header_
     raw_lines = _normalize_text_lines(haystack)
     lines = []
     for line in raw_lines:
-        cleaned = re.sub(r'[]+', '', line).strip()
+        cleaned = re.sub(r'[\[\]]+', '', line).strip()
         if cleaned and cleaned not in {'.', 'â€¢'}:
             lines.append(cleaned)
     purchase_at = _parse_dutch_textual_date(haystack, default_year=2026)
