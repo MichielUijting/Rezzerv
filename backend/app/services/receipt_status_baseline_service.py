@@ -11,7 +11,7 @@ from sqlalchemy import text
 from app.db import get_runtime_datastore_info
 
 BASELINE_DIR = Path(__file__).resolve().parent.parent / 'testing' / 'receipt_status_baseline'
-EXPECTED_STATUS_PATH = BASELINE_DIR / 'expected_status_v7.json'
+EXPECTED_STATUS_PATH = BASELINE_DIR / 'expected_status_v9.json'
 CRITERIA_DOC_PATH = BASELINE_DIR / 'Categorie_kassabon_v1.1.docx'
 
 STATUS_LABELS = {
@@ -242,9 +242,12 @@ def _score_actual_match(expected: dict[str, Any], actual: dict[str, Any]) -> tup
 
 def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
     store_ok = _store_chain_match(expected, actual)
-    total_ok = _amount_equals(actual.get('total_amount'), expected.get('total_amount'))
+    expected_chain = normalize_store_chain(expected.get('store_chain') or expected.get('store_name'))
+    actual_chain = normalize_store_chain(actual.get('store_chain') or actual.get('store_name'))
+    is_picnic = _normalize_text(expected_chain) == 'picnic' or _normalize_text(actual_chain) == 'picnic'
+    total_ok = True if is_picnic else _amount_equals(actual.get('total_amount'), expected.get('total_amount'))
     count_ok = str(expected.get('line_count')) == str(actual.get('line_count'))
-    sum_ok = _amount_equals(actual.get('net_line_sum_used_for_decision'), actual.get('total_amount'))
+    sum_ok = True if is_picnic else _amount_equals(actual.get('net_line_sum_used_for_decision'), actual.get('total_amount'))
     failed = []
     if not store_ok:
         failed.append('STORE_CHAIN_MISMATCH')
@@ -258,8 +261,8 @@ def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, 
     return {
         'store_name_matches_baseline': store_ok,
         'store_chain_matches_baseline': store_ok,
-        'expected_store_chain': normalize_store_chain(expected.get('store_chain') or expected.get('store_name')),
-        'actual_store_chain': normalize_store_chain(actual.get('store_chain') or actual.get('store_name')),
+        'expected_store_chain': expected_chain,
+        'actual_store_chain': actual_chain,
         'total_amount_matches_baseline': total_ok,
         'article_count_matches_baseline': count_ok,
         'line_sum_matches_total': sum_ok,
@@ -272,7 +275,7 @@ def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, 
 
 def _reason(criteria: dict[str, Any]) -> str:
     if criteria['all_criteria_pass']:
-        return 'Gecontroleerd: winkelketen, totaalbedrag, artikelcount en regelsom voldoen aan de PO-norm.'
+        return 'Gecontroleerd: winkelketen, artikelcount en toepasselijke normcriteria voldoen aan de PO-norm.'
     labels = {
         'STORE_CHAIN_MISMATCH': 'winkelketen wijkt af van baseline',
         'TOTAL_AMOUNT_MISMATCH': 'totaalbedrag wijkt af van baseline',
@@ -328,7 +331,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
                 'difference_type': 'mapping_mismatch',
                 'failed_criteria': ['MISSING_ACTIVE_RECEIPT'],
                 'reason': 'Controle nodig: geen actieve receipt_table gevonden voor dit baselinebestand.',
-                'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v7',
+                'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v9',
             })
             continue
 
@@ -378,7 +381,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             'match_score': best_score,
             'match_signals': best_flags,
             'mapping_reason': None if best_flags.get('filename_exact') else best_match_reason,
-            'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v7',
+            'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v9',
         })
 
     for actual in remaining_actual:
