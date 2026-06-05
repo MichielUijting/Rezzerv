@@ -11,7 +11,7 @@ from sqlalchemy import text
 from app.db import get_runtime_datastore_info
 
 BASELINE_DIR = Path(__file__).resolve().parent.parent / 'testing' / 'receipt_status_baseline'
-EXPECTED_STATUS_PATH = BASELINE_DIR / 'expected_status_v9.json'
+EXPECTED_STATUS_PATH = BASELINE_DIR / 'expected_status_v10.json'
 CRITERIA_DOC_PATH = BASELINE_DIR / 'Categorie_kassabon_v1.1.docx'
 
 STATUS_LABELS = {
@@ -64,6 +64,13 @@ def _status_label(status: Any) -> str | None:
 def _normalize_text(value: Any) -> str:
     return ''.join(ch.lower() for ch in str(value or '').strip() if ch.isalnum())
 
+
+
+def _normalize_baseline_source_file(value: Any) -> str:
+    text_value = _normalize_text(value)
+    while text_value.endswith('.eml.eml'):
+        text_value = text_value[:-4]
+    return text_value
 
 def normalize_store_chain(value: Any) -> str | None:
     normalized = _normalize_text(value)
@@ -221,7 +228,7 @@ def _score_actual_match(expected: dict[str, Any], actual: dict[str, Any]) -> tup
     flags = {'filename_exact': False, 'store_chain_match': False, 'total_match': False, 'line_count_match': False}
     score = 0
     reasons = []
-    if _normalize_text(expected.get('source_file')) == _normalize_text(actual.get('original_filename')):
+    if _normalize_baseline_source_file(expected.get('source_file')) == _normalize_baseline_source_file(actual.get('original_filename')):
         score += 100
         flags['filename_exact'] = True
         reasons.append('bestandsnaam exact')
@@ -331,7 +338,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
                 'difference_type': 'mapping_mismatch',
                 'failed_criteria': ['MISSING_ACTIVE_RECEIPT'],
                 'reason': 'Controle nodig: geen actieve receipt_table gevonden voor dit baselinebestand.',
-                'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v9',
+                'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v10',
             })
             continue
 
@@ -381,7 +388,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             'match_score': best_score,
             'match_signals': best_flags,
             'mapping_reason': None if best_flags.get('filename_exact') else best_match_reason,
-            'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v9',
+            'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v10',
         })
 
     for actual in remaining_actual:
