@@ -366,17 +366,20 @@ async function uploadSharedReceiptFile(householdId, file, sourceContext = 'share
   return data
 }
 
-async function uploadEmailReceiptFile(householdId, emailFile) {
+
+
+async function uploadPicnicEmailReceiptFile(householdId, emailFile) {
   const token = localStorage.getItem('rezzerv_token') || ''
   const formData = new FormData()
   formData.append('household_id', String(householdId))
   formData.append('email_file', emailFile)
 
-  const response = await fetch('/api/receipts/email-import', {
+  const response = await fetch('/api/receipts/picnic-email-import', {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: formData,
   })
+
   const responseText = await response.text()
   let data = null
   if (responseText) {
@@ -386,11 +389,13 @@ async function uploadEmailReceiptFile(householdId, emailFile) {
       data = responseText
     }
   }
+
   if (!response.ok) {
     const error = new Error(normalizeErrorMessage(data?.detail || data || response.statusText))
-    error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/import')
+    error.technicalUploadError = createUploadTechnicalError(response, responseText, '/api/receipts/picnic-email-import')
     throw error
   }
+
   return data
 }
 
@@ -1303,7 +1308,6 @@ function ReceiptDetailView({ receipt = null, transientPreview = null, uploadProg
 function ReceiptSourceHubContent({
   onChooseReceiptFile,
   onChooseCamera,
-  onChooseEmail,
   onDropLandingFile,
   onCopyEmailRoute,
   emailRoute,
@@ -1444,10 +1448,9 @@ function ReceiptSourceHubContent({
               </div>
             </div>
 
-            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', alignItems: 'stretch' }}>
+            <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', alignItems: 'stretch' }}>
               <Button type="button" variant="primary" onClick={onChooseReceiptFile} disabled={isUploading} data-testid="kassa-choose-file-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Bestanden kiezen</Button>
               <Button type="button" variant="secondary" onClick={onChooseCamera} disabled={isUploading} data-testid="kassa-open-camera-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Camera openen</Button>
-              <Button type="button" variant="secondary" onClick={onChooseEmail} disabled={isUploading} data-testid="kassa-open-email-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Email inlezen</Button>
             </div>
 
             {uploadProgress?.active ? (
@@ -1729,7 +1732,6 @@ export default function KassaPage() {
   const [isTechnicalUploadErrorOpen, setIsTechnicalUploadErrorOpen] = useState(false)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
-  const emailInputRef = useRef(null)
   const uploadBatchPollerRef = useRef(null)
   const uploadBatchLastProcessedRef = useRef(-1)
   const receiptInboxRefreshInFlightRef = useRef(false)
@@ -2216,15 +2218,6 @@ export default function KassaPage() {
     setTimeout(() => cameraInputRef.current?.click(), 0)
   }
 
-  function handleChooseEmailFromHub() {
-    setUploadMode('email_import')
-    setStatus('')
-    setError('')
-    setDuplicateNotice('')
-    setEmailRouteError('')
-    setReceiptInboxFocusId('')
-    setTimeout(() => emailInputRef.current?.click(), 0)
-  }
 
   async function copyEmailRouteToClipboard() {
     try {
@@ -2342,34 +2335,42 @@ export default function KassaPage() {
     setTimeout(() => cameraInputRef.current?.click(), 0)
   }
 
-  async function processEmailImportFile(file) {
+
+
+  async function processPicnicEmailLandingFile(file) {
     if (!file) {
-      setEmailRouteError('Sleep een .eml-bestand naar het landingsgebied of kies handmatig een e-mailbestand.')
+      setEmailRouteError('Sleep een opgeslagen Picnic .eml-bestand naar het landingsgebied.')
       setError('')
       return
     }
+
     if (!isSupportedEmailImportFile(file)) {
-      setEmailRouteError('Dit bestandstype wordt nog niet ondersteund. Gebruik in deze versie een .eml-bestand.')
+      setEmailRouteError('Gebruik voor Picnic een opgeslagen .eml-bestand.')
       setError('')
       return
     }
+
     setIsUploading(true)
-    setUploadProgressState(true, 'E-mail verwerken...', 'Rezzerv leest de e-mailbon en zet die klaar voor Kassa.', 20)
+    setUploadProgressState(true, 'Picnic e-mail voorbereiden...', 'Rezzerv zet de opgeslagen e-mail klaar voor het Picnic-parserframe.', 20)
     setError('')
-    setStatus('')
+    setStatus('Picnic e-mailbestand uit landingzone wordt verwerkt.')
     setDuplicateNotice('')
     setEmailRouteError('')
+    clearTechnicalUploadError()
+
     try {
-      const result = await uploadEmailReceiptFile(householdId, file)
+      const result = await uploadPicnicEmailReceiptFile(householdId, file)
       const uploadedReceiptId = String(result?.receipt_table_id || '')
+
       if (result?.duplicate) {
         announceDuplicate(result)
       } else {
-            setOpenedReceiptId('')
+        setOpenedReceiptId('')
         setOpenedReceipt(null)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
-        setUploadProgressState(true, 'Kassa laden...', buildPostImportProgressMessage('De e-mailbon'), 85)
+        setUploadProgressState(true, 'Kassa laden...', buildPostImportProgressMessage('De Picnic e-mailbon'), 85)
+
         const refreshedItems = await loadReceiptsWithUploadedFallback(result, { openReceiptId: uploadedReceiptId })
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
@@ -2383,35 +2384,18 @@ export default function KassaPage() {
           setSelectedReceiptIds([])
         }
 
-        if (result?.receipt_table_id) {
-          setDuplicateNotice('')
-          setStatus('E-mailbon ontvangen. De bon staat nu in de Kassa.')
-        } else {
-          setStatus('E-mail verwerkt, maar nog niet als bruikbare kassabon herkend.')
-        }
+        setDuplicateNotice('')
+        setEmailRouteError('')
+        clearTechnicalUploadError()
+        setStatus(result?.receipt_table_id ? 'Picnic e-mailbon ontvangen. De bon staat nu in de Kassa.' : 'Picnic e-mail verwerkt, maar nog niet als bruikbare kassabon herkend.')
+        setUploadProgressState(true, 'Kassa openen...', 'De nieuwe Picnic e-mailbon staat klaar in Kassa.', 100)
 
-        if (uploadedReceiptId && !receiptExistsInInbox) {
-          setStatus('E-mailbon ontvangen. De lijst is direct bijgewerkt.')
-        }
-
-        setUploadProgressState(true, 'Kassa openen...', 'De nieuwe e-mailbon staat klaar in Kassa.', 100)
         if (isAddReceiptRoute) navigate('/kassa')
-
-        try {
-          window.requestAnimationFrame(() => {
-            const targetRow = uploadedReceiptId
-              ? document.querySelector(`[data-testid="kassa-row-${uploadedReceiptId}"]`)
-              : null
-            const inbox = targetRow || document.querySelector('[data-testid="kassa-table"]')
-            inbox?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          })
-        } catch {
-          // ignore scroll issues
-        }
       }
     } catch (err) {
-      const message = normalizeErrorMessage(err?.message) || 'De e-mailbon kon niet worden verwerkt.'
-      setEmailRouteError(message)
+      const technical = err?.technicalUploadError || null
+      if (technical) setTechnicalUploadError(technical)
+      setEmailRouteError(technical?.userMessage || normalizeErrorMessage(err?.message) || 'Picnic e-mailupload is mislukt.')
       setError('')
     } finally {
       setIsUploading(false)
@@ -2553,7 +2537,7 @@ export default function KassaPage() {
     }
     const fileKind = getReceiptLandingFileKind(file)
     if (fileKind === 'email') {
-      await processEmailImportFile(file)
+      await processPicnicEmailLandingFile(file)
       return
     }
     if (fileKind === 'pdf' || fileKind === 'image') {
@@ -2564,12 +2548,6 @@ export default function KassaPage() {
     setError('')
   }
 
-  async function handleEmailUploadChange(event) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    await processEmailImportFile(file)
-  }
 
   async function handleDroppedLandingFile(file) {
     await processLandingReceiptFile(file)
@@ -2587,10 +2565,8 @@ export default function KassaPage() {
       <ReceiptUploadInputs
         fileInputRef={fileInputRef}
         cameraInputRef={cameraInputRef}
-        emailInputRef={emailInputRef}
         onLandingUploadChange={handleLandingUploadChange}
         onCameraCaptureChange={handleCameraCaptureChange}
-        onEmailUploadChange={handleEmailUploadChange}
       />
 
       {isAddReceiptRoute ? (
@@ -2598,7 +2574,6 @@ export default function KassaPage() {
           <ReceiptSourceHubContent
             onChooseReceiptFile={handleChooseReceiptFileFromHub}
             onChooseCamera={handleChooseCameraFromHub}
-            onChooseEmail={handleChooseEmailFromHub}
             onDropLandingFile={handleDroppedLandingFile}
             onCopyEmailRoute={copyEmailRouteToClipboard}
             emailRoute={emailRoute}
@@ -2633,7 +2608,6 @@ export default function KassaPage() {
               <ReceiptSourceHubContent
                 onChooseReceiptFile={handleChooseReceiptFileFromHub}
                 onChooseCamera={handleChooseCameraFromHub}
-                onChooseEmail={handleChooseEmailFromHub}
                 onDropLandingFile={handleDroppedLandingFile}
                 onCopyEmailRoute={copyEmailRouteToClipboard}
                 emailRoute={emailRoute}
