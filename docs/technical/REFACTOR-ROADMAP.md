@@ -1,6 +1,6 @@
 # Rezzerv — Refactor Roadmap
 
-Status: v0.1
+Status: v0.2
 
 Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd zonder traceability en bewijs.
 
@@ -16,13 +16,14 @@ Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd 
 
 ### RR-01 — `backend/app/services/receipt_ssot_status.py`
 
-**Status:** cleanup
+**Status:** DONE
 
-**Probleem:** bevat historische runtime fallbackstatuslogica die functionele status kan afleiden uit parserstatus, totalen en NO_BASELINE_MATCH.
+**Probleem:** bevatte historische runtime fallbackstatuslogica die functionele status kon afleiden uit parserstatus, totalen en NO_BASELINE_MATCH.
 
-**Gewenste toestand:**
+**Uitgevoerd:**
 
-- `apply_po_norm_status` is alleen mapper van statusbaseline-service naar UI/API-velden.
+- Oude runtime fallbackstatus verwijderd.
+- `apply_po_norm_status` blijft mapper van statusbaseline-service naar UI/API-velden.
 - Geen fallback vanuit `parse_status`.
 - Geen `runtime_status_source = parser` voor functionele UI-status.
 
@@ -34,21 +35,78 @@ Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd 
 
 ### RR-02 — `backend/app/services/receipt_status_baseline_service_v4.py`
 
-**Status:** deprecate
+**Status:** DONE
 
 **Probleem:** compatibility shim met verwarrende naam.
 
-**Stappen:**
+**Uitgevoerd:**
 
-1. Zoek imports naar `receipt_status_baseline_service_v4`.
-2. Vervang door `receipt_status_baseline_service`.
-3. Verwijder shim pas als grep leeg is.
+1. Imports naar `receipt_status_baseline_service_v4` gecontroleerd.
+2. Geen verwijzingen gevonden.
+3. Shim verwijderd.
 
 **Acceptatie:** FastAPI start; baselinevalidatie blijft groen.
 
-## Prioriteit 2 — API-laag splitsen
+## Prioriteit 2 — Repo-scope opschonen
 
-### RR-03 — `backend/app/main.py`
+### RR-03 — `_local_safety_before_sync_*`
+
+**Status:** READY_FOR_LOCAL_EXECUTION
+
+**Probleem:** lokale safety-archives staan in Git en vervuilen de actieve Python-inventaris.
+
+**Bewijs uit inventaris:**
+
+- `local_safety_archive`: 68 Python-bestanden.
+- Alle bestanden in deze categorie staan op `remove-candidate`.
+- Alle bestanden hebben `header_scope_default = false`.
+- Deze categorie bevat geen FastAPI-routes.
+
+**Beheerste verwijdering:**
+
+Gebruik:
+
+```powershell
+python tools\cleanup_local_safety_archive.py
+```
+
+Het script:
+
+1. zoekt `_local_safety_before_sync_*` mappen;
+2. controleert externe verwijzingen buiten toegestane documentatie/tooling;
+3. verwijdert de mappen alleen als er geen externe verwijzingen zijn;
+4. genereert daarna `docs/technical/_generated/python-file-inventory.*` opnieuw.
+
+**Acceptatie:**
+
+- `local_safety_archive` is 0 of afwezig in de inventaris.
+- `active_backend_app` blijft functioneel ongewijzigd.
+- Geen wijziging in frontend, baseline V10 of productie-parserlogica.
+- Swagger baselinevalidatie blijft groen.
+
+### RR-04 — Root debug scripts
+
+**Status:** NEXT_CANDIDATE
+
+**Probleem:** losse root scripts zoals `dump_*`, `peek_*`, `inspect_*` vervuilen de repository.
+
+**Aanpak:** eerst inventariseren en markeren; daarna per script verwijderen of verplaatsen naar `tools/archive/`.
+
+### RR-05 — Legacy patchtools
+
+**Status:** NEXT_CANDIDATE
+
+**Probleem:** tijdelijke patchscripts blijven na uitvoering in `tools/` staan.
+
+**Regel:**
+
+- scripts die herbruikbaar zijn: documenteren als tool;
+- scripts die eenmalig waren: markeren als remove-candidate;
+- verwijderen pas na traceability en akkoord.
+
+## Prioriteit 3 — API-laag splitsen
+
+### RR-06 — `backend/app/main.py`
 
 **Status:** split
 
@@ -64,9 +122,9 @@ Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd 
 
 **Regel:** endpointpaden, requestmodellen en responsecontracten blijven ongewijzigd.
 
-## Prioriteit 3 — Parserlaag structureren
+## Prioriteit 4 — Parserlaag structureren
 
-### RR-04 — `backend/app/receipt_ingestion/service_parts/store_specific_parsers.py`
+### RR-07 — `backend/app/receipt_ingestion/service_parts/store_specific_parsers.py`
 
 **Status:** split
 
@@ -83,29 +141,15 @@ Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd 
 
 **Regel:** parser outputcontract blijft gelijk.
 
-## Prioriteit 4 — Diagnose/test isoleren
+## Prioriteit 5 — Diagnose/test isoleren
 
-### RR-05 — Testing en diagnose routes
+### RR-08 — Testing en diagnose routes
 
 **Status:** move/split
 
 **Probleem:** diagnose- en testendpoints zijn deels vermengd met productie-API.
 
 **Doel:** alle test/diagnose endpoints expliciet onder `testing_diagnostics` router en `diagnostic-only` classificatie.
-
-## Prioriteit 5 — Tools opschonen
-
-### RR-06 — Patchscripts in `tools/`
-
-**Status:** classify/deprecate/remove-candidate
-
-**Probleem:** tijdelijke patchscripts blijven na uitvoering in repository staan.
-
-**Regel:**
-
-- scripts die herbruikbaar zijn: documenteren als tool;
-- scripts die eenmalig waren: markeren als remove-candidate;
-- verwijderen pas na traceability en akkoord.
 
 ## Geen acties in deze roadmap zonder akkoord
 
