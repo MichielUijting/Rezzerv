@@ -1,3 +1,16 @@
+"""
+Technical Design Reference:
+- TD Section: TD-09 Tools en scripts
+- Module Role: Repository maintenance helper
+- Runtime Type: tool
+- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
+- Depends On: see generated inventory
+- Reads Data: see generated inventory
+- Writes Data: see generated inventory
+- Status Authority: no
+- Refactor Status: keep
+"""
+
 from __future__ import annotations
 
 from pathlib import Path

@@ -1,3 +1,16 @@
+"""
+Technical Design Reference:
+- TD Section: TD-02 Backend API-laag
+- Module Role: FastAPI entrypoint and route container
+- Runtime Type: production
+- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
+- Depends On: see generated inventory
+- Reads Data: see generated inventory
+- Writes Data: see generated inventory
+- Status Authority: no
+- Refactor Status: split
+"""
+
 from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse

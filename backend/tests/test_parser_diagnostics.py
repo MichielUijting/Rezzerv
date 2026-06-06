@@ -1,3 +1,16 @@
+"""
+Technical Design Reference:
+- TD Section: TD-08 Test, baseline en regressie
+- Module Role: Backend automated test
+- Runtime Type: test
+- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
+- Depends On: see generated inventory
+- Reads Data: see generated inventory
+- Writes Data: see generated inventory
+- Status Authority: no
+- Refactor Status: keep_diagnostic
+"""
+
 from app.receipt_ingestion.parser_diagnostics import (
     diagnostic_events_from_lines,
     normalize_producer_trace,

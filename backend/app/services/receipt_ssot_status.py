@@ -1,3 +1,16 @@
+"""
+Technical Design Reference:
+- TD Section: TD-04 Status en SSOT
+- Module Role: Map PO norm status to API/UI fields
+- Runtime Type: production
+- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
+- Depends On: see generated inventory
+- Reads Data: see generated inventory
+- Writes Data: see generated inventory
+- Status Authority: no
+- Refactor Status: cleanup
+"""
+
 
 from __future__ import annotations
 def _r9_38d6_decimal(value):

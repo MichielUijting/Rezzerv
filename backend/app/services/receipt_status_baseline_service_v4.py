@@ -1,3 +1,16 @@
+"""
+Technical Design Reference:
+- TD Section: TD-04 Status en SSOT
+- Module Role: PO norm status baseline authority or compatibility shim
+- Runtime Type: production
+- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
+- Depends On: see generated inventory
+- Reads Data: see generated inventory
+- Writes Data: see generated inventory
+- Status Authority: yes only for active service
+- Refactor Status: keep/deprecate
+"""
+
 """Compatibility shim for legacy imports after Baseline V7 switch.
 
 R9-36I removed the obsolete V6/V4 implementation, but one diagnostic route
