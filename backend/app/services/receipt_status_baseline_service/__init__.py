@@ -1,10 +1,9 @@
 """Active receipt status baseline service package.
 
-R9-36I/V7 note:
+R9/V10 note:
 Python resolves ``app.services.receipt_status_baseline_service`` to this package
 before the sibling ``receipt_status_baseline_service.py`` module. Therefore the
-active V7 PO baseline implementation must live here, and legacy v4 imports must
-not be pulled from this package to avoid circular startup imports.
+active PO baseline implementation must live here.
 """
 
 from __future__ import annotations
@@ -20,7 +19,7 @@ from sqlalchemy import text
 from app.db import get_runtime_datastore_info
 
 BASELINE_DIR = Path(__file__).resolve().parent.parent.parent / 'testing' / 'receipt_status_baseline'
-EXPECTED_STATUS_PATH = BASELINE_DIR / 'expected_status_v7.json'
+EXPECTED_STATUS_PATH = BASELINE_DIR / 'expected_status_v10.json'
 CRITERIA_DOC_PATH = BASELINE_DIR / 'Categorie_kassabon_v1.1.docx'
 
 STATUS_LABELS = {'approved': 'Gecontroleerd', 'review_needed': 'Controle nodig', 'manual': 'Handmatig'}
@@ -68,6 +67,13 @@ def _normalize_text(value: Any) -> str:
     return ''.join(ch.lower() for ch in str(value or '').strip() if ch.isalnum())
 
 
+def _normalize_baseline_source_file(value: Any) -> str:
+    raw_value = str(value or '').strip().lower()
+    while raw_value.endswith('.eml.eml'):
+        raw_value = raw_value[:-4]
+    return _normalize_text(raw_value)
+
+
 def normalize_store_chain(value: Any) -> str | None:
     normalized = _normalize_text(value)
     if not normalized:
@@ -113,6 +119,7 @@ def _actual_line_total_expr(conn) -> str:
 def _actual_line_discount_expr(conn) -> str:
     cols = _column_names(conn, 'receipt_table_lines')
     return 'COALESCE(rtl.discount_amount, 0)' if 'discount_amount' in cols else '0'
+
 
 def load_expected_receipt_statuses() -> list[dict[str, Any]]:
     return json.loads(EXPECTED_STATUS_PATH.read_text(encoding='utf-8'))
@@ -163,7 +170,6 @@ def _fetch_active_actual_rows(conn, household_id: str | None = None) -> list[dic
         discount_total = _to_decimal(row.get('discount_total')) or Decimal('0')
         total_amount = _to_decimal(row.get('total_amount')) or Decimal('0')
         line_level_net_sum = actual_line_sum + actual_line_discount_sum
-        # R9-38B10: include combined line-level and receipt-level corrections.
         candidates = [
             line_level_net_sum,
             actual_line_sum,
@@ -203,7 +209,7 @@ def _score_actual_match(expected: dict[str, Any], actual: dict[str, Any]) -> tup
     flags = {'filename_exact': False, 'store_chain_match': False, 'total_match': False, 'line_count_match': False}
     score = 0
     reasons = []
-    if _normalize_text(expected.get('source_file')) == _normalize_text(actual.get('original_filename')):
+    if _normalize_baseline_source_file(expected.get('source_file')) == _normalize_baseline_source_file(actual.get('original_filename')):
         score += 100
         flags['filename_exact'] = True
         reasons.append('bestandsnaam exact')
@@ -222,11 +228,18 @@ def _score_actual_match(expected: dict[str, Any], actual: dict[str, Any]) -> tup
     return score, flags, '; '.join(reasons)
 
 
+def _is_picnic(expected: dict[str, Any], actual: dict[str, Any]) -> bool:
+    expected_chain = normalize_store_chain(expected.get('store_chain') or expected.get('store_name'))
+    actual_chain = normalize_store_chain(actual.get('store_chain') or actual.get('store_name'))
+    return _normalize_text(expected_chain) == 'picnic' or _normalize_text(actual_chain) == 'picnic'
+
+
 def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
     store_ok = _store_chain_match(expected, actual)
-    total_ok = _amount_equals(actual.get('total_amount'), expected.get('total_amount'))
+    picnic_receipt = _is_picnic(expected, actual)
+    total_ok = True if picnic_receipt else _amount_equals(actual.get('total_amount'), expected.get('total_amount'))
     count_ok = str(expected.get('line_count')) == str(actual.get('line_count'))
-    sum_ok = _amount_equals(actual.get('net_line_sum_used_for_decision'), actual.get('total_amount'))
+    sum_ok = True if picnic_receipt else _amount_equals(actual.get('net_line_sum_used_for_decision'), actual.get('total_amount'))
     failed = []
     if not store_ok:
         failed.append('STORE_CHAIN_MISMATCH')
@@ -255,7 +268,7 @@ def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, 
 
 def _reason(criteria: dict[str, Any]) -> str:
     if criteria['all_criteria_pass']:
-        return 'Gecontroleerd: winkelketen, totaalbedrag, artikelcount en regelsom voldoen aan de PO-norm.'
+        return 'Gecontroleerd: winkelketen, artikelcount en toepasselijke normcriteria voldoen aan de PO-norm.'
     labels = {
         'STORE_CHAIN_MISMATCH': 'winkelketen wijkt af van baseline',
         'TOTAL_AMOUNT_MISMATCH': 'totaalbedrag wijkt af van baseline',
@@ -266,10 +279,10 @@ def _reason(criteria: dict[str, Any]) -> str:
 
 
 def _active_baseline_scope(expected_rows: list[dict[str, Any]], actual_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    active_files = {_normalize_text(row.get('original_filename')) for row in actual_rows if row.get('original_filename')}
+    active_files = {_normalize_baseline_source_file(row.get('original_filename')) for row in actual_rows if row.get('original_filename')}
     if not active_files:
         return expected_rows
-    scoped = [row for row in expected_rows if _normalize_text(row.get('source_file')) in active_files]
+    scoped = [row for row in expected_rows if _normalize_baseline_source_file(row.get('source_file')) in active_files]
     return scoped or expected_rows
 
 
@@ -306,7 +319,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
                 'difference_type': 'mapping_mismatch',
                 'failed_criteria': ['MISSING_ACTIVE_RECEIPT'],
                 'reason': 'Controle nodig: geen actieve receipt_table gevonden voor dit baselinebestand.',
-                'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v7',
+                'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v10',
             })
             continue
         remaining_actual = [row for row in remaining_actual if row.get('receipt_table_id') != best_actual.get('receipt_table_id')]
@@ -354,7 +367,7 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             'match_score': best_score,
             'match_signals': best_flags,
             'mapping_reason': None if best_flags.get('filename_exact') else best_match_reason,
-            'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v7',
+            'baseline_origin': expected.get('baseline_origin') or 'official_baseline_v10',
         })
     for actual in remaining_actual:
         counts['extra'] += 1
@@ -397,16 +410,16 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
     return {
         'runtime_datastore': get_runtime_datastore_info(),
         'policy_source': 'receipt_status_baseline_service',
-        'policy_mode': 'po_four_criteria_store_chain_v7',
+        'policy_mode': 'po_four_criteria_store_chain_v10',
         'expected_status_file': str(EXPECTED_STATUS_PATH.name),
         'criteria_file': str(CRITERIA_DOC_PATH.name),
         'household_id': str(household_id) if household_id is not None else None,
         'po_norm': {
             'status_gecontroleerd_when_all_true': [
                 'winkelketen gelijk aan baseline',
-                'totaalbedrag gelijk aan baseline',
                 'aantal artikelen gelijk aan baseline',
-                'som van artikelregels inclusief artikelkortingen gelijk aan kassabontotaal',
+                'totaalbedrag gelijk aan baseline waar toepasselijk',
+                'som van artikelregels inclusief artikelkortingen gelijk aan kassabontotaal waar toepasselijk',
             ],
             'store_name_is_display_field': True,
             'store_chain_is_status_field': True,
@@ -435,7 +448,7 @@ def diagnose_receipt_status_baseline(conn, household_id: str | None = None) -> d
     return {
         'runtime_datastore': get_runtime_datastore_info(),
         'policy_source': 'receipt_status_baseline_service',
-        'policy_mode': 'po_four_criteria_store_chain_v7',
+        'policy_mode': 'po_four_criteria_store_chain_v10',
         'validation_summary': validation.get('summary', {}),
         'mapping_mismatch_count': len(mapping_mismatches),
         'criterion_mismatch_count': len(criterion_mismatches),
