@@ -20,6 +20,7 @@ from app.db import get_runtime_datastore_info
 
 BASELINE_DIR = Path(__file__).resolve().parent.parent.parent / 'testing' / 'receipt_status_baseline'
 EXPECTED_STATUS_PATH = BASELINE_DIR / 'expected_status_v10.json'
+CRITERIA_OVERRIDES_PATH = BASELINE_DIR / 'expected_status_v10_criteria_overrides.json'
 CRITERIA_DOC_PATH = BASELINE_DIR / 'Categorie_kassabon_v1.1.docx'
 
 STATUS_LABELS = {'approved': 'Gecontroleerd', 'review_needed': 'Controle nodig', 'manual': 'Handmatig'}
@@ -83,6 +84,39 @@ def normalize_store_chain(value: Any) -> str | None:
             return label
     return str(value or '').strip() or None
 
+
+
+
+def load_expected_criteria_overrides() -> dict[str, dict[str, bool]]:
+    if not CRITERIA_OVERRIDES_PATH.exists():
+        return {}
+    data = json.loads(CRITERIA_OVERRIDES_PATH.read_text(encoding='utf-8'))
+    return data if isinstance(data, dict) else {}
+
+
+def _criteria_for_expected(expected: dict[str, Any]) -> dict[str, bool]:
+    defaults = {
+        'check_store_chain': True,
+        'check_total_amount': True,
+        'check_article_count': True,
+        'check_line_sum': True,
+    }
+    overrides = load_expected_criteria_overrides()
+    key = str(expected.get('source_file') or '').strip()
+    normalized_key = _normalize_baseline_source_file(key)
+    selected = None
+    if key in overrides and isinstance(overrides.get(key), dict):
+        selected = overrides.get(key)
+    else:
+        for override_key, value in overrides.items():
+            if _normalize_baseline_source_file(override_key) == normalized_key and isinstance(value, dict):
+                selected = value
+                break
+    if selected:
+        for flag in defaults:
+            if flag in selected:
+                defaults[flag] = bool(selected[flag])
+    return defaults
 
 def _store_chain_match(expected: dict[str, Any], actual: dict[str, Any]) -> bool:
     expected_chain = normalize_store_chain(expected.get('store_chain') or expected.get('store_name'))
@@ -228,18 +262,18 @@ def _score_actual_match(expected: dict[str, Any], actual: dict[str, Any]) -> tup
     return score, flags, '; '.join(reasons)
 
 
-def _is_picnic(expected: dict[str, Any], actual: dict[str, Any]) -> bool:
-    expected_chain = normalize_store_chain(expected.get('store_chain') or expected.get('store_name'))
-    actual_chain = normalize_store_chain(actual.get('store_chain') or actual.get('store_name'))
-    return _normalize_text(expected_chain) == 'picnic' or _normalize_text(actual_chain) == 'picnic'
-
-
 def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, Any]:
-    store_ok = _store_chain_match(expected, actual)
-    picnic_receipt = _is_picnic(expected, actual)
-    total_ok = True if picnic_receipt else _amount_equals(actual.get('total_amount'), expected.get('total_amount'))
-    count_ok = str(expected.get('line_count')) == str(actual.get('line_count'))
-    sum_ok = True if picnic_receipt else _amount_equals(actual.get('net_line_sum_used_for_decision'), actual.get('total_amount'))
+    criteria_flags = _criteria_for_expected(expected)
+    raw_store_ok = _store_chain_match(expected, actual)
+    raw_total_ok = _amount_equals(actual.get('total_amount'), expected.get('total_amount'))
+    raw_count_ok = str(expected.get('line_count')) == str(actual.get('line_count'))
+    raw_sum_ok = _amount_equals(actual.get('net_line_sum_used_for_decision'), actual.get('total_amount'))
+
+    store_ok = True if not criteria_flags['check_store_chain'] else raw_store_ok
+    total_ok = True if not criteria_flags['check_total_amount'] else raw_total_ok
+    count_ok = True if not criteria_flags['check_article_count'] else raw_count_ok
+    sum_ok = True if not criteria_flags['check_line_sum'] else raw_sum_ok
+
     failed = []
     if not store_ok:
         failed.append('STORE_CHAIN_MISMATCH')
@@ -259,6 +293,13 @@ def _po_criteria(expected: dict[str, Any], actual: dict[str, Any]) -> dict[str, 
         'total_amount_matches_baseline': total_ok,
         'article_count_matches_baseline': count_ok,
         'line_sum_matches_total': sum_ok,
+        'criteria_flags': criteria_flags,
+        'raw_criteria': {
+            'store_chain_matches_baseline': raw_store_ok,
+            'total_amount_matches_baseline': raw_total_ok,
+            'article_count_matches_baseline': raw_count_ok,
+            'line_sum_matches_total': raw_sum_ok,
+        },
         'all_criteria_pass': all_ok,
         'failed_criteria': failed,
         'po_norm_status': status,
@@ -418,8 +459,8 @@ def validate_receipt_status_baseline(conn, household_id: str | None = None) -> d
             'status_gecontroleerd_when_all_true': [
                 'winkelketen gelijk aan baseline',
                 'aantal artikelen gelijk aan baseline',
-                'totaalbedrag gelijk aan baseline waar toepasselijk',
-                'som van artikelregels inclusief artikelkortingen gelijk aan kassabontotaal waar toepasselijk',
+                'totaalbedrag gelijk aan baseline indien baselinecriteria dit vereisen',
+                'som van artikelregels inclusief artikelkortingen gelijk aan kassabontotaal indien baselinecriteria dit vereisen',
             ],
             'store_name_is_display_field': True,
             'store_chain_is_status_field': True,
