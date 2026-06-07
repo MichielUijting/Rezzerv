@@ -8617,7 +8617,7 @@
   {
     "path": "tools/generate_python_module_inventory.py",
     "repository_category": "tools_active",
-    "line_count": 334,
+    "line_count": 318,
     "td_section_guess": "TD-09 Tools en scripts",
     "runtime_type_guess": "tool",
     "refactor_status_guess": "keep",
@@ -8641,7 +8641,7 @@
       "guess_td",
       "header_scope_default",
       "build_item",
-      "write_markdown",
+      "write_inventory",
       "main"
     ],
     "classes": [
@@ -8736,11 +8736,11 @@
   },
   {
     "path": "tools/r7c33_receipt_validation_runner.py",
-    "repository_category": "tools_legacy_patch",
+    "repository_category": "tools_active",
     "line_count": 258,
     "td_section_guess": "TD-09 Tools en scripts",
     "runtime_type_guess": "tool",
-    "refactor_status_guess": "deprecate",
+    "refactor_status_guess": "keep",
     "imports": [
       "__future__",
       "app.services.receipt_status_baseline_service",
@@ -8805,23 +8805,6 @@
       "receipt_status",
       "status_label"
     ],
-    "has_technical_design_header": false,
-    "header_scope_default": false
-  },
-  {
-    "path": "tools/R9-06_receipt_status_governance_check.py",
-    "repository_category": "tools_legacy_patch",
-    "line_count": 220,
-    "td_section_guess": "TD-09 Tools en scripts",
-    "runtime_type_guess": "tool",
-    "refactor_status_guess": "deprecate",
-    "imports": [],
-    "functions": [],
-    "classes": [],
-    "fastapi_routes": [],
-    "reads_data": false,
-    "writes_data": false,
-    "status_terms": [],
     "has_technical_design_header": false,
     "header_scope_default": false
   },
@@ -8916,25 +8899,6 @@
       "parse_status",
       "receipt_status"
     ],
-    "has_technical_design_header": false,
-    "header_scope_default": false
-  },
-  {
-    "path": "tools/R9-32G_patch.py",
-    "repository_category": "tools_legacy_patch",
-    "line_count": 47,
-    "td_section_guess": "TD-09 Tools en scripts",
-    "runtime_type_guess": "tool",
-    "refactor_status_guess": "deprecate",
-    "imports": [
-      "pathlib"
-    ],
-    "functions": [],
-    "classes": [],
-    "fastapi_routes": [],
-    "reads_data": false,
-    "writes_data": true,
-    "status_terms": [],
     "has_technical_design_header": false,
     "header_scope_default": false
   },
