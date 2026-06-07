@@ -1,6 +1,6 @@
 # Rezzerv — Refactor Roadmap
 
-Status: v0.5
+Status: v0.6
 
 Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd zonder traceability en bewijs.
 
@@ -113,43 +113,56 @@ Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd 
 
 ### RR-06 — Reports/tmp Python-bestanden
 
-**Status:** READY_FOR_LOCAL_EXECUTION
+**Status:** DONE
 
-**Probleem:** tijdelijke rapportagebestanden staan nog in de repository en vervuilen de Python-inventaris.
+**Probleem:** tijdelijke rapportagebestanden stonden nog in de repository en vervuilden de Python-inventaris.
 
-**Bewijs uit inventaris:**
+**Uitgevoerd:**
 
-- `reports_tmp`: 9 Python-bestanden.
-- Deze categorie is bedoeld voor tijdelijke rapportage- en scratchbestanden.
-- Deze categorie hoort niet bij productie-runtime.
-
-**Beheerste verwijdering:**
-
-Gebruik:
-
-```powershell
-python tools\cleanup_reports_tmp.py
-```
-
-Het script:
-
-1. leest `docs/technical/_generated/python-file-inventory.json`;
-2. selecteert alleen items met `repository_category = reports_tmp`;
-3. controleert externe verwijzingen buiten toegestane documentatie/tooling, `tools/debug_output/`, `reports/` en `tmp/`;
-4. verwijdert alleen niet-gerefereerde kandidaten;
-5. laat geblokkeerde kandidaten staan met reden;
-6. genereert daarna `docs/technical/_generated/python-file-inventory.*` opnieuw.
+- 9 niet-gerefereerde `reports_tmp` Python-bestanden verwijderd.
+- Python-inventaris opnieuw gegenereerd.
+- `reports_tmp` is verdwenen uit de inventariscategorieën.
 
 **Acceptatie:**
 
-- `reports_tmp` is 0 of afwezig, of resterende bestanden zijn expliciet geblokkeerd met reden.
+- `reports_tmp` is 0 of afwezig.
+- Geen wijziging in `backend/app` productielogica.
+- Geen wijziging in baseline V10.
+- Swagger baselinevalidatie blijft groen.
+
+### RR-07 — Unclassified root receipt service copy
+
+**Status:** LOCAL_EXECUTION_REQUIRED
+
+**Probleem:** de Python-inventaris bevatte nog één `unclassified` bestand: `receipt_service.py` in de repository-root.
+
+**Analyse:**
+
+- `receipt_service.py` in de root is een kopie/afsplitsing buiten de backend-package.
+- De actieve service staat in `backend/app/services/receipt_service.py`.
+- De domeinwrapper verwijst naar `app.services.receipt_service`, niet naar de rootkopie.
+- GitHub-codezoekopdrachten vonden geen actieve import van de rootkopie.
+
+**Uitgevoerd op GitHub:**
+
+- `receipt_service.py` in de root verwijderd.
+
+**Lokaal nog uit te voeren:**
+
+```powershell
+python tools\generate_python_module_inventory.py
+```
+
+**Acceptatie:**
+
+- `unclassified` is 0 of afwezig in de inventaris.
 - Geen wijziging in `backend/app` productielogica.
 - Geen wijziging in baseline V10.
 - Swagger baselinevalidatie blijft groen.
 
 ## Prioriteit 3 — API-laag splitsen
 
-### RR-07 — `backend/app/main.py`
+### RR-08 — `backend/app/main.py`
 
 **Status:** split
 
@@ -167,7 +180,7 @@ Het script:
 
 ## Prioriteit 4 — Parserlaag structureren
 
-### RR-08 — `backend/app/receipt_ingestion/service_parts/store_specific_parsers.py`
+### RR-09 — `backend/app/receipt_ingestion/service_parts/store_specific_parsers.py`
 
 **Status:** split
 
@@ -186,7 +199,7 @@ Het script:
 
 ## Prioriteit 5 — Diagnose/test isoleren
 
-### RR-09 — Testing en diagnose routes
+### RR-10 — Testing en diagnose routes
 
 **Status:** move/split
 
