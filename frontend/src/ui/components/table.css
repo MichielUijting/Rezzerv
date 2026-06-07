@@ -1,12 +1,10 @@
-
-
 :root{
   --rz-table-visible-row-count: 10;
   --rz-table-header-row-height: 42px;
   --rz-table-filter-row-height: 34px;
   --rz-table-body-row-height: 28px;
 }
-/* REZZERV TABLE COMPONENT v2.0 (spreadsheet matrix) */
+/* REZZERV TABLE COMPONENT v2.1 (spreadsheet matrix + sticky title/filter rows) */
 
 .rz-table-wrapper,
 .rz-table-scroll{
@@ -19,7 +17,8 @@
 
 table.rz-table{
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
   background: #ffffff;
 }
@@ -27,16 +26,24 @@ table.rz-table{
 /* header row */
 .rz-table thead tr.rz-table-header th,
 .rz-table thead tr:first-child th{
+  position: sticky;
+  top: 0;
+  z-index: 5;
   background: var(--color-brand-primary);
   color: var(--color-text-inverse);
   font-weight: 600;
-  height: 42px;
+  height: var(--rz-table-header-row-height);
 }
 
 /* filter row */
-.rz-table thead tr.rz-table-filter,
-.rz-table thead tr:nth-child(2){
+.rz-table thead tr.rz-table-filter th,
+.rz-table thead tr.rz-table-filters th,
+.rz-table thead tr:nth-child(2) th{
+  position: sticky;
+  top: var(--rz-table-header-row-height);
+  z-index: 4;
   background: var(--color-brand-light);
+  height: var(--rz-table-filter-row-height);
 }
 
 .rz-table th,
@@ -44,7 +51,7 @@ table.rz-table{
   border: 1px solid var(--color-table-grid);
   padding: var(--space-md);
   vertical-align: middle;
-  text-align: left; /* standaard: alle niet-numerieke kolommen links uitlijnen */
+  text-align: left;
   box-sizing: border-box;
   overflow: hidden;
   text-overflow: ellipsis;
