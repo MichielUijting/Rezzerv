@@ -1,6 +1,6 @@
 # Rezzerv — Refactor Roadmap
 
-Status: v0.2
+Status: v0.3
 
 Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd zonder traceability en bewijs.
 
@@ -51,31 +51,16 @@ Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd 
 
 ### RR-03 — `_local_safety_before_sync_*`
 
-**Status:** READY_FOR_LOCAL_EXECUTION
+**Status:** DONE
 
-**Probleem:** lokale safety-archives staan in Git en vervuilen de actieve Python-inventaris.
+**Probleem:** lokale safety-archives stonden in Git en vervuilden de actieve Python-inventaris.
 
-**Bewijs uit inventaris:**
+**Uitgevoerd:**
 
-- `local_safety_archive`: 68 Python-bestanden.
-- Alle bestanden in deze categorie staan op `remove-candidate`.
-- Alle bestanden hebben `header_scope_default = false`.
-- Deze categorie bevat geen FastAPI-routes.
-
-**Beheerste verwijdering:**
-
-Gebruik:
-
-```powershell
-python tools\cleanup_local_safety_archive.py
-```
-
-Het script:
-
-1. zoekt `_local_safety_before_sync_*` mappen;
-2. controleert externe verwijzingen buiten toegestane documentatie/tooling;
-3. verwijdert de mappen alleen als er geen externe verwijzingen zijn;
-4. genereert daarna `docs/technical/_generated/python-file-inventory.*` opnieuw.
+- `_local_safety_before_sync_20260525_104038` verwijderd uit Git.
+- Python-inventaris opnieuw gegenereerd.
+- Totaal aantal Python-bestanden is gedaald van 433 naar 365.
+- `local_safety_archive` is verdwenen uit de inventariscategorieën.
 
 **Acceptatie:**
 
@@ -86,11 +71,57 @@ Het script:
 
 ### RR-04 — Root debug scripts
 
-**Status:** NEXT_CANDIDATE
+**Status:** READY_FOR_LOCAL_EXECUTION
 
-**Probleem:** losse root scripts zoals `dump_*`, `peek_*`, `inspect_*` vervuilen de repository.
+**Probleem:** losse root scripts zoals `dump_*`, `peek_*`, `inspect_*`, `map_*` en `receipt_duplicates.py` vervuilen de repository.
 
-**Aanpak:** eerst inventariseren en markeren; daarna per script verwijderen of verplaatsen naar `tools/archive/`.
+**Bewijs uit inventaris:**
+
+- `root_debug_scripts`: 15 Python-bestanden.
+- Alle bestanden in deze categorie staan op `remove-candidate`.
+- Alle bestanden hebben `header_scope_default = false`.
+- Deze categorie bevat geen FastAPI-routes.
+
+**Huidige kandidaten:**
+
+- `dump_active_receipts.py`
+- `dump_archived_receipts.py`
+- `dump_two_receipts_lines.py`
+- `dump_two_receipts_lines_v2.py`
+- `dump_two_receipts_lines_v3.py`
+- `frontend/r9_21l_debug_export_hard_reset.py`
+- `inspect_raw_receipts.py`
+- `inspect_receipt_sources.py`
+- `inspect_receipt_table_lines.py`
+- `inspect_rezzerv_db.py`
+- `map_active_to_raw.py`
+- `peek_raw_receipts.py`
+- `peek_receipt_sources.py`
+- `peek_receipt_table_lines.py`
+- `receipt_duplicates.py`
+
+**Beheerste verwijdering:**
+
+Gebruik:
+
+```powershell
+python tools\cleanup_root_debug_scripts.py
+```
+
+Het script:
+
+1. leest `docs/technical/_generated/python-file-inventory.json`;
+2. selecteert alleen items met `repository_category = root_debug_scripts`;
+3. controleert externe verwijzingen buiten toegestane documentatie/tooling;
+4. verwijdert de kandidaten alleen als er geen externe verwijzingen zijn;
+5. genereert daarna `docs/technical/_generated/python-file-inventory.*` opnieuw.
+
+**Acceptatie:**
+
+- `root_debug_scripts` is 0 of afwezig in de inventaris.
+- Geen wijziging in `backend/app` productielogica.
+- Geen wijziging in baseline V10.
+- Swagger baselinevalidatie blijft groen.
 
 ### RR-05 — Legacy patchtools
 
