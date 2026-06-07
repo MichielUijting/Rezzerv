@@ -1,6 +1,6 @@
 # Rezzerv — Refactor Roadmap
 
-Status: v0.3
+Status: v0.4
 
 Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd zonder traceability en bewijs.
 
@@ -71,7 +71,7 @@ Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd 
 
 ### RR-04 — Root debug scripts
 
-**Status:** READY_FOR_LOCAL_EXECUTION
+**Status:** LOCAL_EXECUTION_DONE_AWAITING_PUSH
 
 **Probleem:** losse root scripts zoals `dump_*`, `peek_*`, `inspect_*`, `map_*` en `receipt_duplicates.py` vervuilen de repository.
 
@@ -125,15 +125,38 @@ Het script:
 
 ### RR-05 — Legacy patchtools
 
-**Status:** NEXT_CANDIDATE
+**Status:** READY_FOR_LOCAL_EXECUTION
 
 **Probleem:** tijdelijke patchscripts blijven na uitvoering in `tools/` staan.
 
-**Regel:**
+**Bewijs uit inventaris:**
 
-- scripts die herbruikbaar zijn: documenteren als tool;
-- scripts die eenmalig waren: markeren als remove-candidate;
-- verwijderen pas na traceability en akkoord.
+- `tools_legacy_patch`: 73 Python-bestanden.
+- Alle bestanden in deze categorie staan buiten header-scope.
+- Deze categorie bevat historische `apply_r*`, `patch_*`, `r7c*`, `R9-*` en HOTFIX-scripts.
+
+**Beheerste verwijdering:**
+
+Gebruik:
+
+```powershell
+python tools\cleanup_legacy_patch_tools.py
+```
+
+Het script:
+
+1. leest `docs/technical/_generated/python-file-inventory.json`;
+2. selecteert alleen items met `repository_category = tools_legacy_patch`;
+3. controleert externe verwijzingen buiten toegestane documentatie/tooling, `tools/debug_output/`, `reports/` en `tmp/`;
+4. verwijdert de kandidaten alleen als er geen echte verwijzingen zijn;
+5. genereert daarna `docs/technical/_generated/python-file-inventory.*` opnieuw.
+
+**Acceptatie:**
+
+- `tools_legacy_patch` is 0 of afwezig in de inventaris.
+- Geen wijziging in `backend/app` productielogica.
+- Geen wijziging in baseline V10.
+- Swagger baselinevalidatie blijft groen.
 
 ## Prioriteit 3 — API-laag splitsen
 
