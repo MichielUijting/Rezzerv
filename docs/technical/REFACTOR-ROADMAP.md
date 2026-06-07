@@ -1,6 +1,6 @@
 # Rezzerv — Refactor Roadmap
 
-Status: v0.4
+Status: v0.5
 
 Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd zonder traceability en bewijs.
 
@@ -71,50 +71,15 @@ Deze roadmap ordent refactoring en dead-code-cleanup. Er wordt niets verwijderd 
 
 ### RR-04 — Root debug scripts
 
-**Status:** LOCAL_EXECUTION_DONE_AWAITING_PUSH
+**Status:** DONE
 
-**Probleem:** losse root scripts zoals `dump_*`, `peek_*`, `inspect_*`, `map_*` en `receipt_duplicates.py` vervuilen de repository.
+**Probleem:** losse root scripts zoals `dump_*`, `peek_*`, `inspect_*`, `map_*` en `receipt_duplicates.py` vervuilden de repository.
 
-**Bewijs uit inventaris:**
+**Uitgevoerd:**
 
-- `root_debug_scripts`: 15 Python-bestanden.
-- Alle bestanden in deze categorie staan op `remove-candidate`.
-- Alle bestanden hebben `header_scope_default = false`.
-- Deze categorie bevat geen FastAPI-routes.
-
-**Huidige kandidaten:**
-
-- `dump_active_receipts.py`
-- `dump_archived_receipts.py`
-- `dump_two_receipts_lines.py`
-- `dump_two_receipts_lines_v2.py`
-- `dump_two_receipts_lines_v3.py`
-- `frontend/r9_21l_debug_export_hard_reset.py`
-- `inspect_raw_receipts.py`
-- `inspect_receipt_sources.py`
-- `inspect_receipt_table_lines.py`
-- `inspect_rezzerv_db.py`
-- `map_active_to_raw.py`
-- `peek_raw_receipts.py`
-- `peek_receipt_sources.py`
-- `peek_receipt_table_lines.py`
-- `receipt_duplicates.py`
-
-**Beheerste verwijdering:**
-
-Gebruik:
-
-```powershell
-python tools\cleanup_root_debug_scripts.py
-```
-
-Het script:
-
-1. leest `docs/technical/_generated/python-file-inventory.json`;
-2. selecteert alleen items met `repository_category = root_debug_scripts`;
-3. controleert externe verwijzingen buiten toegestane documentatie/tooling;
-4. verwijdert de kandidaten alleen als er geen externe verwijzingen zijn;
-5. genereert daarna `docs/technical/_generated/python-file-inventory.*` opnieuw.
+- 15 root-debug-scripts verwijderd.
+- Python-inventaris opnieuw gegenereerd.
+- `root_debug_scripts` is verdwenen uit de inventariscategorieën.
 
 **Acceptatie:**
 
@@ -125,31 +90,19 @@ Het script:
 
 ### RR-05 — Legacy patchtools
 
-**Status:** READY_FOR_LOCAL_EXECUTION
+**Status:** DONE
 
-**Probleem:** tijdelijke patchscripts blijven na uitvoering in `tools/` staan.
+**Probleem:** tijdelijke patchscripts bleven na uitvoering in `tools/` staan.
 
-**Bewijs uit inventaris:**
+**Uitgevoerd:**
 
-- `tools_legacy_patch`: 73 Python-bestanden.
-- Alle bestanden in deze categorie staan buiten header-scope.
-- Deze categorie bevat historische `apply_r*`, `patch_*`, `r7c*`, `R9-*` en HOTFIX-scripts.
-
-**Beheerste verwijdering:**
-
-Gebruik:
-
-```powershell
-python tools\cleanup_legacy_patch_tools.py
-```
-
-Het script:
-
-1. leest `docs/technical/_generated/python-file-inventory.json`;
-2. selecteert alleen items met `repository_category = tools_legacy_patch`;
-3. controleert externe verwijzingen buiten toegestane documentatie/tooling, `tools/debug_output/`, `reports/` en `tmp/`;
-4. verwijdert de kandidaten alleen als er geen echte verwijzingen zijn;
-5. genereert daarna `docs/technical/_generated/python-file-inventory.*` opnieuw.
+- 69 niet-gerefereerde legacy patchtools verwijderd.
+- 4 geblokkeerde legacy tools apart beoordeeld.
+- Verouderde R9-06 en R9-32G wrappers/tools verwijderd.
+- `tools/r7c33_receipt_validation_runner.py` geclassificeerd als `tools_active`.
+- Laatste legacy patchtool `tools/patch_dedicated_picnic_eml_import_route.py` verwijderd.
+- Python-inventaris opnieuw gegenereerd.
+- `tools_legacy_patch` is verdwenen uit de inventariscategorieën.
 
 **Acceptatie:**
 
@@ -158,9 +111,45 @@ Het script:
 - Geen wijziging in baseline V10.
 - Swagger baselinevalidatie blijft groen.
 
+### RR-06 — Reports/tmp Python-bestanden
+
+**Status:** READY_FOR_LOCAL_EXECUTION
+
+**Probleem:** tijdelijke rapportagebestanden staan nog in de repository en vervuilen de Python-inventaris.
+
+**Bewijs uit inventaris:**
+
+- `reports_tmp`: 9 Python-bestanden.
+- Deze categorie is bedoeld voor tijdelijke rapportage- en scratchbestanden.
+- Deze categorie hoort niet bij productie-runtime.
+
+**Beheerste verwijdering:**
+
+Gebruik:
+
+```powershell
+python tools\cleanup_reports_tmp.py
+```
+
+Het script:
+
+1. leest `docs/technical/_generated/python-file-inventory.json`;
+2. selecteert alleen items met `repository_category = reports_tmp`;
+3. controleert externe verwijzingen buiten toegestane documentatie/tooling, `tools/debug_output/`, `reports/` en `tmp/`;
+4. verwijdert alleen niet-gerefereerde kandidaten;
+5. laat geblokkeerde kandidaten staan met reden;
+6. genereert daarna `docs/technical/_generated/python-file-inventory.*` opnieuw.
+
+**Acceptatie:**
+
+- `reports_tmp` is 0 of afwezig, of resterende bestanden zijn expliciet geblokkeerd met reden.
+- Geen wijziging in `backend/app` productielogica.
+- Geen wijziging in baseline V10.
+- Swagger baselinevalidatie blijft groen.
+
 ## Prioriteit 3 — API-laag splitsen
 
-### RR-06 — `backend/app/main.py`
+### RR-07 — `backend/app/main.py`
 
 **Status:** split
 
@@ -178,7 +167,7 @@ Het script:
 
 ## Prioriteit 4 — Parserlaag structureren
 
-### RR-07 — `backend/app/receipt_ingestion/service_parts/store_specific_parsers.py`
+### RR-08 — `backend/app/receipt_ingestion/service_parts/store_specific_parsers.py`
 
 **Status:** split
 
@@ -197,7 +186,7 @@ Het script:
 
 ## Prioriteit 5 — Diagnose/test isoleren
 
-### RR-08 — Testing en diagnose routes
+### RR-09 — Testing en diagnose routes
 
 **Status:** move/split
 
