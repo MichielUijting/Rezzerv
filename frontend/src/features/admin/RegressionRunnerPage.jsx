@@ -1,6 +1,6 @@
-import React from 'react'
+﻿import React from 'react'
 import { getRezzervVersionTag } from '../../ui/version'
-import { runLayer1Tests, runLayer2Tests, runLayer3Tests, submitTestResults } from './services/adminTestingService'
+import { runKassaSupermarketRegressionTests, runLayer1Tests, runLayer2Tests, runLayer3Tests, submitTestResults } from './services/adminTestingService'
 import { runLayer1RegressionTests } from './lib/layer1RegressionRunner'
 import { runLayer2RouteTests } from './lib/layer2RouteRunner'
 import { runLayer3StyleguideTests } from './lib/layer3StyleguideRunner'
@@ -8,7 +8,7 @@ import { runLayer3StyleguideTests } from './lib/layer3StyleguideRunner'
 import { resetRegressionDataset } from './lib/regressionFixtureSetup'
 
 const LAYER_TIMEOUT_MS = 120000
-const RUNNER_TIMEOUT_MS = 240000
+const RUNNER_TIMEOUT_MS = 360000
 
 function nowIso() { return new Date().toISOString() }
 
@@ -50,6 +50,40 @@ async function runApiAlmostOutSelfTestLayer() {
     passed_count: passed,
     failed_count: failed,
     results,
+  }
+}
+
+function normalizeRemoteResults(payload) {
+  if (Array.isArray(payload?.results)) return payload.results
+  if (Array.isArray(payload?.report?.results)) return payload.report.results
+  return []
+}
+
+function normalizeRemoteLayerStatus(payload, results) {
+  const explicitStatus = String(payload?.status || payload?.overall_status || payload?.report?.status || '').toLowerCase()
+  if (explicitStatus === 'failed' || explicitStatus === 'error') return 'failed'
+  if (results.some((item) => item.status === 'failed')) return 'failed'
+  return 'passed'
+}
+
+async function runKassaSupermarketRegressionLayer() {
+  const startedAt = nowIso()
+  const payload = await runKassaSupermarketRegressionTests()
+  const results = normalizeRemoteResults(payload)
+  const status = normalizeRemoteLayerStatus(payload, results)
+  const passed = results.filter((item) => item.status === 'passed').length
+  const failed = results.filter((item) => item.status === 'failed').length
+
+  return {
+    id: 'kassa-supermarket-regression',
+    status,
+    started_at: startedAt,
+    finished_at: nowIso(),
+    passed_count: results.length ? passed : (status === 'passed' ? 1 : 0),
+    failed_count: results.length ? failed : (status === 'failed' ? 1 : 0),
+    results: results.length
+      ? results
+      : [{ name: 'Kassa supermarktregressie', status, error: status === 'passed' ? null : (payload?.detail || payload?.message || 'Kassa supermarktregressie faalde') }],
   }
 }
 
@@ -151,6 +185,8 @@ export default function RegressionRunnerPage() {
           layers.push(await runLayerSafely('layer2', () => runLayerSuite('layer2', runLayer2Tests, runLayer2RouteTests)))
           publishRuntimeStatus('running', { currentLayer: 'layer3', startedAt })
           layers.push(await runLayerSafely('layer3', () => runLayerSuite('layer3', runLayer3Tests, runLayer3StyleguideTests)))
+          publishRuntimeStatus('running', { currentLayer: 'kassa-supermarket-regression', startedAt })
+          layers.push(await runLayerSafely('kassa-supermarket-regression', () => runKassaSupermarketRegressionLayer(), 180000))
           const overallStatus = layers.some((layer) => layer.status !== 'passed') ? 'failed' : 'passed'
           const nextReport = { version: getRezzervVersionTag(), started_at: startedAt, finished_at: nowIso(), overall_status: overallStatus, layers, summary_text: '' }
           nextReport.summary_text = toSummary(nextReport)
