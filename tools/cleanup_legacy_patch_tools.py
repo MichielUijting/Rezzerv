@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -64,29 +65,38 @@ def load_candidates() -> list[Path]:
     return sorted(candidates)
 
 
-def find_external_references(candidates: list[Path]) -> list[str]:
-    candidate_names = {candidate.name for candidate in candidates}
-    candidate_paths = {rel(candidate).as_posix() for candidate in candidates}
-    hits: list[str] = []
+def find_external_references(candidates: list[Path]) -> dict[Path, list[str]]:
+    candidate_by_name: dict[str, list[Path]] = defaultdict(list)
+    candidate_by_path: dict[str, Path] = {}
+
+    for candidate in candidates:
+        relative_text = rel(candidate).as_posix()
+        candidate_by_path[relative_text] = candidate
+        candidate_by_name[candidate.name].append(candidate)
+
+    references: dict[Path, list[str]] = {candidate: [] for candidate in candidates}
 
     for path in ROOT.rglob("*"):
         if not path.is_file() or should_skip_reference_scan(path):
             continue
         relative = rel(path)
         relative_text = relative.as_posix()
-        if relative_text in candidate_paths:
+        if relative_text in candidate_by_path:
             continue
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except Exception:
             continue
-        for candidate_path in sorted(candidate_paths):
+
+        for candidate_path, candidate in sorted(candidate_by_path.items()):
             if candidate_path in text:
-                hits.append(f"{relative_text} -> {candidate_path}")
-        for candidate_name in sorted(candidate_names):
+                references[candidate].append(f"{relative_text} -> {candidate_path}")
+        for candidate_name, matching_candidates in sorted(candidate_by_name.items()):
             if candidate_name in text:
-                hits.append(f"{relative_text} -> {candidate_name}")
-    return sorted(set(hits))
+                for candidate in matching_candidates:
+                    references[candidate].append(f"{relative_text} -> {candidate_name}")
+
+    return {candidate: sorted(set(hits)) for candidate, hits in references.items()}
 
 
 def run_inventory() -> None:
@@ -106,18 +116,35 @@ def main() -> None:
         print(f"- {rel(candidate).as_posix()}")
 
     references = find_external_references(candidates)
-    if references:
-        print("NIET VERWIJDERD: externe verwijzingen gevonden buiten toegestane documentatie/tooling:")
-        for hit in references:
-            print(f"- {hit}")
-        raise SystemExit(1)
+    blocked = {candidate: hits for candidate, hits in references.items() if hits}
+    removable = [candidate for candidate in candidates if not references.get(candidate)]
 
-    for candidate in candidates:
+    print("")
+    print(f"Te verwijderen zonder externe verwijzingen: {len(removable)}")
+    for candidate in removable:
+        print(f"REMOVE: {rel(candidate).as_posix()}")
+
+    print("")
+    print(f"Geblokkeerd door externe verwijzingen: {len(blocked)}")
+    for candidate, hits in sorted(blocked.items(), key=lambda item: rel(item[0]).as_posix()):
+        print(f"BLOCKED: {rel(candidate).as_posix()}")
+        for hit in hits:
+            print(f"  - {hit}")
+
+    if not removable:
+        print("")
+        print("NIETS VERWIJDERD: alle tools_legacy_patch bestanden hebben externe verwijzingen.")
+        return
+
+    for candidate in removable:
         candidate.unlink()
         print(f"Verwijderd: {rel(candidate).as_posix()}")
 
     run_inventory()
-    print("OK: legacy patchtools verwijderd en Python-inventaris opnieuw gegenereerd.")
+    print("")
+    print("OK: niet-gerefereerde legacy patchtools verwijderd en Python-inventaris opnieuw gegenereerd.")
+    if blocked:
+        print("Let op: geblokkeerde legacy patchtools zijn blijven staan en moeten apart worden beoordeeld.")
 
 
 if __name__ == "__main__":
