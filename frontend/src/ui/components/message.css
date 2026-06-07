@@ -90,3 +90,8 @@
 .rz-message-dialog--success .rz-message-title{
   color: #027a48;
 }
+
+.rz-inline-feedback:not([data-testid=receipt-upload-progress]),
+.rz-store-inline-feedback{
+  display: none !important;
+}
