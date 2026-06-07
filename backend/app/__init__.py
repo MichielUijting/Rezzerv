@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Technical Design Reference:
 - TD Section: TD-05 Datastore en services
@@ -12,9 +14,6 @@ Technical Design Reference:
 """
 
 """Auto-register additional testing routes and runtime patches after FastAPI app is loaded."""
-
-from __future__ import annotations
-
 import sys
 import threading
 import time
