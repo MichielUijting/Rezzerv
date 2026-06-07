@@ -1,3 +1,16 @@
+"""
+Technical Design Reference:
+- TD Section: TD-03 Receipt ingestion en parsers
+- Module Role: Receipt source parsing and data extraction
+- Runtime Type: production
+- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
+- Depends On: see generated inventory
+- Reads Data: see generated inventory
+- Writes Data: see generated inventory
+- Status Authority: no
+- Refactor Status: classify
+"""
+
 from __future__ import annotations
 
 import re
@@ -433,7 +446,7 @@ def _parse_picnic_email_result(text: str, html_text: str, filename: str, header_
     raw_lines = _normalize_text_lines(haystack)
     lines = []
     for line in raw_lines:
-        cleaned = re.sub(r'[]+', '', line).strip()
+        cleaned = re.sub(r'[\[\]]+', '', line).strip()
         if cleaned and cleaned not in {'.', 'â€¢'}:
             lines.append(cleaned)
     purchase_at = _parse_dutch_textual_date(haystack, default_year=2026)

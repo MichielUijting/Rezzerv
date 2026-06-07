@@ -1,3 +1,16 @@
+"""
+Technical Design Reference:
+- TD Section: TD-02 Backend API-laag
+- Module Role: FastAPI entrypoint and route container
+- Runtime Type: production
+- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
+- Depends On: see generated inventory
+- Reads Data: see generated inventory
+- Writes Data: see generated inventory
+- Status Authority: no
+- Refactor Status: split
+"""
+
 from fastapi import FastAPI, HTTPException, Header, Query, Request, Response, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse, RedirectResponse
@@ -111,7 +124,6 @@ logger = logging.getLogger('rezzerv.api')
 RECEIPT_UPLOAD_ERROR_PATHS = {
     '/api/receipts/import',
     '/api/receipts/share-import',
-    '/api/receipts/email-import',
 }
 
 
@@ -11283,21 +11295,80 @@ def sync_receipt_gmail_mailbox(householdId: str = Query(...), authorization: Opt
     return result
 
 
-@app.post("/api/receipts/email-import")
-async def import_email_receipt(
+@app.post("/api/receipts/picnic-email-import")
+async def import_picnic_email_receipt(
     household_id: str = Form(...),
     email_file: UploadFile = File(...),
     authorization: Optional[str] = Header(None),
 ):
-    context = require_household_admin_context(authorization, household_id)
+    """Handmatige Picnic .eml-import via de Kassa-landingzone.
+
+    Deze route verwerkt handmatige Picnic .eml-bestanden via een eigen importpad.
+    """
+    context = require_household_context(authorization, household_id)
     effective_household_id = str(context['active_household_id']).strip() or '1'
+
     email_bytes = await email_file.read()
     if not email_bytes:
-        raise HTTPException(status_code=400, detail='Het e-mailbestand is leeg.')
+        raise HTTPException(status_code=400, detail='Het Picnic e-mailbestand is leeg.')
+
+    source_filename = email_file.filename or 'picnic-receipt.eml'
+    if not _looks_like_email_upload(source_filename, email_file.content_type):
+        raise HTTPException(status_code=400, detail='Gebruik een opgeslagen .eml-bestand voor Picnic.')
+
+    source_id = f"{effective_household_id}-picnic-eml-upload"
+
     try:
-        result = import_email_receipt_payload(effective_household_id, email_bytes, fallback_filename=email_file.filename or 'receipt.eml')
+        payload = parse_email_receipt_payload(email_bytes, fallback_filename=source_filename)
+
+        result = ingest_receipt(
+            engine=engine,
+            receipt_storage_root=RECEIPT_STORAGE_ROOT,
+            household_id=str(effective_household_id),
+            filename=source_filename,
+            file_bytes=email_bytes,
+            source_id=source_id,
+            mime_type='message/rfc822',
+            reject_non_receipt=False,
+            create_failed_receipt_table=True,
+            failed_store_name='Picnic',
+            failed_purchase_at=payload.get('received_at'),
+        )
+
+        raw_receipt_id = result.get('raw_receipt_id')
+        if raw_receipt_id:
+            store_receipt_email_metadata(raw_receipt_id, str(effective_household_id), payload)
+
+        receipt_table_id = result.get('receipt_table_id')
+        if receipt_table_id:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE receipt_tables
+                        SET store_name = COALESCE(store_name, 'Picnic'),
+                            store_chain = COALESCE(store_chain, 'Picnic'),
+                            purchase_at = COALESCE(purchase_at, :purchase_at),
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = :id
+                        """
+                    ),
+                    {'id': receipt_table_id, 'purchase_at': payload.get('received_at')},
+                )
+
+        result['source_id'] = source_id
+        result['source_label'] = 'Handmatige Picnic e-mailupload'
+        result['sender_email'] = payload.get('sender_email')
+        result['sender_name'] = payload.get('sender_name')
+        result['subject'] = payload.get('subject')
+        result['received_at'] = payload.get('received_at')
+
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception('Onverwachte fout bij handmatige Picnic e-mailimport voor household %s', effective_household_id)
+        raise HTTPException(status_code=500, detail='Het Picnic e-mailbestand kon niet volledig als kassabon worden verwerkt.') from exc
+
     status_code = 200 if result.get('duplicate') else 201
     return JSONResponse(status_code=status_code, content=result)
 

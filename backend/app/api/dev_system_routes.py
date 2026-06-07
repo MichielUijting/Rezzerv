@@ -1,3 +1,16 @@
+"""
+Technical Design Reference:
+- TD Section: TD-07 Diagnose en explainability
+- Module Role: Diagnostic or test API route
+- Runtime Type: diagnostic
+- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
+- Depends On: see generated inventory
+- Reads Data: see generated inventory
+- Writes Data: see generated inventory
+- Status Authority: no
+- Refactor Status: keep_diagnostic
+"""
+
 from __future__ import annotations
 
 from typing import Callable, Optional

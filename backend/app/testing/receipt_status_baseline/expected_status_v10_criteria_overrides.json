@@ -1,0 +1,26 @@
+{
+  "Picnic App 1.eml": {
+    "check_store_chain": true,
+    "check_total_amount": false,
+    "check_article_count": true,
+    "check_line_sum": false
+  },
+  "Picnic App 2.eml": {
+    "check_store_chain": true,
+    "check_total_amount": false,
+    "check_article_count": true,
+    "check_line_sum": false
+  },
+  "Picnic App 3.eml": {
+    "check_store_chain": true,
+    "check_total_amount": false,
+    "check_article_count": true,
+    "check_line_sum": false
+  },
+  "Picnic App 4.eml": {
+    "check_store_chain": true,
+    "check_total_amount": false,
+    "check_article_count": true,
+    "check_line_sum": false
+  }
+}

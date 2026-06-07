@@ -1,73 +1,18 @@
+"""
+Technical Design Reference:
+- TD Section: TD-04 Status en SSOT
+- Module Role: Map PO norm status to API/UI fields
+- Runtime Type: production
+- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
+- Depends On: see generated inventory
+- Reads Data: see generated inventory
+- Writes Data: see generated inventory
+- Status Authority: no
+- Refactor Status: cleanup
+"""
+
 
 from __future__ import annotations
-def _r9_38d6_decimal(value):
-    from decimal import Decimal
-    try:
-        if value is None or value == "":
-            return Decimal("0.00")
-        return Decimal(str(value))
-    except Exception:
-        return Decimal("0.00")
-
-
-def _r9_38d6_list(value):
-    if value is None:
-        return []
-    if isinstance(value, list):
-        return value
-    if isinstance(value, tuple):
-        return list(value)
-    return [value]
-
-
-def _r9_38d6_runtime_status_override(receipt_payload: dict) -> dict:
-    """R9-38D6: runtime status is not controlled by baseline NO_BASELINE_MATCH.
-
-    The PO baseline remains available for regression diagnostics, but a new
-    real receipt that parses cleanly must show as Gecontroleerd when:
-    - parse_status is approved OR approved_at is filled;
-    - net line total matches total_amount;
-    - the only PO failure is NO_BASELINE_MATCH.
-    """
-    if not isinstance(receipt_payload, dict):
-        return receipt_payload
-
-    failed = set(str(x) for x in _r9_38d6_list(receipt_payload.get("po_norm_failed_criteria")))
-    only_no_baseline_match = bool(failed) and failed.issubset({"NO_BASELINE_MATCH"})
-
-    parse_status = str(receipt_payload.get("parse_status") or "").lower()
-    approved_at = receipt_payload.get("approved_at")
-    approved_like = parse_status == "approved" or bool(approved_at)
-
-    total = _r9_38d6_decimal(receipt_payload.get("total_amount"))
-
-    # R9-38E4: runtime status must use the full SSOT net formula:
-    # sum(line_total) + sum(discount_amount) + discount_total_effective.
-    line_sum = _r9_38d6_decimal(receipt_payload.get("line_total_sum"))
-    line_discount_sum = _r9_38d6_decimal(
-        receipt_payload.get("line_discount_total_sum")
-        if receipt_payload.get("line_discount_total_sum") is not None
-        else receipt_payload.get("line_discount_sum")
-    )
-    discount_effective = _r9_38d6_decimal(receipt_payload.get("discount_total_effective"))
-    net = line_sum + line_discount_sum + discount_effective
-
-    receipt_payload["net_line_total_sum"] = float(net.quantize(_r9_38d6_decimal("0.01")))
-
-    totals_match = abs(net - total) <= _r9_38d6_decimal("0.02")
-
-    if only_no_baseline_match and approved_like and totals_match:
-        receipt_payload["inbox_status"] = "Gecontroleerd"
-        receipt_payload["status"] = "Gecontroleerd"
-        receipt_payload["runtime_status"] = "approved"
-        receipt_payload["runtime_status_label"] = "Gecontroleerd"
-        receipt_payload["runtime_status_source"] = "parser"
-        receipt_payload["po_norm_status_is_diagnostic_only"] = True
-
-    return receipt_payload
-
-
-
 import logging
 import time
 from typing import Any
@@ -136,7 +81,7 @@ def apply_po_norm_status(payload: dict[str, Any]) -> dict[str, Any]:
     from the Kassa payload and exposes only the baseline-derived status fields.
     """
     if not isinstance(payload, dict):
-        return _r9_38d6_runtime_status_override(payload)
+        return payload
 
     receipt_table_id = str(payload.get("id") or payload.get("receipt_table_id") or "").strip()
     item = load_po_norm_status_items().get(receipt_table_id) if receipt_table_id else None
@@ -165,8 +110,7 @@ def apply_po_norm_status(payload: dict[str, Any]) -> dict[str, Any]:
     # and the full net formula closes.
     payload["inbox_status"] = label
     payload["status"] = label
-    payload = _r9_38d6_runtime_status_override(payload)
 
     if any(key in payload for key in ("parse_status", "actual_parse_status", "actual_status_label")):
         raise RuntimeError("INVALID STATUS SOURCE")
-    return _r9_38d6_runtime_status_override(payload)
+    return payload

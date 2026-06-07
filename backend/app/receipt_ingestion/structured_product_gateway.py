@@ -1,3 +1,16 @@
+"""
+Technical Design Reference:
+- TD Section: TD-03 Receipt ingestion en parsers
+- Module Role: Receipt source parsing and data extraction
+- Runtime Type: production
+- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
+- Depends On: see generated inventory
+- Reads Data: see generated inventory
+- Writes Data: see generated inventory
+- Status Authority: no
+- Refactor Status: classify
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -34,22 +47,15 @@ def append_structured_product_candidate(
     is_invalid_label: InvalidLabelCheck | None = None,
     confidence_score: float = 0.85,
 ) -> int | None:
-    """Append a product candidate parsed from a structured source.
-
-    This gateway is for store-specific PDF/e-mail parsers. Those parsers often
-    derive a product from structured or semi-structured source fragments rather
-    than from one OCR text line. For that reason this contract does not apply the
-    OCR line-classifier, but it still enforces a uniform product shape and
-    producer_trace.
-
-    Receipt status remains outside receipt ingestion and must stay with the SSOT
-    status service.
-    """
+    """Append a product candidate parsed from a structured source."""
     label_value = clean_label(label)
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
-    if is_invalid_label is not None and is_invalid_label(label_value):
+
+    is_picnic_structured_source = str(store_name or '').strip().lower() == 'picnic'
+    if is_invalid_label is not None and not is_picnic_structured_source and is_invalid_label(label_value):
         return None
+
     if unit_price is None and line_total is None:
         return None
 
