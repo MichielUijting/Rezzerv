@@ -30,13 +30,17 @@ function ScreenMessageBridge() {
   return <Melding open={Boolean(melding)} type={melding?.type || 'info'} title={melding?.title || 'Melding'} message={melding?.message || ''} detail={melding?.detail || ''} onClose={() => setMelding(null)} />
 }
 
+function closeWindow() {
+  window.close()
+}
+
 export default function AppShell({ title, children, showExit = true }) {
   return (
     <div className="rz-screen">
       <Header title={title} />
       <div className="rz-content"><div className="rz-content-inner">{children}</div></div>
       <ScreenMessageBridge />
-      {showExit && <div className="rz-exitbar"><Button variant="secondary" onClick={() => {}}>Afsluiten</Button></div>}
+      {showExit && <div className="rz-exitbar"><Button variant="secondary" onClick={closeWindow}>Afsluiten</Button></div>}
     </div>
   )
 }
