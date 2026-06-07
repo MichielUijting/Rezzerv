@@ -13,7 +13,14 @@ EXCLUDED_REFERENCE_PATHS = {
     Path("docs/technical/_generated/python-file-inventory.json"),
     Path("docs/technical/REFACTOR-ROADMAP.md"),
     Path("tools/cleanup_root_debug_scripts.py"),
+    Path("tools/apply_technical_design_headers.py"),
+    Path("tools/generate_python_module_inventory.py"),
 }
+EXCLUDED_REFERENCE_PREFIXES = (
+    "tools/debug_output/",
+    "reports/",
+    "tmp/",
+)
 SKIP_DIR_NAMES = {
     ".git",
     ".venv",
@@ -32,9 +39,12 @@ def rel(path: Path) -> Path:
 
 def should_skip_reference_scan(path: Path) -> bool:
     relative = rel(path)
+    relative_text = relative.as_posix()
     if any(part in SKIP_DIR_NAMES for part in relative.parts):
         return True
     if relative in EXCLUDED_REFERENCE_PATHS:
+        return True
+    if relative_text.startswith(EXCLUDED_REFERENCE_PREFIXES):
         return True
     return False
 
