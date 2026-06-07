@@ -1,15 +1,4 @@
-"""
-Technical Design Reference:
-- TD Section: TD-04 Status en SSOT
-- Module Role: PO norm status baseline authority or compatibility shim
-- Runtime Type: production
-- Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
-- Depends On: see generated inventory
-- Reads Data: see generated inventory
-- Writes Data: see generated inventory
-- Status Authority: yes only for active service
-- Refactor Status: keep/deprecate
-"""
+﻿from __future__ import annotations
 
 """Active receipt status baseline service package.
 
@@ -19,7 +8,6 @@ before the sibling ``receipt_status_baseline_service.py`` module. Therefore the
 active PO baseline implementation must live here.
 """
 
-from __future__ import annotations
 
 import json
 from collections import Counter
@@ -514,3 +502,5 @@ def diagnose_receipt_status_baseline(conn, household_id: str | None = None) -> d
         'technical_parse_status_mismatches': technical_parse_status_mismatches,
         'excluded_archived_receipts': validation.get('excluded_archived_receipts', []),
     }
+
+
