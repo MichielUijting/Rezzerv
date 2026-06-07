@@ -8690,31 +8690,6 @@
     "header_scope_default": false
   },
   {
-    "path": "tools/patch_dedicated_picnic_eml_import_route.py",
-    "repository_category": "tools_legacy_patch",
-    "line_count": 257,
-    "td_section_guess": "TD-09 Tools en scripts",
-    "runtime_type_guess": "tool",
-    "refactor_status_guess": "deprecate",
-    "imports": [
-      "__future__",
-      "pathlib"
-    ],
-    "functions": [
-      "patch_parser",
-      "patch_backend",
-      "patch_frontend",
-      "main"
-    ],
-    "classes": [],
-    "fastapi_routes": [],
-    "reads_data": true,
-    "writes_data": true,
-    "status_terms": [],
-    "has_technical_design_header": false,
-    "header_scope_default": false
-  },
-  {
     "path": "tools/patch_kassa_eml_runtime_diagnostics.py",
     "repository_category": "diagnostics",
     "line_count": 92,
