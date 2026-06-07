@@ -4,8 +4,8 @@ import "./ui/components/button.css";
 import "./ui/components/card.css";
 import "./ui/components/header.css";
 import "./ui/components/table.css";
-import "./ui/components/message.css";
 import "./styles.css";
+import "./ui/components/message.css";
 
 import React from 'react'
 import ReactDOM from 'react-dom/client'
