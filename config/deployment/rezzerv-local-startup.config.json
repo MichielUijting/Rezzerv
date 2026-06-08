@@ -1,0 +1,40 @@
+{
+  "name": "rezzerv-local-startup",
+  "version": "1.0",
+  "description": "Configuratie voor de lokale Rezzerv-opstartprocedure op Windows PowerShell.",
+  "projectRoot": "C:\\Users\\Gebruiker\\Rezzerv_Github",
+  "stableBranch": "release-3b-kassa-regression-ssot-clean",
+  "ports": {
+    "frontend": 5174,
+    "backend": 8000
+  },
+  "frontend": {
+    "workingDirectory": "frontend",
+    "buildCommand": "npm run build",
+    "devCommand": "npm run dev -- --host 127.0.0.1 --port 5174",
+    "url": "http://localhost:5174",
+    "kassaUrl": "http://localhost:5174/kassa"
+  },
+  "backend": {
+    "pythonPath": ".\\backend",
+    "command": "backend\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload",
+    "url": "http://127.0.0.1:8000",
+    "docsUrl": "http://127.0.0.1:8000/docs"
+  },
+  "regression": {
+    "command": ".\\run-regression.bat",
+    "knownNonKassaRuntimeFailure": "waiting for locator('[data-testid=\"regression-runner-page\"]') to be visible"
+  },
+  "runtimeChecks": {
+    "kassaPageFetchPath": "/src/features/receipts/KassaPage.jsx",
+    "serviceWorkerCleanupRequiredWhen": "Browser serves stale or mixed frontend files."
+  },
+  "safetyRules": [
+    "Always start in projectRoot.",
+    "Run git status --short before git pull.",
+    "Do not pull when local changes are present unless intentionally preserving or committing them first.",
+    "Kill old frontend/backend processes before starting new runtime.",
+    "Do not treat npm run build as full validation; also run regression and browser runtime checks.",
+    "During recovery branches, do not pull blindly from a polluted remote branch."
+  ]
+}
