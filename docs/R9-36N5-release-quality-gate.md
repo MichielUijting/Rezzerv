@@ -1,4 +1,6 @@
-# R9-36N5 — Release Quality Gate: monkeypatch-vrije receipt runtime
+﻿> Let op: de lokale Rezzerv-opstartprocedure is gecentraliseerd in docs/technical/rezzerv-opstartprocedure.md. Oudere losse opstartinstructies zijn vervallen.
+
+# R9-36N5 â€” Release Quality Gate: monkeypatch-vrije receipt runtime
 
 ## Doel
 
@@ -14,7 +16,7 @@ Vanaf R9-36N5 geldt:
 - Geen automatische patchinstallatie bij import.
 - Geen functionele code in `sitecustomize.py`.
 - Geen runtimevervanging van parser-, OCR-, route- of statusfuncties.
-- Parserverbeteringen mogen alleen in de normale parserflow worden geïmplementeerd.
+- Parserverbeteringen mogen alleen in de normale parserflow worden geÃ¯mplementeerd.
 - Diagnostics mogen productieruntime niet vervangen of omwikkelen via import-side-effects.
 
 Verboden patronen zijn onder andere:
@@ -108,3 +110,4 @@ De releasekwaliteit is akkoord als:
 ## Vervolg na R9-36N5
 
 Na deze borging mag inhoudelijke parserverbetering pas weer plaatsvinden in een nieuwe stap, bijvoorbeeld R9-37. Die stap moet gebruikmaken van de normale parserflow en bestaande Swagger/reports. Monkeypatches of parallelle analysepaden zijn niet toegestaan.
+

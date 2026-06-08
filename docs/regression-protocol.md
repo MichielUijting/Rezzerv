@@ -1,4 +1,6 @@
-# Rezzerv – Regression Protocol v1.0
+﻿> Let op: de lokale Rezzerv-opstartprocedure is gecentraliseerd in docs/technical/rezzerv-opstartprocedure.md. Oudere losse opstartinstructies zijn vervallen.
+
+# Rezzerv â€“ Regression Protocol v1.0
 
 Status: ACTIVE  
 Scope: Mandatory before every release zip
@@ -33,7 +35,7 @@ Scope: Mandatory before every release zip
 - admin@rezzerv.local / Rezzerv123
 
 ### RT-AUTH-03 Fout login
-- Exacte tekst: “Login niet correct”
+- Exacte tekst: â€œLogin niet correctâ€
 
 ---
 
@@ -72,3 +74,4 @@ Zonder deze vermelding geen release.
 ---
 
 Dit document maakt integraal onderdeel uit van de Rezzerv-architectuur.
+
