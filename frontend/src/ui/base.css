@@ -1659,30 +1659,40 @@ body,
   padding-bottom: 96px;
 }
 
+.rz-data-table-wrapper {
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.rz-data-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.rz-data-table--sticky-header thead tr.rz-table-header th,
+.rz-data-table--sticky-filters thead tr.rz-table-filters th {
+  position: sticky;
+  background-clip: padding-box;
+}
+
+.rz-data-table--sticky-header thead tr.rz-table-header th {
+  top: 0;
+  z-index: 31;
+  background: var(--color-brand-primary);
+}
+
+.rz-data-table--sticky-filters thead tr.rz-table-filters th {
+  top: 30px;
+  z-index: 30;
+  background: var(--color-brand-light);
+}
+
 .rz-kassa-inbox-table-wrapper {
   max-height: calc(var(--rz-table-header-row-height) + var(--rz-table-filter-row-height) + (var(--rz-table-body-row-height) * 10) + 2px);
   overflow-y: auto;
   overflow-x: auto;
 }
 
-.rz-kassa-inbox-table thead tr.rz-table-header th {
-  position: sticky;
-  top: 0;
-  z-index: 4;
-  background: var(--color-brand-primary);
-}
-
-.rz-kassa-inbox-table thead tr.rz-table-filters th {
-  position: sticky;
-  top: var(--rz-table-header-row-height);
-  z-index: 3;
-  background: var(--color-brand-light);
-}
-
-.rz-kassa-inbox-table thead tr.rz-table-header th:first-child,
-.rz-kassa-inbox-table thead tr.rz-table-filters th:first-child {
-  left: 0;
-}
 /* R9-34L Kassa table sticky-header and detail-scroll corrections */
 .rz-kassa-inbox-table-wrapper {
   max-height: 318px;
@@ -1693,30 +1703,6 @@ body,
 .rz-kassa-inbox-table {
   border-collapse: separate;
   border-spacing: 0;
-}
-
-.rz-kassa-inbox-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-}
-
-.rz-kassa-inbox-table thead tr.rz-table-header th,
-.rz-kassa-inbox-table thead tr.rz-table-filters th {
-  position: sticky;
-  z-index: 31;
-  background-clip: padding-box;
-}
-
-.rz-kassa-inbox-table thead tr.rz-table-header th {
-  top: 0;
-  background: var(--color-brand-primary);
-}
-
-.rz-kassa-inbox-table thead tr.rz-table-filters th {
-  top: 30px;
-  background: var(--color-brand-light);
-  z-index: 30;
 }
 
 .rz-receipt-lines-table-wrapper {
@@ -1730,30 +1716,6 @@ body,
 .rz-receipt-lines-table {
   border-collapse: separate;
   border-spacing: 0;
-}
-
-.rz-receipt-lines-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-}
-
-.rz-receipt-lines-table thead tr.rz-table-header th,
-.rz-receipt-lines-table thead tr.rz-table-filters th {
-  position: sticky;
-  z-index: 31;
-  background-clip: padding-box;
-}
-
-.rz-receipt-lines-table thead tr.rz-table-header th {
-  top: 0;
-  background: var(--color-brand-primary);
-}
-
-.rz-receipt-lines-table thead tr.rz-table-filters th {
-  top: 30px;
-  background: var(--color-brand-light);
-  z-index: 30;
 }
 
 .rz-receipt-lines-table tfoot td {

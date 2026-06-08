@@ -1235,7 +1235,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
             }
             return (
               <div style={{ display: 'grid', gap: '12px' }}>
-                <Table wrapperClassName="rz-receipt-lines-table-wrapper" tableClassName="rz-receipt-lines-table" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }}>
+                <Table wrapperClassName="rz-data-table-wrapper rz-receipt-lines-table-wrapper" tableClassName="rz-data-table rz-data-table--sticky-header rz-data-table--sticky-filters rz-receipt-lines-table" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }}>
                     <colgroup>
                       <col style={{ width: `${lineColumnWidths.select}px` }} />
                       <col style={{ width: `${lineColumnWidths.article}px` }} />
@@ -2694,7 +2694,7 @@ export default function KassaPage() {
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
-              <Table wrapperClassName="rz-kassa-inbox-table-wrapper" tableClassName="rz-kassa-inbox-table" dataTestId="kassa-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
+              <Table wrapperClassName="rz-data-table-wrapper rz-kassa-inbox-table-wrapper" tableClassName="rz-data-table rz-data-table--sticky-header rz-data-table--sticky-filters rz-kassa-inbox-table" dataTestId="kassa-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
                   <colgroup>
                     <col style={{ width: `${inboxColumnWidths.select}px` }} />
                     <col style={{ width: `${inboxColumnWidths.store}px` }} />
