@@ -11,9 +11,9 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Image OCR boundary.
 
 No store-specific interpretation belongs here.
 """
 
-from __future__ import annotations

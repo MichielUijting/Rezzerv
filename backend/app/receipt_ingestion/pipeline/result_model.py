@@ -11,6 +11,6 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Result-model boundary for future ReceiptParseResult migration."""
 
-from __future__ import annotations

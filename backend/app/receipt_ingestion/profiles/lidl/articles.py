@@ -11,9 +11,9 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Lidl article classification extension points for R9-38A0."""
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Literal

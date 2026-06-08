@@ -11,9 +11,9 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Read-only receipt parse context boundary."""
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 

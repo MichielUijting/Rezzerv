@@ -11,6 +11,6 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Email text extraction boundary."""
 
-from __future__ import annotations

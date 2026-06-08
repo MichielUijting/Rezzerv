@@ -11,12 +11,12 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Albert Heijn diagnostics profile.
 
 Diagnostics may only observe and report; they must not change parser output.
 """
 
-from __future__ import annotations
 
 from typing import Any
 

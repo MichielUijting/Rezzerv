@@ -11,9 +11,9 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """PDF text extraction boundary.
 
 No article or total interpretation belongs here.
 """
 
-from __future__ import annotations

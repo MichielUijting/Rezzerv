@@ -11,6 +11,7 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Albert Heijn total extraction profile.
 
 R9-36B mini frame: determine only the explicit AH receipt total from
@@ -18,7 +19,6 @@ raw/normalized source lines. No article parsing, no store-branch parsing,
 no status decisions, and no line-sum fallback.
 """
 
-from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass

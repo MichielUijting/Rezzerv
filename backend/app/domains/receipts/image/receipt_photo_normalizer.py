@@ -11,8 +11,8 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
-﻿from __future__ import annotations
 
+from __future__ import annotations
 import tempfile
 from pathlib import Path
 

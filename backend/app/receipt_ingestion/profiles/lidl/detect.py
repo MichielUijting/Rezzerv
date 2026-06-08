@@ -11,6 +11,7 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Lidl receipt detection helpers.
 
 R9-38A0: skeleton only.
@@ -18,7 +19,6 @@ These helpers expose stable extension points for later Lidl-specific logic,
 but must not remove lines or decide functional status.
 """
 
-from __future__ import annotations
 
 from collections.abc import Iterable
 from typing import Literal

@@ -11,9 +11,9 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Lidl diagnostics extension points for R9-38A0."""
 
-from __future__ import annotations
 
 
 def build_lidl_diagnostics(lines: list[str] | tuple[str, ...] | None) -> dict[str, object]:

@@ -11,9 +11,9 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Source-kind routing skeleton for receipt ingestion."""
 
-from __future__ import annotations
 
 
 def routing_boundary() -> str:

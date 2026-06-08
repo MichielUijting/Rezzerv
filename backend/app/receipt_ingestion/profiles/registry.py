@@ -11,13 +11,13 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Receipt store profile registry.
 
 R9-35A creates the registry boundary. Existing runtime detection remains in place
 until the next migration steps move profiles behind this registry.
 """
 
-from __future__ import annotations
 
 from typing import Iterable
 

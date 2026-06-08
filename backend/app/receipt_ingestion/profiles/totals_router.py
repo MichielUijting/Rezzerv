@@ -11,6 +11,7 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Profile-only receipt total router.
 
 R9-36C architecture rule:
@@ -18,7 +19,6 @@ receipt.total_amount may only come from an explicit store profile total extracto
 There is no generic total fallback and no article-line-sum fallback.
 """
 
-from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal

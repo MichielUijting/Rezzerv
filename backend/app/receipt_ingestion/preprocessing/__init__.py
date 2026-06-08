@@ -11,4 +11,4 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
-﻿# Receipt preprocessing package.
+# Receipt preprocessing package.

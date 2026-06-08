@@ -11,13 +11,13 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Persisted ingest-debug artifacts for receipt parsing.
 
 Debug downloads must read stored JSON and must not run OCR, parse_receipt_content,
 reparse_receipt, or any parser route.
 """
 
-from __future__ import annotations
 
 import json
 import os

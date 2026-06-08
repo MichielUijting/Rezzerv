@@ -11,6 +11,7 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Albert Heijn detection profile.
 
 Small, conservative AH profile boundary for R9-36B.
@@ -18,7 +19,6 @@ This module detects whether source lines belong to Albert Heijn.
 It must not parse articles, store branches, status, or totals.
 """
 
-from __future__ import annotations
 
 import re
 from typing import Iterable

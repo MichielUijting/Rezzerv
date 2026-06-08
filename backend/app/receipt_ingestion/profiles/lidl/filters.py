@@ -11,9 +11,9 @@ Technical Design Reference:
 - Refactor Status: classify
 """
 
+from __future__ import annotations
 """Lidl filter extension points for R9-38A0."""
 
-from __future__ import annotations
 
 
 def is_lidl_non_product_line(line: str | None, *, context: object | None = None) -> bool:
