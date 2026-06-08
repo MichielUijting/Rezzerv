@@ -1,4 +1,4 @@
-\# Rezzerv opstartprocedure
+﻿\# Rezzerv opstartprocedure
 
 
 
@@ -270,6 +270,8 @@ Invoke-WebRequest http://127.0.0.1:8011/openapi.json -UseBasicParsing
 
 Invoke-WebRequest http://127.0.0.1:8011/docs -UseBasicParsing
 
+.\scripts\run-kassa-smoke-report.ps1 -ShowProgress
+
 ```
 
 
@@ -334,7 +336,27 @@ Niet direct resetten, pullen of branches wisselen.
 
 
 
-\## 8. Kassa/Admin-regressie
+\## 8. Kassa-smoke bij uitgebreide opstart
+
+Bij een uitgebreide opstart draait standaard de snelle Kassa-smoke met één bon per winkelketen:
+
+`powershell
+.\scripts\run-kassa-smoke-report.ps1 -ShowProgress
+` 
+
+Deze smoke-test geeft voortgang tijdens het verwerken en sluit af met een compact rapport. Acceptatie:
+
+`	ext
+Status: passed
+Getest: 6
+Geslaagd: 6
+Gefaald: 0
+Geblokkeerd: 0
+` 
+
+De smoke-test dekt één bon per keten: Albert Heijn, ALDI, Jumbo, PLUS, Lidl en Picnic.
+
+## 9. Kassa/Admin-regressie
 
 
 
@@ -436,7 +458,7 @@ Picnic:       4
 
 
 
-\## 9. Stoppen
+\## 10. Stoppen
 
 
 
@@ -452,7 +474,7 @@ docker compose down --remove-orphans
 
 
 
-\## 10. Verboden herstelacties zonder expliciet besluit
+\## 11. Verboden herstelacties zonder expliciet besluit
 
 
 
@@ -482,7 +504,7 @@ docker compose down --volumes
 
 
 
-\## 11. Releasevoorwaarde
+\## 12. Releasevoorwaarde
 
 
 
@@ -502,9 +524,11 @@ OpenAPI 200 OK
 
 Swagger 200 OK
 
-Kassa/Admin-regressie 18/18 passed
+Kassa-smoke 6/6 passed bij uitgebreide opstart
+Kassa/Admin-regressie 18/18 passed bij release- of Kassa/parserwijzigingen
 
 ```
+
 
 
 
