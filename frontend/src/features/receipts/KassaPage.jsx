@@ -11,6 +11,7 @@ import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 import ReceiptStatusBadge from '../kassa/components/ReceiptStatusBadge.jsx'
+import KassaFeedbackPanel from '../kassa/components/KassaFeedbackPanel.jsx'
 import DetailInfoRow from '../kassa/components/DetailInfoRow.jsx'
 
 function formatDateTime(value) {
@@ -820,9 +821,12 @@ function ReceiptProcessingInfoCard({ transientPreview, uploadProgress }) {
           <DetailInfoRow label="Voortgang" value={`${Math.max(5, Math.min(100, Math.round(uploadProgress?.percent || 0)))}%`} />
         </div>
 
-        <div className="rz-inline-feedback rz-inline-feedback--success" style={{ maxWidth: '100%' }}>
-          {uploadProgress?.detail || 'De bewerkte weergave toont de actuele preprocess-versie die richting OCR gaat.'}
-        </div>
+        <KassaFeedbackPanel
+          feedback={{
+            variant: 'success',
+            message: uploadProgress?.detail || 'De bewerkte weergave toont de actuele preprocess-versie die richting OCR gaat.',
+          }}
+        />
       </div>
     </ScreenCard>
   )
@@ -1389,12 +1393,6 @@ function ReceiptSourceHubContent({
       : routeIsPublic
         ? 'Adres klaar, inbound nog niet actief'
         : 'Lokale demo-opstelling'
-  const feedbackClassName = feedbackVariant === 'error'
-    ? 'rz-inline-feedback rz-inline-feedback--error'
-    : feedbackVariant === 'warning'
-      ? 'rz-inline-feedback rz-inline-feedback--warning'
-      : 'rz-inline-feedback rz-inline-feedback--success'
-
   return (
     <div style={{ display: 'grid', gap: '20px' }} data-testid="kassa-add-screen">
       {showHeading ? (
@@ -1405,13 +1403,14 @@ function ReceiptSourceHubContent({
 
       <ScreenCard fullWidth>
           <div style={{ display: 'grid', gap: '18px' }}>
-            {feedbackMessage ? (
-              feedbackVariant === 'warning' ? (
-                <div className={feedbackClassName} style={{ fontWeight: 700 }} data-testid="receipt-duplicate-feedback"><span data-testid="receipt-sourcehub-duplicate-feedback">{feedbackMessage}</span></div>
-              ) : (
-                <div className={feedbackClassName} style={{ fontWeight: 700 }} data-testid="receipt-landing-feedback">{feedbackMessage}</div>
-              )
-            ) : null}
+            <KassaFeedbackPanel
+              feedback={feedbackMessage ? {
+                variant: feedbackVariant,
+                title: feedbackVariant === 'warning' ? 'Dubbele bon' : feedbackVariant === 'error' ? 'Melding' : 'Gelukt',
+                message: feedbackMessage,
+                testId: feedbackVariant === 'warning' ? 'receipt-duplicate-feedback' : 'receipt-landing-feedback',
+              } : null}
+            />
             <div
               role="button"
               tabIndex={0}
@@ -1453,65 +1452,29 @@ function ReceiptSourceHubContent({
               <Button type="button" variant="secondary" onClick={onChooseCamera} disabled={isUploading} data-testid="kassa-open-camera-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Camera openen</Button>
             </div>
 
-            {uploadProgress?.active ? (
-              <div
-                className="rz-inline-feedback rz-inline-feedback--success"
-                data-testid="receipt-upload-progress"
-                aria-live="polite"
-                style={{ display: 'grid', gap: '8px' }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div style={{ fontWeight: 700 }}>{uploadProgress.label || 'Kassabon verwerken...'}</div>
-                  <div style={{ fontSize: '13px', color: '#667085' }}>{Math.max(5, Math.min(100, Math.round(uploadProgress.percent || 0)))}%</div>
-                </div>
-                <div style={{ height: '10px', borderRadius: '999px', background: '#D1FADF', overflow: 'hidden' }}>
-                  <div
-                    style={{
-                      height: '100%',
-                      width: `${Math.max(5, Math.min(100, Math.round(uploadProgress.percent || 0)))}%`,
-                      background: '#166534',
-                      borderRadius: '999px',
-                      transition: 'width 240ms ease',
-                    }}
-                  />
-                </div>
-                <div style={{ fontSize: '13px', color: '#344054' }}>{uploadProgress.detail || 'Even geduld, Rezzerv verwerkt de bon en laadt daarna Kassa.'}</div>
-              </div>
-            ) : null}
-
-            {emailRouteError ? <div className="rz-inline-feedback rz-inline-feedback--error">{emailRouteError}</div> : null}
-            {emailRouteError && ['admin','owner'].includes(String(currentUserDisplayRole || '').trim().toLowerCase()) && (technicalUploadError?.detail || String(emailRouteError || '').startsWith('Upload mislukt. De server gaf een technische fout terug.')) ? (
-              <div style={{ display: 'grid', gap: '8px' }}>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={onToggleTechnicalUploadError}
-                  data-testid="kassa-admin-technical-error-toggle"
-                  style={{ width: 'fit-content' }}
-                >
-                  {isTechnicalUploadErrorOpen ? 'Verberg technische foutmelding' : 'Toon technische foutmelding'}
-                </Button>
-                {isTechnicalUploadErrorOpen ? (
-                  <pre
-                    data-testid="kassa-admin-technical-error-details"
-                    style={{
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      maxHeight: '320px',
-                      overflow: 'auto',
-                      padding: '12px',
-                      border: '1px solid #D0D5DD',
-                      borderRadius: '8px',
-                      background: '#101828',
-                      color: '#F9FAFB',
-                      fontSize: '12px',
-                    }}
-                  >
-                    {technicalUploadError?.detail || `Technische foutmelding niet vastgelegd in deze route.\nFoutmelding: ${emailRouteError}`}
-                  </pre>
-                ) : null}
-              </div>
-            ) : null}
+            <KassaFeedbackPanel
+              feedback={uploadProgress?.active ? {
+                variant: 'progress',
+                title: uploadProgress.label || 'Kassabon verwerken...',
+                message: uploadProgress.detail || 'Even geduld, Rezzerv verwerkt de bon en laadt daarna Kassa.',
+                progress: Math.max(5, Math.min(100, Math.round(uploadProgress.percent || 0))),
+                dismissible: false,
+                testId: 'receipt-upload-progress',
+              } : emailRouteError ? {
+                variant: 'error',
+                title: 'Melding',
+                message: emailRouteError,
+                technicalDetail: technicalUploadError?.detail || (
+                  String(emailRouteError || '').startsWith('Upload mislukt. De server gaf een technische fout terug.')
+                    ? `Technische foutmelding niet vastgelegd in deze route.\nFoutmelding: ${emailRouteError}`
+                    : ''
+                ),
+                showTechnicalToggle: ['admin','owner'].includes(String(currentUserDisplayRole || '').trim().toLowerCase()),
+                testId: 'kassa-feedback-email-route-error',
+              } : null}
+              isTechnicalOpen={isTechnicalUploadErrorOpen}
+              onToggleTechnical={onToggleTechnicalUploadError}
+            />
           </div>
         </ScreenCard>
 
@@ -1648,8 +1611,19 @@ function CameraCaptureModal({
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isUploading} data-testid="kassa-camera-cancel">Annuleren</Button>
         </div>
 
-        {duplicateNotice ? <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-camera-duplicate-feedback">{duplicateNotice}</div> : null}
-        {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
+        <KassaFeedbackPanel
+          feedback={duplicateNotice ? {
+            variant: 'warning',
+            title: 'Dubbele bon',
+            message: duplicateNotice,
+            testId: 'receipt-camera-duplicate-feedback',
+          } : error ? {
+            variant: 'error',
+            title: 'Melding',
+            message: error,
+            testId: 'receipt-camera-error-feedback',
+          } : null}
+        />
 
         <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', minHeight: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           {draftUrl ? (
