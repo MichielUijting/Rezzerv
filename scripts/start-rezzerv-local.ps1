@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$ConfigPath = ".\config\deployment\rezzerv-local-startup.config.json",
   [switch]$SkipPull,
   [switch]$SkipRegression,
@@ -25,7 +25,7 @@ function Stop-PortProcesses($ports) {
     }
 
     if ($ids) {
-      Write-Host "Gestopt op poort $port: $($ids -join ', ')"
+      Write-Host "Gestopt op poort ${port}: $($ids -join ', ')"
     } else {
       Write-Host "Geen proces op poort $port"
     }
@@ -99,3 +99,4 @@ Write-Host "Kassa:    $($config.frontend.kassaUrl)"
 Write-Host "Backend:  $($config.backend.url)"
 Write-Host "Swagger:  $($config.backend.docsUrl)"
 Write-Host "Gebruik Ctrl+F5 in de browser en voer zo nodig de runtimecheck uit uit docs/deployment/REZZERV_LOCAL_STARTUP_PROCEDURE.md."
+
