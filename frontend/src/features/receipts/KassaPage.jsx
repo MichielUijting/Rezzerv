@@ -1025,11 +1025,11 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     const normalizedStoreName = String(headerDraft.store_name || '').trim()
     const normalizedPurchaseAt = String(headerDraft.purchase_at || '').trim()
     if (!normalizedStoreName) {
-      onFeedback?.('error', 'Winkel is verplicht voordat je de bon kunt goedkeuren')
+      onFeedback?.('error', 'Vul eerst de winkel in voordat je de bon goedkeurt.')
       return
     }
     if (!normalizedPurchaseAt) {
-      onFeedback?.('error', 'Aankoopdatum is verplicht voordat je de bon kunt goedkeuren')
+      onFeedback?.('error', 'Vul eerst de aankoopdatum in voordat je de bon goedkeurt.')
       return
     }
     setIsApproving(true)
@@ -1567,11 +1567,11 @@ function ReceiptSourceHubContent({
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ fontSize: '18px', fontWeight: 700 }}>Importuitleg</div>
-              <div style={{ color: '#667085' }}>De schermopbouw is nu gericht op Ã©Ã©n centrale actie. De extra uitleg blijft zichtbaar, maar staat bewust lager op het scherm.</div>
+              <div style={{ color: '#667085' }}>De schermopbouw is nu gericht op één centrale actie. De extra uitleg blijft zichtbaar, maar staat bewust lager op het scherm.</div>
               <div style={{ color: '#344054', fontSize: '14px', display: 'grid', gap: '6px' }}>
                 <div><strong>.eml</strong> blijft via de bestaande e-mailimport lopen.</div>
                 <div><strong>.pdf</strong>, <strong>.zip</strong> en ondersteunde afbeeldingsbestanden lopen via de bestaande bonbestand-import.</div>
-                <div><strong>Slepen, plakken en kiezen via Verkenner</strong> komen hiermee samen in Ã©Ã©n centrale landingsroute.</div>
+                <div><strong>Slepen, plakken en kiezen via Verkenner</strong> komen hiermee samen in één centrale landingsroute.</div>
               </div>
             </div>
           </ScreenCard>
@@ -1823,11 +1823,11 @@ export default function KassaPage() {
           resetUploadProgress()
           setDuplicateNotice('')
           if (statusValue === 'failed') {
-            setError(normalizeErrorMessage(batch?.error_message) || 'De zip-batch kon niet volledig worden verwerkt.')
+            setError(normalizeErrorMessage(batch?.error_message) || 'Het zipbestand kon niet volledig worden verwerkt.')
             setStatus('')
           } else {
             setError('')
-            setStatus(`Zip verwerkt: ${Number(batch?.imported_files || 0)} toegevoegd, ${Number(batch?.duplicate_files || 0)} dubbel, ${Number(batch?.failed_files || 0)} mislukt.`)
+            setStatus(`Zipbestand verwerkt: ${Number(batch?.imported_files || 0)} toegevoegd, ${Number(batch?.duplicate_files || 0)} dubbel, ${Number(batch?.failed_files || 0)} mislukt.`)
           }
           return true
         }
@@ -1837,7 +1837,7 @@ export default function KassaPage() {
         setIsUploading(false)
         setUploadMode('manual')
         resetUploadProgress()
-        setError(normalizeErrorMessage(err?.message) || 'De voortgang van de zip-batch kon niet worden bijgewerkt.')
+        setError(normalizeErrorMessage(err?.message) || 'De voortgang van het zipbestand kon niet worden bijgewerkt.')
         return true
       }
     }
@@ -2006,7 +2006,7 @@ export default function KassaPage() {
         if (cancelled) return
         const sharedResult = readShareQueryParams()
         if (sharedResult?.shareStatus === 'error') {
-          setError(sharedResult.message || 'Gedeelde inhoud kon niet worden verwerkt.')
+          setError(sharedResult.message || 'De gedeelde bon kon niet worden verwerkt.')
           clearShareQueryParams()
           return
         }
@@ -2031,7 +2031,7 @@ export default function KassaPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(normalizeErrorMessage(err?.message) || 'Huishouden kon niet worden geladen.')
+          setError(normalizeErrorMessage(err?.message) || 'Je gegevens konden niet worden geladen.')
           setIsLoading(false)
         }
       }
@@ -2289,11 +2289,11 @@ export default function KassaPage() {
           setDuplicateNotice('')
           setStatus('Foto verwerkt. De bon staat nu in de Kassa.')
         } else {
-          setStatus('Foto opgeslagen, maar nog niet als bruikbare kassabon herkend.')
+          setStatus('Foto opgeslagen, maar Rezzerv herkent nog geen bruikbare kassabon. Controleer de foto of probeer opnieuw.')
         }
 
         if (uploadedReceiptId && !receiptExistsInInbox) {
-          setStatus('Bon toegevoegd. De bon staat nu in de Kassa. De lijst is direct bijgewerkt.')
+          setStatus('Bon toegevoegd. De lijst is bijgewerkt.')
         }
 
         setUploadProgressState(true, 'Kassa openen...', 'De nieuwe bon staat klaar in Kassa.', 100)
@@ -2339,13 +2339,13 @@ export default function KassaPage() {
 
   async function processPicnicEmailLandingFile(file) {
     if (!file) {
-      setEmailRouteError('Sleep een opgeslagen Picnic .eml-bestand naar het landingsgebied.')
+      setEmailRouteError('Sleep hier een opgeslagen Picnic e-mailbestand (.eml) naartoe.')
       setError('')
       return
     }
 
     if (!isSupportedEmailImportFile(file)) {
-      setEmailRouteError('Gebruik voor Picnic een opgeslagen .eml-bestand.')
+      setEmailRouteError('Gebruik voor Picnic een opgeslagen e-mailbestand (.eml).')
       setError('')
       return
     }
@@ -2353,7 +2353,7 @@ export default function KassaPage() {
     setIsUploading(true)
     setUploadProgressState(true, 'Picnic e-mail voorbereiden...', 'Rezzerv zet de opgeslagen e-mail klaar voor het Picnic-parserframe.', 20)
     setError('')
-    setStatus('Picnic e-mailbestand uit landingzone wordt verwerkt.')
+    setStatus('Picnic e-mailbestand wordt verwerkt.')
     setDuplicateNotice('')
     setEmailRouteError('')
     clearTechnicalUploadError()
@@ -2387,7 +2387,7 @@ export default function KassaPage() {
         setDuplicateNotice('')
         setEmailRouteError('')
         clearTechnicalUploadError()
-        setStatus(result?.receipt_table_id ? 'Picnic e-mailbon ontvangen. De bon staat nu in de Kassa.' : 'Picnic e-mail verwerkt, maar nog niet als bruikbare kassabon herkend.')
+        setStatus(result?.receipt_table_id ? 'Picnic e-mailbon ontvangen. De bon staat nu in de Kassa.' : 'Picnic e-mail verwerkt, maar Rezzerv herkent nog geen bruikbare kassabon. Controleer het e-mailbestand.')
         setUploadProgressState(true, 'Kassa openen...', 'De nieuwe Picnic e-mailbon staat klaar in Kassa.', 100)
 
         if (isAddReceiptRoute) navigate('/kassa')
@@ -2395,7 +2395,7 @@ export default function KassaPage() {
     } catch (err) {
       const technical = err?.technicalUploadError || null
       if (technical) setTechnicalUploadError(technical)
-      setEmailRouteError(technical?.userMessage || normalizeErrorMessage(err?.message) || 'Picnic e-mailupload is mislukt.')
+      setEmailRouteError(technical?.userMessage || normalizeErrorMessage(err?.message) || 'Picnic e-mailbestand kon niet worden verwerkt.')
       setError('')
     } finally {
       setIsUploading(false)
@@ -2420,12 +2420,12 @@ export default function KassaPage() {
       clearTransientReceiptPreview()
     }
     if (!file) {
-      setEmailRouteError('Kies een .pdf, .zip, ondersteunde bonafbeelding of gebruik .eml voor een e-mailbestand.')
+      setEmailRouteError('Kies een bonbestand: pdf, zip, afbeelding of e-mailbestand (.eml).')
       setError('')
       return
     }
     if (!isSupportedReceiptDocumentFile(file) && !isSupportedReceiptImageFile(file)) {
-      setEmailRouteError('Dit bestandstype wordt in deze versie nog niet als bonbestand ondersteund. Gebruik .pdf, .zip, .png, .jpg, .jpeg, .webp of .eml.')
+      setEmailRouteError('Dit bestandstype wordt nog niet ondersteund. Gebruik pdf, zip, png, jpg, jpeg, webp of eml.')
       setError('')
       return
     }
@@ -2475,11 +2475,11 @@ export default function KassaPage() {
           setDuplicateNotice('')
           setStatus('Bon toegevoegd. De bon staat nu in de Kassa.')
         } else {
-          setStatus('Bestand opgeslagen, maar nog niet als bruikbare kassabon herkend.')
+          setStatus('Bestand opgeslagen, maar Rezzerv herkent nog geen bruikbare kassabon. Controleer het bestand of probeer opnieuw.')
         }
 
         if (uploadedReceiptId && !receiptExistsInInbox) {
-          setStatus('Bon toegevoegd. De bon staat nu in de Kassa. De lijst is direct bijgewerkt.')
+          setStatus('Bon toegevoegd. De lijst is bijgewerkt.')
         }
 
         setUploadProgressState(true, 'Kassa openen...', 'De nieuwe kassabon staat klaar in Kassa.', 100)
@@ -2531,7 +2531,7 @@ export default function KassaPage() {
 
   async function processLandingReceiptFile(file) {
     if (!file) {
-      setEmailRouteError('Sleep of kies een .eml, .pdf of ondersteunde bonafbeelding.')
+      setEmailRouteError('Sleep of kies een eml-, pdf- of afbeeldingsbestand.')
       setError('')
       return
     }
@@ -2544,7 +2544,7 @@ export default function KassaPage() {
       await processReceiptFileImport(file)
       return
     }
-    setEmailRouteError('Dit bestandstype wordt niet ondersteund in de centrale landingsplaats.')
+    setEmailRouteError('Dit bestandstype wordt hier niet ondersteund.')
     setError('')
   }
 
