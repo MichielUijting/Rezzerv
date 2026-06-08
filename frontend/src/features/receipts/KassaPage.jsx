@@ -739,11 +739,15 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
             ) : null}
 
             {previewState.status === 'error' ? (
-              <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-fallback" style={{ maxWidth: '560px', margin: '16px' }}>
-                <div style={{ display: 'grid', gap: '12px' }}>
-                  <div>{selectedVariant === 'processed' ? 'De bewerkte preview van deze bon kon niet worden geladen.' : 'De preview van deze bon kon niet worden geladen.'}</div>
-                  <div style={{ color: '#667085' }}>{previewState.error || 'De bonpreview is momenteel niet beschikbaar.'}</div>
-                </div>
+              <div style={{ maxWidth: '560px', margin: '16px' }}>
+                <KassaFeedbackPanel
+                  feedback={{
+                    variant: 'warning',
+                    title: selectedVariant === 'processed' ? 'De bewerkte preview van deze bon kon niet worden geladen.' : 'De preview van deze bon kon niet worden geladen.',
+                    message: previewState.error || 'De bonpreview is momenteel niet beschikbaar.',
+                    testId: 'receipt-preview-fallback',
+                  }}
+                />
               </div>
             ) : null}
 
@@ -792,8 +796,14 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
             ) : null}
 
             {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage && !previewState.isHtml && !previewState.isText ? (
-              <div className="rz-inline-feedback rz-inline-feedback--warning" data-testid="receipt-preview-unsupported" style={{ maxWidth: '560px', margin: '16px' }}>
-                Voor dit bestandstype is geen ingebedde preview beschikbaar.
+              <div style={{ maxWidth: '560px', margin: '16px' }}>
+                <KassaFeedbackPanel
+                  feedback={{
+                    variant: 'warning',
+                    message: 'Voor dit bestandstype is geen ingebedde preview beschikbaar.',
+                    testId: 'receipt-preview-unsupported',
+                  }}
+                />
               </div>
             ) : null}
           </div>
