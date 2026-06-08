@@ -845,6 +845,7 @@ function ReceiptProcessingInfoCard({ transientPreview, uploadProgress }) {
 function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onFeedback }) {
   const [selectedLineIds, setSelectedLineIds] = useState([])
   const [lineSort, setLineSort] = useState({ key: 'lineIndex', direction: 'asc' })
+  const [lineFilters, setLineFilters] = useState({ article: '', quantity: '', unit: '', unitPrice: '', lineTotal: '', discount: '' })
   const [isSavingHeader, setIsSavingHeader] = useState(false)
   const [isApproving, setIsApproving] = useState(false)
   const [headerDraft, setHeaderDraft] = useState({
@@ -860,6 +861,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
 
   useEffect(() => {
     setSelectedLineIds([])
+    setLineFilters({ article: '', quantity: '', unit: '', unitPrice: '', lineTotal: '', discount: '' })
     setHeaderDraft({
       store_name: receipt?.store_name || '',
       purchase_at: receipt?.purchase_at || '',
@@ -895,6 +897,25 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     lineTotal: (line) => Number(lineDrafts[line.id]?.line_total ?? line?.display_line_total ?? line?.line_total ?? 0),
     discount: (line) => Number(line?.discount_amount ?? 0),
   }), [lines, lineSort, lineDrafts])
+
+  const filteredSortedLines = useMemo(() => {
+    const normalizedFilters = Object.fromEntries(
+      Object.entries(lineFilters).map(([key, value]) => [key, String(value || '').trim().toLowerCase()])
+    )
+
+    return sortedLines.filter((line) => {
+      const values = {
+        article: String(lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || '').toLowerCase(),
+        quantity: String(lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? '').toLowerCase(),
+        unit: String(lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || '').toLowerCase(),
+        unitPrice: String(lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? '').toLowerCase(),
+        lineTotal: String(lineDrafts[line.id]?.line_total ?? line?.display_line_total ?? line?.line_total ?? '').toLowerCase(),
+        discount: String(line?.discount_amount ?? '').toLowerCase(),
+      }
+
+      return Object.entries(normalizedFilters).every(([key, filter]) => !filter || values[key]?.includes(filter))
+    })
+  }, [sortedLines, lineFilters, lineDrafts])
   const allSelected = lines.length > 0 && lines.every((line) => selectedLineIds.includes(line.id))
   const visibleLineTotalSum = lines.reduce((sum, line) => {
     const value = Number(lineDrafts[line.id]?.line_total ?? line?.display_line_total ?? line?.line_total)
@@ -917,6 +938,10 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   const branchParts = deriveBranchAddressPlace(receipt)
   const lineColumnDefaults = useMemo(() => Object.fromEntries(receiptLineTableColumns.map(({ key, width }) => [key, width])), [])
   const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
+
+  function handleLineFilterChange(key, value) {
+    setLineFilters((current) => ({ ...current, [key]: value }))
+  }
 
   function toggleLine(lineId) {
     setSelectedLineIds((current) => (current.includes(lineId) ? current.filter((id) => id !== lineId) : [...current, lineId]))
@@ -1230,9 +1255,30 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
                         <ResizableHeaderCell columnKey="lineTotal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num" sortable isSorted={lineSort.key === 'lineTotal'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Regelbedrag</ResizableHeaderCell>
                         <ResizableHeaderCell columnKey="discount" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num" sortable isSorted={lineSort.key === 'discount'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Korting</ResizableHeaderCell>
                       </tr>
+                      <tr className="rz-table-filters">
+                        <th />
+                        <th>
+                          <input className="rz-input rz-inline-input" value={lineFilters.article} onChange={(event) => handleLineFilterChange('article', event.target.value)} placeholder="Filter" aria-label="Filter op artikel in bon" />
+                        </th>
+                        <th>
+                          <input className="rz-input rz-inline-input" value={lineFilters.quantity} onChange={(event) => handleLineFilterChange('quantity', event.target.value)} placeholder="Filter" aria-label="Filter op aantal" />
+                        </th>
+                        <th>
+                          <input className="rz-input rz-inline-input" value={lineFilters.unit} onChange={(event) => handleLineFilterChange('unit', event.target.value)} placeholder="Filter" aria-label="Filter op eenheid" />
+                        </th>
+                        <th>
+                          <input className="rz-input rz-inline-input" value={lineFilters.unitPrice} onChange={(event) => handleLineFilterChange('unitPrice', event.target.value)} placeholder="Filter" aria-label="Filter op stukprijs" />
+                        </th>
+                        <th>
+                          <input className="rz-input rz-inline-input" value={lineFilters.lineTotal} onChange={(event) => handleLineFilterChange('lineTotal', event.target.value)} placeholder="Filter" aria-label="Filter op regelbedrag" />
+                        </th>
+                        <th>
+                          <input className="rz-input rz-inline-input" value={lineFilters.discount} onChange={(event) => handleLineFilterChange('discount', event.target.value)} placeholder="Filter" aria-label="Filter op korting" />
+                        </th>
+                      </tr>
                     </thead>
                     <tbody>
-                      {sortedLines.map((line) => {
+                      {filteredSortedLines.map((line) => {
                         const selected = selectedLineIds.includes(line.id)
                         const draft = lineDrafts[line.id] || {}
                         return (

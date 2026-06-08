@@ -1732,6 +1732,30 @@ body,
   border-spacing: 0;
 }
 
+.rz-receipt-lines-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.rz-receipt-lines-table thead tr.rz-table-header th,
+.rz-receipt-lines-table thead tr.rz-table-filters th {
+  position: sticky;
+  z-index: 31;
+  background-clip: padding-box;
+}
+
+.rz-receipt-lines-table thead tr.rz-table-header th {
+  top: 0;
+  background: var(--color-brand-primary);
+}
+
+.rz-receipt-lines-table thead tr.rz-table-filters th {
+  top: 30px;
+  background: var(--color-brand-light);
+  z-index: 30;
+}
+
 .rz-receipt-lines-table tfoot td {
   background: #ffffff;
 }
