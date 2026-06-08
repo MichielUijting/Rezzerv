@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
+import DataTable from '../../ui/DataTable'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
 import Tabs from '../../ui/Tabs'
@@ -898,24 +899,6 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     discount: (line) => Number(line?.discount_amount ?? 0),
   }), [lines, lineSort, lineDrafts])
 
-  const filteredSortedLines = useMemo(() => {
-    const normalizedFilters = Object.fromEntries(
-      Object.entries(lineFilters).map(([key, value]) => [key, String(value || '').trim().toLowerCase()])
-    )
-
-    return sortedLines.filter((line) => {
-      const values = {
-        article: String(lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || '').toLowerCase(),
-        quantity: String(lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? '').toLowerCase(),
-        unit: String(lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || '').toLowerCase(),
-        unitPrice: String(lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? '').toLowerCase(),
-        lineTotal: String(lineDrafts[line.id]?.line_total ?? line?.display_line_total ?? line?.line_total ?? '').toLowerCase(),
-        discount: String(line?.discount_amount ?? '').toLowerCase(),
-      }
-
-      return Object.entries(normalizedFilters).every(([key, filter]) => !filter || values[key]?.includes(filter))
-    })
-  }, [sortedLines, lineFilters, lineDrafts])
   const allSelected = lines.length > 0 && lines.every((line) => selectedLineIds.includes(line.id))
   const visibleLineTotalSum = lines.reduce((sum, line) => {
     const value = Number(lineDrafts[line.id]?.line_total ?? line?.display_line_total ?? line?.line_total)
@@ -936,8 +919,59 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   const detailAmountsAccepted = detailAmountsMatch || isPoNormControlled
   const totalsMismatchWarningVisible = !detailAmountsAccepted && Number.isFinite(Number(headerDraft.total_amount)) && lines.length > 0
   const branchParts = deriveBranchAddressPlace(receipt)
-  const lineColumnDefaults = useMemo(() => Object.fromEntries(receiptLineTableColumns.map(({ key, width }) => [key, width])), [])
-  const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
+  const receiptLineDataTableColumns = useMemo(() => receiptLineTableColumns.map((column) => {
+    if (column.key === 'select') {
+      return {
+        ...column,
+        header: <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Selecteer alle bonregels" />,
+      }
+    }
+
+    const labels = {
+      article: 'Artikel in bon',
+      quantity: 'Aantal',
+      unit: 'Eenheid',
+      unitPrice: 'Stukprijs',
+      lineTotal: 'Regelbedrag',
+      discount: 'Korting',
+    }
+
+    const filterLabels = {
+      article: 'Filter op artikel in bon',
+      quantity: 'Filter op aantal',
+      unit: 'Filter op eenheid',
+      unitPrice: 'Filter op stukprijs',
+      lineTotal: 'Filter op regelbedrag',
+      discount: 'Filter op korting',
+    }
+
+    return {
+      ...column,
+      label: labels[column.key] || column.label || column.key,
+      align: ['quantity', 'unitPrice', 'lineTotal', 'discount'].includes(column.key) ? 'right' : undefined,
+      sortable: true,
+      filterable: true,
+      filterLabel: filterLabels[column.key],
+      getSortValue: (line) => {
+        if (column.key === 'article') return lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || ''
+        if (column.key === 'quantity') return Number(lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? 0)
+        if (column.key === 'unit') return lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || ''
+        if (column.key === 'unitPrice') return Number(lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? 0)
+        if (column.key === 'lineTotal') return Number(lineDrafts[line.id]?.line_total ?? line?.display_line_total ?? line?.line_total ?? 0)
+        if (column.key === 'discount') return Number(line?.discount_amount ?? 0)
+        return ''
+      },
+      getFilterValue: (line) => {
+        if (column.key === 'article') return lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || ''
+        if (column.key === 'quantity') return lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? ''
+        if (column.key === 'unit') return lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || ''
+        if (column.key === 'unitPrice') return lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? ''
+        if (column.key === 'lineTotal') return lineDrafts[line.id]?.line_total ?? line?.display_line_total ?? line?.line_total ?? ''
+        if (column.key === 'discount') return line?.discount_amount ?? ''
+        return ''
+      },
+    }
+  }), [allSelected, lineDrafts])
 
   function handleLineFilterChange(key, value) {
     setLineFilters((current) => ({ ...current, [key]: value }))
@@ -1235,82 +1269,55 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
             }
             return (
               <div style={{ display: 'grid', gap: '12px' }}>
-                <Table wrapperClassName="rz-data-table-wrapper rz-receipt-lines-table-wrapper" tableClassName="rz-data-table rz-data-table--sticky-header rz-data-table--sticky-filters rz-receipt-lines-table" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }}>
-                    <colgroup>
-                      <col style={{ width: `${lineColumnWidths.select}px` }} />
-                      <col style={{ width: `${lineColumnWidths.article}px` }} />
-                      <col style={{ width: `${lineColumnWidths.quantity}px` }} />
-                      <col style={{ width: `${lineColumnWidths.unit}px` }} />
-                      <col style={{ width: `${lineColumnWidths.unitPrice}px` }} />
-                      <col style={{ width: `${lineColumnWidths.lineTotal}px` }} />
-                      <col style={{ width: `${lineColumnWidths.discount}px` }} />
-                    </colgroup>
-                    <thead>
-                      <tr className="rz-table-header">
-                        <ResizableHeaderCell columnKey="select" widths={lineColumnWidths} onStartResize={startLineResize} style={{ width: '44px' }}><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Selecteer alle bonregels" /></ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="article" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={lineSort.key === 'article'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Artikel in bon</ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="quantity" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num" sortable isSorted={lineSort.key === 'quantity'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Aantal</ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="unit" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={lineSort.key === 'unit'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Eenheid</ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="unitPrice" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num" sortable isSorted={lineSort.key === 'unitPrice'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Stukprijs</ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="lineTotal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num" sortable isSorted={lineSort.key === 'lineTotal'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Regelbedrag</ResizableHeaderCell>
-                        <ResizableHeaderCell columnKey="discount" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num" sortable isSorted={lineSort.key === 'discount'} sortDirection={lineSort.direction} onSort={(key) => setLineSort((current) => nextSortState(current, key, { lineIndex: 'asc', article: 'asc', quantity: 'desc', unit: 'asc', unitPrice: 'desc', lineTotal: 'desc', discount: 'desc' }))}>Korting</ResizableHeaderCell>
+                <DataTable
+                  columns={receiptLineDataTableColumns}
+                  data={lines}
+                  getRowKey={(line) => line.id}
+                  wrapperClassName="rz-receipt-lines-table-wrapper"
+                  tableClassName="rz-receipt-lines-table"
+                  dataTestId="receipt-lines-table"
+                  defaultSort={{ key: 'lineIndex', direction: 'asc' }}
+                  sortState={lineSort}
+                  onSortChange={setLineSort}
+                  filterState={lineFilters}
+                  onFilterChange={handleLineFilterChange}
+                  emptyMessage="Geen bonregels gevonden."
+                  renderRow={(line) => {
+                    const selected = selectedLineIds.includes(line.id)
+                    const draft = lineDrafts[line.id] || {}
+                    return (
+                      <tr key={line.id} data-testid={`receipt-line-row-${line.id}`} className={selected ? 'rz-row-selected' : ''}>
+                        <td><input type="checkbox" data-testid={`receipt-line-select-${line.id}`} checked={selected} onChange={() => toggleLine(line.id)} aria-label={`Selecteer regel ${draft.article_name || line.display_label || line.id}`} /></td>
+                        <td>{canEdit ? <input className="rz-input" value={draft.article_name ?? ''} onChange={(event) => updateLineDraft(line.id, 'article_name', event.target.value)} onBlur={(event) => saveLine(line.id, { article_name: event.target.value })} /> : <span data-testid={`receipt-line-status-${line.id}`}>{draft.article_name || line.display_label || '-'}</span>}</td>
+                        <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.001" value={draft.quantity ?? ''} onChange={(event) => updateLineDraft(line.id, 'quantity', event.target.value)} onBlur={(event) => saveLine(line.id, { quantity: event.target.value })} /> : formatQuantity(draft.quantity ?? line.display_quantity ?? line.quantity)}</td>
+                        <td>{canEdit ? <input className="rz-input" value={draft.unit ?? ''} onChange={(event) => updateLineDraft(line.id, 'unit', event.target.value)} onBlur={(event) => saveLine(line.id, { unit: event.target.value })} /> : (draft.unit || line.display_unit || '-')}</td>
+                        <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.unit_price ?? ''} onChange={(event) => updateLineDraft(line.id, 'unit_price', event.target.value)} onBlur={(event) => saveLine(line.id, { unit_price: event.target.value })} /> : formatMoney(draft.unit_price ?? line.display_unit_price ?? line.unit_price, receipt?.currency)}</td>
+                        <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.line_total ?? ''} onChange={(event) => updateLineDraft(line.id, 'line_total', event.target.value)} onBlur={(event) => saveLine(line.id, { line_total: event.target.value })} /> : formatMoney(draft.line_total ?? line.display_line_total ?? line.line_total, receipt?.currency)}</td>
+                        <td className="rz-num">{formatMoney(line.discount_amount, receipt?.currency)}</td>
                       </tr>
-                      <tr className="rz-table-filters">
-                        <th />
-                        <th>
-                          <input className="rz-input rz-inline-input" value={lineFilters.article} onChange={(event) => handleLineFilterChange('article', event.target.value)} placeholder="Filter" aria-label="Filter op artikel in bon" />
-                        </th>
-                        <th>
-                          <input className="rz-input rz-inline-input" value={lineFilters.quantity} onChange={(event) => handleLineFilterChange('quantity', event.target.value)} placeholder="Filter" aria-label="Filter op aantal" />
-                        </th>
-                        <th>
-                          <input className="rz-input rz-inline-input" value={lineFilters.unit} onChange={(event) => handleLineFilterChange('unit', event.target.value)} placeholder="Filter" aria-label="Filter op eenheid" />
-                        </th>
-                        <th>
-                          <input className="rz-input rz-inline-input" value={lineFilters.unitPrice} onChange={(event) => handleLineFilterChange('unitPrice', event.target.value)} placeholder="Filter" aria-label="Filter op stukprijs" />
-                        </th>
-                        <th>
-                          <input className="rz-input rz-inline-input" value={lineFilters.lineTotal} onChange={(event) => handleLineFilterChange('lineTotal', event.target.value)} placeholder="Filter" aria-label="Filter op regelbedrag" />
-                        </th>
-                        <th>
-                          <input className="rz-input rz-inline-input" value={lineFilters.discount} onChange={(event) => handleLineFilterChange('discount', event.target.value)} placeholder="Filter" aria-label="Filter op korting" />
-                        </th>
+                    )
+                  }}
+                  renderBodyAppend={() => (
+                    canEdit && isAddingLine ? (
+                      <tr data-testid="receipt-line-row-new">
+                        <td />
+                        <td><input className="rz-input" value={newLineDraft.article_name} onChange={(event) => setNewLineDraft((current) => ({ ...current, article_name: event.target.value }))} placeholder="Nieuw artikel" /></td>
+                        <td className="rz-num"><input className="rz-input" type="number" step="0.001" value={newLineDraft.quantity} onChange={(event) => setNewLineDraft((current) => ({ ...current, quantity: event.target.value }))} /></td>
+                        <td><input className="rz-input" value={newLineDraft.unit} onChange={(event) => setNewLineDraft((current) => ({ ...current, unit: event.target.value }))} placeholder="st / kg / l" /></td>
+                        <td className="rz-num"><input className="rz-input" type="number" step="0.01" value={newLineDraft.unit_price} onChange={(event) => setNewLineDraft((current) => ({ ...current, unit_price: event.target.value }))} /></td>
+                        <td className="rz-num"><input className="rz-input" type="number" step="0.01" value={newLineDraft.line_total} onChange={(event) => setNewLineDraft((current) => ({ ...current, line_total: event.target.value }))} /></td>
+                        <td />
                       </tr>
-                    </thead>
-                    <tbody>
-                      {filteredSortedLines.map((line) => {
-                        const selected = selectedLineIds.includes(line.id)
-                        const draft = lineDrafts[line.id] || {}
-                        return (
-                          <tr key={line.id} data-testid={`receipt-line-row-${line.id}`} className={selected ? 'rz-row-selected' : ''}>
-                            <td><input type="checkbox" data-testid={`receipt-line-select-${line.id}`} checked={selected} onChange={() => toggleLine(line.id)} aria-label={`Selecteer regel ${draft.article_name || line.display_label || line.id}`} /></td>
-                            <td>{canEdit ? <input className="rz-input" value={draft.article_name ?? ''} onChange={(event) => updateLineDraft(line.id, 'article_name', event.target.value)} onBlur={(event) => saveLine(line.id, { article_name: event.target.value })} /> : <span data-testid={`receipt-line-status-${line.id}`}>{draft.article_name || line.display_label || '-'}</span>}</td>
-                            <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.001" value={draft.quantity ?? ''} onChange={(event) => updateLineDraft(line.id, 'quantity', event.target.value)} onBlur={(event) => saveLine(line.id, { quantity: event.target.value })} /> : formatQuantity(draft.quantity ?? line.display_quantity ?? line.quantity)}</td>
-                            <td>{canEdit ? <input className="rz-input" value={draft.unit ?? ''} onChange={(event) => updateLineDraft(line.id, 'unit', event.target.value)} onBlur={(event) => saveLine(line.id, { unit: event.target.value })} /> : (draft.unit || line.display_unit || '-')}</td>
-                            <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.unit_price ?? ''} onChange={(event) => updateLineDraft(line.id, 'unit_price', event.target.value)} onBlur={(event) => saveLine(line.id, { unit_price: event.target.value })} /> : formatMoney(draft.unit_price ?? line.display_unit_price ?? line.unit_price, receipt?.currency)}</td>
-                            <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.line_total ?? ''} onChange={(event) => updateLineDraft(line.id, 'line_total', event.target.value)} onBlur={(event) => saveLine(line.id, { line_total: event.target.value })} /> : formatMoney(draft.line_total ?? line.display_line_total ?? line.line_total, receipt?.currency)}</td>
-                            <td className="rz-num">{formatMoney(line.discount_amount, receipt?.currency)}</td>
-                          </tr>
-                        )
-                      })}
-                      {canEdit && isAddingLine ? (
-                        <tr data-testid="receipt-line-row-new">
-                          <td />
-                          <td><input className="rz-input" value={newLineDraft.article_name} onChange={(event) => setNewLineDraft((current) => ({ ...current, article_name: event.target.value }))} placeholder="Nieuw artikel" /></td>
-                          <td className="rz-num"><input className="rz-input" type="number" step="0.001" value={newLineDraft.quantity} onChange={(event) => setNewLineDraft((current) => ({ ...current, quantity: event.target.value }))} /></td>
-                          <td><input className="rz-input" value={newLineDraft.unit} onChange={(event) => setNewLineDraft((current) => ({ ...current, unit: event.target.value }))} placeholder="st / kg / l" /></td>
-                          <td className="rz-num"><input className="rz-input" type="number" step="0.01" value={newLineDraft.unit_price} onChange={(event) => setNewLineDraft((current) => ({ ...current, unit_price: event.target.value }))} /></td>
-                          <td className="rz-num"><input className="rz-input" type="number" step="0.01" value={newLineDraft.line_total} onChange={(event) => setNewLineDraft((current) => ({ ...current, line_total: event.target.value }))} /></td>
-                          <td />
-                        </tr>
-                      ) : null}
-                    </tbody>
+                    ) : null
+                  )}
+                  renderFooter={() => (
                     <tfoot>
                       <tr><td colSpan={5} style={{ fontWeight: 700 }}>Totaal bonregels</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(visibleLineTotalSum, receipt?.currency)}</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(effectiveLineDiscountTotal, receipt?.currency)}</td></tr>
                       <tr><td colSpan={5} style={{ fontWeight: 700 }}>Boncorrectie</td><td className="rz-num" style={{ fontWeight: 700 }}>-</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(effectiveReceiptLevelDiscount, receipt?.currency)}</td></tr>
                       <tr><td colSpan={5} style={{ fontWeight: 700 }}>Netto bonregels</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(visibleNetTotalSum, receipt?.currency)}</td><td className="rz-num" style={{ fontWeight: 700 }}>{formatMoney(headerDraft.total_amount, receipt?.currency)}</td></tr>
                     </tfoot>
-                  </Table>
+                  )}
+                />
                 <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                   {canEdit ? <Button type="button" variant="secondary" onClick={addLine}>{isAddingLine ? 'Nieuwe regel opslaan' : 'Toevoegen'}</Button> : null}
                   {canEdit ? <Button type="button" variant="secondary" onClick={deleteSelectedLines} disabled={selectedLineIds.length === 0}>Verwijderen</Button> : null}

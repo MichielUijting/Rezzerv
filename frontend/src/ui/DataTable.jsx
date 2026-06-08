@@ -50,6 +50,7 @@ export default function DataTable({
   sortState = null,
   onSortChange = null,
   tableStyle = {},
+  renderBodyAppend = null,
   renderFooter = null,
 }) {
   const visibleColumns = useMemo(
@@ -218,6 +219,7 @@ export default function DataTable({
             </tr>
           ))
         )}
+        {typeof renderBodyAppend === 'function' ? renderBodyAppend({ columns: visibleColumns, data: sortedData }) : null}
       </tbody>
 
       {typeof renderFooter === 'function' ? renderFooter({ columns: visibleColumns, data: sortedData }) : null}
