@@ -165,6 +165,9 @@ const MAX_CAMERA_UPLOAD_BYTES = 4 * 1024 * 1024
 const MAX_CAMERA_DIMENSION = 1800
 const RECEIPT_INBOX_AUTO_REFRESH_MS = 60000
 const RECEIPT_DETAIL_PANEL_HEIGHT = 560
+const RECEIPT_PREVIEW_ZOOM_MIN = 0.5
+const RECEIPT_PREVIEW_ZOOM_MAX = 3
+const RECEIPT_PREVIEW_ZOOM_STEP = 0.25
 
 function formatQuantity(value) {
   if (value === null || value === undefined || value === '') return '-'
@@ -624,12 +627,14 @@ function readShareQueryParams() {
 function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onToggleCollapse }) {
   const [selectedVariant, setSelectedVariant] = useState('original')
   const [previewState, setPreviewState] = useState({ status: 'idle', blobUrl: '', contentType: '', isPdf: false, isImage: false, isHtml: false, isText: false, textContent: '', error: '' })
+  const [imageZoom, setImageZoom] = useState(1)
   const hasTransientPreview = Boolean(transientPreview?.originalUrl)
   const supportsProcessedPreview = hasTransientPreview || (receipt?.mime_type ? String(receipt.mime_type).toLowerCase().startsWith('image/') : false)
   const previewTitle = selectedVariant === 'processed' ? 'Bewerkte kassabon' : 'Originele kassabon'
 
   useEffect(() => {
     setSelectedVariant('original')
+    setImageZoom(1)
   }, [receipt?.id, transientPreview?.originalUrl, transientPreview?.processedUrl])
 
   useEffect(() => {
@@ -673,8 +678,20 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
     }
   }, [receipt?.id, receipt?.mime_type, selectedVariant, transientPreview?.originalUrl, transientPreview?.processedUrl, hasTransientPreview])
 
+  function zoomReceiptImage(delta) {
+    setImageZoom((current) => {
+      const next = Math.round((Number(current || 1) + delta) * 100) / 100
+      return Math.min(RECEIPT_PREVIEW_ZOOM_MAX, Math.max(RECEIPT_PREVIEW_ZOOM_MIN, next))
+    })
+  }
+
+  const imageZoomPercent = Math.round(imageZoom * 100)
+
   return (
-    <ScreenCard style={{ height: `${RECEIPT_DETAIL_PANEL_HEIGHT}px` }}>
+        <ScreenCard style={{
+      height: 'calc(var(--rz-kassa-review-panel-height) + var(--rz-kassa-preview-card-overhead))',
+      minHeight: 'calc(var(--rz-kassa-review-panel-height) + var(--rz-kassa-preview-card-overhead))',
+    }}>
       {isCollapsed ? (
         <div
           style={{
@@ -698,13 +715,18 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
           </button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-preview-card">
+        <div style={{ display: 'grid', gap: '16px', height: '100%', gridTemplateRows: 'auto 1fr' }} data-testid="receipt-preview-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
             <div style={{ display: 'grid', gap: '8px' }}>
               <div style={{ fontWeight: 700, fontSize: '22px' }}>{previewTitle}</div>
               <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start', gap: '8px' }}>
-                <Button type="button" variant={selectedVariant === 'original' ? 'primary' : 'secondary'} onClick={() => setSelectedVariant('original')} style={{ padding: '8px 14px', minWidth: '110px' }}>Origineel</Button>
-                <Button type="button" variant={selectedVariant === 'processed' ? 'primary' : 'secondary'} onClick={() => setSelectedVariant('processed')} disabled={!supportsProcessedPreview} style={{ padding: '8px 14px', minWidth: '110px' }}>Bewerkt</Button>
+                {previewState.status === 'ready' && previewState.isImage ? (
+                  <div className="rz-kassa-preview-zoom-controls" aria-label="Zoom kassabonfoto">
+                    <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(-RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom <= RECEIPT_PREVIEW_ZOOM_MIN} data-testid="receipt-preview-zoom-out">−</Button>
+                    <span className="rz-kassa-preview-zoom-label" data-testid="receipt-preview-zoom-level">{imageZoomPercent}%</span>
+                    <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom >= RECEIPT_PREVIEW_ZOOM_MAX} data-testid="receipt-preview-zoom-in">+</Button>
+                  </div>
+                ) : null}
               </div>
             </div>
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
@@ -723,17 +745,8 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
           </div>
 
           <div
-            style={{
-              border: '1px solid #d0d5dd',
-              borderRadius: '8px',
-              minHeight: '420px',
-              background: '#f8fafc',
-              overflow: 'auto',
-              display: 'block',
-              padding: previewState.isImage ? '16px' : '0',
-              height: `${RECEIPT_DETAIL_PANEL_HEIGHT - 126}px`,
-              maxHeight: `${RECEIPT_DETAIL_PANEL_HEIGHT - 126}px`,
-            }}
+            className={`rz-kassa-preview-viewport${previewState.isImage ? '' : ' rz-kassa-preview-viewport--plain'}`}
+            data-testid="receipt-preview-viewport"
           >
             {previewState.status === 'loading' ? (
               <div style={{ color: '#475467', fontWeight: 600, padding: '16px' }}>Preview laden...</div>
@@ -757,13 +770,13 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
                 data={`${previewState.blobUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=page-width`}
                 type="application/pdf"
                 title={`Preview van bon ${receipt?.id || transientPreview?.filename || ''}`}
-                style={{ display: 'block', width: '100%', height: '100%', minHeight: '900px', border: '0', background: '#fff' }}
+                style={{ display: 'block', width: '100%', height: '100%', minHeight: '100%', border: '0', background: '#fff' }}
                 data-testid="receipt-preview-pdf"
               >
                 <iframe
                   src={`${previewState.blobUrl}#toolbar=1&navpanes=0&scrollbar=1&zoom=page-width`}
                   title={`Preview van bon ${receipt?.id || transientPreview?.filename || ''}`}
-                  style={{ display: 'block', width: '100%', height: '100%', minHeight: '900px', border: '0', background: '#fff' }}
+                  style={{ display: 'block', width: '100%', height: '100%', minHeight: '100%', border: '0', background: '#fff' }}
                 />
               </object>
             ) : null}
@@ -772,7 +785,8 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
               <img
                 src={previewState.blobUrl}
                 alt={selectedVariant === 'processed' ? 'Bewerkte kassabon' : 'Originele kassabon'}
-                style={{ display: 'block', width: '100%', maxWidth: '100%', height: 'auto', background: '#fff', borderRadius: '4px' }}
+                className="rz-kassa-preview-image"
+                style={{ width: `${imageZoomPercent}%` }}
                 data-testid="receipt-preview-image"
               />
             ) : null}
@@ -781,7 +795,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
               <iframe
                 srcDoc={previewState.textContent || '<p>Geen HTML-preview beschikbaar.</p>'}
                 title={`HTML-preview van bon ${receipt?.id}`}
-                style={{ display: 'block', width: '100%', height: '100%', minHeight: '560px', border: '0', background: '#fff' }}
+                style={{ display: 'block', width: '100%', height: '100%', minHeight: '100%', border: '0', background: '#fff' }}
                 sandbox=""
                 data-testid="receipt-preview-html"
               />
@@ -789,7 +803,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
 
             {previewState.status === 'ready' && previewState.isText ? (
               <pre
-                style={{ width: '100%', minHeight: '560px', margin: 0, padding: '16px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fff', fontFamily: 'inherit', fontSize: '14px', lineHeight: 1.5 }}
+                style={{ width: '100%', minHeight: '100%', margin: 0, padding: '16px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: '#fff', fontFamily: 'inherit', fontSize: '14px', lineHeight: 1.5 }}
                 data-testid="receipt-preview-text"
               >
                 {previewState.textContent || 'Geen tekstpreview beschikbaar.'}
@@ -1008,19 +1022,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     return updated
   }
 
-  async function saveHeader() {
-    if (!canEdit) return
-    setIsSavingHeader(true)
-    try {
-      await persistHeaderDraft()
-    } catch (err) {
-      onFeedback?.('error', normalizeErrorMessage(err?.message) || 'Bonkop kon niet worden opgeslagen.')
-    } finally {
-      setIsSavingHeader(false)
-    }
-  }
-
-  async function saveLine(lineId, overrides = null) {
+async function saveLine(lineId, overrides = null) {
     if (!canEdit) return
     const draft = { ...(lineDrafts[lineId] || {}), ...(overrides || {}) }
     try {
@@ -1206,13 +1208,13 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
           <div>
             <div style={{ fontWeight: 700, fontSize: '24px' }} data-testid="receipt-detail-title">{receipt?.store_name || 'Kassabon'}</div>
             <div style={{ color: detailAmountsAccepted ? '#027A48' : '#B54708', fontWeight: 600 }}>{detailAmountsAccepted ? 'Bonbedragen sluiten aan' : 'Totaalbedrag wijkt af van de bonregels'}</div>
-            {totalsMismatchWarningVisible ? <div style={{ color: '#B54708', fontSize: 13 }}>Je kunt deze afwijking overrulen via 'Goedkeuren voor Uitpakken'. De bon gaat dan naar Gecontroleerd.</div> : null}
+            {totalsMismatchWarningVisible ? <div style={{ color: '#B54708', fontSize: 13 }}>Je kunt deze afwijking overrulen via 'Goedkeuren'. De bon gaat dan naar Gecontroleerd.</div> : null}
           </div>
           {canEdit ? (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              <Button type="button" variant="secondary" onClick={downloadParsingDebug} data-testid="receipt-debug-download-button">Download parsing (JSON)</Button>
-              <Button type="button" variant="secondary" onClick={saveHeader} disabled={isSavingHeader}>{isSavingHeader ? 'Opslaan...' : 'Bonkop opslaan'}</Button>
-              <Button type="button" onClick={approveReceipt} disabled={isApproving}>{isApproving ? 'Goedkeuren...' : 'Goedkeuren voor Uitpakken'}</Button>
+              
+              
+              
             </div>
           ) : null}
         </div>
@@ -1323,6 +1325,10 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
                   {canEdit ? <Button type="button" variant="secondary" onClick={deleteSelectedLines} disabled={selectedLineIds.length === 0}>Verwijderen</Button> : null}
                   <Button type="button" variant="secondary" onClick={exportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
                 </div>
+              <div className="rz-kassa-secondary-actions">
+                <Button type="button" onClick={approveReceipt} disabled={isApproving}>{isApproving ? 'Goedkeuren...' : 'Goedkeuren'}</Button>
+                <Button type="button" variant="secondary" onClick={downloadParsingDebug} data-testid="receipt-debug-download-button">JSON</Button>
+              </div>
               </div>
             )
           }}

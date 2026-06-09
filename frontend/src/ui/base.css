@@ -1730,3 +1730,56 @@ body,
 .rz-data-table thead {
   position: static;
 }
+
+
+/* R9-35J Kassa preview white card inline-height support */
+.rz-kassa-page {
+  --rz-table-header-row-height: 44px;
+  --rz-table-filter-row-height: 42px;
+  --rz-table-body-row-height: 38px;
+  --rz-kassa-review-panel-height: calc(
+    var(--rz-table-header-row-height) +
+    var(--rz-table-filter-row-height) +
+    (var(--rz-table-body-row-height) * 10) +
+    4px
+  );
+  --rz-kassa-preview-card-overhead: 306px;
+}
+
+.rz-receipt-lines-table-wrapper {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: var(--rz-kassa-review-panel-height) !important;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+.rz-kassa-preview-viewport {
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: auto;
+  display: block;
+}
+
+.rz-kassa-preview-viewport iframe,
+.rz-kassa-preview-viewport object,
+.rz-kassa-preview-viewport embed {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  display: block;
+}
+
+.rz-kassa-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.rz-kassa-secondary-actions > * {
+  margin: 0 !important;
+}
+

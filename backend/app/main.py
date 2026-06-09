@@ -11160,7 +11160,26 @@ def register_receipt_source(payload: ReceiptSourceCreateRequest, authorization: 
 @app.get("/api/receipt-sources/email-route")
 def get_receipt_email_route(householdId: str = Query(...), authorization: Optional[str] = Header(None)):
     effective_household_id = resolve_authorized_household_id(authorization, householdId, require_authorization=True)
-    return ensure_household_email_source(effective_household_id)
+    # R9-36 local receipt email route fallback
+    # In de lokale demo-opstelling kan de receipt source helper bewust niet geconfigureerd zijn.
+    # Dit mag het scherm Bon toevoegen niet blokkeren met een 500/modal.
+    try:
+        return ensure_household_email_source(effective_household_id)
+    except RuntimeError as exc:
+        if "Receipt source helper service is niet geconfigureerd" not in str(exc):
+            raise
+        return {
+            "id": None,
+            "household_id": effective_household_id,
+            "source_type": "email",
+            "status": "local_demo",
+            "address": "-",
+            "display_address": "-",
+            "inbound_path": "/api/receipts/inbound",
+            "message": "Lokale demo-opstelling",
+            "last_status": "Nog geen automatische mail ontvangen",
+            "is_configured": False,
+        }
 
 
 
