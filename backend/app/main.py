@@ -15442,15 +15442,39 @@ def get_purchase_import_batch(batch_id: str):
             text(
                 """
                 SELECT
-                    id, article_name_raw, brand_raw, quantity_raw, unit_raw,
-                    line_price_raw, currency_code, match_status, review_decision,
-                    matched_household_article_id, target_location_id,
-                    suggested_household_article_id, suggested_location_id, suggestion_confidence, suggestion_reason, is_auto_prefilled,
-                    article_override_mode, location_override_mode,
-                    processing_status, processed_at, processed_event_id, processing_error, final_location_id
-                FROM purchase_import_lines
-                WHERE batch_id = :batch_id
-                ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
+                    pil.id,
+                    pil.article_name_raw,
+                    pil.brand_raw,
+                    pil.quantity_raw,
+                    pil.unit_raw,
+                    pil.line_price_raw,
+                    pil.currency_code,
+                    pil.match_status,
+                    pil.review_decision,
+                    pil.matched_household_article_id,
+                    pil.matched_global_product_id,
+                    gp.name AS matched_global_product_name,
+                    gp.brand AS matched_global_product_brand,
+                    gp.category AS matched_global_product_category,
+                    gp.source AS matched_global_product_source,
+                    gp.status AS matched_global_product_status,
+                    pil.target_location_id,
+                    pil.suggested_household_article_id,
+                    pil.suggested_location_id,
+                    pil.suggestion_confidence,
+                    pil.suggestion_reason,
+                    pil.is_auto_prefilled,
+                    pil.article_override_mode,
+                    pil.location_override_mode,
+                    pil.processing_status,
+                    pil.processed_at,
+                    pil.processed_event_id,
+                    pil.processing_error,
+                    pil.final_location_id
+                FROM purchase_import_lines pil
+                LEFT JOIN global_products gp ON gp.id = pil.matched_global_product_id
+                WHERE pil.batch_id = :batch_id
+                ORDER BY COALESCE(pil.ui_sort_order, 999999), pil.created_at ASC, pil.id ASC
                 """
             ),
             {"batch_id": batch_id},
