@@ -1659,6 +1659,10 @@ body,
   padding-bottom: 96px;
 }
 
+.rz-resizable-header-cell {
+  position: relative;
+}
+
 .rz-data-table-wrapper {
   overflow-y: auto;
   overflow-x: auto;
@@ -1682,7 +1686,7 @@ body,
 }
 
 .rz-data-table--sticky-filters thead tr.rz-table-filters th {
-  top: 30px;
+  top: var(--rz-sticky-header-offset, 32px);
   z-index: 30;
   background: var(--color-brand-light);
 }
@@ -1720,4 +1724,9 @@ body,
 
 .rz-receipt-lines-table tfoot td {
   background: #ffffff;
+}
+
+/* R9-34M DataTable measured sticky filter offset */
+.rz-data-table thead {
+  position: static;
 }

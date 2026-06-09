@@ -1772,8 +1772,6 @@ export default function KassaPage() {
   const uploadBatchPollerRef = useRef(null)
   const uploadBatchLastProcessedRef = useRef(-1)
   const receiptInboxRefreshInFlightRef = useRef(false)
-  const inboxColumnDefaults = useMemo(() => Object.fromEntries(inboxTableColumns.map(({ key, width }) => [key, width])), [])
-  const { widths: inboxColumnWidths, startResize: startInboxResize } = useResizableColumnWidths(inboxColumnDefaults)
   const [inboxSort, setInboxSort] = useState({ key: 'date', direction: 'desc' })
 
   useDismissOnComponentClick([() => setError(''), () => setStatus(''), () => setDuplicateNotice(''), () => setCameraError(''), () => setEmailRouteError('')], Boolean(error || status || duplicateNotice || cameraError || emailRouteError))
@@ -2144,13 +2142,68 @@ export default function KassaPage() {
       .filter((item) => (filters.status ? item.inbox_status === filters.status : true))
     return sortItems(filteredItems, inboxSort, {
       store: (item) => item.store_name || '',
-      date: (item) => item.purchase_at || item.created_at || '',
+      date: (item) => item.purchase_at || '',
       total: (item) => Number(item.total_amount ?? 0),
       items: (item) => Number(item.line_count ?? 0),
     })
   }, [inboxItems, filters, inboxSort])
 
   const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedReceiptIds.includes(item.receipt_table_id))
+
+  const inboxDataTableColumns = useMemo(() => inboxTableColumns.map((column) => {
+    if (column.key === 'select') {
+      return {
+        ...column,
+        header: <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare bonnen" />,
+      }
+    }
+
+    const labels = {
+      store: 'Winkel',
+      date: 'Datum',
+      total: 'Totaal',
+      items: 'Artikelen',
+    }
+
+    const filterLabels = {
+      store: 'Filter op winkel',
+      date: 'Filter op datum',
+      total: 'Filter op totaal',
+      items: 'Filter op artikelen',
+    }
+
+    return {
+      ...column,
+      label: labels[column.key] || column.label || column.key,
+      align: ['total', 'items'].includes(column.key) ? 'right' : undefined,
+      sortable: true,
+      filterable: true,
+      filterLabel: filterLabels[column.key],
+      getSortValue: (item) => {
+        if (column.key === 'store') return item.store_name || ''
+        if (column.key === 'date') return item.purchase_at || ''
+        if (column.key === 'total') return Number(item.total_amount ?? 0)
+        if (column.key === 'items') return Number(item.line_count ?? 0)
+        return ''
+      },
+      getFilterValue: (item) => {
+        if (column.key === 'store') return item.store_name || ''
+        if (column.key === 'date') return formatDateTime(item.purchase_at)
+        if (column.key === 'total') return formatMoney(item.total_amount, item.currency)
+        if (column.key === 'items') return String(item.line_count ?? 0)
+        return ''
+      },
+    }
+  }), [allVisibleSelected])
+
+  const inboxTableFilters = useMemo(() => ({
+    store: filters.winkel,
+    date: filters.datum,
+    total: filters.totaal,
+    items: filters.artikelen,
+  }), [filters.winkel, filters.datum, filters.totaal, filters.artikelen])
+
+
 
   async function openReceiptDetail(receiptTableId, sourceItems = receipts, prefetchedDetail = null) {
     setError('')
@@ -2178,7 +2231,14 @@ export default function KassaPage() {
   }
 
   function handleFilterChange(key, value) {
-    setFilters((current) => ({ ...current, [key]: value }))
+    const mappedKey = {
+      store: 'winkel',
+      date: 'datum',
+      total: 'totaal',
+      items: 'artikelen',
+    }[key] || key
+
+    setFilters((current) => ({ ...current, [mappedKey]: value }))
   }
 
   function applyStatusFilter(value) {
@@ -2701,91 +2761,61 @@ export default function KassaPage() {
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
-              <Table wrapperClassName="rz-data-table-wrapper rz-kassa-inbox-table-wrapper" tableClassName="rz-data-table rz-data-table--sticky-header rz-data-table--sticky-filters rz-kassa-inbox-table" dataTestId="kassa-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inboxColumnWidths), minWidth: buildTableWidth(inboxColumnWidths) }}>
-                  <colgroup>
-                    <col style={{ width: `${inboxColumnWidths.select}px` }} />
-                    <col style={{ width: `${inboxColumnWidths.store}px` }} />
-                    <col style={{ width: `${inboxColumnWidths.date}px` }} />
-                    <col style={{ width: `${inboxColumnWidths.total}px` }} />
-                    <col style={{ width: `${inboxColumnWidths.items}px` }} />
-                  </colgroup>
-                  <thead>
-                    <tr className="rz-table-header">
-                      <ResizableHeaderCell columnKey="select" widths={inboxColumnWidths} onStartResize={startInboxResize} style={{ width: '44px' }}>
-                        <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare bonnen" />
-                      </ResizableHeaderCell>
-                      <ResizableHeaderCell columnKey="store" widths={inboxColumnWidths} onStartResize={startInboxResize} sortable isSorted={inboxSort.key === 'store'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Winkel</ResizableHeaderCell>
-                      <ResizableHeaderCell columnKey="date" widths={inboxColumnWidths} onStartResize={startInboxResize} sortable isSorted={inboxSort.key === 'date'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Datum</ResizableHeaderCell>
-                      <ResizableHeaderCell columnKey="total" widths={inboxColumnWidths} onStartResize={startInboxResize} className="rz-num" sortable isSorted={inboxSort.key === 'total'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Totaal</ResizableHeaderCell>
-                      <ResizableHeaderCell columnKey="items" widths={inboxColumnWidths} onStartResize={startInboxResize} className="rz-num" sortable isSorted={inboxSort.key === 'items'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Artikelen</ResizableHeaderCell>
+              <DataTable
+                columns={inboxDataTableColumns}
+                data={isLoading ? [] : listItems}
+                getRowKey={(item) => item.receipt_table_id}
+                wrapperClassName="rz-kassa-inbox-table-wrapper"
+                tableClassName="rz-kassa-inbox-table"
+                dataTestId="kassa-table"
+                defaultSort={{ key: 'date', direction: 'desc' }}
+                sortState={inboxSort}
+                onSortChange={setInboxSort}
+                filterState={inboxTableFilters}
+                onFilterChange={handleFilterChange}
+                emptyMessage={isLoading ? 'Bonnen laden...' : 'Er zijn nog geen bonnen in de inbox beschikbaar.'}
+                renderRow={(item) => {
+                  const selected = selectedReceiptIds.includes(item.receipt_table_id)
+                  return (
+                    <tr
+                      key={item.receipt_table_id}
+                      className={selected ? 'rz-row-selected' : ''}
+                      onClick={() => toggleSelectedReceipt(item.receipt_table_id)}
+                      onDoubleClick={() => openReceiptDetail(item.receipt_table_id)}
+                      data-testid={`kassa-row-${item.receipt_table_id}`}
+                      style={{
+                        cursor: 'pointer',
+                        boxShadow: `inset 4px 0 0 ${item.inbox_status === 'Gecontroleerd' ? '#12B76A' : item.inbox_status === 'Controle nodig' ? '#F79009' : '#B54708'}`,
+                        background: String(item.receipt_table_id) === receiptInboxFocusId ? '#ECFDF3' : undefined,
+                        outline: String(item.receipt_table_id) === receiptInboxFocusId ? '2px solid #12B76A' : undefined,
+                        outlineOffset: String(item.receipt_table_id) === receiptInboxFocusId ? '-2px' : undefined,
+                      }}
+                    >
+                      <td onClick={(event) => event.stopPropagation()}>
+                        <button
+                          type="button"
+                          data-testid={`kassa-open-${item.receipt_table_id}`}
+                          onClick={(event) => { event.stopPropagation(); openReceiptDetail(item.receipt_table_id) }}
+                          style={{ display: 'none' }}
+                          aria-hidden="true"
+                          tabIndex={-1}
+                        />
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleSelectedReceipt(item.receipt_table_id)}
+                          aria-label={`Selecteer bon ${item.store_name || 'onbekend'} van ${formatDateTime(item.purchase_at)}`}
+                        />
+                      </td>
+                      <td>{item.store_name || 'Onbekende winkel'}</td>
+                      <td>{formatDateTime(item.purchase_at)}</td>
+                      <td className="rz-num">{formatMoney(item.total_amount, item.currency)}</td>
+                      <td className="rz-num">{item.line_count ?? 0}</td>
                     </tr>
-                    <tr className="rz-table-filters">
-                      <th />
-                      <th>
-                        <input className="rz-input rz-inline-input" value={filters.winkel} onChange={(event) => handleFilterChange('winkel', event.target.value)} placeholder="Filter" aria-label="Filter op winkel" />
-                      </th>
-                      <th>
-                        <input className="rz-input rz-inline-input" value={filters.datum} onChange={(event) => handleFilterChange('datum', event.target.value)} placeholder="Filter" aria-label="Filter op datum" />
-                      </th>
-                      <th>
-                        <input className="rz-input rz-inline-input" value={filters.totaal} onChange={(event) => handleFilterChange('totaal', event.target.value)} placeholder="Filter" aria-label="Filter op totaal" />
-                      </th>
-                      <th>
-                        <input className="rz-input rz-inline-input" value={filters.artikelen} onChange={(event) => handleFilterChange('artikelen', event.target.value)} placeholder="Filter" aria-label="Filter op artikelen" />
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {isLoading ? (
-                      <tr><td colSpan={5}>Bonnen laden...</td></tr>
-                    ) : listItems.length === 0 ? (
-                      <tr><td colSpan={5}>Er zijn nog geen bonnen in de inbox beschikbaar.</td></tr>
-                    ) : listItems.map((item) => {
-                      const selected = selectedReceiptIds.includes(item.receipt_table_id)
-                      return (
-                        <tr
-                          key={item.receipt_table_id}
-                          className={selected ? 'rz-row-selected' : ''}
-                          onClick={() => toggleSelectedReceipt(item.receipt_table_id)}
-                          onDoubleClick={() => openReceiptDetail(item.receipt_table_id)}
-                          data-testid={`kassa-row-${item.receipt_table_id}`}
-                          style={{
-                            cursor: 'pointer',
-                            boxShadow: `inset 4px 0 0 ${item.inbox_status === 'Gecontroleerd' ? '#12B76A' : item.inbox_status === 'Controle nodig' ? '#F79009' : '#B54708'}`,
-                            background: String(item.receipt_table_id) === receiptInboxFocusId ? '#ECFDF3' : undefined,
-                            outline: String(item.receipt_table_id) === receiptInboxFocusId ? '2px solid #12B76A' : undefined,
-                            outlineOffset: String(item.receipt_table_id) === receiptInboxFocusId ? '-2px' : undefined,
-                          }}
-                        >
-                          <td onClick={(event) => event.stopPropagation()}>
-                            <button
-                              type="button"
-                              data-testid={`kassa-open-${item.receipt_table_id}`}
-                              onClick={(event) => { event.stopPropagation(); openReceiptDetail(item.receipt_table_id) }}
-                              style={{ display: 'none' }}
-                              aria-hidden="true"
-                              tabIndex={-1}
-                            />
-                            <input
-                              type="checkbox"
-                              checked={selected}
-                              onChange={() => toggleSelectedReceipt(item.receipt_table_id)}
-                              aria-label={`Selecteer bon ${item.store_name || 'onbekend'} van ${formatDateTime(item.purchase_at)}`}
-                            />
-                          </td>
-                          <td className="rz-receipts-cell">
-                            <div style={{ display: 'grid', gap: '4px' }}>
-                              <div style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{item.store_name || 'Onbekende winkel'}</div>
-                            </div>
-                          </td>
-                          <td className="rz-receipts-cell">{formatDateTime(item.purchase_at)}</td>
-                          <td className="rz-num rz-receipts-cell">{formatMoney(item.total_amount, item.currency)}</td>
-                          <td className="rz-num rz-receipts-cell">{item.line_count ?? 0}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </Table>
+                  )
+                }}
+              />
+
             </div>
           </ScreenCard>
 

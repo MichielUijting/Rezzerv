@@ -48,8 +48,10 @@ export function ResizableHeaderCell({
   isSorted = false,
   onSort = null,
 }) {
+  const headerClassName = ['rz-resizable-header-cell', className].filter(Boolean).join(' ')
+
   return (
-    <th className={className} style={{ ...style, position: 'relative', width: widths?.[columnKey] ? `${widths[columnKey]}px` : style.width }}>
+    <th className={headerClassName} style={{ ...style, width: widths?.[columnKey] ? `${widths[columnKey]}px` : style.width }}>
       {sortable ? (
         <button
           type="button"

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Table from './Table'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from './resizableTable.jsx'
 import { nextSortState, sortItems } from './sorting'
@@ -64,6 +64,36 @@ export default function DataTable({
   )
 
   const { widths, startResize } = useResizableColumnWidths(defaultWidths)
+
+  const headerRowRef = useRef(null)
+  const [stickyHeaderOffset, setStickyHeaderOffset] = useState(32)
+
+  useLayoutEffect(() => {
+    const headerRow = headerRowRef.current
+    if (!headerRow) return
+
+    const measure = () => {
+      const height = Math.ceil(headerRow.getBoundingClientRect().height)
+      if (height > 0) {
+        setStickyHeaderOffset(height)
+      }
+    }
+
+    measure()
+
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(measure)
+        : null
+
+    resizeObserver?.observe(headerRow)
+    window.addEventListener('resize', measure)
+
+    return () => {
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', measure)
+    }
+  }, [visibleColumns, widths])
 
   const [internalFilters, setInternalFilters] = useState({})
   const [internalSort, setInternalSort] = useState(defaultSort || { key: '', direction: 'asc' })
@@ -144,6 +174,7 @@ export default function DataTable({
     tableLayout: 'fixed',
     width: buildTableWidth(widths),
     minWidth: buildTableWidth(widths),
+    '--rz-sticky-header-offset': `${stickyHeaderOffset}px`,
     ...tableStyle,
   }
 
@@ -161,7 +192,7 @@ export default function DataTable({
       </colgroup>
 
       <thead>
-        <tr className="rz-table-header">
+        <tr className="rz-table-header" ref={headerRowRef}>
           {visibleColumns.map((column) => (
             <ResizableHeaderCell
               key={column.key}
