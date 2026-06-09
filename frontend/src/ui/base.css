@@ -1783,3 +1783,18 @@ body,
   margin: 0 !important;
 }
 
+/* Uitpakken sticky table headers */
+.rz-table[data-testid="receipts-table"] thead tr.rz-table-header th,
+.rz-store-batch-table-wrapper .rz-table thead tr.rz-table-header th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.rz-table[data-testid="receipts-table"] thead tr.rz-table-filters th,
+.rz-store-batch-table-wrapper .rz-table thead tr.rz-table-filters th {
+  position: sticky;
+  top: 42px;
+  z-index: 4;
+  background: var(--rz-surface, #fff);
+}

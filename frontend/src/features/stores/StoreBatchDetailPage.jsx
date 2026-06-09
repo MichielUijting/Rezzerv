@@ -775,7 +775,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error" data-testid="receipt-feedback">{error}</div> : null}
           {status ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="receipt-feedback">{status}</div> : null}
-          <Table wrapperClassName="rz-store-batch-table-wrapper" tableClassName="rz-store-workbench-table" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths) }}>
+          <Table wrapperClassName="rz-store-batch-table-wrapper" tableClassName="rz-store-workbench-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths), '--rz-sticky-header-offset': '36px' }}>
               <colgroup>
                 <col style={{ width: `${lineColumnWidths.select}px` }} />
                 <col style={{ width: `${lineColumnWidths.bonartikel}px` }} />
