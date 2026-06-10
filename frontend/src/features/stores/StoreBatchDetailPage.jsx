@@ -117,6 +117,48 @@ function standardProductDetail(line) {
   return parts.join(' · ')
 }
 
+function firstTextValue(...values) {
+  for (const value of values) {
+    if (value == null) continue
+    if (typeof value === 'object') {
+      const nested = firstTextValue(value.name, value.label, value.title)
+      if (nested) return nested
+      continue
+    }
+    const text = String(value).trim()
+    if (text) return text
+  }
+  return ''
+}
+
+function selectedHouseholdArticle(draft, articleOptions) {
+  return (articleOptions || []).find((option) => String(option.id) === String(draft?.articleId || ''))
+}
+
+function householdArticleHierarchyTitle(line, draft, articleOptions) {
+  const article = selectedHouseholdArticle(draft, articleOptions)
+  const category = firstTextValue(
+    article?.category_name,
+    article?.category?.name,
+    article?.category,
+    article?.article_group,
+    article?.group_name,
+    article?.type
+  ) || 'Nog niet ingedeeld'
+  const name = firstTextValue(
+    line?.resolved_household_article_name,
+    article?.custom_name,
+    article?.name,
+    articleLabel(article)
+  ) || 'Nog niet gekoppeld'
+
+  return [
+    'Niveau 1: Huishouden',
+    `Niveau 2: ${category}`,
+    `Niveau 3: ${name}`,
+  ].join('\n')
+}
+
 function buildActiveLocationOptions(spacesData, sublocationsData) {
   const activeSpaces = Array.isArray(spacesData?.items) ? spacesData.items.filter((item) => Boolean(item?.active)) : []
   const activeSublocations = Array.isArray(sublocationsData?.items) ? sublocationsData.items.filter((item) => Boolean(item?.active)) : []
@@ -192,12 +234,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const processFeedbackTimer = useRef(null)
   const storeBatchTableColumns = useMemo(() => ([
     { key: 'select', width: 44 },
-    { key: 'bonartikel', width: 220 },
+    { key: 'bonartikel', width: 240 },
+    { key: 'locatie', width: 260 },
     { key: 'aantal', width: 100 },
-    { key: 'standaardartikel', width: 240 },
-    { key: 'gekoppeld', width: 260 },
-    { key: 'locatie', width: 220 },
-    { key: 'prijs', width: 100 },
+    { key: 'gekoppeld', width: 280 },
+    { key: 'standaardartikel', width: 260 },
   ]), [])
   const lineColumnDefaults = useMemo(() => Object.fromEntries(storeBatchTableColumns.map(({ key, width }) => [key, width])), [storeBatchTableColumns])
   const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
@@ -503,18 +544,16 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     if (!batch || selectedLineIds.length === 0) return
     const selectedSet = new Set(selectedLineIds.map((id) => String(id)))
     const rows = lineUiStates.filter((entry) => selectedSet.has(String(entry.line.id)))
-    const header = ['Bonartikel', 'Aantal', 'Standaardartikel', 'Gekoppeld artikel', 'Locatie', 'Prijs', 'Status']
+    const header = ['Bonartikel', 'Mijn artikel', 'Locatie', 'Aantal', 'Standaardartikel', 'Status']
     const csvRows = rows.map((entry) => {
       const articleName = entry.line.resolved_household_article_name || articleLabel(articleOptions.find((option) => String(option.id) === String(entry.draft.articleId))) || ''
       const locationLabel = locationOptions.find((location) => String(location.id) === String(entry.draft.locationId))?.label || ''
-      const priceLabel = entry.line.line_price_raw != null ? entry.line.line_price_raw.toFixed(2) : ''
       return [
         entry.line.article_name_raw || '',
-        formatQuantity(entry.line.quantity_raw, entry.line.unit_raw),
-        standardProductLabel(entry.line),
         articleName,
         locationLabel,
-        priceLabel,
+        formatQuantity(entry.line.quantity_raw, entry.line.unit_raw),
+        standardProductLabel(entry.line),
         entry.statusLabel || '',
       ]
     })
@@ -710,7 +749,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       standaardartikel: (entry) => standardProductLabel(entry.line),
       gekoppeld: (entry) => entry.line.resolved_household_article_name || '',
       locatie: (entry) => (locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''),
-      prijs: (entry) => Number(entry.line.line_price_raw ?? 0),
     })
   }, [filteredLineUiStates, tableSort, locationOptions])
 
@@ -779,39 +817,36 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               <colgroup>
                 <col style={{ width: `${lineColumnWidths.select}px` }} />
                 <col style={{ width: `${lineColumnWidths.bonartikel}px` }} />
-                <col style={{ width: `${lineColumnWidths.aantal}px` }} />
-                <col style={{ width: `${lineColumnWidths.standaardartikel}px` }} />
-                <col style={{ width: `${lineColumnWidths.gekoppeld}px` }} />
                 <col style={{ width: `${lineColumnWidths.locatie}px` }} />
-                <col style={{ width: `${lineColumnWidths.prijs}px` }} />
+                <col style={{ width: `${lineColumnWidths.aantal}px` }} />
+                <col style={{ width: `${lineColumnWidths.gekoppeld}px` }} />
+                <col style={{ width: `${lineColumnWidths.standaardartikel}px` }} />
               </colgroup>
               <thead>
                 <tr className="rz-table-header">
                   <ResizableHeaderCell columnKey="select" widths={lineColumnWidths} onStartResize={startLineResize} style={{ width: '44px' }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
                   </ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', standaardartikel: 'asc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Bonartikel</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', standaardartikel: 'asc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Aantal</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="standaardartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-standard" sortable isSorted={tableSort.key === 'standaardartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', standaardartikel: 'asc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Standaardartikel</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', standaardartikel: 'asc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Gekoppeld artikel</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', standaardartikel: 'asc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Locatie</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="prijs" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-price" sortable isSorted={tableSort.key === 'prijs'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', standaardartikel: 'asc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Prijs</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Bonartikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Locatie / sublocatie</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Aantal</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Mijn artikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="standaardartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-standard" sortable isSorted={tableSort.key === 'standaardartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Standaardartikel</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
                   <th>
-                    <input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of gekoppeld artikel" />
-                  </th>
-                  <th />
-                  <th />
-                  <th>
-                    <select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
-                      {MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
-                    </select>
+                    <input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of mijn artikel" />
                   </th>
                   <th>
                     <select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
                       {LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
+                    </select>
+                  </th>
+                  <th />
+                  <th>
+                    <select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
+                      {MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
                     </select>
                   </th>
                   <th />
@@ -820,7 +855,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               <tbody>
                 {visibleLineUiStates.length === 0 ? (
                   <tr>
-                    <td colSpan={7}>Geen open bonregels in deze selectie.</td>
+                    <td colSpan={6}>Geen open bonregels in deze selectie.</td>
                   </tr>
                 ) : visibleLineUiStates.map((entry) => {
                   const { line, draft, statusLabel: currentStatusLabel } = entry
@@ -839,24 +874,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         <input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} />
                       </td>
                       <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
-                      <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
-                      <td className="rz-store-batch-col-standard">
-                         <div className="rz-store-primary" data-testid={`receipt-line-standard-product-${line.id}`}>{standardProductLabel(line)}</div>
-                         {standardProductDetail(line) ? <div className="rz-store-secondary">{standardProductDetail(line)}</div> : null}
-                       </td>
-                       <td className="rz-store-batch-col-linked">
-                        <div data-testid={`receipt-line-article-select-${line.id}`}><StoreArticleSelector
-                          lineId={line.id}
-                          lineName={line.article_name_raw}
-                          selectedArticleId={draft.articleId || ''}
-                          articleOptions={articleOptions}
-                          disabled={lineBusy}
-                          onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
-                          onClearArticle={() => persistLineDraft(line, { articleId: '' })}
-                          onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
-                          canCreateArticle={Boolean(household?.permissions?.['article.create'])}
-                        /></div>
-                      </td>
                       <td className="rz-store-batch-col-location">
                         <select
                           className="rz-input rz-store-select"
@@ -873,7 +890,23 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           ))}
                         </select>
                       </td>
-                      <td className="rz-num rz-store-batch-col-price">{line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : '-'}</td>
+                      <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
+                      <td className="rz-store-batch-col-linked" title={householdArticleHierarchyTitle(line, draft, articleOptions)}>
+                        <div data-testid={`receipt-line-article-select-${line.id}`}><StoreArticleSelector
+                          lineId={line.id}
+                          lineName={line.article_name_raw}
+                          selectedArticleId={draft.articleId || ''}
+                          articleOptions={articleOptions}
+                          disabled={lineBusy}
+                          onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
+                          onClearArticle={() => persistLineDraft(line, { articleId: '' })}
+                          onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
+                          canCreateArticle={Boolean(household?.permissions?.['article.create'])}
+                        /></div>
+                      </td>
+                      <td className="rz-store-batch-col-standard" title={standardProductDetail(line) || standardProductLabel(line)}>
+                         <div className="rz-store-primary" data-testid={`receipt-line-standard-product-${line.id}`}>{standardProductLabel(line)}</div>
+                       </td>
                     </tr>
                   )
                 })}
