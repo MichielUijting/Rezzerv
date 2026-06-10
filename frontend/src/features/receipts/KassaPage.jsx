@@ -12,7 +12,7 @@ import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '
 import { fetchJson, normalizeErrorMessage } from '../stores/storeImportShared'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 import ReceiptStatusBadge from '../kassa/components/ReceiptStatusBadge.jsx'
-import KassaFeedbackPanel from '../kassa/components/KassaFeedbackPanel.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import DetailInfoRow from '../kassa/components/DetailInfoRow.jsx'
 
 function formatDateTime(value) {
@@ -754,15 +754,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
 
             {previewState.status === 'error' ? (
               <div style={{ maxWidth: '560px', margin: '16px' }}>
-                <KassaFeedbackPanel
-                  feedback={{
-                    variant: 'warning',
-                    title: selectedVariant === 'processed' ? 'De bewerkte preview van deze bon kon niet worden geladen.' : 'De preview van deze bon kon niet worden geladen.',
-                    message: previewState.error || 'De bonpreview is momenteel niet beschikbaar.',
-                    testId: 'receipt-preview-fallback',
-                  }}
-                />
-              </div>
+</div>
             ) : null}
 
             {previewState.status === 'ready' && previewState.isPdf ? (
@@ -812,14 +804,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
 
             {previewState.status === 'ready' && !previewState.isPdf && !previewState.isImage && !previewState.isHtml && !previewState.isText ? (
               <div style={{ maxWidth: '560px', margin: '16px' }}>
-                <KassaFeedbackPanel
-                  feedback={{
-                    variant: 'warning',
-                    message: 'Voor dit bestandstype is geen ingebedde preview beschikbaar.',
-                    testId: 'receipt-preview-unsupported',
-                  }}
-                />
-              </div>
+</div>
             ) : null}
           </div>
         </div>
@@ -845,14 +830,7 @@ function ReceiptProcessingInfoCard({ transientPreview, uploadProgress }) {
           <DetailInfoRow label="Status" value={uploadProgress?.label || 'Kassabon verwerken...'} />
           <DetailInfoRow label="Voortgang" value={`${Math.max(5, Math.min(100, Math.round(uploadProgress?.percent || 0)))}%`} />
         </div>
-
-        <KassaFeedbackPanel
-          feedback={{
-            variant: 'success',
-            message: uploadProgress?.detail || 'De bewerkte weergave toont de actuele preprocess-versie die richting OCR gaat.',
-          }}
-        />
-      </div>
+</div>
     </ScreenCard>
   )
 }
@@ -871,6 +849,8 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     notes: receipt?.notes || '',
   })
   const [lineDrafts, setLineDrafts] = useState({})
+  const lineFieldInitialValueRef = useRef(new Map())
+  const lineFieldDirtyRef = useRef(new Set())
   const [isAddingLine, setIsAddingLine] = useState(false)
   const [newLineDraft, setNewLineDraft] = useState({ article_name: '', quantity: 1, unit: '', unit_price: '', line_total: '' })
 
@@ -999,8 +979,54 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     setSelectedLineIds(allSelected ? [] : lines.map((line) => line.id))
   }
 
+  function lineFieldKey(lineId, fieldName) {
+    return `${String(lineId)}::${String(fieldName)}`
+  }
+
+  function normalizeLineInputValue(fieldName, value) {
+    if (fieldName === 'quantity' || fieldName === 'unit_price' || fieldName === 'line_total') {
+      const rawValue = String(value ?? '').trim()
+      if (!rawValue) return ''
+      const numberValue = Number(rawValue)
+      return Number.isFinite(numberValue) ? String(numberValue) : rawValue
+    }
+    return String(value ?? '')
+  }
+
+  function rememberLineFieldValue(lineId, fieldName, value) {
+    const key = lineFieldKey(lineId, fieldName)
+    lineFieldInitialValueRef.current.set(key, normalizeLineInputValue(fieldName, value))
+    lineFieldDirtyRef.current.delete(key)
+  }
+
   function updateLineDraft(lineId, field, value) {
+    const key = lineFieldKey(lineId, field)
+    const nextValue = normalizeLineInputValue(field, value)
+
+    if (!lineFieldInitialValueRef.current.has(key)) {
+      lineFieldInitialValueRef.current.set(key, nextValue)
+    }
+
+    const initialValue = lineFieldInitialValueRef.current.get(key)
+    if (initialValue === nextValue) {
+      lineFieldDirtyRef.current.delete(key)
+    } else {
+      lineFieldDirtyRef.current.add(key)
+    }
+
     setLineDrafts((current) => ({ ...current, [lineId]: { ...(current[lineId] || {}), [field]: value } }))
+  }
+
+  function saveLineFieldOnBlur(lineId, fieldName, value) {
+    const key = lineFieldKey(lineId, fieldName)
+    const isDirty = lineFieldDirtyRef.current.has(key)
+
+    lineFieldDirtyRef.current.delete(key)
+    lineFieldInitialValueRef.current.delete(key)
+
+    if (!isDirty) return
+
+    saveLine(lineId, { [fieldName]: value })
   }
 
   async function persistHeaderDraft({ suppressSuccessFeedback = false } = {}) {
@@ -1039,7 +1065,9 @@ async function saveLine(lineId, overrides = null) {
         }),
       })
       onReceiptUpdated?.(updated)
-      onFeedback?.('success', 'Bonregel opgeslagen.')
+      if (updated?.mutation_status !== 'unchanged') {
+        onFeedback?.('success', updated?.mutation_message || 'Wijziging verwerkt.', { key: `receipt-line-saved-${String(lineId)}` })
+      }
     } catch (err) {
       onFeedback?.('error', normalizeErrorMessage(err?.message) || 'Bonregel kon niet worden opgeslagen.')
     }
@@ -1290,11 +1318,11 @@ async function saveLine(lineId, overrides = null) {
                     return (
                       <tr key={line.id} data-testid={`receipt-line-row-${line.id}`} className={selected ? 'rz-row-selected' : ''}>
                         <td><input type="checkbox" data-testid={`receipt-line-select-${line.id}`} checked={selected} onChange={() => toggleLine(line.id)} aria-label={`Selecteer regel ${draft.article_name || line.display_label || line.id}`} /></td>
-                        <td>{canEdit ? <input className="rz-input" value={draft.article_name ?? ''} onChange={(event) => updateLineDraft(line.id, 'article_name', event.target.value)} onBlur={(event) => saveLine(line.id, { article_name: event.target.value })} /> : <span data-testid={`receipt-line-status-${line.id}`}>{draft.article_name || line.display_label || '-'}</span>}</td>
-                        <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.001" value={draft.quantity ?? ''} onChange={(event) => updateLineDraft(line.id, 'quantity', event.target.value)} onBlur={(event) => saveLine(line.id, { quantity: event.target.value })} /> : formatQuantity(draft.quantity ?? line.display_quantity ?? line.quantity)}</td>
-                        <td>{canEdit ? <input className="rz-input" value={draft.unit ?? ''} onChange={(event) => updateLineDraft(line.id, 'unit', event.target.value)} onBlur={(event) => saveLine(line.id, { unit: event.target.value })} /> : (draft.unit || line.display_unit || '-')}</td>
-                        <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.unit_price ?? ''} onChange={(event) => updateLineDraft(line.id, 'unit_price', event.target.value)} onBlur={(event) => saveLine(line.id, { unit_price: event.target.value })} /> : formatMoney(draft.unit_price ?? line.display_unit_price ?? line.unit_price, receipt?.currency)}</td>
-                        <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.line_total ?? ''} onChange={(event) => updateLineDraft(line.id, 'line_total', event.target.value)} onBlur={(event) => saveLine(line.id, { line_total: event.target.value })} /> : formatMoney(draft.line_total ?? line.display_line_total ?? line.line_total, receipt?.currency)}</td>
+                        <td>{canEdit ? <input className="rz-input" value={draft.article_name ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'article_name', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'article_name', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'article_name', event.target.value)} /> : <span data-testid={`receipt-line-status-${line.id}`}>{draft.article_name || line.display_label || '-'}</span>}</td>
+                        <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.001" value={draft.quantity ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'quantity', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'quantity', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'quantity', event.target.value)} /> : formatQuantity(draft.quantity ?? line.display_quantity ?? line.quantity)}</td>
+                        <td>{canEdit ? <input className="rz-input" value={draft.unit ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'unit', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'unit', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'unit', event.target.value)} /> : (draft.unit || line.display_unit || '-')}</td>
+                        <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.unit_price ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'unit_price', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'unit_price', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'unit_price', event.target.value)} /> : formatMoney(draft.unit_price ?? line.display_unit_price ?? line.unit_price, receipt?.currency)}</td>
+                        <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.line_total ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'line_total', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'line_total', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'line_total', event.target.value)} /> : formatMoney(draft.line_total ?? line.display_line_total ?? line.line_total, receipt?.currency)}</td>
                         <td className="rz-num">{formatMoney(line.discount_amount, receipt?.currency)}</td>
                       </tr>
                     )
@@ -1472,14 +1500,6 @@ function ReceiptSourceHubContent({
 
       <ScreenCard fullWidth>
           <div style={{ display: 'grid', gap: '18px' }}>
-            <KassaFeedbackPanel
-              feedback={feedbackMessage ? {
-                variant: feedbackVariant,
-                title: feedbackVariant === 'warning' ? 'Dubbele bon' : feedbackVariant === 'error' ? 'Melding' : 'Gelukt',
-                message: feedbackMessage,
-                testId: feedbackVariant === 'warning' ? 'receipt-duplicate-feedback' : 'receipt-landing-feedback',
-              } : null}
-            />
             <div
               role="button"
               tabIndex={0}
@@ -1520,30 +1540,6 @@ function ReceiptSourceHubContent({
               <Button type="button" variant="primary" onClick={onChooseReceiptFile} disabled={isUploading} data-testid="kassa-choose-file-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Bestanden kiezen</Button>
               <Button type="button" variant="secondary" onClick={onChooseCamera} disabled={isUploading} data-testid="kassa-open-camera-button" style={{ width: '100%', fontSize: '14px', padding: '10px 12px', whiteSpace: 'nowrap' }}>Camera openen</Button>
             </div>
-
-            <KassaFeedbackPanel
-              feedback={uploadProgress?.active ? {
-                variant: 'progress',
-                title: uploadProgress.label || 'Kassabon verwerken...',
-                message: uploadProgress.detail || 'Even geduld, Rezzerv verwerkt de bon en laadt daarna Kassa.',
-                progress: Math.max(5, Math.min(100, Math.round(uploadProgress.percent || 0))),
-                dismissible: false,
-                testId: 'receipt-upload-progress',
-              } : emailRouteError ? {
-                variant: 'error',
-                title: 'Melding',
-                message: emailRouteError,
-                technicalDetail: technicalUploadError?.detail || (
-                  String(emailRouteError || '').startsWith('Upload mislukt. De server gaf een technische fout terug.')
-                    ? `Technische foutmelding niet vastgelegd in deze route.\nFoutmelding: ${emailRouteError}`
-                    : ''
-                ),
-                showTechnicalToggle: ['admin','owner'].includes(String(currentUserDisplayRole || '').trim().toLowerCase()),
-                testId: 'kassa-feedback-email-route-error',
-              } : null}
-              isTechnicalOpen={isTechnicalUploadErrorOpen}
-              onToggleTechnical={onToggleTechnicalUploadError}
-            />
           </div>
         </ScreenCard>
 
@@ -1679,21 +1675,6 @@ function CameraCaptureModal({
           </div>
           <Button type="button" variant="secondary" onClick={onCancel} disabled={isUploading} data-testid="kassa-camera-cancel">Annuleren</Button>
         </div>
-
-        <KassaFeedbackPanel
-          feedback={duplicateNotice ? {
-            variant: 'warning',
-            title: 'Dubbele bon',
-            message: duplicateNotice,
-            testId: 'receipt-camera-duplicate-feedback',
-          } : error ? {
-            variant: 'error',
-            title: 'Melding',
-            message: error,
-            testId: 'receipt-camera-error-feedback',
-          } : null}
-        />
-
         <div style={{ border: '1px solid #D0D5DD', borderRadius: '12px', background: '#F8FAFC', minHeight: '360px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
           {draftUrl ? (
             <img src={draftUrl} alt="Voorbeeld van gefotografeerde kassabon" style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: '8px', background: '#fff' }} />
@@ -1747,6 +1728,7 @@ function ReceiptUploadInputs({ fileInputRef, cameraInputRef, emailInputRef, onLa
 export default function KassaPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const { showFeedback } = useAppFeedback()
   const isAddReceiptRoute = location.pathname === '/kassa/nieuw'
   const [householdId, setHouseholdId] = useState('1')
   const [currentUserDisplayRole, setCurrentUserDisplayRole] = useState('viewer')
@@ -1809,6 +1791,25 @@ export default function KassaPage() {
       }
     }
   }, [])
+
+  function showKassaFeedback(variant, message, options = {}) {
+    const normalizedVariant = String(variant || 'info').trim().toLowerCase() || 'info'
+    const normalizedMessage = String(message || '').trim()
+    if (!normalizedMessage) return
+
+    showFeedback({
+      variant: normalizedVariant,
+      title: options.title || (normalizedVariant === 'success' ? 'Gelukt' : normalizedVariant === 'error' ? 'Melding' : undefined),
+      message: normalizedMessage,
+      detail: options.detail || '',
+      technicalDetail: options.technicalDetail || '',
+      showTechnicalToggle: Boolean(options.showTechnicalToggle),
+      key: options.key || `kassa-${normalizedVariant}-${normalizedMessage}`,
+      dedupeMs: Number.isFinite(Number(options.dedupeMs)) ? Number(options.dedupeMs) : 3000,
+      dismissMode: options.dismissMode || undefined,
+      testId: options.testId || `kassa-feedback-${normalizedVariant}`,
+    })
+  }
 
   function clearTransientReceiptPreview() {
     setTransientReceiptPreview((current) => {
@@ -2682,8 +2683,6 @@ export default function KassaPage() {
             emailRoute={emailRoute}
             isEmailRouteLoading={isEmailRouteLoading}
             emailRouteError={emailRouteError}
-            feedbackMessage={landingFeedback?.message || ''}
-            feedbackVariant={landingFeedback?.variant || 'success'}
             isUploading={isUploading}
             uploadProgress={uploadProgress}
             technicalUploadError={technicalUploadError}
@@ -2716,8 +2715,6 @@ export default function KassaPage() {
                 emailRoute={emailRoute}
                 isEmailRouteLoading={isEmailRouteLoading}
                 emailRouteError={emailRouteError}
-                feedbackMessage={landingFeedback?.message || ''}
-                feedbackVariant={landingFeedback?.variant || 'success'}
                 isUploading={isUploading}
                 uploadProgress={uploadProgress}
             technicalUploadError={technicalUploadError}
@@ -2772,7 +2769,7 @@ export default function KassaPage() {
                 data={isLoading ? [] : listItems}
                 getRowKey={(item) => item.receipt_table_id}
                 wrapperClassName="rz-kassa-inbox-table-wrapper"
-                tableClassName="rz-kassa-inbox-table"
+                tableClassName="rz-kassa-inbox-table rz-table--compact"
                 dataTestId="kassa-table"
                 defaultSort={{ key: 'date', direction: 'desc' }}
                 sortState={inboxSort}
@@ -2825,7 +2822,19 @@ export default function KassaPage() {
             </div>
           </ScreenCard>
 
-          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} uploadProgress={uploadProgress} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => { setOpenedReceipt(updated); loadReceipts(householdId, { openReceiptId: updated?.id || openedReceiptId, prefetchedDetail: updated }).catch(() => {}) }} onFeedback={(variant, message) => { if (variant === 'error') { setError(message); setStatus('') } else { setStatus(message); setError('') } }} /> : null}
+          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} uploadProgress={uploadProgress} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => {
+                setOpenedReceipt(updated)
+                setReceipts((current) => current.map((item) => {
+                  const itemId = String(item?.receipt_table_id || item?.id || '')
+                  const updatedId = String(updated?.receipt_table_id || updated?.id || '')
+                  if (!itemId || itemId !== updatedId) return item
+                  return {
+                    ...item,
+                    ...updated,
+                    receipt_table_id: item.receipt_table_id || updated.receipt_table_id || updated.id,
+                  }
+                }))
+              }} onFeedback={showKassaFeedback} /> : null}
         </div>
       )}
 

@@ -319,7 +319,7 @@ function ArticleDetailsEditor({ articleData = {}, onDetailsSaved = null, section
       const nextDetails = data?.details && typeof data.details === 'object' ? data.details : { ...articleData, ...payload }
       setFormState(buildFormState(nextDetails))
       if (typeof onDetailsSaved === 'function') onDetailsSaved(nextDetails)
-      setStatusMessage(`'${field.label}' opgeslagen.`)
+      setStatusMessage('Wijziging verwerkt.')
     } catch (error) {
       setErrorMessage(error?.message || 'Artikeldetails konden niet worden opgeslagen.')
       setFormState((current) => ({ ...current, [fieldKey]: previousValue }))
@@ -402,7 +402,6 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
 
   useEffect(() => {
     setFormState(buildHouseholdSettingsFormState(settings))
-    setStatusMessage('')
     setErrorMessage('')
   }, [
     settings?.min_stock,
@@ -491,7 +490,7 @@ function HouseholdArticleSettingsCard({ articleData = {}, onDetailsSaved = null,
       const nextSettings = data?.settings && typeof data.settings === 'object' ? data.settings : payload
       setFormState(buildHouseholdSettingsFormState(nextSettings))
       if (typeof onDetailsSaved === 'function') onDetailsSaved({ settings: nextSettings })
-      setStatusMessage('Instellingen voor dit huishouden opgeslagen.')
+      setStatusMessage('Wijziging verwerkt.')
     } catch (error) {
       setErrorMessage(error?.message || 'Huishoudinstellingen konden niet worden opgeslagen.')
     } finally {

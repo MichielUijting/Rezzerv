@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import AppRouter from "./app/router/AppRouter.jsx";
+import { AppFeedbackProvider } from "./ui/AppFeedbackProvider.jsx";
 import { getRezzervVersionTag } from "./ui/version";
 
 export default function App() {
@@ -12,9 +13,9 @@ export default function App() {
   }, []);
 
   return (
-    <>
+    <AppFeedbackProvider>
       <AppRouter />
       <div className="rz-buildtag" aria-hidden="true" data-testid="build-tag">Rezzerv v{buildTag}</div>
-    </>
+    </AppFeedbackProvider>
   );
 }

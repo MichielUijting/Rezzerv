@@ -7307,6 +7307,53 @@ def resolve_household_article_selection_to_id(conn, household_id: str | None, ar
         return None
 
 
+def _decode_household_article_setting_value(value):
+    if value is None:
+        return ''
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        parsed = value
+    return str(parsed or '').strip()
+
+
+def get_household_article_location_defaults(conn, household_article_ids: list[str]) -> dict[str, dict[str, str]]:
+    normalized_ids = [str(value or '').strip() for value in household_article_ids if str(value or '').strip()]
+    if not normalized_ids:
+        return {}
+
+    rows = conn.execute(
+        text(
+            '''
+            SELECT household_article_id, setting_key, setting_value
+            FROM household_article_settings
+            WHERE household_article_id IN :article_ids
+              AND setting_key IN ('default_location_id', 'default_sublocation_id')
+            '''
+        ).bindparams(bindparam('article_ids', expanding=True)),
+        {'article_ids': normalized_ids},
+    ).mappings().all()
+
+    defaults: dict[str, dict[str, str]] = {}
+    for row in rows:
+        article_id = str(row.get('household_article_id') or '').strip()
+        setting_key = str(row.get('setting_key') or '').strip()
+        if not article_id or setting_key not in {'default_location_id', 'default_sublocation_id'}:
+            continue
+        bucket = defaults.setdefault(article_id, {})
+        bucket[setting_key] = _decode_household_article_setting_value(row.get('setting_value'))
+    return defaults
+
+
+def get_household_article_default_target_location_id(conn, household_article_id: str | None) -> str | None:
+    article_id = str(household_article_id or '').strip()
+    if not article_id:
+        return None
+    defaults = get_household_article_location_defaults(conn, [article_id]).get(article_id, {})
+    target_id = defaults.get('default_sublocation_id') or defaults.get('default_location_id') or ''
+    return str(target_id).strip() or None
+
+
 def get_store_review_article_options(conn):
     items = [dict(item) for item in MOCK_ARTICLE_OPTIONS]
     seen_names = {item["name"].strip().lower() for item in items if item.get("name")}
@@ -7321,6 +7368,10 @@ def get_store_review_article_options(conn):
             """
         )
     ).mappings().all()
+    location_defaults_by_article = get_household_article_location_defaults(
+        conn,
+        [str(row.get("id") or "") for row in household_rows],
+    )
 
     for row in household_rows:
         article_name = (row["article_name"] or "").strip()
@@ -7329,11 +7380,14 @@ def get_store_review_article_options(conn):
         normalized = article_name.lower()
         if normalized in seen_names:
             continue
+        defaults = location_defaults_by_article.get(str(row.get("id") or ""), {})
         items.append({
             "id": str(row.get("id")),
             "name": article_name,
             "brand": str(row.get("brand_or_maker") or '').strip(),
             "consumable": bool(row["consumable"]) if row.get("consumable") is not None else infer_consumable_from_name(article_name),
+            "default_location_id": defaults.get("default_location_id") or "",
+            "default_sublocation_id": defaults.get("default_sublocation_id") or "",
         })
         seen_names.add(normalized)
 
@@ -8991,11 +9045,22 @@ def recompute_receipt_review_state(conn, receipt_table_id: str):
         ),
         {'receipt_table_id': receipt_table_id},
     ).scalar()
+    line_discount_sum = conn.execute(
+        text(
+            """
+        SELECT COALESCE(SUM(COALESCE(discount_amount, 0)), 0)
+        FROM receipt_table_lines
+        WHERE receipt_table_id = :receipt_table_id
+          AND COALESCE(is_deleted, 0) = 0
+        """
+        ),
+        {'receipt_table_id': receipt_table_id},
+    ).scalar()
     criteria = evaluate_receipt_unpack_criteria({
         **dict(receipt),
         'line_count': valid_line_count,
         'line_total_sum': line_total_sum,
-            'line_discount_total_sum': line_discount_sum,
+        'line_discount_total_sum': line_discount_sum,
         'discount_total_effective': receipt.get('discount_total'),
     })
     next_status = str(criteria.get('parse_status') or current_status or 'manual').strip().lower() or 'manual'
@@ -12151,7 +12216,17 @@ def update_receipt_line(receipt_table_id: str, line_id: str, payload: ReceiptLin
             {**values, 'id': line_id, 'receipt_table_id': receipt_table_id},
         )
         conn.execute(text("UPDATE receipt_tables SET corrected_by_user_email = :user_email, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {'id': receipt_table_id, 'user_email': str(context.get('email') or '').strip().lower()})
-        sync_receipt_table_line_product_links(conn, receipt_table_id, line_id, create_global_product=True, create_household_article=False)
+        product_sync_warning = None
+        try:
+            sync_receipt_table_line_product_links(conn, receipt_table_id, line_id, create_global_product=True, create_household_article=False)
+        except Exception as exc:
+            product_sync_warning = normalize_api_error_message(exc, 'Productkoppeling kon niet automatisch worden bijgewerkt.')
+            logger.warning(
+                'receipt_line_product_sync_warning receipt_table_id=%s line_id=%s warning=%s',
+                receipt_table_id,
+                line_id,
+                product_sync_warning,
+            )
         recompute_receipt_review_state(conn, receipt_table_id)
         receipt_header = conn.execute(
             text("""
@@ -12164,7 +12239,12 @@ def update_receipt_line(receipt_table_id: str, line_id: str, payload: ReceiptLin
         ).mappings().first()
         if receipt_header:
             ensure_unpack_batch_for_receipt(conn, dict(receipt_header))
-    return get_receipt_detail(receipt_table_id, authorization)
+    result = get_receipt_detail(receipt_table_id, authorization)
+    result["mutation_status"] = "saved"
+    result["mutation_message"] = "Wijziging verwerkt."
+    if 'product_sync_warning' in locals() and product_sync_warning:
+        result["product_sync_warning"] = product_sync_warning
+    return result
 
 
 @app.post("/api/receipts/{receipt_table_id}/lines")
@@ -16169,18 +16249,30 @@ def review_purchase_import_line(line_id: str, payload: ReviewLineRequest):
 def map_purchase_import_line(line_id: str, payload: MapLineRequest):
     with engine.begin() as conn:
         line = conn.execute(
-            text("SELECT id, batch_id FROM purchase_import_lines WHERE id = :id"),
+            text("SELECT id, batch_id, target_location_id, location_override_mode FROM purchase_import_lines WHERE id = :id"),
             {"id": line_id},
         ).mappings().first()
         if not line:
             raise HTTPException(status_code=404, detail="Onbekende importregel")
 
+        batch_row = conn.execute(
+            text("SELECT household_id FROM purchase_import_batches WHERE id = :id LIMIT 1"),
+            {"id": line["batch_id"]},
+        ).mappings().first()
+        household_id = str((batch_row or {}).get('household_id') or '')
         article_id = resolve_household_article_selection_to_id(
             conn,
-            str((conn.execute(text("SELECT household_id FROM purchase_import_batches WHERE id = :id LIMIT 1"), {"id": line["batch_id"]}).mappings().first() or {}).get('household_id') or ''),
+            household_id,
             payload.household_article_id,
             create_if_missing=True,
         ) if payload.household_article_id else None
+        default_target_location_id = get_household_article_default_target_location_id(conn, article_id)
+        may_apply_default_location = bool(
+            article_id
+            and default_target_location_id
+            and not str(line.get("target_location_id") or "").strip()
+            and str(line.get("location_override_mode") or "auto").strip() == "auto"
+        )
         match_status = 'matched' if article_id else 'unmatched'
         next_review_decision = 'pending' if not article_id else None
         conn.execute(
@@ -16190,6 +16282,11 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
                 SET matched_household_article_id = :article_id,
                     match_status = :match_status,
                     article_override_mode = :article_override_mode,
+                    target_location_id = CASE WHEN :may_apply_default_location = 1 THEN :default_target_location_id ELSE target_location_id END,
+                    suggested_location_id = CASE WHEN :may_apply_default_location = 1 THEN :default_target_location_id ELSE suggested_location_id END,
+                    suggestion_confidence = CASE WHEN :may_apply_default_location = 1 THEN COALESCE(suggestion_confidence, 'medium') ELSE suggestion_confidence END,
+                    suggestion_reason = CASE WHEN :may_apply_default_location = 1 THEN 'Standaardlocatie van gekoppeld artikel' ELSE suggestion_reason END,
+                    location_override_mode = CASE WHEN :may_apply_default_location = 1 THEN 'auto' ELSE location_override_mode END,
                     review_decision = CASE WHEN :next_review_decision IS NOT NULL THEN :next_review_decision ELSE review_decision END,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
@@ -16199,17 +16296,18 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
                 "article_id": article_id,
                 "match_status": match_status,
                 "article_override_mode": 'manual' if article_id else 'cleared',
+                "default_target_location_id": default_target_location_id,
+                "may_apply_default_location": 1 if may_apply_default_location else 0,
                 "next_review_decision": next_review_decision,
                 "id": line_id,
             },
         )
-        batch_row = conn.execute(text("SELECT household_id FROM purchase_import_batches WHERE id = :id LIMIT 1"), {"id": line["batch_id"]}).mappings().first()
-        sync_purchase_import_line_product_links(conn, line_id, str((batch_row or {}).get('household_id') or ''))
+        sync_purchase_import_line_product_links(conn, line_id, household_id)
         status = update_batch_status(conn, line["batch_id"])
         updated = conn.execute(
             text(
                 """
-                SELECT id, batch_id, review_decision, matched_household_article_id, matched_global_product_id, target_location_id, match_status, article_override_mode, location_override_mode
+                SELECT id, batch_id, review_decision, matched_household_article_id, matched_global_product_id, target_location_id, suggested_location_id, suggestion_confidence, suggestion_reason, match_status, article_override_mode, location_override_mode
                 FROM purchase_import_lines WHERE id = :id
                 """
             ),

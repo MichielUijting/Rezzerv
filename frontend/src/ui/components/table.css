@@ -183,3 +183,28 @@ table.rz-table{
 .rz-table-component:focus-visible{
   outline: 2px solid var(--color-brand-primary);
 }
+
+/* Rezzerv table density: compact body rows */
+.rz-table.rz-table--compact {
+  --rz-table-body-row-height: 28px;
+}
+
+.rz-table.rz-table--compact tbody tr,
+.rz-table.rz-table--compact tbody td {
+  height: 28px !important;
+  min-height: 28px !important;
+}
+
+.rz-table.rz-table--compact tbody td {
+  line-height: 24px !important;
+  padding-top: 1px !important;
+  padding-bottom: 1px !important;
+  box-sizing: border-box;
+}
+
+.rz-table.rz-table--compact tbody input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  vertical-align: middle;
+}

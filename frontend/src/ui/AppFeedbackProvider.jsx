@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import Button from '../../../ui/Button'
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react'
+import Button from './Button'
+
+const AppFeedbackContext = createContext(null)
 
 function normalizeVariant(variant) {
   const value = String(variant || '').trim().toLowerCase()
-  if (['error', 'warning', 'success', 'info', 'progress'].includes(value)) return value
+  if (['success', 'warning', 'error', 'info', 'progress'].includes(value)) return value
   return 'info'
 }
 
@@ -26,108 +28,123 @@ function ariaLiveForVariant(variant) {
   return variant === 'error' || variant === 'warning' ? 'assertive' : 'polite'
 }
 
-function normalizeDismissMode(feedback, variant) {
-  const explicitMode = String(feedback?.dismissMode || '').trim().toLowerCase()
-  if (['outside-or-ok', 'ok-only', 'blocked'].includes(explicitMode)) return explicitMode
+function normalizeFeedback(input) {
+  if (!input) return null
+  const variant = normalizeVariant(input.variant)
+  const message = String(input.message || '').trim()
+  const detail = String(input.detail || '').trim()
+  const technicalDetail = String(input.technicalDetail || '').trim()
+  const title = String(input.title || titleForVariant(variant)).trim()
+  if (!title && !message && !detail && !technicalDetail) return null
 
-  if (feedback?.requiresDecision) return 'blocked'
-  if (variant === 'progress') return 'blocked'
-  if (feedback?.dismissible === false) return 'blocked'
-
-  return 'outside-or-ok'
+  return {
+    ...input,
+    id: input.id || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    variant,
+    title,
+    message,
+    detail,
+    technicalDetail,
+    dismissMode: input.dismissMode || (variant === 'progress' ? 'blocked' : 'outside-or-ok'),
+    testId: input.testId || `app-feedback-${variant}`,
+    progress: Number.isFinite(Number(input.progress))
+      ? Math.max(0, Math.min(100, Number(input.progress)))
+      : null,
+    showTechnicalToggle: Boolean(input.showTechnicalToggle && technicalDetail),
+  }
 }
 
-export default function KassaFeedbackPanel({
-  feedback,
-  isTechnicalOpen = false,
-  onToggleTechnical,
-  onDismiss,
-}) {
-  const normalizedFeedback = useMemo(() => {
-    if (!feedback) return null
+export function AppFeedbackProvider({ children }) {
+  const [feedback, setFeedback] = useState(null)
+  const [isTechnicalOpen, setIsTechnicalOpen] = useState(false)
+  const lastFeedbackRef = useRef({ signature: '', at: 0 })
 
-    const variant = normalizeVariant(feedback.variant)
-    const title = String(feedback.title || titleForVariant(variant)).trim()
-    const message = String(feedback.message || '').trim()
-    const detail = String(feedback.detail || '').trim()
-    const technicalDetail = String(feedback.technicalDetail || '').trim()
-    const dismissMode = normalizeDismissMode(feedback, variant)
+  const dismissFeedback = useCallback(() => {
+    setFeedback(null)
+    setIsTechnicalOpen(false)
+  }, [])
 
-    if (!title && !message && !detail && !technicalDetail) return null
+  const showFeedback = useCallback((nextFeedback) => {
+    const normalized = normalizeFeedback(nextFeedback)
+    if (!normalized) return
 
-    return {
-      ...feedback,
-      variant,
-      title,
-      message,
-      detail,
-      technicalDetail,
-      dismissMode,
-      progress: Number.isFinite(Number(feedback.progress))
-        ? Math.max(0, Math.min(100, Number(feedback.progress)))
-        : null,
-      showTechnicalToggle: Boolean(
-        feedback.showTechnicalToggle &&
-        technicalDetail &&
-        typeof onToggleTechnical === 'function'
-      ),
-      testId: feedback.testId || `kassa-feedback-${variant}`,
-    }
-  }, [feedback, onToggleTechnical])
+    const dedupeMs = Number.isFinite(Number(nextFeedback?.dedupeMs))
+      ? Number(nextFeedback.dedupeMs)
+      : 1500
+    const signature = String(
+      nextFeedback?.key
+      || [
+        normalized.variant,
+        normalized.title,
+        normalized.message,
+        normalized.detail,
+        normalized.technicalDetail,
+      ].join('|')
+    )
+    const now = Date.now()
+    const last = lastFeedbackRef.current || { signature: '', at: 0 }
 
-  const feedbackSignature = useMemo(() => {
-    if (!normalizedFeedback) return ''
-    return [
-      normalizedFeedback.variant,
-      normalizedFeedback.title,
-      normalizedFeedback.message,
-      normalizedFeedback.detail,
-      normalizedFeedback.technicalDetail,
-      normalizedFeedback.progress,
-      normalizedFeedback.testId,
-    ].join('|')
-  }, [normalizedFeedback])
+    if (last.signature === signature && now - Number(last.at || 0) < dedupeMs) return
 
-  const [isLocallyDismissed, setIsLocallyDismissed] = useState(false)
+    lastFeedbackRef.current = { signature, at: now }
+    setIsTechnicalOpen(false)
+    setFeedback({ ...normalized, signature })
+  }, [])
 
-  useEffect(() => {
-    setIsLocallyDismissed(false)
-  }, [feedbackSignature])
+  const value = useMemo(() => ({
+    feedback,
+    showFeedback,
+    dismissFeedback,
+  }), [feedback, showFeedback, dismissFeedback])
 
-  if (!normalizedFeedback || isLocallyDismissed) return null
+  return (
+    <AppFeedbackContext.Provider value={value}>
+      {children}
+      <AppFeedbackDialog
+        feedback={feedback}
+        isTechnicalOpen={isTechnicalOpen}
+        onToggleTechnical={() => setIsTechnicalOpen((current) => !current)}
+        onDismiss={dismissFeedback}
+      />
+    </AppFeedbackContext.Provider>
+  )
+}
+
+export function useAppFeedback() {
+  const context = useContext(AppFeedbackContext)
+  if (!context) {
+    throw new Error('useAppFeedback moet binnen AppFeedbackProvider worden gebruikt.')
+  }
+  return context
+}
+
+function AppFeedbackDialog({ feedback, isTechnicalOpen = false, onToggleTechnical, onDismiss }) {
+  if (!feedback) return null
 
   const {
     variant,
     title,
     message,
     detail,
-    progress,
-    dismissMode,
-    showTechnicalToggle,
     technicalDetail,
+    dismissMode,
     testId,
-  } = normalizedFeedback
+    progress,
+    showTechnicalToggle,
+  } = feedback
 
   const canDismissWithOk = dismissMode !== 'blocked'
   const canDismissOutside = dismissMode === 'outside-or-ok'
 
-  function dismissFeedback() {
+  function dismiss() {
     if (dismissMode === 'blocked') return
-
-    if (typeof onDismiss === 'function') {
-      onDismiss()
-      return
-    }
-
-    setIsLocallyDismissed(true)
+    onDismiss?.()
   }
 
-  function handleOverlayClick() {
-    if (canDismissOutside) dismissFeedback()
-  }
-
-  function handleDialogClick(event) {
-    event.stopPropagation()
+  function handleOverlayMouseDown(event) {
+    // Voorkomt dat de browser focus uit het onderliggende invoerveld trekt
+    // voordat de gebruiker bewust op OK klikt.
+    if (event.target === event.currentTarget) event.preventDefault()
   }
 
   return (
@@ -135,7 +152,8 @@ export default function KassaFeedbackPanel({
       data-testid={`${testId}-overlay`}
       aria-live={ariaLiveForVariant(variant)}
       role="presentation"
-      onClick={handleOverlayClick}
+      onMouseDown={handleOverlayMouseDown}
+      onClick={() => { if (canDismissOutside) dismiss() }}
       style={{
         position: 'fixed',
         inset: 0,
@@ -153,7 +171,8 @@ export default function KassaFeedbackPanel({
         aria-labelledby={`${testId}-title`}
         className={classNameForVariant(variant)}
         data-testid={testId}
-        onClick={handleDialogClick}
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
         style={{
           width: 'min(560px, 100%)',
           maxHeight: 'calc(100vh - 48px)',
@@ -193,7 +212,7 @@ export default function KassaFeedbackPanel({
               type="button"
               variant="secondary"
               onClick={onToggleTechnical}
-              data-testid="kassa-admin-technical-error-toggle"
+              data-testid="app-feedback-technical-toggle"
               style={{ width: 'fit-content' }}
             >
               {isTechnicalOpen ? 'Verberg technische foutmelding' : 'Toon technische foutmelding'}
@@ -201,7 +220,7 @@ export default function KassaFeedbackPanel({
 
             {isTechnicalOpen ? (
               <pre
-                data-testid="kassa-admin-technical-error-details"
+                data-testid="app-feedback-technical-details"
                 style={{
                   whiteSpace: 'pre-wrap',
                   margin: 0,
@@ -227,7 +246,7 @@ export default function KassaFeedbackPanel({
             <Button
               type="button"
               variant="primary"
-              onClick={dismissFeedback}
+              onClick={dismiss}
               data-testid={`${testId}-ok-button`}
             >
               OK
