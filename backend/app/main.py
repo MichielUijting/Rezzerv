@@ -154,6 +154,208 @@ GS1_MY_PRODUCT_MANAGER_SHARE_API_KEY = os.getenv('REZZERV_GS1_MPM_SHARE_API_KEY'
 
 
 
+
+def _dev_inventory_preview_row(row):
+    return {
+        "id": str(row.get("id") or ""),
+        "household_article_id": row.get("household_article_id") or None,
+        "household_article_name": row.get("household_article_name") or row.get("artikel") or "",
+        "product_name": row.get("product_name") or row.get("artikel") or "",
+        "artikel": row.get("artikel") or "",
+        "aantal": int(row.get("aantal") or 0),
+        "locatie": row.get("locatie") or "",
+        "sublocatie": row.get("sublocatie") or "",
+        "space_id": row.get("space_id") or None,
+        "sublocation_id": row.get("sublocation_id") or None,
+    }
+
+
+@app.get("/api/dev/inventory-preview")
+def dev_inventory_preview():
+    with engine.begin() as conn:
+        rows = conn.execute(text(
+            """
+            SELECT
+                i.id,
+                i.naam AS artikel,
+                i.aantal,
+                i.household_id,
+                i.space_id,
+                i.sublocation_id,
+                s.naam AS locatie,
+                sl.naam AS sublocatie
+            FROM inventory i
+            LEFT JOIN spaces s ON s.id = i.space_id
+            LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
+            WHERE COALESCE(i.status, 'active') = 'active'
+            ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC
+            """
+        )).mappings().all()
+
+    return {"rows": [_dev_inventory_preview_row(row) for row in rows]}
+
+
+def _dev_resolve_space_id(conn, household_id: str | None, space_id: str | None, space_name: str | None):
+    normalized_space_id = str(space_id or "").strip()
+    normalized_space_name = " ".join(str(space_name or "").strip().split())
+
+    if normalized_space_id:
+        existing = conn.execute(
+            text("SELECT id FROM spaces WHERE id = :id LIMIT 1"),
+            {"id": normalized_space_id},
+        ).mappings().first()
+        if existing:
+            return str(existing.get("id"))
+
+    if not normalized_space_name:
+        return None
+
+    existing = conn.execute(
+        text(
+            """
+            SELECT id
+            FROM spaces
+            WHERE lower(trim(naam)) = lower(trim(:naam))
+              AND (:household_id IS NULL OR COALESCE(household_id, '') = COALESCE(:household_id, ''))
+            ORDER BY CASE WHEN COALESCE(household_id, '') = COALESCE(:household_id, '') THEN 0 ELSE 1 END
+            LIMIT 1
+            """
+        ),
+        {"naam": normalized_space_name, "household_id": household_id},
+    ).mappings().first()
+
+    if existing:
+        return str(existing.get("id"))
+
+    new_space_id = str(uuid.uuid4())
+    conn.execute(
+        text(
+            """
+            INSERT INTO spaces (id, naam, household_id)
+            VALUES (:id, :naam, :household_id)
+            """
+        ),
+        {"id": new_space_id, "naam": normalized_space_name, "household_id": household_id},
+    )
+    return new_space_id
+
+
+def _dev_resolve_sublocation_id(conn, space_id: str | None, sublocation_id: str | None, sublocation_name: str | None):
+    normalized_sublocation_id = str(sublocation_id or "").strip()
+    normalized_sublocation_name = " ".join(str(sublocation_name or "").strip().split())
+    normalized_space_id = str(space_id or "").strip()
+
+    if normalized_sublocation_id:
+        existing = conn.execute(
+            text("SELECT id FROM sublocations WHERE id = :id LIMIT 1"),
+            {"id": normalized_sublocation_id},
+        ).mappings().first()
+        if existing:
+            return str(existing.get("id"))
+
+    if not normalized_space_id or not normalized_sublocation_name:
+        return None
+
+    existing = conn.execute(
+        text(
+            """
+            SELECT id
+            FROM sublocations
+            WHERE space_id = :space_id
+              AND lower(trim(naam)) = lower(trim(:naam))
+            LIMIT 1
+            """
+        ),
+        {"space_id": normalized_space_id, "naam": normalized_sublocation_name},
+    ).mappings().first()
+
+    if existing:
+        return str(existing.get("id"))
+
+    new_sublocation_id = str(uuid.uuid4())
+    conn.execute(
+        text(
+            """
+            INSERT INTO sublocations (id, naam, space_id)
+            VALUES (:id, :naam, :space_id)
+            """
+        ),
+        {"id": new_sublocation_id, "naam": normalized_sublocation_name, "space_id": normalized_space_id},
+    )
+    return new_sublocation_id
+
+
+@app.put("/api/dev/inventory/{inventory_id}")
+def dev_update_inventory(inventory_id: str, payload: InventoryUpdate):
+    normalized_inventory_id = str(inventory_id or "").strip()
+    if not normalized_inventory_id:
+        raise HTTPException(status_code=400, detail="Voorraadregel-id ontbreekt")
+
+    with engine.begin() as conn:
+        existing = conn.execute(
+            text(
+                """
+                SELECT id, household_id
+                FROM inventory
+                WHERE id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": normalized_inventory_id},
+        ).mappings().first()
+
+        if not existing:
+            raise HTTPException(status_code=404, detail="Voorraadregel niet gevonden")
+
+        household_id = str(existing.get("household_id") or "").strip() or None
+        space_id = _dev_resolve_space_id(conn, household_id, payload.space_id, payload.space_name)
+        sublocation_id = _dev_resolve_sublocation_id(conn, space_id, payload.sublocation_id, payload.sublocation_name)
+
+        conn.execute(
+            text(
+                """
+                UPDATE inventory
+                SET naam = :naam,
+                    aantal = :aantal,
+                    space_id = :space_id,
+                    sublocation_id = :sublocation_id,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            {
+                "id": normalized_inventory_id,
+                "naam": str(payload.naam or "").strip(),
+                "aantal": int(payload.aantal or 0),
+                "space_id": space_id,
+                "sublocation_id": sublocation_id,
+            },
+        )
+
+        row = conn.execute(
+            text(
+                """
+                SELECT
+                    i.id,
+                    i.naam AS artikel,
+                    i.aantal,
+                    i.household_id,
+                    i.space_id,
+                    i.sublocation_id,
+                    s.naam AS locatie,
+                    sl.naam AS sublocatie
+                FROM inventory i
+                LEFT JOIN spaces s ON s.id = i.space_id
+                LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
+                WHERE i.id = :id
+                LIMIT 1
+                """
+            ),
+            {"id": normalized_inventory_id},
+        ).mappings().first()
+
+    return {"ok": True, "row": _dev_inventory_preview_row(row or {})}
+
 @app.exception_handler(Exception)
 async def unhandled_api_exception_handler(request: Request, exc: Exception):
     if request.url.path.startswith('/api/'):

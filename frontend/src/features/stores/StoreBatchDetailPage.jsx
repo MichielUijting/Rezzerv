@@ -217,6 +217,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [busyLineId, setBusyLineId] = useState('')
   const [isProcessingBatch, setIsProcessingBatch] = useState(false)
   const [processFeedback, setProcessFeedback] = useState('')
+  const [processResultOverlay, setProcessResultOverlay] = useState('')
   const [lastProcessResult, setLastProcessResult] = useState(null)
   const [batchDiagnostics, setBatchDiagnostics] = useState(null)
   const [lineDrafts, setLineDrafts] = useState({})
@@ -696,7 +697,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         parts.push(`Overgeslagen: ${skippedCount}`)
         parts.push(`Mislukt: ${failedCount}`)
       }
-      setStatus(parts.join(' · '))
+      setProcessResultOverlay(parts.join(' · '))
       setSelectedLineIds((current) => current.filter((id) => {
         const outcome = (result.results || []).find((item) => item.line_id === id)
         return !(outcome && outcome.status === 'processed')
@@ -994,6 +995,27 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 })}
               </tbody>
             </Table>
+
+          {processResultOverlay ? (
+            <div className="rz-modal-backdrop" role="presentation" onClick={() => setProcessResultOverlay('')}>
+              <div
+                className="rz-modal-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="process-result-title"
+                onClick={(event) => event.stopPropagation()}
+                style={{ width: 'min(560px, calc(100vw - 48px))' }}
+              >
+                <h3 id="process-result-title" className="rz-modal-title">Verwerking afgerond</h3>
+                <p className="rz-modal-text">{processResultOverlay}</p>
+                <div className="rz-modal-actions">
+                  <Button variant="primary" type="button" onClick={() => setProcessResultOverlay('')}>
+                    Sluiten
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {locationPickerLineId ? (() => {
             const pickerIsBulk = locationPickerMode === 'bulk'
