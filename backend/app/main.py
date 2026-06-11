@@ -1954,8 +1954,10 @@ def ensure_household_article_global_product_link(conn, household_article_id: str
         existing_gtin = str((existing_product or {}).get('primary_gtin') or '').strip()
         if existing_gtin == normalized_barcode:
             return existing_global_product_id
+    if not normalized_barcode:
+        return None
     global_product_id = resolve_global_product_id_for_article(conn, normalized_article_id, normalized_barcode)
-    if not global_product_id:
+    if not global_product_id and normalized_barcode:
         global_product_id = ensure_global_product_record(
             conn,
             normalized_barcode,
@@ -1967,6 +1969,145 @@ def ensure_household_article_global_product_link(conn, household_article_id: str
     if global_product_id:
         set_household_article_global_product_id(conn, normalized_article_id, global_product_id)
     return global_product_id
+
+
+
+
+def normalize_external_product_candidate_status(value: str | None) -> str:
+    normalized = str(value or '').strip().lower()
+    return normalized if normalized in {'candidate', 'confirmed', 'rejected', 'stale'} else 'candidate'
+
+
+def ensure_external_product_candidates_schema():
+    with engine.begin() as conn:
+        conn.execute(text(
+            """
+            CREATE TABLE IF NOT EXISTS external_product_candidates (
+                id TEXT PRIMARY KEY,
+                purchase_import_line_id TEXT NOT NULL,
+                global_product_id TEXT,
+                source_name TEXT NOT NULL,
+                source_product_code TEXT,
+                candidate_name TEXT,
+                candidate_brand TEXT,
+                candidate_category TEXT,
+                candidate_image_url TEXT,
+                candidate_source_url TEXT,
+                candidate_stores TEXT,
+                candidate_countries TEXT,
+                score NUMERIC,
+                match_reason TEXT,
+                status TEXT NOT NULL DEFAULT 'candidate',
+                raw_payload TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )
+            """
+        ))
+
+        columns = {row[1] for row in conn.execute(text("PRAGMA table_info(external_product_candidates)")).fetchall()}
+        required_columns = {
+            "purchase_import_line_id": "TEXT",
+            "global_product_id": "TEXT",
+            "source_name": "TEXT",
+            "source_product_code": "TEXT",
+            "candidate_name": "TEXT",
+            "candidate_brand": "TEXT",
+            "candidate_category": "TEXT",
+            "candidate_image_url": "TEXT",
+            "candidate_source_url": "TEXT",
+            "candidate_stores": "TEXT",
+            "candidate_countries": "TEXT",
+            "score": "NUMERIC",
+            "match_reason": "TEXT",
+            "status": "TEXT",
+            "raw_payload": "TEXT",
+            "created_at": "TEXT",
+            "updated_at": "TEXT",
+        }
+        for column_name, column_type in required_columns.items():
+            if column_name not in columns:
+                conn.execute(text(f"ALTER TABLE external_product_candidates ADD COLUMN {column_name} {column_type}"))
+
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_external_product_candidates_line
+            ON external_product_candidates (purchase_import_line_id, status, score)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_external_product_candidates_global_product
+            ON external_product_candidates (global_product_id)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_external_product_candidates_source_code
+            ON external_product_candidates (source_name, source_product_code)
+        """))
+
+
+def parse_external_candidate_json(value, fallback):
+    if value is None or value == '':
+        return fallback
+    if isinstance(value, (list, dict)):
+        return value
+    try:
+        parsed = json.loads(value)
+        return parsed
+    except Exception:
+        return fallback
+
+
+def build_external_product_candidate_payload(row) -> dict:
+    payload = dict(row)
+    payload['status'] = normalize_external_product_candidate_status(payload.get('status'))
+    payload['score'] = float(payload['score']) if payload.get('score') is not None else None
+    payload['candidate_stores'] = parse_external_candidate_json(payload.get('candidate_stores'), [])
+    payload['candidate_countries'] = parse_external_candidate_json(payload.get('candidate_countries'), [])
+    payload['raw_payload'] = parse_external_candidate_json(payload.get('raw_payload'), None)
+    return payload
+
+
+def get_external_product_candidates_for_purchase_line(conn, purchase_import_line_id: str | None) -> list[dict]:
+    normalized_line_id = str(purchase_import_line_id or '').strip()
+    if not normalized_line_id:
+        return []
+    rows = conn.execute(
+        text(
+            """
+            SELECT
+                id,
+                purchase_import_line_id,
+                global_product_id,
+                source_name,
+                source_product_code,
+                candidate_name,
+                candidate_brand,
+                candidate_category,
+                candidate_image_url,
+                candidate_source_url,
+                candidate_stores,
+                candidate_countries,
+                score,
+                match_reason,
+                status,
+                raw_payload,
+                created_at,
+                updated_at
+            FROM external_product_candidates
+            WHERE purchase_import_line_id = :purchase_import_line_id
+            ORDER BY
+                CASE
+                    WHEN status = 'confirmed' THEN 0
+                    WHEN status = 'candidate' THEN 1
+                    WHEN status = 'stale' THEN 2
+                    ELSE 3
+                END,
+                COALESCE(score, 0) DESC,
+                datetime(COALESCE(updated_at, created_at, '1970-01-01')) DESC,
+                id ASC
+            """
+        ),
+        {'purchase_import_line_id': normalized_line_id},
+    ).mappings().all()
+    return [build_external_product_candidate_payload(row) for row in rows]
 
 
 def ensure_release_b_household_article_global_product_integrity():
@@ -5132,7 +5273,7 @@ def resolve_receipt_line_product_links(conn, household_id: str | None, article_n
             if resolved_global_product_id:
                 match_method = 'article_linked'
                 confidence_score = 1.0
-            elif create_global_product:
+            elif create_global_product and normalized_barcode:
                 resolved_global_product_id = ensure_global_product_record(
                     conn,
                     normalized_barcode,
@@ -5158,7 +5299,7 @@ def resolve_receipt_line_product_links(conn, household_id: str | None, article_n
             match_method = matched_product.get('match_method')
             confidence_score = matched_product.get('confidence_score')
 
-    if not resolved_global_product_id and create_global_product and normalized_article_name:
+    if not resolved_global_product_id and create_global_product and normalized_barcode and normalized_article_name:
         resolved_global_product_id = ensure_global_product_record(
             conn,
             normalized_barcode,
@@ -5409,14 +5550,18 @@ def sync_purchase_import_line_product_links(conn, line_id: str | None, household
         if resolved_global_product_id and resolved_global_product_id != matched_global_product_id:
             matched_global_product_id = resolved_global_product_id
     elif matched_global_product_id:
-        matched_household_article_id = ensure_household_article_for_global_product(
+        # M2A: een catalogusmatch is een productsuggestie, geen automatische Mijn-artikelkeuze.
+        # Alleen een bestaand huishoudartikel dat al expliciet aan dit global_product is gekoppeld
+        # mag hier automatisch worden ingevuld.
+        existing_household_article = find_household_article_for_global_product(
             conn,
             normalized_household_id,
             matched_global_product_id,
-            article_name_hint=article_name_hint,
-            barcode=barcode,
-            brand=brand,
         )
+        if existing_household_article and existing_household_article.get('id'):
+            matched_household_article_id = str(existing_household_article.get('id'))
+        else:
+            matched_household_article_id = ''
 
     if matched_household_article_id and not matched_global_product_id:
         article_row = resolve_review_article_option(conn, matched_household_article_id, normalized_household_id)
@@ -9197,11 +9342,14 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
             barcode=line.get('barcode'),
             brand=(receipt or {}).get('store_name'),
             create_global_product=True,
-            create_household_article=bool(household_id),
+            create_household_article=False,  # M2A: geen automatisch Mijn artikel vanuit bon/import
             external_article_code=line.get('barcode'),
         )
         matched_global_product_id = str((resolved_links or {}).get('matched_global_product_id') or '').strip() or None
-        matched_household_article_id = str((resolved_links or {}).get('matched_household_article_id') or '').strip() or None
+        # M2A: bij eerste import blijft 'Mijn artikel' leeg.
+        # Een global_product/catalogusmatch mag alleen product- en categoriesuggestie zijn.
+        # Een household_article wordt pas gevuld door expliciete geheugenmapping of gebruikerskeuze.
+        matched_household_article_id = None
 
         if external_line_ref in existing_refs:
             conn.execute(
@@ -13207,6 +13355,7 @@ ensure_household_role_change_audit_schema()
 ensure_household_articles_schema()
 ensure_product_enrichment_schema()
 ensure_global_product_catalog_schema()
+ensure_external_product_candidates_schema()
 ensure_release_b_household_article_global_product_integrity()
 ensure_release_c_product_enrichment_centralization()
 ensure_release_2_schema()
@@ -16243,6 +16392,52 @@ def review_purchase_import_line(line_id: str, payload: ReviewLineRequest):
     result = dict(updated)
     result["batch_status"] = status
     return result
+
+
+
+
+@app.get("/api/purchase-import-lines/{line_id}/external-product-candidates")
+def get_purchase_import_line_external_product_candidates(line_id: str):
+    normalized_line_id = str(line_id or '').strip()
+    if not normalized_line_id:
+        raise HTTPException(status_code=400, detail="line_id is verplicht")
+
+    with engine.begin() as conn:
+        line = conn.execute(
+            text(
+                """
+                SELECT
+                    pil.id,
+                    pil.batch_id,
+                    pil.article_name_raw,
+                    pil.brand_raw,
+                    pil.external_article_code,
+                    pil.matched_global_product_id
+                FROM purchase_import_lines pil
+                WHERE pil.id = :line_id
+                LIMIT 1
+                """
+            ),
+            {'line_id': normalized_line_id},
+        ).mappings().first()
+
+        if not line:
+            raise HTTPException(status_code=404, detail="Importregel niet gevonden")
+
+        candidates = get_external_product_candidates_for_purchase_line(conn, normalized_line_id)
+
+    return {
+        "line_id": normalized_line_id,
+        "article_name_raw": line.get("article_name_raw"),
+        "brand_raw": line.get("brand_raw"),
+        "external_article_code": line.get("external_article_code"),
+        "matched_global_product_id": line.get("matched_global_product_id"),
+        "store_provider_code": None,
+        "store_name": None,
+        "store_label": None,
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+    }
 
 
 @app.post("/api/purchase-import-lines/{line_id}/map")
