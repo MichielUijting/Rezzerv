@@ -16501,6 +16501,7 @@ def build_open_food_facts_candidate(line: dict, product: dict, match_reason: str
 
 def fetch_open_food_facts_json(url: str, timeout_seconds: int = 8) -> dict:
     import json as _json
+    import urllib.error
     import urllib.request
 
     request = urllib.request.Request(
@@ -16510,9 +16511,23 @@ def fetch_open_food_facts_json(url: str, timeout_seconds: int = 8) -> dict:
             "Accept": "application/json",
         },
     )
-    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-        payload = response.read().decode("utf-8")
-    return _json.loads(payload)
+
+    try:
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+            payload = response.read().decode("utf-8")
+        return _json.loads(payload)
+    except urllib.error.HTTPError as exc:
+        print(
+            f"M2C2 Open Food Facts HTTP-fout overgeslagen: status={exc.code} url={url}",
+            flush=True,
+        )
+        return {}
+    except Exception as exc:
+        print(
+            f"M2C2 Open Food Facts requestfout overgeslagen: {type(exc).__name__}: {exc} url={url}",
+            flush=True,
+        )
+        return {}
 
 
 def lookup_open_food_facts_by_gtin(gtin: str) -> list[dict]:
@@ -16541,44 +16556,58 @@ def lookup_open_food_facts_by_text(query: str, brand: str | None = None, limit: 
     if not search_terms:
         return []
 
-    # Merk/winkel uit bonregel mag ranking helpen, maar mag geen harde koppeling afdwingen.
+    fields = ",".join([
+        "code",
+        "product_name",
+        "product_name_nl",
+        "generic_name",
+        "brands",
+        "categories",
+        "categories_tags",
+        "image_url",
+        "image_front_url",
+        "stores",
+        "stores_tags",
+        "countries",
+        "countries_tags",
+    ])
+
+    def run_search(search_query: str) -> list[dict]:
+        params = {
+            "search_terms": search_query,
+            "search_simple": "1",
+            "action": "process",
+            "json": "1",
+            "page_size": str(max(1, min(limit, 10))),
+            "fields": fields,
+        }
+        url = "https://world.openfoodfacts.org/cgi/search.pl?" + urllib.parse.urlencode(params)
+
+        try:
+            data = fetch_open_food_facts_json(url)
+        except Exception as exc:
+            print(f"M2C2 OFF tekstzoekactie mislukt voor '{search_query}': {type(exc).__name__}: {exc}", flush=True)
+            return []
+
+        products = data.get("products") or []
+        if not isinstance(products, list):
+            return []
+
+        return [product for product in products if isinstance(product, dict)]
+
+    # Eerst artikelnaam alleen. brand_raw is vaak winkel/bron, geen productmerk.
+    products = run_search(search_terms)
+    if products:
+        return products
+
+    # Pas daarna fallback met brand/winkelcontext.
     brand_text = normalize_external_candidate_text(brand)
-    full_query = f"{search_terms} {brand_text}".strip() if brand_text else search_terms
+    if brand_text:
+        fallback_query = f"{search_terms} {brand_text}".strip()
+        if fallback_query.lower() != search_terms.lower():
+            return run_search(fallback_query)
 
-    params = {
-        "search_terms": full_query,
-        "search_simple": "1",
-        "action": "process",
-        "json": "1",
-        "page_size": str(max(1, min(limit, 10))),
-        "fields": ",".join([
-            "code",
-            "product_name",
-            "product_name_nl",
-            "generic_name",
-            "brands",
-            "categories",
-            "categories_tags",
-            "image_url",
-            "image_front_url",
-            "stores",
-            "stores_tags",
-            "countries",
-            "countries_tags",
-        ]),
-    }
-    url = "https://world.openfoodfacts.org/cgi/search.pl?" + urllib.parse.urlencode(params)
-
-    try:
-        data = fetch_open_food_facts_json(url)
-    except Exception:
-        return []
-
-    products = data.get("products") or []
-    if not isinstance(products, list):
-        return []
-
-    return [product for product in products if isinstance(product, dict)]
+    return []
 
 
 def upsert_external_product_candidate(conn, purchase_import_line_id: str, candidate: dict) -> None:
