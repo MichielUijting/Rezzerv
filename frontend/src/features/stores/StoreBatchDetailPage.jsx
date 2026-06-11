@@ -467,6 +467,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     return sublocationOptionsForSpace(locationOptions, activeLocationSpaceId)
   }
 
+  const canManageLocations = !isViewer
+
+  function openLocationManagement() {
+    window.location.href = '/instellingen/locaties'
+  }
+
   async function applyPickedLocation(locationId) {
     const nextLocationId = String(locationId ?? '')
 
@@ -1151,7 +1157,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   aria-modal="true"
                   aria-labelledby="location-picker-title"
                   onClick={(event) => event.stopPropagation()}
-                  style={{ width: 'min(560px, calc(100vw - 48px))', maxHeight: '80vh', overflow: 'auto' }}
+                  style={{ width: 'min(600px, calc(100vw - 48px))', maxHeight: '90vh', overflow: 'auto' }}
                 >
                   <h3 id="location-picker-title" className="rz-modal-title">
                     {pickerIsBulk ? 'Locatie toepassen op geselecteerde regels' : 'Locatie / sublocatie kiezen'}
@@ -1165,60 +1171,124 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     className="rz-input"
                     type="text"
                     autoFocus
-                    placeholder="Zoek locatie of sublocatie..."
+                    placeholder="Zoek locatie..."
                     value={locationPickerSearch}
                     onChange={(event) => setLocationPickerSearch(event.target.value)}
                     data-testid={pickerIsBulk ? 'receipt-bulk-location-search' : `receipt-line-location-search-${pickerEntry.line.id}`}
                   />
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '12px', maxHeight: '360px', overflowY: 'auto', marginTop: '12px' }}>
-                    <div style={{ display: 'grid', gap: '6px', alignContent: 'start' }}>
-                      <div style={{ color: '#2e7d4d', fontSize: 12, fontWeight: 700 }}>Stap 1: locatie</div>
-                      {pickerOptions.length ? pickerOptions.map((location) => {
-                        const sublocations = sublocationOptionsForSpace(locationOptions, location.space_id || location.id)
-                        const hasSublocations = sublocations.length > 0
-                        const active = String(activeLocationSpaceId || '') === String(location.space_id || location.id)
-                        return (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '14px', overflow: 'hidden', marginTop: '12px' }}>
+                    <div style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
+                      <div style={{ color: '#2e7d4d', fontSize: 14, fontWeight: 400, letterSpacing: '0' }}>Stap 1: locatie</div>
+                      <div style={{ display: 'grid', gap: '6px', height: '246px', overflowY: 'auto', padding: '6px', border: '1px solid #d8e8de', borderRadius: '12px', background: '#f8fbf9', alignContent: 'start', gridAutoRows: '42px' }}>
+                        {pickerOptions.length ? pickerOptions.map((location) => {
+                          const sublocations = sublocationOptionsForSpace(locationOptions, location.space_id || location.id)
+                          const hasSublocations = sublocations.length > 0
+                          const active = String(activeLocationSpaceId || '') === String(location.space_id || location.id)
+                          return (
+                            <button
+                              key={location.id}
+                              type="button"
+                              disabled={pickerLineBusy}
+                              onMouseEnter={() => hasSublocations ? activateLocationSpaceDelayed(location.space_id || location.id) : null}
+                              onFocus={() => hasSublocations ? activateLocationSpaceDelayed(location.space_id || location.id) : null}
+                              onClick={() => {
+                                if (hasSublocations) {
+                                  activateLocationSpaceNow(location.space_id || location.id)
+                                  return
+                                }
+                                applyPickedLocation(String(location.id))
+                              }}
+                              title={hasSublocations ? 'Kies een sublocatie binnen deze locatie' : 'Kies deze locatie'}
+                              style={{
+                                appearance: 'none',
+                                width: '100%',
+                                border: active ? '1px solid #2e7d4d' : '1px solid #d8e8de',
+                                background: active ? '#e8f4ec' : '#ffffff',
+                                color: '#163020',
+                                borderRadius: '10px',
+                                height: '42px',
+                                padding: '0 12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: '12px',
+                                fontSize: 14,
+                                fontWeight: 500,
+                                lineHeight: 1.3,
+                                textAlign: 'left',
+                                cursor: pickerLineBusy ? 'not-allowed' : 'pointer',
+                                boxShadow: active ? '0 0 0 1px rgba(46, 125, 77, 0.08)' : 'none',
+                              }}
+                            >
+                              <span>{location.label}</span>
+                              <span style={{ color: hasSublocations ? '#2e7d4d' : '#9aa8a0', fontSize: 14, fontWeight: 700 }}>
+                                {hasSublocations ? '›' : ''}
+                              </span>
+                            </button>
+                          )
+                        }) : (
+                          <div style={{ color: '#5f7a68', fontSize: 13, padding: '10px 12px' }}>Geen locatie gevonden.</div>
+                        )}
+                      </div>
+                      {canManageLocations ? (
+                        <button
+                          type="button"
+                          disabled={pickerLineBusy}
+                          onClick={openLocationManagement}
+                          style={{
+                            appearance: 'none',
+                            width: '100%',
+                            border: '1px dashed #2e7d4d',
+                            background: '#f8fbf9',
+                            color: '#0f3b26',
+                            borderRadius: '10px',
+                            height: '38px',
+                            padding: '0 12px',
+                            fontSize: 14,
+                            fontWeight: 500,
+                            textAlign: 'center',
+                            cursor: pickerLineBusy ? 'not-allowed' : 'pointer',
+                          }}
+                        >
+                          Beheer locaties
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <div style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
+                      <div style={{ color: '#2e7d4d', fontSize: 14, fontWeight: 400, letterSpacing: '0' }}>Stap 2: sublocatie</div>
+                      <div style={{ display: 'grid', gap: '6px', height: '246px', overflowY: 'auto', padding: '6px', border: '1px solid #d8e8de', borderRadius: '12px', background: '#f8fbf9', alignContent: 'start', gridAutoRows: '42px' }}>
+                        {activeSublocationOptions().length ? activeSublocationOptions().map((location) => (
                           <button
                             key={location.id}
                             type="button"
-                            className={active ? 'rz-button-primary' : 'rz-button-secondary'}
                             disabled={pickerLineBusy}
-                            onMouseEnter={() => hasSublocations ? activateLocationSpaceDelayed(location.space_id || location.id) : null}
-                            onFocus={() => hasSublocations ? activateLocationSpaceDelayed(location.space_id || location.id) : null}
-                            onClick={() => {
-                              if (hasSublocations) {
-                                activateLocationSpaceNow(location.space_id || location.id)
-                                return
-                              }
-                              applyPickedLocation(String(location.id))
+                            onClick={() => applyPickedLocation(String(location.id))}
+                            style={{
+                              appearance: 'none',
+                              width: '100%',
+                              border: '1px solid #d8e8de',
+                              background: '#ffffff',
+                              color: '#163020',
+                              borderRadius: '10px',
+                              height: '42px',
+                              padding: '0 12px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              gap: '12px',
+                              fontSize: 14,
+                              fontWeight: 500,
+                              lineHeight: 1.3,
+                              textAlign: 'left',
+                              cursor: pickerLineBusy ? 'not-allowed' : 'pointer',
                             }}
-                            style={{ textAlign: 'left', justifyContent: 'flex-start' }}
-                            title={hasSublocations ? 'Kies een sublocatie binnen deze locatie' : 'Kies deze locatie'}
                           >
-                            {location.label}{hasSublocations ? ' ›' : ''}
+                            <span>{location.sublocation_label || location.label}</span>
+                            <span style={{ color: '#2e7d4d', fontSize: 14, fontWeight: 700 }}>✓</span>
                           </button>
-                        )
-                      }) : (
-                        <div style={{ color: '#2e7d4d' }}>Geen locatie gevonden.</div>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'grid', gap: '6px', alignContent: 'start' }}>
-                      <div style={{ color: '#2e7d4d', fontSize: 12, fontWeight: 700 }}>Stap 2: sublocatie</div>
-                      {activeSublocationOptions().length ? activeSublocationOptions().map((location) => (
-                        <button
-                          key={location.id}
-                          type="button"
-                          className="rz-button-primary"
-                          disabled={pickerLineBusy}
-                          onClick={() => applyPickedLocation(String(location.id))}
-                          style={{ textAlign: 'left', justifyContent: 'flex-start' }}
-                        >
-                          {location.sublocation_label || location.label}
-                        </button>
-                      )) : (
-                        <div style={{ color: '#2e7d4d' }}>Selecteer links een locatie met sublocaties.</div>
-                      )}
+                        )) : null}
+                      </div>
                     </div>
                   </div>
                   <div className="rz-modal-actions">
