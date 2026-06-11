@@ -20,6 +20,7 @@ import {
   StoreArticleSelector,
 } from './storeImportShared'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'Alles' },
@@ -257,6 +258,29 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const validLocationIds = useMemo(() => new Set(locationOptions.map((location) => String(location.id))), [locationOptions])
   const isViewer = Boolean(household?.is_viewer)
 
+
+  const { showFeedback } = useAppFeedback()
+
+  function showUitpakkenFeedback(variant, message, options = {}) {
+    const normalizedVariant = String(variant || 'info').trim().toLowerCase() || 'info'
+    const normalizedMessage = String(message || '').trim()
+    if (!normalizedMessage) return
+
+    showFeedback({
+      variant: normalizedVariant,
+      title: normalizedVariant === 'error'
+        ? 'Fout'
+        : normalizedVariant === 'warning'
+          ? 'Let op'
+          : normalizedVariant === 'success'
+            ? 'Gelukt'
+            : 'Melding',
+      message: normalizedMessage,
+      dedupeKey: options.key || `uitpakken-${normalizedVariant}-${normalizedMessage}`,
+      dedupeMs: options.dedupeMs ?? 1200,
+    })
+  }
+
   function getDraftValues(line) {
     const draft = Object.prototype.hasOwnProperty.call(lineDrafts, line.id)
       ? lineDrafts[line.id]
@@ -386,7 +410,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       }
 
       for (const entry of targetEntries) {
-        await persistLineDraft(entry.line, { locationId: nextLocationId })
+        await persistLineDraft(entry.line, { locationId: nextLocationId }, { suppressSuccessFeedback: true })
       }
 
       setStatus(nextLocationId
@@ -407,7 +431,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     closeLocationPicker()
   }
 
-  async function persistLineDraft(line, patch = {}) {
+  async function persistLineDraft(line, patch = {}, options = {}) {
     if (!batch) return
     const draftValues = getDraftValues(line)
     const nextArticleId = String(patch.articleId !== undefined ? (patch.articleId ?? '') : draftValues.articleId)
@@ -425,10 +449,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         [line.id]: {
           ...(current[line.id] || {}),
           dirty: false,
-          status: 'saved',
-          message: 'Opgeslagen',
-          savedAt: new Date().toISOString(),
+          status: 'idle',
+          message: '',
           error: '',
+          currentArticleId: originalArticleId,
+          currentLocationId: originalLocationId,
         },
       }))
       return
@@ -475,6 +500,17 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           currentLocationId: nextLocationId,
         },
       }))
+      if (!options.suppressSuccessFeedback) {
+        showUitpakkenFeedback(
+          'success',
+          articleChanged && locationChanged
+            ? 'Artikel en locatie bijgewerkt.'
+            : articleChanged
+              ? 'Artikelkoppeling bijgewerkt.'
+              : 'Locatie bijgewerkt.',
+          { key: `uitpakken-line-saved-${String(line.id)}-${Date.now()}` }
+        )
+      }
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'Opslaan mislukt'
       setError(message)
@@ -897,8 +933,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
           <div style={{ color: '#2e7d4d' }}>Totaal: {summaryCounts.total} · Klaar: {summaryCounts.ready} · Actie nodig: {summaryCounts.action_needed} · Verwerkt: {summaryCounts.processed}</div>
 
-          {error ? <div className="rz-inline-feedback rz-inline-feedback--error" data-testid="receipt-feedback">{error}</div> : null}
-          {status ? <div className="rz-inline-feedback rz-inline-feedback--success" data-testid="receipt-feedback">{status}</div> : null}
           <Table wrapperClassName="rz-store-batch-table-wrapper" tableClassName="rz-store-workbench-table rz-data-table--sticky-header rz-data-table--sticky-filters" dataTestId="receipt-lines-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(lineColumnWidths), minWidth: buildTableWidth(lineColumnWidths), '--rz-sticky-header-offset': '36px' }}>
               <colgroup>
                 <col style={{ width: `${lineColumnWidths.select}px` }} />
