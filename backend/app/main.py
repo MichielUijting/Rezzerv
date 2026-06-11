@@ -775,6 +775,16 @@ class MapLineRequest(BaseModel):
 class TargetLocationRequest(BaseModel):
     target_location_id: Optional[str] = None
 
+    default_location_policy: str = 'line_only'
+
+    @field_validator("default_location_policy")
+    @classmethod
+    def validate_default_location_policy(cls, value):
+        normalized = str(value or 'line_only').strip().lower()
+        if normalized not in {'line_only', 'article_default'}:
+            raise ValueError('Ongeldig locatiebeleid')
+        return normalized
+
     @field_validator("target_location_id", mode="before")
     @classmethod
     def normalize_target_location_id(cls, value):
@@ -7497,6 +7507,175 @@ def get_household_article_default_target_location_id(conn, household_article_id:
     defaults = get_household_article_location_defaults(conn, [article_id]).get(article_id, {})
     target_id = defaults.get('default_sublocation_id') or defaults.get('default_location_id') or ''
     return str(target_id).strip() or None
+
+
+def resolve_store_storage_target_location(conn, target_location_id: str | None) -> dict | None:
+    """Resolveer een geldige eindlocatie voor Uitpakken.
+
+    Regel:
+    - sublocatie-id is geldig als sublocatie en bovenliggende ruimte actief zijn;
+    - ruimte-id is alleen geldig als de ruimte actief is en geen actieve sublocaties heeft;
+    - ruimte-id met actieve sublocaties is geen eindlocatie.
+    """
+    normalized_id = str(target_location_id or '').strip()
+    if not normalized_id:
+        return None
+
+    sublocation = conn.execute(
+        text(
+            """
+            SELECT
+                sl.id AS sublocation_id,
+                sl.naam AS sublocation_name,
+                s.id AS space_id,
+                s.naam AS space_name
+            FROM sublocations sl
+            JOIN spaces s ON s.id = sl.space_id
+            WHERE sl.id = :id
+              AND COALESCE(sl.active, 1) = 1
+              AND COALESCE(s.active, 1) = 1
+            LIMIT 1
+            """
+        ),
+        {"id": normalized_id},
+    ).mappings().first()
+
+    if sublocation:
+        return {
+            "location_id": str(sublocation["sublocation_id"]),
+            "target_location_id": str(sublocation["sublocation_id"]),
+            "target_type": "sublocation",
+            "space_id": str(sublocation["space_id"]),
+            "space_name": str(sublocation["space_name"] or ""),
+            "sublocation_id": str(sublocation["sublocation_id"]),
+            "sublocation_name": str(sublocation["sublocation_name"] or ""),
+            "location_label": f"{sublocation['space_name']} / {sublocation['sublocation_name']}",
+        }
+
+    space = conn.execute(
+        text(
+            """
+            SELECT
+                s.id AS space_id,
+                s.naam AS space_name,
+                COUNT(sl.id) AS active_sublocation_count
+            FROM spaces s
+            LEFT JOIN sublocations sl
+              ON sl.space_id = s.id
+             AND COALESCE(sl.active, 1) = 1
+            WHERE s.id = :id
+              AND COALESCE(s.active, 1) = 1
+            GROUP BY s.id, s.naam
+            LIMIT 1
+            """
+        ),
+        {"id": normalized_id},
+    ).mappings().first()
+
+    if not space:
+        return None
+
+    if int(space.get("active_sublocation_count") or 0) > 0:
+        return None
+
+    return {
+        "location_id": str(space["space_id"]),
+        "target_location_id": str(space["space_id"]),
+        "target_type": "space",
+        "space_id": str(space["space_id"]),
+        "space_name": str(space["space_name"] or ""),
+        "sublocation_id": None,
+        "sublocation_name": None,
+        "location_label": str(space["space_name"] or ""),
+    }
+
+
+def build_store_location_default_payload(resolved_location: dict | None) -> dict:
+    if not resolved_location:
+        return {"default_location_id": None, "default_sublocation_id": None}
+
+    return {
+        "default_location_id": str(resolved_location.get("space_id") or resolved_location.get("location_id") or "").strip() or None,
+        "default_sublocation_id": str(resolved_location.get("sublocation_id") or "").strip() or None,
+    }
+
+
+def set_household_article_location_defaults(conn, household_article_id: str | None, resolved_location: dict | None) -> dict:
+    article_id = str(household_article_id or "").strip()
+    if not article_id:
+        return {"updated": False, "reason": "missing_household_article_id"}
+
+    defaults = build_store_location_default_payload(resolved_location)
+    columns = {row["name"] for row in conn.execute(text("PRAGMA table_info(household_article_settings)")).mappings().all()}
+    required = {"household_article_id", "setting_key", "setting_value"}
+    if not required.issubset(columns):
+        return {"updated": False, "reason": "household_article_settings_schema_incomplete"}
+
+    conn.execute(
+        text(
+            """
+            DELETE FROM household_article_settings
+            WHERE household_article_id = :household_article_id
+              AND setting_key IN ('default_location_id', 'default_sublocation_id')
+            """
+        ),
+        {"household_article_id": article_id},
+    )
+
+    def insert_setting(setting_key: str, setting_value: str | None) -> None:
+        insert_columns = []
+        insert_values = []
+        params = {
+            "household_article_id": article_id,
+            "setting_key": setting_key,
+            "setting_value": json.dumps(setting_value, ensure_ascii=False),
+        }
+
+        if "id" in columns:
+            insert_columns.append("id")
+            insert_values.append("lower(hex(randomblob(16)))")
+
+        insert_columns.extend(["household_article_id", "setting_key", "setting_value"])
+        insert_values.extend([":household_article_id", ":setting_key", ":setting_value"])
+
+        if "created_at" in columns:
+            insert_columns.append("created_at")
+            insert_values.append("CURRENT_TIMESTAMP")
+        if "updated_at" in columns:
+            insert_columns.append("updated_at")
+            insert_values.append("CURRENT_TIMESTAMP")
+
+        conn.execute(
+            text(
+                f"""
+                INSERT INTO household_article_settings ({", ".join(insert_columns)})
+                VALUES ({", ".join(insert_values)})
+                """
+            ),
+            params,
+        )
+
+    insert_setting("default_location_id", defaults["default_location_id"])
+    insert_setting("default_sublocation_id", defaults["default_sublocation_id"])
+
+    return {
+        "updated": True,
+        **defaults,
+    }
+
+
+def validate_purchase_import_storage_target_location(conn, line_id: str, target_location_id: str | None) -> tuple[dict | None, dict]:
+    line_ref = build_purchase_import_line_reference(conn, line_id)
+    if not target_location_id:
+        return None, line_ref
+
+    resolved_location = resolve_store_storage_target_location(conn, target_location_id)
+    if not resolved_location:
+        line_ref["location_error_reason"] = "invalid_or_requires_sublocation"
+        line_ref["location_error_message"] = "Kies een sublocatie binnen deze ruimte, of kies een ruimte zonder sublocaties."
+        return None, line_ref
+
+    return resolved_location, line_ref
 
 
 def get_store_review_article_options(conn):
@@ -16997,18 +17176,18 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
 def set_purchase_import_line_target_location(line_id: str, payload: TargetLocationRequest):
     with engine.begin() as conn:
         line = conn.execute(
-            text("SELECT id, batch_id FROM purchase_import_lines WHERE id = :id"),
+            text("SELECT id, batch_id, matched_household_article_id FROM purchase_import_lines WHERE id = :id"),
             {"id": line_id},
         ).mappings().first()
         if not line:
             raise HTTPException(status_code=404, detail="Onbekende importregel")
 
-        resolved_location, line_ref = validate_purchase_import_target_location(conn, line_id, payload.target_location_id)
+        resolved_location, line_ref = validate_purchase_import_storage_target_location(conn, line_id, payload.target_location_id)
         if payload.target_location_id and not resolved_location:
             return JSONResponse(
                 status_code=422,
                 content={
-                    "detail": f"Ongeldige target_location_id voor {line_ref.get('display_label') or line_id}",
+                    "detail": line_ref.get("location_error_message") or f"Ongeldige target_location_id voor {line_ref.get('display_label') or line_id}",
                     "line_id": line_ref.get("line_id") or str(line_id),
                     "external_line_ref": line_ref.get("external_line_ref") or "",
                     "ui_line_number": line_ref.get("ui_line_number"),
@@ -17038,6 +17217,14 @@ def set_purchase_import_line_target_location(line_id: str, payload: TargetLocati
                 "id": line_id,
             },
         )
+        standard_location_result = {"updated": False}
+        if resolved_location and payload.default_location_policy == 'article_default':
+            standard_location_result = set_household_article_location_defaults(
+                conn,
+                line.get("matched_household_article_id"),
+                resolved_location,
+            )
+
         status = update_batch_status(conn, line["batch_id"])
         updated = conn.execute(
             text(
@@ -17051,6 +17238,11 @@ def set_purchase_import_line_target_location(line_id: str, payload: TargetLocati
     result = dict(updated)
     result["batch_status"] = status
     result["line_reference"] = line_ref
+    result["standard_location_updated"] = bool(standard_location_result.get("updated"))
+    result["standard_location"] = {
+        "default_location_id": standard_location_result.get("default_location_id"),
+        "default_sublocation_id": standard_location_result.get("default_sublocation_id"),
+    }
     if resolved_location:
         result["resolved_location"] = resolved_location
     return result
@@ -17418,7 +17610,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     failed_count += 1
                     continue
 
-                resolved_location = resolve_target_location(conn, line["target_location_id"])
+                resolved_location = resolve_store_storage_target_location(conn, line["target_location_id"])
                 if not resolved_location:
                     error = "Geen geldige locatie gekozen"
                     diagnostic = build_purchase_import_line_diagnostic(

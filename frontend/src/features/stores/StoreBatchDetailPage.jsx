@@ -164,6 +164,7 @@ function buildActiveLocationOptions(spacesData, sublocationsData) {
   const activeSpaces = Array.isArray(spacesData?.items) ? spacesData.items.filter((item) => Boolean(item?.active)) : []
   const activeSublocations = Array.isArray(sublocationsData?.items) ? sublocationsData.items.filter((item) => Boolean(item?.active)) : []
   const sublocationsBySpaceId = new Map()
+
   activeSublocations.forEach((item) => {
     const key = String(item?.space_id || '')
     if (!key) return
@@ -171,21 +172,60 @@ function buildActiveLocationOptions(spacesData, sublocationsData) {
     current.push(item)
     sublocationsBySpaceId.set(key, current)
   })
+
   const rows = []
   activeSpaces.forEach((space) => {
+    const spaceId = String(space?.id || '')
     const spaceName = String(space?.naam || '').trim()
-    if (!spaceName) return
-    const linked = sublocationsBySpaceId.get(String(space.id)) || []
-    if (!linked.length) {
-      rows.push({ id: String(space.id), label: spaceName })
-      return
-    }
+    if (!spaceId || !spaceName) return
+
+    const linked = sortOptionObjects(sublocationsBySpaceId.get(spaceId) || [], (item) => item?.naam || '')
+
+    rows.push({
+      id: spaceId,
+      label: spaceName,
+      type: 'space',
+      space_id: spaceId,
+      sublocation_id: '',
+      has_sublocations: linked.length > 0,
+    })
+
     linked.forEach((sublocation) => {
+      const sublocationId = String(sublocation?.id || '')
       const sublocationName = String(sublocation?.naam || '').trim()
-      rows.push({ id: String(sublocation.id || space.id), label: sublocationName ? `${spaceName} / ${sublocationName}` : spaceName })
+      if (!sublocationId || !sublocationName) return
+
+      rows.push({
+        id: sublocationId,
+        label: `${spaceName} / ${sublocationName}`,
+        type: 'sublocation',
+        space_id: spaceId,
+        sublocation_id: sublocationId,
+        parent_label: spaceName,
+        sublocation_label: sublocationName,
+        has_sublocations: false,
+      })
     })
   })
+
   return sortOptionObjects(rows, (location) => location?.label || '')
+}
+
+function spaceLocationOptions(locationOptions) {
+  const bySpace = new Map()
+  ;(locationOptions || []).forEach((location) => {
+    if (location?.type !== 'space') return
+    bySpace.set(String(location.space_id || location.id), location)
+  })
+  return sortOptionObjects([...bySpace.values()], (location) => location?.label || '')
+}
+
+function sublocationOptionsForSpace(locationOptions, spaceId) {
+  const key = String(spaceId || '')
+  return sortOptionObjects(
+    (locationOptions || []).filter((location) => location?.type === 'sublocation' && String(location.space_id || '') === key),
+    (location) => location?.sublocation_label || location?.label || ''
+  )
 }
 
 function deriveLineSelectionState({ draft, validLocationIds, processingStatus }) {
@@ -229,6 +269,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [locationPickerLineId, setLocationPickerLineId] = useState('')
   const [locationPickerSearch, setLocationPickerSearch] = useState('')
   const [locationPickerMode, setLocationPickerMode] = useState('single')
+  const [activeLocationSpaceId, setActiveLocationSpaceId] = useState('')
+  const locationHoverTimerRef = useRef(null)
 
   useDismissOnComponentClick([() => setStatus(''), () => setError(''), () => setProcessFeedback('')], Boolean(status || error || processFeedback))
   const [statusFilter, setStatusFilter] = useState('all')
@@ -352,9 +394,32 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   }
 
   function closeLocationPicker() {
+    if (locationHoverTimerRef.current) {
+      window.clearTimeout(locationHoverTimerRef.current)
+      locationHoverTimerRef.current = null
+    }
     setLocationPickerLineId('')
     setLocationPickerSearch('')
     setLocationPickerMode('single')
+    setActiveLocationSpaceId('')
+  }
+
+  function activateLocationSpaceDelayed(spaceId) {
+    const nextSpaceId = String(spaceId || '')
+    if (locationHoverTimerRef.current) {
+      window.clearTimeout(locationHoverTimerRef.current)
+    }
+    locationHoverTimerRef.current = window.setTimeout(() => {
+      setActiveLocationSpaceId(nextSpaceId)
+    }, 500)
+  }
+
+  function activateLocationSpaceNow(spaceId) {
+    if (locationHoverTimerRef.current) {
+      window.clearTimeout(locationHoverTimerRef.current)
+      locationHoverTimerRef.current = null
+    }
+    setActiveLocationSpaceId(String(spaceId || ''))
   }
 
   async function openLocationPicker(lineId) {
@@ -391,10 +456,15 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   function filteredLocationOptions() {
     const needle = locationPickerSearch.trim().toLowerCase()
-    if (!needle) return locationOptions.slice(0, 12)
-    return locationOptions
+    const spaces = spaceLocationOptions(locationOptions)
+    if (!needle) return spaces.slice(0, 12)
+    return spaces
       .filter((location) => String(location.label || '').toLowerCase().includes(needle))
       .slice(0, 12)
+  }
+
+  function activeSublocationOptions() {
+    return sublocationOptionsForSpace(locationOptions, activeLocationSpaceId)
   }
 
   async function applyPickedLocation(locationId) {
@@ -427,7 +497,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       return
     }
 
-    await persistLineDraft(pickerEntry.line, { locationId: nextLocationId })
+    const hasArticle = Boolean(String(pickerEntry.draft?.articleId || pickerEntry.line?.matched_household_article_id || '').trim())
+    const defaultLocationPolicy = hasArticle && nextLocationId
+      ? (window.confirm('Deze locatie voortaan als standaardlocatie voor dit artikel gebruiken?\n\nOK = voortaan standaard\nAnnuleren = alleen deze bonregel')
+          ? 'article_default'
+          : 'line_only')
+      : 'line_only'
+
+    await persistLineDraft(pickerEntry.line, { locationId: nextLocationId }, { defaultLocationPolicy })
     closeLocationPicker()
   }
 
@@ -482,7 +559,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       if (locationChanged) {
         await fetchJson(`/api/purchase-import-lines/${line.id}/target-location`, {
           method: 'POST',
-          body: JSON.stringify({ target_location_id: nextLocationId || null }),
+          body: JSON.stringify({
+            target_location_id: nextLocationId || null,
+            default_location_policy: options.defaultLocationPolicy || 'line_only',
+          }),
         })
       }
       await refreshBatch(batch.batch_id)
@@ -1090,21 +1170,56 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     onChange={(event) => setLocationPickerSearch(event.target.value)}
                     data-testid={pickerIsBulk ? 'receipt-bulk-location-search' : `receipt-line-location-search-${pickerEntry.line.id}`}
                   />
-                  <div style={{ display: 'grid', gap: '6px', maxHeight: '320px', overflowY: 'auto', marginTop: '12px' }}>
-                    {pickerOptions.length ? pickerOptions.map((location) => (
-                      <button
-                        key={location.id}
-                        type="button"
-                        className="rz-button-secondary"
-                        disabled={pickerLineBusy}
-                        onClick={() => applyPickedLocation(String(location.id))}
-                        style={{ textAlign: 'left', justifyContent: 'flex-start' }}
-                      >
-                        {location.label}
-                      </button>
-                    )) : (
-                      <div style={{ color: '#2e7d4d' }}>Geen locatie gevonden.</div>
-                    )}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: '12px', maxHeight: '360px', overflowY: 'auto', marginTop: '12px' }}>
+                    <div style={{ display: 'grid', gap: '6px', alignContent: 'start' }}>
+                      <div style={{ color: '#2e7d4d', fontSize: 12, fontWeight: 700 }}>Stap 1: locatie</div>
+                      {pickerOptions.length ? pickerOptions.map((location) => {
+                        const sublocations = sublocationOptionsForSpace(locationOptions, location.space_id || location.id)
+                        const hasSublocations = sublocations.length > 0
+                        const active = String(activeLocationSpaceId || '') === String(location.space_id || location.id)
+                        return (
+                          <button
+                            key={location.id}
+                            type="button"
+                            className={active ? 'rz-button-primary' : 'rz-button-secondary'}
+                            disabled={pickerLineBusy}
+                            onMouseEnter={() => hasSublocations ? activateLocationSpaceDelayed(location.space_id || location.id) : null}
+                            onFocus={() => hasSublocations ? activateLocationSpaceDelayed(location.space_id || location.id) : null}
+                            onClick={() => {
+                              if (hasSublocations) {
+                                activateLocationSpaceNow(location.space_id || location.id)
+                                return
+                              }
+                              applyPickedLocation(String(location.id))
+                            }}
+                            style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                            title={hasSublocations ? 'Kies een sublocatie binnen deze locatie' : 'Kies deze locatie'}
+                          >
+                            {location.label}{hasSublocations ? ' ›' : ''}
+                          </button>
+                        )
+                      }) : (
+                        <div style={{ color: '#2e7d4d' }}>Geen locatie gevonden.</div>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'grid', gap: '6px', alignContent: 'start' }}>
+                      <div style={{ color: '#2e7d4d', fontSize: 12, fontWeight: 700 }}>Stap 2: sublocatie</div>
+                      {activeSublocationOptions().length ? activeSublocationOptions().map((location) => (
+                        <button
+                          key={location.id}
+                          type="button"
+                          className="rz-button-primary"
+                          disabled={pickerLineBusy}
+                          onClick={() => applyPickedLocation(String(location.id))}
+                          style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                        >
+                          {location.sublocation_label || location.label}
+                        </button>
+                      )) : (
+                        <div style={{ color: '#2e7d4d' }}>Selecteer links een locatie met sublocaties.</div>
+                      )}
+                    </div>
                   </div>
                   <div className="rz-modal-actions">
                     <Button
