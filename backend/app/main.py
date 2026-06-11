@@ -16396,6 +16396,409 @@ def review_purchase_import_line(line_id: str, payload: ReviewLineRequest):
 
 
 
+
+
+def normalize_external_candidate_text(value) -> str:
+    return str(value or '').strip()
+
+
+def normalize_external_candidate_code(value) -> str:
+    return str(value or '').strip()
+
+
+def is_plausible_gtin(value) -> bool:
+    code = normalize_external_candidate_code(value)
+    if not code.isdigit() or len(code) not in {8, 12, 13, 14}:
+        return False
+
+    # Checksumcontrole voor EAN/UPC/GTIN. Bij twijfel: niet als OFF-barcode gebruiken.
+    digits = [int(ch) for ch in code]
+    check_digit = digits[-1]
+    body = digits[:-1]
+
+    total = 0
+    reversed_body = list(reversed(body))
+    for index, digit in enumerate(reversed_body):
+        multiplier = 3 if index % 2 == 0 else 1
+        total += digit * multiplier
+
+    calculated = (10 - (total % 10)) % 10
+    return calculated == check_digit
+
+
+def external_candidate_tokens(value: str | None) -> set[str]:
+    cleaned = normalize_external_candidate_text(value).lower()
+    for char in ",.;:/\\|()[]{}+-_":
+        cleaned = cleaned.replace(char, " ")
+    return {part for part in cleaned.split() if len(part) >= 3}
+
+
+def calculate_external_candidate_score(line_name: str | None, line_brand: str | None, product: dict) -> float:
+    line_tokens = external_candidate_tokens(line_name)
+    product_name = product.get("product_name") or product.get("product_name_nl") or product.get("generic_name") or ""
+    product_tokens = external_candidate_tokens(product_name)
+
+    score = 0.0
+    if line_tokens and product_tokens:
+        overlap = line_tokens.intersection(product_tokens)
+        score += min(0.65, len(overlap) / max(len(line_tokens), 1))
+
+    line_brand_normalized = normalize_external_candidate_text(line_brand).lower()
+    product_brand_normalized = normalize_external_candidate_text(product.get("brands")).lower()
+    if line_brand_normalized and product_brand_normalized and line_brand_normalized in product_brand_normalized:
+        score += 0.2
+
+    if product.get("code"):
+        score += 0.05
+    if product.get("categories") or product.get("categories_tags"):
+        score += 0.05
+    if product.get("image_url") or product.get("image_front_url"):
+        score += 0.05
+
+    return round(min(score, 1.0), 4)
+
+
+def build_open_food_facts_candidate(line: dict, product: dict, match_reason: str) -> dict | None:
+    source_product_code = normalize_external_candidate_code(product.get("code") or product.get("_id"))
+    candidate_name = normalize_external_candidate_text(
+        product.get("product_name_nl")
+        or product.get("product_name")
+        or product.get("generic_name")
+    )
+
+    if not source_product_code and not candidate_name:
+        return None
+
+    categories_tags = product.get("categories_tags") or []
+    if isinstance(categories_tags, list) and categories_tags:
+        candidate_category = categories_tags[0]
+    else:
+        candidate_category = product.get("categories") or None
+
+    stores = product.get("stores_tags") or product.get("stores") or []
+    countries = product.get("countries_tags") or product.get("countries") or []
+
+    if isinstance(stores, str):
+        stores = [part.strip() for part in stores.split(",") if part.strip()]
+    if isinstance(countries, str):
+        countries = [part.strip() for part in countries.split(",") if part.strip()]
+
+    return {
+        "source_name": "open_food_facts",
+        "source_product_code": source_product_code or candidate_name,
+        "candidate_name": candidate_name or None,
+        "candidate_brand": product.get("brands") or None,
+        "candidate_category": candidate_category,
+        "candidate_image_url": product.get("image_front_url") or product.get("image_url") or None,
+        "candidate_source_url": f"https://world.openfoodfacts.org/product/{source_product_code}" if source_product_code else None,
+        "candidate_stores": stores if isinstance(stores, list) else [],
+        "candidate_countries": countries if isinstance(countries, list) else [],
+        "score": calculate_external_candidate_score(line.get("article_name_raw"), line.get("brand_raw"), product),
+        "match_reason": match_reason,
+        "raw_payload": product,
+    }
+
+
+def fetch_open_food_facts_json(url: str, timeout_seconds: int = 8) -> dict:
+    import json as _json
+    import urllib.request
+
+    request = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": "Rezzerv/1.0 external-product-candidates",
+            "Accept": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+        payload = response.read().decode("utf-8")
+    return _json.loads(payload)
+
+
+def lookup_open_food_facts_by_gtin(gtin: str) -> list[dict]:
+    import urllib.parse
+
+    normalized_gtin = normalize_external_candidate_code(gtin)
+    if not is_plausible_gtin(normalized_gtin):
+        return []
+
+    url = f"https://world.openfoodfacts.org/api/v2/product/{urllib.parse.quote(normalized_gtin)}.json"
+    try:
+        data = fetch_open_food_facts_json(url)
+    except Exception:
+        return []
+
+    if data.get("status") != 1 or not isinstance(data.get("product"), dict):
+        return []
+
+    return [data["product"]]
+
+
+def lookup_open_food_facts_by_text(query: str, brand: str | None = None, limit: int = 5) -> list[dict]:
+    import urllib.parse
+
+    search_terms = normalize_external_candidate_text(query)
+    if not search_terms:
+        return []
+
+    # Merk/winkel uit bonregel mag ranking helpen, maar mag geen harde koppeling afdwingen.
+    brand_text = normalize_external_candidate_text(brand)
+    full_query = f"{search_terms} {brand_text}".strip() if brand_text else search_terms
+
+    params = {
+        "search_terms": full_query,
+        "search_simple": "1",
+        "action": "process",
+        "json": "1",
+        "page_size": str(max(1, min(limit, 10))),
+        "fields": ",".join([
+            "code",
+            "product_name",
+            "product_name_nl",
+            "generic_name",
+            "brands",
+            "categories",
+            "categories_tags",
+            "image_url",
+            "image_front_url",
+            "stores",
+            "stores_tags",
+            "countries",
+            "countries_tags",
+        ]),
+    }
+    url = "https://world.openfoodfacts.org/cgi/search.pl?" + urllib.parse.urlencode(params)
+
+    try:
+        data = fetch_open_food_facts_json(url)
+    except Exception:
+        return []
+
+    products = data.get("products") or []
+    if not isinstance(products, list):
+        return []
+
+    return [product for product in products if isinstance(product, dict)]
+
+
+def upsert_external_product_candidate(conn, purchase_import_line_id: str, candidate: dict) -> None:
+    import json as _json
+    import uuid as _uuid
+
+    normalized_line_id = str(purchase_import_line_id or '').strip()
+    source_name = normalize_external_candidate_text(candidate.get("source_name"))
+    source_product_code = normalize_external_candidate_code(candidate.get("source_product_code"))
+
+    if not normalized_line_id or not source_name or not source_product_code:
+        return
+
+    existing = conn.execute(
+        text(
+            """
+            SELECT id
+            FROM external_product_candidates
+            WHERE purchase_import_line_id = :purchase_import_line_id
+              AND source_name = :source_name
+              AND source_product_code = :source_product_code
+            LIMIT 1
+            """
+        ),
+        {
+            "purchase_import_line_id": normalized_line_id,
+            "source_name": source_name,
+            "source_product_code": source_product_code,
+        },
+    ).mappings().first()
+
+    payload = {
+        "purchase_import_line_id": normalized_line_id,
+        "global_product_id": candidate.get("global_product_id"),
+        "source_name": source_name,
+        "source_product_code": source_product_code,
+        "candidate_name": candidate.get("candidate_name"),
+        "candidate_brand": candidate.get("candidate_brand"),
+        "candidate_category": candidate.get("candidate_category"),
+        "candidate_image_url": candidate.get("candidate_image_url"),
+        "candidate_source_url": candidate.get("candidate_source_url"),
+        "candidate_stores": _json.dumps(candidate.get("candidate_stores") or [], ensure_ascii=False),
+        "candidate_countries": _json.dumps(candidate.get("candidate_countries") or [], ensure_ascii=False),
+        "score": candidate.get("score"),
+        "match_reason": candidate.get("match_reason"),
+        "status": normalize_external_product_candidate_status(candidate.get("status")),
+        "raw_payload": _json.dumps(candidate.get("raw_payload"), ensure_ascii=False) if candidate.get("raw_payload") is not None else None,
+    }
+
+    if existing:
+        payload["id"] = existing["id"]
+        conn.execute(
+            text(
+                """
+                UPDATE external_product_candidates
+                SET
+                    global_product_id = :global_product_id,
+                    candidate_name = :candidate_name,
+                    candidate_brand = :candidate_brand,
+                    candidate_category = :candidate_category,
+                    candidate_image_url = :candidate_image_url,
+                    candidate_source_url = :candidate_source_url,
+                    candidate_stores = :candidate_stores,
+                    candidate_countries = :candidate_countries,
+                    score = :score,
+                    match_reason = :match_reason,
+                    status = :status,
+                    raw_payload = :raw_payload,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                """
+            ),
+            payload,
+        )
+    else:
+        payload["id"] = str(_uuid.uuid4())
+        conn.execute(
+            text(
+                """
+                INSERT INTO external_product_candidates (
+                    id,
+                    purchase_import_line_id,
+                    global_product_id,
+                    source_name,
+                    source_product_code,
+                    candidate_name,
+                    candidate_brand,
+                    candidate_category,
+                    candidate_image_url,
+                    candidate_source_url,
+                    candidate_stores,
+                    candidate_countries,
+                    score,
+                    match_reason,
+                    status,
+                    raw_payload,
+                    created_at,
+                    updated_at
+                )
+                VALUES (
+                    :id,
+                    :purchase_import_line_id,
+                    :global_product_id,
+                    :source_name,
+                    :source_product_code,
+                    :candidate_name,
+                    :candidate_brand,
+                    :candidate_category,
+                    :candidate_image_url,
+                    :candidate_source_url,
+                    :candidate_stores,
+                    :candidate_countries,
+                    :score,
+                    :match_reason,
+                    :status,
+                    :raw_payload,
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            payload,
+        )
+
+
+def find_external_product_candidates_for_purchase_line(conn, line_id: str) -> list[dict]:
+    normalized_line_id = str(line_id or '').strip()
+    if not normalized_line_id:
+        return []
+
+    line = conn.execute(
+        text(
+            """
+            SELECT
+                pil.id,
+                pil.article_name_raw,
+                pil.brand_raw,
+                pil.external_article_code,
+                pil.matched_global_product_id,
+                gp.primary_gtin AS matched_primary_gtin
+            FROM purchase_import_lines pil
+            LEFT JOIN global_products gp ON gp.id = pil.matched_global_product_id
+            WHERE pil.id = :line_id
+            LIMIT 1
+            """
+        ),
+        {"line_id": normalized_line_id},
+    ).mappings().first()
+
+    if not line:
+        raise HTTPException(status_code=404, detail="Importregel niet gevonden")
+
+    line_payload = dict(line)
+    candidates: list[dict] = []
+    seen_keys: set[tuple[str, str]] = set()
+
+    # 1. Harde barcode/GTIN lookup alleen bij plausibele GTIN.
+    gtin_sources = [
+        line_payload.get("matched_primary_gtin"),
+        line_payload.get("external_article_code"),
+    ]
+
+    try:
+        for gtin in gtin_sources:
+            if not is_plausible_gtin(gtin):
+                continue
+            for product in lookup_open_food_facts_by_gtin(gtin):
+                candidate = build_open_food_facts_candidate(line_payload, product, "barcode_gtin")
+                if not candidate:
+                    continue
+                key = (candidate["source_name"], candidate["source_product_code"])
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                candidates.append(candidate)
+    except Exception as exc:
+        print(f"M2C2 OFF barcode lookup overgeslagen: {type(exc).__name__}: {exc}", flush=True)
+
+    # 2. Tekstzoekactie alleen als kandidaat. Dit maakt g??n global_product.
+    try:
+        for product in lookup_open_food_facts_by_text(
+            line_payload.get("article_name_raw"),
+            brand=line_payload.get("brand_raw"),
+            limit=5,
+        ):
+            candidate = build_open_food_facts_candidate(line_payload, product, "text_search")
+            if not candidate:
+                continue
+            key = (candidate["source_name"], candidate["source_product_code"])
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            candidates.append(candidate)
+    except Exception as exc:
+        print(f"M2C2 OFF tekstzoekactie overgeslagen: {type(exc).__name__}: {exc}", flush=True)
+
+    candidates = sorted(candidates, key=lambda item: item.get("score") or 0, reverse=True)
+
+    for candidate in candidates:
+        upsert_external_product_candidate(conn, normalized_line_id, candidate)
+
+    return get_external_product_candidates_for_purchase_line(conn, normalized_line_id)
+
+
+@app.post("/api/purchase-import-lines/{line_id}/external-product-candidates/search")
+def search_purchase_import_line_external_product_candidates(line_id: str):
+    normalized_line_id = str(line_id or '').strip()
+    if not normalized_line_id:
+        raise HTTPException(status_code=400, detail="line_id is verplicht")
+
+    with engine.begin() as conn:
+        candidates = find_external_product_candidates_for_purchase_line(conn, normalized_line_id)
+
+    return {
+        "line_id": normalized_line_id,
+        "candidate_count": len(candidates),
+        "candidates": candidates,
+    }
+
+
 @app.get("/api/purchase-import-lines/{line_id}/external-product-candidates")
 def get_purchase_import_line_external_product_candidates(line_id: str):
     normalized_line_id = str(line_id or '').strip()
