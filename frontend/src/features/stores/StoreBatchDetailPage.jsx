@@ -928,7 +928,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   aria-modal="true"
                   aria-labelledby="location-picker-title"
                   onClick={(event) => event.stopPropagation()}
-                  style={{ width: 'min(560px, calc(100vw - 48px))', maxHeight: '80vh', overflow: 'auto' }}
+                  style={{ width: 'min(640px, calc(100vw - 48px))', maxHeight: '90vh', overflow: 'auto' }}
                 >
                   <h3 id="location-picker-title" className="rz-modal-title">
                     {pickerIsBulk ? 'Locatie toepassen op geselecteerde regels' : 'Locatie / sublocatie kiezen'}
@@ -947,7 +947,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     onChange={(event) => setLocationPickerSearch(event.target.value)}
                     data-testid={pickerIsBulk ? 'receipt-bulk-location-search' : `receipt-line-location-search-${pickerEntry.line.id}`}
                   />
-                  <div style={{ display: 'grid', gap: '6px', maxHeight: '320px', overflowY: 'auto', marginTop: '12px' }}>
+                  <div style={{ display: 'grid', gap: '8px', maxHeight: '360px', overflowY: 'auto', marginTop: '12px', padding: '8px', border: '1px solid #d8e8de', borderRadius: '12px', background: '#f8fbf9' }}>
                     {pickerOptions.length ? pickerOptions.map((location) => (
                       <button
                         key={location.id}
@@ -955,7 +955,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         className="rz-button-secondary"
                         disabled={pickerLineBusy}
                         onClick={() => applyPickedLocation(String(location.id))}
-                        style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                        style={{ textAlign: 'left', justifyContent: 'flex-start', minHeight: '42px', borderColor: '#d8e8de', background: '#ffffff' }}
                       >
                         {location.label}
                       </button>
