@@ -1,19 +1,134 @@
 from __future__ import annotations
 
 import logging
+import re
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
+from app.db import engine
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
+from app.services.receipt_status_baseline_service_v4 import validate_receipt_status_baseline
+from app.services.receipt_ssot_status import apply_po_norm_status
 
 from . import receipt_service as _receipt_service
+from .receipt_v4_classifier_overrides import (
+    has_price,
+    is_discount_line,
+    is_payment_or_total_line,
+    normalize_discount_line,
+)
 
 LOGGER = logging.getLogger(__name__)
 RECEIPT_PHOTO_NORMALIZATION_ENABLED = True
 _PHOTO_MIME_TYPES = {"image/jpeg", "image/jpg", "image/png"}
 _NORMALIZER = ReceiptPhotoNormalizer()
 _ORIGINAL_PARSE_RECEIPT_CONTENT = _receipt_service.parse_receipt_content
+_ORIGINAL_SHOULD_SKIP_RECEIPT_LINE = getattr(_receipt_service, "_should_skip_receipt_line", None)
+_ORIGINAL_LOOKS_LIKE_NON_PRODUCT_RECEIPT_LABEL = getattr(_receipt_service, "_looks_like_non_product_receipt_label", None)
+_ORIGINAL_FILTER_NON_PRODUCT_RECEIPT_LINES = getattr(_receipt_service, "_filter_non_product_receipt_lines", None)
+_ORIGINAL_APPLY_DISCOUNT_ENTRIES = getattr(_receipt_service, "_apply_discount_entries", None)
+_ORIGINAL_SERIALIZE_RECEIPT_ROW = getattr(_receipt_service, "serialize_receipt_row", None)
+_PO_NORM_STATUS_CACHE: dict[str, Any] = {"loaded_at": 0.0, "labels": {}}
+_PO_NORM_STATUS_CACHE_TTL_SECONDS = 1.0
+
+
+def _v4_keep_priced_receipt_candidate(value: Any) -> bool:
+    text = str(value or "").strip()
+    return bool(text and has_price(text) and not is_payment_or_total_line(text) and not is_discount_line(text))
+
+
+def _v4_should_skip_receipt_line(line: str, *args, **kwargs) -> bool:
+    if _v4_keep_priced_receipt_candidate(line):
+        return False
+    if callable(_ORIGINAL_SHOULD_SKIP_RECEIPT_LINE):
+        return bool(_ORIGINAL_SHOULD_SKIP_RECEIPT_LINE(line, *args, **kwargs))
+    return False
+
+
+def _v4_looks_like_non_product_receipt_label(label: str | None) -> bool:
+    if _v4_keep_priced_receipt_candidate(label):
+        return False
+    if callable(_ORIGINAL_LOOKS_LIKE_NON_PRODUCT_RECEIPT_LABEL):
+        return bool(_ORIGINAL_LOOKS_LIKE_NON_PRODUCT_RECEIPT_LABEL(label))
+    return not bool(str(label or "").strip())
+
+
+def _v4_filter_non_product_receipt_lines(lines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    filtered: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for line in lines or []:
+        label = str(line.get("raw_label") or line.get("normalized_label") or "").strip()
+        if _v4_looks_like_non_product_receipt_label(label):
+            continue
+        key = (
+            re.sub(r"\s+", " ", label).strip().lower(),
+            str(line.get("line_total") or ""),
+            str(line.get("source_index") or ""),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        filtered.append(line)
+    return filtered
+
+
+def _v4_apply_discount_entries(lines: list[dict[str, Any]], discount_entries: list[dict[str, Any]]):
+    result = _ORIGINAL_APPLY_DISCOUNT_ENTRIES(lines, discount_entries) if callable(_ORIGINAL_APPLY_DISCOUNT_ENTRIES) else None
+    if not lines or not discount_entries:
+        return result
+
+    discount_by_source_index = {
+        int(entry.get("source_index")): entry
+        for entry in discount_entries
+        if entry.get("source_index") is not None
+    }
+    if not discount_by_source_index:
+        return result
+
+    for line in lines:
+        source_index = line.get("source_index")
+        if source_index is None:
+            continue
+        entry = discount_by_source_index.get(int(source_index))
+        if not entry:
+            continue
+        raw_label = str(entry.get("raw_label") or line.get("raw_label") or "")
+        normalized = normalize_discount_line(raw_label)
+        if not normalized:
+            continue
+        line["line_total"] = normalized.get("line_total")
+        line["discount_amount"] = normalized.get("discount_amount")
+    return result
+
+
+def _load_po_norm_status_labels() -> dict[str, str]:
+    now = time.monotonic()
+    cached_labels = _PO_NORM_STATUS_CACHE.get("labels") or {}
+    if cached_labels and (now - float(_PO_NORM_STATUS_CACHE.get("loaded_at") or 0.0)) < _PO_NORM_STATUS_CACHE_TTL_SECONDS:
+        return dict(cached_labels)
+    labels: dict[str, str] = {}
+    try:
+        with engine.connect() as conn:
+            validation = validate_receipt_status_baseline(conn)
+        for item in validation.get("details", []) or []:
+            receipt_table_id = str(item.get("receipt_table_id") or "").strip()
+            if not receipt_table_id:
+                continue
+            labels[receipt_table_id] = str(item.get("po_norm_status_label") or "Controle nodig")
+    except Exception as exc:
+        LOGGER.warning("po_norm_status_labels_load_failed error=%s", exc)
+    _PO_NORM_STATUS_CACHE["loaded_at"] = now
+    _PO_NORM_STATUS_CACHE["labels"] = labels
+    return labels
+
+
+def _v4_serialize_receipt_row(*args, **kwargs):
+    payload = _ORIGINAL_SERIALIZE_RECEIPT_ROW(*args, **kwargs) if callable(_ORIGINAL_SERIALIZE_RECEIPT_ROW) else {}
+    if not isinstance(payload, dict):
+        return payload
+    return apply_po_norm_status(payload)
 
 
 def _looks_like_photo_mime(mime_type: Any) -> bool:
@@ -92,4 +207,9 @@ def parse_receipt_content(*args, **kwargs):
     return _ORIGINAL_PARSE_RECEIPT_CONTENT(*tuple(mutable_args), **kwargs)
 
 
+_receipt_service._should_skip_receipt_line = _v4_should_skip_receipt_line
+_receipt_service._looks_like_non_product_receipt_label = _v4_looks_like_non_product_receipt_label
+_receipt_service._filter_non_product_receipt_lines = _v4_filter_non_product_receipt_lines
+_receipt_service._apply_discount_entries = _v4_apply_discount_entries
+_receipt_service.serialize_receipt_row = _v4_serialize_receipt_row
 _receipt_service.parse_receipt_content = parse_receipt_content

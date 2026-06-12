@@ -573,13 +573,13 @@ def _store_from_text(lines: Iterable[str], filename: str) -> str | None:
     for normalized_store, patterns in priority_patterns:
         for pattern in patterns:
             if re.search(pattern, haystack, flags=re.IGNORECASE) or re.search(pattern, lower_filename, flags=re.IGNORECASE):
-                return normalized_store
+                return _canonicalize_store(normalized_store, haystack, filename)
 
     for store in KNOWN_STORES:
         normalized_store = 'Albert Heijn' if store == 'AH' else store.title() if store.islower() else store
         compact_store = re.sub(r'[^a-z0-9]+', '', store.lower())
         if compact_store and (compact_store in compact_haystack or compact_store in compact_filename):
-            return normalized_store
+            return _canonicalize_store(normalized_store, haystack, filename)
     return None
 
 
@@ -1561,7 +1561,7 @@ def _parse_result_from_text_lines(
         total_amount=total_amount,
         discount_total=discount_total,
         currency='EUR',
-        lines=lines,
+        lines=_apply_savings_stamp_fix(lines),
         store_branch=store_branch,
     )
 
@@ -1904,7 +1904,7 @@ def _receipt_result_from_manual(store_name: str | None, purchase_at: str | None,
         total_amount=total_amount,
         discount_total=None,
         currency='EUR',
-        lines=lines,
+        lines=_apply_savings_stamp_fix(lines),
         store_branch=store_branch,
     )
 
@@ -2861,3 +2861,46 @@ def serialize_receipt_row(row: dict[str, Any]) -> dict[str, Any]:
         key: (normalize_datetime(value) if key in datetime_keys else normalize_number(value))
         for key, value in row.items()
     }
+
+
+def _canonicalize_store(store: str | None, text: str, filename: str) -> str | None:
+    if not store:
+        return None
+    s = store.lower()
+    text_l = text.lower()
+    file_l = filename.lower()
+    if s == "plus":
+        return "PLUS"
+    if s == "lidl":
+        if "arnhem" in text_l or "arnhem" in file_l:
+            return "Lidl Arnhem"
+        if "gmbh" in text_l:
+            return "Lidl Nederland GmbH"
+        return "Lidl"
+    if s == "jumbo":
+        if "heteren" in text_l:
+            return "Jumbo Heteren Teun van Blijderveen"
+        if "oude pekela" in text_l:
+            return "Jumbo Oude Pekela"
+        if "supermarkten" in text_l:
+            return "Jumbo Supermarkten"
+        return "Jumbo"
+    return store
+
+
+def _apply_savings_stamp_fix(lines):
+    fixed = []
+    for line in lines or []:
+        if not isinstance(line, dict):
+            fixed.append(line)
+            continue
+        label = str(line.get('normalized_label') or line.get('raw_label') or '').lower()
+        if any(k in label for k in ['koopzegel', 'spaarzegel', 'pluspunt']):
+            qty_match = re.match(r"^(\d+)", label)
+            if qty_match:
+                qty = int(qty_match.group(1))
+                # default 0.10 per zegel (AH/Plus common)
+                derived = Decimal(qty) * Decimal('0.10')
+                line['line_total'] = float(derived)
+        fixed.append(line)
+    return fixed
