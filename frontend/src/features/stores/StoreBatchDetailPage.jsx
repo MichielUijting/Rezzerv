@@ -1230,29 +1230,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           <div style={{ color: '#5f7a68', fontSize: 13, padding: '10px 12px' }}>Geen locatie gevonden.</div>
                         )}
                       </div>
-                      {canManageLocations ? (
-                        <button
-                          type="button"
-                          disabled={pickerLineBusy}
-                          onClick={openLocationManagement}
-                          style={{
-                            appearance: 'none',
-                            width: '100%',
-                            border: '1px dashed #2e7d4d',
-                            background: '#f8fbf9',
-                            color: '#0f3b26',
-                            borderRadius: '10px',
-                            height: '38px',
-                            padding: '0 12px',
-                            fontSize: 14,
-                            fontWeight: 500,
-                            textAlign: 'center',
-                            cursor: pickerLineBusy ? 'not-allowed' : 'pointer',
-                          }}
-                        >
-                          Beheer locaties
-                        </button>
-                      ) : null}
                     </div>
 
                     <div style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
@@ -1291,18 +1268,32 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       </div>
                     </div>
                   </div>
-                  <div className="rz-modal-actions">
-                    <Button
-                      variant="secondary"
-                      type="button"
-                      disabled={pickerLineBusy}
-                      onClick={() => applyPickedLocation('')}
-                    >
-                      Verwijderen
-                    </Button>
-                    <Button variant="secondary" type="button" onClick={closeLocationPicker}>
-                      Sluiten
-                    </Button>
+                  <div className="rz-modal-actions" style={{ justifyContent: 'space-between' }}>
+                    <div>
+                      {canManageLocations ? (
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          disabled={pickerLineBusy}
+                          onClick={openLocationManagement}
+                        >
+                          Beheer locaties
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                      <Button
+                        variant="secondary"
+                        type="button"
+                        disabled={pickerLineBusy}
+                        onClick={() => applyPickedLocation('')}
+                      >
+                        Verwijderen
+                      </Button>
+                      <Button variant="secondary" type="button" onClick={closeLocationPicker}>
+                        Sluiten
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
