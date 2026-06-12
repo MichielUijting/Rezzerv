@@ -77,7 +77,9 @@ export const articleFallbackOptions = sortOptionObjects(demoData.articles.map((a
 })), (article) => articleLabel(article))
 
 export function articleLabel(article) {
-  return article.brand ? `${article.name} — ${article.brand}` : article.name
+  const name = String(article?.name || '').trim()
+  const brand = String(article?.brand || '').trim()
+  return brand ? `${name} - ${brand}` : name
 }
 
 export function StoreArticleSelector({
