@@ -147,9 +147,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const storeBatchTableColumns = useMemo(() => ([
     { key: 'select', width: 44 },
     { key: 'bonartikel', width: 220 },
+    { key: 'locatie', width: 220 },
     { key: 'aantal', width: 100 },
     { key: 'gekoppeld', width: 260 },
-    { key: 'locatie', width: 220 },
     { key: 'prijs', width: 100 },
   ]), [])
   const lineColumnDefaults = useMemo(() => Object.fromEntries(storeBatchTableColumns.map(({ key, width }) => [key, width])), [storeBatchTableColumns])
@@ -817,9 +817,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               <colgroup>
                 <col style={{ width: `${lineColumnWidths.select}px` }} />
                 <col style={{ width: `${lineColumnWidths.bonartikel}px` }} />
+                <col style={{ width: `${lineColumnWidths.locatie}px` }} />
                 <col style={{ width: `${lineColumnWidths.aantal}px` }} />
                 <col style={{ width: `${lineColumnWidths.gekoppeld}px` }} />
-                <col style={{ width: `${lineColumnWidths.locatie}px` }} />
                 <col style={{ width: `${lineColumnWidths.prijs}px` }} />
               </colgroup>
               <thead>
@@ -828,9 +828,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
                   </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Bonartikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Locatie</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Aantal</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Mijn artikel</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Locatie</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="prijs" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-price" sortable isSorted={tableSort.key === 'prijs'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', gekoppeld: 'asc', locatie: 'asc', prijs: 'desc' }))}>Prijs</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
@@ -838,15 +838,15 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <th>
                     <input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of mijn artikel" />
                   </th>
+                  <th>
+                    <select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
+                      {LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
+                    </select>
+                  </th>
                   <th />
                   <th>
                     <select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
                       {MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
-                    </select>
-                  </th>
-                  <th>
-                    <select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
-                      {LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
                     </select>
                   </th>
                   <th />
@@ -875,6 +875,18 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         <input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} />
                       </td>
                       <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
+                      <td className="rz-store-batch-col-location">
+                        <button
+                          type="button"
+                          className="rz-input rz-store-select"
+                          data-testid={`receipt-line-location-select-${line.id}`}
+                          disabled={lineBusy}
+                          onClick={() => openLocationPicker(line.id)}
+                          style={{ width: '100%', textAlign: 'left', cursor: lineBusy ? 'not-allowed' : 'pointer' }}
+                        >
+                          {selectedLocationLabel || 'Kies locatie'}
+                        </button>
+                      </td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td className="rz-store-batch-col-linked">
                         <div data-testid={`receipt-line-article-select-${line.id}`}><StoreArticleSelector
@@ -888,18 +900,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
                           canCreateArticle={Boolean(household?.permissions?.['article.create'])}
                         /></div>
-                      </td>
-                      <td className="rz-store-batch-col-location">
-                        <button
-                          type="button"
-                          className="rz-input rz-store-select"
-                          data-testid={`receipt-line-location-select-${line.id}`}
-                          disabled={lineBusy}
-                          onClick={() => openLocationPicker(line.id)}
-                          style={{ width: '100%', textAlign: 'left', cursor: lineBusy ? 'not-allowed' : 'pointer' }}
-                        >
-                          {selectedLocationLabel || 'Kies locatie'}
-                        </button>
                       </td>
                       <td className="rz-num rz-store-batch-col-price">{line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : '-'}</td>
                     </tr>
