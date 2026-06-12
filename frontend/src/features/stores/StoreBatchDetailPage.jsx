@@ -135,6 +135,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [searchValue, setSearchValue] = useState('')
   const [locationPickerLineId, setLocationPickerLineId] = useState('')
   const [locationPickerSearch, setLocationPickerSearch] = useState('')
+  const [locationPickerMode, setLocationPickerMode] = useState('single')
 
   useDismissOnComponentClick([() => setStatus(''), () => setError(''), () => setProcessFeedback('')], Boolean(status || error || processFeedback))
   const [statusFilter, setStatusFilter] = useState('all')
@@ -237,11 +238,36 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   function closeLocationPicker() {
     setLocationPickerLineId('')
     setLocationPickerSearch('')
+    setLocationPickerMode('single')
   }
 
   async function openLocationPicker(lineId) {
+    setLocationPickerMode('single')
     setLocationPickerLineId(String(lineId))
     setLocationPickerSearch('')
+    if (household?.id) {
+      await refreshLocationOptions(household.id)
+    }
+  }
+
+  async function openBulkLocationPicker() {
+    if (selectedLineIds.length === 0) {
+      setError('Selecteer eerst minstens één bonregel.')
+      return
+    }
+
+    const selectedSet = new Set(selectedLineIds.map((id) => String(id)))
+    const targetEntries = lineUiStates.filter((entry) => selectedSet.has(String(entry.line.id)) && entry.processingStatus !== 'processed')
+
+    if (targetEntries.length === 0) {
+      setError('Er zijn geen geselecteerde open bonregels om een locatie op toe te passen.')
+      return
+    }
+
+    setLocationPickerMode('bulk')
+    setLocationPickerLineId('bulk')
+    setLocationPickerSearch('')
+
     if (household?.id) {
       await refreshLocationOptions(household.id)
     }
@@ -257,6 +283,41 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     return locationOptions
       .filter((location) => String(location.label || '').toLowerCase().includes(needle))
       .slice(0, 12)
+  }
+
+  async function applyPickedLocation(locationId) {
+    const nextLocationId = String(locationId ?? '')
+
+    if (locationPickerMode === 'bulk') {
+      const selectedSet = new Set(selectedLineIds.map((id) => String(id)))
+      const targetEntries = lineUiStates.filter((entry) => selectedSet.has(String(entry.line.id)) && entry.processingStatus !== 'processed')
+
+      if (targetEntries.length === 0) {
+        setError('Er zijn geen geselecteerde open bonregels om bij te werken.')
+        closeLocationPicker()
+        return
+      }
+
+      for (const entry of targetEntries) {
+        await persistLineDraft(entry.line, { locationId: nextLocationId })
+      }
+
+      setStatus(nextLocationId
+        ? `Locatie toegepast op ${targetEntries.length} geselecteerde regel(s).`
+        : `Locatie verwijderd bij ${targetEntries.length} geselecteerde regel(s).`
+      )
+      closeLocationPicker()
+      return
+    }
+
+    const pickerEntry = lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
+    if (!pickerEntry) {
+      closeLocationPicker()
+      return
+    }
+
+    await persistLineDraft(pickerEntry.line, { locationId: nextLocationId })
+    closeLocationPicker()
   }
 
   async function persistLineDraft(line, patch = {}) {
@@ -743,6 +804,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             </div>
             <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
               <Button variant="secondary" type="button" onClick={handleExportSelected} disabled={selectedLineIds.length === 0} data-testid="receipt-export-button">Exporteren</Button>
+              <Button variant="secondary" type="button" onClick={openBulkLocationPicker} disabled={selectedLineIds.length === 0 || isProcessingBatch || isViewer} data-testid="receipt-bulk-location-button">Locatie toepassen</Button>
               <Button variant="secondary" onClick={handlePrimaryProcessClick} disabled={isProcessingBatch || isViewer} data-testid="receipt-process-button">Naar voorraad</Button>
             </div>
           </div>
@@ -847,10 +909,16 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             </Table>
 
           {locationPickerLineId ? (() => {
-            const pickerEntry = lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
-            if (!pickerEntry) return null
+            const pickerIsBulk = locationPickerMode === 'bulk'
+            const pickerEntry = pickerIsBulk ? null : lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
+            if (!pickerIsBulk && !pickerEntry) return null
+
             const pickerOptions = filteredLocationOptions()
-            const pickerLineBusy = busyLineId === pickerEntry.line.id || isProcessingBatch
+            const selectedSet = new Set(selectedLineIds.map((id) => String(id)))
+            const pickerTargetCount = pickerIsBulk
+              ? lineUiStates.filter((entry) => selectedSet.has(String(entry.line.id)) && entry.processingStatus !== 'processed').length
+              : 1
+            const pickerLineBusy = isProcessingBatch || (!pickerIsBulk && busyLineId === pickerEntry.line.id)
 
             return (
               <div className="rz-modal-backdrop" role="presentation" onClick={closeLocationPicker}>
@@ -862,8 +930,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   onClick={(event) => event.stopPropagation()}
                   style={{ width: 'min(560px, calc(100vw - 48px))', maxHeight: '80vh', overflow: 'auto' }}
                 >
-                  <h3 id="location-picker-title" className="rz-modal-title">Locatie / sublocatie kiezen</h3>
-                  <p className="rz-modal-text">{formatReceiptLineLabel(pickerEntry.line.article_name_raw)}</p>
+                  <h3 id="location-picker-title" className="rz-modal-title">
+                    {pickerIsBulk ? 'Locatie toepassen op geselecteerde regels' : 'Locatie / sublocatie kiezen'}
+                  </h3>
+                  <p className="rz-modal-text">
+                    {pickerIsBulk
+                      ? `${pickerTargetCount} geselecteerde open regel(s)`
+                      : formatReceiptLineLabel(pickerEntry.line.article_name_raw)}
+                  </p>
                   <input
                     className="rz-input"
                     type="text"
@@ -871,7 +945,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     placeholder="Zoek locatie of sublocatie..."
                     value={locationPickerSearch}
                     onChange={(event) => setLocationPickerSearch(event.target.value)}
-                    data-testid={`receipt-line-location-search-${pickerEntry.line.id}`}
+                    data-testid={pickerIsBulk ? 'receipt-bulk-location-search' : `receipt-line-location-search-${pickerEntry.line.id}`}
                   />
                   <div style={{ display: 'grid', gap: '6px', maxHeight: '320px', overflowY: 'auto', marginTop: '12px' }}>
                     {pickerOptions.length ? pickerOptions.map((location) => (
@@ -880,10 +954,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         type="button"
                         className="rz-button-secondary"
                         disabled={pickerLineBusy}
-                        onClick={() => {
-                          persistLineDraft(pickerEntry.line, { locationId: String(location.id) })
-                          closeLocationPicker()
-                        }}
+                        onClick={() => applyPickedLocation(String(location.id))}
                         style={{ textAlign: 'left', justifyContent: 'flex-start' }}
                       >
                         {location.label}
@@ -897,10 +968,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       variant="secondary"
                       type="button"
                       disabled={pickerLineBusy}
-                      onClick={() => {
-                        persistLineDraft(pickerEntry.line, { locationId: '' })
-                        closeLocationPicker()
-                      }}
+                      onClick={() => applyPickedLocation('')}
                     >Verwijderen</Button>
                     <Button variant="secondary" type="button" onClick={closeLocationPicker}>
                       Sluiten
@@ -910,7 +978,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               </div>
             )
           })() : null}
-
 
           {processConfirm ? (
             <div className="rz-modal-backdrop" role="presentation">
