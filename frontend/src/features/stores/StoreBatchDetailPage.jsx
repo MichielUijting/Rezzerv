@@ -133,6 +133,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [selectedLineIds, setSelectedLineIds] = useState([])
   const [activeSummaryFilter, setActiveSummaryFilter] = useState('all')
   const [searchValue, setSearchValue] = useState('')
+  const [locationPickerLineId, setLocationPickerLineId] = useState('')
+  const [locationPickerSearch, setLocationPickerSearch] = useState('')
 
   useDismissOnComponentClick([() => setStatus(''), () => setError(''), () => setProcessFeedback('')], Boolean(status || error || processFeedback))
   const [statusFilter, setStatusFilter] = useState('all')
@@ -230,6 +232,31 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     const nextLocations = buildActiveLocationOptions(spacesData, sublocationsData)
     setLocationOptions(nextLocations)
     return nextLocations
+  }
+
+  function closeLocationPicker() {
+    setLocationPickerLineId('')
+    setLocationPickerSearch('')
+  }
+
+  async function openLocationPicker(lineId) {
+    setLocationPickerLineId(String(lineId))
+    setLocationPickerSearch('')
+    if (household?.id) {
+      await refreshLocationOptions(household.id)
+    }
+  }
+
+  function locationLabelForDraft(draft) {
+    return locationOptions.find((location) => String(location.id) === String(draft.locationId || ''))?.label || ''
+  }
+
+  function filteredLocationOptions() {
+    const needle = locationPickerSearch.trim().toLowerCase()
+    if (!needle) return locationOptions.slice(0, 12)
+    return locationOptions
+      .filter((location) => String(location.label || '').toLowerCase().includes(needle))
+      .slice(0, 12)
   }
 
   async function persistLineDraft(line, patch = {}) {
@@ -675,6 +702,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setMappingFilter('all')
     setLocationFilter('all')
     setSearchValue('')
+    closeLocationPicker()
   }
 
   function showExceptionsOnly() {
@@ -771,6 +799,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   const { line, draft, statusLabel: currentStatusLabel } = entry
                   const lineBusy = busyLineId === line.id || isProcessingBatch
                   const selected = entry.isSelected
+                  const selectedLocationLabel = locationLabelForDraft(draft)
                   const rowClassName = [
                     'rz-store-workbench-row',
                     entry.statusKey === 'ready' && !selected ? 'is-ready' : '',
@@ -799,20 +828,16 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         /></div>
                       </td>
                       <td className="rz-store-batch-col-location">
-                        <select
+                        <button
+                          type="button"
                           className="rz-input rz-store-select"
                           data-testid={`receipt-line-location-select-${line.id}`}
-                          value={draft.locationId || ''}
                           disabled={lineBusy}
-                          onFocus={() => household?.id && refreshLocationOptions(household.id)}
-                          onMouseDown={() => household?.id && refreshLocationOptions(household.id)}
-                          onChange={(event) => persistLineDraft(line, { locationId: event.target.value || '' })}
+                          onClick={() => openLocationPicker(line.id)}
+                          style={{ width: '100%', textAlign: 'left', cursor: lineBusy ? 'not-allowed' : 'pointer' }}
                         >
-                          <option value="">Kies locatie</option>
-                          {locationOptions.map((location) => (
-                            <option key={location.id} value={location.id}>{location.label}</option>
-                          ))}
-                        </select>
+                          {selectedLocationLabel || 'Kies locatie'}
+                        </button>
                       </td>
                       <td className="rz-num rz-store-batch-col-price">{line.line_price_raw != null ? `€ ${line.line_price_raw.toFixed(2)}` : '-'}</td>
                     </tr>
@@ -820,6 +845,72 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 })}
               </tbody>
             </Table>
+
+          {locationPickerLineId ? (() => {
+            const pickerEntry = lineUiStates.find((entry) => String(entry.line.id) === String(locationPickerLineId))
+            if (!pickerEntry) return null
+            const pickerOptions = filteredLocationOptions()
+            const pickerLineBusy = busyLineId === pickerEntry.line.id || isProcessingBatch
+
+            return (
+              <div className="rz-modal-backdrop" role="presentation" onClick={closeLocationPicker}>
+                <div
+                  className="rz-modal-card"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="location-picker-title"
+                  onClick={(event) => event.stopPropagation()}
+                  style={{ width: 'min(560px, calc(100vw - 48px))', maxHeight: '80vh', overflow: 'auto' }}
+                >
+                  <h3 id="location-picker-title" className="rz-modal-title">Locatie / sublocatie kiezen</h3>
+                  <p className="rz-modal-text">{formatReceiptLineLabel(pickerEntry.line.article_name_raw)}</p>
+                  <input
+                    className="rz-input"
+                    type="text"
+                    autoFocus
+                    placeholder="Zoek locatie of sublocatie..."
+                    value={locationPickerSearch}
+                    onChange={(event) => setLocationPickerSearch(event.target.value)}
+                    data-testid={`receipt-line-location-search-${pickerEntry.line.id}`}
+                  />
+                  <div style={{ display: 'grid', gap: '6px', maxHeight: '320px', overflowY: 'auto', marginTop: '12px' }}>
+                    {pickerOptions.length ? pickerOptions.map((location) => (
+                      <button
+                        key={location.id}
+                        type="button"
+                        className="rz-button-secondary"
+                        disabled={pickerLineBusy}
+                        onClick={() => {
+                          persistLineDraft(pickerEntry.line, { locationId: String(location.id) })
+                          closeLocationPicker()
+                        }}
+                        style={{ textAlign: 'left', justifyContent: 'flex-start' }}
+                      >
+                        {location.label}
+                      </button>
+                    )) : (
+                      <div style={{ color: '#2e7d4d' }}>Geen locatie gevonden.</div>
+                    )}
+                  </div>
+                  <div className="rz-modal-actions">
+                    <Button
+                      variant="secondary"
+                      type="button"
+                      disabled={pickerLineBusy}
+                      onClick={() => {
+                        persistLineDraft(pickerEntry.line, { locationId: '' })
+                        closeLocationPicker()
+                      }}
+                    >Verwijderen</Button>
+                    <Button variant="secondary" type="button" onClick={closeLocationPicker}>
+                      Sluiten
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )
+          })() : null}
+
 
           {processConfirm ? (
             <div className="rz-modal-backdrop" role="presentation">
