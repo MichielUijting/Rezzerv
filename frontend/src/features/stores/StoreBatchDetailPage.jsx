@@ -273,8 +273,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
   }
 
-  function locationLabelForDraft(draft) {
-    return locationOptions.find((location) => String(location.id) === String(draft.locationId || ''))?.label || ''
+  function locationLabelForDraft(draft, line = null) {
+    const draftLocationId = String(draft?.locationId || '')
+    const lineLocationId = String(line?.target_location_id || '')
+    const locationId = draftLocationId || lineLocationId
+    return locationOptions.find((location) => String(location.id) === locationId)?.label || ''
   }
 
   function filteredLocationOptions() {
@@ -544,7 +547,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     const header = ['Bonartikel', 'Aantal', 'Gekoppeld artikel', 'Locatie', 'Prijs', 'Status']
     const csvRows = rows.map((entry) => {
       const articleName = entry.line.resolved_household_article_name || articleLabel(articleOptions.find((option) => String(option.id) === String(entry.draft.articleId))) || ''
-      const locationLabel = locationOptions.find((location) => String(location.id) === String(entry.draft.locationId))?.label || ''
+      const locationLabel = locationLabelForDraft(entry.draft, entry.line)
       const priceLabel = entry.line.line_price_raw != null ? entry.line.line_price_raw.toFixed(2) : ''
       return [
         entry.line.article_name_raw || '',
