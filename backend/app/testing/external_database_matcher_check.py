@@ -7,4 +7,5 @@ def run_check() -> dict[str, object]:
     return {
         "mexicaanse_kruidenm": match_retailer_receipt_line("lidl", "Mexicaanse kruidenm.", include_below_threshold=False),
         "taco_saus": match_retailer_receipt_line("lidl", "Taco saus", include_below_threshold=False),
+        "note": "preview_only_no_mutations",
     }
