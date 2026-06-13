@@ -20,6 +20,7 @@ import ScannerLabPage from '../../pages/ScannerLabPage.jsx'
 import ReceiptReviewPreviewPage from '../../pages/ReceiptReviewPreviewPage.jsx'
 import IncidentalPurchasePage from '../../features/purchaseImport/IncidentalPurchasePage.jsx'
 import AlmostOutPage from '../../features/almostOut/AlmostOutPage.jsx'
+import ExternalDatabasesPage from '../../features/externalDatabases/ExternalDatabasesPage.jsx'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import SettingsGuard from './SettingsGuard'
@@ -72,6 +73,7 @@ const router = createBrowserRouter([
   { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
+  { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><StoreBatchDetailPage /></Protected> },
