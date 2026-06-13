@@ -26,6 +26,8 @@ CANDIDATE_COLUMNS: dict[str, str] = {
     "candidate_brand": "TEXT",
     "candidate_source_name": "TEXT",
     "candidate_source_product_code": "TEXT",
+    "source_name": "TEXT",
+    "source_product_code": "TEXT",
     "retailer_article_number": "TEXT",
     "quantity_label": "TEXT",
     "variant": "TEXT",
@@ -53,6 +55,8 @@ CREATE TABLE IF NOT EXISTS external_product_candidates (
     candidate_brand TEXT,
     candidate_source_name TEXT,
     candidate_source_product_code TEXT,
+    source_name TEXT,
+    source_product_code TEXT,
     retailer_article_number TEXT,
     quantity_label TEXT,
     variant TEXT,
@@ -149,8 +153,8 @@ def _find_existing_candidate(conn, context_key: str, retailer_code: str, candida
             FROM external_product_candidates
             WHERE COALESCE(context_key, '') = COALESCE(:context_key, '')
               AND COALESCE(retailer_code, '') = COALESCE(:retailer_code, '')
-              AND COALESCE(candidate_source_name, '') = COALESCE(:candidate_source_name, '')
-              AND COALESCE(candidate_source_product_code, '') = COALESCE(:candidate_source_product_code, '')
+              AND COALESCE(candidate_source_name, COALESCE(source_name, '')) = COALESCE(:candidate_source_name, '')
+              AND COALESCE(candidate_source_product_code, COALESCE(source_product_code, '')) = COALESCE(:candidate_source_product_code, '')
               AND COALESCE(variant, '') = COALESCE(:variant, '')
               AND COALESCE(candidate_name, '') = COALESCE(:candidate_name, '')
             LIMIT 1
@@ -215,6 +219,8 @@ def save_matchpreview_candidates(
                 continue
 
             candidate_id = str(existing.get("id")) if existing else str(uuid.uuid4())
+            candidate_source_name = str(candidate.get("candidate_source_name") or "external_database").strip()
+            candidate_source_product_code = str(candidate.get("candidate_source_product_code") or candidate.get("retailer_article_number") or "unknown").strip()
             params = {
                 "id": candidate_id,
                 "receipt_line_id": receipt_line_id,
@@ -224,8 +230,10 @@ def save_matchpreview_candidates(
                 "receipt_line_text": receipt_line_text,
                 "candidate_name": str(candidate.get("candidate_name") or "").strip(),
                 "candidate_brand": str(candidate.get("candidate_brand") or "").strip() or None,
-                "candidate_source_name": str(candidate.get("candidate_source_name") or "").strip() or None,
-                "candidate_source_product_code": str(candidate.get("candidate_source_product_code") or candidate.get("retailer_article_number") or "").strip() or None,
+                "candidate_source_name": candidate_source_name,
+                "candidate_source_product_code": candidate_source_product_code,
+                "source_name": candidate_source_name,
+                "source_product_code": candidate_source_product_code,
                 "retailer_article_number": str(candidate.get("retailer_article_number") or "").strip() or None,
                 "quantity_label": str(candidate.get("quantity_label") or "").strip() or None,
                 "variant": str(candidate.get("variant") or "").strip() or None,
@@ -252,6 +260,8 @@ def save_matchpreview_candidates(
                             candidate_brand = :candidate_brand,
                             candidate_source_name = :candidate_source_name,
                             candidate_source_product_code = :candidate_source_product_code,
+                            source_name = :source_name,
+                            source_product_code = :source_product_code,
                             retailer_article_number = :retailer_article_number,
                             quantity_label = :quantity_label,
                             source_url = :source_url,
@@ -281,6 +291,8 @@ def save_matchpreview_candidates(
                             candidate_brand,
                             candidate_source_name,
                             candidate_source_product_code,
+                            source_name,
+                            source_product_code,
                             retailer_article_number,
                             quantity_label,
                             variant,
@@ -305,6 +317,8 @@ def save_matchpreview_candidates(
                             :candidate_brand,
                             :candidate_source_name,
                             :candidate_source_product_code,
+                            :source_name,
+                            :source_product_code,
                             :retailer_article_number,
                             :quantity_label,
                             :variant,
