@@ -91,6 +91,10 @@ def build_candidate_context_key(retailer_code: str, receipt_line_text: str, rece
     return f"external-preview:{normalize_candidate_text(retailer_code)}:{normalize_candidate_text(receipt_line_text)}"
 
 
+def build_preview_import_line_fallback(context_key: str) -> str:
+    return f"preview:{context_key}"
+
+
 def _get_sqlite_columns(conn) -> set[str]:
     rows = conn.execute(text("PRAGMA table_info(external_product_candidates)")).mappings().all()
     return {str(row.get("name") or "") for row in rows}
@@ -196,6 +200,7 @@ def save_matchpreview_candidates(
         receipt_line_id=receipt_line_id,
         purchase_import_line_id=purchase_import_line_id,
     )
+    storage_purchase_import_line_id = purchase_import_line_id or build_preview_import_line_fallback(context_key)
     candidates = list(match_result.get("candidates") or [])
     timestamp = now_iso()
     saved = []
@@ -213,7 +218,7 @@ def save_matchpreview_candidates(
             params = {
                 "id": candidate_id,
                 "receipt_line_id": receipt_line_id,
-                "purchase_import_line_id": purchase_import_line_id,
+                "purchase_import_line_id": storage_purchase_import_line_id,
                 "context_key": context_key,
                 "retailer_code": normalized_retailer,
                 "receipt_line_text": receipt_line_text,
