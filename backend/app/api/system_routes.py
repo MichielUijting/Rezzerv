@@ -126,7 +126,7 @@ def external_databases_promote_highest_candidate(payload: dict[str, Any] = Body(
     context_key = str(payload.get('context_key') or '').strip() or None
     threshold = float(payload.get('threshold') or 0.85)
     if not context_key and not (retailer_code and receipt_line_text):
-        raise HTTPException(status_code=400, detail='Context of retailer_code + bonregel is verplicht voor catalogusopname')
+        raise HTTPException(status_code=400, detail='Context of retailer_code + bonregel is verplicht voor cataloguskoppeling')
     return promote_highest_candidate_to_catalog(
         context_key=context_key,
         retailer_code=retailer_code,
