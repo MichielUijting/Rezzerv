@@ -35,6 +35,10 @@ from app.services.external_product_catalog_store import (
     list_catalog_products,
     promote_highest_candidate_to_catalog,
 )
+from app.services.external_relation_batch_store import (
+    apply_external_relation_batch_decision,
+    list_external_relation_batch_items,
+)
 
 router = APIRouter()
 logger = logging.getLogger('rezzerv.api')
@@ -138,6 +142,21 @@ def external_databases_promote_highest_candidate(payload: dict[str, Any] = Body(
 @router.get('/api/external-databases/catalog/products')
 def external_databases_catalog_products(limit: int = Query(default=50)):
     return list_catalog_products(limit=limit)
+
+
+@router.get('/api/admin/external-relations/batch')
+def admin_external_relation_batch(household_id: str | None = Query(default=None), limit: int = Query(default=50)):
+    return list_external_relation_batch_items(household_id=household_id, limit=limit)
+
+
+@router.post('/api/admin/external-relations/batch/decision')
+def admin_external_relation_batch_decision(payload: dict[str, Any] = Body(default_factory=dict)):
+    return apply_external_relation_batch_decision(
+        candidate_id=str(payload.get('candidate_id') or '').strip(),
+        household_article_id=str(payload.get('household_article_id') or '').strip() or None,
+        decision=str(payload.get('decision') or 'later').strip(),
+        decision_reason=str(payload.get('decision_reason') or '').strip() or None,
+    )
 
 
 @router.get('/api/admin/route-governance')
