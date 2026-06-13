@@ -108,13 +108,22 @@
   min-width: 720px;
 }
 
+.rz-external-databases-col-candidate { width: 260px; }
+.rz-external-databases-col-brand { width: 150px; }
+.rz-external-databases-col-code { width: 140px; }
+.rz-external-databases-col-variant { width: 120px; }
+.rz-external-databases-col-score { width: 110px; }
+.rz-external-databases-col-status { width: 170px; }
+
+.rz-external-databases-col-retailer { width: 180px; }
+.rz-external-databases-col-retailer-status { width: 140px; }
+.rz-external-databases-col-retailer-threshold { width: 140px; }
+.rz-external-databases-col-retailer-examples { width: 320px; }
+
 @media (max-width: 720px) {
   .rz-external-databases-header,
   .rz-external-databases-form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .rz-external-databases-header {
     display: grid;
+    grid-template-columns: 1fr;
   }
 }
