@@ -36,6 +36,21 @@ function OverviewTile({ title, value, helper }) {
   )
 }
 
+function ErrorOverlay({ message, onClose }) {
+  if (!message) return null
+  return (
+    <div className="rz-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="external-databases-error-title">
+      <div className="rz-modal-card">
+        <h3 id="external-databases-error-title" className="rz-modal-title">Melding</h3>
+        <p className="rz-modal-text">{message}</p>
+        <div className="rz-modal-actions">
+          <Button type="button" onClick={onClose}>Sluiten</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ExternalDatabasesPage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(TAB_LABELS.overzicht)
@@ -294,14 +309,13 @@ export default function ExternalDatabasesPage() {
               </Button>
             </div>
 
-            {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
-
             <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
               {renderTabContent}
             </Tabs>
           </div>
         </ScreenCard>
       </div>
+      <ErrorOverlay message={error} onClose={() => setError('')} />
     </AppShell>
   )
 }
