@@ -13,6 +13,10 @@ function formatScore(value) {
   return number.toLocaleString('nl-NL', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
 
+function canSelect(item) {
+  return item?.can_link === true
+}
+
 export default function ExternalRelationsBatchPanel({ onError }) {
   const [items, setItems] = useState([])
   const [selectedKeys, setSelectedKeys] = useState([])
@@ -42,18 +46,20 @@ export default function ExternalRelationsBatchPanel({ onError }) {
   }, [])
 
   function toggleItem(item) {
+    if (!canSelect(item)) return
     const key = itemKey(item)
     setSelectedKeys((current) => (current.includes(key) ? current.filter((value) => value !== key) : [...current, key]))
   }
 
   function toggleAll() {
-    setSelectedKeys((current) => (current.length === items.length ? [] : items.map(itemKey)))
+    const selectableKeys = items.filter(canSelect).map(itemKey)
+    setSelectedKeys((current) => (current.length === selectableKeys.length ? [] : selectableKeys))
   }
 
   async function linkSelected() {
-    const selectedItems = items.filter((item) => selectedKeys.includes(itemKey(item)))
+    const selectedItems = items.filter((item) => canSelect(item) && selectedKeys.includes(itemKey(item)))
     if (!selectedItems.length) {
-      onError?.('Selecteer eerst één of meer relaties om te koppelen')
+      onError?.('Selecteer eerst één of meer koppelbare relaties')
       return
     }
     setIsLinking(true)
@@ -79,14 +85,15 @@ export default function ExternalRelationsBatchPanel({ onError }) {
     }
   }
 
-  const allSelected = items.length > 0 && selectedKeys.length === items.length
+  const selectableItems = items.filter(canSelect)
+  const allSelected = selectableItems.length > 0 && selectedKeys.length === selectableItems.length
 
   return (
     <div className="rz-external-databases-batch">
       <div className="rz-external-databases-batch-toolbar">
         <Button type="button" disabled={isLinking || !selectedKeys.length} onClick={linkSelected}>{isLinking ? 'Koppelen...' : 'Koppelen'}</Button>
         <Button type="button" variant="secondary" disabled={isLoading || isLinking} onClick={loadItems}>Vernieuwen</Button>
-        <span className="rz-external-databases-muted">Geselecteerd: {selectedKeys.length}. Geen nieuw huishoudartikel en geen voorraadmutatie.</span>
+        <span className="rz-external-databases-muted">Geselecteerd: {selectedKeys.length}. Niet-koppelbare regels blijven zichtbaar maar zijn niet selecteerbaar.</span>
       </div>
       {message ? <div className="rz-inline-feedback rz-inline-feedback--success">{message}</div> : null}
       {isLoading ? <div>Externe relaties worden geladen...</div> : null}
@@ -101,7 +108,7 @@ export default function ExternalRelationsBatchPanel({ onError }) {
         </colgroup>
         <thead>
           <tr className="rz-table-header">
-            <th className="rz-check"><input type="checkbox" checked={allSelected} disabled={!items.length} onChange={toggleAll} /></th>
+            <th className="rz-check"><input type="checkbox" checked={allSelected} disabled={!selectableItems.length} onChange={toggleAll} /></th>
             <th>Kandidaat</th>
             <th>Merk</th>
             <th>Huishoudartikel</th>
@@ -112,14 +119,15 @@ export default function ExternalRelationsBatchPanel({ onError }) {
         <tbody>
           {items.length ? items.map((item) => {
             const key = itemKey(item)
+            const selectable = canSelect(item)
             return (
               <tr key={key}>
-                <td className="rz-check"><input type="checkbox" checked={selectedKeys.includes(key)} onChange={() => toggleItem(item)} /></td>
+                <td className="rz-check"><input type="checkbox" disabled={!selectable} checked={selectedKeys.includes(key)} onChange={() => toggleItem(item)} /></td>
                 <td>{item.candidate_name || item.global_product_name || '-'}</td>
                 <td>{item.candidate_brand || item.global_product_brand || '-'}</td>
                 <td>{item.household_article_name || '-'}</td>
                 <td className="rz-num">{formatScore(item.score)}</td>
-                <td><span className="rz-inline-feedback rz-external-databases-status">klaar voor koppelen</span></td>
+                <td><span className="rz-inline-feedback rz-external-databases-status">{item.relation_status_label || '-'}</span></td>
               </tr>
             )
           }) : <tr><td colSpan="6">Geen externe relaties beschikbaar om te koppelen.</td></tr>}
