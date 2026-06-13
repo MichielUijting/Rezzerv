@@ -12,6 +12,7 @@ import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFi
 import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHouseholdAutomationPage'
 import SettingsAlmostOutPage from '../../features/settings/SettingsAlmostOutPage'
 import SettingsStoreImportPage from '../../features/settings/SettingsStoreImportPage'
+import SettingsExternalDatabasesPage from '../../features/settings/SettingsExternalDatabasesPage.jsx'
 import SettingsHouseholdPage from '../../features/settings/SettingsHouseholdPage'
 import SettingsLocationsPage from '../../features/settings/SettingsLocationsPage'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
@@ -82,6 +83,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/huishoudautomatisering', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdAutomationPage /></ProtectedSettings> },
   { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettings allowViewer={false}><SettingsAlmostOutPage /></ProtectedSettings> },
   { path: '/instellingen/winkelimport', element: <ProtectedSettings allowViewer={false}><SettingsStoreImportPage /></ProtectedSettings> },
+  { path: '/instellingen/externe-databases', element: <ProtectedSettings allowViewer={false}><SettingsExternalDatabasesPage /></ProtectedSettings> },
   { path: '/instellingen/huishouden', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdPage /></ProtectedSettings> },
   { path: '/instellingen/locaties', element: <ProtectedSettings allowViewer={false}><SettingsLocationsPage /></ProtectedSettings> },
   { path: '/instellingen/ruimtes', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },

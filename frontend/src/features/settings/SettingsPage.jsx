@@ -68,6 +68,13 @@ export default function SettingsPage() {
             </div>
             <div aria-hidden="true">→</div>
           </Link>
+          <Link to="/instellingen/externe-databases" style={getTileStyle(isViewer)} aria-disabled={isViewer ? 'true' : 'false'} onClick={isViewer ? handleDisabledClick : undefined}>
+            <div>
+              <div style={{ fontWeight: 600 }}>Externe databases</div>
+              <div style={{ color: isViewer ? '#0f5b32' : '#667085', fontSize: '14px' }}>{isViewer ? 'Zichtbaar voor kijkers, maar alleen Artikeldetails is beschikbaar.' : 'Algoritmes, termbibliotheken en testmatching per winkelketen'}</div>
+            </div>
+            <div aria-hidden="true">→</div>
+          </Link>
           <Link to="/instellingen/huishouden" style={getTileStyle(isViewer)} aria-disabled={isViewer ? 'true' : 'false'} onClick={isViewer ? handleDisabledClick : undefined}>
             <div>
               <div style={{ fontWeight: 600 }}>Huishouden</div>
