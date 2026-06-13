@@ -15,16 +15,41 @@ PROTECTED_CANDIDATE_STATUSES = {
     "external_database_override",
 }
 
+CANDIDATE_COLUMNS: dict[str, str] = {
+    "id": "TEXT PRIMARY KEY",
+    "receipt_line_id": "TEXT",
+    "purchase_import_line_id": "TEXT",
+    "context_key": "TEXT",
+    "retailer_code": "TEXT",
+    "receipt_line_text": "TEXT",
+    "candidate_name": "TEXT",
+    "candidate_brand": "TEXT",
+    "candidate_source_name": "TEXT",
+    "candidate_source_product_code": "TEXT",
+    "retailer_article_number": "TEXT",
+    "quantity_label": "TEXT",
+    "variant": "TEXT",
+    "source_url": "TEXT",
+    "score": "REAL",
+    "score_breakdown_json": "TEXT",
+    "candidate_status": "TEXT",
+    "is_probable": "INTEGER DEFAULT 0",
+    "is_user_confirmed": "INTEGER DEFAULT 0",
+    "is_external_database_override": "INTEGER DEFAULT 0",
+    "created_by": "TEXT",
+    "created_at": "TEXT",
+    "updated_at": "TEXT",
+}
 
 CREATE_EXTERNAL_PRODUCT_CANDIDATES_SQL = """
 CREATE TABLE IF NOT EXISTS external_product_candidates (
     id TEXT PRIMARY KEY,
     receipt_line_id TEXT,
     purchase_import_line_id TEXT,
-    context_key TEXT NOT NULL,
-    retailer_code TEXT NOT NULL,
-    receipt_line_text TEXT NOT NULL,
-    candidate_name TEXT NOT NULL,
+    context_key TEXT,
+    retailer_code TEXT,
+    receipt_line_text TEXT,
+    candidate_name TEXT,
     candidate_brand TEXT,
     candidate_source_name TEXT,
     candidate_source_product_code TEXT,
@@ -32,15 +57,15 @@ CREATE TABLE IF NOT EXISTS external_product_candidates (
     quantity_label TEXT,
     variant TEXT,
     source_url TEXT,
-    score REAL NOT NULL,
+    score REAL,
     score_breakdown_json TEXT,
-    candidate_status TEXT NOT NULL,
-    is_probable INTEGER NOT NULL DEFAULT 0,
-    is_user_confirmed INTEGER NOT NULL DEFAULT 0,
-    is_external_database_override INTEGER NOT NULL DEFAULT 0,
+    candidate_status TEXT,
+    is_probable INTEGER DEFAULT 0,
+    is_user_confirmed INTEGER DEFAULT 0,
+    is_external_database_override INTEGER DEFAULT 0,
     created_by TEXT,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    created_at TEXT,
+    updated_at TEXT
 )
 """
 
@@ -66,9 +91,39 @@ def build_candidate_context_key(retailer_code: str, receipt_line_text: str, rece
     return f"external-preview:{normalize_candidate_text(retailer_code)}:{normalize_candidate_text(receipt_line_text)}"
 
 
+def _get_sqlite_columns(conn) -> set[str]:
+    rows = conn.execute(text("PRAGMA table_info(external_product_candidates)")).mappings().all()
+    return {str(row.get("name") or "") for row in rows}
+
+
+def _get_postgres_columns(conn) -> set[str]:
+    rows = conn.execute(
+        text(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'external_product_candidates'
+            """
+        )
+    ).mappings().all()
+    return {str(row.get("column_name") or "") for row in rows}
+
+
+def _add_missing_columns(conn) -> None:
+    dialect_name = str(engine.dialect.name or "").lower()
+    existing_columns = _get_sqlite_columns(conn) if dialect_name == "sqlite" else _get_postgres_columns(conn)
+    for column_name, column_definition in CANDIDATE_COLUMNS.items():
+        if column_name in existing_columns:
+            continue
+        if column_name == "id":
+            continue
+        conn.execute(text(f"ALTER TABLE external_product_candidates ADD COLUMN {column_name} {column_definition}"))
+
+
 def ensure_external_product_candidates_schema() -> None:
     with engine.begin() as conn:
         conn.execute(text(CREATE_EXTERNAL_PRODUCT_CANDIDATES_SQL))
+        _add_missing_columns(conn)
         conn.execute(text(CREATE_EXTERNAL_PRODUCT_CANDIDATES_INDEX_SQL))
 
 
@@ -88,8 +143,8 @@ def _find_existing_candidate(conn, context_key: str, retailer_code: str, candida
             """
             SELECT id, candidate_status, is_user_confirmed, is_external_database_override
             FROM external_product_candidates
-            WHERE context_key = :context_key
-              AND retailer_code = :retailer_code
+            WHERE COALESCE(context_key, '') = COALESCE(:context_key, '')
+              AND COALESCE(retailer_code, '') = COALESCE(:retailer_code, '')
               AND COALESCE(candidate_source_name, '') = COALESCE(:candidate_source_name, '')
               AND COALESCE(candidate_source_product_code, '') = COALESCE(:candidate_source_product_code, '')
               AND COALESCE(variant, '') = COALESCE(:variant, '')
