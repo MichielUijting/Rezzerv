@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Header from '../../ui/Header.jsx'
-import Card from '../../ui/Card.jsx'
+import AppShell from '../../app/AppShell'
+import ScreenCard from '../../ui/ScreenCard'
+import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 
@@ -13,10 +14,16 @@ function formatScore(value) {
 
 function StatusBadge({ status }) {
   const label = status || 'onbekend'
+  return <span className="rz-inline-feedback" style={{ display: 'inline-flex', padding: '3px 8px' }}>{label}</span>
+}
+
+function OverviewTile({ title, value, helper }) {
   return (
-    <span style={{ border: '1px solid #2e7d4d', borderRadius: 999, padding: '3px 8px', color: '#2e7d4d', fontSize: 12 }}>
-      {label}
-    </span>
+    <div style={{ border: '1px solid #d5e5d8', borderRadius: 12, padding: 14, display: 'grid', gap: 6 }}>
+      <strong>{title}</strong>
+      <div style={{ fontSize: 28, color: '#2e7d4d', lineHeight: 1 }}>{value}</div>
+      {helper ? <div style={{ color: '#5f7a68' }}>{helper}</div> : null}
+    </div>
   )
 }
 
@@ -49,8 +56,9 @@ export default function ExternalDatabasesPage() {
         if (!retailersResponse.ok) throw new Error(retailersData?.detail || 'Winkelketens konden niet worden geladen')
         if (!cancelled) {
           setSummary(summaryData)
-          setRetailers(Array.isArray(retailersData?.retailers) ? retailersData.retailers : [])
-          const firstRetailerCode = retailersData?.retailers?.[0]?.retailer_code
+          const nextRetailers = Array.isArray(retailersData?.retailers) ? retailersData.retailers : []
+          setRetailers(nextRetailers)
+          const firstRetailerCode = nextRetailers?.[0]?.retailer_code
           if (firstRetailerCode) setSelectedRetailer(firstRetailerCode)
         }
       } catch (err) {
@@ -98,72 +106,59 @@ export default function ExternalDatabasesPage() {
   }
 
   const candidates = Array.isArray(matchResult?.candidates) ? matchResult.candidates : []
+  const tabs = [
+    ['overzicht', 'Overzicht'],
+    ['test', 'Test algoritme'],
+    ['winkelketens', 'Winkelketens'],
+  ]
 
   return (
-    <div className="rz-screen">
-      <Header title="Externe databases" />
-      <div className="rz-content">
-        <div className="rz-content-inner">
-          <Card>
-            <div style={{ display: 'grid', gap: 18 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <h2 style={{ margin: 0, color: '#2e7d4d' }}>Externe databases</h2>
-                  <p style={{ margin: 0, color: '#5f7a68' }}>
-                    Eerste versie voor externe productkandidaten. Deze preview maakt geen Mijn artikel, product of voorraadmutatie aan.
-                  </p>
-                </div>
-                <Button variant="secondary" type="button" onClick={() => navigate('/home')}>
-                  Terug
+    <AppShell title="Externe databases" showExit={false}>
+      <div style={{ display: 'grid', gap: '16px' }} data-testid="external-databases-page">
+        <ScreenCard fullWidth>
+          <div style={{ display: 'grid', gap: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start' }}>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <h2 style={{ margin: 0, color: '#2e7d4d' }}>Externe databases</h2>
+                <p style={{ margin: 0, color: '#5f7a68' }}>
+                  Eerste versie voor externe productkandidaten. Deze preview maakt geen Mijn artikel, product of voorraadmutatie aan.
+                </p>
+              </div>
+              <Button variant="primary" type="button" onClick={() => navigate('/home')}>
+                Terug
+              </Button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }} role="tablist" aria-label="Externe databases tabs">
+              {tabs.map(([key, label]) => (
+                <Button key={key} type="button" variant={activeTab === key ? 'primary' : 'secondary'} onClick={() => setActiveTab(key)}>
+                  {label}
                 </Button>
-              </div>
+              ))}
+            </div>
 
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }} role="tablist" aria-label="Externe databases tabs">
-                {[
-                  ['overzicht', 'Overzicht'],
-                  ['test', 'Test algoritme'],
-                  ['winkelketens', 'Winkelketens'],
-                ].map(([key, label]) => (
-                  <Button key={key} type="button" variant={activeTab === key ? 'primary' : 'secondary'} onClick={() => setActiveTab(key)}>
-                    {label}
-                  </Button>
-                ))}
-              </div>
+            {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
 
-              {error ? (
-                <div style={{ border: '1px solid #b3261e', borderRadius: 12, padding: 12, color: '#b3261e', background: '#fff7f6' }}>
-                  {error}
+            {activeTab === 'overzicht' ? (
+              <div style={{ display: 'grid', gap: 14 }}>
+                {isLoadingConfig ? <div>Externe databases worden geladen...</div> : null}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+                  <OverviewTile title="Actieve winkelketens" value={summary?.supported_retailers ?? retailers.length} helper={(summary?.active_retailers || []).join(', ') || 'Nog geen actieve winkelketens'} />
+                  <OverviewTile title="Beleid" value="Preview" helper="Alleen kandidaatmatches tonen" />
+                  <OverviewTile title="Productmutaties" value="0" helper="Niet toegestaan in v1" />
                 </div>
-              ) : null}
+                <p style={{ margin: 0, color: '#5f7a68' }}>
+                  Deze module toont kandidaatmatches uit externe bronnen. Bevestigen, GTIN-invoer en OFF-verrijking volgen pas in latere opdrachten.
+                </p>
+              </div>
+            ) : null}
 
-              {activeTab === 'overzicht' ? (
-                <div style={{ display: 'grid', gap: 14 }}>
-                  {isLoadingConfig ? <div>Externe databases worden geladen...</div> : null}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
-                    <div style={{ border: '1px solid #d5e5d8', borderRadius: 12, padding: 14 }}>
-                      <strong>Actieve winkelketens</strong>
-                      <div style={{ fontSize: 28, color: '#2e7d4d' }}>{summary?.supported_retailers ?? retailers.length}</div>
-                    </div>
-                    <div style={{ border: '1px solid #d5e5d8', borderRadius: 12, padding: 14 }}>
-                      <strong>Beleid</strong>
-                      <div style={{ color: '#5f7a68', marginTop: 6 }}>Preview only</div>
-                    </div>
-                    <div style={{ border: '1px solid #d5e5d8', borderRadius: 12, padding: 14 }}>
-                      <strong>Productmutaties</strong>
-                      <div style={{ color: '#5f7a68', marginTop: 6 }}>Niet toegestaan in v1</div>
-                    </div>
-                  </div>
-                  <p style={{ margin: 0, color: '#5f7a68' }}>
-                    Deze module toont kandidaatmatches uit externe bronnen. Bevestigen, GTIN-invoer en OFF-verrijking volgen pas in latere opdrachten.
-                  </p>
-                </div>
-              ) : null}
-
-              {activeTab === 'test' ? (
-                <div style={{ display: 'grid', gap: 16 }}>
-                  <form onSubmit={testCandidateMatch} style={{ display: 'grid', gap: 12 }}>
+            {activeTab === 'test' ? (
+              <div style={{ display: 'grid', gap: 16 }}>
+                <form onSubmit={testCandidateMatch} style={{ display: 'grid', gap: 12 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 260px) minmax(280px, 1fr)', gap: 12, alignItems: 'end' }}>
                     <label style={{ display: 'grid', gap: 4 }}>
-                      <span>Winkelketen</span>
+                      <strong>Winkelketen</strong>
                       <select value={selectedRetailer} onChange={(event) => setSelectedRetailer(event.target.value)}>
                         {retailers.map((retailer) => (
                           <option key={retailer.retailer_code} value={retailer.retailer_code}>
@@ -173,75 +168,99 @@ export default function ExternalDatabasesPage() {
                       </select>
                     </label>
                     <label style={{ display: 'grid', gap: 4 }}>
-                      <span>Bonregel</span>
+                      <strong>Bonregel</strong>
                       <input value={receiptLineText} onChange={(event) => setReceiptLineText(event.target.value)} placeholder="Bijvoorbeeld: Mexicaanse kruidenm." />
                     </label>
-                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <Button type="submit" disabled={isTesting || !selectedRetailer}>
-                        {isTesting ? 'Test loopt...' : 'Test kandidaat'}
-                      </Button>
-                      <Button type="button" variant="secondary" onClick={() => setReceiptLineText('Taco saus')}>
-                        Voorbeeld Taco saus
-                      </Button>
-                      <Button type="button" variant="secondary" onClick={() => setReceiptLineText('Mexicaanse kruidenm.')}>
-                        Voorbeeld kruidenmix
-                      </Button>
-                    </div>
-                  </form>
-
-                  <div style={{ color: '#5f7a68' }}>
-                    Drempel probable_candidate: {formatScore(selectedRetailerConfig?.probable_candidate_threshold)}. Deze test schrijft geen data weg.
                   </div>
+                  <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <Button type="submit" disabled={isTesting || !selectedRetailer}>
+                      {isTesting ? 'Test loopt...' : 'Test kandidaat'}
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => setReceiptLineText('Taco saus')}>
+                      Voorbeeld Taco saus
+                    </Button>
+                    <Button type="button" variant="secondary" onClick={() => setReceiptLineText('Mexicaanse kruidenm.')}>
+                      Voorbeeld kruidenmix
+                    </Button>
+                  </div>
+                </form>
 
-                  {matchResult ? (
-                    <div style={{ overflowX: 'auto' }}>
-                      <table className="rz-table" style={{ width: '100%', minWidth: 760 }}>
-                        <thead>
-                          <tr>
-                            <th>Kandidaat</th>
-                            <th>Merk</th>
-                            <th>Artikelnummer</th>
-                            <th>Variant</th>
-                            <th>Score</th>
-                            <th>Status</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {candidates.length ? candidates.map((candidate) => (
-                            <tr key={`${candidate.candidate_name}-${candidate.retailer_article_number}-${candidate.variant}`}>
-                              <td>{candidate.candidate_name}</td>
-                              <td>{candidate.candidate_brand}</td>
-                              <td>{candidate.retailer_article_number}</td>
-                              <td>{candidate.variant || '-'}</td>
-                              <td>{formatScore(candidate.score)}</td>
-                              <td><StatusBadge status={candidate.candidate_status} /></td>
-                            </tr>
-                          )) : (
-                            <tr><td colSpan="6">Geen kandidaten gevonden boven de drempel.</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : null}
+                <div style={{ color: '#5f7a68' }}>
+                  Drempel probable_candidate: {formatScore(selectedRetailerConfig?.probable_candidate_threshold)}. Deze test schrijft geen data weg.
                 </div>
-              ) : null}
 
-              {activeTab === 'winkelketens' ? (
-                <div style={{ display: 'grid', gap: 12 }}>
-                  {retailers.map((retailer) => (
-                    <div key={retailer.retailer_code} style={{ border: '1px solid #d5e5d8', borderRadius: 12, padding: 14, display: 'grid', gap: 6 }}>
-                      <strong>{retailer.retailer_name}</strong>
-                      <div>Status: {retailer.status}</div>
-                      <div>Drempel: {formatScore(retailer.probable_candidate_threshold)}</div>
-                      <div>Voorbeelden: {(retailer.supported_examples || []).join(', ')}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          </Card>
-        </div>
+                {matchResult ? (
+                  <Table dataTestId="external-database-candidates-table" tableStyle={{ tableLayout: 'fixed', width: '100%', minWidth: 860 }}>
+                    <colgroup>
+                      <col style={{ width: '260px' }} />
+                      <col style={{ width: '150px' }} />
+                      <col style={{ width: '140px' }} />
+                      <col style={{ width: '120px' }} />
+                      <col style={{ width: '110px' }} />
+                      <col style={{ width: '170px' }} />
+                    </colgroup>
+                    <thead>
+                      <tr className="rz-table-header">
+                        <th>Kandidaat</th>
+                        <th>Merk</th>
+                        <th>Artikelnummer</th>
+                        <th>Variant</th>
+                        <th className="rz-num">Score</th>
+                        <th>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {candidates.length ? candidates.map((candidate) => (
+                        <tr key={`${candidate.candidate_name}-${candidate.retailer_article_number}-${candidate.variant}`}>
+                          <td>{candidate.candidate_name}</td>
+                          <td>{candidate.candidate_brand}</td>
+                          <td>{candidate.retailer_article_number}</td>
+                          <td>{candidate.variant || '-'}</td>
+                          <td className="rz-num">{formatScore(candidate.score)}</td>
+                          <td><StatusBadge status={candidate.candidate_status} /></td>
+                        </tr>
+                      )) : (
+                        <tr><td colSpan="6">Geen kandidaten gevonden boven de drempel.</td></tr>
+                      )}
+                    </tbody>
+                  </Table>
+                ) : null}
+              </div>
+            ) : null}
+
+            {activeTab === 'winkelketens' ? (
+              <Table dataTestId="external-database-retailers-table" tableStyle={{ tableLayout: 'fixed', width: '100%', minWidth: 720 }}>
+                <colgroup>
+                  <col style={{ width: '180px' }} />
+                  <col style={{ width: '140px' }} />
+                  <col style={{ width: '140px' }} />
+                  <col style={{ width: '320px' }} />
+                </colgroup>
+                <thead>
+                  <tr className="rz-table-header">
+                    <th>Winkelketen</th>
+                    <th>Status</th>
+                    <th className="rz-num">Drempel</th>
+                    <th>Voorbeelden</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {retailers.length ? retailers.map((retailer) => (
+                    <tr key={retailer.retailer_code}>
+                      <td>{retailer.retailer_name}</td>
+                      <td>{retailer.status}</td>
+                      <td className="rz-num">{formatScore(retailer.probable_candidate_threshold)}</td>
+                      <td>{(retailer.supported_examples || []).join(', ')}</td>
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="4">Geen winkelketens gevonden.</td></tr>
+                  )}
+                </tbody>
+              </Table>
+            ) : null}
+          </div>
+        </ScreenCard>
       </div>
-    </div>
+    </AppShell>
   )
 }
