@@ -2,7 +2,7 @@
 
 ## Doel
 
-Controleer dat de gebruiker externe relaties via een checkboxbatch kan koppelen.
+Controleer dat de gebruiker opgeslagen externe kandidaten ziet en alleen koppelbare relaties via checkboxbatch kan koppelen.
 
 ## Voorbereiding
 
@@ -26,18 +26,23 @@ Start-Process "http://localhost:5174/login"
 4. Controleer dat boven de tabel één knop **Koppelen** staat.
 5. Controleer dat boven de tabel een knop **Vernieuwen** staat.
 6. Controleer dat er geen knoppen **Overslaan** of **Later** per regel zichtbaar zijn.
-7. Bij lege batchlijst verschijnt:
+7. Controleer dat opgeslagen externe kandidaten zichtbaar zijn, ook als ze nog niet koppelbaar zijn.
+8. Controleer dat niet-koppelbare regels een status tonen, bijvoorbeeld:
 
 ```text
-Geen externe relaties beschikbaar om te koppelen.
+Nog geen cataloguskoppeling
+Nog geen huishoudartikelmatch
 ```
+
+9. Controleer dat alleen koppelbare regels selecteerbaar zijn.
 
 ## Acceptatie
 
 M2C2g is akkoord als:
 
+- opgeslagen externe kandidaten zichtbaar zijn;
 - checkboxkolom zichtbaar is;
 - knop **Koppelen** boven de tabel staat;
 - geen per-regel knoppen voor overslaan/later zichtbaar zijn;
-- lege batchlijst netjes wordt getoond;
+- niet-koppelbare regels zichtbaar maar niet selecteerbaar zijn;
 - bestaande tabs blijven werken.
