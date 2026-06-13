@@ -80,13 +80,16 @@
   align-items: end;
 }
 
-.rz-external-databases-actions {
+.rz-external-databases-actions,
+.rz-external-databases-batch-toolbar {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
-.rz-external-databases-test {
+.rz-external-databases-test,
+.rz-external-databases-batch {
   display: grid;
   gap: 16px;
 }
@@ -102,16 +105,24 @@
   min-width: 860px;
 }
 
+.rz-external-databases-batch-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 900px;
+}
+
 .rz-external-databases-retailer-table {
   table-layout: fixed;
   width: 100%;
   min-width: 720px;
 }
 
+.rz-external-databases-col-select { width: 70px; }
 .rz-external-databases-col-candidate { width: 260px; }
 .rz-external-databases-col-brand { width: 150px; }
 .rz-external-databases-col-code { width: 140px; }
 .rz-external-databases-col-variant { width: 120px; }
+.rz-external-databases-col-household { width: 230px; }
 .rz-external-databases-col-score { width: 110px; }
 .rz-external-databases-col-status { width: 170px; }
 
