@@ -36,6 +36,21 @@ function OverviewTile({ title, value, helper }) {
   )
 }
 
+function ErrorOverlay({ message, onClose }) {
+  if (!message) return null
+  return (
+    <div className="rz-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="external-databases-error-title">
+      <div className="rz-modal-card">
+        <h3 id="external-databases-error-title" className="rz-modal-title">Melding</h3>
+        <p className="rz-modal-text">{message}</p>
+        <div className="rz-modal-actions">
+          <Button type="button" onClick={onClose}>Sluiten</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ExternalDatabasesPage() {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState(TAB_LABELS.overzicht)
@@ -44,8 +59,10 @@ export default function ExternalDatabasesPage() {
   const [receiptLineText, setReceiptLineText] = useState('Mexicaanse kruidenm.')
   const [selectedRetailer, setSelectedRetailer] = useState('lidl')
   const [matchResult, setMatchResult] = useState(null)
+  const [saveResult, setSaveResult] = useState(null)
   const [isLoadingConfig, setIsLoadingConfig] = useState(true)
   const [isTesting, setIsTesting] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -97,6 +114,7 @@ export default function ExternalDatabasesPage() {
     }
     setIsTesting(true)
     setError('')
+    setSaveResult(null)
     setMatchResult(null)
     try {
       const response = await fetchJsonWithAuth(`/api/external-databases/retailers/${encodeURIComponent(selectedRetailer)}/match-preview`, {
@@ -111,6 +129,31 @@ export default function ExternalDatabasesPage() {
       setError(err?.message || 'Matchpreview kon niet worden uitgevoerd')
     } finally {
       setIsTesting(false)
+    }
+  }
+
+  async function saveCandidateMatches() {
+    const normalizedLine = receiptLineText.trim()
+    if (!normalizedLine) {
+      setError('Vul eerst een bonregel in')
+      return
+    }
+    setIsSaving(true)
+    setError('')
+    setSaveResult(null)
+    try {
+      const response = await fetchJsonWithAuth(`/api/external-databases/retailers/${encodeURIComponent(selectedRetailer)}/save-candidates`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ receipt_line_text: normalizedLine, include_below_threshold: false }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.detail || 'Kandidaten opslaan is mislukt')
+      setSaveResult(data)
+    } catch (err) {
+      setError(err?.message || 'Kandidaten opslaan is mislukt')
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -161,12 +204,21 @@ export default function ExternalDatabasesPage() {
               <Button type="button" variant="secondary" onClick={() => setReceiptLineText('Mexicaanse kruidenm.')}>
                 Voorbeeld kruidenmix
               </Button>
+              <Button type="button" variant="secondary" disabled={isSaving || !candidates.length} onClick={saveCandidateMatches}>
+                {isSaving ? 'Opslaan...' : 'Kandidaten opslaan'}
+              </Button>
             </div>
           </form>
 
           <div className="rz-external-databases-muted">
-            Drempel probable_candidate: {formatScore(selectedRetailerConfig?.probable_candidate_threshold)}. Deze test schrijft geen data weg.
+            Drempel probable_candidate: {formatScore(selectedRetailerConfig?.probable_candidate_threshold)}. Deze opslag maakt geen Mijn artikel, global_product of voorraadmutatie aan.
           </div>
+
+          {saveResult ? (
+            <div className="rz-inline-feedback rz-inline-feedback--success">
+              Kandidaten opgeslagen: {saveResult.saved_count ?? 0} nieuw, {saveResult.updated_count ?? 0} bijgewerkt, {saveResult.skipped_count ?? 0} overgeslagen.
+            </div>
+          ) : null}
 
           {matchResult ? (
             <Table dataTestId="external-database-candidates-table" tableClassName="rz-external-databases-table">
@@ -257,14 +309,13 @@ export default function ExternalDatabasesPage() {
               </Button>
             </div>
 
-            {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
-
             <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
               {renderTabContent}
             </Tabs>
           </div>
         </ScreenCard>
       </div>
+      <ErrorOverlay message={error} onClose={() => setError('')} />
     </AppShell>
   )
 }
