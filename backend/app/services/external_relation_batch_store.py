@@ -49,13 +49,21 @@ def _candidate_source_record_id(row: dict[str, Any]) -> str:
     ).strip()
 
 
+def _relation_status(row: dict[str, Any]) -> tuple[bool, str, str]:
+    if not str(row.get("global_product_id") or "").strip():
+        return False, "no_catalog_link", "Nog geen cataloguskoppeling"
+    if not str(row.get("household_article_id") or "").strip():
+        return False, "no_household_match", "Nog geen huishoudartikelmatch"
+    return True, "linkable", "Koppelbaar"
+
+
 def list_external_relation_batch_items(household_id: str | None = None, limit: int = 50) -> dict[str, Any]:
     ensure_external_relation_batch_schema()
     normalized_limit = max(1, min(int(limit or 50), 200))
     params: dict[str, Any] = {"limit": normalized_limit}
-    household_filter = ""
+    household_join_filter = ""
     if household_id:
-        household_filter = "AND ha.household_id = :household_id"
+        household_join_filter = "AND ha.household_id = :household_id"
         params["household_id"] = household_id
 
     with engine.begin() as conn:
@@ -76,6 +84,8 @@ def list_external_relation_batch_items(household_id: str | None = None, limit: i
                     epc.source_url AS source_url,
                     epc.candidate_source_url AS candidate_source_url,
                     epc.score AS score,
+                    epc.status AS candidate_storage_status,
+                    epc.candidate_status AS candidate_match_status,
                     epc.raw_payload AS raw_payload,
                     ha.id AS household_article_id,
                     ha.household_id AS household_id,
@@ -88,16 +98,16 @@ def list_external_relation_batch_items(household_id: str | None = None, limit: i
                     gp.category AS global_product_category,
                     d.decision AS last_decision
                 FROM external_product_candidates epc
-                JOIN global_products gp ON gp.id = epc.global_product_id
-                JOIN household_articles ha ON ha.global_product_id = epc.global_product_id
+                LEFT JOIN global_products gp ON gp.id = epc.global_product_id
+                LEFT JOIN household_articles ha
+                  ON ha.global_product_id = epc.global_product_id
+                 AND COALESCE(ha.status, 'active') = 'active'
+                 {household_join_filter}
                 LEFT JOIN external_relation_batch_decisions d
                   ON d.candidate_id = epc.id
-                 AND d.household_article_id = ha.id
+                 AND COALESCE(d.household_article_id, '') = COALESCE(ha.id, '')
                  AND d.decision IN ('apply', 'skip')
-                WHERE epc.global_product_id IS NOT NULL
-                  AND COALESCE(ha.status, 'active') = 'active'
-                  {household_filter}
-                  AND d.id IS NULL
+                WHERE d.id IS NULL
                 ORDER BY epc.score DESC, epc.updated_at DESC, epc.created_at DESC
                 LIMIT :limit
                 """
@@ -105,7 +115,15 @@ def list_external_relation_batch_items(household_id: str | None = None, limit: i
             params,
         ).mappings().all()
 
-    return {"items": [dict(row) for row in rows]}
+    items: list[dict[str, Any]] = []
+    for row in rows:
+        item = dict(row)
+        can_link, status_code, status_label = _relation_status(item)
+        item["can_link"] = can_link
+        item["relation_status"] = status_code
+        item["relation_status_label"] = status_label
+        items.append(item)
+    return {"items": items}
 
 
 def _find_candidate_household_pair(conn, candidate_id: str, household_article_id: str):
