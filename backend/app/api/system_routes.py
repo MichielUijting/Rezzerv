@@ -15,11 +15,17 @@ from __future__ import annotations
 
 from pathlib import Path
 import logging
+from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body, HTTPException
 
 from app.api.route_governance import build_route_governance_manifest
 from app.db import get_runtime_datastore_info
+from app.services.external_database_matchers import (
+    get_external_database_summary,
+    list_external_database_retailers,
+    match_retailer_receipt_line,
+)
 
 router = APIRouter()
 logger = logging.getLogger('rezzerv.api')
@@ -45,6 +51,29 @@ def api_version():
         'version': VERSION_TAG,
         'source': 'VERSION.txt',
     }
+
+
+@router.get('/api/external-databases/summary')
+def external_databases_summary():
+    return get_external_database_summary()
+
+
+@router.get('/api/external-databases/retailers')
+def external_databases_retailers():
+    return {'retailers': list_external_database_retailers()}
+
+
+@router.post('/api/external-databases/retailers/{retailer_code}/match-preview')
+def external_databases_match_preview(retailer_code: str, payload: dict[str, Any] = Body(default_factory=dict)):
+    receipt_line_text = str(payload.get('receipt_line_text') or payload.get('query') or '').strip()
+    include_below_threshold = bool(payload.get('include_below_threshold', True))
+    if not receipt_line_text:
+        raise HTTPException(status_code=400, detail='Bonregel is verplicht voor matchpreview')
+    return match_retailer_receipt_line(
+        retailer_code=retailer_code,
+        receipt_line_text=receipt_line_text,
+        include_below_threshold=include_below_threshold,
+    )
 
 
 @router.get('/api/admin/route-governance')
