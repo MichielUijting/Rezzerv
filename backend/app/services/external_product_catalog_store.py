@@ -51,11 +51,23 @@ def _find_highest_candidate(conn, context_key: str | None, retailer_code: str | 
 
 
 def _find_existing_global_product(conn, candidate: dict[str, Any]):
-    candidate_name = str(candidate.get("candidate_name") or "").strip()
-    candidate_brand = str(candidate.get("candidate_brand") or "").strip()
-    candidate_variant = str(candidate.get("variant") or "").strip()
-    source_product_code = _candidate_source_product_code(candidate)
+    explicit_global_product_id = str(candidate.get("global_product_id") or "").strip()
+    if explicit_global_product_id:
+        direct_match = conn.execute(
+            text(
+                """
+                SELECT *
+                FROM global_products
+                WHERE id = :global_product_id
+                LIMIT 1
+                """
+            ),
+            {"global_product_id": explicit_global_product_id},
+        ).mappings().first()
+        if direct_match:
+            return direct_match
 
+    source_product_code = _candidate_source_product_code(candidate)
     if source_product_code and source_product_code != "unknown":
         identity_match = conn.execute(
             text(
@@ -64,6 +76,7 @@ def _find_existing_global_product(conn, candidate: dict[str, Any]):
                 FROM product_identities pi
                 JOIN global_products gp ON gp.id = pi.global_product_id
                 WHERE pi.identity_value = :identity_value
+                  AND pi.global_product_id IS NOT NULL
                 LIMIT 1
                 """
             ),
@@ -72,6 +85,9 @@ def _find_existing_global_product(conn, candidate: dict[str, Any]):
         if identity_match:
             return identity_match
 
+    candidate_name = str(candidate.get("candidate_name") or "").strip()
+    candidate_brand = str(candidate.get("candidate_brand") or "").strip()
+    candidate_variant = str(candidate.get("variant") or "").strip()
     if candidate_name:
         return conn.execute(
             text(
