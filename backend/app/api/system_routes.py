@@ -31,6 +31,10 @@ from app.services.external_product_candidate_store import (
     list_saved_external_product_candidates,
     save_matchpreview_candidates,
 )
+from app.services.external_product_catalog_store import (
+    list_catalog_products,
+    promote_highest_candidate_to_catalog,
+)
 
 router = APIRouter()
 logger = logging.getLogger('rezzerv.api')
@@ -113,6 +117,27 @@ def external_databases_saved_candidates(
             purchase_import_line_id=purchase_import_line_id,
         )
     return list_saved_external_product_candidates(context_key=resolved_context_key, limit=limit)
+
+
+@router.post('/api/external-databases/catalog/promote-highest')
+def external_databases_promote_highest_candidate(payload: dict[str, Any] = Body(default_factory=dict)):
+    receipt_line_text = str(payload.get('receipt_line_text') or '').strip() or None
+    retailer_code = str(payload.get('retailer_code') or '').strip() or None
+    context_key = str(payload.get('context_key') or '').strip() or None
+    threshold = float(payload.get('threshold') or 0.85)
+    if not context_key and not (retailer_code and receipt_line_text):
+        raise HTTPException(status_code=400, detail='Context of retailer_code + bonregel is verplicht voor cataloguskoppeling')
+    return promote_highest_candidate_to_catalog(
+        context_key=context_key,
+        retailer_code=retailer_code,
+        receipt_line_text=receipt_line_text,
+        threshold=threshold,
+    )
+
+
+@router.get('/api/external-databases/catalog/products')
+def external_databases_catalog_products(limit: int = Query(default=50)):
+    return list_catalog_products(limit=limit)
 
 
 @router.get('/api/admin/route-governance')
