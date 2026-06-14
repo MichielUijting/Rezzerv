@@ -22,3 +22,7 @@ Externe kandidaten selecteren en verwerken in de artikelcatalogus.
 - filterrij is aanwezig
 - sortering is aanwezig
 - paginering is aanwezig
+
+## Vaste ontwikkelregel
+
+Nieuwe onderdelen met tabellen gebruiken standaard de Rezzerv tabelconventies. Afwijkingen worden vooraf benoemd en niet achteraf ontdekt.
