@@ -22,36 +22,25 @@ function receiptLineLabel(item) {
   return String(item?.receipt_line_text || item?.raw_text || item?.parsed_name || '-').trim() || '-'
 }
 
-function feedbackFromProcessResult(data) {
+function processMessage(data) {
   const firstResult = Array.isArray(data?.results) ? data.results[0] : null
   if (data?.already_linked_count || firstResult?.already_linked) {
-    return {
-      type: 'warning',
-      text: firstResult?.message || 'Dit bonartikel heeft al een kandidaatartikel in de catalogus.',
-    }
+    return firstResult?.message || 'Dit bonartikel heeft al een kandidaatartikel in de catalogus.'
   }
   if ((data?.promoted_count ?? 0) > 0) {
-    return {
-      type: 'success',
-      text: 'Keuze opgeslagen in de catalogus.',
-    }
+    return 'Keuze opgeslagen in de catalogus.'
   }
-  return {
-    type: 'warning',
-    text: firstResult?.message || firstResult?.reason || 'De kandidaat is niet verwerkt in de catalogus.',
-  }
+  return firstResult?.message || firstResult?.reason || 'De kandidaat is niet verwerkt in de catalogus.'
 }
 
-export default function ExternalRelationsBatchPanel({ onError }) {
+export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
   const [items, setItems] = useState([])
   const [selectedKey, setSelectedKey] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
-  const [feedback, setFeedback] = useState(null)
 
-  async function loadItems({ keepFeedback = false } = {}) {
+  async function loadItems() {
     setIsLoading(true)
-    if (!keepFeedback) setFeedback(null)
     try {
       const response = await fetchJsonWithAuth('/api/external-databases/candidates?limit=100', { method: 'GET' })
       const data = await response.json().catch(() => ({}))
@@ -75,11 +64,10 @@ export default function ExternalRelationsBatchPanel({ onError }) {
 
   async function processSelected() {
     if (!selectedKey) {
-      onError?.('Selecteer eerst één kandidaat om in de catalogus te verwerken')
+      onMessage?.('Selecteer eerst één kandidaat om in de catalogus te verwerken')
       return
     }
     setIsProcessing(true)
-    setFeedback(null)
     try {
       const response = await fetchJsonWithAuth('/api/external-databases/catalog/process-candidates', {
         method: 'POST',
@@ -88,8 +76,9 @@ export default function ExternalRelationsBatchPanel({ onError }) {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok || data?.ok === false) throw new Error(data?.detail || data?.reason || 'Catalogusverwerking is mislukt')
-      setFeedback(feedbackFromProcessResult(data))
-      await loadItems({ keepFeedback: true })
+      const message = processMessage(data)
+      await loadItems()
+      onMessage?.(message)
     } catch (err) {
       onError?.(err?.message || 'Catalogusverwerking is mislukt')
     } finally {
@@ -107,14 +96,9 @@ export default function ExternalRelationsBatchPanel({ onError }) {
 
       <div className="rz-external-databases-batch-toolbar">
         <Button type="button" disabled={isProcessing || !selectedKey} onClick={processSelected}>{isProcessing ? 'Verwerken...' : 'Verwerk gekozen kandidaat in catalogus'}</Button>
-        <Button type="button" variant="secondary" disabled={isLoading || isProcessing} onClick={() => loadItems()}>Vernieuwen</Button>
+        <Button type="button" variant="secondary" disabled={isLoading || isProcessing} onClick={loadItems}>Vernieuwen</Button>
         <span className="rz-external-databases-muted">Gekozen: {selectedKey ? 1 : 0}. Dit maakt geen huishoudartikel en geen voorraadmutatie.</span>
       </div>
-      {feedback ? (
-        <div className={`rz-inline-feedback ${feedback.type === 'warning' ? 'rz-inline-feedback--warning' : 'rz-inline-feedback--success'}`}>
-          {feedback.text}
-        </div>
-      ) : null}
       {isLoading ? <div>Externe kandidaten worden geladen...</div> : null}
       <Table dataTestId="external-catalog-candidates-table" tableClassName="rz-external-databases-batch-table">
         <colgroup>
