@@ -146,6 +146,20 @@
 .rz-external-databases-col-retailer-threshold { width: 140px; }
 .rz-external-databases-col-retailer-examples { width: 320px; }
 
+.rz-external-databases-batch-table th,
+.rz-external-databases-batch-table td {
+  height: 28px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 28px;
+  vertical-align: middle;
+}
+
+.rz-external-databases-status-cell {
+  padding: 0;
+  line-height: 28px;
+}
+
 @media (max-width: 720px) {
   .rz-external-databases-header,
   .rz-external-databases-form-grid {
