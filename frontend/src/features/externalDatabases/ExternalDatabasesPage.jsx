@@ -263,7 +263,7 @@ export default function ExternalDatabasesPage() {
     }
 
     if (tab === TAB_LABELS.catalogus) {
-      return <ExternalRelationsBatchPanel onError={setError} />
+      return <ExternalRelationsBatchPanel onError={setError} onMessage={setError} />
     }
 
     return (
