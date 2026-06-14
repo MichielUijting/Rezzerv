@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -16,16 +16,41 @@ function numberText(value) {
   return number.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+function scoreText(value) {
+  const number = Number(value)
+  if (!Number.isFinite(number)) return '-'
+  return number.toLocaleString('nl-NL', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+}
+
 function rowKey(item) {
   return text(item.context_key || item.receipt_line_id || item.purchase_import_line_id || item.receipt_line_text, 'receipt-item')
 }
 
+function candidateKey(candidate) {
+  return text(candidate.id || `${candidate.candidate_name}-${candidate.candidate_source_product_code}-${candidate.variant}`, 'candidate')
+}
+
 function buildReceiptItems(candidates) {
   const grouped = new Map()
+
   candidates.forEach((candidate) => {
     const key = rowKey(candidate)
+    const candidateItem = {
+      id: candidateKey(candidate),
+      candidateName: text(candidate.candidate_name),
+      brand: text(candidate.candidate_brand),
+      articleNumber: text(candidate.retailer_article_number || candidate.source_product_code || candidate.candidate_source_product_code),
+      gtin: text(candidate.gtin || candidate.ean),
+      quantity: text(candidate.quantity_label),
+      source: text(candidate.candidate_source_name || candidate.source_name),
+      score: candidate.score,
+      status: text(candidate.candidate_status),
+      raw: candidate,
+    }
+
     const current = grouped.get(key) || {
       id: key,
+      contextKey: text(candidate.context_key, ''),
       receiptLineText: text(candidate.receipt_line_text),
       normalizedName: text(candidate.parsed_name || candidate.receipt_line_text),
       retailerCode: text(candidate.retailer_code),
@@ -37,14 +62,20 @@ function buildReceiptItems(candidates) {
       candidateCount: 0,
       catalogLinked: false,
       status: 'Nog niet verwerkt',
+      candidates: [],
     }
+
     current.candidateCount += 1
-    if (candidate.global_product_id || candidate.product_identity_id || candidate.candidate_status === 'user_confirmed') {
+    current.candidates.push(candidateItem)
+
+    if (candidate.global_product_id || candidate.product_identity_id || candidate.candidate_status === 'user_confirmed' || candidate.candidate_status === 'linked_to_catalog') {
       current.catalogLinked = true
       current.status = 'Catalogus kandidaat'
     }
+
     grouped.set(key, current)
   })
+
   return Array.from(grouped.values())
 }
 
@@ -57,7 +88,10 @@ function sortValue(item, key) {
 export default function ReceiptItemsOverview({ onError }) {
   const [items, setItems] = useState([])
   const [selectedItem, setSelectedItem] = useState(null)
+  const [selectedCandidateId, setSelectedCandidateId] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isProcessingCandidate, setIsProcessingCandidate] = useState(false)
+  const [processMessage, setProcessMessage] = useState('')
   const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', articleNumber: '', quantity: '', status: '' })
   const [sortKey, setSortKey] = useState('receiptLineText')
   const [sortDesc, setSortDesc] = useState(false)
@@ -70,8 +104,14 @@ export default function ReceiptItemsOverview({ onError }) {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data?.detail || 'Bonartikelen konden niet worden geladen')
       const candidates = Array.isArray(data?.items) ? data.items : []
-      setItems(buildReceiptItems(candidates))
+      const nextItems = buildReceiptItems(candidates)
+      setItems(nextItems)
       setPage(1)
+
+      if (selectedItem) {
+        const refreshedSelection = nextItems.find((item) => item.id === selectedItem.id) || null
+        setSelectedItem(refreshedSelection)
+      }
     } catch (err) {
       onError?.(err?.message || 'Bonartikelen konden niet worden geladen')
     } finally {
@@ -83,6 +123,51 @@ export default function ReceiptItemsOverview({ onError }) {
     loadItems()
   }, [])
 
+  function selectReceiptItem(item) {
+    setSelectedItem(item)
+    setSelectedCandidateId('')
+    setProcessMessage('')
+  }
+
+  async function processSelectedCandidate() {
+    if (!selectedItem || !selectedCandidateId) return
+
+    setIsProcessingCandidate(true)
+    setProcessMessage('')
+
+    try {
+      const response = await fetchJsonWithAuth('/api/external-databases/catalog/promote-highest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          context_key: selectedItem.contextKey || undefined,
+          retailer_code: selectedItem.retailerCode !== '-' ? selectedItem.retailerCode : undefined,
+          receipt_line_text: selectedItem.receiptLineText !== '-' ? selectedItem.receiptLineText : undefined,
+          threshold: 0,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.detail || 'Kandidaat verwerken is mislukt')
+
+      if (data?.promoted) {
+        setProcessMessage('Kandidaat is verwerkt in de catalogus.')
+      } else if (data?.reason === 'blocked_requires_existing_global_product') {
+        setProcessMessage('Kandidaat is gevonden, maar er bestaat nog geen passend catalogusproduct om aan te koppelen.')
+      } else if (data?.reason === 'no_candidate_above_threshold') {
+        setProcessMessage('Er is geen kandidaat gevonden om te verwerken.')
+      } else {
+        setProcessMessage('Catalogusverwerking is afgerond zonder catalogusmutatie.')
+      }
+
+      await loadItems()
+    } catch (err) {
+      onError?.(err?.message || 'Kandidaat verwerken is mislukt')
+    } finally {
+      setIsProcessingCandidate(false)
+    }
+  }
+
   function updateFilter(key, value) {
     setFilters((current) => ({ ...current, [key]: value }))
     setPage(1)
@@ -90,7 +175,10 @@ export default function ReceiptItemsOverview({ onError }) {
 
   function updateSort(key) {
     if (sortKey === key) setSortDesc((value) => !value)
-    else { setSortKey(key); setSortDesc(false) }
+    else {
+      setSortKey(key)
+      setSortDesc(false)
+    }
     setPage(1)
   }
 
@@ -107,6 +195,7 @@ export default function ReceiptItemsOverview({ onError }) {
       item.quantity.toLowerCase().includes(filters.quantity.toLowerCase()) &&
       item.status.toLowerCase().includes(filters.status.toLowerCase())
     ))
+
     rows.sort((leftItem, rightItem) => {
       const left = sortValue(leftItem, sortKey)
       const right = sortValue(rightItem, sortKey)
@@ -114,9 +203,11 @@ export default function ReceiptItemsOverview({ onError }) {
       if (left > right) return sortDesc ? -1 : 1
       return 0
     })
+
     return rows
   }, [items, filters, sortKey, sortDesc])
 
+  const selectedCandidates = selectedItem?.candidates || []
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
   const visibleItems = filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
@@ -128,7 +219,9 @@ export default function ReceiptItemsOverview({ onError }) {
         <h3>Bonartikelen voor externe herkenning</h3>
         <Button type="button" variant="secondary" disabled={isLoading} onClick={loadItems}>Vernieuwen</Button>
       </div>
+
       {isLoading ? <div>Bonartikelen worden geladen...</div> : null}
+
       <Table dataTestId="external-receipt-items-table" tableClassName="rz-external-receipt-table">
         <colgroup>
           <col className="rz-external-receipt-col-receipt" />
@@ -173,7 +266,7 @@ export default function ReceiptItemsOverview({ onError }) {
         </thead>
         <tbody>
           {visibleItems.length ? visibleItems.map((item) => (
-            <tr key={item.id} className={selectedItem?.id === item.id ? 'rz-row-active' : ''} onDoubleClick={() => setSelectedItem(item)}>
+            <tr key={item.id} className={selectedItem?.id === item.id ? 'rz-row-active' : ''} onDoubleClick={() => selectReceiptItem(item)}>
               <td>{item.receiptLineText}</td>
               <td>{item.normalizedName}</td>
               <td>{item.retailerCode}</td>
@@ -190,11 +283,13 @@ export default function ReceiptItemsOverview({ onError }) {
           {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="11"></td></tr>)}
         </tbody>
       </Table>
+
       <div className="rz-external-databases-pagination">
         <Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Vorige</Button>
         <span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span>
         <Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Volgende</Button>
       </div>
+
       <div className="rz-external-receipt-detail">
         {selectedItem ? (
           <>
@@ -203,14 +298,77 @@ export default function ReceiptItemsOverview({ onError }) {
               <dt>Bonartikel</dt><dd>{selectedItem.receiptLineText}</dd>
               <dt>Winkelketen</dt><dd>{selectedItem.retailerCode}</dd>
               <dt>Artikelnummer</dt><dd>{selectedItem.articleNumber}</dd>
+              <dt>GTIN / EAN</dt><dd>{selectedItem.gtin}</dd>
               <dt>Omvang / gewicht</dt><dd>{selectedItem.quantity}</dd>
               <dt>Externe kandidaten</dt><dd>{selectedItem.candidateCount}</dd>
               <dt>Catalogus</dt><dd>{selectedItem.catalogLinked ? 'Kandidaat aanwezig' : 'Nog geen kandidaat'}</dd>
             </dl>
-            <p className="rz-external-databases-muted">Detailfunctionaliteit volgt in M2C2h-2.</p>
+
+            <h3>Externe kandidaten voor dit bonartikel</h3>
+            <Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table">
+              <colgroup>
+                <col className="rz-external-candidate-col-choice" />
+                <col className="rz-external-candidate-col-name" />
+                <col className="rz-external-candidate-col-brand" />
+                <col className="rz-external-candidate-col-code" />
+                <col className="rz-external-candidate-col-gtin" />
+                <col className="rz-external-candidate-col-quantity" />
+                <col className="rz-external-candidate-col-source" />
+                <col className="rz-external-candidate-col-score" />
+                <col className="rz-external-candidate-col-status" />
+              </colgroup>
+              <thead>
+                <tr className="rz-table-header">
+                  <th>Keuze</th>
+                  <th>Kandidaat</th>
+                  <th>Merk</th>
+                  <th>Artikelnummer</th>
+                  <th>GTIN / EAN</th>
+                  <th>Omvang / gewicht</th>
+                  <th>Bron</th>
+                  <th className="rz-num">Score</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedCandidates.length ? selectedCandidates.map((candidate) => (
+                  <tr key={candidate.id}>
+                    <td className="rz-check">
+                      <input
+                        type="radio"
+                        name="external-candidate-choice"
+                        checked={selectedCandidateId === candidate.id}
+                        onChange={() => setSelectedCandidateId(candidate.id)}
+                      />
+                    </td>
+                    <td>{candidate.candidateName}</td>
+                    <td>{candidate.brand}</td>
+                    <td>{candidate.articleNumber}</td>
+                    <td>{candidate.gtin}</td>
+                    <td>{candidate.quantity}</td>
+                    <td>{candidate.source}</td>
+                    <td className="rz-num">{scoreText(candidate.score)}</td>
+                    <td>{candidate.status}</td>
+                  </tr>
+                )) : <tr><td colSpan="9">Geen externe kandidaten gevonden voor dit bonartikel.</td></tr>}
+              </tbody>
+            </Table>
+
+                        <div className="rz-external-databases-actions">
+              <Button
+                type="button"
+                disabled={!selectedCandidateId || isProcessingCandidate}
+                onClick={processSelectedCandidate}
+              >
+                {isProcessingCandidate ? 'Verwerken...' : 'Verwerk gekozen kandidaat in catalogus'}
+              </Button>
+            </div>
+
+            {processMessage ? <div className="rz-inline-feedback rz-inline-feedback--success">{processMessage}</div> : null}
           </>
         ) : <p className="rz-external-databases-muted">Dubbelklik op een bonartikel om de detailcontext te openen.</p>}
       </div>
     </div>
   )
 }
+
