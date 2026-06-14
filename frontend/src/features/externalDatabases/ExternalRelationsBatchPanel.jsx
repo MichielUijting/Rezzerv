@@ -24,6 +24,27 @@ function receiptLineLabel(item) {
   return String(item?.receipt_line_text || item?.raw_text || item?.parsed_name || '-').trim() || '-'
 }
 
+function candidateLabel(item) {
+  return String(item?.candidate_name || '-').trim() || '-'
+}
+
+function brandLabel(item) {
+  return String(item?.candidate_brand || '-').trim() || '-'
+}
+
+function codeLabel(item) {
+  return String(item?.candidate_source_product_code || item?.source_product_code || item?.retailer_article_number || '-').trim() || '-'
+}
+
+function sortValue(item, key) {
+  if (key === 'candidate') return candidateLabel(item).toLowerCase()
+  if (key === 'brand') return brandLabel(item).toLowerCase()
+  if (key === 'code') return codeLabel(item).toLowerCase()
+  if (key === 'score') return Number(item?.score || 0)
+  if (key === 'status') return catalogStatus(item).toLowerCase()
+  return receiptLineLabel(item).toLowerCase()
+}
+
 function processMessage(data) {
   const firstResult = Array.isArray(data?.results) ? data.results[0] : null
   if (data?.already_linked_count || firstResult?.already_linked) {
@@ -33,15 +54,6 @@ function processMessage(data) {
     return 'Keuze opgeslagen in de catalogus.'
   }
   return firstResult?.message || firstResult?.reason || 'De kandidaat is niet verwerkt in de catalogus.'
-}
-
-function getCellValue(item, key) {
-  if (key === 'candidate') return String(item.candidate_name || '').toLowerCase()
-  if (key === 'brand') return String(item.candidate_brand || '').toLowerCase()
-  if (key === 'code') return String(item.candidate_source_product_code || item.source_product_code || item.retailer_article_number || '').toLowerCase()
-  if (key === 'score') return Number(item.score || 0)
-  if (key === 'status') return catalogStatus(item).toLowerCase()
-  return receiptLineLabel(item).toLowerCase()
 }
 
 export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
@@ -98,9 +110,9 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
   const filteredItems = useMemo(() => {
     const rows = items.filter((item) => {
       const receipt = receiptLineLabel(item).toLowerCase()
-      const candidate = String(item.candidate_name || '').toLowerCase()
-      const brand = String(item.candidate_brand || '').toLowerCase()
-      const code = String(item.candidate_source_product_code || item.source_product_code || item.retailer_article_number || '').toLowerCase()
+      const candidate = candidateLabel(item).toLowerCase()
+      const brand = brandLabel(item).toLowerCase()
+      const code = codeLabel(item).toLowerCase()
       const status = catalogStatus(item).toLowerCase()
       return receipt.includes(filters.receipt.toLowerCase())
         && candidate.includes(filters.candidate.toLowerCase())
@@ -109,8 +121,8 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
         && status.includes(filters.status.toLowerCase())
     })
     rows.sort((leftItem, rightItem) => {
-      const left = getCellValue(leftItem, sortKey)
-      const right = getCellValue(rightItem, sortKey)
+      const left = sortValue(leftItem, sortKey)
+      const right = sortValue(rightItem, sortKey)
       if (left < right) return sortDesc ? 1 : -1
       if (left > right) return sortDesc ? -1 : 1
       return 0
@@ -121,6 +133,7 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
   const visibleItems = filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+  const emptyRows = Math.max(0, 3 - visibleItems.length)
 
   const selectedItem = useMemo(() => items.find((item) => itemKey(item) === selectedKey) || null, [items, selectedKey])
   const activeReceiptLine = receiptLineLabel(selectedItem || items[0])
@@ -207,6 +220,7 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
               </tr>
             )
           }) : <tr><td colSpan="7">Geen externe kandidaten beschikbaar om in de catalogus te verwerken.</td></tr>}
+          {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="7"></td></tr>)}
         </tbody>
       </Table>
       <div className="rz-external-databases-pagination">
