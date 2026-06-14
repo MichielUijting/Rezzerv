@@ -13,7 +13,7 @@ import './externalDatabases.css'
 const TAB_LABELS = {
   overzicht: 'Overzicht',
   test: 'Test algoritme',
-  koppelen: 'Relaties koppelen',
+  catalogus: 'Catalogus verwerken',
   winkelketens: 'Winkelketens',
 }
 
@@ -160,7 +160,7 @@ export default function ExternalDatabasesPage() {
   }
 
   const candidates = Array.isArray(matchResult?.candidates) ? matchResult.candidates : []
-  const tabs = [TAB_LABELS.overzicht, TAB_LABELS.test, TAB_LABELS.koppelen, TAB_LABELS.winkelketens]
+  const tabs = [TAB_LABELS.overzicht, TAB_LABELS.test, TAB_LABELS.catalogus, TAB_LABELS.winkelketens]
 
   function renderTabContent(tab) {
     if (tab === TAB_LABELS.overzicht) {
@@ -262,7 +262,7 @@ export default function ExternalDatabasesPage() {
       )
     }
 
-    if (tab === TAB_LABELS.koppelen) {
+    if (tab === TAB_LABELS.catalogus) {
       return <ExternalRelationsBatchPanel onError={setError} />
     }
 
