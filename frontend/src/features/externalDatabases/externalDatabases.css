@@ -181,6 +181,10 @@
   padding: 0;
 }
 
+.rz-external-databases-sort .is-active {
+  color: var(--color-brand-primary);
+}
+
 .rz-external-databases-page-indicator {
   min-width: 110px;
   text-align: center;
