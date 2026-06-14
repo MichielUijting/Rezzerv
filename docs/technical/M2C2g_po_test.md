@@ -2,7 +2,7 @@
 
 ## Doel
 
-Controleer dat de gebruiker per bonartikel één externe kandidaat kan kiezen en expliciet kan verwerken in de artikelcatalogus.
+Controleer dat de gebruiker per bonartikel een externe kandidaat kan kiezen en expliciet kan verwerken in de artikelcatalogus.
 
 ## Voorbereiding
 
@@ -20,24 +20,24 @@ Start-Process "http://localhost:5174/login"
 
 ## Testpunten
 
-1. Open het scherm **Externe databases**.
-2. Controleer dat de tab **Catalogus verwerken** zichtbaar is.
-3. Open de tab **Catalogus verwerken**.
-4. Controleer dat boven de tabel expliciet staat: **Bonartikel in behandeling**.
-5. Controleer dat het actuele bonartikel daar duidelijk leesbaar is.
-6. Controleer dat de tabel kolommen toont voor **Bonartikel** en **Kandidaat**.
-7. Controleer dat de keuze per regel een radioselectie is, geen multiselect-checkboxbatch.
-8. Controleer dat de radioselectie/Rezzerv-selectie groen is en niet browserblauw.
-9. Selecteer één kandidaat bij het bonartikel.
-10. Controleer dat boven de tabel de knop **Verwerk gekozen kandidaat in catalogus** staat.
-11. Klik **Verwerk gekozen kandidaat in catalogus**.
-12. Controleer dat de standaard melding-overlay verschijnt met titel **Melding**, tekst **Keuze opgeslagen in de catalogus.** en knop **Sluiten**.
-13. Klik na verwerking opnieuw op dezelfde kandidaat en probeer opnieuw te verwerken.
-14. Controleer dat de standaard melding-overlay verschijnt met titel **Melding**, tekst **Dit bonartikel heeft al een kandidaatartikel in de catalogus.** en knop **Sluiten**.
-15. Controleer dat er geen losse custom inline-melding onder de knoppen staat.
+1. Open het scherm Externe databases.
+2. Open de tab Catalogus verwerken.
+3. Controleer dat Bonartikel in behandeling zichtbaar is.
+4. Controleer dat de tabel kolommen toont voor Bonartikel en Kandidaat.
+5. Controleer dat er een filterrij onder de kolomkoppen staat.
+6. Controleer dat Bonartikel een zoekveld met placeholder Zoek heeft.
+7. Controleer dat Kandidaat, Merk, Artikelnummer en Status een filterveld hebben.
+8. Controleer dat de dataregels 28 px hoog zijn.
+9. Controleer dat radioselectie groen is.
+10. Controleer dat sorteren werkt op Bonartikel, Kandidaat, Merk, Artikelnummer, Score en Status.
+11. Controleer dat paginering onder de tabel staat.
+12. Kies een kandidaat en klik Verwerk gekozen kandidaat in catalogus.
+13. Controleer dat de standaard melding-overlay verschijnt met titel Melding, tekst Keuze opgeslagen in de catalogus. en knop Sluiten.
+14. Probeer opnieuw te verwerken.
+15. Controleer dat de standaard melding-overlay verschijnt met de waarschuwing dat het bonartikel al een kandidaatartikel in de catalogus heeft.
 16. Controleer dat er geen huishoudartikel wordt aangemaakt.
 17. Controleer dat er geen voorraadmutatie wordt aangemaakt.
-18. Controleer dat de status van de gekozen kandidaat wijzigt naar catalogus verwerkt.
+18. Controleer dat bestaande tabs blijven werken.
 
 ## Acceptatie
 
@@ -46,13 +46,12 @@ M2C2g is akkoord als:
 - het bonartikel boven de tabel zichtbaar is als context;
 - het bonartikel ook in de tabel zichtbaar is;
 - de externe kandidaat zichtbaar is;
-- de gebruiker maximaal één kandidaat per verwerking kan kiezen;
+- de gebruiker maximaal een kandidaat per verwerking kan kiezen;
 - de selectie groen is;
-- knop **Verwerk gekozen kandidaat in catalogus** boven de tabel staat;
-- de verwerking expliciet door de gebruiker wordt gestart;
+- de tabel het standaard Table-component gebruikt;
+- de tabel filterrij, sortering, paginering en rijhoogte 28 px heeft;
 - succes en waarschuwing via de standaard melding-overlay verschijnen;
 - er geen losse custom inline-melding wordt gebruikt;
-- dubbele verwerking een duidelijke waarschuwing geeft;
 - er geen huishoudartikel wordt aangemaakt;
 - er geen voorraadmutatie wordt aangemaakt;
 - bestaande tabs blijven werken.
