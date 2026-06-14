@@ -23,3 +23,7 @@ Externe kandidaten selecteren en verwerken in de artikelcatalogus.
 - filterrij is aanwezig
 - sortering is aanwezig
 - paginering is aanwezig
+
+## Vaste ontwikkelregel
+
+Bij elk nieuw onderdeel met tabellen controleert het scrumteam vooraf het standaard tabelcomponent, hergebruikt dat component en voegt een UI check toe aan de PO test.
