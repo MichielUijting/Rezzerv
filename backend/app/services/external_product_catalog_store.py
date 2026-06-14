@@ -92,6 +92,33 @@ def _find_candidate_by_id(conn, candidate_id: str):
     ).mappings().first()
 
 
+def _find_catalog_link_for_receipt_context(conn, candidate: dict[str, Any]):
+    context_key = str(candidate.get("context_key") or "").strip()
+    receipt_line_text = str(candidate.get("receipt_line_text") or "").strip()
+    params: dict[str, Any] = {}
+    where_parts = ["global_product_id IS NOT NULL"]
+    if context_key:
+        where_parts.append("context_key = :context_key")
+        params["context_key"] = context_key
+    elif receipt_line_text:
+        where_parts.append("receipt_line_text = :receipt_line_text")
+        params["receipt_line_text"] = receipt_line_text
+    else:
+        return None
+    return conn.execute(
+        text(
+            f"""
+            SELECT id, candidate_name, global_product_id, receipt_line_text
+            FROM external_product_candidates
+            WHERE {' AND '.join(where_parts)}
+            ORDER BY updated_at DESC, created_at DESC
+            LIMIT 1
+            """
+        ),
+        params,
+    ).mappings().first()
+
+
 def _find_existing_global_product(conn, candidate: dict[str, Any]):
     explicit_global_product_id = str(candidate.get("global_product_id") or "").strip()
     if explicit_global_product_id:
@@ -247,8 +274,31 @@ def _mark_candidate_linked(conn, candidate_id: str, global_product_id: str) -> N
     )
 
 
+def _already_linked_result(candidate: dict[str, Any], linked: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "promoted": False,
+        "already_linked": True,
+        "reason": "receipt_line_already_has_catalog_candidate",
+        "message": "Dit bonartikel heeft al een kandidaatartikel in de catalogus.",
+        "candidate_id": str(candidate.get("id") or ""),
+        "candidate_name": _candidate_title(candidate),
+        "linked_candidate_id": str(linked.get("id") or ""),
+        "linked_candidate_name": str(linked.get("candidate_name") or ""),
+        "global_product_id": str(linked.get("global_product_id") or ""),
+        "receipt_line_text": str(linked.get("receipt_line_text") or candidate.get("receipt_line_text") or ""),
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_inventory_event": False,
+    }
+
+
 def _promote_candidate_row(conn, candidate: dict[str, Any], allow_create: bool) -> dict[str, Any]:
     candidate_id = str(candidate.get("id") or "")
+    linked_for_context = _find_catalog_link_for_receipt_context(conn, candidate)
+    if linked_for_context:
+        return _already_linked_result(candidate, dict(linked_for_context))
+
     existing_global_product = _find_existing_global_product(conn, candidate)
     created_global_product = False
 
@@ -280,6 +330,7 @@ def _promote_candidate_row(conn, candidate: dict[str, Any], allow_create: bool) 
     return {
         "ok": True,
         "promoted": True,
+        "already_linked": False,
         "reason": reason,
         "global_product_id": global_product_id,
         "candidate_id": candidate_id,
@@ -347,6 +398,7 @@ def process_selected_candidates_to_catalog(candidate_ids: list[str], allow_creat
         "ok": True,
         "processed_count": len(results),
         "promoted_count": sum(1 for item in results if item.get("promoted")),
+        "already_linked_count": sum(1 for item in results if item.get("already_linked")),
         "created_global_products_count": sum(1 for item in results if item.get("creates_global_product")),
         "creates_household_article": False,
         "creates_inventory_event": False,
