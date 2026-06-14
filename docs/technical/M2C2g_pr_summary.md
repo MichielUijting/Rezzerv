@@ -4,8 +4,8 @@ Externe kandidaten selecteren en verwerken in de artikelcatalogus.
 
 ## Scope
 
-- tab **Catalogus verwerken** in Externe databases
-- per bonartikel maximaal één externe kandidaat kiezen
+- tab Catalogus verwerken in Externe databases
+- per bonartikel maximaal een externe kandidaat kiezen
 - gekozen kandidaat verwerken in de artikelcatalogus
 - geen huishoudartikel-aanmaak
 - geen voorraadmutatie
@@ -15,17 +15,16 @@ Externe kandidaten selecteren en verwerken in de artikelcatalogus.
 
 Deze PR moet aantoonbaar voldoen aan de standaard Rezzerv UI-conventies:
 
-- tabellen gebruiken `frontend/src/ui/Table.jsx` als basiscomponent;
-- er worden geen losse HTML-tabellen buiten het standaard `Table`-component geïntroduceerd;
-- tabelselectie gebruikt Rezzerv-groen en geen browserblauw;
-- meldingen lopen via het standaard melding-overlaypatroon met titel **Melding** en knop **Sluiten**;
+- tabellen gebruiken frontend/src/ui/Table.jsx als basiscomponent;
+- geen losse HTML-tabellen buiten het standaard Table-component;
+- tabelselectie gebruikt Rezzerv-groen;
+- meldingen lopen via het standaard melding-overlaypatroon;
 - geen losse custom inline-meldingen onder tabelknoppen;
-- contextinformatie bij de tabel is functioneel zichtbaar, in dit geval **Bonartikel in behandeling**;
+- contextinformatie bij de tabel is zichtbaar;
 - tabelrijhoogte is 28 px;
-- de tabel heeft een filterrij onder de kolomkoppen;
-- paginering is aanwezig;
-- sortering is nog de resterende correctie voordat PR #55 mergeklaar is;
-- eventuele afwijkingen van de standaard tabelconventies moeten vooraf expliciet worden benoemd.
+- filterrij onder de kolomkoppen is aanwezig;
+- sortering op relevante kolommen is aanwezig;
+- paginering is aanwezig.
 
 ## Ontwikkelafspraak voor vervolgwerk
 
