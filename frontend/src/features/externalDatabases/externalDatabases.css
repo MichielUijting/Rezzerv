@@ -90,7 +90,8 @@
 }
 
 .rz-external-databases-actions,
-.rz-external-databases-batch-toolbar {
+.rz-external-databases-batch-toolbar,
+.rz-external-databases-pagination {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
@@ -158,6 +159,31 @@
 .rz-external-databases-status-cell {
   padding: 0;
   line-height: 28px;
+}
+
+.rz-table-filter {
+  width: 100%;
+  height: 24px;
+  box-sizing: border-box;
+  font: inherit;
+  font-weight: 400;
+}
+
+.rz-external-databases-sort {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+}
+
+.rz-external-databases-page-indicator {
+  min-width: 110px;
+  text-align: center;
 }
 
 @media (max-width: 720px) {
