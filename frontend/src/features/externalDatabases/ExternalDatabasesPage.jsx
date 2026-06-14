@@ -7,11 +7,13 @@ import Tabs from '../../ui/Tabs'
 import Input from '../../ui/Input'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
+import ExternalRelationsBatchPanel from './ExternalRelationsBatchPanel'
 import './externalDatabases.css'
 
 const TAB_LABELS = {
   overzicht: 'Overzicht',
   test: 'Test algoritme',
+  catalogus: 'Catalogus verwerken',
   winkelketens: 'Winkelketens',
 }
 
@@ -158,7 +160,7 @@ export default function ExternalDatabasesPage() {
   }
 
   const candidates = Array.isArray(matchResult?.candidates) ? matchResult.candidates : []
-  const tabs = [TAB_LABELS.overzicht, TAB_LABELS.test, TAB_LABELS.winkelketens]
+  const tabs = [TAB_LABELS.overzicht, TAB_LABELS.test, TAB_LABELS.catalogus, TAB_LABELS.winkelketens]
 
   function renderTabContent(tab) {
     if (tab === TAB_LABELS.overzicht) {
@@ -258,6 +260,10 @@ export default function ExternalDatabasesPage() {
           ) : null}
         </div>
       )
+    }
+
+    if (tab === TAB_LABELS.catalogus) {
+      return <ExternalRelationsBatchPanel onError={setError} onMessage={setError} />
     }
 
     return (

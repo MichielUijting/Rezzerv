@@ -33,6 +33,7 @@ from app.services.external_product_candidate_store import (
 )
 from app.services.external_product_catalog_store import (
     list_catalog_products,
+    process_selected_candidates_to_catalog,
     promote_highest_candidate_to_catalog,
 )
 from app.services.external_relation_batch_store import (
@@ -137,6 +138,15 @@ def external_databases_promote_highest_candidate(payload: dict[str, Any] = Body(
         receipt_line_text=receipt_line_text,
         threshold=threshold,
     )
+
+
+@router.post('/api/external-databases/catalog/process-candidates')
+def external_databases_process_selected_candidates(payload: dict[str, Any] = Body(default_factory=dict)):
+    candidate_ids = payload.get('candidate_ids') or []
+    if not isinstance(candidate_ids, list):
+        raise HTTPException(status_code=400, detail='candidate_ids moet een lijst zijn')
+    allow_create = bool(payload.get('allow_create', True))
+    return process_selected_candidates_to_catalog(candidate_ids=candidate_ids, allow_create=allow_create)
 
 
 @router.get('/api/external-databases/catalog/products')
