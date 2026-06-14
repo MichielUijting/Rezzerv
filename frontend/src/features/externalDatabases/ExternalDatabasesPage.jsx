@@ -6,6 +6,7 @@ import Table from '../../ui/Table'
 import Tabs from '../../ui/Tabs'
 import Input from '../../ui/Input'
 import Button from '../../ui/Button'
+import ReceiptItemsOverview from './ReceiptItemsOverview'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './externalDatabases.css'
 
@@ -165,6 +166,7 @@ export default function ExternalDatabasesPage() {
       return (
         <div className="rz-external-databases-overview">
           {isLoadingConfig ? <div>Externe databases worden geladen...</div> : null}
+          <ReceiptItemsOverview onError={setError} />
           <div className="rz-external-databases-overview-grid">
             <OverviewTile title="Actieve winkelketens" value={summary?.supported_retailers ?? retailers.length} helper={(summary?.active_retailers || []).join(', ') || 'Nog geen actieve winkelketens'} />
             <OverviewTile title="Beleid" value="Preview" helper="Alleen kandidaatmatches tonen" />
@@ -198,62 +200,18 @@ export default function ExternalDatabasesPage() {
               <Button type="submit" disabled={isTesting || !selectedRetailer}>
                 {isTesting ? 'Test loopt...' : 'Test kandidaat'}
               </Button>
-              <Button type="button" variant="secondary" onClick={() => setReceiptLineText('Taco saus')}>
-                Voorbeeld Taco saus
-              </Button>
-              <Button type="button" variant="secondary" onClick={() => setReceiptLineText('Mexicaanse kruidenm.')}>
-                Voorbeeld kruidenmix
-              </Button>
-              <Button type="button" variant="secondary" disabled={isSaving || !candidates.length} onClick={saveCandidateMatches}>
-                {isSaving ? 'Opslaan...' : 'Kandidaten opslaan'}
-              </Button>
+              <Button type="button" variant="secondary" onClick={() => setReceiptLineText('Taco saus')}>Voorbeeld Taco saus</Button>
+              <Button type="button" variant="secondary" onClick={() => setReceiptLineText('Mexicaanse kruidenm.')}>Voorbeeld kruidenmix</Button>
+              <Button type="button" variant="secondary" disabled={isSaving || !candidates.length} onClick={saveCandidateMatches}>{isSaving ? 'Opslaan...' : 'Kandidaten opslaan'}</Button>
             </div>
           </form>
-
-          <div className="rz-external-databases-muted">
-            Drempel probable_candidate: {formatScore(selectedRetailerConfig?.probable_candidate_threshold)}. Deze opslag maakt geen Mijn artikel, global_product of voorraadmutatie aan.
-          </div>
-
-          {saveResult ? (
-            <div className="rz-inline-feedback rz-inline-feedback--success">
-              Kandidaten opgeslagen: {saveResult.saved_count ?? 0} nieuw, {saveResult.updated_count ?? 0} bijgewerkt, {saveResult.skipped_count ?? 0} overgeslagen.
-            </div>
-          ) : null}
-
+          <div className="rz-external-databases-muted">Drempel probable_candidate: {formatScore(selectedRetailerConfig?.probable_candidate_threshold)}. Deze opslag maakt geen Mijn artikel, global_product of voorraadmutatie aan.</div>
+          {saveResult ? <div className="rz-inline-feedback rz-inline-feedback--success">Kandidaten opgeslagen: {saveResult.saved_count ?? 0} nieuw, {saveResult.updated_count ?? 0} bijgewerkt, {saveResult.skipped_count ?? 0} overgeslagen.</div> : null}
           {matchResult ? (
             <Table dataTestId="external-database-candidates-table" tableClassName="rz-external-databases-table">
-              <colgroup>
-                <col className="rz-external-databases-col-candidate" />
-                <col className="rz-external-databases-col-brand" />
-                <col className="rz-external-databases-col-code" />
-                <col className="rz-external-databases-col-variant" />
-                <col className="rz-external-databases-col-score" />
-                <col className="rz-external-databases-col-status" />
-              </colgroup>
-              <thead>
-                <tr className="rz-table-header">
-                  <th>Kandidaat</th>
-                  <th>Merk</th>
-                  <th>Artikelnummer</th>
-                  <th>Variant</th>
-                  <th className="rz-num">Score</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {candidates.length ? candidates.map((candidate) => (
-                  <tr key={`${candidate.candidate_name}-${candidate.retailer_article_number}-${candidate.variant}`}>
-                    <td>{candidate.candidate_name}</td>
-                    <td>{candidate.candidate_brand}</td>
-                    <td>{candidate.retailer_article_number}</td>
-                    <td>{candidate.variant || '-'}</td>
-                    <td className="rz-num">{formatScore(candidate.score)}</td>
-                    <td><StatusBadge status={candidate.candidate_status} /></td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan="6">Geen kandidaten gevonden boven de drempel.</td></tr>
-                )}
-              </tbody>
+              <colgroup><col className="rz-external-databases-col-candidate" /><col className="rz-external-databases-col-brand" /><col className="rz-external-databases-col-code" /><col className="rz-external-databases-col-variant" /><col className="rz-external-databases-col-score" /><col className="rz-external-databases-col-status" /></colgroup>
+              <thead><tr className="rz-table-header"><th>Kandidaat</th><th>Merk</th><th>Artikelnummer</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr></thead>
+              <tbody>{candidates.length ? candidates.map((candidate) => <tr key={`${candidate.candidate_name}-${candidate.retailer_article_number}-${candidate.variant}`}><td>{candidate.candidate_name}</td><td>{candidate.candidate_brand}</td><td>{candidate.retailer_article_number}</td><td>{candidate.variant || '-'}</td><td className="rz-num">{formatScore(candidate.score)}</td><td><StatusBadge status={candidate.candidate_status} /></td></tr>) : <tr><td colSpan="6">Geen kandidaten gevonden boven de drempel.</td></tr>}</tbody>
             </Table>
           ) : null}
         </div>
@@ -262,32 +220,9 @@ export default function ExternalDatabasesPage() {
 
     return (
       <Table dataTestId="external-database-retailers-table" tableClassName="rz-external-databases-retailer-table">
-        <colgroup>
-          <col className="rz-external-databases-col-retailer" />
-          <col className="rz-external-databases-col-retailer-status" />
-          <col className="rz-external-databases-col-retailer-threshold" />
-          <col className="rz-external-databases-col-retailer-examples" />
-        </colgroup>
-        <thead>
-          <tr className="rz-table-header">
-            <th>Winkelketen</th>
-            <th>Status</th>
-            <th className="rz-num">Drempel</th>
-            <th>Voorbeelden</th>
-          </tr>
-        </thead>
-        <tbody>
-          {retailers.length ? retailers.map((retailer) => (
-            <tr key={retailer.retailer_code}>
-              <td>{retailer.retailer_name}</td>
-              <td>{retailer.status}</td>
-              <td className="rz-num">{formatScore(retailer.probable_candidate_threshold)}</td>
-              <td>{(retailer.supported_examples || []).join(', ')}</td>
-            </tr>
-          )) : (
-            <tr><td colSpan="4">Geen winkelketens gevonden.</td></tr>
-          )}
-        </tbody>
+        <colgroup><col className="rz-external-databases-col-retailer" /><col className="rz-external-databases-col-retailer-status" /><col className="rz-external-databases-col-retailer-threshold" /><col className="rz-external-databases-col-retailer-examples" /></colgroup>
+        <thead><tr className="rz-table-header"><th>Winkelketen</th><th>Status</th><th className="rz-num">Drempel</th><th>Voorbeelden</th></tr></thead>
+        <tbody>{retailers.length ? retailers.map((retailer) => <tr key={retailer.retailer_code}><td>{retailer.retailer_name}</td><td>{retailer.status}</td><td className="rz-num">{formatScore(retailer.probable_candidate_threshold)}</td><td>{(retailer.supported_examples || []).join(', ')}</td></tr>) : <tr><td colSpan="4">Geen winkelketens gevonden.</td></tr>}</tbody>
       </Table>
     )
   }
@@ -300,18 +235,11 @@ export default function ExternalDatabasesPage() {
             <div className="rz-external-databases-header">
               <div className="rz-external-databases-title-group">
                 <h2 className="rz-external-databases-title">Externe databases</h2>
-                <p className="rz-external-databases-subtitle">
-                  Eerste versie voor externe productkandidaten. Deze preview maakt geen Mijn artikel, product of voorraadmutatie aan.
-                </p>
+                <p className="rz-external-databases-subtitle">Eerste versie voor externe productkandidaten. Deze preview maakt geen Mijn artikel, product of voorraadmutatie aan.</p>
               </div>
-              <Button variant="primary" type="button" onClick={() => navigate('/home')}>
-                Terug
-              </Button>
+              <Button variant="primary" type="button" onClick={() => navigate('/home')}>Terug</Button>
             </div>
-
-            <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>
-              {renderTabContent}
-            </Tabs>
+            <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>{renderTabContent}</Tabs>
           </div>
         </ScreenCard>
       </div>

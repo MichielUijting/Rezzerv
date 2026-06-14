@@ -8,11 +8,21 @@
   gap: 18px;
 }
 
-.rz-external-databases-header {
+.rz-external-databases-header,
+.rz-external-databases-section-header {
   display: flex;
   justify-content: space-between;
   gap: var(--space-md);
   align-items: flex-start;
+}
+
+.rz-external-databases-section-header {
+  align-items: center;
+}
+
+.rz-external-databases-section-header h3 {
+  margin: 0;
+  color: var(--color-brand-primary);
 }
 
 .rz-external-databases-title-group {
@@ -31,7 +41,8 @@
   color: #5f7a68;
 }
 
-.rz-external-databases-overview {
+.rz-external-databases-overview,
+.rz-external-receipt-overview {
   display: grid;
   gap: 14px;
 }
@@ -42,13 +53,34 @@
   gap: 12px;
 }
 
-.rz-external-databases-summary-card {
+.rz-external-databases-summary-card,
+.rz-external-receipt-detail {
   border: 2px solid #dfe7e1;
   border-radius: 14px;
   padding: 16px 18px;
   background: #ffffff;
   display: grid;
   gap: 6px;
+}
+
+.rz-external-receipt-detail h3 {
+  margin: 0;
+  color: var(--color-brand-primary);
+}
+
+.rz-external-receipt-detail dl {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 6px 12px;
+  margin: 0;
+}
+
+.rz-external-receipt-detail dt {
+  color: #5f7a68;
+}
+
+.rz-external-receipt-detail dd {
+  margin: 0;
 }
 
 .rz-external-databases-summary-label {
@@ -80,10 +112,12 @@
   align-items: end;
 }
 
-.rz-external-databases-actions {
+.rz-external-databases-actions,
+.rz-external-databases-pagination {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .rz-external-databases-test {
@@ -96,16 +130,66 @@
   padding: 3px 8px;
 }
 
+.rz-external-databases input[type='radio'],
+.rz-external-databases input[type='checkbox'] {
+  accent-color: var(--color-brand-primary);
+}
+
 .rz-external-databases-table {
   table-layout: fixed;
   width: 100%;
   min-width: 860px;
 }
 
+.rz-external-receipt-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 1480px;
+}
+
 .rz-external-databases-retailer-table {
   table-layout: fixed;
   width: 100%;
   min-width: 720px;
+}
+
+.rz-external-receipt-table th,
+.rz-external-receipt-table td {
+  height: 28px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 28px;
+  vertical-align: middle;
+}
+
+.rz-row-active td {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: -2px;
+}
+
+.rz-table-filter {
+  width: 100%;
+  height: 24px;
+  box-sizing: border-box;
+  font: inherit;
+  font-weight: 400;
+}
+
+.rz-external-databases-sort {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0;
+}
+
+.rz-external-databases-page-indicator {
+  min-width: 110px;
+  text-align: center;
 }
 
 .rz-external-databases-col-candidate { width: 260px; }
@@ -120,8 +204,21 @@
 .rz-external-databases-col-retailer-threshold { width: 140px; }
 .rz-external-databases-col-retailer-examples { width: 320px; }
 
+.rz-external-receipt-col-receipt { width: 220px; }
+.rz-external-receipt-col-normalized { width: 220px; }
+.rz-external-receipt-col-retailer { width: 120px; }
+.rz-external-receipt-col-code { width: 150px; }
+.rz-external-receipt-col-gtin { width: 140px; }
+.rz-external-receipt-col-quantity { width: 150px; }
+.rz-external-receipt-col-price { width: 90px; }
+.rz-external-receipt-col-amount { width: 90px; }
+.rz-external-receipt-col-candidates { width: 150px; }
+.rz-external-receipt-col-catalog { width: 110px; }
+.rz-external-receipt-col-status { width: 160px; }
+
 @media (max-width: 720px) {
   .rz-external-databases-header,
+  .rz-external-databases-section-header,
   .rz-external-databases-form-grid {
     display: grid;
     grid-template-columns: 1fr;
