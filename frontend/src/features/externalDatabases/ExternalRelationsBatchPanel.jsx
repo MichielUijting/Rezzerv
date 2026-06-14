@@ -3,6 +3,8 @@ import Button from '../../ui/Button'
 import Table from '../../ui/Table'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 
+const PAGE_SIZE = 10
+
 function itemKey(item) {
   return String(item.id || item.candidate_id || '')
 }
@@ -39,6 +41,7 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
   const [isLoading, setIsLoading] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [filters, setFilters] = useState({ receipt: '', candidate: '', brand: '', code: '', status: '' })
+  const [page, setPage] = useState(1)
 
   async function loadItems() {
     setIsLoading(true)
@@ -49,6 +52,7 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
       const nextItems = Array.isArray(data?.items) ? data.items : []
       setItems(nextItems)
       setSelectedKey('')
+      setPage(1)
     } catch (err) {
       onError?.(err?.message || 'Externe kandidaten konden niet worden geladen')
     } finally {
@@ -59,6 +63,11 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
   useEffect(() => {
     loadItems()
   }, [])
+
+  function updateFilter(key, value) {
+    setFilters((current) => ({ ...current, [key]: value }))
+    setPage(1)
+  }
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -74,6 +83,10 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
         && status.includes(filters.status.toLowerCase())
     })
   }, [items, filters])
+
+  const pageCount = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
+  const visibleItems = filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const selectedItem = useMemo(() => items.find((item) => itemKey(item) === selectedKey) || null, [items, selectedKey])
   const activeReceiptLine = receiptLineLabel(selectedItem || items[0])
@@ -137,16 +150,16 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
           </tr>
           <tr className="rz-external-databases-filter-row">
             <th></th>
-            <th><input className="rz-table-filter" value={filters.receipt} onChange={(event) => setFilters((value) => ({ ...value, receipt: event.target.value }))} placeholder="Zoek" /></th>
-            <th><input className="rz-table-filter" value={filters.candidate} onChange={(event) => setFilters((value) => ({ ...value, candidate: event.target.value }))} placeholder="Filter" /></th>
-            <th><input className="rz-table-filter" value={filters.brand} onChange={(event) => setFilters((value) => ({ ...value, brand: event.target.value }))} placeholder="Filter" /></th>
-            <th><input className="rz-table-filter" value={filters.code} onChange={(event) => setFilters((value) => ({ ...value, code: event.target.value }))} placeholder="Filter" /></th>
+            <th><input className="rz-table-filter" value={filters.receipt} onChange={(event) => updateFilter('receipt', event.target.value)} placeholder="Zoek" /></th>
+            <th><input className="rz-table-filter" value={filters.candidate} onChange={(event) => updateFilter('candidate', event.target.value)} placeholder="Filter" /></th>
+            <th><input className="rz-table-filter" value={filters.brand} onChange={(event) => updateFilter('brand', event.target.value)} placeholder="Filter" /></th>
+            <th><input className="rz-table-filter" value={filters.code} onChange={(event) => updateFilter('code', event.target.value)} placeholder="Filter" /></th>
             <th></th>
-            <th><input className="rz-table-filter" value={filters.status} onChange={(event) => setFilters((value) => ({ ...value, status: event.target.value }))} placeholder="Filter" /></th>
+            <th><input className="rz-table-filter" value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} placeholder="Filter" /></th>
           </tr>
         </thead>
         <tbody>
-          {filteredItems.length ? filteredItems.map((item) => {
+          {visibleItems.length ? visibleItems.map((item) => {
             const key = itemKey(item)
             return (
               <tr key={key}>
@@ -162,6 +175,11 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
           }) : <tr><td colSpan="7">Geen externe kandidaten beschikbaar om in de catalogus te verwerken.</td></tr>}
         </tbody>
       </Table>
+      <div className="rz-external-databases-pagination">
+        <Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>Vorige</Button>
+        <span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span>
+        <Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Volgende</Button>
+      </div>
     </div>
   )
 }
