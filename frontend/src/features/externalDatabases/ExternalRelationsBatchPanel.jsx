@@ -35,12 +35,23 @@ function processMessage(data) {
   return firstResult?.message || firstResult?.reason || 'De kandidaat is niet verwerkt in de catalogus.'
 }
 
+function getCellValue(item, key) {
+  if (key === 'candidate') return String(item.candidate_name || '').toLowerCase()
+  if (key === 'brand') return String(item.candidate_brand || '').toLowerCase()
+  if (key === 'code') return String(item.candidate_source_product_code || item.source_product_code || item.retailer_article_number || '').toLowerCase()
+  if (key === 'score') return Number(item.score || 0)
+  if (key === 'status') return catalogStatus(item).toLowerCase()
+  return receiptLineLabel(item).toLowerCase()
+}
+
 export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
   const [items, setItems] = useState([])
   const [selectedKey, setSelectedKey] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [filters, setFilters] = useState({ receipt: '', candidate: '', brand: '', code: '', status: '' })
+  const [sortKey, setSortKey] = useState('receipt')
+  const [sortDesc, setSortDesc] = useState(false)
   const [page, setPage] = useState(1)
 
   async function loadItems() {
@@ -69,8 +80,23 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
     setPage(1)
   }
 
+  function updateSort(key) {
+    if (sortKey === key) {
+      setSortDesc((value) => !value)
+    } else {
+      setSortKey(key)
+      setSortDesc(false)
+    }
+    setPage(1)
+  }
+
+  function sortText(key) {
+    if (sortKey !== key) return 'v'
+    return sortDesc ? 'v' : '^'
+  }
+
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    const rows = items.filter((item) => {
       const receipt = receiptLineLabel(item).toLowerCase()
       const candidate = String(item.candidate_name || '').toLowerCase()
       const brand = String(item.candidate_brand || '').toLowerCase()
@@ -82,7 +108,15 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
         && code.includes(filters.code.toLowerCase())
         && status.includes(filters.status.toLowerCase())
     })
-  }, [items, filters])
+    rows.sort((leftItem, rightItem) => {
+      const left = getCellValue(leftItem, sortKey)
+      const right = getCellValue(rightItem, sortKey)
+      if (left < right) return sortDesc ? 1 : -1
+      if (left > right) return sortDesc ? -1 : 1
+      return 0
+    })
+    return rows
+  }, [items, filters, sortKey, sortDesc])
 
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
@@ -141,12 +175,12 @@ export default function ExternalRelationsBatchPanel({ onError, onMessage }) {
         <thead>
           <tr className="rz-table-header">
             <th className="rz-check">Keuze</th>
-            <th>Bonartikel</th>
-            <th>Kandidaat</th>
-            <th>Merk</th>
-            <th>Artikelnummer</th>
-            <th className="rz-num">Score</th>
-            <th>Status</th>
+            <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('receipt')}>Bonartikel <span>{sortText('receipt')}</span></button></th>
+            <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('candidate')}>Kandidaat <span>{sortText('candidate')}</span></button></th>
+            <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('brand')}>Merk <span>{sortText('brand')}</span></button></th>
+            <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('code')}>Artikelnummer <span>{sortText('code')}</span></button></th>
+            <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('score')}>Score <span>{sortText('score')}</span></button></th>
+            <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('status')}>Status <span>{sortText('status')}</span></button></th>
           </tr>
           <tr className="rz-external-databases-filter-row">
             <th></th>
