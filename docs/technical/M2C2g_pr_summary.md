@@ -13,22 +13,13 @@ Externe kandidaten selecteren en verwerken in de artikelcatalogus.
 
 ## UI check
 
-- Table component wordt gebruikt
-- Geen losse HTML tabel
-- Selectie is groen
-- Meldingen via standaard overlay
-- Geen losse inline melding onder knoppen
-- Bonartikel in behandeling is zichtbaar
-- Rijhoogte is 28 px
-- Filterrij is aanwezig
-- Sortering is aanwezig
-- Paginering is aanwezig
-
-## Afspraak vervolgwerk
-
-Voor elk nieuw onderdeel met tabellen geldt:
-
-1. standaardcomponent zoeken
-2. standaardcomponent gebruiken
-3. afwijking vooraf benoemen
-4. PO test uitbreiden met UI check
+- standaard tabelcomponent wordt gebruikt
+- geen losse HTML tabel
+- selectie is groen
+- meldingen via standaard overlay
+- geen losse inline melding onder knoppen
+- bonartikel in behandeling is zichtbaar
+- rijhoogte is 28 px
+- filterrij is aanwezig
+- sortering is aanwezig
+- paginering is aanwezig
