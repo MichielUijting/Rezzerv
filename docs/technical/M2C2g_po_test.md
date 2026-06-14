@@ -31,9 +31,12 @@ Start-Process "http://localhost:5174/login"
 9. Selecteer één kandidaat bij het bonartikel.
 10. Controleer dat boven de tabel de knop **Verwerk gekozen kandidaat in catalogus** staat.
 11. Klik **Verwerk gekozen kandidaat in catalogus**.
-12. Controleer dat er geen huishoudartikel wordt aangemaakt.
-13. Controleer dat er geen voorraadmutatie wordt aangemaakt.
-14. Controleer dat de status van de gekozen kandidaat wijzigt naar catalogus verwerkt.
+12. Controleer dat een succesmelding zichtbaar blijft: **Keuze opgeslagen in de catalogus.**
+13. Klik na verwerking opnieuw op dezelfde kandidaat en probeer opnieuw te verwerken.
+14. Controleer dat een waarschuwing verschijnt: **Dit bonartikel heeft al een kandidaatartikel in de catalogus.**
+15. Controleer dat er geen huishoudartikel wordt aangemaakt.
+16. Controleer dat er geen voorraadmutatie wordt aangemaakt.
+17. Controleer dat de status van de gekozen kandidaat wijzigt naar catalogus verwerkt.
 
 ## Acceptatie
 
@@ -46,6 +49,8 @@ M2C2g is akkoord als:
 - de selectie groen is;
 - knop **Verwerk gekozen kandidaat in catalogus** boven de tabel staat;
 - de verwerking expliciet door de gebruiker wordt gestart;
+- na verwerking een succesmelding zichtbaar blijft;
+- dubbele verwerking een duidelijke waarschuwing geeft;
 - er geen huishoudartikel wordt aangemaakt;
 - er geen voorraadmutatie wordt aangemaakt;
 - bestaande tabs blijven werken.
