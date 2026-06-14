@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Button from '../../ui/Button'
 import Table from '../../ui/Table'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -16,6 +16,10 @@ function formatScore(value) {
 function catalogStatus(item) {
   if (item.global_product_id) return 'Verwerkt in catalogus'
   return 'Nog niet in catalogus'
+}
+
+function receiptLineLabel(item) {
+  return String(item?.receipt_line_text || item?.raw_text || item?.parsed_name || '-').trim() || '-'
 }
 
 export default function ExternalRelationsBatchPanel({ onError }) {
@@ -46,6 +50,9 @@ export default function ExternalRelationsBatchPanel({ onError }) {
     loadItems()
   }, [])
 
+  const selectedItem = useMemo(() => items.find((item) => itemKey(item) === selectedKey) || null, [items, selectedKey])
+  const activeReceiptLine = receiptLineLabel(selectedItem || items[0])
+
   async function processSelected() {
     if (!selectedKey) {
       onError?.('Selecteer eerst één kandidaat om in de catalogus te verwerken')
@@ -72,10 +79,16 @@ export default function ExternalRelationsBatchPanel({ onError }) {
 
   return (
     <div className="rz-external-databases-batch">
+      <div className="rz-external-databases-context-card">
+        <div className="rz-external-databases-context-label">Bonartikel in behandeling</div>
+        <div className="rz-external-databases-context-value">{activeReceiptLine}</div>
+        <div className="rz-external-databases-context-helper">Kies hieronder precies één externe kandidaat voor dit bonartikel.</div>
+      </div>
+
       <div className="rz-external-databases-batch-toolbar">
         <Button type="button" disabled={isProcessing || !selectedKey} onClick={processSelected}>{isProcessing ? 'Verwerken...' : 'Verwerk gekozen kandidaat in catalogus'}</Button>
         <Button type="button" variant="secondary" disabled={isLoading || isProcessing} onClick={loadItems}>Vernieuwen</Button>
-        <span className="rz-external-databases-muted">Gekozen: {selectedKey ? 1 : 0}. Kies per bonartikel één kandidaat. Dit maakt geen huishoudartikel en geen voorraadmutatie.</span>
+        <span className="rz-external-databases-muted">Gekozen: {selectedKey ? 1 : 0}. Dit maakt geen huishoudartikel en geen voorraadmutatie.</span>
       </div>
       {message ? <div className="rz-inline-feedback rz-inline-feedback--success">{message}</div> : null}
       {isLoading ? <div>Externe kandidaten worden geladen...</div> : null}
@@ -106,7 +119,7 @@ export default function ExternalRelationsBatchPanel({ onError }) {
             return (
               <tr key={key}>
                 <td className="rz-check"><input type="radio" name="catalog-candidate" checked={selectedKey === key} onChange={() => setSelectedKey(key)} /></td>
-                <td>{item.receipt_line_text || '-'}</td>
+                <td>{receiptLineLabel(item)}</td>
                 <td>{item.candidate_name || '-'}</td>
                 <td>{item.candidate_brand || '-'}</td>
                 <td>{item.candidate_source_product_code || item.source_product_code || item.retailer_article_number || '-'}</td>
