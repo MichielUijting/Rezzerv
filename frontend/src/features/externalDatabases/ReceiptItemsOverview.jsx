@@ -90,6 +90,8 @@ export default function ReceiptItemsOverview({ onError }) {
   const [selectedItem, setSelectedItem] = useState(null)
   const [selectedCandidateId, setSelectedCandidateId] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isProcessingCandidate, setIsProcessingCandidate] = useState(false)
+  const [processMessage, setProcessMessage] = useState('')
   const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', articleNumber: '', quantity: '', status: '' })
   const [sortKey, setSortKey] = useState('receiptLineText')
   const [sortDesc, setSortDesc] = useState(false)
@@ -124,6 +126,46 @@ export default function ReceiptItemsOverview({ onError }) {
   function selectReceiptItem(item) {
     setSelectedItem(item)
     setSelectedCandidateId('')
+    setProcessMessage('')
+  }
+
+  async function processSelectedCandidate() {
+    if (!selectedItem || !selectedCandidateId) return
+
+    setIsProcessingCandidate(true)
+    setProcessMessage('')
+
+    try {
+      const response = await fetchJsonWithAuth('/api/external-databases/catalog/promote-highest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          context_key: selectedItem.contextKey || undefined,
+          retailer_code: selectedItem.retailerCode !== '-' ? selectedItem.retailerCode : undefined,
+          receipt_line_text: selectedItem.receiptLineText !== '-' ? selectedItem.receiptLineText : undefined,
+          threshold: 0,
+        }),
+      })
+
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.detail || 'Kandidaat verwerken is mislukt')
+
+      if (data?.promoted) {
+        setProcessMessage('Kandidaat is verwerkt in de catalogus.')
+      } else if (data?.reason === 'blocked_requires_existing_global_product') {
+        setProcessMessage('Kandidaat is gevonden, maar er bestaat nog geen passend catalogusproduct om aan te koppelen.')
+      } else if (data?.reason === 'no_candidate_above_threshold') {
+        setProcessMessage('Er is geen kandidaat gevonden om te verwerken.')
+      } else {
+        setProcessMessage('Catalogusverwerking is afgerond zonder catalogusmutatie.')
+      }
+
+      await loadItems()
+    } catch (err) {
+      onError?.(err?.message || 'Kandidaat verwerken is mislukt')
+    } finally {
+      setIsProcessingCandidate(false)
+    }
   }
 
   function updateFilter(key, value) {
@@ -312,10 +354,21 @@ export default function ReceiptItemsOverview({ onError }) {
               </tbody>
             </Table>
 
-            <p className="rz-external-databases-muted">Catalogusverwerking volgt in de volgende patch van M2C2h-2.</p>
+                        <div className="rz-external-databases-actions">
+              <Button
+                type="button"
+                disabled={!selectedCandidateId || isProcessingCandidate}
+                onClick={processSelectedCandidate}
+              >
+                {isProcessingCandidate ? 'Verwerken...' : 'Verwerk gekozen kandidaat in catalogus'}
+              </Button>
+            </div>
+
+            {processMessage ? <div className="rz-inline-feedback rz-inline-feedback--success">{processMessage}</div> : null}
           </>
         ) : <p className="rz-external-databases-muted">Dubbelklik op een bonartikel om de detailcontext te openen.</p>}
       </div>
     </div>
   )
 }
+
