@@ -108,7 +108,7 @@
 .rz-external-databases-batch-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 900px;
+  min-width: 1040px;
 }
 
 .rz-external-databases-retailer-table {
@@ -118,6 +118,7 @@
 }
 
 .rz-external-databases-col-select { width: 70px; }
+.rz-external-databases-col-receipt-line { width: 220px; }
 .rz-external-databases-col-candidate { width: 260px; }
 .rz-external-databases-col-brand { width: 150px; }
 .rz-external-databases-col-code { width: 140px; }
