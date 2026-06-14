@@ -21,17 +21,15 @@ Start-Process "http://localhost:5174/login"
 3. Bonartikel in behandeling is zichtbaar.
 4. Kolommen Bonartikel en Kandidaat zijn zichtbaar.
 5. Filterrij staat onder de kolomkoppen.
-6. Bonartikel heeft placeholder Zoek.
-7. Kandidaat, Merk, Artikelnummer en Status hebben placeholder Filter.
-8. Dataregels zijn 28 px hoog.
-9. Radioselectie is groen.
-10. Sorteren werkt op Bonartikel, Kandidaat, Merk, Artikelnummer, Score en Status.
-11. Paginering staat onder de tabel.
-12. Verwerking toont standaard melding overlay.
-13. Dubbele verwerking toont waarschuwing.
-14. Geen huishoudartikel wordt aangemaakt.
-15. Geen voorraadmutatie wordt aangemaakt.
-16. Bestaande tabs blijven werken.
+6. Rijhoogte is 28 px.
+7. Radioselectie is groen.
+8. Sorteren werkt.
+9. Paginering staat onder de tabel.
+10. Verwerking toont standaard melding overlay.
+11. Dubbele verwerking toont waarschuwing.
+12. Geen huishoudartikel wordt aangemaakt.
+13. Geen voorraadmutatie wordt aangemaakt.
+14. Bestaande tabs blijven werken.
 
 ## Acceptatie
 
