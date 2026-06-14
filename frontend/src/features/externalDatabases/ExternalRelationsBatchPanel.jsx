@@ -20,7 +20,7 @@ function catalogStatus(item) {
 
 export default function ExternalRelationsBatchPanel({ onError }) {
   const [items, setItems] = useState([])
-  const [selectedKeys, setSelectedKeys] = useState([])
+  const [selectedKey, setSelectedKey] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [message, setMessage] = useState('')
@@ -34,7 +34,7 @@ export default function ExternalRelationsBatchPanel({ onError }) {
       if (!response.ok) throw new Error(data?.detail || 'Externe kandidaten konden niet worden geladen')
       const nextItems = Array.isArray(data?.items) ? data.items : []
       setItems(nextItems)
-      setSelectedKeys([])
+      setSelectedKey('')
     } catch (err) {
       onError?.(err?.message || 'Externe kandidaten konden niet worden geladen')
     } finally {
@@ -46,20 +46,9 @@ export default function ExternalRelationsBatchPanel({ onError }) {
     loadItems()
   }, [])
 
-  function toggleItem(item) {
-    const key = itemKey(item)
-    setSelectedKeys((current) => (current.includes(key) ? current.filter((value) => value !== key) : [...current, key]))
-  }
-
-  function toggleAll() {
-    const selectableKeys = items.map(itemKey).filter(Boolean)
-    setSelectedKeys((current) => (current.length === selectableKeys.length ? [] : selectableKeys))
-  }
-
   async function processSelected() {
-    const candidateIds = selectedKeys.filter(Boolean)
-    if (!candidateIds.length) {
-      onError?.('Selecteer eerst één of meer kandidaten om in de catalogus te verwerken')
+    if (!selectedKey) {
+      onError?.('Selecteer eerst één kandidaat om in de catalogus te verwerken')
       return
     }
     setIsProcessing(true)
@@ -68,11 +57,11 @@ export default function ExternalRelationsBatchPanel({ onError }) {
       const response = await fetchJsonWithAuth('/api/external-databases/catalog/process-candidates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidate_ids: candidateIds, allow_create: true }),
+        body: JSON.stringify({ candidate_ids: [selectedKey], allow_create: true }),
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok || data?.ok === false) throw new Error(data?.detail || data?.reason || 'Catalogusverwerking is mislukt')
-      setMessage(`Catalogus verwerkt: ${data.promoted_count ?? 0} van ${data.processed_count ?? candidateIds.length} geselecteerd.`)
+      setMessage(`Catalogus verwerkt: ${data.promoted_count ?? 0} kandidaat.`)
       await loadItems()
     } catch (err) {
       onError?.(err?.message || 'Catalogusverwerking is mislukt')
@@ -81,20 +70,19 @@ export default function ExternalRelationsBatchPanel({ onError }) {
     }
   }
 
-  const allSelected = items.length > 0 && selectedKeys.length === items.length
-
   return (
     <div className="rz-external-databases-batch">
       <div className="rz-external-databases-batch-toolbar">
-        <Button type="button" disabled={isProcessing || !selectedKeys.length} onClick={processSelected}>{isProcessing ? 'Verwerken...' : 'Verwerken in catalogus'}</Button>
+        <Button type="button" disabled={isProcessing || !selectedKey} onClick={processSelected}>{isProcessing ? 'Verwerken...' : 'Verwerk gekozen kandidaat in catalogus'}</Button>
         <Button type="button" variant="secondary" disabled={isLoading || isProcessing} onClick={loadItems}>Vernieuwen</Button>
-        <span className="rz-external-databases-muted">Geselecteerd: {selectedKeys.length}. Dit maakt geen huishoudartikel en geen voorraadmutatie.</span>
+        <span className="rz-external-databases-muted">Gekozen: {selectedKey ? 1 : 0}. Kies per bonartikel één kandidaat. Dit maakt geen huishoudartikel en geen voorraadmutatie.</span>
       </div>
       {message ? <div className="rz-inline-feedback rz-inline-feedback--success">{message}</div> : null}
       {isLoading ? <div>Externe kandidaten worden geladen...</div> : null}
       <Table dataTestId="external-catalog-candidates-table" tableClassName="rz-external-databases-batch-table">
         <colgroup>
           <col className="rz-external-databases-col-select" />
+          <col className="rz-external-databases-col-receipt-line" />
           <col className="rz-external-databases-col-candidate" />
           <col className="rz-external-databases-col-brand" />
           <col className="rz-external-databases-col-code" />
@@ -103,7 +91,8 @@ export default function ExternalRelationsBatchPanel({ onError }) {
         </colgroup>
         <thead>
           <tr className="rz-table-header">
-            <th className="rz-check"><input type="checkbox" checked={allSelected} disabled={!items.length} onChange={toggleAll} /></th>
+            <th className="rz-check">Keuze</th>
+            <th>Bonartikel</th>
             <th>Kandidaat</th>
             <th>Merk</th>
             <th>Artikelnummer</th>
@@ -116,7 +105,8 @@ export default function ExternalRelationsBatchPanel({ onError }) {
             const key = itemKey(item)
             return (
               <tr key={key}>
-                <td className="rz-check"><input type="checkbox" checked={selectedKeys.includes(key)} onChange={() => toggleItem(item)} /></td>
+                <td className="rz-check"><input type="radio" name="catalog-candidate" checked={selectedKey === key} onChange={() => setSelectedKey(key)} /></td>
+                <td>{item.receipt_line_text || '-'}</td>
                 <td>{item.candidate_name || '-'}</td>
                 <td>{item.candidate_brand || '-'}</td>
                 <td>{item.candidate_source_product_code || item.source_product_code || item.retailer_article_number || '-'}</td>
@@ -124,7 +114,7 @@ export default function ExternalRelationsBatchPanel({ onError }) {
                 <td><span className="rz-inline-feedback rz-external-databases-status">{catalogStatus(item)}</span></td>
               </tr>
             )
-          }) : <tr><td colSpan="6">Geen externe kandidaten beschikbaar om in de catalogus te verwerken.</td></tr>}
+          }) : <tr><td colSpan="7">Geen externe kandidaten beschikbaar om in de catalogus te verwerken.</td></tr>}
         </tbody>
       </Table>
     </div>
