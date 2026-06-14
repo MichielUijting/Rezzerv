@@ -4,7 +4,7 @@ import Table from '../../ui/Table'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 
 function itemKey(item) {
-  return `${item.candidate_id || ''}:${item.household_article_id || ''}`
+  return String(item.id || item.candidate_id || '')
 }
 
 function formatScore(value) {
@@ -13,29 +13,30 @@ function formatScore(value) {
   return number.toLocaleString('nl-NL', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
 
-function canSelect(item) {
-  return item?.can_link === true
+function catalogStatus(item) {
+  if (item.global_product_id) return 'Verwerkt in catalogus'
+  return 'Nog niet in catalogus'
 }
 
 export default function ExternalRelationsBatchPanel({ onError }) {
   const [items, setItems] = useState([])
   const [selectedKeys, setSelectedKeys] = useState([])
   const [isLoading, setIsLoading] = useState(false)
-  const [isLinking, setIsLinking] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
   const [message, setMessage] = useState('')
 
   async function loadItems() {
     setIsLoading(true)
     setMessage('')
     try {
-      const response = await fetchJsonWithAuth('/api/admin/external-relations/batch?limit=50', { method: 'GET' })
+      const response = await fetchJsonWithAuth('/api/external-databases/candidates?limit=100', { method: 'GET' })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data?.detail || 'Externe relaties konden niet worden geladen')
+      if (!response.ok) throw new Error(data?.detail || 'Externe kandidaten konden niet worden geladen')
       const nextItems = Array.isArray(data?.items) ? data.items : []
       setItems(nextItems)
       setSelectedKeys([])
     } catch (err) {
-      onError?.(err?.message || 'Externe relaties konden niet worden geladen')
+      onError?.(err?.message || 'Externe kandidaten konden niet worden geladen')
     } finally {
       setIsLoading(false)
     }
@@ -46,72 +47,66 @@ export default function ExternalRelationsBatchPanel({ onError }) {
   }, [])
 
   function toggleItem(item) {
-    if (!canSelect(item)) return
     const key = itemKey(item)
     setSelectedKeys((current) => (current.includes(key) ? current.filter((value) => value !== key) : [...current, key]))
   }
 
   function toggleAll() {
-    const selectableKeys = items.filter(canSelect).map(itemKey)
+    const selectableKeys = items.map(itemKey).filter(Boolean)
     setSelectedKeys((current) => (current.length === selectableKeys.length ? [] : selectableKeys))
   }
 
-  async function linkSelected() {
-    const selectedItems = items.filter((item) => canSelect(item) && selectedKeys.includes(itemKey(item)))
-    if (!selectedItems.length) {
-      onError?.('Selecteer eerst één of meer koppelbare relaties')
+  async function processSelected() {
+    const candidateIds = selectedKeys.filter(Boolean)
+    if (!candidateIds.length) {
+      onError?.('Selecteer eerst één of meer kandidaten om in de catalogus te verwerken')
       return
     }
-    setIsLinking(true)
+    setIsProcessing(true)
     setMessage('')
     try {
-      let linked = 0
-      for (const item of selectedItems) {
-        const response = await fetchJsonWithAuth('/api/admin/external-relations/batch/decision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ candidate_id: item.candidate_id, household_article_id: item.household_article_id, decision: 'apply', decision_reason: 'M2C2g UI Koppelen' }),
-        })
-        const data = await response.json().catch(() => ({}))
-        if (!response.ok || data?.ok === false) throw new Error(data?.detail || data?.reason || 'Koppelen is mislukt')
-        if (data?.applied) linked += 1
-      }
-      setMessage(`Relaties gekoppeld: ${linked} van ${selectedItems.length} geselecteerd.`)
+      const response = await fetchJsonWithAuth('/api/external-databases/catalog/process-candidates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidate_ids: candidateIds, allow_create: true }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok || data?.ok === false) throw new Error(data?.detail || data?.reason || 'Catalogusverwerking is mislukt')
+      setMessage(`Catalogus verwerkt: ${data.promoted_count ?? 0} van ${data.processed_count ?? candidateIds.length} geselecteerd.`)
       await loadItems()
     } catch (err) {
-      onError?.(err?.message || 'Koppelen is mislukt')
+      onError?.(err?.message || 'Catalogusverwerking is mislukt')
     } finally {
-      setIsLinking(false)
+      setIsProcessing(false)
     }
   }
 
-  const selectableItems = items.filter(canSelect)
-  const allSelected = selectableItems.length > 0 && selectedKeys.length === selectableItems.length
+  const allSelected = items.length > 0 && selectedKeys.length === items.length
 
   return (
     <div className="rz-external-databases-batch">
       <div className="rz-external-databases-batch-toolbar">
-        <Button type="button" disabled={isLinking || !selectedKeys.length} onClick={linkSelected}>{isLinking ? 'Koppelen...' : 'Koppelen'}</Button>
-        <Button type="button" variant="secondary" disabled={isLoading || isLinking} onClick={loadItems}>Vernieuwen</Button>
-        <span className="rz-external-databases-muted">Geselecteerd: {selectedKeys.length}. Niet-koppelbare regels blijven zichtbaar maar zijn niet selecteerbaar.</span>
+        <Button type="button" disabled={isProcessing || !selectedKeys.length} onClick={processSelected}>{isProcessing ? 'Verwerken...' : 'Verwerken in catalogus'}</Button>
+        <Button type="button" variant="secondary" disabled={isLoading || isProcessing} onClick={loadItems}>Vernieuwen</Button>
+        <span className="rz-external-databases-muted">Geselecteerd: {selectedKeys.length}. Dit maakt geen huishoudartikel en geen voorraadmutatie.</span>
       </div>
       {message ? <div className="rz-inline-feedback rz-inline-feedback--success">{message}</div> : null}
-      {isLoading ? <div>Externe relaties worden geladen...</div> : null}
-      <Table dataTestId="external-relation-batch-table" tableClassName="rz-external-databases-batch-table">
+      {isLoading ? <div>Externe kandidaten worden geladen...</div> : null}
+      <Table dataTestId="external-catalog-candidates-table" tableClassName="rz-external-databases-batch-table">
         <colgroup>
           <col className="rz-external-databases-col-select" />
           <col className="rz-external-databases-col-candidate" />
           <col className="rz-external-databases-col-brand" />
-          <col className="rz-external-databases-col-household" />
+          <col className="rz-external-databases-col-code" />
           <col className="rz-external-databases-col-score" />
           <col className="rz-external-databases-col-status" />
         </colgroup>
         <thead>
           <tr className="rz-table-header">
-            <th className="rz-check"><input type="checkbox" checked={allSelected} disabled={!selectableItems.length} onChange={toggleAll} /></th>
+            <th className="rz-check"><input type="checkbox" checked={allSelected} disabled={!items.length} onChange={toggleAll} /></th>
             <th>Kandidaat</th>
             <th>Merk</th>
-            <th>Huishoudartikel</th>
+            <th>Artikelnummer</th>
             <th className="rz-num">Score</th>
             <th>Status</th>
           </tr>
@@ -119,18 +114,17 @@ export default function ExternalRelationsBatchPanel({ onError }) {
         <tbody>
           {items.length ? items.map((item) => {
             const key = itemKey(item)
-            const selectable = canSelect(item)
             return (
               <tr key={key}>
-                <td className="rz-check"><input type="checkbox" disabled={!selectable} checked={selectedKeys.includes(key)} onChange={() => toggleItem(item)} /></td>
-                <td>{item.candidate_name || item.global_product_name || '-'}</td>
-                <td>{item.candidate_brand || item.global_product_brand || '-'}</td>
-                <td>{item.household_article_name || '-'}</td>
+                <td className="rz-check"><input type="checkbox" checked={selectedKeys.includes(key)} onChange={() => toggleItem(item)} /></td>
+                <td>{item.candidate_name || '-'}</td>
+                <td>{item.candidate_brand || '-'}</td>
+                <td>{item.candidate_source_product_code || item.source_product_code || item.retailer_article_number || '-'}</td>
                 <td className="rz-num">{formatScore(item.score)}</td>
-                <td><span className="rz-inline-feedback rz-external-databases-status">{item.relation_status_label || '-'}</span></td>
+                <td><span className="rz-inline-feedback rz-external-databases-status">{catalogStatus(item)}</span></td>
               </tr>
             )
-          }) : <tr><td colSpan="6">Geen externe relaties beschikbaar om te koppelen.</td></tr>}
+          }) : <tr><td colSpan="6">Geen externe kandidaten beschikbaar om in de catalogus te verwerken.</td></tr>}
         </tbody>
       </Table>
     </div>
