@@ -21,6 +21,10 @@ Deze PR moet aantoonbaar voldoen aan de standaard Rezzerv UI-conventies:
 - meldingen lopen via het standaard melding-overlaypatroon met titel **Melding** en knop **Sluiten**;
 - geen losse custom inline-meldingen onder tabelknoppen;
 - contextinformatie bij de tabel is functioneel zichtbaar, in dit geval **Bonartikel in behandeling**;
+- tabelrijhoogte is 28 px;
+- de tabel heeft een filterrij onder de kolomkoppen;
+- paginering is aanwezig;
+- sortering is nog de resterende correctie voordat PR #55 mergeklaar is;
 - eventuele afwijkingen van de standaard tabelconventies moeten vooraf expliciet worden benoemd.
 
 ## Ontwikkelafspraak voor vervolgwerk
