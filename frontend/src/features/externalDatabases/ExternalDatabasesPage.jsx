@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
-import Tabs from '../../ui/Tabs'
 import Input from '../../ui/Input'
 import Button from '../../ui/Button'
 import ReceiptItemsOverview from './ReceiptItemsOverview'
@@ -54,7 +53,6 @@ function ErrorOverlay({ message, onClose }) {
 
 export default function ExternalDatabasesPage() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState(TAB_LABELS.overzicht)
   const [summary, setSummary] = useState(null)
   const [retailers, setRetailers] = useState([])
   const [receiptLineText, setReceiptLineText] = useState('Mexicaanse kruidenm.')
@@ -159,22 +157,13 @@ export default function ExternalDatabasesPage() {
   }
 
   const candidates = Array.isArray(matchResult?.candidates) ? matchResult.candidates : []
-  const tabs = [TAB_LABELS.overzicht, TAB_LABELS.test, TAB_LABELS.winkelketens]
 
   function renderTabContent(tab) {
     if (tab === TAB_LABELS.overzicht) {
       return (
         <div className="rz-external-databases-overview">
           {isLoadingConfig ? <div>Externe databases worden geladen...</div> : null}
-          <ReceiptItemsOverview onError={setError} />
-          <div className="rz-external-databases-overview-grid">
-            <OverviewTile title="Actieve winkelketens" value={summary?.supported_retailers ?? retailers.length} helper={(summary?.active_retailers || []).join(', ') || 'Nog geen actieve winkelketens'} />
-            <OverviewTile title="Beleid" value="Preview" helper="Alleen kandidaatmatches tonen" />
-            <OverviewTile title="Productmutaties" value="0" helper="Niet toegestaan in v1" />
-          </div>
-          <p className="rz-external-databases-muted">
-            Deze module toont kandidaatmatches uit externe bronnen. Bevestigen, GTIN-invoer en OFF-verrijking volgen pas in latere opdrachten.
-          </p>
+          <ReceiptItemsOverview onError={setError} onMessage={setError} />
         </div>
       )
     }
@@ -239,7 +228,7 @@ export default function ExternalDatabasesPage() {
               </div>
               <Button variant="primary" type="button" onClick={() => navigate('/home')}>Terug</Button>
             </div>
-            <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>{renderTabContent}</Tabs>
+            {renderTabContent(TAB_LABELS.overzicht)}
           </div>
         </ScreenCard>
       </div>
@@ -247,3 +236,5 @@ export default function ExternalDatabasesPage() {
     </AppShell>
   )
 }
+
+
