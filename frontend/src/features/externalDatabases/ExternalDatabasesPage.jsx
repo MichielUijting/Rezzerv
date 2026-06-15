@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
-import Tabs from '../../ui/Tabs'
 import Input from '../../ui/Input'
 import Button from '../../ui/Button'
 import ReceiptItemsOverview from './ReceiptItemsOverview'
@@ -54,7 +53,6 @@ function ErrorOverlay({ message, onClose }) {
 
 export default function ExternalDatabasesPage() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState(TAB_LABELS.overzicht)
   const [summary, setSummary] = useState(null)
   const [retailers, setRetailers] = useState([])
   const [receiptLineText, setReceiptLineText] = useState('Mexicaanse kruidenm.')
@@ -159,7 +157,6 @@ export default function ExternalDatabasesPage() {
   }
 
   const candidates = Array.isArray(matchResult?.candidates) ? matchResult.candidates : []
-  const tabs = [TAB_LABELS.overzicht, TAB_LABELS.test, TAB_LABELS.winkelketens]
 
   function renderTabContent(tab) {
     if (tab === TAB_LABELS.overzicht) {
@@ -231,7 +228,7 @@ export default function ExternalDatabasesPage() {
               </div>
               <Button variant="primary" type="button" onClick={() => navigate('/home')}>Terug</Button>
             </div>
-            <Tabs tabs={tabs} activeTab={activeTab} onTabChange={setActiveTab}>{renderTabContent}</Tabs>
+            {renderTabContent(TAB_LABELS.overzicht)}
           </div>
         </ScreenCard>
       </div>
@@ -239,4 +236,5 @@ export default function ExternalDatabasesPage() {
     </AppShell>
   )
 }
+
 

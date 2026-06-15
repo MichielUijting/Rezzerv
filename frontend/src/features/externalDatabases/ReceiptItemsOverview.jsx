@@ -51,7 +51,6 @@ function buildReceiptItems(candidates) {
       id: key,
       contextKey: text(candidate.context_key, ''),
       receiptLineText: text(candidate.receipt_line_text),
-      normalizedName: text(candidate.parsed_name || candidate.receipt_line_text),
       retailerCode: text(candidate.retailer_code),
       articleNumber: text(candidate.retailer_article_number || candidate.source_product_code || candidate.candidate_source_product_code),
       gtin: text(candidate.gtin || candidate.ean),
@@ -225,39 +224,36 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
         <Table dataTestId="external-receipt-items-table" tableClassName="rz-external-receipt-table">
           <colgroup>
             <col className="rz-external-receipt-col-receipt" />
-            <col className="rz-external-receipt-col-normalized" />
             <col className="rz-external-receipt-col-retailer" />
+            <col className="rz-external-receipt-col-catalog" />
             <col className="rz-external-receipt-col-code" />
             <col className="rz-external-receipt-col-gtin" />
             <col className="rz-external-receipt-col-quantity" />
             <col className="rz-external-receipt-col-price" />
             <col className="rz-external-receipt-col-amount" />
             <col className="rz-external-receipt-col-candidates" />
-            <col className="rz-external-receipt-col-catalog" />
             <col className="rz-external-receipt-col-status" />
           </colgroup>
           <thead>
             <tr className="rz-table-header">
               <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('receiptLineText')}>Bonartikel <span>{sortMark('receiptLineText')}</span></button></th>
-              <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('normalizedName')}>Genormaliseerde naam <span>{sortMark('normalizedName')}</span></button></th>
               <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('retailerCode')}>Winkelketen <span>{sortMark('retailerCode')}</span></button></th>
+              <th className="rz-check"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('catalogLinked')}>Catalogus <span>{sortMark('catalogLinked')}</span></button></th>
               <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('articleNumber')}>Artikelnummer <span>{sortMark('articleNumber')}</span></button></th>
               <th>GTIN / EAN</th>
               <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('quantity')}>Omvang / gewicht <span>{sortMark('quantity')}</span></button></th>
               <th className="rz-num">Prijs</th>
               <th className="rz-num">Aantal</th>
               <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('candidateCount')}>Externe kandidaten <span>{sortMark('candidateCount')}</span></button></th>
-              <th className="rz-check"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('catalogLinked')}>Catalogus <span>{sortMark('catalogLinked')}</span></button></th>
               <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('status')}>Status <span>{sortMark('status')}</span></button></th>
             </tr>
             <tr className="rz-external-databases-filter-row">
               <th><input className="rz-table-filter" value={filters.receiptLineText} onChange={(event) => updateFilter('receiptLineText', event.target.value)} placeholder="Zoek" /></th>
-              <th></th>
               <th><input className="rz-table-filter" value={filters.retailerCode} onChange={(event) => updateFilter('retailerCode', event.target.value)} placeholder="Filter" /></th>
+              <th></th>
               <th><input className="rz-table-filter" value={filters.articleNumber} onChange={(event) => updateFilter('articleNumber', event.target.value)} placeholder="Filter" /></th>
               <th></th>
               <th><input className="rz-table-filter" value={filters.quantity} onChange={(event) => updateFilter('quantity', event.target.value)} placeholder="Filter" /></th>
-              <th></th>
               <th></th>
               <th></th>
               <th></th>
@@ -268,19 +264,18 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
             {visibleItems.length ? visibleItems.map((item) => (
               <tr key={item.id} className={selectedItem?.id === item.id ? 'rz-row-active' : ''} onDoubleClick={() => selectReceiptItem(item)}>
                 <td>{item.receiptLineText}</td>
-                <td>{item.normalizedName}</td>
                 <td>{item.retailerCode}</td>
+                <td className="rz-check"><input type="checkbox" checked={item.catalogLinked} readOnly /></td>
                 <td>{item.articleNumber}</td>
                 <td>{item.gtin}</td>
                 <td>{item.quantity}</td>
                 <td className="rz-num">{numberText(item.price)}</td>
                 <td className="rz-num">{item.amount}</td>
                 <td className="rz-num">{item.candidateCount}</td>
-                <td className="rz-check"><input type="checkbox" checked={item.catalogLinked} readOnly /></td>
                 <td>{item.status}</td>
               </tr>
-            )) : <tr><td colSpan="11">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}
-            {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="11"></td></tr>)}
+            )) : <tr><td colSpan="10">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}
+            {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="10"></td></tr>)}
           </tbody>
         </Table>
       </div>

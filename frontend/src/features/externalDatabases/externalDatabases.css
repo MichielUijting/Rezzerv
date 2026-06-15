@@ -266,3 +266,33 @@
 .rz-external-candidate-col-variant { width: 140px; }
 .rz-external-candidate-col-score { width: 90px; }
 .rz-external-candidate-col-status { width: 150px; }
+
+
+/* M2C2h-4 table cleanup */
+.rz-external-databases .rz-table th,
+.rz-external-databases .rz-table td {
+  border-left: 0;
+  border-right: 0;
+}
+
+.rz-external-databases .rz-table th,
+.rz-external-databases .rz-table th button,
+.rz-external-databases .rz-table td {
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.rz-external-databases .rz-table th {
+  overflow: visible;
+}
+
+.rz-external-receipt-col-receipt { width: 360px; }
+.rz-external-receipt-col-retailer { width: 150px; }
+.rz-external-receipt-col-catalog { width: 120px; }
+.rz-external-receipt-col-code { width: 170px; }
+.rz-external-receipt-col-gtin { width: 160px; }
+.rz-external-receipt-col-quantity { width: 170px; }
+.rz-external-receipt-col-price { width: 110px; }
+.rz-external-receipt-col-amount { width: 110px; }
+.rz-external-receipt-col-candidates { width: 170px; }
+.rz-external-receipt-col-status { width: 190px; }
