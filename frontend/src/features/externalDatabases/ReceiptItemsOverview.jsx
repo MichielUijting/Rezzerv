@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -92,7 +92,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const [selectedCandidateId, setSelectedCandidateId] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [isProcessingCandidate, setIsProcessingCandidate] = useState(false)
-  const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', articleNumber: '', quantity: '', status: '' })
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false)
+  const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', catalogLinked: 'all', articleNumber: '', gtin: '', quantity: '', price: '', amount: '', candidateCount: '', status: '' })
   const [sortKey, setSortKey] = useState('receiptLineText')
   const [sortDesc, setSortDesc] = useState(false)
   const [page, setPage] = useState(1)
@@ -126,11 +127,18 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   function selectReceiptItem(item) {
     setSelectedItem(item)
     setSelectedCandidateId('')
+    setConfirmOverwrite(false)
   }
 
-  async function processSelectedCandidate() {
+  async function processSelectedCandidate(options = {}) {
     if (!selectedItem || !selectedCandidateId) return
 
+    if (selectedItem.catalogLinked && !options.forceOverwrite) {
+      setConfirmOverwrite(true)
+      return
+    }
+
+    setConfirmOverwrite(false)
     setIsProcessingCandidate(true)
 
     try {
@@ -189,8 +197,13 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     const rows = items.filter((item) => (
       item.receiptLineText.toLowerCase().includes(filters.receiptLineText.toLowerCase()) &&
       item.retailerCode.toLowerCase().includes(filters.retailerCode.toLowerCase()) &&
+      ((filters.catalogLinked === 'all') || (filters.catalogLinked === 'linked' && item.catalogLinked) || (filters.catalogLinked === 'unlinked' && !item.catalogLinked)) &&
       item.articleNumber.toLowerCase().includes(filters.articleNumber.toLowerCase()) &&
+      item.gtin.toLowerCase().includes(filters.gtin.toLowerCase()) &&
       item.quantity.toLowerCase().includes(filters.quantity.toLowerCase()) &&
+      numberText(item.price).toLowerCase().includes(filters.price.toLowerCase()) &&
+      String(item.amount || '').toLowerCase().includes(filters.amount.toLowerCase()) &&
+      String(item.candidateCount || '').toLowerCase().includes(filters.candidateCount.toLowerCase()) &&
       item.status.toLowerCase().includes(filters.status.toLowerCase())
     ))
 
@@ -250,13 +263,19 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
             <tr className="rz-external-databases-filter-row">
               <th><input className="rz-table-filter" value={filters.receiptLineText} onChange={(event) => updateFilter('receiptLineText', event.target.value)} placeholder="Zoek" /></th>
               <th><input className="rz-table-filter" value={filters.retailerCode} onChange={(event) => updateFilter('retailerCode', event.target.value)} placeholder="Filter" /></th>
-              <th></th>
+              <th>
+                <select className="rz-table-filter" value={filters.catalogLinked} onChange={(event) => updateFilter('catalogLinked', event.target.value)} aria-label="Catalogus filter">
+                  <option value="all">Alle</option>
+                  <option value="linked">Gekoppeld</option>
+                  <option value="unlinked">Niet gekoppeld</option>
+                </select>
+              </th>
               <th><input className="rz-table-filter" value={filters.articleNumber} onChange={(event) => updateFilter('articleNumber', event.target.value)} placeholder="Filter" /></th>
-              <th></th>
+              <th><input className="rz-table-filter" value={filters.gtin} onChange={(event) => updateFilter('gtin', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.quantity} onChange={(event) => updateFilter('quantity', event.target.value)} placeholder="Filter" /></th>
-              <th></th>
-              <th></th>
-              <th></th>
+              <th><input className="rz-table-filter" value={filters.price} onChange={(event) => updateFilter('price', event.target.value)} placeholder="Filter" /></th>
+              <th><input className="rz-table-filter" value={filters.amount} onChange={(event) => updateFilter('amount', event.target.value)} placeholder="Filter" /></th>
+              <th><input className="rz-table-filter" value={filters.candidateCount} onChange={(event) => updateFilter('candidateCount', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} placeholder="Filter" /></th>
             </tr>
           </thead>
@@ -285,6 +304,20 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
         <span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span>
         <Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => setPage((value) => Math.min(pageCount, value + 1))}>Volgende</Button>
       </div>
+
+      {confirmOverwrite ? (
+        <div className="rz-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="external-overwrite-title">
+          <div className="rz-modal-card">
+            <h3 id="external-overwrite-title" className="rz-modal-title">Cataloguskoppeling overschrijven?</h3>
+            <p className="rz-modal-text">Dit bonartikel is al gekoppeld aan een catalogusartikel.</p>
+            <p className="rz-modal-text">Wil je de bestaande koppeling overschrijven?</p>
+            <div className="rz-modal-actions">
+              <Button type="button" variant="primary" disabled={isProcessingCandidate} onClick={() => processSelectedCandidate({ forceOverwrite: true })}>Overschrijven</Button>
+              <Button type="button" variant="secondary" disabled={isProcessingCandidate} onClick={() => setConfirmOverwrite(false)}>Annuleren</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="rz-external-receipt-detail">
         {selectedItem ? (

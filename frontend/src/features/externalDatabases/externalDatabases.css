@@ -296,3 +296,109 @@
 .rz-external-receipt-col-amount { width: 110px; }
 .rz-external-receipt-col-candidates { width: 170px; }
 .rz-external-receipt-col-status { width: 190px; }
+
+
+/* M2C2h-4b table style alignment */
+.rz-external-databases .rz-table-scroll,
+.rz-external-databases .rz-table-scroll--wide {
+  border: 1px solid var(--color-table-border, #6bbf7a);
+  border-radius: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.rz-external-databases .rz-table {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+
+.rz-external-databases .rz-table th,
+.rz-external-databases .rz-table td {
+  border: 1px solid var(--color-table-border, #6bbf7a);
+  height: 26px;
+  line-height: 22px;
+  padding: 2px 10px;
+  vertical-align: middle;
+  resize: none;
+}
+
+.rz-external-databases .rz-table thead th {
+  height: 30px;
+  line-height: 24px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.rz-external-databases .rz-table tbody tr {
+  height: 26px;
+}
+
+.rz-external-databases .rz-table tbody tr:nth-child(even) td {
+  background: #f7f7f7;
+}
+
+.rz-external-databases .rz-table tbody tr.rz-row-active td {
+  background: #d8f0dc;
+  outline: 0;
+}
+
+.rz-external-databases-filter-row th {
+  background: #d8f0dc;
+  padding: 3px 10px;
+}
+
+.rz-external-databases .rz-table-filter {
+  width: 100%;
+  height: 25px;
+  min-height: 25px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-table-border, #6bbf7a);
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 400;
+  box-sizing: border-box;
+}
+
+.rz-external-databases .rz-external-databases-sort {
+  min-height: 22px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.rz-external-databases .rz-external-receipt-table {
+  width: 100%;
+  min-width: 1260px;
+  table-layout: fixed;
+}
+
+.rz-external-databases .rz-external-candidate-detail-table {
+  width: 100%;
+  min-width: 920px;
+  table-layout: fixed;
+}
+
+.rz-external-receipt-col-receipt { width: 260px; }
+.rz-external-receipt-col-retailer { width: 120px; }
+.rz-external-receipt-col-catalog { width: 90px; }
+.rz-external-receipt-col-code { width: 140px; }
+.rz-external-receipt-col-gtin { width: 130px; }
+.rz-external-receipt-col-quantity { width: 145px; }
+.rz-external-receipt-col-price { width: 90px; }
+.rz-external-receipt-col-amount { width: 90px; }
+.rz-external-receipt-col-candidates { width: 150px; }
+.rz-external-receipt-col-status { width: 155px; }
+
+.rz-external-candidate-col-choice { width: 70px; }
+.rz-external-candidate-col-name { width: 230px; }
+.rz-external-candidate-col-brand { width: 140px; }
+.rz-external-candidate-col-source { width: 145px; }
+.rz-external-candidate-col-code { width: 145px; }
+.rz-external-candidate-col-variant { width: 120px; }
+.rz-external-candidate-col-score { width: 90px; }
+.rz-external-candidate-col-status { width: 130px; }
+
+.rz-external-receipt-detail {
+  border: 1px solid var(--color-table-border, #6bbf7a);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
