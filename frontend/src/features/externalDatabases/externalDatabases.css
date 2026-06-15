@@ -224,3 +224,45 @@
     grid-template-columns: 1fr;
   }
 }
+
+.rz-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.rz-table-scroll--wide {
+  border: 1px solid var(--color-table-border, #6bbf7a);
+}
+
+.rz-table-scroll table {
+  resize: horizontal;
+}
+
+.rz-external-receipt-table {
+  min-width: 1500px;
+}
+
+.rz-external-receipt-table th,
+.rz-external-receipt-table td,
+.rz-external-candidate-detail-table th,
+.rz-external-candidate-detail-table td {
+  resize: horizontal;
+  overflow: hidden;
+}
+
+.rz-external-candidate-detail-table {
+  width: 100%;
+  min-width: 880px;
+  table-layout: fixed;
+}
+
+.rz-external-candidate-col-choice { width: 72px; }
+.rz-external-candidate-col-name { width: 220px; }
+.rz-external-candidate-col-brand { width: 140px; }
+.rz-external-candidate-col-source { width: 150px; }
+.rz-external-candidate-col-code { width: 150px; }
+.rz-external-candidate-col-variant { width: 140px; }
+.rz-external-candidate-col-score { width: 90px; }
+.rz-external-candidate-col-status { width: 150px; }

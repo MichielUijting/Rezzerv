@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -166,15 +166,7 @@ export default function ExternalDatabasesPage() {
       return (
         <div className="rz-external-databases-overview">
           {isLoadingConfig ? <div>Externe databases worden geladen...</div> : null}
-          <ReceiptItemsOverview onError={setError} />
-          <div className="rz-external-databases-overview-grid">
-            <OverviewTile title="Actieve winkelketens" value={summary?.supported_retailers ?? retailers.length} helper={(summary?.active_retailers || []).join(', ') || 'Nog geen actieve winkelketens'} />
-            <OverviewTile title="Beleid" value="Preview" helper="Alleen kandidaatmatches tonen" />
-            <OverviewTile title="Productmutaties" value="0" helper="Niet toegestaan in v1" />
-          </div>
-          <p className="rz-external-databases-muted">
-            Deze module toont kandidaatmatches uit externe bronnen. Bevestigen, GTIN-invoer en OFF-verrijking volgen pas in latere opdrachten.
-          </p>
+          <ReceiptItemsOverview onError={setError} onMessage={setError} />
         </div>
       )
     }
@@ -247,3 +239,4 @@ export default function ExternalDatabasesPage() {
     </AppShell>
   )
 }
+
