@@ -47,6 +47,18 @@ function isBackendLinkedCandidate(candidate) {
   return candidate?.is_linked_to_catalog === true
 }
 
+function candidateStatusFromBackend(candidate, linked) {
+  if (linked) return 'Gekoppeld'
+
+  const rawLabel = text(candidate.status_label, '')
+  if (rawLabel && rawLabel.toLowerCase() !== 'gekoppeld') return rawLabel
+
+  const rawStatus = String(candidate.candidate_status || candidate.status || '').trim().toLowerCase()
+  if (rawStatus === 'linked_to_catalog' || rawStatus === 'user_confirmed') return 'Kandidaat'
+
+  return candidateStatusLabel(candidate.candidate_status || candidate.status)
+}
+
 function buildReceiptItems(candidates) {
   const grouped = new Map()
 
@@ -63,7 +75,7 @@ function buildReceiptItems(candidates) {
       externalCode: text(candidate.candidate_source_product_code || candidate.source_product_code || candidate.retailer_article_number),
       variant: text(candidate.variant),
       score: candidate.score,
-      status: text(candidate.status_label, '') || candidateStatusLabel(candidate.candidate_status || candidate.status),
+      status: candidateStatusFromBackend(candidate, linked),
       catalogLinked: linked,
       isLinkedToCatalog: linked,
       isLinkableToCatalog: Boolean(candidate.is_linkable_to_catalog) && !linked,
