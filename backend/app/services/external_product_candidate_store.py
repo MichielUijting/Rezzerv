@@ -577,7 +577,9 @@ def list_external_receipt_items(limit: int = 200) -> dict[str, Any]:
         existing_context_keys = _candidate_context_keys(candidates)
         placeholders = _list_receipt_line_placeholders(conn, existing_context_keys, normalized_limit)
 
-    combined = candidates + placeholders
+    # Bovenste tabel is bonartikelgedreven: purchase_import_lines-placeholders zijn leidend.
+    # Candidates blijven detailregels onder dezelfde bonartikelcontext.
+    combined = placeholders + candidates
     return {
         "items": combined[:normalized_limit],
         "candidate_rows": len(candidates),
@@ -713,6 +715,42 @@ def _m2c2h5_col(alias: str, columns: set[str], names: list[str], fallback: str =
     return fallback
 
 
+def _m2c2i_fix7a3_retailer_from_purchase_import(row: dict[str, Any]) -> str:
+    """Bepaal winkelketen voor een importregel uit de canonieke batchmetadata."""
+    raw_payload = row.get("batch_raw_payload")
+
+    if raw_payload:
+        try:
+            payload = json.loads(raw_payload) if isinstance(raw_payload, str) else raw_payload
+        except Exception:
+            payload = {}
+
+        if isinstance(payload, dict):
+            metadata = payload.get("batch_metadata") if isinstance(payload.get("batch_metadata"), dict) else {}
+            for value in (
+                metadata.get("store_name"),
+                metadata.get("store_label"),
+                payload.get("store_name"),
+                payload.get("store_label"),
+                payload.get("retailer_code"),
+                payload.get("retailer"),
+            ):
+                normalized = str(value or "").strip()
+                if normalized:
+                    return normalized
+
+    for value in (
+        row.get("retailer_code"),
+        row.get("store_name"),
+        row.get("store_label"),
+        row.get("brand_raw"),
+    ):
+        normalized = str(value or "").strip()
+        if normalized and normalized.lower() not in {"-", "import", "onbekend", "unknown"}:
+            return normalized
+
+    return "onbekend"
+
 def _m2c2h5_purchase_import_placeholder(row: dict[str, Any]) -> dict[str, Any]:
     purchase_import_line_id = str(row.get("purchase_import_line_id") or "").strip()
     article_name = str(row.get("article_name_raw") or "").strip()
@@ -728,7 +766,7 @@ def _m2c2h5_purchase_import_placeholder(row: dict[str, Any]) -> dict[str, Any]:
         "receipt_line_id": None,
         "purchase_import_line_id": purchase_import_line_id or None,
         "context_key": context_key,
-        "retailer_code": str(row.get("retailer_code") or "import").strip().lower() or "import",
+        "retailer_code": _m2c2i_fix7a3_retailer_from_purchase_import(row),
         "receipt_line_text": article_name or str(row.get("external_article_code") or "").strip(),
         "candidate_name": "",
         "candidate_brand": str(row.get("brand_raw") or "").strip(),
@@ -766,6 +804,13 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
 
     columns = _m2c2h5_table_columns(conn, "purchase_import_lines")
 
+    batch_join_sql = ""
+    batch_raw_payload_expr = "''"
+    if "batch_id" in columns and _m2c2h5_table_exists(conn, "purchase_import_batches"):
+        batch_columns = _m2c2h5_table_columns(conn, "purchase_import_batches")
+        if "id" in batch_columns:
+            batch_join_sql = "LEFT JOIN purchase_import_batches pib ON pib.id = pil.batch_id"
+            batch_raw_payload_expr = _m2c2h5_col("pib", batch_columns, ["raw_payload"], "''")
     id_expr = _m2c2h5_col("pil", columns, ["id"])
     code_expr = _m2c2h5_col("pil", columns, ["external_article_code"])
     name_expr = _m2c2h5_col("pil", columns, ["article_name_raw"])
@@ -782,6 +827,7 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
             f"""
             SELECT
                 {id_expr} AS purchase_import_line_id,
+                {batch_raw_payload_expr} AS batch_raw_payload,
                 {code_expr} AS external_article_code,
                 {name_expr} AS article_name_raw,
                 {brand_expr} AS brand_raw,
@@ -792,6 +838,7 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
                 {created_expr} AS created_at,
                 {updated_expr} AS updated_at
             FROM purchase_import_lines pil
+            {batch_join_sql}
             ORDER BY pil.ui_sort_order ASC, pil.created_at DESC, pil.id DESC
             LIMIT :limit
             """
@@ -803,8 +850,6 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
     for row in rows:
         item = _m2c2h5_purchase_import_placeholder(dict(row))
         if not item.get("receipt_line_text"):
-            continue
-        if str(item.get("context_key") or "") in existing_context_keys:
             continue
         placeholders.append(item)
 
@@ -836,7 +881,9 @@ def list_external_receipt_items(limit: int = 500) -> dict[str, Any]:
         }
         placeholders = _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys, normalized_limit)
 
-    combined = candidates + placeholders
+    # Bovenste tabel is bonartikelgedreven: purchase_import_lines-placeholders zijn leidend.
+    # Candidates blijven detailregels onder dezelfde bonartikelcontext.
+    combined = placeholders + candidates
     return {
         "items": combined[:normalized_limit],
         "candidate_rows": len(candidates),
@@ -985,13 +1032,8 @@ def ensure_external_receipt_item_candidates(items: list[dict[str, Any]] | None =
             skipped_count += 1
             errors.append({"reason": "missing_receipt_line_text", "item": item})
             continue
-
-        # Tijdelijke fallback zolang alleen Lidl als externe matcher actief is.
-        # Als retailer_code later uit purchase_import_batches betrouwbaar wordt gevuld,
-        # kan deze fallback vervallen.
-        if not retailer_code or retailer_code in {"-", "import", "onbekend"}:
-            retailer_code = "lidl"
-
+        if retailer_code in {"-", "import", "onbekend"}:
+            retailer_code = ""
         try:
             result = save_matchpreview_candidates(
                 retailer_code=retailer_code,
