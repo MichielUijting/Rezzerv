@@ -22,6 +22,26 @@ function scoreText(value) {
   return number.toLocaleString('nl-NL', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
 
+function retailerLabel(value) {
+  const normalized = String(value || '').trim()
+  const key = normalized.toLowerCase()
+
+  if (!key || key === '-' || key === 'import' || key === 'onbekend') return 'Onbekend'
+
+  const labels = {
+    ah: 'Albert Heijn',
+    albert_heijn: 'Albert Heijn',
+    'albert heijn': 'Albert Heijn',
+    jumbo: 'Jumbo',
+    lidl: 'Lidl',
+    aldi: 'Aldi',
+    plus: 'PLUS',
+    picnic: 'Picnic',
+  }
+
+  return labels[key] || normalized
+}
+
 function candidateStatusLabel(value) {
   const normalized = String(value || '').trim().toLowerCase()
   const labels = {
@@ -95,7 +115,8 @@ function buildReceiptItems(candidates) {
       receiptLineId: text(candidate.receipt_line_id, ''),
       purchaseImportLineId: text(candidate.purchase_import_line_id, ''),
       receiptLineText: text(candidate.receipt_line_text),
-      retailerCode: text(candidate.retailer_code),
+      retailerCode: retailerLabel(candidate.retailer_code),
+      retailerCodeRaw: text(candidate.retailer_code, ''),
       articleNumber: text(candidate.retailer_article_number || candidate.source_product_code || candidate.candidate_source_product_code),
       gtin: text(candidate.gtin || candidate.ean),
       quantity: text(candidate.quantity_label),
@@ -250,17 +271,9 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     return rows
   }, [items, filters, sortKey, sortDesc])
 
-  const dedupedItems = filteredItems.filter((item, index, source) => {
-    const key = String(item.receiptLineText || item.receipt_line_text || item.name || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-    if (!key) return true
-    return source.findIndex((candidate) => String(candidate.receiptLineText || candidate.receipt_line_text || candidate.name || '')
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, ' ') === key) === index
-  })
+  // De backend levert één rij per bonartikelcontext.
+  // Niet extra ontdubbelen op artikeltekst: gelijke omschrijvingen met andere artikelcode zijn aparte bonartikelen.
+  const dedupedItems = filteredItems
 
   const pageCount = Math.max(1, Math.ceil(dedupedItems.length / PAGE_SIZE))
   const currentPage = Math.min(page, pageCount)
@@ -305,7 +318,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
             include_below_threshold: true,
             items: [{
               receipt_line_text: item.receiptLineText,
-              retailer_code: item.retailerCode,
+              retailer_code: item.retailerCodeRaw || item.retailerCode,
               purchase_import_line_id: item.purchaseImportLineId,
               receipt_line_id: item.receiptLineId,
             }],
