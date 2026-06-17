@@ -576,6 +576,21 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
             "creates_inventory_event": False,
         }
 
+    if normalized_retailer != "lidl":
+        return {
+            "retailer_code": normalized_retailer,
+            "receipt_line_text": receipt_line_text,
+            "expanded_terms": [normalize_match_text(receipt_line_text)],
+            "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
+            "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
+            "candidates": [],
+            "candidate_source": "no_retailer_specific_legacy_candidates",
+            "uses_legacy_fallback": False,
+            "creates_global_product": False,
+            "creates_household_article": False,
+            "creates_inventory_event": False,
+        }
+
     legacy = _m2c2i_legacy_match_retailer_receipt_line(
         retailer_code=retailer_code,
         receipt_line_text=receipt_line_text,
@@ -681,7 +696,7 @@ def _m2c2i2_score_candidate(receipt_line_text: str, row: dict[str, Any]) -> dict
 
 def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, include_below_threshold: bool = True) -> dict[str, Any]:
     normalized_retailer = normalize_match_text(retailer_code)
-    index_rows = search_external_product_index_candidates(receipt_line_text, limit=120)
+    index_rows = search_external_product_index_candidates(receipt_line_text, limit=120, retailer_code=normalized_retailer)
 
     scored = [_m2c2i2_score_candidate(receipt_line_text, row) for row in index_rows]
     if not include_below_threshold:
@@ -699,6 +714,21 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
             "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
             "candidates": scored,
             "candidate_source": "external_product_index",
+            "uses_legacy_fallback": False,
+            "creates_global_product": False,
+            "creates_household_article": False,
+            "creates_inventory_event": False,
+        }
+
+    if normalized_retailer != "lidl":
+        return {
+            "retailer_code": normalized_retailer,
+            "receipt_line_text": receipt_line_text,
+            "expanded_terms": [normalize_match_text(receipt_line_text)],
+            "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
+            "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
+            "candidates": [],
+            "candidate_source": "no_retailer_specific_legacy_candidates",
             "uses_legacy_fallback": False,
             "creates_global_product": False,
             "creates_household_article": False,

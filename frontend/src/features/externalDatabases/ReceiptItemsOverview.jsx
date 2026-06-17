@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -243,7 +243,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const [isProcessingCandidate, setIsProcessingCandidate] = useState(false)
   const [isUnlinking, setIsUnlinking] = useState(false)
   const [confirmOverwrite, setConfirmOverwrite] = useState(false)
-  const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', catalogLinked: 'all', articleNumber: '', gtin: '', quantity: '', price: '', amount: '', candidateCount: '', status: '' })
+  const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', catalogLinked: 'all', articleNumber: '', gtin: '', quantity: '', price: '', amount: '', candidateCount: '' })
   const [sortKey, setSortKey] = useState('receiptLineText')
   const [sortDesc, setSortDesc] = useState(false)
   const [page, setPage] = useState(1)
@@ -290,8 +290,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       item.quantity.toLowerCase().includes(filters.quantity.toLowerCase()) &&
       numberText(item.price).toLowerCase().includes(filters.price.toLowerCase()) &&
       String(item.amount || '').toLowerCase().includes(filters.amount.toLowerCase()) &&
-      String(item.candidateCount || '').toLowerCase().includes(filters.candidateCount.toLowerCase()) &&
-      item.status.toLowerCase().includes(filters.status.toLowerCase())
+      String(item.candidateCount || '').toLowerCase().includes(filters.candidateCount.toLowerCase())
     ))
 
     rows.sort((leftItem, rightItem) => {
@@ -305,7 +304,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     return rows
   }, [items, filters, sortKey, sortDesc])
 
-  // De backend levert één rij per bonartikelcontext.
+  // De backend levert Ã©Ã©n rij per bonartikelcontext.
   // Niet extra ontdubbelen op artikeltekst: gelijke omschrijvingen met andere artikelcode zijn aparte bonartikelen.
   const dedupedItems = filteredItems
 
@@ -407,12 +406,12 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   function exportSelectedItems() {
     const selectedRows = items.filter((item) => selectedItemIds.includes(item.id))
     if (!selectedRows.length) {
-      onMessage?.('Selecteer eerst één of meer bonartikelen om te exporteren.')
+      onMessage?.('Selecteer eerst Ã©Ã©n of meer bonartikelen om te exporteren.')
       return
     }
 
     const rows = [
-      ['Bonartikel', 'Winkelketen', 'Catalogus', 'Artikelnummer', 'GTIN / EAN', 'Omvang / gewicht', 'Prijs', 'Aantal', 'Externe kandidaten', 'Status'],
+      ['Bonartikel', 'Winkelketen', 'Catalogus', 'Artikelnummer', 'GTIN / EAN', 'Omvang / gewicht', 'Prijs', 'Aantal', 'Externe kandidaten'],
       ...selectedRows.map((item) => [
         item.receiptLineText,
         item.retailerCode,
@@ -423,7 +422,6 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
         numberText(item.price),
         item.amount,
         item.candidateCount,
-        item.status,
       ]),
     ]
 
@@ -625,7 +623,6 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
             <col className="rz-external-receipt-col-price" />
             <col className="rz-external-receipt-col-amount" />
             <col className="rz-external-receipt-col-candidates" />
-            <col className="rz-external-receipt-col-status" />
           </colgroup>
           <thead>
             <tr className="rz-table-header">
@@ -639,7 +636,6 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
               <th className="rz-num">Prijs</th>
               <th className="rz-num">Aantal</th>
               <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('candidateCount')}>Externe kandidaten <span>{sortMark('candidateCount')}</span></button></th>
-              <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('status')}>Status <span>{sortMark('status')}</span></button></th>
             </tr>
             <tr className="rz-external-databases-filter-row">
               <th></th>
@@ -658,7 +654,6 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
               <th><input className="rz-table-filter" value={filters.price} onChange={(event) => updateFilter('price', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.amount} onChange={(event) => updateFilter('amount', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.candidateCount} onChange={(event) => updateFilter('candidateCount', event.target.value)} placeholder="Filter" /></th>
-              <th><input className="rz-table-filter" value={filters.status} onChange={(event) => updateFilter('status', event.target.value)} placeholder="Filter" /></th>
             </tr>
           </thead>
           <tbody>
@@ -674,10 +669,9 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
                 <td className="rz-num">{numberText(item.price)}</td>
                 <td className="rz-num">{item.amount}</td>
                 <td className="rz-num">{item.candidateCount}</td>
-                <td>{item.status}</td>
               </tr>
-            )) : <tr><td colSpan="11">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}
-            {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="11"></td></tr>)}
+            )) : <tr><td colSpan="10">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}
+            {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="10"></td></tr>)}
           </tbody>
         </Table>
       </div>
@@ -764,3 +758,4 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     </div>
   )
 }
+
