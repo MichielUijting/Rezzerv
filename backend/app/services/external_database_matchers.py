@@ -296,3 +296,420 @@ def list_external_database_retailers() -> list[dict[str, Any]]:
         }
         for code, config in RETAILER_CONFIG.items()
     ]
+
+
+# M2C2i broad local OFF index matcher
+_m2c2i_legacy_match_retailer_receipt_line = match_retailer_receipt_line
+
+
+def _m2c2i_index_table_exists(conn) -> bool:
+    from sqlalchemy import text as sql_text
+
+    dialect_name = str(conn.engine.dialect.name or "").lower()
+    if dialect_name == "sqlite":
+        row = conn.execute(
+            sql_text("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'external_product_index'")
+        ).first()
+        return row is not None
+
+    row = conn.execute(
+        sql_text(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_name = 'external_product_index'
+            LIMIT 1
+            """
+        )
+    ).first()
+    return row is not None
+
+
+def _m2c2i_index_columns(conn) -> set[str]:
+    from sqlalchemy import text as sql_text
+
+    dialect_name = str(conn.engine.dialect.name or "").lower()
+    if dialect_name == "sqlite":
+        rows = conn.execute(sql_text("PRAGMA table_info(external_product_index)")).mappings().all()
+        return {str(row.get("name") or "") for row in rows}
+
+    rows = conn.execute(
+        sql_text(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'external_product_index'
+            """
+        )
+    ).mappings().all()
+    return {str(row.get("column_name") or "") for row in rows}
+
+
+def _m2c2i_first_column(columns: set[str], names: list[str]) -> str | None:
+    for name in names:
+        if name in columns:
+            return name
+    return None
+
+
+def _m2c2i_expr(columns: set[str], names: list[str], fallback: str = "''") -> str:
+    column = _m2c2i_first_column(columns, names)
+    if not column:
+        return fallback
+    return column
+
+
+def _m2c2i_value(row: dict[str, Any], names: list[str]) -> str:
+    for name in names:
+        value = row.get(name)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
+def _m2c2i_numeric_tokens(value: str) -> set[str]:
+    return set(re.findall(r"\d+(?:[,.]\d+)?", normalize_match_text(value)))
+
+
+def _m2c2i_token_overlap_score(left: str, right: str) -> float:
+    left_tokens = {token for token in normalize_match_text(left).split() if len(token) >= 3}
+    right_tokens = {token for token in normalize_match_text(right).split() if len(token) >= 3}
+    if not left_tokens or not right_tokens:
+        return 0.0
+    overlap = left_tokens & right_tokens
+    return len(overlap) / max(1, len(left_tokens | right_tokens))
+
+
+def _m2c2i_score_index_candidate(receipt_line_text: str, row: dict[str, Any]) -> dict[str, Any]:
+    product_name = _m2c2i_value(row, [
+        "product_name",
+        "name",
+        "product_name_nl",
+        "generic_name",
+        "generic_name_nl",
+        "brands_tags",
+    ])
+    brand = _m2c2i_value(row, ["brand", "brands", "manufacturer", "producer"])
+    source_name = _m2c2i_value(row, ["source_name"]) or "OFF-index"
+    source_product_code = _m2c2i_value(row, [
+        "source_product_code",
+        "gtin",
+        "code",
+        "barcode",
+        "ean",
+        "product_code",
+    ])
+    quantity_label = _m2c2i_value(row, [
+        "quantity",
+        "quantity_label",
+        "net_content",
+        "net_weight",
+        "packaging",
+        "serving_size",
+    ])
+    category = _m2c2i_value(row, [
+        "category",
+        "categories",
+        "main_category",
+        "pnns_groups_1",
+        "pnns_groups_2",
+    ])
+    source_url = _m2c2i_value(row, ["source_url", "url", "product_url"])
+
+    text_score = max(
+        _text_similarity(receipt_line_text, product_name),
+        _m2c2i_token_overlap_score(receipt_line_text, product_name),
+    )
+
+    normalized_receipt = normalize_match_text(receipt_line_text)
+    normalized_brand = normalize_match_text(brand)
+    if normalized_brand and normalized_brand in normalized_receipt:
+        brand_score = 1.0
+    elif normalized_brand:
+        brand_score = max(0.55, _m2c2i_token_overlap_score(receipt_line_text, brand))
+    else:
+        brand_score = 0.40
+
+    receipt_numbers = _m2c2i_numeric_tokens(receipt_line_text)
+    quantity_numbers = _m2c2i_numeric_tokens(quantity_label)
+    if receipt_numbers and quantity_numbers and receipt_numbers & quantity_numbers:
+        quantity_score = 1.0
+    elif quantity_label:
+        quantity_score = 0.65
+    else:
+        quantity_score = 0.45
+
+    normalized_code = normalize_match_text(source_product_code)
+    if normalized_code and normalized_code in normalized_receipt:
+        code_score = 1.0
+    elif normalized_code:
+        code_score = 0.55
+    else:
+        code_score = 0.35
+
+    category_score = max(
+        0.45,
+        _m2c2i_token_overlap_score(receipt_line_text, category),
+    ) if category else 0.40
+
+    source_score = 0.92 if "off" in normalize_match_text(source_name) or source_name == "OFF-index" else 0.80
+
+    breakdown = {
+        "text_score": round(text_score, 3),
+        "brand_score": round(brand_score, 3),
+        "product_type_score": round(category_score, 3),
+        "quantity_score": round(quantity_score, 3),
+        "variant_score": 0.70,
+        "source_score": round(source_score, 3),
+        "code_score": round(code_score, 3),
+        "category_score": round(category_score, 3),
+    }
+
+    # Bestaande gewichten blijven leidend; code/category zijn aanvullend.
+    base_score = sum(breakdown[key] * SCORE_WEIGHTS[key] for key in SCORE_WEIGHTS)
+    bonus = (code_score * 0.08) + (category_score * 0.04)
+    score = round(min(1.0, base_score + bonus), 3)
+
+    return {
+        "candidate_name": product_name or source_product_code or "Onbekend OFF-product",
+        "candidate_brand": brand,
+        "candidate_source_name": source_name,
+        "candidate_source_product_code": source_product_code or "unknown",
+        "source_name": source_name,
+        "source_product_code": source_product_code or "unknown",
+        "retailer_article_number": source_product_code or "",
+        "quantity_label": quantity_label,
+        "variant": category,
+        "source_url": source_url,
+        "score": score,
+        "score_breakdown": breakdown,
+        "candidate_status": candidate_status_for_score(score),
+        "is_probable": score >= PROBABLE_CANDIDATE_THRESHOLD,
+        "is_user_confirmed": False,
+        "is_external_database_override": False,
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_inventory_event": False,
+        "created_by": "external_database_off_index_matcher_v1",
+    }
+
+
+def _m2c2i_query_index_candidates(receipt_line_text: str, limit: int = 80) -> list[dict[str, Any]]:
+    from sqlalchemy import text as sql_text
+    from app.db import engine
+
+    normalized = normalize_match_text(receipt_line_text)
+    tokens = [token for token in normalized.split() if len(token) >= 3]
+    if not tokens:
+        return []
+
+    with engine.begin() as conn:
+        if not _m2c2i_index_table_exists(conn):
+            return []
+
+        columns = _m2c2i_index_columns(conn)
+
+        name_col = _m2c2i_expr(columns, ["product_name", "name", "product_name_nl", "generic_name", "generic_name_nl"])
+        brand_col = _m2c2i_expr(columns, ["brand", "brands", "manufacturer", "producer"])
+        code_col = _m2c2i_expr(columns, ["source_product_code", "gtin", "code", "barcode", "ean", "product_code"])
+        category_col = _m2c2i_expr(columns, ["category", "categories", "main_category", "pnns_groups_1", "pnns_groups_2"])
+        quantity_col = _m2c2i_expr(columns, ["quantity", "quantity_label", "net_content", "net_weight", "packaging", "serving_size"])
+        source_col = _m2c2i_expr(columns, ["source_name"])
+        url_col = _m2c2i_expr(columns, ["source_url", "url", "product_url"])
+
+        search_expr = f"""
+            lower(COALESCE(CAST({name_col} AS TEXT), '') || ' ' ||
+                  COALESCE(CAST({brand_col} AS TEXT), '') || ' ' ||
+                  COALESCE(CAST({code_col} AS TEXT), '') || ' ' ||
+                  COALESCE(CAST({category_col} AS TEXT), '') || ' ' ||
+                  COALESCE(CAST({quantity_col} AS TEXT), ''))
+        """
+
+        where_parts = []
+        params: dict[str, Any] = {"limit": max(10, min(int(limit or 80), 200))}
+        for index, token in enumerate(tokens[:8]):
+            key = f"token_{index}"
+            where_parts.append(f"{search_expr} LIKE :{key}")
+            params[key] = f"%{token}%"
+
+        where_sql = " OR ".join(where_parts)
+
+        rows = conn.execute(
+            sql_text(
+                f"""
+                SELECT *
+                FROM external_product_index
+                WHERE {where_sql}
+                LIMIT :limit
+                """
+            ),
+            params,
+        ).mappings().all()
+
+    return [dict(row) for row in rows]
+
+
+def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, include_below_threshold: bool = True) -> dict[str, Any]:
+    """M2C2i: zoek primair in lokale OFF-index; gebruik legacy Lidl-set alleen als fallback."""
+    normalized_retailer = normalize_match_text(retailer_code)
+    index_rows = _m2c2i_query_index_candidates(receipt_line_text, limit=120)
+
+    scored = [_m2c2i_score_index_candidate(receipt_line_text, row) for row in index_rows]
+    if not include_below_threshold:
+        scored = [candidate for candidate in scored if candidate["score"] >= PROBABLE_CANDIDATE_THRESHOLD]
+
+    scored.sort(key=lambda item: (-item["score"], item["candidate_name"]))
+    scored = scored[:5]
+
+    if scored:
+        return {
+            "retailer_code": normalized_retailer,
+            "receipt_line_text": receipt_line_text,
+            "expanded_terms": expand_terms_for_retailer(receipt_line_text, normalized_retailer) if normalized_retailer in RETAILER_CONFIG else [normalize_match_text(receipt_line_text)],
+            "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
+            "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
+            "candidates": scored,
+            "candidate_source": "external_product_index",
+            "uses_legacy_fallback": False,
+            "creates_global_product": False,
+            "creates_household_article": False,
+            "creates_inventory_event": False,
+        }
+
+    legacy = _m2c2i_legacy_match_retailer_receipt_line(
+        retailer_code=retailer_code,
+        receipt_line_text=receipt_line_text,
+        include_below_threshold=include_below_threshold,
+    )
+    legacy["candidate_source"] = "legacy_lidl_testset"
+    legacy["uses_legacy_fallback"] = True
+    return legacy
+
+
+# M2C2i-2 generic OFF index matcher
+from app.services.external_product_index_store import search_external_product_index_candidates
+
+_m2c2i2_previous_match_retailer_receipt_line = match_retailer_receipt_line
+
+
+def _m2c2i2_value(row: dict[str, Any], names: list[str]) -> str:
+    for name in names:
+        value = row.get(name)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
+def _m2c2i2_numeric_tokens(value: str) -> set[str]:
+    return set(re.findall(r"\d+(?:[,.]\d+)?", normalize_match_text(value)))
+
+
+def _m2c2i2_token_overlap_score(left: str, right: str) -> float:
+    left_tokens = {token for token in normalize_match_text(left).split() if len(token) >= 3}
+    right_tokens = {token for token in normalize_match_text(right).split() if len(token) >= 3}
+    if not left_tokens or not right_tokens:
+        return 0.0
+    overlap = left_tokens & right_tokens
+    return len(overlap) / max(1, len(left_tokens | right_tokens))
+
+
+def _m2c2i2_score_candidate(receipt_line_text: str, row: dict[str, Any]) -> dict[str, Any]:
+    product_name = _m2c2i2_value(row, ["product_name", "name", "generic_name"])
+    brand = _m2c2i2_value(row, ["brand", "brands"])
+    quantity_label = _m2c2i2_value(row, ["quantity", "net_content", "packaging"])
+    category = _m2c2i2_value(row, ["category", "categories"])
+    source_name = _m2c2i2_value(row, ["source_name"]) or "OFF-index"
+    source_product_code = _m2c2i2_value(row, ["source_product_code", "gtin", "ean", "code"]) or "unknown"
+    source_url = _m2c2i2_value(row, ["source_url", "url", "product_url"])
+
+    text_score = max(
+        _text_similarity(receipt_line_text, product_name),
+        _m2c2i2_token_overlap_score(receipt_line_text, product_name),
+    )
+
+    normalized_receipt = normalize_match_text(receipt_line_text)
+    normalized_brand = normalize_match_text(brand)
+    brand_score = 1.0 if normalized_brand and normalized_brand in normalized_receipt else (0.60 if brand else 0.40)
+
+    receipt_numbers = _m2c2i2_numeric_tokens(receipt_line_text)
+    quantity_numbers = _m2c2i2_numeric_tokens(quantity_label)
+    quantity_score = 1.0 if receipt_numbers and quantity_numbers and receipt_numbers & quantity_numbers else (0.65 if quantity_label else 0.45)
+
+    normalized_code = normalize_match_text(source_product_code)
+    code_score = 1.0 if normalized_code and normalized_code in normalized_receipt else (0.55 if source_product_code != "unknown" else 0.35)
+
+    category_score = max(0.45, _m2c2i2_token_overlap_score(receipt_line_text, category)) if category else 0.40
+    source_score = 0.92 if source_name == "OFF-index" else 0.80
+
+    breakdown = {
+        "text_score": round(text_score, 3),
+        "brand_score": round(brand_score, 3),
+        "product_type_score": round(category_score, 3),
+        "quantity_score": round(quantity_score, 3),
+        "variant_score": 0.70,
+        "source_score": round(source_score, 3),
+        "code_score": round(code_score, 3),
+        "category_score": round(category_score, 3),
+    }
+
+    base_score = sum(breakdown[key] * SCORE_WEIGHTS[key] for key in SCORE_WEIGHTS)
+    score = round(min(1.0, base_score + (code_score * 0.08) + (category_score * 0.04)), 3)
+
+    return {
+        "candidate_name": product_name or source_product_code,
+        "candidate_brand": brand,
+        "candidate_source_name": source_name,
+        "candidate_source_product_code": source_product_code,
+        "source_name": source_name,
+        "source_product_code": source_product_code,
+        "retailer_article_number": source_product_code,
+        "quantity_label": quantity_label,
+        "variant": category,
+        "source_url": source_url,
+        "score": score,
+        "score_breakdown": breakdown,
+        "candidate_status": candidate_status_for_score(score),
+        "is_probable": score >= PROBABLE_CANDIDATE_THRESHOLD,
+        "is_user_confirmed": False,
+        "is_external_database_override": False,
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_inventory_event": False,
+        "created_by": "external_database_off_index_matcher_v2",
+    }
+
+
+def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, include_below_threshold: bool = True) -> dict[str, Any]:
+    normalized_retailer = normalize_match_text(retailer_code)
+    index_rows = search_external_product_index_candidates(receipt_line_text, limit=120)
+
+    scored = [_m2c2i2_score_candidate(receipt_line_text, row) for row in index_rows]
+    if not include_below_threshold:
+        scored = [candidate for candidate in scored if candidate["score"] >= PROBABLE_CANDIDATE_THRESHOLD]
+
+    scored.sort(key=lambda item: (-item["score"], item["candidate_name"]))
+    scored = scored[:5]
+
+    if scored:
+        return {
+            "retailer_code": normalized_retailer,
+            "receipt_line_text": receipt_line_text,
+            "expanded_terms": [normalize_match_text(receipt_line_text)],
+            "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
+            "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
+            "candidates": scored,
+            "candidate_source": "external_product_index",
+            "uses_legacy_fallback": False,
+            "creates_global_product": False,
+            "creates_household_article": False,
+            "creates_inventory_event": False,
+        }
+
+    fallback = _m2c2i2_previous_match_retailer_receipt_line(
+        retailer_code=retailer_code,
+        receipt_line_text=receipt_line_text,
+        include_below_threshold=include_below_threshold,
+    )
+    fallback["candidate_source"] = "legacy_lidl_testset"
+    fallback["uses_legacy_fallback"] = True
+    return fallback

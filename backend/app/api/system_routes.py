@@ -28,8 +28,12 @@ from app.services.external_database_matchers import (
 )
 from app.services.external_product_candidate_store import (
     build_candidate_context_key,
+    ensure_external_receipt_item_candidates,
+    list_external_receipt_items,
     list_saved_external_product_candidates,
     save_matchpreview_candidates,
+    unlink_external_catalog_links,
+    promote_external_product_candidate,
 )
 from app.services.external_product_catalog_store import (
     list_catalog_products,
@@ -64,6 +68,14 @@ def api_version():
         'version': VERSION_TAG,
         'source': 'VERSION.txt',
     }
+
+
+@router.post('/api/external-databases/catalog/promote-candidate')
+def external_databases_promote_selected_candidate(payload: dict[str, Any] = Body(default_factory=dict)):
+    return promote_external_product_candidate(
+        candidate_id=str(payload.get('candidate_id') or ''),
+        force_overwrite=bool(payload.get('force_overwrite', False)),
+    )
 
 
 @router.get('/api/external-databases/summary')
@@ -103,6 +115,19 @@ def external_databases_save_candidates(retailer_code: str, payload: dict[str, An
     )
 
 
+@router.get('/api/external-databases/receipt-items')
+def external_databases_receipt_items(limit: int = Query(default=200)):
+    return list_external_receipt_items(limit=limit)
+
+
+@router.post('/api/external-databases/receipt-items/ensure-candidates')
+def external_databases_ensure_receipt_item_candidates(payload: dict[str, Any] = Body(default_factory=dict)):
+    return ensure_external_receipt_item_candidates(
+        items=list(payload.get('items') or []),
+        include_below_threshold=bool(payload.get('include_below_threshold', True)),
+    )
+
+
 @router.get('/api/external-databases/candidates')
 def external_databases_saved_candidates(
     context_key: str | None = Query(default=None),
@@ -136,6 +161,14 @@ def external_databases_promote_highest_candidate(payload: dict[str, Any] = Body(
         retailer_code=retailer_code,
         receipt_line_text=receipt_line_text,
         threshold=threshold,
+    )
+
+
+@router.post('/api/external-databases/catalog/unlink')
+def external_databases_unlink_catalog(payload: dict[str, Any] = Body(default_factory=dict)):
+    return unlink_external_catalog_links(
+        context_keys=list(payload.get('context_keys') or []),
+        candidate_ids=list(payload.get('candidate_ids') or []),
     )
 
 
