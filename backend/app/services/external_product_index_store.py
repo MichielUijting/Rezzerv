@@ -331,7 +331,7 @@ def ensure_external_product_index_seeded(minimum_rows: int = 100) -> dict[str, A
     return {"ok": True, "seeded": True, "inserted": inserted}
 
 
-def search_external_product_index_candidates(receipt_line_text: str, limit: int = 120) -> list[dict[str, Any]]:
+def search_external_product_index_candidates(receipt_line_text: str, limit: int = 120, retailer_code: str | None = None) -> list[dict[str, Any]]:
     ensure_external_product_index_seeded()
 
     normalized = normalize_index_text(receipt_line_text)
@@ -349,13 +349,19 @@ def search_external_product_index_candidates(receipt_line_text: str, limit: int 
 
     where_sql = " OR ".join(where_parts)
 
+    retailer_filter_sql = ""
+    normalized_retailer = normalize_index_text(retailer_code)
+    if normalized_retailer:
+        params["retailer_code"] = normalized_retailer
+        retailer_filter_sql = " AND (COALESCE(retailer_code, '') = :retailer_code OR COALESCE(retailer_code, '') = '')"
+
     with engine.begin() as conn:
         rows = conn.execute(
             text(
                 f"""
                 SELECT *
                 FROM external_product_index
-                WHERE {where_sql}
+                WHERE ({where_sql}){retailer_filter_sql}
                 LIMIT :limit
                 """
             ),

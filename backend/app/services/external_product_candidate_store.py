@@ -1168,6 +1168,18 @@ def _m2c2i_fix7b_dedupe_top_receipt_items(items: list[dict[str, Any]]) -> list[d
 
     return list(best_by_key.values())
 
+
+def _m2c2i_fix7c_same_retailer_for_projection(placeholder: dict[str, object], candidate: dict[str, object]) -> bool:
+    """Alleen candidates van dezelfde retailer mogen op een bonartikelrij worden geprojecteerd."""
+    placeholder_retailer = str(placeholder.get("retailer_code") or "").strip().lower()
+    candidate_retailer = str(candidate.get("retailer_code") or "").strip().lower()
+
+    if not placeholder_retailer or not candidate_retailer:
+        return False
+
+    return placeholder_retailer == candidate_retailer
+
+
 def _m2c2i_fix7a3_apply_catalog_status_to_placeholders(
     placeholders: list[dict[str, Any]],
     candidates: list[dict[str, Any]],
@@ -1229,6 +1241,12 @@ def _m2c2i_fix7a3_apply_catalog_status_to_placeholders(
         )
         matching_candidates.extend(by_receipt_key.get(key, []))
 
+        matching_candidates = [
+            candidate
+            for candidate in matching_candidates
+            if _m2c2i_fix7c_same_retailer_for_projection(placeholder, candidate)
+        ]
+
         # Ontdubbel detailkandidaten op kandidaatidentiteit.
         unique: dict[str, dict[str, Any]] = {}
         for candidate in matching_candidates:
@@ -1273,10 +1291,6 @@ def _m2c2i_fix7a3_apply_catalog_status_to_placeholders(
             elif detail_candidates:
                 placeholder["status"] = "candidate"
                 placeholder["candidate_status"] = "candidate"
-                placeholder["retailer_article_number"] = (
-                    str(best.get("retailer_article_number") or best.get("candidate_source_product_code") or best.get("source_product_code") or "").strip()
-                    or placeholder.get("retailer_article_number")
-                )
         else:
             placeholder = dict(placeholder)
             placeholder["candidates"] = []
