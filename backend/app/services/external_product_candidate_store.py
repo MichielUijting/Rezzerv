@@ -874,16 +874,18 @@ def list_external_receipt_items(limit: int = 500) -> dict[str, Any]:
         ).mappings().all()
 
         candidates = [dict(row) for row in candidate_rows]
+        candidates = _m2c2i_fix7b_ensure_catalog_products_for_article_codes(conn, candidates)
         existing_context_keys = {
             str(row.get("context_key") or "").strip()
             for row in candidates
             if str(row.get("context_key") or "").strip()
         }
         placeholders = _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys, normalized_limit)
+        placeholders = _m2c2i_fix7a3_apply_catalog_status_to_placeholders(placeholders, candidates)
 
     # Bovenste tabel is bonartikelgedreven: purchase_import_lines-placeholders zijn leidend.
     # Candidates blijven detailregels onder dezelfde bonartikelcontext.
-    combined = placeholders + candidates
+    combined = _m2c2i_fix7b_dedupe_top_receipt_items(placeholders)
     return {
         "items": combined[:normalized_limit],
         "candidate_rows": len(candidates),
@@ -891,6 +893,398 @@ def list_external_receipt_items(limit: int = 500) -> dict[str, Any]:
         "total": len(combined[:normalized_limit]),
     }
 
+
+def _m2c2i_fix7a3_normalized_receipt_key(retailer_code: Any, receipt_line_text: Any) -> str:
+    retailer = str(retailer_code or "").strip().lower()
+    text_value = str(receipt_line_text or "").strip().lower()
+    text_value = text_value.replace(".", "")
+    text_value = " ".join(text_value.split())
+    return f"{retailer}|{text_value}"
+
+
+def _m2c2i_fix7a3_best_catalog_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
+    priority = {
+        "linked_to_catalog": 3,
+        "unlinked_from_catalog": 2,
+    }
+
+    best: dict[str, Any] | None = None
+    best_score = 0
+
+    for candidate in candidates:
+        status = str(candidate.get("status") or candidate.get("candidate_status") or "").strip()
+        score = priority.get(status, 0)
+        if score > best_score:
+            best = candidate
+            best_score = score
+
+    return best
+
+
+def _m2c2i_fix7b_catalog_source_code(candidate: dict[str, Any]) -> str:
+    return (
+        str(candidate.get("retailer_article_number") or "").strip()
+        or str(candidate.get("candidate_source_product_code") or "").strip()
+        or str(candidate.get("source_product_code") or "").strip()
+    )
+
+
+def _m2c2i_fix7b_best_candidate_name(candidate: dict[str, Any]) -> str:
+    return (
+        str(candidate.get("candidate_name") or "").strip()
+        or str(candidate.get("receipt_line_text") or "").strip()
+        or "Onbekend product"
+    )
+
+
+def _m2c2i_fix7b_best_candidate_brand(candidate: dict[str, Any]) -> str:
+    return (
+        str(candidate.get("candidate_brand") or "").strip()
+        or str(candidate.get("retailer_code") or "").strip()
+        or None
+    )
+
+
+def _m2c2i_fix7b_candidate_is_confirmed_catalog_link(candidate: dict[str, Any]) -> bool:
+    status_values = {
+        str(candidate.get("status") or "").strip().lower(),
+        str(candidate.get("candidate_status") or "").strip().lower(),
+    }
+    return bool(
+        "linked_to_catalog" in status_values
+        or "user_confirmed" in status_values
+        or bool(candidate.get("is_user_confirmed"))
+        or bool(candidate.get("is_external_database_override"))
+    )
+
+
+def _m2c2i_fix7b_identity_value(candidate: dict[str, Any]) -> str:
+    source_code = _m2c2i_fix7b_catalog_source_code(candidate)
+    retailer_code = str(candidate.get("retailer_code") or "").strip().lower()
+    source_name = str(candidate.get("candidate_source_name") or candidate.get("source_name") or "external_product_candidate").strip().lower()
+    if retailer_code and source_code:
+        return f"retailer:{retailer_code}:{source_code}"
+    if source_name and source_code:
+        return f"source:{source_name}:{source_code}"
+    return source_code
+
+
+def _m2c2i_fix7b_catalog_lookup_values(candidate: dict[str, Any]) -> list[str]:
+    values = []
+    source_code = _m2c2i_fix7b_catalog_source_code(candidate)
+    retailer_code = str(candidate.get("retailer_code") or "").strip().lower()
+    source_name = str(candidate.get("candidate_source_name") or candidate.get("source_name") or "external_product_candidate").strip().lower()
+    if retailer_code and source_code:
+        values.append(f"retailer:{retailer_code}:{source_code}")
+    if source_name and retailer_code and source_code:
+        values.append(f"{source_name}:{retailer_code}:{source_code}")
+    if source_name and source_code:
+        values.append(f"source:{source_name}:{source_code}")
+    if source_code:
+        values.append(source_code)
+    return list(dict.fromkeys(values))
+
+
+def _m2c2i_fix7b_create_or_reuse_catalog_product_for_candidate(conn, candidate: dict[str, Any]) -> str:
+    """Maak of hergebruik een global_product voor een bevestigde externe kandidaat.
+
+    Dit maakt nadrukkelijk geen household_article en geen voorraadmutatie.
+    """
+    if not _m2c2h5_table_exists(conn, "global_products") or not _m2c2h5_table_exists(conn, "product_identities"):
+        return str(candidate.get("global_product_id") or "").strip()
+
+    source_code = _m2c2i_fix7b_catalog_source_code(candidate)
+    if not source_code:
+        return str(candidate.get("global_product_id") or "").strip()
+
+    global_product_id = str(candidate.get("global_product_id") or "").strip()
+    lookup_values = _m2c2i_fix7b_catalog_lookup_values(candidate)
+
+    if not global_product_id and lookup_values:
+        placeholders = []
+        params: dict[str, Any] = {}
+        for index, value in enumerate(lookup_values):
+            key = f"identity_value_{index}"
+            placeholders.append(f":{key}")
+            params[key] = value
+
+        existing = conn.execute(
+            text(
+                f"""
+                SELECT global_product_id
+                FROM product_identities
+                WHERE identity_type = 'retailer_article_number'
+                  AND identity_value IN ({', '.join(placeholders)})
+                  AND COALESCE(global_product_id, '') <> ''
+                LIMIT 1
+                """
+            ),
+            params,
+        ).mappings().first()
+
+        if existing and str(existing.get("global_product_id") or "").strip():
+            global_product_id = str(existing.get("global_product_id") or "").strip()
+
+    if not global_product_id:
+        global_product_id = str(uuid.uuid4())
+        conn.execute(
+            text(
+                """
+                INSERT INTO global_products (
+                    id, primary_gtin, name, brand, variant, category,
+                    size_value, size_unit, source, status, created_at, updated_at
+                )
+                VALUES (
+                    :id, NULL, :name, :brand, :variant, :category,
+                    NULL, NULL, :source, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """
+            ),
+            {
+                "id": global_product_id,
+                "name": _m2c2i_fix7b_best_candidate_name(candidate),
+                "brand": _m2c2i_fix7b_best_candidate_brand(candidate),
+                "variant": str(candidate.get("variant") or "").strip() or None,
+                "category": str(candidate.get("candidate_category") or candidate.get("variant") or "").strip() or None,
+                "source": str(candidate.get("candidate_source_name") or candidate.get("source_name") or "external_product_candidate").strip(),
+            },
+        )
+
+    primary_identity = _m2c2i_fix7b_identity_value(candidate)
+    if primary_identity:
+        conn.execute(
+            text(
+                """
+                INSERT INTO product_identities (
+                    id, household_article_id, identity_type, identity_value,
+                    source, confidence_score, is_primary, created_at, updated_at, global_product_id
+                )
+                SELECT
+                    :id, '', 'retailer_article_number', :identity_value,
+                    :source, 1.0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :global_product_id
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM product_identities
+                    WHERE identity_type = 'retailer_article_number'
+                      AND identity_value = :identity_value
+                )
+                """
+            ),
+            {
+                "id": str(uuid.uuid4()),
+                "identity_value": primary_identity,
+                "source": str(candidate.get("candidate_source_name") or candidate.get("source_name") or "external_product_candidate").strip(),
+                "global_product_id": global_product_id,
+            },
+        )
+
+    return global_product_id
+
+
+def _m2c2i_fix7b_ensure_catalog_products_for_article_codes(conn, candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Vul catalogusreferenties voor bevestigde externe kandidaten met artikelcode.
+
+    Zwakke of gewone preview-kandidaten worden niet automatisch catalogusproduct. Daarmee
+    voorkomen we dat false positives zoals PREI -> artikelcode 21175 in de catalogus belanden.
+    """
+    enriched: list[dict[str, Any]] = []
+
+    for candidate in candidates:
+        next_candidate = dict(candidate)
+        source_code = _m2c2i_fix7b_catalog_source_code(next_candidate)
+        if not source_code or not _m2c2i_fix7b_candidate_is_confirmed_catalog_link(next_candidate):
+            enriched.append(next_candidate)
+            continue
+
+        global_product_id = _m2c2i_fix7b_create_or_reuse_catalog_product_for_candidate(conn, next_candidate)
+        if global_product_id:
+            conn.execute(
+                text(
+                    """
+                    UPDATE external_product_candidates
+                    SET global_product_id = :global_product_id,
+                        status = 'linked_to_catalog',
+                        candidate_status = 'linked_to_catalog',
+                        is_user_confirmed = 1,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = :candidate_id
+                    """
+                ),
+                {
+                    "global_product_id": global_product_id,
+                    "candidate_id": next_candidate.get("id"),
+                },
+            )
+            next_candidate["global_product_id"] = global_product_id
+            next_candidate["status"] = "linked_to_catalog"
+            next_candidate["candidate_status"] = "linked_to_catalog"
+            next_candidate["is_user_confirmed"] = 1
+
+        enriched.append(next_candidate)
+
+    return enriched
+
+def _m2c2i_fix7b_dedupe_top_receipt_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Toon één bovenste tabelrij per winkelketen + genormaliseerde bonartikelnaam."""
+    best_by_key: dict[str, dict[str, Any]] = {}
+
+    status_priority = {
+        "linked_to_catalog": 5,
+        "unlinked_from_catalog": 4,
+        "candidate": 3,
+        "possible_candidate": 2,
+        "no_candidate": 1,
+    }
+
+    for item in items:
+        key = _m2c2i_fix7a3_normalized_receipt_key(
+            item.get("retailer_code"),
+            item.get("receipt_line_text"),
+        )
+
+        current = best_by_key.get(key)
+        item_status = str(item.get("status") or item.get("candidate_status") or "").strip()
+        item_score = (
+            status_priority.get(item_status, 0),
+            1 if str(item.get("global_product_id") or "").strip() else 0,
+            1 if str(item.get("retailer_article_number") or "").strip() else 0,
+            str(item.get("updated_at") or item.get("created_at") or ""),
+        )
+
+        if current is None:
+            best_by_key[key] = item
+            continue
+
+        current_status = str(current.get("status") or current.get("candidate_status") or "").strip()
+        current_score = (
+            status_priority.get(current_status, 0),
+            1 if str(current.get("global_product_id") or "").strip() else 0,
+            1 if str(current.get("retailer_article_number") or "").strip() else 0,
+            str(current.get("updated_at") or current.get("created_at") or ""),
+        )
+
+        if item_score > current_score:
+            best_by_key[key] = item
+
+    return list(best_by_key.values())
+
+def _m2c2i_fix7a3_apply_catalog_status_to_placeholders(
+    placeholders: list[dict[str, Any]],
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Projecteer catalogusstatus en detailkandidaten op de bonartikelrij."""
+    by_purchase_import_line_id: dict[str, list[dict[str, Any]]] = {}
+    by_receipt_key: dict[str, list[dict[str, Any]]] = {}
+
+    def candidate_priority(candidate: dict[str, Any]) -> tuple:
+        status = str(candidate.get("status") or candidate.get("candidate_status") or "").strip().lower()
+        return (
+            0 if status == "linked_to_catalog" else 1,
+            0 if bool(candidate.get("is_user_confirmed")) else 1,
+            0 if str(candidate.get("global_product_id") or "").strip() else 1,
+            -float(candidate.get("score") or 0),
+            str(candidate.get("candidate_name") or ""),
+        )
+
+    def normalize_candidate_for_detail(candidate: dict[str, Any]) -> dict[str, Any]:
+        next_candidate = dict(candidate)
+        try:
+            next_candidate = _m2c2i_fix7a_apply_identifier_contract(next_candidate)
+        except Exception:
+            pass
+        status = str(next_candidate.get("status") or next_candidate.get("candidate_status") or "").strip().lower()
+        has_catalog = _m2c2i_fix2_has_catalog_reference(next_candidate) if "_m2c2i_fix2_has_catalog_reference" in globals() else bool(next_candidate.get("global_product_id"))
+        is_linked = bool(status == "linked_to_catalog" and has_catalog)
+        next_candidate["is_linked_to_catalog"] = is_linked
+        next_candidate["is_existing_link_for_receipt_item"] = is_linked
+        next_candidate["is_linkable_to_catalog"] = bool(not is_linked and _m2c2i_fix7b_catalog_source_code(next_candidate))
+        if is_linked:
+            next_candidate["status"] = "linked_to_catalog"
+            next_candidate["candidate_status"] = "linked_to_catalog"
+        return next_candidate
+
+    for candidate in candidates:
+        purchase_import_line_id = str(candidate.get("purchase_import_line_id") or "").strip()
+        if purchase_import_line_id and not purchase_import_line_id.startswith("preview:"):
+            by_purchase_import_line_id.setdefault(purchase_import_line_id, []).append(candidate)
+
+        key = _m2c2i_fix7a3_normalized_receipt_key(
+            candidate.get("retailer_code"),
+            candidate.get("receipt_line_text"),
+        )
+        if key and key != "|":
+            by_receipt_key.setdefault(key, []).append(candidate)
+
+    enriched: list[dict[str, Any]] = []
+    for placeholder in placeholders:
+        matching_candidates: list[dict[str, Any]] = []
+
+        purchase_import_line_id = str(placeholder.get("purchase_import_line_id") or "").strip()
+        if purchase_import_line_id:
+            matching_candidates.extend(by_purchase_import_line_id.get(purchase_import_line_id, []))
+
+        key = _m2c2i_fix7a3_normalized_receipt_key(
+            placeholder.get("retailer_code"),
+            placeholder.get("receipt_line_text"),
+        )
+        matching_candidates.extend(by_receipt_key.get(key, []))
+
+        # Ontdubbel detailkandidaten op kandidaatidentiteit.
+        unique: dict[str, dict[str, Any]] = {}
+        for candidate in matching_candidates:
+            identity = "|".join([
+                str(candidate.get("id") or ""),
+                str(candidate.get("candidate_source_name") or candidate.get("source_name") or ""),
+                str(candidate.get("candidate_source_product_code") or candidate.get("source_product_code") or candidate.get("retailer_article_number") or ""),
+                str(candidate.get("variant") or ""),
+                str(candidate.get("candidate_name") or ""),
+            ])
+            if identity not in unique or candidate_priority(candidate) < candidate_priority(unique[identity]):
+                unique[identity] = candidate
+
+        detail_candidates = sorted(unique.values(), key=candidate_priority)
+        best = detail_candidates[0] if detail_candidates else None
+
+        if best:
+            status = str(best.get("status") or best.get("candidate_status") or "").strip().lower()
+            has_catalog = bool(str(best.get("global_product_id") or "").strip())
+            placeholder = dict(placeholder)
+            placeholder["candidates"] = [normalize_candidate_for_detail(candidate) for candidate in detail_candidates[:20]]
+            placeholder["candidate_count"] = len(detail_candidates)
+
+            if status == "linked_to_catalog" and has_catalog:
+                placeholder["status"] = "linked_to_catalog"
+                placeholder["candidate_status"] = "linked_to_catalog"
+                placeholder["global_product_id"] = str(best.get("global_product_id") or "").strip() or None
+                placeholder["is_linked_to_catalog"] = True
+                placeholder["is_existing_link_for_receipt_item"] = True
+                placeholder["canonical_catalog_product_id"] = placeholder["global_product_id"]
+                placeholder["retailer_article_number"] = (
+                    str(best.get("retailer_article_number") or best.get("candidate_source_product_code") or best.get("source_product_code") or "").strip()
+                    or placeholder.get("retailer_article_number")
+                )
+            elif status == "unlinked_from_catalog":
+                placeholder["status"] = "unlinked_from_catalog"
+                placeholder["candidate_status"] = "unlinked_from_catalog"
+                placeholder["retailer_article_number"] = (
+                    str(best.get("retailer_article_number") or best.get("candidate_source_product_code") or best.get("source_product_code") or "").strip()
+                    or placeholder.get("retailer_article_number")
+                )
+            elif detail_candidates:
+                placeholder["status"] = "candidate"
+                placeholder["candidate_status"] = "candidate"
+                placeholder["retailer_article_number"] = (
+                    str(best.get("retailer_article_number") or best.get("candidate_source_product_code") or best.get("source_product_code") or "").strip()
+                    or placeholder.get("retailer_article_number")
+                )
+        else:
+            placeholder = dict(placeholder)
+            placeholder["candidates"] = []
+            placeholder["candidate_count"] = 0
+
+        enriched.append(placeholder)
+
+    return enriched
 
 def unlink_external_catalog_links(
     context_keys: list[str] | None = None,
@@ -1186,8 +1580,8 @@ def _m2c2i_fix2_apply_status_fields(rows: list[dict]) -> list[dict]:
         explicit_linked = [
             (index, row)
             for index, row in entries
-            if not _m2c2i_fix2_is_candidate_placeholder(row)
-            and _m2c2i_fix2_has_explicit_link_status(row)
+            if _m2c2i_fix2_has_explicit_link_status(row)
+            and _m2c2i_fix2_has_catalog_reference(row)
         ]
 
         if explicit_linked:
@@ -1203,17 +1597,16 @@ def _m2c2i_fix2_apply_status_fields(rows: list[dict]) -> list[dict]:
     for index, row in enumerate(rows):
         context_key = _m2c2i_fix2_context_key(row)
         is_placeholder = _m2c2i_fix2_is_candidate_placeholder(row)
-        is_linked = index in active_link_indices
+        has_catalog_reference = _m2c2i_fix2_has_catalog_reference(row)
+        explicit_link_status = _m2c2i_fix2_has_explicit_link_status(row)
+        is_linked = bool(index in active_link_indices or (is_placeholder and has_catalog_reference and explicit_link_status))
 
-        # Regel:
-        # - Als een bonartikel al één actieve koppeling heeft, zijn andere echte kandidaten koppelbaar als overschrijfkandidaat.
-        # - Als er nog geen actieve koppeling is, is een kandidaat alleen koppelbaar met harde catalogusreferentie.
         is_linkable = bool(
             not is_placeholder
             and not is_linked
             and (
                 group_has_active_link.get(context_key, False)
-                or _m2c2i_fix2_has_catalog_reference(row)
+                or has_catalog_reference
                 or _m2c2i_fix2_has_external_candidate_identity(row)
             )
         )
@@ -1223,8 +1616,6 @@ def _m2c2i_fix2_apply_status_fields(rows: list[dict]) -> list[dict]:
         next_row["is_existing_link_for_receipt_item"] = bool(is_linked)
         next_row["is_linkable_to_catalog"] = bool(is_linkable)
 
-        # Normaliseer alleen de response, niet de database:
-        # meerdere gelinkte kandidaten worden in de UI niet meer als meerdere actieve koppelingen getoond.
         if is_linked:
             next_row["candidate_status"] = "linked_to_catalog"
             next_row["status"] = "linked_to_catalog"
@@ -1232,10 +1623,27 @@ def _m2c2i_fix2_apply_status_fields(rows: list[dict]) -> list[dict]:
             next_row["candidate_status"] = "candidate"
             next_row["status"] = "candidate"
 
+        # Verrijk geneste detailkandidaten voor de frontend.
+        nested_candidates = []
+        for candidate in next_row.get("candidates") or []:
+            if not isinstance(candidate, dict):
+                continue
+            nested = _m2c2i_fix7a_apply_identifier_contract(dict(candidate))
+            nested_status = str(nested.get("status") or nested.get("candidate_status") or "").strip().lower()
+            nested_has_catalog = _m2c2i_fix2_has_catalog_reference(nested)
+            nested_is_linked = bool(nested_status == "linked_to_catalog" and nested_has_catalog)
+            nested["is_linked_to_catalog"] = nested_is_linked
+            nested["is_existing_link_for_receipt_item"] = nested_is_linked
+            nested["is_linkable_to_catalog"] = bool(not nested_is_linked and _m2c2i_fix2_has_external_candidate_identity(nested))
+            if nested_is_linked:
+                nested["candidate_status"] = "linked_to_catalog"
+                nested["status"] = "linked_to_catalog"
+            nested_candidates.append(nested)
+        next_row["candidates"] = nested_candidates
+
         enriched.append(next_row)
 
     return enriched
-
 
 def list_external_receipt_items(limit: int = 500):
     payload = _m2c2i_fix2_previous_list_external_receipt_items(limit=limit)
@@ -1243,10 +1651,12 @@ def list_external_receipt_items(limit: int = 500):
     if isinstance(payload, dict):
         rows = payload.get("items") or []
         next_payload = dict(payload)
-        next_payload["items"] = _m2c2i_fix2_apply_status_fields([
+        enriched_rows = _m2c2i_fix2_apply_status_fields([
             dict(row) if hasattr(row, "items") else row
             for row in rows
         ])
+        next_payload["items"] = _m2c2i_fix7b_dedupe_top_receipt_items(enriched_rows)
+        next_payload["total"] = len(next_payload["items"])
         return next_payload
 
     rows = payload or []
@@ -1315,6 +1725,8 @@ def promote_external_product_candidate(candidate_id: str, force_overwrite: bool 
                 "context_key": context_key,
             }
 
+        global_product_id = _m2c2i_fix7b_create_or_reuse_catalog_product_for_candidate(conn, candidate_dict)
+
         # Maak binnen dit bonartikel exact één actieve koppeling.
         conn.execute(
             sql_text(
@@ -1339,13 +1751,14 @@ def promote_external_product_candidate(candidate_id: str, force_overwrite: bool 
                 UPDATE external_product_candidates
                 SET candidate_status = 'linked_to_catalog',
                     status = 'linked_to_catalog',
+                    global_product_id = :global_product_id,
                     is_user_confirmed = 1,
                     is_external_database_override = 0,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :candidate_id
                 """
             ),
-            {"candidate_id": normalized_candidate_id},
+            {"candidate_id": normalized_candidate_id, "global_product_id": global_product_id or None},
         )
 
     return {

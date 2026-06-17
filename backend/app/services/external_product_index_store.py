@@ -208,6 +208,59 @@ def _fixture_rows() -> list[dict[str, Any]]:
                 "updated_at": timestamp,
             })
 
+
+    # Retailer-artikelcodes die niet als GTIN bekend zijn, maar wel als externe catalogusidentiteit.
+    special_rows = [
+        {
+            "retailer_code": "lidl",
+            "retailer_name": "Lidl",
+            "source_name": "lidl_product_group",
+            "source_product_code": "21175",
+            "product_name": "Kania Mexicaanse kruidenmix",
+            "brand": "Kania/Kanig",
+            "quantity": "25-35 g",
+            "category": "Kruiden",
+            "source_url": "https://www.lidl.nl/p/mexicaanse-kruidenmix/p21175",
+            "tags": "mexicaanse kruidenmix taco burrito fajita specerijenmix kania kanig 21175",
+        },
+    ]
+
+    for special in special_rows:
+        normalized_search_text = normalize_index_text(
+            " ".join([
+                special["retailer_name"],
+                special["retailer_code"],
+                special["brand"],
+                special["product_name"],
+                special["category"],
+                special["quantity"],
+                special["tags"],
+                special["source_product_code"],
+            ])
+        )
+        rows.append({
+            "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"rezzerv-retailer-code:{special['retailer_code']}:{special['source_product_code']}")),
+            "source_name": special["source_name"],
+            "source_product_code": special["source_product_code"],
+            "gtin": "",
+            "ean": "",
+            "code": special["source_product_code"],
+            "product_name": special["product_name"],
+            "brand": special["brand"],
+            "brands": special["brand"],
+            "quantity": special["quantity"],
+            "net_content": special["quantity"],
+            "packaging": special["quantity"],
+            "category": special["category"],
+            "categories": special["category"],
+            "image_url": "",
+            "source_url": special["source_url"],
+            "retailer_code": special["retailer_code"],
+            "normalized_search_text": normalized_search_text,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        })
+
     return rows
 
 

@@ -137,6 +137,40 @@ function buildReceiptItems(candidates) {
       current.candidates.push(candidateItem)
     }
 
+    if (isPlaceholder && Array.isArray(candidate.candidates)) {
+      candidate.candidates.forEach((nestedCandidate) => {
+        const nestedLinked = isBackendLinkedCandidate(nestedCandidate)
+        const nestedItem = {
+          id: candidateKey(nestedCandidate),
+          candidateName: text(nestedCandidate.candidate_name),
+          brand: text(nestedCandidate.candidate_brand),
+          source: text(nestedCandidate.external_source_name || nestedCandidate.candidate_source_name || nestedCandidate.source_name),
+          externalCode: text(nestedCandidate.external_source_product_code || nestedCandidate.candidate_source_product_code || nestedCandidate.source_product_code || nestedCandidate.retailer_article_number),
+          variant: text(nestedCandidate.variant),
+          score: nestedCandidate.score,
+          status: candidateStatusFromBackend(nestedCandidate, nestedLinked),
+          catalogLinked: nestedLinked,
+          isLinkedToCatalog: nestedLinked,
+          isLinkableToCatalog: Boolean(nestedCandidate.is_linkable_to_catalog) && !nestedLinked,
+          isExistingLinkForReceiptItem: nestedLinked,
+          canonicalCatalogProductId: text(nestedCandidate.canonical_catalog_product_id, ''),
+          raw: nestedCandidate,
+        }
+
+        current.candidateCount += 1
+        current.candidates.push(nestedItem)
+
+        if (nestedLinked) {
+          current.catalogLinked = true
+          current.status = 'Gekoppeld'
+          current.linkedGlobalProductId = text(nestedCandidate.global_product_id, current.linkedGlobalProductId || '')
+          current.linkedProductIdentityId = text(nestedCandidate.product_identity_id, current.linkedProductIdentityId || '')
+          current.linkedMatchedGlobalProductId = text(nestedCandidate.matched_global_product_id, current.linkedMatchedGlobalProductId || '')
+          current.linkedMatchedGlobalArticleId = text(nestedCandidate.matched_global_article_id, current.linkedMatchedGlobalArticleId || '')
+        }
+      })
+    }
+
     if (linked) {
       current.catalogLinked = true
       current.status = 'Gekoppeld'
