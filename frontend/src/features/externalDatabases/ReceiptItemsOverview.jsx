@@ -42,18 +42,9 @@ function candidateKey(candidate) {
   return text(candidate.id || `${candidate.candidate_name}-${candidate.candidate_source_product_code}-${candidate.variant}`, 'candidate')
 }
 
-function hasCatalogLinkValue(value) {
-  const normalized = String(value ?? '').trim().toLowerCase()
-  return Boolean(normalized && normalized !== '-' && normalized !== '0' && normalized !== 'null' && normalized !== 'undefined' && normalized !== 'false')
-}
-
-function isCatalogLinked(candidate) {
-  return Boolean(
-    hasCatalogLinkValue(candidate.global_product_id) ||
-    hasCatalogLinkValue(candidate.product_identity_id) ||
-    hasCatalogLinkValue(candidate.matched_global_product_id) ||
-    hasCatalogLinkValue(candidate.matched_global_article_id)
-  )
+function isBackendLinkedCandidate(candidate) {
+  // Single source of truth: de backend bepaalt of deze kandidaat de actieve koppeling is.
+  return candidate?.is_linked_to_catalog === true
 }
 
 function buildReceiptItems(candidates) {
@@ -62,7 +53,7 @@ function buildReceiptItems(candidates) {
   candidates.forEach((candidate) => {
     const key = rowKey(candidate)
     const isPlaceholder = Boolean(candidate.is_receipt_item_placeholder)
-    const linked = isCatalogLinked(candidate)
+    const linked = isBackendLinkedCandidate(candidate)
 
     const candidateItem = {
       id: candidateKey(candidate),
@@ -72,11 +63,11 @@ function buildReceiptItems(candidates) {
       externalCode: text(candidate.candidate_source_product_code || candidate.source_product_code || candidate.retailer_article_number),
       variant: text(candidate.variant),
       score: candidate.score,
-      status: candidateStatusLabel(candidate.candidate_status || candidate.status),
+      status: text(candidate.status_label, '') || candidateStatusLabel(candidate.candidate_status || candidate.status),
       catalogLinked: linked,
-      isLinkedToCatalog: Boolean(candidate.is_linked_to_catalog),
-      isLinkableToCatalog: Boolean(candidate.is_linkable_to_catalog),
-      isExistingLinkForReceiptItem: Boolean(candidate.is_existing_link_for_receipt_item),
+      isLinkedToCatalog: linked,
+      isLinkableToCatalog: Boolean(candidate.is_linkable_to_catalog) && !linked,
+      isExistingLinkForReceiptItem: linked,
       raw: candidate,
     }
 
