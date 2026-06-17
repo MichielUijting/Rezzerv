@@ -39,7 +39,12 @@ function rowKey(item) {
 }
 
 function candidateKey(candidate) {
-  return text(candidate.id || `${candidate.candidate_name}-${candidate.candidate_source_product_code}-${candidate.variant}`, 'candidate')
+  return text(
+    candidate.candidate_id ||
+    candidate.id ||
+    `${candidate.candidate_name}-${candidate.external_source_product_code || candidate.candidate_source_product_code}-${candidate.variant}`,
+    'candidate'
+  )
 }
 
 function isBackendLinkedCandidate(candidate) {
@@ -71,8 +76,8 @@ function buildReceiptItems(candidates) {
       id: candidateKey(candidate),
       candidateName: text(candidate.candidate_name),
       brand: text(candidate.candidate_brand),
-      source: text(candidate.candidate_source_name || candidate.source_name),
-      externalCode: text(candidate.candidate_source_product_code || candidate.source_product_code || candidate.retailer_article_number),
+      source: text(candidate.external_source_name || candidate.candidate_source_name || candidate.source_name),
+      externalCode: text(candidate.external_source_product_code || candidate.candidate_source_product_code || candidate.source_product_code || candidate.retailer_article_number),
       variant: text(candidate.variant),
       score: candidate.score,
       status: candidateStatusFromBackend(candidate, linked),
@@ -80,6 +85,7 @@ function buildReceiptItems(candidates) {
       isLinkedToCatalog: linked,
       isLinkableToCatalog: Boolean(candidate.is_linkable_to_catalog) && !linked,
       isExistingLinkForReceiptItem: linked,
+      canonicalCatalogProductId: text(candidate.canonical_catalog_product_id, ''),
       raw: candidate,
     }
 

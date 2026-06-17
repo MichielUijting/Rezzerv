@@ -1061,6 +1061,37 @@ def _m2c2i_fix2_has_catalog_reference(row: dict) -> bool:
     )
 
 
+def _m2c2i_fix7a_first_truthy(row: dict, fields: tuple[str, ...]) -> str:
+    for field in fields:
+        value = str(row.get(field) if row.get(field) is not None else "").strip()
+        if _m2c2i_fix2_truthy(value):
+            return value
+    return ""
+
+
+def _m2c2i_fix7a_apply_identifier_contract(row: dict) -> dict:
+    next_row = dict(row)
+
+    next_row["candidate_id"] = _m2c2i_fix7a_first_truthy(next_row, ("id",))
+    next_row["external_source_name"] = _m2c2i_fix7a_first_truthy(
+        next_row,
+        ("candidate_source_name", "source_name"),
+    )
+    next_row["external_source_product_code"] = _m2c2i_fix7a_first_truthy(
+        next_row,
+        ("candidate_source_product_code", "source_product_code", "retailer_article_number"),
+    )
+    next_row["gtin"] = _m2c2i_fix7a_first_truthy(
+        next_row,
+        ("gtin", "ean", "code"),
+    )
+    next_row["canonical_catalog_product_id"] = _m2c2i_fix7a_first_truthy(
+        next_row,
+        ("global_product_id", "matched_global_product_id", "matched_global_article_id", "product_identity_id"),
+    )
+
+    return next_row
+
 # M2C2i-2a-fix2b external candidates are linkable
 def _m2c2i_fix2_has_external_candidate_identity(row: dict) -> bool:
     return bool(
@@ -1145,7 +1176,7 @@ def _m2c2i_fix2_apply_status_fields(rows: list[dict]) -> list[dict]:
             )
         )
 
-        next_row = dict(row)
+        next_row = _m2c2i_fix7a_apply_identifier_contract(dict(row))
         next_row["is_linked_to_catalog"] = bool(is_linked)
         next_row["is_existing_link_for_receipt_item"] = bool(is_linked)
         next_row["is_linkable_to_catalog"] = bool(is_linkable)
