@@ -111,7 +111,8 @@ from app.services.email_config_service import (
     build_outbound_email_configuration_summary,
     build_resend_error_message,
 )
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 from decimal import Decimal
 from email import policy
 from email.parser import BytesParser
@@ -10874,6 +10875,59 @@ def _extract_supported_receipts_from_zip(filename: str, file_bytes: bytes) -> li
     return members
 
 
+def _normalized_purchase_at_or_fallback(receipt_table_id: str, result: dict[str, Any]) -> dict[str, Any]:
+    """Store an explicit Kassa purchase timestamp without overwriting parser output.
+
+    A detected timestamp remains untouched. A detected date-only value receives 00:00.
+    When parsing did not produce a valid receipt date, store today's Dutch date at 00:00.
+    """
+    if not receipt_table_id or result.get('duplicate'):
+        return result
+
+    with engine.begin() as conn:
+        row = conn.execute(
+            text('SELECT purchase_at FROM receipt_tables WHERE id = :id LIMIT 1'),
+            {'id': str(receipt_table_id)},
+        ).mappings().first()
+        if not row:
+            return result
+
+        raw_text = str(row.get('purchase_at') or '').strip()
+        normalized_value = raw_text
+        valid_receipt_date = False
+
+        if raw_text:
+            try:
+                if re.fullmatch(r'\d{4}-\d{2}-\d{2}', raw_text):
+                    normalized_value = datetime.combine(date.fromisoformat(raw_text), time.min).isoformat(timespec='seconds')
+                    valid_receipt_date = True
+                else:
+                    datetime.fromisoformat(raw_text.replace('Z', '+00:00'))
+                    valid_receipt_date = True
+            except (TypeError, ValueError):
+                normalized_value = ''
+
+        if not valid_receipt_date:
+            try:
+                dutch_now = datetime.now(ZoneInfo('Europe/Amsterdam'))
+            except Exception:
+                dutch_now = datetime.now()
+            normalized_value = dutch_now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None).isoformat(timespec='seconds')
+
+        if normalized_value != raw_text:
+            conn.execute(
+                text('UPDATE receipt_tables SET purchase_at = :purchase_at, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
+                {'id': str(receipt_table_id), 'purchase_at': normalized_value},
+            )
+
+    result['purchase_at'] = normalized_value
+    if isinstance(result.get('receipt'), dict):
+        result['receipt']['purchase_at'] = normalized_value
+    if isinstance(result.get('parsed'), dict):
+        result['parsed']['purchase_at'] = normalized_value
+    return result
+
+
 def import_uploaded_receipt_payload(
     household_id: str,
     filename: str,
@@ -10945,7 +10999,7 @@ def import_uploaded_receipt_payload(
         if reject_non_receipt and not result.get('receipt_table_id'):
             raise ValueError('Gedeelde inhoud is niet als bruikbare kassabon herkend.')
         return result
-    return ingest_receipt(
+    result = ingest_receipt(
         engine=engine,
         receipt_storage_root=RECEIPT_STORAGE_ROOT,
         household_id=str(household_id),
@@ -10959,6 +11013,7 @@ def import_uploaded_receipt_payload(
         failed_purchase_at=failed_purchase_at,
         include_debug=include_debug,
     )
+    return _normalized_purchase_at_or_fallback(str(result.get('receipt_table_id') or ''), result)
 
 
 def store_receipt_email_metadata(raw_receipt_id: str, household_id: str, payload: dict[str, Any]):
@@ -11028,7 +11083,7 @@ def import_email_receipt_payload(household_id: str, email_bytes: bytes, fallback
         reject_non_receipt=False,
         create_failed_receipt_table=True,
         failed_store_name=derive_email_receipt_store_name(payload),
-        failed_purchase_at=payload.get('received_at'),
+        failed_purchase_at=None,
     )
     raw_receipt_id = result.get('raw_receipt_id')
     if raw_receipt_id:
@@ -11042,12 +11097,11 @@ def import_email_receipt_payload(household_id: str, email_bytes: bytes, fallback
                     """
                     UPDATE receipt_tables
                     SET store_name = COALESCE(store_name, :store_name),
-                        purchase_at = COALESCE(purchase_at, :purchase_at),
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = :id
                     """
                 ),
-                {'id': receipt_table_id, 'store_name': derived_store_name, 'purchase_at': payload.get('received_at')},
+                {'id': receipt_table_id, 'store_name': derived_store_name},
             )
             stored_receipt = conn.execute(
                 text(
@@ -11074,6 +11128,7 @@ def import_email_receipt_payload(household_id: str, email_bytes: bytes, fallback
             repaired = reparse_receipt(engine, RECEIPT_STORAGE_ROOT, str(receipt_table_id))
             if repaired:
                 result['parse_status'] = repaired.get('parse_status') or result.get('parse_status')
+    result = _normalized_purchase_at_or_fallback(str(result.get('receipt_table_id') or ''), result)
     result['source_id'] = effective_source_id
     result['source_label'] = default_email_source.get('label', 'E-mail')
     result['sender_email'] = payload.get('sender_email')
@@ -11945,7 +12000,7 @@ async def import_picnic_email_receipt(
             reject_non_receipt=False,
             create_failed_receipt_table=True,
             failed_store_name='Picnic',
-            failed_purchase_at=payload.get('received_at'),
+            failed_purchase_at=None,
         )
 
         raw_receipt_id = result.get('raw_receipt_id')
@@ -11961,14 +12016,14 @@ async def import_picnic_email_receipt(
                         UPDATE receipt_tables
                         SET store_name = COALESCE(store_name, 'Picnic'),
                             store_chain = COALESCE(store_chain, 'Picnic'),
-                            purchase_at = COALESCE(purchase_at, :purchase_at),
                             updated_at = CURRENT_TIMESTAMP
                         WHERE id = :id
                         """
                     ),
-                    {'id': receipt_table_id, 'purchase_at': payload.get('received_at')},
+                    {'id': receipt_table_id},
                 )
 
+        result = _normalized_purchase_at_or_fallback(str(result.get('receipt_table_id') or ''), result)
         result['source_id'] = source_id
         result['source_label'] = 'Handmatige Picnic e-mailupload'
         result['sender_email'] = payload.get('sender_email')

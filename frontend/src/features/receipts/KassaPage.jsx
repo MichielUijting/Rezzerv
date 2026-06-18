@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -163,11 +163,24 @@ const DELETED_RECEIPTS_STORAGE_KEY = 'rezzerv_kassa_deleted_receipts'
 const DEFAULT_RECEIPT_FILTERS = { winkel: '', datum: '', totaal: '', artikelen: '', status: '' }
 const MAX_CAMERA_UPLOAD_BYTES = 4 * 1024 * 1024
 const MAX_CAMERA_DIMENSION = 1800
+
+// Kassa-inbox: de hoogte wordt in de browser gemeten op kop/filter plus exact tien bonregels.
+// Daardoor blijft het aantal zichtbare regels stabiel, ook wanneer de werkelijke rijhoogte door de styleguide verandert.
+const KASSA_INBOX_VISIBLE_ROW_COUNT = 10
+const KASSA_INBOX_FALLBACK_SCROLL_HEIGHT_PX = 350
 const RECEIPT_INBOX_AUTO_REFRESH_MS = 60000
 const RECEIPT_DETAIL_PANEL_HEIGHT = 560
 const RECEIPT_PREVIEW_ZOOM_MIN = 0.5
 const RECEIPT_PREVIEW_ZOOM_MAX = 3
 const RECEIPT_PREVIEW_ZOOM_STEP = 0.25
+
+const RECEIPT_IMPORT_STEPS = [
+  { key: 'preparing', label: 'Bestand voorbereiden' },
+  { key: 'uploading', label: 'Bon versturen' },
+  { key: 'processing', label: 'Bon verwerken' },
+  { key: 'refreshing', label: 'Kassa bijwerken' },
+  { key: 'ready', label: 'Gereed' },
+]
 
 function formatQuantity(value) {
   if (value === null || value === undefined || value === '') return '-'
@@ -813,7 +826,87 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
   )
 }
 
-function ReceiptProcessingInfoCard({ transientPreview, uploadProgress }) {
+function ReceiptUploadProgressOverlay({ uploadProgress }) {
+  if (!uploadProgress?.active) return null
+
+  const percent = Math.max(5, Math.min(100, Math.round(Number(uploadProgress?.percent || 0))))
+  const label = String(uploadProgress?.label || 'Kassabon verwerken...')
+  const detail = String(uploadProgress?.detail || 'Rezzerv verwerkt je bestand.')
+  const currentStepKey = String(uploadProgress?.stepKey || 'processing')
+  const currentStepIndex = Math.max(0, RECEIPT_IMPORT_STEPS.findIndex((step) => step.key === currentStepKey))
+
+  return (
+    <div
+      className="rz-modal-backdrop"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="kassa-upload-progress-title"
+      aria-describedby="kassa-upload-progress-detail"
+      data-testid="kassa-upload-progress-overlay"
+      style={{ zIndex: 1200, padding: '20px' }}
+    >
+      <div className="rz-modal-card" style={{ width: 'min(560px, 100%)', display: 'grid', gap: '18px', padding: '24px' }}>
+        <div style={{ display: 'grid', gap: '6px' }}>
+          <h2 id="kassa-upload-progress-title" className="rz-modal-title" style={{ fontSize: '22px' }}>Bon verwerken</h2>
+          <div style={{ color: '#344054', fontSize: '15px', fontWeight: 700 }}>{label}</div>
+          <p id="kassa-upload-progress-detail" className="rz-modal-text">{detail}</p>
+        </div>
+
+        <div
+          role="progressbar"
+          aria-label="Voortgang kassabon verwerken"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent}
+          data-testid="kassa-upload-progress"
+          style={{ display: 'grid', gap: '8px' }}
+        >
+          <div style={{ height: '14px', borderRadius: '999px', overflow: 'hidden', background: '#EAECF0' }}>
+            <div style={{ width: `${percent}%`, height: '100%', background: '#166534', transition: 'width 220ms ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#166534', fontSize: '14px', fontWeight: 700 }}>
+            <span>Voortgang</span>
+            <span data-testid="kassa-upload-progress-percent">{percent}%</span>
+          </div>
+        </div>
+
+        <ol style={{ display: 'grid', gap: '10px', margin: 0, padding: 0, listStyle: 'none' }} aria-label="Stappen bij het verwerken van de kassabon">
+          {RECEIPT_IMPORT_STEPS.map((step, index) => {
+            const isComplete = index < currentStepIndex || (step.key === 'ready' && percent >= 100)
+            const isCurrent = index === currentStepIndex && !isComplete
+            return (
+              <li key={step.key} style={{ display: 'flex', alignItems: 'center', gap: '10px', color: isComplete || isCurrent ? '#166534' : '#667085', fontWeight: isCurrent ? 700 : 400 }}>
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: '22px',
+                    height: '22px',
+                    borderRadius: '50%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flex: '0 0 22px',
+                    border: isComplete || isCurrent ? '1px solid #166534' : '1px solid #D0D5DD',
+                    background: isComplete ? '#166534' : isCurrent ? '#FFFFFF' : '#FFFFFF',
+                    color: isComplete ? '#FFFFFF' : '#667085',
+                    fontSize: '13px',
+                    fontWeight: 800,
+                  }}
+                >
+                  {isComplete ? '✓' : index + 1}
+                </span>
+                <span>{step.label}</span>
+                {isCurrent ? <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#166534' }}>Bezig</span> : null}
+              </li>
+            )
+          })}
+        </ol>
+      </div>
+    </div>
+  )
+}
+
+function ReceiptProcessingInfoCard({ transientPreview }) {
   return (
     <ScreenCard fullWidth>
       <div style={{ display: 'grid', gap: '18px' }}>
@@ -827,8 +920,6 @@ function ReceiptProcessingInfoCard({ transientPreview, uploadProgress }) {
         <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           <DetailInfoRow label="Bestand" value={transientPreview?.filename || '-'} />
           <DetailInfoRow label="Weergaven" value="Origineel / Bewerkt" />
-          <DetailInfoRow label="Status" value={uploadProgress?.label || 'Kassabon verwerken...'} />
-          <DetailInfoRow label="Voortgang" value={`${Math.max(5, Math.min(100, Math.round(uploadProgress?.percent || 0)))}%`} />
         </div>
 </div>
     </ScreenCard>
@@ -1366,7 +1457,7 @@ async function saveLine(lineId, overrides = null) {
   )
 }
 
-function ReceiptDetailView({ receipt = null, transientPreview = null, uploadProgress = null, canEdit = false, onReceiptUpdated, onFeedback }) {
+function ReceiptDetailView({ receipt = null, transientPreview = null, canEdit = false, onReceiptUpdated, onFeedback }) {
   const [isPreviewCollapsed, setIsPreviewCollapsed] = useState(false)
 
   useEffect(() => {
@@ -1399,7 +1490,7 @@ function ReceiptDetailView({ receipt = null, transientPreview = null, uploadProg
         {receipt ? (
           <ReceiptDetailInfoCard receipt={receipt} canEdit={canEdit} onReceiptUpdated={onReceiptUpdated} onFeedback={onFeedback} />
         ) : (
-          <ReceiptProcessingInfoCard transientPreview={transientPreview} uploadProgress={uploadProgress} />
+          <ReceiptProcessingInfoCard transientPreview={transientPreview} />
         )}
       </div>
     </div>
@@ -1417,7 +1508,6 @@ function ReceiptSourceHubContent({
   feedbackMessage,
   feedbackVariant = 'success',
   isUploading,
-  uploadProgress,
   technicalUploadError,
   isTechnicalUploadErrorOpen = false,
   onToggleTechnicalUploadError,
@@ -1542,6 +1632,7 @@ function ReceiptSourceHubContent({
             </div>
           </div>
         </ScreenCard>
+
 
         {showSupportPanels ? (
         <>
@@ -1683,6 +1774,7 @@ function CameraCaptureModal({
           )}
         </div>
 
+
         <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start' }}>
           <Button type="button" variant="secondary" onClick={onRetake} disabled={isUploading} data-testid="kassa-camera-retake">Opnieuw</Button>
           <Button type="button" variant="primary" onClick={onConfirm} disabled={isUploading} data-testid="kassa-camera-confirm">{isUploading ? 'Opslaan...' : 'Bevestigen'}</Button>
@@ -1736,7 +1828,7 @@ export default function KassaPage() {
   const [filters, setFilters] = useState(DEFAULT_RECEIPT_FILTERS)
   const [isLoading, setIsLoading] = useState(true)
   const [isUploading, setIsUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState({ active: false, label: '', detail: '', percent: 0 })
+  const [uploadProgress, setUploadProgress] = useState({ active: false, label: '', detail: '', percent: 0, stepKey: 'preparing' })
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [duplicateNotice, setDuplicateNotice] = useState('')
@@ -1759,7 +1851,10 @@ export default function KassaPage() {
   const cameraInputRef = useRef(null)
   const uploadBatchPollerRef = useRef(null)
   const uploadBatchLastProcessedRef = useRef(-1)
+  const uploadProgressTimersRef = useRef([])
   const receiptInboxRefreshInFlightRef = useRef(false)
+  const inboxScrollFrameRef = useRef(null)
+  const [inboxScrollHeightPx, setInboxScrollHeightPx] = useState(KASSA_INBOX_FALLBACK_SCROLL_HEIGHT_PX)
   const [inboxSort, setInboxSort] = useState({ key: 'date', direction: 'desc' })
 
   useDismissOnComponentClick([() => setError(''), () => setStatus(''), () => setDuplicateNotice(''), () => setCameraError(''), () => setEmailRouteError('')], Boolean(error || status || duplicateNotice || cameraError || emailRouteError))
@@ -1789,6 +1884,8 @@ export default function KassaPage() {
         window.clearInterval(uploadBatchPollerRef.current)
         uploadBatchPollerRef.current = null
       }
+      uploadProgressTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+      uploadProgressTimersRef.current = []
     }
   }, [])
 
@@ -1834,7 +1931,8 @@ export default function KassaPage() {
     return {
       label: 'Zip-batch verwerken...',
       detail: `${processed} van ${total} kassabonnen verwerkt (${percentage}%).`,
-      percent: percentage,
+      percent: Math.max(10, percentage),
+      stepKey: percentage >= 100 ? 'ready' : processed > 0 ? 'processing' : 'uploading',
     }
   }
 
@@ -1843,14 +1941,14 @@ export default function KassaPage() {
     if (!batchId) return
     stopReceiptImportBatchPolling()
     const initial = buildBatchUploadProgress(batchPayload)
-    setUploadProgressState(true, initial.label, initial.detail, initial.percent)
+    setUploadProgressState(true, initial.label, initial.detail, initial.percent, initial.stepKey)
     if (isAddReceiptRoute) navigate('/kassa')
     setIsUploading(true)
     const pollOnce = async () => {
       try {
         const batch = await fetchReceiptImportBatchStatus(householdId, batchId)
         const nextProgress = buildBatchUploadProgress(batch)
-        setUploadProgressState(true, nextProgress.label, nextProgress.detail, nextProgress.percent)
+        setUploadProgressState(true, nextProgress.label, nextProgress.detail, nextProgress.percent, nextProgress.stepKey)
         const processed = Number(batch?.processed_files || 0)
         if (processed !== uploadBatchLastProcessedRef.current) {
           uploadBatchLastProcessedRef.current = processed
@@ -1860,6 +1958,7 @@ export default function KassaPage() {
         if (['completed', 'completed_with_errors', 'failed'].includes(statusValue)) {
           stopReceiptImportBatchPolling()
           await loadReceipts(householdId)
+          await completeUploadProgress('Het zipbestand')
           setIsUploading(false)
           setUploadMode('manual')
           resetUploadProgress()
@@ -1920,7 +2019,16 @@ export default function KassaPage() {
       }
       setSelectedReceiptIds([])
       await loadReceipts(householdId)
-      setStatus(`${deletedIds.length} bon${deletedIds.length === 1 ? '' : 'nen'} verwijderd uit de inbox.`)
+      const deletedCount = deletedIds.length
+      const message = `${deletedCount} bon${deletedCount === 1 ? '' : 'nen'} verwijderd uit de inbox.`
+      setStatus('')
+      showKassaFeedback('success', message, {
+        title: deletedCount === 1 ? 'Bon verwijderd' : 'Bonnen verwijderd',
+        detail: 'De verwijderde bon is niet langer zichtbaar in de Kassa-inbox.',
+        key: 'kassa-receipt-delete-success',
+        dedupeMs: 0,
+        testId: 'kassa-delete-overlay',
+      })
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De geselecteerde bonnen konden niet worden verwijderd.')
     }
@@ -2091,9 +2199,17 @@ export default function KassaPage() {
   }, [receiptInboxFocusId])
 
   function announceDuplicate(result) {
+    const message = formatDuplicateImportMessage(result)
     setError('')
     setStatus('')
-    setDuplicateNotice(formatDuplicateImportMessage(result))
+    setDuplicateNotice(message)
+    showKassaFeedback('warning', message, {
+      title: 'Bon al ingelezen',
+      detail: 'Deze upload is niet opnieuw toegevoegd. De bestaande kassabon blijft ongewijzigd in Kassa.',
+      key: 'kassa-duplicate-receipt',
+      dedupeMs: 0,
+      testId: 'kassa-duplicate-overlay',
+    })
     try {
       window.requestAnimationFrame(() => {
         const feedback = document.querySelector('[data-testid="receipt-duplicate-feedback"]')
@@ -2210,7 +2326,69 @@ export default function KassaPage() {
     items: filters.artikelen,
   }), [filters.winkel, filters.datum, filters.totaal, filters.artikelen])
 
+  useLayoutEffect(() => {
+    const frame = inboxScrollFrameRef.current
+    if (!frame) return undefined
 
+    let animationFrame = 0
+
+    const measureInboxHeight = () => {
+      const table = frame.querySelector('.rz-kassa-inbox-table')
+      const header = table?.querySelector('thead')
+      const dataRows = Array.from(table?.querySelectorAll('tbody > tr') || [])
+        .filter((row) => row.querySelector('td'))
+
+      if (!header || dataRows.length === 0) {
+        setInboxScrollHeightPx(KASSA_INBOX_FALLBACK_SCROLL_HEIGHT_PX)
+        return
+      }
+
+      const visibleRows = dataRows.slice(0, KASSA_INBOX_VISIBLE_ROW_COUNT)
+      const headerHeight = header.getBoundingClientRect().height
+      const rowsHeight = visibleRows.reduce(
+        (total, row) => total + row.getBoundingClientRect().height,
+        0,
+      )
+
+      // Eén pixel marge voorkomt dat de elfde rij deels zichtbaar wordt door afronding of tabelranden.
+      const nextHeight = Math.max(
+        1,
+        Math.floor(headerHeight + rowsHeight) - 1,
+      )
+
+      setInboxScrollHeightPx((current) => (
+        current === nextHeight ? current : nextHeight
+      ))
+    }
+
+    const scheduleMeasure = () => {
+      window.cancelAnimationFrame(animationFrame)
+      animationFrame = window.requestAnimationFrame(measureInboxHeight)
+    }
+
+    scheduleMeasure()
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(scheduleMeasure)
+      : null
+
+    resizeObserver?.observe(frame)
+    window.addEventListener('resize', scheduleMeasure)
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      resizeObserver?.disconnect()
+      window.removeEventListener('resize', scheduleMeasure)
+    }
+  }, [
+    isLoading,
+    listItems.length,
+    inboxSort,
+    inboxTableFilters.store,
+    inboxTableFilters.date,
+    inboxTableFilters.total,
+    inboxTableFilters.items,
+  ])
 
   async function openReceiptDetail(receiptTableId, sourceItems = receipts, prefetchedDetail = null) {
     setError('')
@@ -2270,12 +2448,43 @@ export default function KassaPage() {
   }
 
 
-  function setUploadProgressState(active, label = '', detail = '', percent = 0) {
-    setUploadProgress({ active, label, detail, percent })
+  function clearUploadProgressTimers() {
+    uploadProgressTimersRef.current.forEach((timerId) => window.clearTimeout(timerId))
+    uploadProgressTimersRef.current = []
+  }
+
+  function setUploadProgressState(active, label = '', detail = '', percent = 0, stepKey = 'processing') {
+    setUploadProgress({ active, label, detail, percent, stepKey })
+  }
+
+  function scheduleUploadProgressStep(delayMs, label, detail, percent, stepKey) {
+    const timerId = window.setTimeout(() => {
+      setUploadProgress((current) => {
+        if (!current?.active) return current
+        return { active: true, label, detail, percent, stepKey }
+      })
+    }, delayMs)
+    uploadProgressTimersRef.current.push(timerId)
+  }
+
+  function beginUploadProgress(kindLabel = 'de kassabon') {
+    clearUploadProgressTimers()
+    setUploadProgressState(true, 'Bestand voorbereiden...', `Rezzerv bereidt ${kindLabel} voor.`, 10, 'preparing')
+    scheduleUploadProgressStep(180, 'Bon versturen...', 'Het bestand wordt veilig naar Rezzerv verstuurd.', 25, 'uploading')
+    scheduleUploadProgressStep(700, 'Bon verwerken...', 'Rezzerv leest winkel, aankoopmoment, bedragen en bonregels uit.', 50, 'processing')
+  }
+
+  async function completeUploadProgress(kindLabel = 'De kassabon') {
+    clearUploadProgressTimers()
+    setUploadProgressState(true, 'Kassa bijwerken...', `${kindLabel} is verwerkt. Rezzerv werkt nu de inbox bij.`, 80, 'refreshing')
+    await new Promise((resolve) => window.setTimeout(resolve, 160))
+    setUploadProgressState(true, 'Gereed...', `${kindLabel} staat klaar in Kassa.`, 100, 'ready')
+    await new Promise((resolve) => window.setTimeout(resolve, 420))
   }
 
   function resetUploadProgress() {
-    setUploadProgress({ active: false, label: '', detail: '', percent: 0 })
+    clearUploadProgressTimers()
+    setUploadProgress({ active: false, label: '', detail: '', percent: 0, stepKey: 'preparing' })
   }
 
   function clearTechnicalUploadError() {
@@ -2355,14 +2564,14 @@ export default function KassaPage() {
   async function confirmCameraDraft() {
     if (!cameraDraft?.file) return
     setIsUploading(true)
-    setUploadProgressState(true, 'Kassabon verwerken...', 'Rezzerv bereidt de foto voor en verwerkt daarna de bon.', 15)
+    beginUploadProgress('de foto')
     setError('')
     setCameraError('')
     setStatus('')
     setDuplicateNotice('')
     try {
       const preparedFile = await prepareCameraUploadFile(cameraDraft.file)
-      setUploadProgressState(true, 'Kassabon verwerken...', 'De gefotografeerde kassabon wordt nu geanalyseerd.', 45)
+      setUploadProgressState(true, 'Bon verwerken...', 'Rezzerv analyseert de gefotografeerde kassabon.', 55, 'processing')
       const result = await uploadSharedReceiptFile(householdId, preparedFile, 'camera_capture', 'Foto gemaakt in Rezzerv')
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
@@ -2375,7 +2584,7 @@ export default function KassaPage() {
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
 
-        setUploadProgressState(true, 'Kassa laden...', buildPostImportProgressMessage('De foto'), 85)
+        setUploadProgressState(true, 'Kassa bijwerken...', buildPostImportProgressMessage('De foto'), 80, 'refreshing')
         const refreshedItems = await loadReceiptsWithUploadedFallback(result, { openReceiptId: uploadedReceiptId })
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
@@ -2400,7 +2609,7 @@ export default function KassaPage() {
           setStatus('Bon toegevoegd. De lijst is bijgewerkt.')
         }
 
-        setUploadProgressState(true, 'Kassa openen...', 'De nieuwe bon staat klaar in Kassa.', 100)
+        await completeUploadProgress('De foto')
         if (isAddReceiptRoute) navigate('/kassa')
 
         try {
@@ -2455,7 +2664,7 @@ export default function KassaPage() {
     }
 
     setIsUploading(true)
-    setUploadProgressState(true, 'Picnic e-mail voorbereiden...', 'Rezzerv zet de opgeslagen e-mail klaar voor het Picnic-parserframe.', 20)
+    beginUploadProgress('de Picnic e-mailbon')
     setError('')
     setStatus('Picnic e-mailbestand wordt verwerkt.')
     setDuplicateNotice('')
@@ -2473,7 +2682,7 @@ export default function KassaPage() {
         setOpenedReceipt(null)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
-        setUploadProgressState(true, 'Kassa laden...', buildPostImportProgressMessage('De Picnic e-mailbon'), 85)
+        setUploadProgressState(true, 'Kassa bijwerken...', buildPostImportProgressMessage('De Picnic e-mailbon'), 80, 'refreshing')
 
         const refreshedItems = await loadReceiptsWithUploadedFallback(result, { openReceiptId: uploadedReceiptId })
         const receiptExistsInInbox = uploadedReceiptId
@@ -2492,7 +2701,7 @@ export default function KassaPage() {
         setEmailRouteError('')
         clearTechnicalUploadError()
         setStatus(result?.receipt_table_id ? 'Picnic e-mailbon ontvangen. De bon staat nu in de Kassa.' : 'Picnic e-mail verwerkt, maar Rezzerv herkent nog geen bruikbare kassabon. Controleer het e-mailbestand.')
-        setUploadProgressState(true, 'Kassa openen...', 'De nieuwe Picnic e-mailbon staat klaar in Kassa.', 100)
+        await completeUploadProgress('De Picnic e-mailbon')
 
         if (isAddReceiptRoute) navigate('/kassa')
       }
@@ -2535,7 +2744,7 @@ export default function KassaPage() {
     }
 
     setIsUploading(true)
-    setUploadProgressState(true, 'Kassabon verwerken...', 'Rezzerv verwerkt het bestand en bereidt Kassa voor.', 20)
+    beginUploadProgress('de kassabon')
     setError('')
     setStatus('')
     setDuplicateNotice('')
@@ -2561,7 +2770,7 @@ export default function KassaPage() {
         setOpenedReceipt(null)
         setFilters(DEFAULT_RECEIPT_FILTERS)
         setReceiptInboxFocusId(uploadedReceiptId)
-        setUploadProgressState(true, 'Kassa laden...', buildPostImportProgressMessage('De kassabon'), 85)
+        setUploadProgressState(true, 'Kassa bijwerken...', buildPostImportProgressMessage('De kassabon'), 80, 'refreshing')
         const refreshedItems = await loadReceiptsWithUploadedFallback(result, { openReceiptId: uploadedReceiptId })
         const receiptExistsInInbox = uploadedReceiptId
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
@@ -2586,7 +2795,7 @@ export default function KassaPage() {
           setStatus('Bon toegevoegd. De lijst is bijgewerkt.')
         }
 
-        setUploadProgressState(true, 'Kassa openen...', 'De nieuwe kassabon staat klaar in Kassa.', 100)
+        await completeUploadProgress('De kassabon')
         if (isAddReceiptRoute) navigate('/kassa')
 
         try {
@@ -2684,7 +2893,6 @@ export default function KassaPage() {
             isEmailRouteLoading={isEmailRouteLoading}
             emailRouteError={emailRouteError}
             isUploading={isUploading}
-            uploadProgress={uploadProgress}
             technicalUploadError={technicalUploadError}
             isTechnicalUploadErrorOpen={isTechnicalUploadErrorOpen}
             onToggleTechnicalUploadError={() => setIsTechnicalUploadErrorOpen((current) => !current)}
@@ -2716,7 +2924,6 @@ export default function KassaPage() {
                 isEmailRouteLoading={isEmailRouteLoading}
                 emailRouteError={emailRouteError}
                 isUploading={isUploading}
-                uploadProgress={uploadProgress}
             technicalUploadError={technicalUploadError}
             isTechnicalUploadErrorOpen={isTechnicalUploadErrorOpen}
             onToggleTechnicalUploadError={() => setIsTechnicalUploadErrorOpen((current) => !current)}
@@ -2764,6 +2971,36 @@ export default function KassaPage() {
                 <Button type="button" variant="secondary" onClick={deleteSelectedReceipts} disabled={selectedReceiptIds.length === 0} data-testid="kassa-delete-selected-button">Verwijderen</Button>
               </div>
 
+              <style>{`
+                .rz-kassa-inbox-scroll-frame > .rz-kassa-inbox-table-wrapper {
+                  max-height: none !important;
+                  overflow: visible !important;
+                }
+
+                .rz-kassa-inbox-scroll-frame .rz-kassa-inbox-table tbody > tr > td {
+                  padding-top: 4px;
+                  padding-bottom: 4px;
+                  vertical-align: middle;
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                }
+              `}</style>
+
+              <div
+                ref={inboxScrollFrameRef}
+                className="rz-kassa-inbox-scroll-frame"
+                style={{
+                  // Gemeten hoogte: kop/filter plus exact tien volledige bonregels.
+                  height: `${inboxScrollHeightPx}px`,
+                  maxHeight: `${inboxScrollHeightPx}px`,
+                  overflowY: 'auto',
+                  overflowX: 'auto',
+                  scrollbarGutter: 'stable',
+                }}
+                aria-label="Kassaboninbox met maximaal tien zichtbare bonnen"
+                data-testid="kassa-inbox-scroll-container"
+              >
               <DataTable
                 columns={inboxDataTableColumns}
                 data={isLoading ? [] : listItems}
@@ -2818,11 +3055,12 @@ export default function KassaPage() {
                   )
                 }}
               />
+              </div>
 
             </div>
           </ScreenCard>
 
-          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} uploadProgress={uploadProgress} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => {
+          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => {
                 setOpenedReceipt(updated)
                 setReceipts((current) => current.map((item) => {
                   const itemId = String(item?.receipt_table_id || item?.id || '')
@@ -2837,6 +3075,8 @@ export default function KassaPage() {
               }} onFeedback={showKassaFeedback} /> : null}
         </div>
       )}
+
+      <ReceiptUploadProgressOverlay uploadProgress={uploadProgress} />
 
       <CameraCaptureModal
         isOpen={Boolean(cameraDraft)}
