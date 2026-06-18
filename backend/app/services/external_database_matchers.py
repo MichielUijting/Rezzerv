@@ -604,7 +604,42 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
 # M2C2i-2 generic OFF index matcher
 from app.services.external_product_index_store import search_external_product_index_candidates
 
-_m2c2i2_previous_match_retailer_receipt_line = match_retailer_receipt_line
+def _m2c2i2_build_lidl_taxonomy_preview(
+    retailer_code: str,
+    receipt_line_text: str,
+    include_below_threshold: bool = True,
+) -> dict[str, Any]:
+    normalized_retailer = normalize_match_text(retailer_code)
+    expanded_terms = expand_terms_for_retailer(receipt_line_text, normalized_retailer)
+
+    scored = [
+        score_candidate(receipt_line_text, normalized_retailer, candidate)
+        for candidate in LIDL_CANDIDATES
+    ]
+
+    if not include_below_threshold:
+        scored = [
+            candidate
+            for candidate in scored
+            if candidate["score"] >= PROBABLE_CANDIDATE_THRESHOLD
+        ]
+
+    scored.sort(key=lambda item: (-item["score"], item["candidate_name"]))
+
+    return {
+        "retailer_code": normalized_retailer,
+        "receipt_line_text": receipt_line_text,
+        "expanded_terms": expanded_terms,
+        "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
+        "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
+        "candidates": scored,
+        "candidate_source": "lidl_taxonomy",
+        "uses_legacy_fallback": False,
+        "uses_retailer_taxonomy_preview": True,
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_inventory_event": False,
+    }
 
 
 def _m2c2i2_value(row: dict[str, Any], names: list[str]) -> str:
@@ -735,11 +770,8 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
             "creates_inventory_event": False,
         }
 
-    fallback = _m2c2i2_previous_match_retailer_receipt_line(
+    return _m2c2i2_build_lidl_taxonomy_preview(
         retailer_code=retailer_code,
         receipt_line_text=receipt_line_text,
         include_below_threshold=include_below_threshold,
     )
-    fallback["candidate_source"] = "legacy_lidl_testset"
-    fallback["uses_legacy_fallback"] = True
-    return fallback
