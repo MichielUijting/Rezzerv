@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
@@ -26,13 +26,21 @@ const sublocationTableColumns = [
 const sublocationColumnWidths = Object.fromEntries(sublocationTableColumns.map(({ key, width }) => [key, width]))
 const greenCheckboxStyle = { accentColor: '#1A3E2B', width: 16, height: 16 }
 
-function Feedback({ type = 'info', children }) {
-  if (!children) return null
+function FeedbackOverlay({ type = 'info', message, onClose }) {
+  if (!message) return null
   const isError = type === 'error'
-  const background = isError ? '#fef2f2' : '#ecfdf3'
-  const border = isError ? '#fecaca' : '#bbf7d0'
-  const color = isError ? '#991b1b' : '#166534'
-  return <div style={{ padding: '12px 14px', borderRadius: 12, border: `1px solid ${border}`, background, color }}>{children}</div>
+  const title = isError ? 'Melding' : 'Bevestiging'
+  return (
+    <div className="rz-modal-backdrop" role="presentation">
+      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="locations-feedback-title">
+        <h3 id="locations-feedback-title" className="rz-modal-title">{title}</h3>
+        <p className="rz-modal-text">{message}</p>
+        <div className="rz-modal-actions">
+          <Button type="button" onClick={onClose}>OK</Button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 
@@ -255,8 +263,7 @@ export default function SettingsLocationsPage() {
       const draft = locationDrafts[String(item.id)] || { naam: item.naam, active: item.active }
       const naamOk = !locationFilters.naam || String(draft?.naam || '').toLowerCase().includes(locationFilters.naam.toLowerCase())
       const actief = Boolean(draft?.active)
-      const actiefFilterAan = Boolean(locationFilters.actiefJa) !== Boolean(locationFilters.actiefNee)
-      const actiefOk = !actiefFilterAan || (locationFilters.actiefJa ? actief : !actief)
+      const actiefOk = !locationFilters.actiefJa || actief
       const sublocatiesOk = !locationFilters.sublocaties || String(Number(item?.sublocation_count || 0)).includes(locationFilters.sublocaties)
       return naamOk && actiefOk && sublocatiesOk
     })
@@ -271,8 +278,7 @@ export default function SettingsLocationsPage() {
         const draft = sublocationDrafts[String(item.id)] || { naam: item.naam, active: item.active }
         const naamOk = !sublocationFilters.naam || String(draft?.naam || '').toLowerCase().includes(sublocationFilters.naam.toLowerCase())
         const actief = Boolean(draft?.active)
-        const actiefFilterAan = Boolean(sublocationFilters.actiefJa) !== Boolean(sublocationFilters.actiefNee)
-        const actiefOk = !actiefFilterAan || (sublocationFilters.actiefJa ? actief : !actief)
+        const actiefOk = !sublocationFilters.actiefJa || actief
         return naamOk && actiefOk
       })
   }, [visibleSublocations, sublocationFilters, sublocationDrafts])
@@ -640,9 +646,6 @@ export default function SettingsLocationsPage() {
             <h2 style={{ margin: 0, fontSize: 20 }}>Beheer Locaties</h2>
           </div>
 
-          <Feedback type="error">{error}</Feedback>
-          <Feedback type="success">{message}</Feedback>
-
           <section style={{ display: 'grid', gap: 18 }}>
             <div style={{ fontWeight: 700, color: '#0f172a' }}>Locaties</div>
             <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(locationColumnWidths), minWidth: buildTableWidth(locationColumnWidths) }}>
@@ -663,9 +666,8 @@ export default function SettingsLocationsPage() {
                     <th />
                     <th><input className="rz-input rz-inline-input" value={locationFilters.naam} onChange={(event) => setLocationFilters((current) => ({ ...current, naam: event.target.value }))} placeholder="Filter" aria-label="Filter op locatie" /></th>
                     <th className="rz-num">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center', minHeight: 20, width: '100%' }}>
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}><input type="checkbox" style={greenCheckboxStyle} checked={locationFilters.actiefJa} onChange={(event) => setLocationFilters((current) => ({ ...current, actiefJa: event.target.checked }))} />Ja</label>
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}><input type="checkbox" style={greenCheckboxStyle} checked={locationFilters.actiefNee} onChange={(event) => setLocationFilters((current) => ({ ...current, actiefNee: event.target.checked }))} />Nee</label>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 20, width: '100%' }}>
+                        <input type="checkbox" className="rz-filter-checkbox" style={greenCheckboxStyle} checked={locationFilters.actiefJa} onChange={(event) => setLocationFilters((current) => ({ ...current, actiefJa: event.target.checked }))} aria-label="Filter actieve locaties" title="Alleen actieve locaties tonen" />
                       </div>
                     </th>
                     <th><input className="rz-input rz-inline-input" value={locationFilters.sublocaties} onChange={(event) => setLocationFilters((current) => ({ ...current, sublocaties: event.target.value }))} placeholder="Filter" aria-label="Filter op aantal sublocaties" /></th>
@@ -718,9 +720,8 @@ export default function SettingsLocationsPage() {
                     <th />
                     <th><input className="rz-input rz-inline-input" value={sublocationFilters.naam} onChange={(event) => setSublocationFilters((current) => ({ ...current, naam: event.target.value }))} placeholder="Filter" aria-label="Filter op sublocatie" /></th>
                     <th className="rz-num">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'center', minHeight: 20, width: '100%' }}>
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}><input type="checkbox" style={greenCheckboxStyle} checked={sublocationFilters.actiefJa} onChange={(event) => setSublocationFilters((current) => ({ ...current, actiefJa: event.target.checked }))} />Ja</label>
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12 }}><input type="checkbox" style={greenCheckboxStyle} checked={sublocationFilters.actiefNee} onChange={(event) => setSublocationFilters((current) => ({ ...current, actiefNee: event.target.checked }))} />Nee</label>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 20, width: '100%' }}>
+                        <input type="checkbox" className="rz-filter-checkbox" style={greenCheckboxStyle} checked={sublocationFilters.actiefJa} onChange={(event) => setSublocationFilters((current) => ({ ...current, actiefJa: event.target.checked }))} aria-label="Filter actieve sublocaties" title="Alleen actieve sublocaties tonen" />
                       </div>
                     </th>
                   </tr>
@@ -759,6 +760,8 @@ export default function SettingsLocationsPage() {
         </div>
       </Card>
 
+      <FeedbackOverlay type="error" message={error} onClose={() => setError('')} />
+      <FeedbackOverlay type="success" message={message} onClose={() => setMessage('')} />
       <LocationModal open={locationModalOpen} form={locationForm} onChange={setLocationForm} onClose={() => setLocationModalOpen(false)} onSubmit={handleSaveLocation} busy={isSaving} />
       <SublocationModal mode={sublocationModalMode} form={sublocationForm} onChange={setSublocationForm} onClose={() => setSublocationModalMode('')} onSubmit={handleSaveSublocation} busy={isSaving} locationOptions={sortedLocations} />
       <ActionModal open={showLocationActionModal} title="Geselecteerde locaties verwerken" noun="locatie" selectedCount={selectedLocationIds.length} onClose={() => setShowLocationActionModal(false)} onDelete={deleteSelectedLocations} onArchive={archiveSelectedLocations} busy={isSaving} />

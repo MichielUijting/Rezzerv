@@ -234,6 +234,22 @@ function csvValue(value) {
   return `"${normalized}"`
 }
 
+function CandidateProgressOverlay({ progress, percent }) {
+  if (!progress?.active) return null
+  return (
+    <div className="rz-modal-backdrop" role="presentation">
+      <div className="rz-modal-card" role="status" aria-live="polite" aria-label="Bonartikelen worden ingelezen">
+        <h3 className="rz-modal-title">Bonartikelen inlezen</h3>
+        <p className="rz-modal-text">{progress.label}</p>
+        <div className="rz-external-progress-track">
+          <div className="rz-external-progress-bar" style={{ width: `${percent}%` }} />
+        </div>
+        <p className="rz-modal-text">{progress.current} van {progress.total} verwerkt</p>
+      </div>
+    </div>
+  )
+}
+
 export default function ReceiptItemsOverview({ onError, onMessage }) {
   const [items, setItems] = useState([])
   const [selectedItem, setSelectedItem] = useState(null)
@@ -578,15 +594,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
 
       {isLoading ? <div>Bonartikelen worden geladen...</div> : null}
 
-      {candidateProgress.active ? (
-        <div className="rz-external-progress" role="status" aria-live="polite">
-          <div className="rz-external-progress-label">{candidateProgress.label}</div>
-          <div className="rz-external-progress-track">
-            <div className="rz-external-progress-bar" style={{ width: `${progressPercent}%` }} />
-          </div>
-          <div className="rz-external-progress-count">{candidateProgress.current} van {candidateProgress.total} verwerkt</div>
-        </div>
-      ) : null}
+      <CandidateProgressOverlay progress={candidateProgress} percent={progressPercent} />
 
       <div className="rz-external-databases-actions">
         <Button type="button" variant="secondary" disabled={!selectedItemIds.length} onClick={exportSelectedItems}>Exporteren</Button>
