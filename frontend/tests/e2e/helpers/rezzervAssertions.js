@@ -1,4 +1,4 @@
-﻿import { expect } from '@playwright/test';
+import { expect } from '@playwright/test';
 
 export function attachConsoleErrorCollector(page) {
   const consoleErrors = [];
@@ -26,8 +26,11 @@ export async function expectAnyVisible(page, candidates, description = 'verwacht
       ? page.getByText(candidate, { exact: false })
       : page.getByText(candidate);
 
-    if (await locator.first().isVisible().catch(() => false)) {
-      return;
+    const count = await locator.count().catch(() => 0);
+    for (let index = 0; index < count; index++) {
+      if (await locator.nth(index).isVisible().catch(() => false)) {
+        return;
+      }
     }
   }
 
