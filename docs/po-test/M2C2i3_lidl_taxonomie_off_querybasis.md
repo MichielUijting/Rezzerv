@@ -87,9 +87,18 @@ print("M2C2i-3 taxonomy smoke OK")
 '@ | python -
 ```
 
+Docker-startup heeft in de lokale Rezzerv-omgeving een vaste opwarmtijd nodig voordat de backend betrouwbaar reageert op de healthcheck. Gebruik daarom na `docker compose up -d --build` standaard 90 seconden wachttijd:
+
+```powershell
+docker compose up -d --build
+Start-Sleep -Seconds 90
+Invoke-RestMethod http://localhost:8011/api/health
+```
+
 Bij vervolgwijziging richting Externe databases UI/API blijft verplicht:
 
 ```powershell
+Start-Sleep -Seconds 90
 .\scripts\run-frontend-regression-report.ps1 -SkipDockerBuild
 ```
 
