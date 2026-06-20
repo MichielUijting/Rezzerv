@@ -5,6 +5,12 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from app.services.external_retailer_taxonomy import (
+    build_off_query_terms,
+    expand_receipt_terms as expand_taxonomy_receipt_terms,
+    list_taxonomy_entries,
+)
+
 PROBABLE_CANDIDATE_THRESHOLD = 0.85
 POSSIBLE_CANDIDATE_THRESHOLD = 0.70
 
@@ -604,17 +610,37 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
 # M2C2i-2 generic OFF index matcher
 from app.services.external_product_index_store import search_external_product_index_candidates
 
+def _m2c2i2_taxonomy_entry_to_candidate(entry) -> RetailerCandidateTemplate:
+    return RetailerCandidateTemplate(
+        candidate_name=entry.canonical_name,
+        brand=entry.brand,
+        retailer_article_number=entry.retailer_article_number,
+        product_type_terms=entry.product_type_terms,
+        quantity_label=entry.quantity_label,
+        variant=entry.variant,
+        source_name=entry.source_name,
+        source_url=entry.source_url,
+        source_score=entry.source_score,
+    )
+
+
 def _m2c2i2_build_lidl_taxonomy_preview(
     retailer_code: str,
     receipt_line_text: str,
     include_below_threshold: bool = True,
 ) -> dict[str, Any]:
     normalized_retailer = normalize_match_text(retailer_code)
-    expanded_terms = expand_terms_for_retailer(receipt_line_text, normalized_retailer)
+    taxonomy_entries = list_taxonomy_entries(normalized_retailer)
+    expanded_terms = expand_taxonomy_receipt_terms(receipt_line_text, normalized_retailer)
+    off_query_terms = build_off_query_terms(receipt_line_text, normalized_retailer)
 
     scored = [
-        score_candidate(receipt_line_text, normalized_retailer, candidate)
-        for candidate in LIDL_CANDIDATES
+        score_candidate(
+            receipt_line_text,
+            normalized_retailer,
+            _m2c2i2_taxonomy_entry_to_candidate(entry),
+        )
+        for entry in taxonomy_entries
     ]
 
     if not include_below_threshold:
@@ -630,6 +656,7 @@ def _m2c2i2_build_lidl_taxonomy_preview(
         "retailer_code": normalized_retailer,
         "receipt_line_text": receipt_line_text,
         "expanded_terms": expanded_terms,
+        "off_query_terms": off_query_terms,
         "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
         "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
         "candidates": scored,
