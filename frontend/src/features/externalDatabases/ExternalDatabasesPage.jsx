@@ -246,7 +246,6 @@ export default function ExternalDatabasesPage() {
               <Button variant="primary" type="button" onClick={() => navigate('/home')}>Terug</Button>
             </div>
             {renderTabContent(TAB_LABELS.overzicht)}
-            {renderTabContent(TAB_LABELS.test)}
           </div>
         </ScreenCard>
       </div>
