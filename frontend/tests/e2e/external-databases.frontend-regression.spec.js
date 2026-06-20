@@ -26,18 +26,17 @@ test.describe('Externe databases frontend-regressie', () => {
       'Product',
     ], 'Externe databases kernlabels');
 
-    await page.getByRole('button', { name: 'Test kandidaat' }).click();
+    await expect(page.getByText('Lidl-kandidaatpreview')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Test kandidaat' })).toHaveCount(0);
 
-    await expect(page.getByTestId('external-database-preview-meta')).toBeVisible();
-    await expect(page.getByText('Bron:', { exact: false })).toBeVisible();
-    await expect(page.getByText('lidl_taxonomy', { exact: false })).toBeVisible();
-    await expect(page.getByTestId('external-database-off-query-terms')).toBeVisible();
-    await expect(page.getByTestId('external-database-off-query-terms')).toContainText('kania taco specerijenmix');
-    await expectAnyVisible(page, [
-      'Kania Taco Specerijenmix',
-      'Kania Burrito Specerijenmix',
-      'Kania Fajita Specerijenmix',
-    ], 'Lidl kandidaatpreview');
+    const receiptTable = page.getByTestId('external-receipt-items-table');
+    await expect(receiptTable).toBeVisible();
+
+    const firstDataRow = receiptTable.locator('tbody tr').filter({ hasText: /[A-Za-z0-9]/ }).first();
+    await firstDataRow.dblclick();
+
+    await expect(page.getByText('Koppelen kandidaten in artikel-catalogus')).toBeVisible();
+    await expect(page.getByTestId('external-receipt-item-candidates-table')).toBeVisible();
 
     await expect(page.getByText(/Application error|Uncaught|TypeError|ReferenceError/i)).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
