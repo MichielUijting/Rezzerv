@@ -331,18 +331,33 @@ def ensure_external_product_index_seeded(minimum_rows: int = 100) -> dict[str, A
     return {"ok": True, "seeded": True, "inserted": inserted}
 
 
-def search_external_product_index_candidates(receipt_line_text: str, limit: int = 120, retailer_code: str | None = None) -> list[dict[str, Any]]:
+def search_external_product_index_candidates(
+    receipt_line_text: str,
+    limit: int = 120,
+    retailer_code: str | None = None,
+    additional_search_terms: list[str] | tuple[str, ...] | None = None,
+) -> list[dict[str, Any]]:
     ensure_external_product_index_seeded()
 
     normalized = normalize_index_text(receipt_line_text)
-    tokens = [token for token in normalized.split() if len(token) >= 3]
+    search_text = " ".join([
+        normalized,
+        *[normalize_index_text(term) for term in (additional_search_terms or [])],
+    ])
+    tokens: list[str] = []
+    seen_tokens: set[str] = set()
+    for token in search_text.split():
+        if len(token) < 3 or token in seen_tokens:
+            continue
+        tokens.append(token)
+        seen_tokens.add(token)
     if not tokens:
         return []
 
     params: dict[str, Any] = {"limit": max(10, min(int(limit or 120), 200))}
     where_parts: list[str] = []
 
-    for index, token in enumerate(tokens[:10]):
+    for index, token in enumerate(tokens[:16]):
         key = f"token_{index}"
         where_parts.append(f"normalized_search_text LIKE :{key}")
         params[key] = f"%{token}%"
