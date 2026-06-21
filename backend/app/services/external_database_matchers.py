@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.services.external_retailer_taxonomy import (
+    analyze_retailer_article_codes,
     build_off_query_terms,
     expand_receipt_terms as expand_taxonomy_receipt_terms,
     list_taxonomy_entries,
@@ -587,6 +588,10 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
             "retailer_code": normalized_retailer,
             "receipt_line_text": receipt_line_text,
             "expanded_terms": [normalize_match_text(receipt_line_text)],
+            "off_query_terms": article_code_analysis.get("off_query_terms", []),
+            "retailer_article_codes": article_code_analysis.get("retailer_article_codes", []),
+            "retailer_article_code_analysis": article_code_analysis.get("retailer_article_code_analysis", []),
+            "index_search_terms": article_code_analysis.get("index_search_terms", []),
             "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
             "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
             "candidates": [],
@@ -630,9 +635,10 @@ def _m2c2i2_build_lidl_taxonomy_preview(
     include_below_threshold: bool = True,
 ) -> dict[str, Any]:
     normalized_retailer = normalize_match_text(retailer_code)
+    article_code_analysis = analyze_retailer_article_codes(receipt_line_text, normalized_retailer)
     taxonomy_entries = list_taxonomy_entries(normalized_retailer)
     expanded_terms = expand_taxonomy_receipt_terms(receipt_line_text, normalized_retailer)
-    off_query_terms = build_off_query_terms(receipt_line_text, normalized_retailer)
+    off_query_terms = article_code_analysis.get("off_query_terms") or build_off_query_terms(receipt_line_text, normalized_retailer)
 
     scored = [
         score_candidate(
@@ -657,6 +663,9 @@ def _m2c2i2_build_lidl_taxonomy_preview(
         "receipt_line_text": receipt_line_text,
         "expanded_terms": expanded_terms,
         "off_query_terms": off_query_terms,
+        "retailer_article_codes": article_code_analysis.get("retailer_article_codes", []),
+        "retailer_article_code_analysis": article_code_analysis.get("retailer_article_code_analysis", []),
+        "index_search_terms": article_code_analysis.get("index_search_terms", []),
         "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
         "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
         "candidates": scored,
@@ -758,7 +767,22 @@ def _m2c2i2_score_candidate(receipt_line_text: str, row: dict[str, Any]) -> dict
 
 def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, include_below_threshold: bool = True) -> dict[str, Any]:
     normalized_retailer = normalize_match_text(retailer_code)
-    index_rows = search_external_product_index_candidates(receipt_line_text, limit=120, retailer_code=normalized_retailer)
+    article_code_analysis = (
+        analyze_retailer_article_codes(receipt_line_text, normalized_retailer)
+        if normalized_retailer == "lidl"
+        else {
+            "retailer_article_codes": [],
+            "retailer_article_code_analysis": [],
+            "off_query_terms": [],
+            "index_search_terms": [normalize_match_text(receipt_line_text)],
+        }
+    )
+    index_rows = search_external_product_index_candidates(
+        receipt_line_text,
+        limit=120,
+        retailer_code=normalized_retailer,
+        additional_search_terms=article_code_analysis.get("index_search_terms", []),
+    )
 
     scored = [_m2c2i2_score_candidate(receipt_line_text, row) for row in index_rows]
     if not include_below_threshold:
@@ -772,6 +796,10 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
             "retailer_code": normalized_retailer,
             "receipt_line_text": receipt_line_text,
             "expanded_terms": [normalize_match_text(receipt_line_text)],
+            "off_query_terms": article_code_analysis.get("off_query_terms", []),
+            "retailer_article_codes": article_code_analysis.get("retailer_article_codes", []),
+            "retailer_article_code_analysis": article_code_analysis.get("retailer_article_code_analysis", []),
+            "index_search_terms": article_code_analysis.get("index_search_terms", []),
             "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
             "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
             "candidates": scored,

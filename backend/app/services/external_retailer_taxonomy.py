@@ -159,6 +159,92 @@ def expand_receipt_terms(receipt_line_text: str, retailer_code: str) -> list[str
     return [item for item in sorted(expanded) if item]
 
 
+def analyze_retailer_article_codes(receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
+    """Analyseer mogelijke retailer-artikelcodes voor een bonregel.
+
+    Deze functie is alleen metadata/zoekverrijking:
+    - geen productmutatie
+    - geen household_article-mutatie
+    - geen voorraadmutatie
+    - geen beperking van kandidaatresultaten tot deze codes
+    """
+    normalized_retailer = normalize_taxonomy_text(retailer_code)
+    expanded_terms = set(expand_receipt_terms(receipt_line_text, normalized_retailer))
+    matches: list[RetailerTaxonomyEntry] = []
+
+    for entry in list_taxonomy_entries(normalized_retailer):
+        entry_terms = {
+            *entry.receipt_terms,
+            *entry.product_type_terms,
+            entry.canonical_name,
+            entry.brand,
+            entry.product_family,
+            entry.variant,
+            entry.retailer_article_number,
+        }
+        normalized_entry_terms = {
+            normalize_taxonomy_text(term)
+            for term in entry_terms
+            if normalize_taxonomy_text(term)
+        }
+        if normalized_entry_terms & expanded_terms:
+            matches.append(entry)
+
+    article_codes = sorted({
+        entry.retailer_article_number
+        for entry in matches
+        if normalize_taxonomy_text(entry.retailer_article_number)
+    })
+
+    off_query_terms = sorted({
+        normalize_taxonomy_text(term)
+        for entry in matches
+        for term in entry.off_query_terms
+        if normalize_taxonomy_text(term)
+    })
+
+    enriched_search_terms = {
+        normalize_taxonomy_text(receipt_line_text),
+        *expanded_terms,
+        *off_query_terms,
+    }
+
+    # Artikelcodes zijn extra signalen, maar mogen de zoekresultaten niet beperken.
+    for entry in matches:
+        enriched_search_terms.update({
+            normalize_taxonomy_text(entry.retailer_article_number),
+            normalize_taxonomy_text(entry.canonical_name),
+            normalize_taxonomy_text(entry.brand),
+            normalize_taxonomy_text(entry.product_family),
+            normalize_taxonomy_text(entry.variant),
+            *[normalize_taxonomy_text(term) for term in entry.product_type_terms],
+        })
+
+    return {
+        "retailer_code": normalized_retailer,
+        "receipt_line_text": receipt_line_text,
+        "retailer_article_codes": article_codes,
+        "retailer_article_code_analysis": [
+            {
+                "retailer_article_number": entry.retailer_article_number,
+                "canonical_name": entry.canonical_name,
+                "brand": entry.brand,
+                "variant": entry.variant,
+                "product_family": entry.product_family,
+                "quantity_label": entry.quantity_label,
+                "source_name": entry.source_name,
+                "source_url": entry.source_url,
+            }
+            for entry in matches
+        ],
+        "off_query_terms": off_query_terms,
+        "index_search_terms": sorted(term for term in enriched_search_terms if term),
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_inventory_event": False,
+    }
+
+
 def build_off_query_terms(receipt_line_text: str, retailer_code: str) -> list[str]:
     """Return reviewable OFF search terms derived from retailer taxonomy.
 
