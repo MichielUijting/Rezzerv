@@ -825,13 +825,6 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
             "creates_inventory_event": False,
         }
 
-    if article_code_analysis.get("retailer_article_codes"):
-        return _m2c2i2_build_lidl_taxonomy_preview(
-            retailer_code=retailer_code,
-            receipt_line_text=receipt_line_text,
-            include_below_threshold=include_below_threshold,
-        )
-
     return {
         "retailer_code": normalized_retailer,
         "receipt_line_text": receipt_line_text,
