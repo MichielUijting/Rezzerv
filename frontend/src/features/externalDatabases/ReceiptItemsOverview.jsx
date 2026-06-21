@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -394,10 +394,46 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     }
   }, [items.length, dedupedItems.length, currentPage])
 
-  function selectReceiptItem(item) {
+  async function selectReceiptItem(item) {
     setSelectedItem(item)
     setSelectedCandidateId('')
     setConfirmOverwrite(false)
+
+    if (!item || item.candidates?.length) return
+
+    setCandidateProgress({
+      active: true,
+      current: 1,
+      total: 1,
+      label: `Bijlezen en wegen: ${item.receiptLineText}`,
+    })
+
+    try {
+      const response = await fetchJsonWithAuth('/api/external-databases/receipt-items/ensure-candidates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          include_below_threshold: true,
+          items: [{
+            receipt_line_text: item.receiptLineText,
+            retailer_code: item.retailerCodeRaw || item.retailerCode,
+            purchase_import_line_id: item.purchaseImportLineId,
+            receipt_line_id: item.receiptLineId,
+          }],
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.detail || 'Kandidaten bijlezen is mislukt')
+
+      const refreshed = await fetchItems()
+      setItems(refreshed)
+      const refreshedSelection = refreshed.find((nextItem) => nextItem.id === item.id) || null
+      if (refreshedSelection) setSelectedItem(refreshedSelection)
+    } catch (err) {
+      onError?.(err?.message || 'Kandidaten bijlezen is mislukt')
+    } finally {
+      setCandidateProgress({ active: false, current: 0, total: 0, label: '' })
+    }
   }
 
   function toggleSelectedItem(itemId) {
