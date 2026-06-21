@@ -33,6 +33,7 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(receiptTable).toBeVisible();
 
     const firstDataRow = receiptTable.locator('tbody tr').filter({ hasText: /[A-Za-z0-9]/ }).first();
+    await expect(firstDataRow).toBeVisible();
     await firstDataRow.dblclick();
 
     await expect(page.getByText('Koppelen kandidaten in artikel-catalogus')).toBeVisible();
