@@ -11,6 +11,11 @@ from app.services.external_retailer_taxonomy import (
     expand_receipt_terms as expand_taxonomy_receipt_terms,
     list_taxonomy_entries,
 )
+from app.services.product_intent_classifier import (
+    classify_product_intent,
+    has_meaningful_product_intent_match,
+    product_intent_match_score,
+)
 
 PROBABLE_CANDIDATE_THRESHOLD = 0.85
 POSSIBLE_CANDIDATE_THRESHOLD = 0.70
@@ -708,6 +713,12 @@ def _m2c2i2_score_candidate(receipt_line_text: str, row: dict[str, Any]) -> dict
     source_product_code = _m2c2i2_value(row, ["source_product_code", "gtin", "ean", "code"]) or "unknown"
     source_url = _m2c2i2_value(row, ["source_url", "url", "product_url"])
 
+    candidate_intent_text = " ".join(part for part in [product_name, category] if part)
+    receipt_product_intent = classify_product_intent(receipt_line_text)
+    candidate_product_intent = classify_product_intent(candidate_intent_text)
+    intent_score = product_intent_match_score(receipt_line_text, candidate_intent_text)
+    has_meaningful_intent_match = has_meaningful_product_intent_match(receipt_line_text, candidate_intent_text)
+
     text_score = max(
         _text_similarity(receipt_line_text, product_name),
         _m2c2i2_token_overlap_score(receipt_line_text, product_name),
@@ -736,10 +747,12 @@ def _m2c2i2_score_candidate(receipt_line_text: str, row: dict[str, Any]) -> dict
         "source_score": round(source_score, 3),
         "code_score": round(code_score, 3),
         "category_score": round(category_score, 3),
+        "intent_score": round(intent_score, 3),
     }
 
     base_score = sum(breakdown[key] * SCORE_WEIGHTS[key] for key in SCORE_WEIGHTS)
-    score = round(min(1.0, base_score + (code_score * 0.08) + (category_score * 0.04)), 3)
+    score = min(1.0, base_score + (code_score * 0.08) + (category_score * 0.04))
+    score = round(score * intent_score, 3)
 
     return {
         "candidate_name": product_name or source_product_code,
@@ -754,6 +767,10 @@ def _m2c2i2_score_candidate(receipt_line_text: str, row: dict[str, Any]) -> dict
         "source_url": source_url,
         "score": score,
         "score_breakdown": breakdown,
+        "receipt_product_intent": receipt_product_intent,
+        "candidate_product_intent": candidate_product_intent,
+        "intent_score": round(intent_score, 3),
+        "has_meaningful_intent_match": has_meaningful_intent_match,
         "candidate_status": candidate_status_for_score(score),
         "is_probable": score >= PROBABLE_CANDIDATE_THRESHOLD,
         "is_user_confirmed": False,
@@ -777,6 +794,38 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
             "index_search_terms": [normalize_match_text(receipt_line_text)],
         }
     )
+
+    # M2C2i-8d: artikelcode-analyse mag geen productfamilie forceren
+    # die betekenisvol afwijkt van de bonregel.
+    receipt_product_intent = classify_product_intent(receipt_line_text)
+    if normalized_retailer == "lidl" and receipt_product_intent:
+        original_entries = list(article_code_analysis.get("retailer_article_code_analysis", []))
+        filtered_entries = []
+        for entry in original_entries:
+            entry_intent_text = " ".join(
+                str(entry.get(key) or "")
+                for key in ["canonical_name", "product_family", "variant", "brand"]
+            )
+            entry_intent = classify_product_intent(entry_intent_text)
+
+            if not entry_intent or entry_intent == receipt_product_intent:
+                filtered_entries.append(entry)
+
+        if len(filtered_entries) != len(original_entries):
+            article_code_analysis = dict(article_code_analysis)
+            article_code_analysis["retailer_article_code_analysis"] = filtered_entries
+            article_code_analysis["retailer_article_codes"] = sorted(
+                {
+                    str(entry.get("retailer_article_number") or "").strip()
+                    for entry in filtered_entries
+                    if str(entry.get("retailer_article_number") or "").strip()
+                }
+            )
+
+            if not filtered_entries:
+                article_code_analysis["off_query_terms"] = []
+                article_code_analysis["index_search_terms"] = [normalize_match_text(receipt_line_text)]
+
     index_rows = search_external_product_index_candidates(
         receipt_line_text,
         limit=120,
@@ -785,6 +834,23 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
     )
 
     scored = [_m2c2i2_score_candidate(receipt_line_text, row) for row in index_rows]
+
+    # M2C2i-8d: als de bonregel een bekende product-intent heeft,
+    # tonen we alleen kandidaten met dezelfde bekende product-intent.
+    # Bij onbekende bonregel-intent blijft de bestaande scorelogica leidend.
+    if receipt_product_intent:
+        scored = [
+            candidate
+            for candidate in scored
+            if candidate.get("candidate_product_intent") == receipt_product_intent
+        ]
+    else:
+        scored = [
+            candidate
+            for candidate in scored
+            if candidate.get("has_meaningful_intent_match", True)
+        ]
+
     if not include_below_threshold:
         scored = [candidate for candidate in scored if candidate["score"] >= PROBABLE_CANDIDATE_THRESHOLD]
 
