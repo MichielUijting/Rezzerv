@@ -825,8 +825,28 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
             "creates_inventory_event": False,
         }
 
-    return _m2c2i2_build_lidl_taxonomy_preview(
-        retailer_code=retailer_code,
-        receipt_line_text=receipt_line_text,
-        include_below_threshold=include_below_threshold,
-    )
+    if article_code_analysis.get("retailer_article_codes"):
+        return _m2c2i2_build_lidl_taxonomy_preview(
+            retailer_code=retailer_code,
+            receipt_line_text=receipt_line_text,
+            include_below_threshold=include_below_threshold,
+        )
+
+    return {
+        "retailer_code": normalized_retailer,
+        "receipt_line_text": receipt_line_text,
+        "expanded_terms": [normalize_match_text(receipt_line_text)],
+        "off_query_terms": article_code_analysis.get("off_query_terms", []),
+        "retailer_article_codes": article_code_analysis.get("retailer_article_codes", []),
+        "retailer_article_code_analysis": article_code_analysis.get("retailer_article_code_analysis", []),
+        "index_search_terms": article_code_analysis.get("index_search_terms", []),
+        "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
+        "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
+        "candidates": [],
+        "candidate_source": "external_product_index_no_match",
+        "uses_legacy_fallback": False,
+        "uses_retailer_taxonomy_preview": False,
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_inventory_event": False,
+    }
