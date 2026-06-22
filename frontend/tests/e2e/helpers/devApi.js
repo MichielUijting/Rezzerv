@@ -12,7 +12,7 @@ async function parseJson(response) {
   }
 }
 
-async function apiFetch(request, path, options = {}) {
+export async function apiFetch(request, path, options = {}) {
   const headers = {
     ...(options.headers || {}),
     Authorization: `Bearer ${DEV_ADMIN_TOKEN}`,
@@ -28,9 +28,13 @@ async function apiFetch(request, path, options = {}) {
   return payload;
 }
 
-async function resolveAuthorizedHouseholdId(request) {
+export async function resolveAuthorizedHouseholdId(request) {
   const household = await apiFetch(request, '/api/household');
   return String(household?.id || household?.household_id || DEMO_HOUSEHOLD_ID);
+}
+
+export async function cleanupRegressionFixtures(request) {
+  return apiFetch(request, '/api/testing/fixtures/cleanup', { method: 'POST' });
 }
 
 export async function resetAndSeedStoreImportFixture(request) {
@@ -79,4 +83,4 @@ export async function loginThroughUi(page) {
   await page.waitForURL('**/home');
 }
 
-export { API_URL, DEMO_HOUSEHOLD_ID, apiFetch, resolveAuthorizedHouseholdId };
+export { API_URL, DEMO_HOUSEHOLD_ID };

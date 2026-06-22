@@ -17897,6 +17897,8 @@ def clear_regression_receipt_state(household_id: str):
                     WHERE household_id = :household_id
                       AND (
                         source_reference = 'mock:export-regression-fixture'
+                        OR source_reference LIKE 'mock:seed-%'
+                        OR source_reference LIKE '%regression-seed%'
                         OR (source_type = 'receipt' AND source_reference IN :references)
                       )
                     """
@@ -18266,9 +18268,17 @@ def ensure_regression_inventory_fixture_endpoint():
     }
 
 
-def cleanup_regression_fixture_state_endpoint():
+@app.post("/api/testing/fixtures/cleanup")
+def cleanup_regression_fixture_state_endpoint(authorization: Optional[str] = Header(None)):
+    require_platform_admin_user(authorization)
     household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
-    return cleanup_regression_fixture_state(household_id)
+    cleanup = cleanup_regression_fixture_state(household_id)
+    log_regression_action('fixture.cleanup_endpoint', cleanup=cleanup)
+    return {
+        "status": "ok",
+        "household_id": household_id,
+        **cleanup,
+    }
 
 @app.get("/api/testing/fixtures/receipt/file")
 def get_regression_receipt_fixture_file(kind: str = Query('manual')):

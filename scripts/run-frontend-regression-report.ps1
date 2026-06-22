@@ -6,6 +6,12 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Rezzerv frontend regressie: Kassa + Uitpakken ===" -ForegroundColor Cyan
 
+function Invoke-RegressionFixtureCleanup {
+  Write-Host "`n=== Regression fixture cleanup ===" -ForegroundColor Cyan
+  $headers = @{ Authorization = "Bearer rezzerv-dev-token::admin@rezzerv.local" }
+  Invoke-RestMethod -Method Post -Uri "http://localhost:8011/api/testing/fixtures/cleanup" -Headers $headers | Out-Host
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 
@@ -33,6 +39,8 @@ try {
     throw "Backend healthcheck niet groen na 12 pogingen."
   }
 
+  Invoke-RegressionFixtureCleanup
+
   Write-Host "`n=== Playwright frontend regressie via Docker ===" -ForegroundColor Cyan
 
   $frontendPath = Join-Path $repoRoot "frontend"
@@ -55,5 +63,13 @@ try {
   Write-Host "`n=== Frontend regressie groen ===" -ForegroundColor Green
 }
 finally {
+  try {
+    Invoke-RegressionFixtureCleanup
+  } catch {
+    Write-Host "Regression fixture cleanup na test faalde: $($_.Exception.Message)" -ForegroundColor Red
+    if ($LASTEXITCODE -eq 0) {
+      $global:LASTEXITCODE = 1
+    }
+  }
   Pop-Location
 }
