@@ -1,0 +1,37 @@
+{
+  "version": "m2c2i9-product-taxonomy-v1",
+  "taxonomy": [
+    {"intent_key": "zuivel.vla", "canonical_name": "Bananenvla", "category": "Zuivel", "product_type": "Vla", "synonyms": ["bananenvla", "vla banaan", "vla"]},
+    {"intent_key": "broodbeleg.notenpasta", "canonical_name": "Pindakaas", "category": "Broodbeleg", "product_type": "Notenpasta", "synonyms": ["pindakaas", "notenpasta"]},
+    {"intent_key": "broodbeleg.hagelslag", "canonical_name": "Hagelslag", "category": "Broodbeleg", "product_type": "Hagelslag", "synonyms": ["hagelslag melk", "chocoladehagelslag", "hagelslag"]},
+    {"intent_key": "zuivel.kaas", "canonical_name": "Kaas", "category": "Zuivel", "product_type": "Kaas", "synonyms": ["geraspte kaas", "jonge kaas", "belegen kaas", "oude kaas", "kaas 48", "kaas"]},
+    {"intent_key": "zuivel.melk", "canonical_name": "Melk", "category": "Zuivel", "product_type": "Melk", "synonyms": ["halfvolle melk", "volle melk", "magere melk", "melk halfvol", "melk vol", "melk"]},
+    {"intent_key": "fruit.banaan", "canonical_name": "Banaan", "category": "Fruit", "product_type": "Banaan", "synonyms": ["banaan", "bananen", "banana"]},
+    {"intent_key": "fruit.appel", "canonical_name": "Appel", "category": "Fruit", "product_type": "Appel", "synonyms": ["elstar appels", "elstar appel", "appels", "appel"]},
+    {"intent_key": "bakkerij.brood", "canonical_name": "Brood", "category": "Bakkerij", "product_type": "Brood", "synonyms": ["volkoren brood", "brood"]},
+    {"intent_key": "groente.spinazie", "canonical_name": "Spinazie", "category": "Groente", "product_type": "Spinazie", "synonyms": ["spinazie diepvries", "spinazie"]},
+    {"intent_key": "groente.courgette", "canonical_name": "Courgette", "category": "Groente", "product_type": "Courgette", "synonyms": ["courgette groen", "courgette"]},
+    {"intent_key": "groente.zoete_aardappel", "canonical_name": "Zoete aardappel", "category": "Groente", "product_type": "Zoete aardappel", "synonyms": ["zoete aardappel", "aardappel zoet", "aardappels zoet"]},
+    {"intent_key": "groente.aardappel", "canonical_name": "Aardappel", "category": "Groente", "product_type": "Aardappel", "synonyms": ["aardappel", "aardappels"]},
+    {"intent_key": "eieren.ei", "canonical_name": "Ei", "category": "Eieren", "product_type": "Ei", "synonyms": ["eieren vrije uitloop", "vrije uitloop eieren", "eieren", "ei"]},
+    {"intent_key": "graan.rijst", "canonical_name": "Rijst", "category": "Graan", "product_type": "Rijst", "synonyms": ["basmati rijst", "rijst"]},
+    {"intent_key": "saus.tomatensaus", "canonical_name": "Tomatensaus", "category": "Saus", "product_type": "Tomatensaus", "synonyms": ["tomatensaus basilicum", "tomatensaus"]},
+    {"intent_key": "groente.tomaat", "canonical_name": "Tomaat", "category": "Groente", "product_type": "Tomaat", "synonyms": ["tomaten", "tomaat"]},
+    {"intent_key": "maaltijd.pizza", "canonical_name": "Pizza", "category": "Maaltijd", "product_type": "Pizza", "synonyms": ["pizza margherita", "pizza"]},
+    {"intent_key": "kruiden.specerijenmix", "canonical_name": "Specerijenmix", "category": "Kruiden", "product_type": "Specerijenmix", "synonyms": ["mexicaanse kruidenmix", "taco specerijenmix", "burrito specerijenmix", "fajita specerijenmix", "taco kruidenmix", "burrito kruidenmix", "fajita kruidenmix", "seasoning mix", "specerijenmix", "kruidenmix"]},
+    {"intent_key": "zuivel.yoghurt", "canonical_name": "Yoghurt", "category": "Zuivel", "product_type": "Yoghurt", "synonyms": ["magere yoghurt", "yoghurt"]},
+    {"intent_key": "vleeswaren.ham", "canonical_name": "Ham", "category": "Vleeswaren", "product_type": "Ham", "synonyms": ["achterham"]},
+    {"intent_key": "vleeswaren.kipfilet", "canonical_name": "Kipfilet", "category": "Vleeswaren", "product_type": "Kipfilet", "synonyms": ["kipfilet plakken", "kipfilet"]},
+    {"intent_key": "drank.frisdrank", "canonical_name": "Frisdrank", "category": "Drank", "product_type": "Frisdrank", "synonyms": ["cola zero", "cola", "frisdrank"]},
+    {"intent_key": "pasta.droog", "canonical_name": "Droge pasta", "category": "Pasta", "product_type": "Droge pasta", "synonyms": ["spaghetti", "penne rigate", "penne", "pasta"]},
+    {"intent_key": "snack.chips", "canonical_name": "Chips", "category": "Snack", "product_type": "Chips", "synonyms": ["naturel chips", "chips"]},
+    {"intent_key": "ontbijt.muesli", "canonical_name": "Muesli", "category": "Ontbijt", "product_type": "Muesli", "synonyms": ["muesli naturel", "muesli"]},
+    {"intent_key": "ontbijt.havermout", "canonical_name": "Havermout", "category": "Ontbijt", "product_type": "Havermout", "synonyms": ["havermout"]},
+    {"intent_key": "drank.water", "canonical_name": "Water", "category": "Drank", "product_type": "Water", "synonyms": ["mineraalwater", "water"]}
+  ],
+  "retailer_receipt_terms": [
+    {"retailer_code": "lidl", "receipt_term": "mexicaanse kruidenm", "normalized_term": "mexicaanse kruidenmix", "intent_key": "kruiden.specerijenmix", "confidence": 0.95, "source": "m2c2i_lidl_receipt_term"},
+    {"retailer_code": "lidl", "receipt_term": "h volle melk", "normalized_term": "halfvolle melk", "intent_key": "zuivel.melk", "confidence": 0.90, "source": "m2c2i_lidl_receipt_term"},
+    {"retailer_code": "lidl", "receipt_term": "aardappel zoet", "normalized_term": "zoete aardappel", "intent_key": "groente.zoete_aardappel", "confidence": 0.95, "source": "m2c2i_lidl_receipt_term"}
+  ]
+}
