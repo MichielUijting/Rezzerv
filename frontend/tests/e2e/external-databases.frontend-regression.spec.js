@@ -116,7 +116,13 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = page.getByTestId('external-receipt-items-table');
     await expect(receiptTable).toBeVisible();
 
-    await receiptTable.locator('tbody tr', { hasText: 'Dubbele kandidaat regressietest' }).dblclick();
+    const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Dubbele kandidaat regressietest' });
+    await expect(receiptRow).toBeVisible();
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('8710000000001');
+    await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Mosterd');
+    await expect(receiptRow.locator('td').nth(10)).toContainText('0,800');
+
+    await receiptRow.dblclick();
 
     const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
     await expect(candidateTable).toBeVisible();
@@ -131,4 +137,67 @@ test.describe('Externe databases frontend-regressie', () => {
 
     await expectNoConsoleErrors(consoleErrors);
   });
+  test('Bovenste tabel toont geen winkelspecifieke artikelcode als GTIN EAN', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+
+    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [
+            {
+              context_key: 'ctx-invalid-gtin-regression',
+              receipt_line_id: 'receipt-line-invalid-gtin-regression',
+              purchase_import_line_id: 'purchase-line-invalid-gtin-regression',
+              receipt_line_text: 'Winkelspecifieke code regressietest',
+              retailer_code: 'lidl',
+              retailer_article_number: '12345',
+              gtin: 'ART-8710000000001',
+              quantity_label: '1 stuk',
+              price: 1.23,
+              candidate_id: 'candidate-invalid-gtin',
+              candidate_name: 'Rezzerv Test Product',
+              candidate_brand: 'Testmerk',
+              external_source_name: 'Open Food Facts',
+              external_source_product_code: '8710000000001',
+              variant: 'Standaard',
+              score: 0.9,
+              candidate_status: 'candidate',
+              is_linked_to_catalog: false,
+              is_linkable_to_catalog: true,
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.route('**/api/external-databases/receipt-items/ensure-candidates', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok' }),
+      });
+    });
+
+    await expectRouteLoads(page, '/externe-databases', [
+      'Externe databases',
+      'Bonartikelen',
+      'Kandidaten',
+      'Product',
+    ]);
+
+    const receiptTable = page.getByTestId('external-receipt-items-table');
+    await expect(receiptTable).toBeVisible();
+
+    const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Winkelspecifieke code regressietest' });
+    await expect(receiptRow).toBeVisible();
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('12345');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Product');
+    await expect(receiptRow.locator('td').nth(10)).toContainText('0,900');
+
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
 });
