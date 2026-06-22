@@ -67,6 +67,51 @@ function candidateKey(candidate) {
   )
 }
 
+function candidateDedupValue(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function candidateDedupKey(candidate) {
+  const raw = candidate?.raw || {}
+  const source = candidateDedupValue(candidate.source || raw.external_source_name || raw.candidate_source_name || raw.source_name)
+  const externalCode = candidateDedupValue(candidate.externalCode || raw.external_source_product_code || raw.candidate_source_product_code || raw.source_product_code || raw.retailer_article_number)
+  const gtin = candidateDedupValue(raw.gtin || raw.ean)
+
+  if (source && externalCode) return `source:${source}|code:${externalCode}`
+  if (gtin) return `gtin:${gtin}`
+
+  const name = candidateDedupValue(candidate.candidateName || raw.candidate_name)
+  const brand = candidateDedupValue(candidate.brand || raw.candidate_brand)
+  const variant = candidateDedupValue(candidate.variant || raw.variant)
+
+  return `fallback:${name}|brand:${brand}|variant:${variant}`
+}
+
+function preferCandidate(current, next) {
+  if (!current) return next
+
+  if (next.isLinkedToCatalog && !current.isLinkedToCatalog) return next
+  if (current.isLinkedToCatalog && !next.isLinkedToCatalog) return current
+
+  const currentScore = Number(current.score || 0)
+  const nextScore = Number(next.score || 0)
+
+  if (nextScore > currentScore) return next
+
+  return current
+}
+
+function dedupeCandidates(candidates) {
+  const deduped = new Map()
+
+  candidates.forEach((candidate) => {
+    const key = candidateDedupKey(candidate)
+    deduped.set(key, preferCandidate(deduped.get(key), candidate))
+  })
+
+  return Array.from(deduped.values())
+}
+
 function isBackendLinkedCandidate(candidate) {
   // Single source of truth: de backend bepaalt of deze kandidaat de actieve koppeling is.
   return candidate?.is_linked_to_catalog === true
@@ -187,7 +232,8 @@ function buildReceiptItems(candidates) {
   })
 
   return Array.from(grouped.values()).map((item) => {
-    const sortedCandidates = [...item.candidates].sort((left, right) => Number(right.score || 0) - Number(left.score || 0))
+    const uniqueCandidates = dedupeCandidates(item.candidates)
+    const sortedCandidates = [...uniqueCandidates].sort((left, right) => Number(right.score || 0) - Number(left.score || 0))
     if (item.catalogLinked && sortedCandidates.length === 0) {
       sortedCandidates.push({
         id: `${item.id}-catalog-link`,
