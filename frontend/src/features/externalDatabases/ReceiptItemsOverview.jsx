@@ -124,6 +124,31 @@ function bestCandidateForItem(candidates) {
   return candidates[0] || null
 }
 
+function candidateExternalCode(candidate) {
+  if (!candidate) return ''
+  const raw = candidate.raw || {}
+  return text(
+    candidate.externalCode ||
+    raw.external_source_product_code ||
+    raw.candidate_source_product_code ||
+    raw.source_product_code,
+    ''
+  )
+}
+
+function candidateExternalGtin(candidate) {
+  if (!candidate) return '-'
+  const raw = candidate.raw || {}
+  return gtinText(
+    raw.gtin ||
+    raw.ean ||
+    candidate.externalCode ||
+    raw.external_source_product_code ||
+    raw.candidate_source_product_code ||
+    raw.source_product_code
+  )
+}
+
 function isBackendLinkedCandidate(candidate) {
   // Single source of truth: de backend bepaalt of deze kandidaat de actieve koppeling is.
   return candidate?.is_linked_to_catalog === true
@@ -273,9 +298,13 @@ function buildReceiptItems(candidates) {
       })
     }
     const bestCandidate = bestCandidateForItem(sortedCandidates)
+    const externalArticleNumber = candidateExternalCode(bestCandidate)
+    const externalGtin = candidateExternalGtin(bestCandidate)
 
     return {
       ...item,
+      articleNumber: externalArticleNumber || '-',
+      gtin: externalGtin,
       candidateCount: sortedCandidates.length,
       candidates: sortedCandidates,
       bestCandidateName: text(bestCandidate?.candidateName, ''),

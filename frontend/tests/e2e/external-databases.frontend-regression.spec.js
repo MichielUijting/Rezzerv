@@ -118,6 +118,7 @@ test.describe('Externe databases frontend-regressie', () => {
 
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Dubbele kandidaat regressietest' });
     await expect(receiptRow).toBeVisible();
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('8710000000001');
     await expect(receiptRow.locator('td').nth(5)).toHaveText('8710000000001');
     await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Mosterd');
     await expect(receiptRow.locator('td').nth(10)).toContainText('0,800');
@@ -160,7 +161,7 @@ test.describe('Externe databases frontend-regressie', () => {
               candidate_name: 'Rezzerv Test Product',
               candidate_brand: 'Testmerk',
               external_source_name: 'Open Food Facts',
-              external_source_product_code: '8710000000001',
+              external_source_product_code: 'LIDL-00999',
               variant: 'Standaard',
               score: 0.9,
               candidate_status: 'candidate',
@@ -192,10 +193,100 @@ test.describe('Externe databases frontend-regressie', () => {
 
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Winkelspecifieke code regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('12345');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('LIDL-00999');
     await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Product');
     await expect(receiptRow.locator('td').nth(10)).toContainText('0,900');
+
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
+  test('Bovenste tabel gebruikt gekoppelde kandidaat boven hoogste score', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+
+    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [
+            {
+              context_key: 'ctx-linked-wins-regression',
+              receipt_line_id: 'receipt-line-linked-wins-regression',
+              purchase_import_line_id: 'purchase-line-linked-wins-regression',
+              receipt_line_text: 'Gekoppelde kandidaat regressietest',
+              retailer_code: 'lidl',
+              retailer_article_number: '12345',
+              gtin: '',
+              quantity_label: '1 stuk',
+              price: 1.23,
+              candidate_id: 'candidate-highest-score-not-linked',
+              candidate_name: 'Niet gekoppelde hoogste score',
+              candidate_brand: 'Testmerk',
+              external_source_name: 'Open Food Facts',
+              external_source_product_code: 'LIDL-HIGH',
+              variant: 'Standaard',
+              score: 0.99,
+              candidate_status: 'candidate',
+              is_linked_to_catalog: false,
+              is_linkable_to_catalog: true,
+            },
+            {
+              context_key: 'ctx-linked-wins-regression',
+              receipt_line_id: 'receipt-line-linked-wins-regression',
+              purchase_import_line_id: 'purchase-line-linked-wins-regression',
+              receipt_line_text: 'Gekoppelde kandidaat regressietest',
+              retailer_code: 'lidl',
+              retailer_article_number: '12345',
+              gtin: '',
+              quantity_label: '1 stuk',
+              price: 1.23,
+              candidate_id: 'candidate-linked-lower-score',
+              candidate_name: 'Gekoppelde lagere score',
+              candidate_brand: 'Testmerk',
+              external_source_name: 'Open Food Facts',
+              external_source_product_code: 'LIDL-LINKED',
+              variant: 'Standaard',
+              score: 0.50,
+              candidate_status: 'linked_to_catalog',
+              is_linked_to_catalog: true,
+              is_linkable_to_catalog: false,
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.route('**/api/external-databases/receipt-items/ensure-candidates', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok' }),
+      });
+    });
+
+    await expectRouteLoads(page, '/externe-databases', [
+      'Externe databases',
+      'Bonartikelen',
+      'Kandidaten',
+      'Product',
+    ]);
+
+    const receiptTable = page.getByTestId('external-receipt-items-table');
+    await expect(receiptTable).toBeVisible();
+
+    const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Gekoppelde kandidaat regressietest' });
+    await expect(receiptRow).toBeVisible();
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('LIDL-LINKED');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
+
+    await receiptRow.dblclick();
+
+    const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
+    await expect(candidateTable).toBeVisible();
+    const linkedCandidateRow = candidateTable.locator('tbody tr', { hasText: 'Gekoppelde lagere score' });
+    await expect(linkedCandidateRow).toBeVisible();
+    await expect(linkedCandidateRow).toContainText('Gekoppeld');
 
     await expectNoConsoleErrors(consoleErrors);
   });
