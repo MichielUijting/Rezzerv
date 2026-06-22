@@ -265,7 +265,9 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const [page, setPage] = useState(1)
   const [ensuredPages, setEnsuredPages] = useState([])
   const [candidateProgress, setCandidateProgress] = useState({ active: false, current: 0, total: 0, label: '' })
+  const [selectedItemCandidateLoadingId, setSelectedItemCandidateLoadingId] = useState('')
   const ensuringRef = useRef(false)
+  const selectedItemRequestRef = useRef(0)
 
   async function fetchItems() {
     const response = await fetchJsonWithAuth('/api/external-databases/receipt-items?limit=500', { method: 'GET' })
@@ -331,7 +333,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const visibleIds = visibleItems.map((item) => item.id)
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedItemIds.includes(id))
   const selectedLinkedCount = items.filter((item) => selectedItemIds.includes(item.id) && item.catalogLinked).length
-  const selectedCandidates = selectedItem?.candidates || []
+  const selectedItemCandidatesAreLoading = Boolean(selectedItem && selectedItemCandidateLoadingId === selectedItem.id)
+  const selectedCandidates = selectedItemCandidatesAreLoading ? [] : (selectedItem?.candidates || [])
   const selectedCandidate = selectedCandidates.find((candidate) => candidate.id === selectedCandidateId) || null
   const selectedCandidateIsLinked = selectedCandidate?.isLinkedToCatalog === true
   const selectedCandidateCanBeLinked = Boolean(
@@ -395,12 +398,25 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   }, [items.length, dedupedItems.length, currentPage])
 
   async function selectReceiptItem(item) {
-    setSelectedItem(item)
+    const requestId = selectedItemRequestRef.current + 1
+    selectedItemRequestRef.current = requestId
+
     setSelectedCandidateId('')
     setConfirmOverwrite(false)
+    setSelectedItemCandidateLoadingId('')
 
-    if (!item || item.candidates?.length) return
+    if (!item) {
+      setSelectedItem(null)
+      return
+    }
 
+    if (item.candidates?.length) {
+      setSelectedItem(item)
+      return
+    }
+
+    setSelectedItem({ ...item, candidates: [], candidateCount: 0 })
+    setSelectedItemCandidateLoadingId(item.id)
     setCandidateProgress({
       active: true,
       current: 1,
@@ -426,13 +442,20 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       if (!response.ok) throw new Error(data?.detail || 'Kandidaten bijlezen is mislukt')
 
       const refreshed = await fetchItems()
+      if (selectedItemRequestRef.current !== requestId) return
+
       setItems(refreshed)
       const refreshedSelection = refreshed.find((nextItem) => nextItem.id === item.id) || null
-      if (refreshedSelection) setSelectedItem(refreshedSelection)
+      setSelectedItem(refreshedSelection || { ...item, candidates: [], candidateCount: 0 })
     } catch (err) {
-      onError?.(err?.message || 'Kandidaten bijlezen is mislukt')
+      if (selectedItemRequestRef.current === requestId) {
+        onError?.(err?.message || 'Kandidaten bijlezen is mislukt')
+      }
     } finally {
-      setCandidateProgress({ active: false, current: 0, total: 0, label: '' })
+      if (selectedItemRequestRef.current === requestId) {
+        setCandidateProgress({ active: false, current: 0, total: 0, label: '' })
+        setSelectedItemCandidateLoadingId('')
+      }
     }
   }
 
@@ -756,7 +779,9 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {selectedCandidates.length ? selectedCandidates.map((candidate) => (
+                  {selectedItemCandidatesAreLoading ? (
+                    <tr><td colSpan="8">Kandidaten worden bijgewerkt voor dit bonartikel...</td></tr>
+                  ) : selectedCandidates.length ? selectedCandidates.map((candidate) => (
                     <tr key={candidate.id}>
                       <td className="rz-check">
                         <input
