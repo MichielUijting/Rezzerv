@@ -3,6 +3,16 @@
 import re
 
 
+COMPOUND_PRODUCT_INTENT_RULES: tuple[tuple[str, str], ...] = (
+    ("zoete aardappel", "groente.zoete_aardappel"),
+    ("aardappel zoet", "groente.zoete_aardappel"),
+    ("aardappels zoet", "groente.zoete_aardappel"),
+    ("aardappel", "groente.aardappel"),
+    ("aardappels", "groente.aardappel"),
+    ("bananenvla", "zuivel.vla"),
+    ("courgette groen", "groente.courgette"),
+)
+
 PRODUCT_INTENT_RULES: tuple[tuple[str, str], ...] = (
     # Eerst samengestelde termen, daarna generiekere termen.
     ("bananenvla", "zuivel.vla"),
@@ -43,6 +53,29 @@ PRODUCT_INTENT_RULES: tuple[tuple[str, str], ...] = (
 
     ("spinazie diepvries", "groente.spinazie"),
     ("spinazie", "groente.spinazie"),
+
+    ("courgette groen", "groente.courgette"),
+    ("courgette", "groente.courgette"),
+
+    ("zoete aardappel", "groente.zoete_aardappel"),
+    ("aardappel zoet", "groente.zoete_aardappel"),
+    ("aardappels zoet", "groente.zoete_aardappel"),
+    ("aardappel", "groente.aardappel"),
+    ("aardappels", "groente.aardappel"),
+
+    ("eieren vrije uitloop", "eieren.ei"),
+    ("vrije uitloop eieren", "eieren.ei"),
+    ("eieren", "eieren.ei"),
+    ("ei", "eieren.ei"),
+
+    ("basmati rijst", "graan.rijst"),
+    ("rijst", "graan.rijst"),
+
+    ("tomatensaus basilicum", "saus.tomatensaus"),
+    ("tomatensaus", "saus.tomatensaus"),
+    ("tomaten", "groente.tomaat"),
+    ("tomaat", "groente.tomaat"),
+
 
     ("pizza margherita", "maaltijd.pizza"),
     ("pizza", "maaltijd.pizza"),
@@ -95,15 +128,40 @@ def normalize_product_intent_text(value: str | None) -> str:
     return " ".join(normalized.split())
 
 
+def _contains_term(normalized_text: str, normalized_term: str) -> bool:
+    if not normalized_text or not normalized_term:
+        return False
+
+    text_tokens = normalized_text.split()
+    term_tokens = normalized_term.split()
+
+    if len(term_tokens) == 1:
+        term = term_tokens[0]
+        return term in text_tokens or normalized_text == term
+
+    for index in range(0, len(text_tokens) - len(term_tokens) + 1):
+        if text_tokens[index:index + len(term_tokens)] == term_tokens:
+            return True
+
+    return False
+
+
 def classify_product_intent(text: str | None) -> str:
     normalized = normalize_product_intent_text(text)
 
     if not normalized:
         return ""
 
+    # Samengestelde productwoorden eerst, zodat aardappel nooit als appel
+    # en bananenvla nooit als banaan wordt ge?nterpreteerd.
+    for needle, intent in COMPOUND_PRODUCT_INTENT_RULES:
+        needle_normalized = normalize_product_intent_text(needle)
+        if _contains_term(normalized, needle_normalized):
+            return intent
+
     for needle, intent in PRODUCT_INTENT_RULES:
         needle_normalized = normalize_product_intent_text(needle)
-        if needle_normalized and needle_normalized in normalized:
+        if _contains_term(normalized, needle_normalized):
             return intent
 
     return ""
