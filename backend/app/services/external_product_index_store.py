@@ -60,6 +60,15 @@ CREATE TABLE IF NOT EXISTS external_product_index (
 """
 
 
+NON_LIDL_FIXTURE_BRAND_BY_RETAILER = {
+    "ah": "AH",
+    "jumbo": "Jumbo",
+    "aldi": "Aldi",
+    "plus": "PLUS",
+    "picnic": "Picnic",
+}
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -108,6 +117,22 @@ def ensure_external_product_index_schema() -> None:
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_search ON external_product_index (normalized_search_text)"))
 
 
+def fixture_brand_for_row(retailer_code: str, retailer_name: str, category: str) -> str:
+    """Return deterministic fixture brand metadata without a retailer-specific brand whitelist.
+
+    The local OFF fixture is synthetic. For Lidl we deliberately do not map the
+    whole retailer to one fixed brand such as Kania, because that makes the PO
+    candidate list appear brand-filtered. Category-derived fixture brands create
+    representative brand diversity without hardcoding a closed list of Lidl
+    brands. Real imported OFF data can still carry any brand from the source.
+    """
+    normalized_retailer = normalize_index_text(retailer_code)
+    if normalized_retailer == "lidl":
+        normalized_category = " ".join(str(category or "").strip().split())
+        return f"{retailer_name} {normalized_category}" if normalized_category else retailer_name
+    return NON_LIDL_FIXTURE_BRAND_BY_RETAILER.get(normalized_retailer, retailer_name)
+
+
 def _fixture_rows() -> list[dict[str, Any]]:
     retailers = [
         ("ah", "Albert Heijn"),
@@ -151,22 +176,13 @@ def _fixture_rows() -> list[dict[str, Any]]:
         ("Havermout", "Ontbijtgranen", "500 g", "havermout ontbijt"),
     ]
 
-    brand_by_retailer = {
-        "ah": "AH",
-        "jumbo": "Jumbo",
-        "lidl": "Kania",
-        "aldi": "Aldi",
-        "plus": "PLUS",
-        "picnic": "Picnic",
-    }
-
     rows: list[dict[str, Any]] = []
     timestamp = now_iso()
     base_gtin = 8710000000000
 
     for retailer_index, (retailer_code, retailer_name) in enumerate(retailers):
         for product_index, (name, category, quantity, tags) in enumerate(products):
-            brand = brand_by_retailer[retailer_code]
+            brand = fixture_brand_for_row(retailer_code, retailer_name, category)
             gtin = str(base_gtin + retailer_index * 1000 + product_index)
             source_product_code = f"{retailer_code.upper()}-{product_index + 1:05d}"
             product_name = f"{brand} {name}"
@@ -207,7 +223,6 @@ def _fixture_rows() -> list[dict[str, Any]]:
                 "created_at": timestamp,
                 "updated_at": timestamp,
             })
-
 
     # Retailer-artikelcodes die niet als GTIN bekend zijn, maar wel als externe catalogusidentiteit.
     special_rows = [
@@ -264,6 +279,20 @@ def _fixture_rows() -> list[dict[str, Any]]:
     return rows
 
 
+def _lidl_off_fixture_needs_brand_refresh(conn) -> bool:
+    row = conn.execute(
+        text(
+            """
+            SELECT COUNT(DISTINCT COALESCE(NULLIF(TRIM(brand), ''), '-')) AS brand_count
+            FROM external_product_index
+            WHERE COALESCE(retailer_code, '') = 'lidl'
+              AND COALESCE(source_name, '') = 'OFF-index'
+            """
+        )
+    ).mappings().first()
+    return int((row or {}).get("brand_count") or 0) <= 1
+
+
 def ensure_external_product_index_seeded(minimum_rows: int = 100) -> dict[str, Any]:
     ensure_external_product_index_schema()
     rows = _fixture_rows()
@@ -271,8 +300,9 @@ def ensure_external_product_index_seeded(minimum_rows: int = 100) -> dict[str, A
     with engine.begin() as conn:
         existing_count = conn.execute(text("SELECT COUNT(*) AS count FROM external_product_index")).mappings().first()
         count_value = int(existing_count.get("count") or 0)
+        needs_fixture_refresh = count_value < minimum_rows or _lidl_off_fixture_needs_brand_refresh(conn)
 
-        if count_value >= minimum_rows:
+        if not needs_fixture_refresh:
             return {"ok": True, "seeded": False, "existing_count": count_value}
 
         dialect_name = str(engine.dialect.name or "").lower()
@@ -328,7 +358,7 @@ def ensure_external_product_index_seeded(minimum_rows: int = 100) -> dict[str, A
                 )
             inserted += 1
 
-    return {"ok": True, "seeded": True, "inserted": inserted}
+    return {"ok": True, "seeded": True, "inserted": inserted, "refreshed_fixture_brands": count_value >= minimum_rows}
 
 
 def search_external_product_index_candidates(
