@@ -16,6 +16,7 @@ from app.services.product_intent_classifier import (
     has_meaningful_product_intent_match,
     product_intent_match_score,
 )
+from app.services.receipt_candidate_coverage import ensure_candidate_coverage
 
 PROBABLE_CANDIDATE_THRESHOLD = 0.85
 POSSIBLE_CANDIDATE_THRESHOLD = 0.70
@@ -795,8 +796,6 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
         }
     )
 
-    # M2C2i-8d: artikelcode-analyse mag geen productfamilie forceren
-    # die betekenisvol afwijkt van de bonregel.
     receipt_product_intent = classify_product_intent(receipt_line_text)
     if normalized_retailer == "lidl" and receipt_product_intent:
         original_entries = list(article_code_analysis.get("retailer_article_code_analysis", []))
@@ -835,9 +834,6 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
 
     scored = [_m2c2i2_score_candidate(receipt_line_text, row) for row in index_rows]
 
-    # M2C2i-8d: als de bonregel een bekende product-intent heeft,
-    # tonen we alleen kandidaten met dezelfde bekende product-intent.
-    # Bij onbekende bonregel-intent blijft de bestaande scorelogica leidend.
     if receipt_product_intent:
         scored = [
             candidate
@@ -871,27 +867,13 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
             "candidates": scored,
             "candidate_source": "external_product_index",
             "uses_legacy_fallback": False,
+            "uses_coverage_fallback": False,
             "creates_global_product": False,
             "creates_household_article": False,
             "creates_inventory_event": False,
         }
 
-    if normalized_retailer != "lidl":
-        return {
-            "retailer_code": normalized_retailer,
-            "receipt_line_text": receipt_line_text,
-            "expanded_terms": [normalize_match_text(receipt_line_text)],
-            "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
-            "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
-            "candidates": [],
-            "candidate_source": "no_retailer_specific_legacy_candidates",
-            "uses_legacy_fallback": False,
-            "creates_global_product": False,
-            "creates_household_article": False,
-            "creates_inventory_event": False,
-        }
-
-    return {
+    result = {
         "retailer_code": normalized_retailer,
         "receipt_line_text": receipt_line_text,
         "expanded_terms": [normalize_match_text(receipt_line_text)],
@@ -902,10 +884,15 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
         "probable_candidate_threshold": PROBABLE_CANDIDATE_THRESHOLD,
         "possible_candidate_threshold": POSSIBLE_CANDIDATE_THRESHOLD,
         "candidates": [],
-        "candidate_source": "external_product_index_no_match",
+        "candidate_source": (
+            "external_product_index_no_match"
+            if normalized_retailer == "lidl"
+            else "no_retailer_specific_legacy_candidates"
+        ),
         "uses_legacy_fallback": False,
         "uses_retailer_taxonomy_preview": False,
         "creates_global_product": False,
         "creates_household_article": False,
         "creates_inventory_event": False,
     }
+    return ensure_candidate_coverage(result, receipt_line_text, retailer_code=normalized_retailer)
