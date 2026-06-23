@@ -17,6 +17,7 @@ PRODUCT_TYPE_BY_INTENT_PREFIX = {
     "zuivel.yoghurt": "yoghurt",
     "zuivel.vla": "vla",
     "zuivel.kaas": "kaas",
+    "zuivel.creme_fraiche": "crème fraîche",
     "fruit.banaan": "banaan",
     "fruit.appel": "appel",
     "bakkerij.brood": "brood",
@@ -58,6 +59,8 @@ CATEGORY_BY_INTENT_PREFIX = {
 }
 
 VARIANT_TERMS = (
+    "gouda",
+    "gerasp",
     "geraspt",
     "rasp",
     "raspkaas",
@@ -68,6 +71,7 @@ VARIANT_TERMS = (
     "emmentaler",
     "jong",
     "jonge",
+    "jong belegen",
     "belegen",
     "oud",
     "48",
@@ -89,6 +93,7 @@ VARIANT_TERMS = (
     "vrije uitloop",
     "diepvries",
     "basilicum",
+    "linguine",
 )
 
 STOPWORDS = {
