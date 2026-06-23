@@ -4,7 +4,7 @@ import re
 from dataclasses import asdict, dataclass
 
 from app.services.product_intent_classifier import classify_product_intent
-from app.services.product_taxonomy_store import normalize_taxonomy_text
+from app.services.product_taxonomy_store import contains_taxonomy_term, normalize_taxonomy_text
 
 
 QUANTITY_PATTERN = re.compile(
@@ -17,6 +17,7 @@ PRODUCT_TYPE_BY_INTENT_PREFIX = {
     "zuivel.yoghurt": "yoghurt",
     "zuivel.vla": "vla",
     "zuivel.kaas": "kaas",
+    "zuivel.creme_fraiche": "crème fraîche",
     "fruit.banaan": "banaan",
     "fruit.appel": "appel",
     "bakkerij.brood": "brood",
@@ -58,6 +59,8 @@ CATEGORY_BY_INTENT_PREFIX = {
 }
 
 VARIANT_TERMS = (
+    "gouda",
+    "gerasp",
     "geraspt",
     "rasp",
     "raspkaas",
@@ -66,6 +69,7 @@ VARIANT_TERMS = (
     "parmezaan",
     "grana padano",
     "emmentaler",
+    "jong belegen",
     "jong",
     "jonge",
     "belegen",
@@ -89,6 +93,7 @@ VARIANT_TERMS = (
     "vrije uitloop",
     "diepvries",
     "basilicum",
+    "linguine",
 )
 
 STOPWORDS = {
@@ -158,7 +163,7 @@ def _extract_variant_terms(normalized_text: str) -> list[str]:
     variants: list[str] = []
     for term in VARIANT_TERMS:
         normalized_term = normalize_taxonomy_text(term)
-        if normalized_term and normalized_term in normalized_text:
+        if normalized_term and contains_taxonomy_term(normalized_text, normalized_term):
             variants.append(normalized_term)
     return variants
 
