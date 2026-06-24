@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -32,6 +32,7 @@ function gtinText(value) {
 }
 
 function scoreText(value) {
+  if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
   return number.toLocaleString('nl-NL', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
@@ -63,6 +64,30 @@ function normalizeCandidateStatus(value) {
 
 function isFallbackCandidateStatus(value) {
   return FALLBACK_CANDIDATE_STATUSES.has(normalizeCandidateStatus(value))
+}
+
+function isFallbackSignal(value) {
+  const normalized = normalizeCandidateStatus(value)
+  return normalized.includes('fallback') || normalized.includes('unresolved') || normalized.includes('no_external_match')
+}
+
+function detectFallbackCandidate(candidate) {
+  if (!candidate) return false
+  return [
+    candidate.candidate_status,
+    candidate.status,
+    candidate.status_label,
+    candidate.external_source_name,
+    candidate.external_source_product_code,
+    candidate.candidate_source_name,
+    candidate.candidate_source_product_code,
+    candidate.source_name,
+    candidate.source_product_code,
+    candidate.candidate_source,
+    candidate.variant,
+    candidate.candidate_id,
+    candidate.id,
+  ].some((value) => isFallbackCandidateStatus(value) || isFallbackSignal(value))
 }
 
 function candidateStatusLabel(value) {
@@ -177,12 +202,25 @@ function candidateExternalGtin(candidate) {
 }
 
 function isBackendLinkedCandidate(candidate) {
-  // Single source of truth: de backend bepaalt of deze kandidaat de actieve koppeling is.
+  // Single source of truth: expliciete backendkoppeling blijft leidend.
   return candidate?.is_linked_to_catalog === true
+}
+
+function hasCatalogLink(candidate) {
+  if (!candidate) return false
+  return (
+    candidate.is_linked_to_catalog === true ||
+    Boolean(text(candidate.global_product_id, '')) ||
+    Boolean(text(candidate.product_identity_id, '')) ||
+    Boolean(text(candidate.matched_global_product_id, '')) ||
+    Boolean(text(candidate.matched_global_article_id, ''))
+  )
 }
 
 function candidateStatusFromBackend(candidate, linked) {
   if (linked) return 'Gekoppeld'
+
+  if (detectFallbackCandidate(candidate)) return 'Geen externe match'
 
   const rawLabel = text(candidate.status_label, '')
   if (rawLabel && rawLabel.toLowerCase() !== 'gekoppeld') return rawLabel
@@ -201,9 +239,10 @@ function buildReceiptItems(candidates) {
     const key = rowKey(candidate)
     const isPlaceholder = Boolean(candidate.is_receipt_item_placeholder)
     const linked = isBackendLinkedCandidate(candidate)
+    const catalogLinked = hasCatalogLink(candidate)
 
     const rawStatus = candidateRawStatus(candidate)
-    const isFallbackCandidate = isFallbackCandidateStatus(rawStatus)
+    const isFallbackCandidate = detectFallbackCandidate(candidate)
 
     const candidateItem = {
       id: candidateKey(candidate),
@@ -215,7 +254,7 @@ function buildReceiptItems(candidates) {
       score: candidate.score,
       status: candidateStatusFromBackend(candidate, linked),
       rawStatus,
-      catalogLinked: linked,
+      catalogLinked,
       isLinkedToCatalog: linked,
       isFallbackCandidate,
       isLinkableToCatalog: Boolean(candidate.is_linkable_to_catalog) && !linked && !isFallbackCandidate,
@@ -257,8 +296,9 @@ function buildReceiptItems(candidates) {
     if (isPlaceholder && Array.isArray(candidate.candidates)) {
       candidate.candidates.forEach((nestedCandidate) => {
         const nestedLinked = isBackendLinkedCandidate(nestedCandidate)
+        const nestedCatalogLinked = hasCatalogLink(nestedCandidate)
         const nestedRawStatus = candidateRawStatus(nestedCandidate)
-        const nestedIsFallbackCandidate = isFallbackCandidateStatus(nestedRawStatus)
+        const nestedIsFallbackCandidate = detectFallbackCandidate(nestedCandidate)
 
         const nestedItem = {
           id: candidateKey(nestedCandidate),
@@ -270,7 +310,7 @@ function buildReceiptItems(candidates) {
           score: nestedCandidate.score,
           status: candidateStatusFromBackend(nestedCandidate, nestedLinked),
           rawStatus: nestedRawStatus,
-          catalogLinked: nestedLinked,
+          catalogLinked: nestedCatalogLinked,
           isLinkedToCatalog: nestedLinked,
           isFallbackCandidate: nestedIsFallbackCandidate,
           isLinkableToCatalog: Boolean(nestedCandidate.is_linkable_to_catalog) && !nestedLinked && !nestedIsFallbackCandidate,
@@ -283,7 +323,7 @@ function buildReceiptItems(candidates) {
         if (nestedItem.isFallbackCandidate) current.hasFallbackCandidate = true
         current.candidates.push(nestedItem)
 
-        if (nestedLinked) {
+        if (nestedCatalogLinked) {
           current.catalogLinked = true
           current.status = 'Gekoppeld'
           current.linkedGlobalProductId = text(nestedCandidate.global_product_id, current.linkedGlobalProductId || '')
@@ -294,7 +334,7 @@ function buildReceiptItems(candidates) {
       })
     }
 
-    if (linked) {
+    if (catalogLinked) {
       current.catalogLinked = true
       current.status = 'Gekoppeld'
       current.linkedGlobalProductId = text(candidate.global_product_id, current.linkedGlobalProductId || '')
@@ -348,7 +388,7 @@ function buildReceiptItems(candidates) {
       ...item,
       articleNumber: externalArticleNumber || '-',
       gtin: externalGtin,
-      candidateCount: sortedCandidates.length,
+      candidateCount: item.candidateCount,
       candidates: sortedCandidates,
       bestCandidateName: text(bestCandidate?.candidateName, ''),
       bestCandidateScore: bestCandidate?.score ?? null,
@@ -459,7 +499,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     return rows
   }, [items, filters, sortKey, sortDesc])
 
-  // De backend levert Ã©Ã©n rij per bonartikelcontext.
+  // De backend levert ÃƒÂ©ÃƒÂ©n rij per bonartikelcontext.
   // Niet extra ontdubbelen op artikeltekst: gelijke omschrijvingen met andere artikelcode zijn aparte bonartikelen.
   const dedupedItems = filteredItems
 
@@ -473,10 +513,19 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const selectedItemCandidatesAreLoading = Boolean(selectedItem && selectedItemCandidateLoadingId === selectedItem.id)
   const selectedCandidates = selectedItemCandidatesAreLoading ? [] : (selectedItem?.candidates || [])
   const selectedCandidate = selectedCandidates.find((candidate) => candidate.id === selectedCandidateId) || null
+  useEffect(() => {
+    if (!selectedItem) return
+    if (filteredItems.some((item) => item.id === selectedItem.id)) return
+    setSelectedItem(null)
+    setSelectedCandidateId('')
+    setConfirmOverwrite(false)
+  }, [filteredItems, selectedItem])
+
   const selectedCandidateIsLinked = selectedCandidate?.isLinkedToCatalog === true
   const selectedCandidateCanBeLinked = Boolean(
     selectedCandidate &&
     selectedCandidate.isLinkableToCatalog === true &&
+    selectedCandidate.isFallbackCandidate !== true &&
     selectedCandidateIsLinked === false
   )
 
@@ -618,7 +667,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   function exportSelectedItems() {
     const selectedRows = items.filter((item) => selectedItemIds.includes(item.id))
     if (!selectedRows.length) {
-      onMessage?.('Selecteer eerst Ã©Ã©n of meer bonartikelen om te exporteren.')
+      onMessage?.('Selecteer eerst ÃƒÂ©ÃƒÂ©n of meer bonartikelen om te exporteren.')
       return
     }
 

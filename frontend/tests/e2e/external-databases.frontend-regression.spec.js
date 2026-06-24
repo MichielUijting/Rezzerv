@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectAnyVisible,
@@ -313,11 +313,11 @@ test.describe('Externe databases frontend-regressie', () => {
               candidate_id: 'candidate-fallback-regression',
               candidate_name: 'Fallback kandidaat',
               candidate_brand: '-',
-              external_source_name: 'Rezzerv fallback',
-              external_source_product_code: '',
+              external_source_name: 'receipt_product_intent_fallback',
+              external_source_product_code: 'fallback:creme-frache',
               variant: 'Geen externe match',
               score: 0.1,
-              candidate_status: 'receipt_unresolved_fallback',
+              candidate_status: 'candidate',
               is_linked_to_catalog: false,
               is_linkable_to_catalog: true,
             },
@@ -356,10 +356,46 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(fallbackRow).toBeVisible();
     await expect(fallbackRow).toContainText('Geen externe match');
     await expect(fallbackRow.locator('input[type="radio"]')).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Koppel artikel' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Koppel artikel', exact: true })).toBeDisabled();
 
     await expectNoConsoleErrors(consoleErrors);
   });
 
+  test('Catalogusfilter reset detailselectie als geselecteerde rij verdwijnt', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+
+    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [
+            { context_key: 'ctx-filter-linked', receipt_line_id: 'line-filter-linked', purchase_import_line_id: 'purchase-filter-linked', receipt_line_text: 'Gekoppeld filter product', retailer_code: 'lidl', retailer_article_number: 'LIDL-LINKED', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-filter-linked', candidate_name: 'Gekoppeld filter kandidaat', candidate_brand: '-', external_source_name: 'Open Food Facts', external_source_product_code: '8710000000001', variant: 'Standaard', score: 0.9, candidate_status: 'linked_to_catalog', is_linked_to_catalog: true, is_linkable_to_catalog: false, global_product_id: 'gp-filter-linked' },
+            { context_key: 'ctx-filter-unlinked', receipt_line_id: 'line-filter-unlinked', purchase_import_line_id: 'purchase-filter-unlinked', receipt_line_text: 'Niet gekoppeld filter product', retailer_code: 'lidl', retailer_article_number: 'LIDL-UNLINKED', gtin: '', quantity_label: '1 stuk', price: 1.45, candidate_id: 'candidate-filter-unlinked', candidate_name: 'Niet gekoppeld filter kandidaat', candidate_brand: '-', external_source_name: 'Open Food Facts', external_source_product_code: '8710000000002', variant: 'Standaard', score: 0.8, candidate_status: 'candidate', is_linked_to_catalog: false, is_linkable_to_catalog: true },
+          ],
+        }),
+      });
+    });
+
+    await page.route('**/api/external-databases/receipt-items/ensure-candidates', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ status: 'ok' }) });
+    });
+
+    await expectRouteLoads(page, '/externe-databases', ['Externe databases', 'Bonartikelen', 'Kandidaten', 'Product']);
+
+    const receiptTable = page.getByTestId('external-receipt-items-table');
+    const unlinkedRow = receiptTable.locator('tbody tr', { hasText: 'Niet gekoppeld filter product' });
+    await expect(unlinkedRow).toBeVisible();
+    await unlinkedRow.dblclick();
+    await expect(page.getByTestId('external-receipt-item-candidates-table')).toContainText('Niet gekoppeld filter kandidaat');
+
+    await receiptTable.locator('select').first().selectOption('linked');
+    await expect(receiptTable.locator('tbody tr', { hasText: 'Gekoppeld filter product' })).toBeVisible();
+    await expect(receiptTable.locator('tbody tr', { hasText: 'Niet gekoppeld filter product' })).toHaveCount(0);
+    await expect(page.getByText('Niet gekoppeld filter kandidaat')).toHaveCount(0);
+
+    await expectNoConsoleErrors(consoleErrors);
+  });
 
 });
+

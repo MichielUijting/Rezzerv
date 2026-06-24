@@ -1,4 +1,4 @@
-.rz-external-databases {
+﻿.rz-external-databases {
   display: grid;
   gap: var(--space-md);
 }
@@ -283,7 +283,14 @@
 }
 
 .rz-external-databases .rz-table th {
-  overflow: visible;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rz-external-databases .rz-table th button {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rz-external-receipt-col-receipt { width: 360px; }
@@ -487,3 +494,4 @@
   color: var(--color-text-primary);
   line-height: 1.5;
 }
+
