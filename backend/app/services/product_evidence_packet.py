@@ -144,3 +144,100 @@ def build_product_evidence_packet(receipt_line_text: str | None, retailer_code: 
 
 def build_product_evidence_packet_dict(receipt_line_text: str | None, retailer_code: str | None = None) -> dict[str, Any]:
     return asdict(build_product_evidence_packet(receipt_line_text, retailer_code=retailer_code))
+
+
+def _field(candidate: dict[str, Any], names: list[str]) -> str:
+    for name in names:
+        value = candidate.get(name)
+        if value is not None and str(value).strip():
+            return str(value).strip()
+    return ""
+
+
+def _token_overlap(left: str | None, right: str | None) -> float:
+    left_tokens = {token for token in normalize_taxonomy_text(left).split() if len(token) >= 3}
+    right_tokens = {token for token in normalize_taxonomy_text(right).split() if len(token) >= 3}
+    if not left_tokens or not right_tokens:
+        return 0.0
+    return len(left_tokens & right_tokens) / max(1, len(left_tokens | right_tokens))
+
+
+def _numeric_overlap(left: str | None, right: str | None) -> float:
+    left_numbers = {token for token in normalize_taxonomy_text(left).split() if any(char.isdigit() for char in token)}
+    right_numbers = {token for token in normalize_taxonomy_text(right).split() if any(char.isdigit() for char in token)}
+    if not left_numbers or not right_numbers:
+        return 0.0
+    return 1.0 if left_numbers & right_numbers else 0.0
+
+
+def _candidate_code(candidate: dict[str, Any]) -> str:
+    return _field(candidate, [
+        "candidate_source_product_code",
+        "source_product_code",
+        "retailer_article_number",
+        "gtin",
+        "ean",
+        "code",
+        "barcode",
+    ])
+
+
+def score_candidate_with_product_evidence(candidate: dict[str, Any], evidence_packet: dict[str, Any]) -> dict[str, Any]:
+    """Verhoog OFF-kandidaatscore op basis van veilig productbewijs.
+
+    Zonder GTIN blijft de evidence-boost begrensd op 0.85, behalve wanneer de
+    kandidaat exact hetzelfde retailer-artikelnummer of dezelfde code draagt.
+    De functie muteert geen product-, artikel- of voorraadtabellen.
+    """
+    if not evidence_packet.get("matched"):
+        return dict(candidate)
+
+    candidate_name = _field(candidate, ["candidate_name", "product_name", "name", "generic_name"])
+    candidate_brand = _field(candidate, ["candidate_brand", "brand", "brands"])
+    candidate_quantity = _field(candidate, ["quantity_label", "quantity", "net_content", "packaging"])
+    candidate_code = normalize_taxonomy_text(_candidate_code(candidate))
+    retailer_article_code = normalize_taxonomy_text(evidence_packet.get("retailer_article_code"))
+    gtin = normalize_taxonomy_text(evidence_packet.get("gtin"))
+
+    code_match = 1.0 if candidate_code and candidate_code in {retailer_article_code, gtin} else 0.0
+    brand_match = max(
+        (1.0 if normalize_taxonomy_text(term) and normalize_taxonomy_text(term) in normalize_taxonomy_text(candidate_brand + " " + candidate_name) else 0.0)
+        for term in evidence_packet.get("brand_terms") or [""]
+    )
+    name_match = _token_overlap(evidence_packet.get("canonical_name"), candidate_name)
+    quantity_match = _numeric_overlap(evidence_packet.get("quantity_label"), candidate_quantity)
+
+    evidence_score = round((code_match * 0.40) + (brand_match * 0.20) + (name_match * 0.25) + (quantity_match * 0.15), 3)
+    result = dict(candidate)
+    result["product_evidence_packet"] = evidence_packet
+    result["product_evidence_score"] = evidence_score
+    result.setdefault("score_breakdown", {})["product_evidence_score"] = evidence_score
+
+    current_score = float(result.get("score") or 0.0)
+    target_score = current_score
+    if code_match >= 1.0:
+        target_score = max(target_score, 0.95)
+    elif evidence_score >= 0.55:
+        target_score = max(target_score, min(0.85, current_score + 0.20))
+
+    if target_score > current_score:
+        result["score"] = round(target_score, 3)
+        result["candidate_status"] = "probable_candidate" if target_score >= 0.85 else result.get("candidate_status", "possible_candidate")
+        result["is_probable"] = target_score >= 0.85
+        result["product_evidence_boost_applied"] = True
+        result.setdefault("score_breakdown", {})["product_evidence_boost_score"] = round(target_score, 3)
+
+    result["creates_global_product"] = False
+    result["creates_household_article"] = False
+    result["creates_inventory_event"] = False
+    return result
+
+
+def apply_product_evidence_to_candidates(
+    receipt_line_text: str | None,
+    retailer_code: str | None,
+    candidates: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    evidence_packet = build_product_evidence_packet_dict(receipt_line_text, retailer_code=retailer_code)
+    rescored = [score_candidate_with_product_evidence(candidate, evidence_packet) for candidate in candidates]
+    return sorted(rescored, key=lambda item: (-float(item.get("score") or 0.0), str(item.get("candidate_name") or "")))
