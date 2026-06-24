@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+﻿import { useEffect, useMemo, useRef, useState } from 'react'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -32,6 +32,7 @@ function gtinText(value) {
 }
 
 function scoreText(value) {
+  if (value === null || value === undefined || value === '') return '-'
   const number = Number(value)
   if (!Number.isFinite(number)) return '-'
   return number.toLocaleString('nl-NL', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
@@ -459,7 +460,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     return rows
   }, [items, filters, sortKey, sortDesc])
 
-  // De backend levert Ã©Ã©n rij per bonartikelcontext.
+  // De backend levert ÃƒÂ©ÃƒÂ©n rij per bonartikelcontext.
   // Niet extra ontdubbelen op artikeltekst: gelijke omschrijvingen met andere artikelcode zijn aparte bonartikelen.
   const dedupedItems = filteredItems
 
@@ -618,7 +619,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   function exportSelectedItems() {
     const selectedRows = items.filter((item) => selectedItemIds.includes(item.id))
     if (!selectedRows.length) {
-      onMessage?.('Selecteer eerst Ã©Ã©n of meer bonartikelen om te exporteren.')
+      onMessage?.('Selecteer eerst ÃƒÂ©ÃƒÂ©n of meer bonartikelen om te exporteren.')
       return
     }
 
