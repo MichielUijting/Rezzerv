@@ -24,14 +24,16 @@ from app.db import get_runtime_datastore_info
 from app.services.external_database_matchers import (
     get_external_database_summary,
     list_external_database_retailers,
+)
+from app.services.external_database_matchflow_evidence import (
+    ensure_external_receipt_item_candidates,
     match_retailer_receipt_line,
+    save_matchpreview_candidates,
 )
 from app.services.external_product_candidate_store import (
     build_candidate_context_key,
-    ensure_external_receipt_item_candidates,
     list_external_receipt_items,
     list_saved_external_product_candidates,
-    save_matchpreview_candidates,
     unlink_external_catalog_links,
     promote_external_product_candidate,
 )
@@ -196,7 +198,6 @@ def admin_external_relation_batch_decision(payload: dict[str, Any] = Body(defaul
 def route_governance_manifest():
     from app.main import app
     return build_route_governance_manifest(app)
-
 
 
 @router.on_event('startup')
