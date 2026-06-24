@@ -5,6 +5,15 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 
 const PAGE_SIZE = 10
 
+const FALLBACK_CANDIDATE_STATUSES = new Set([
+  'fallback_candidate',
+  'receipt_fallback_candidate',
+  'receipt_unresolved_fallback',
+  'unresolved_fallback',
+  'unresolved',
+  'no_external_match',
+])
+
 function text(value, fallback = '-') {
   const normalized = String(value || '').trim()
   return normalized || fallback
@@ -48,16 +57,34 @@ function retailerLabel(value) {
   return labels[key] || normalized
 }
 
+function normalizeCandidateStatus(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function isFallbackCandidateStatus(value) {
+  return FALLBACK_CANDIDATE_STATUSES.has(normalizeCandidateStatus(value))
+}
+
 function candidateStatusLabel(value) {
-  const normalized = String(value || '').trim().toLowerCase()
+  const normalized = normalizeCandidateStatus(value)
   const labels = {
     linked_to_catalog: 'Gekoppeld',
     user_confirmed: 'Bevestigd',
     probable_candidate: 'Waarschijnlijke kandidaat',
     weak_candidate: 'Lage zekerheid',
     candidate: 'Kandidaat',
+    fallback_candidate: 'Geen externe match',
+    receipt_fallback_candidate: 'Geen externe match',
+    receipt_unresolved_fallback: 'Geen externe match',
+    unresolved_fallback: 'Geen externe match',
+    unresolved: 'Geen externe match',
+    no_external_match: 'Geen externe match',
   }
   return labels[normalized] || text(value)
+}
+
+function candidateRawStatus(candidate) {
+  return normalizeCandidateStatus(candidate?.candidate_status || candidate?.status)
 }
 
 function rowKey(item) {
@@ -121,7 +148,7 @@ function dedupeCandidates(candidates) {
 function bestCandidateForItem(candidates) {
   const linkedCandidate = candidates.find((candidate) => candidate.isLinkedToCatalog)
   if (linkedCandidate) return linkedCandidate
-  return candidates[0] || null
+  return candidates.find((candidate) => !candidate.isFallbackCandidate) || null
 }
 
 function candidateExternalCode(candidate) {
@@ -160,7 +187,8 @@ function candidateStatusFromBackend(candidate, linked) {
   const rawLabel = text(candidate.status_label, '')
   if (rawLabel && rawLabel.toLowerCase() !== 'gekoppeld') return rawLabel
 
-  const rawStatus = String(candidate.candidate_status || candidate.status || '').trim().toLowerCase()
+  const rawStatus = candidateRawStatus(candidate)
+  if (isFallbackCandidateStatus(rawStatus)) return candidateStatusLabel(rawStatus)
   if (rawStatus === 'linked_to_catalog' || rawStatus === 'user_confirmed') return 'Kandidaat'
 
   return candidateStatusLabel(candidate.candidate_status || candidate.status)
@@ -174,6 +202,9 @@ function buildReceiptItems(candidates) {
     const isPlaceholder = Boolean(candidate.is_receipt_item_placeholder)
     const linked = isBackendLinkedCandidate(candidate)
 
+    const rawStatus = candidateRawStatus(candidate)
+    const isFallbackCandidate = isFallbackCandidateStatus(rawStatus)
+
     const candidateItem = {
       id: candidateKey(candidate),
       candidateName: text(candidate.candidate_name),
@@ -183,9 +214,11 @@ function buildReceiptItems(candidates) {
       variant: text(candidate.variant),
       score: candidate.score,
       status: candidateStatusFromBackend(candidate, linked),
+      rawStatus,
       catalogLinked: linked,
       isLinkedToCatalog: linked,
-      isLinkableToCatalog: Boolean(candidate.is_linkable_to_catalog) && !linked,
+      isFallbackCandidate,
+      isLinkableToCatalog: Boolean(candidate.is_linkable_to_catalog) && !linked && !isFallbackCandidate,
       isExistingLinkForReceiptItem: linked,
       canonicalCatalogProductId: text(candidate.canonical_catalog_product_id, ''),
       raw: candidate,
@@ -205,6 +238,7 @@ function buildReceiptItems(candidates) {
       price: candidate.price ?? '-',
       amount: '-',
       candidateCount: 0,
+      hasFallbackCandidate: false,
       catalogLinked: false,
       linkedGlobalProductId: '',
       linkedProductIdentityId: '',
@@ -215,13 +249,17 @@ function buildReceiptItems(candidates) {
     }
 
     if (!isPlaceholder) {
-      current.candidateCount += 1
+      if (!candidateItem.isFallbackCandidate) current.candidateCount += 1
+      if (candidateItem.isFallbackCandidate) current.hasFallbackCandidate = true
       current.candidates.push(candidateItem)
     }
 
     if (isPlaceholder && Array.isArray(candidate.candidates)) {
       candidate.candidates.forEach((nestedCandidate) => {
         const nestedLinked = isBackendLinkedCandidate(nestedCandidate)
+        const nestedRawStatus = candidateRawStatus(nestedCandidate)
+        const nestedIsFallbackCandidate = isFallbackCandidateStatus(nestedRawStatus)
+
         const nestedItem = {
           id: candidateKey(nestedCandidate),
           candidateName: text(nestedCandidate.candidate_name),
@@ -231,15 +269,18 @@ function buildReceiptItems(candidates) {
           variant: text(nestedCandidate.variant),
           score: nestedCandidate.score,
           status: candidateStatusFromBackend(nestedCandidate, nestedLinked),
+          rawStatus: nestedRawStatus,
           catalogLinked: nestedLinked,
           isLinkedToCatalog: nestedLinked,
-          isLinkableToCatalog: Boolean(nestedCandidate.is_linkable_to_catalog) && !nestedLinked,
+          isFallbackCandidate: nestedIsFallbackCandidate,
+          isLinkableToCatalog: Boolean(nestedCandidate.is_linkable_to_catalog) && !nestedLinked && !nestedIsFallbackCandidate,
           isExistingLinkForReceiptItem: nestedLinked,
           canonicalCatalogProductId: text(nestedCandidate.canonical_catalog_product_id, ''),
           raw: nestedCandidate,
         }
 
-        current.candidateCount += 1
+        if (!nestedItem.isFallbackCandidate) current.candidateCount += 1
+        if (nestedItem.isFallbackCandidate) current.hasFallbackCandidate = true
         current.candidates.push(nestedItem)
 
         if (nestedLinked) {
@@ -262,6 +303,8 @@ function buildReceiptItems(candidates) {
       current.linkedMatchedGlobalArticleId = text(candidate.matched_global_article_id, current.linkedMatchedGlobalArticleId || '')
     } else if (current.candidateCount > 0) {
       current.status = 'Kandidaten gevonden'
+    } else if (current.hasFallbackCandidate) {
+      current.status = 'Geen externe match'
     }
 
     if (!current.contextKey && candidate.context_key) current.contextKey = String(candidate.context_key)
@@ -885,14 +928,18 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
                 <tbody>
                   {selectedItemCandidatesAreLoading ? (
                     <tr><td colSpan="8">Kandidaten worden bijgewerkt voor dit bonartikel...</td></tr>
-                  ) : selectedCandidates.length ? selectedCandidates.map((candidate) => (
+                  ) : selectedCandidates.length ? selectedCandidates.map((candidate) => {
+                    const candidateSelectable = candidate.isLinkedToCatalog || candidate.isLinkableToCatalog
+                    return (
                     <tr key={candidate.id}>
                       <td className="rz-check">
                         <input
                           type="radio"
                           name="external-candidate-choice"
                           checked={selectedCandidateId === candidate.id}
-                          onChange={() => setSelectedCandidateId(candidate.id)}
+                          disabled={!candidateSelectable}
+                          aria-label={candidateSelectable ? 'Kandidaat selecteren' : 'Informatieve fallback, niet koppelbaar'}
+                          onChange={() => candidateSelectable && setSelectedCandidateId(candidate.id)}
                         />
                       </td>
                       <td>{candidate.candidateName}</td>
@@ -903,7 +950,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
                       <td>{candidate.variant}</td>
                       <td>{candidate.status}</td>
                     </tr>
-                  )) : <tr><td colSpan="8">Geen externe kandidaten gevonden voor dit bonartikel.</td></tr>}
+                    )
+                  }) : <tr><td colSpan="8">Geen externe kandidaten gevonden voor dit bonartikel.</td></tr>}
                 </tbody>
               </Table>
             </div>
