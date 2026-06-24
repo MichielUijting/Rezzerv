@@ -378,9 +378,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   async function refreshBatchDiagnostics(nextBatchId = batchId) {
     if (!nextBatchId) return null
-    const diagnostics = await fetchJson(`/api/dev/purchase-import-batches/${nextBatchId}/diagnostics`).catch(() => null)
-    setBatchDiagnostics(diagnostics)
-    return diagnostics
+    setBatchDiagnostics(null)
+    return null
   }
 
   async function refreshLocationOptions() {
@@ -650,8 +649,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? sortOptionObjects(backendArticles, (article) => articleLabel(article)) : articleFallbackOptions)
       setLocationOptions(buildActiveLocationOptions(spacesData, sublocationsData))
       setBatch(loadedBatch)
-      const diagnostics = await fetchJson(`/api/dev/purchase-import-batches/${batchId}/diagnostics`).catch(() => null)
-      setBatchDiagnostics(diagnostics)
+      setBatchDiagnostics(null)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
     } finally {
