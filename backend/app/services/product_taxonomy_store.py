@@ -82,7 +82,7 @@ def contains_taxonomy_term(normalized_text: str, normalized_term: str) -> bool:
 
 def _seed_payload() -> dict[str, Any]:
     if not TAXONOMY_SEED_PATH.exists():
-        return {"taxonomy": [], "retailer_receipt_terms": []}
+        return {"taxonomy": [], "retailer_receipt_terms": [], "product_variant_terms": []}
     return json.loads(TAXONOMY_SEED_PATH.read_text(encoding="utf-8"))
 
 
@@ -234,6 +234,8 @@ def ensure_product_taxonomy_seeded() -> dict[str, Any]:
             inserted_retailer_terms += 1
 
     load_taxonomy_rules.cache_clear()
+    load_taxonomy_metadata.cache_clear()
+    load_product_variant_terms.cache_clear()
     return {
         "ok": True,
         "taxonomy_rows": inserted_taxonomy,
@@ -324,3 +326,96 @@ def classify_product_intent_from_taxonomy(text_value: str | None, retailer_code:
             return str(rule.get("intent_key") or "")
 
     return ""
+
+
+def _fallback_metadata_from_seed() -> dict[str, dict[str, str]]:
+    metadata: dict[str, dict[str, str]] = {}
+    for item in _seed_payload().get("taxonomy") or []:
+        intent_key = str(item.get("intent_key") or "").strip()
+        if not intent_key:
+            continue
+        metadata[intent_key] = {
+            "intent_key": intent_key,
+            "canonical_name": str(item.get("canonical_name") or intent_key).strip(),
+            "category": normalize_taxonomy_text(item.get("category")),
+            "product_type": normalize_taxonomy_text(item.get("product_type")),
+        }
+    return metadata
+
+
+@lru_cache(maxsize=1)
+def load_taxonomy_metadata() -> dict[str, dict[str, str]]:
+    try:
+        ensure_product_taxonomy_seeded()
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    """
+                    SELECT intent_key, canonical_name, category, product_type
+                    FROM product_taxonomy
+                    WHERE COALESCE(is_active, 1) = 1
+                    """
+                )
+            ).mappings().all()
+        return {
+            str(row["intent_key"]): {
+                "intent_key": str(row["intent_key"]),
+                "canonical_name": str(row["canonical_name"] or row["intent_key"]),
+                "category": normalize_taxonomy_text(row["category"]),
+                "product_type": normalize_taxonomy_text(row["product_type"]),
+            }
+            for row in rows
+            if row.get("intent_key")
+        }
+    except Exception:
+        return _fallback_metadata_from_seed()
+
+
+def get_taxonomy_metadata_for_intent(intent_key: str | None) -> dict[str, str]:
+    key = str(intent_key or "").strip()
+    if not key:
+        return {"intent_key": "", "canonical_name": "", "category": "", "product_type": ""}
+    return load_taxonomy_metadata().get(
+        key,
+        {"intent_key": key, "canonical_name": key, "category": "", "product_type": ""},
+    )
+
+
+def _variant_rules_from_seed(intent_key: str | None = None) -> list[dict[str, Any]]:
+    requested_intent = str(intent_key or "").strip()
+    rules: list[dict[str, Any]] = []
+    for item in _seed_payload().get("product_variant_terms") or []:
+        item_intent = str(item.get("intent_key") or "").strip()
+        if requested_intent and item_intent != requested_intent:
+            continue
+        variant_term = str(item.get("variant_term") or "").strip()
+        normalized_variant = normalize_taxonomy_text(variant_term)
+        if not item_intent or not normalized_variant:
+            continue
+        search_terms = [
+            normalize_taxonomy_text(search_term)
+            for search_term in (item.get("search_terms") or [])
+            if normalize_taxonomy_text(search_term)
+        ]
+        rules.append({
+            "intent_key": item_intent,
+            "variant_term": variant_term,
+            "normalized_variant_term": normalized_variant,
+            "variant_type": normalize_taxonomy_text(item.get("variant_type")),
+            "search_terms": search_terms,
+            "confidence": float(item.get("confidence") or 1.0),
+            "source": str(item.get("source") or "taxonomy_seed"),
+        })
+    return sorted(
+        rules,
+        key=lambda row: (
+            -len(str(row.get("normalized_variant_term") or "").split()),
+            -len(str(row.get("normalized_variant_term") or "")),
+            str(row.get("normalized_variant_term") or ""),
+        ),
+    )
+
+
+@lru_cache(maxsize=64)
+def load_product_variant_terms(intent_key: str | None = None) -> tuple[dict[str, Any], ...]:
+    return tuple(_variant_rules_from_seed(intent_key))
