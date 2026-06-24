@@ -349,7 +349,7 @@ function buildReceiptItems(candidates) {
       ...item,
       articleNumber: externalArticleNumber || '-',
       gtin: externalGtin,
-      candidateCount: sortedCandidates.length,
+      candidateCount: item.candidateCount,
       candidates: sortedCandidates,
       bestCandidateName: text(bestCandidate?.candidateName, ''),
       bestCandidateScore: bestCandidate?.score ?? null,
