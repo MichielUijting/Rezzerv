@@ -1,7 +1,6 @@
 from app.services.receipt_product_intent_analyzer import analyze_receipt_product_line
 
 
-
 def test_analyzes_grated_cheese_receipt_line():
     analysis = analyze_receipt_product_line("ITALIAANSE RASP KAAS 200G", retailer_code="lidl")
 
@@ -18,7 +17,6 @@ def test_analyzes_grated_cheese_receipt_line():
     assert analysis.requires_user_confirmation is False
 
 
-
 def test_analyzes_halfvolle_melk_with_quantity():
     analysis = analyze_receipt_product_line("HALFVOLLE MELK 1L", retailer_code="lidl")
 
@@ -31,7 +29,6 @@ def test_analyzes_halfvolle_melk_with_quantity():
     assert analysis.quantity_label == "1 l"
 
 
-
 def test_analyzes_lidl_specific_abbreviated_kruidenmix():
     analysis = analyze_receipt_product_line("Mexicaanse kruidenm.", retailer_code="lidl")
 
@@ -39,7 +36,6 @@ def test_analyzes_lidl_specific_abbreviated_kruidenmix():
     assert analysis.category == "kruiden"
     assert analysis.product_type == "specerijenmix"
     assert "mexicaanse kruidenm" in analysis.searchable_terms
-
 
 
 def test_lidl_catalog_enrichment_adds_catalog_terms_for_off_search():
@@ -53,7 +49,6 @@ def test_lidl_catalog_enrichment_adds_catalog_terms_for_off_search():
     assert "burrito seasoning mix" in analysis.searchable_terms
 
 
-
 def test_lidl_catalog_enrichment_supports_creme_frache_ocr_variant():
     analysis = analyze_receipt_product_line("Creme frache 30%", retailer_code="lidl")
 
@@ -63,14 +58,12 @@ def test_lidl_catalog_enrichment_supports_creme_frache_ocr_variant():
     assert "sour cream 30" in analysis.searchable_terms
 
 
-
 def test_retailer_catalog_enrichment_is_retailer_scoped():
     analysis = analyze_receipt_product_line("Mexicaanse kruidenm.", retailer_code="jumbo")
 
     assert analysis.retailer_catalog_match["matched"] is False
     assert analysis.retailer_catalog_terms == []
     assert "taco seasoning mix" not in analysis.searchable_terms
-
 
 
 def test_unknown_receipt_line_requires_confirmation():
