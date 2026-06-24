@@ -1,5 +1,5 @@
 {
-  "version": "m2c2i10a-product-taxonomy-v3",
+  "version": "m2c2i10b-product-taxonomy-v1",
   "taxonomy": [
     {"intent_key": "zuivel.vla", "canonical_name": "Bananenvla", "category": "Zuivel", "product_type": "Vla", "synonyms": ["bananenvla", "vla banaan", "vla"]},
     {"intent_key": "broodbeleg.notenpasta", "canonical_name": "Pindakaas", "category": "Broodbeleg", "product_type": "Notenpasta", "synonyms": ["pindakaas", "notenpasta"]},
@@ -46,5 +46,30 @@
     {"retailer_code": "lidl", "receipt_term": "mexicaanse kruidenm", "normalized_term": "mexicaanse kruidenmix", "intent_key": "kruiden.specerijenmix", "confidence": 0.95, "source": "m2c2i_lidl_receipt_term"},
     {"retailer_code": "lidl", "receipt_term": "h volle melk", "normalized_term": "halfvolle melk", "intent_key": "zuivel.melk", "confidence": 0.90, "source": "m2c2i_lidl_receipt_term"},
     {"retailer_code": "lidl", "receipt_term": "aardappel zoet", "normalized_term": "zoete aardappel", "intent_key": "groente.zoete_aardappel", "confidence": 0.95, "source": "m2c2i_lidl_receipt_term"}
+  ],
+  "product_variant_terms": [
+    {"intent_key": "zuivel.kaas", "variant_term": "gouda", "variant_type": "kaassoort", "search_terms": ["gouda kaas"], "confidence": 0.95},
+    {"intent_key": "zuivel.kaas", "variant_term": "gerasp", "variant_type": "vorm", "search_terms": ["geraspte kaas", "gerasp kaas"], "confidence": 0.95},
+    {"intent_key": "zuivel.kaas", "variant_term": "geraspt", "variant_type": "vorm", "search_terms": ["geraspte kaas", "gerasp kaas"], "confidence": 0.95},
+    {"intent_key": "zuivel.kaas", "variant_term": "rasp", "variant_type": "vorm", "search_terms": ["rasp kaas", "geraspte kaas"], "confidence": 0.90},
+    {"intent_key": "zuivel.kaas", "variant_term": "jong belegen", "variant_type": "rijping", "search_terms": ["jong belegen kaas"], "confidence": 0.95},
+    {"intent_key": "zuivel.kaas", "variant_term": "belegen", "variant_type": "rijping", "search_terms": ["belegen kaas"], "confidence": 0.95},
+    {"intent_key": "zuivel.kaas", "variant_term": "oude", "variant_type": "rijping", "search_terms": ["oude kaas"], "confidence": 0.90},
+    {"intent_key": "zuivel.kaas", "variant_term": "jong", "variant_type": "rijping", "search_terms": ["jonge kaas", "jong kaas"], "confidence": 0.85},
+    {"intent_key": "zuivel.kaas", "variant_term": "jonge", "variant_type": "rijping", "search_terms": ["jonge kaas"], "confidence": 0.85},
+    {"intent_key": "zuivel.melk", "variant_term": "halfvol", "variant_type": "vetgehalte", "search_terms": ["halfvolle melk"], "confidence": 0.90},
+    {"intent_key": "zuivel.melk", "variant_term": "halfvolle", "variant_type": "vetgehalte", "search_terms": ["halfvolle melk"], "confidence": 0.90},
+    {"intent_key": "zuivel.melk", "variant_term": "vol", "variant_type": "vetgehalte", "search_terms": ["volle melk"], "confidence": 0.90},
+    {"intent_key": "zuivel.melk", "variant_term": "volle", "variant_type": "vetgehalte", "search_terms": ["volle melk"], "confidence": 0.90},
+    {"intent_key": "zuivel.yoghurt", "variant_term": "mager", "variant_type": "vetgehalte", "search_terms": ["magere yoghurt"], "confidence": 0.90},
+    {"intent_key": "zuivel.yoghurt", "variant_term": "magere", "variant_type": "vetgehalte", "search_terms": ["magere yoghurt"], "confidence": 0.90},
+    {"intent_key": "zuivel.creme_fraiche", "variant_term": "30", "variant_type": "vetgehalte", "search_terms": ["creme fraiche 30", "crème fraîche 30"], "confidence": 0.85},
+    {"intent_key": "pasta.droog", "variant_term": "linguine", "variant_type": "pastasoort", "search_terms": ["pasta linguine"], "confidence": 0.95},
+    {"intent_key": "bakkerij.brood", "variant_term": "volkoren", "variant_type": "graansoort", "search_terms": ["volkoren brood"], "confidence": 0.95},
+    {"intent_key": "eieren.ei", "variant_term": "vrije uitloop", "variant_type": "houderij", "search_terms": ["vrije uitloop eieren"], "confidence": 0.95},
+    {"intent_key": "saus.tomatensaus", "variant_term": "basilicum", "variant_type": "smaak", "search_terms": ["tomatensaus basilicum"], "confidence": 0.95},
+    {"intent_key": "snack.chips", "variant_term": "naturel", "variant_type": "smaak", "search_terms": ["naturel chips"], "confidence": 0.90},
+    {"intent_key": "drank.frisdrank", "variant_term": "zero", "variant_type": "suiker", "search_terms": ["cola zero", "frisdrank zero"], "confidence": 0.90},
+    {"intent_key": "drank.water", "variant_term": "bruisend", "variant_type": "koolzuur", "search_terms": ["bruisend water"], "confidence": 0.90}
   ]
 }
