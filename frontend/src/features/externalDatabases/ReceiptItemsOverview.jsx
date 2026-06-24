@@ -202,8 +202,19 @@ function candidateExternalGtin(candidate) {
 }
 
 function isBackendLinkedCandidate(candidate) {
-  // Single source of truth: de backend bepaalt of deze kandidaat de actieve koppeling is.
+  // Single source of truth: expliciete backendkoppeling blijft leidend.
   return candidate?.is_linked_to_catalog === true
+}
+
+function hasCatalogLink(candidate) {
+  if (!candidate) return false
+  return (
+    candidate.is_linked_to_catalog === true ||
+    Boolean(text(candidate.global_product_id, '')) ||
+    Boolean(text(candidate.product_identity_id, '')) ||
+    Boolean(text(candidate.matched_global_product_id, '')) ||
+    Boolean(text(candidate.matched_global_article_id, ''))
+  )
 }
 
 function candidateStatusFromBackend(candidate, linked) {
@@ -228,6 +239,7 @@ function buildReceiptItems(candidates) {
     const key = rowKey(candidate)
     const isPlaceholder = Boolean(candidate.is_receipt_item_placeholder)
     const linked = isBackendLinkedCandidate(candidate)
+    const catalogLinked = hasCatalogLink(candidate)
 
     const rawStatus = candidateRawStatus(candidate)
     const isFallbackCandidate = detectFallbackCandidate(candidate)
@@ -242,7 +254,7 @@ function buildReceiptItems(candidates) {
       score: candidate.score,
       status: candidateStatusFromBackend(candidate, linked),
       rawStatus,
-      catalogLinked: linked,
+      catalogLinked,
       isLinkedToCatalog: linked,
       isFallbackCandidate,
       isLinkableToCatalog: Boolean(candidate.is_linkable_to_catalog) && !linked && !isFallbackCandidate,
@@ -284,6 +296,7 @@ function buildReceiptItems(candidates) {
     if (isPlaceholder && Array.isArray(candidate.candidates)) {
       candidate.candidates.forEach((nestedCandidate) => {
         const nestedLinked = isBackendLinkedCandidate(nestedCandidate)
+        const nestedCatalogLinked = hasCatalogLink(nestedCandidate)
         const nestedRawStatus = candidateRawStatus(nestedCandidate)
         const nestedIsFallbackCandidate = detectFallbackCandidate(nestedCandidate)
 
@@ -297,7 +310,7 @@ function buildReceiptItems(candidates) {
           score: nestedCandidate.score,
           status: candidateStatusFromBackend(nestedCandidate, nestedLinked),
           rawStatus: nestedRawStatus,
-          catalogLinked: nestedLinked,
+          catalogLinked: nestedCatalogLinked,
           isLinkedToCatalog: nestedLinked,
           isFallbackCandidate: nestedIsFallbackCandidate,
           isLinkableToCatalog: Boolean(nestedCandidate.is_linkable_to_catalog) && !nestedLinked && !nestedIsFallbackCandidate,
@@ -310,7 +323,7 @@ function buildReceiptItems(candidates) {
         if (nestedItem.isFallbackCandidate) current.hasFallbackCandidate = true
         current.candidates.push(nestedItem)
 
-        if (nestedLinked) {
+        if (nestedCatalogLinked) {
           current.catalogLinked = true
           current.status = 'Gekoppeld'
           current.linkedGlobalProductId = text(nestedCandidate.global_product_id, current.linkedGlobalProductId || '')
@@ -321,7 +334,7 @@ function buildReceiptItems(candidates) {
       })
     }
 
-    if (linked) {
+    if (catalogLinked) {
       current.catalogLinked = true
       current.status = 'Gekoppeld'
       current.linkedGlobalProductId = text(candidate.global_product_id, current.linkedGlobalProductId || '')
@@ -500,6 +513,14 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const selectedItemCandidatesAreLoading = Boolean(selectedItem && selectedItemCandidateLoadingId === selectedItem.id)
   const selectedCandidates = selectedItemCandidatesAreLoading ? [] : (selectedItem?.candidates || [])
   const selectedCandidate = selectedCandidates.find((candidate) => candidate.id === selectedCandidateId) || null
+  useEffect(() => {
+    if (!selectedItem) return
+    if (filteredItems.some((item) => item.id === selectedItem.id)) return
+    setSelectedItem(null)
+    setSelectedCandidateId('')
+    setConfirmOverwrite(false)
+  }, [filteredItems, selectedItem])
+
   const selectedCandidateIsLinked = selectedCandidate?.isLinkedToCatalog === true
   const selectedCandidateCanBeLinked = Boolean(
     selectedCandidate &&
