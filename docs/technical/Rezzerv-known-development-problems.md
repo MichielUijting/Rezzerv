@@ -1,4 +1,4 @@
-# Rezzerv Known Development Problems & Fixes
+﻿# Rezzerv Known Development Problems & Fixes
 
 ## Doel
 
@@ -390,7 +390,7 @@ Voorbeelden:
 3. Pas niet direct applicatiecode aan als de fout in de testselector zit.
 4. Voeg alleen een testfix toe als de applicatielogica aantoonbaar correct is.
 
-## 10. Minimale validatie vóór push
+## 10. Minimale validatie vÃ³Ã³r push
 
 Voor elke lokale codewijziging:
 
@@ -434,7 +434,7 @@ Remove-Item -Recurse -Force frontend\playwright-report, frontend\playwright, fro
 git status --short
 ```
 
-## 11. Wanneer dit document bijwerken
+## 11. Lokale Python mist pytest  ### Symptoom  Een backendtest wordt lokaal gestart met:  ```powershell python -m pytest backend/tests/test_receipt_product_intent_analyzer.py ```  maar PowerShell toont:  ```text No module named pytest ```  ### Oorzaak  De gebruikte Windows-Python buiten Docker of buiten de projectomgeving heeft `pytest` niet geïnstalleerd. Dit zegt niets over de applicatiecode of de test zelf; de testomgeving is niet compleet.  ### Niet doen  - Niet direct applicatiecode aanpassen. - Niet concluderen dat de test inhoudelijk faalt. - Niet blind `pip install pytest` doen zonder te weten welke Python-omgeving actief is.  ### Wel doen  Gebruik bij voorkeur de project-/containeromgeving of installeer testdependencies bewust in de actieve omgeving. Controleer eerst welke Python wordt gebruikt:  ```powershell python -c "import sys; print(sys.executable)" ```  Als lokale backendtests bewust buiten Docker worden gedraaid, zorg dan dat de testdependencies aanwezig zijn.  ### Preventie  Backendtestinstructies moeten expliciet vermelden of ze lokaal, in Docker of in een virtuele omgeving draaien. Een ontbrekende testtool is een omgevingsprobleem, geen regressie in Rezzerv.  ## 12. Wanneer dit document bijwerken
 
 Werk dit document bij wanneer:
 
@@ -444,7 +444,7 @@ Werk dit document bij wanneer:
 - een ontwikkelregel expliciet moet worden aangescherpt;
 - een nieuwe foutcategorie impact heeft op releasekwaliteit.
 
-## 12. Kwaliteitsregel
+## 13. Kwaliteitsregel
 
 Een fout is pas opgelost wanneer:
 
@@ -453,3 +453,4 @@ Een fout is pas opgelost wanneer:
 3. de regressie groen is;
 4. `git status --short` schoon is;
 5. de oplossing waar nodig in dit document staat.
+

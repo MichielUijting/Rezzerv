@@ -11,6 +11,7 @@ from app.services.product_taxonomy_store import (
     load_product_variant_terms,
     normalize_taxonomy_text,
 )
+from app.services.retailer_catalog_enrichment import enrich_receipt_product_line_dict
 
 
 QUANTITY_PATTERN = re.compile(
@@ -34,6 +35,8 @@ class ReceiptProductAnalysis:
     quantity_unit: str
     quantity_label: str
     searchable_terms: list[str]
+    retailer_catalog_match: dict[str, Any]
+    retailer_catalog_terms: list[str]
     requires_user_confirmation: bool
 
 
@@ -83,6 +86,7 @@ def _build_searchable_terms(
     product_type: str,
     variant_matches: list[dict[str, Any]],
     quantity_label: str,
+    retailer_catalog_terms: list[str] | None = None,
 ) -> list[str]:
     tokens = [token for token in normalized_text.split() if len(token) >= 3 and token not in STOPWORDS]
     variant_terms = [str(match.get("normalized_variant_term") or "") for match in variant_matches]
@@ -102,6 +106,7 @@ def _build_searchable_terms(
         *variant_terms,
         *variant_search_terms,
         quantity_label,
+        *(retailer_catalog_terms or []),
         *tokens,
     ])
 
@@ -117,6 +122,8 @@ def analyze_receipt_product_line(receipt_line_text: str | None, retailer_code: s
     quantity_amount, quantity_unit, quantity_label = _extract_quantity(normalized_text)
     variant_matches = _extract_variant_matches(normalized_text, product_intent)
     variant_terms = _deduplicate([str(match.get("normalized_variant_term") or "") for match in variant_matches])
+    retailer_catalog_match = enrich_receipt_product_line_dict(raw_text, retailer_code=normalized_retailer)
+    retailer_catalog_terms = list(retailer_catalog_match.get("search_terms") or [])
     searchable_terms = _build_searchable_terms(
         normalized_text=normalized_text,
         product_intent=product_intent,
@@ -124,6 +131,7 @@ def analyze_receipt_product_line(receipt_line_text: str | None, retailer_code: s
         product_type=product_type,
         variant_matches=variant_matches,
         quantity_label=quantity_label,
+        retailer_catalog_terms=retailer_catalog_terms,
     )
 
     return ReceiptProductAnalysis(
@@ -138,6 +146,8 @@ def analyze_receipt_product_line(receipt_line_text: str | None, retailer_code: s
         quantity_unit=quantity_unit,
         quantity_label=quantity_label,
         searchable_terms=searchable_terms,
+        retailer_catalog_match=retailer_catalog_match,
+        retailer_catalog_terms=retailer_catalog_terms,
         requires_user_confirmation=not bool(product_intent),
     )
 
