@@ -847,6 +847,17 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
             if candidate.get("has_meaningful_intent_match", True)
         ]
 
+    catalog_codes = {str(code).strip() for code in article_code_analysis.get("retailer_article_codes", []) if str(code).strip()}
+    for candidate in scored:
+        candidate_code = str(candidate.get("candidate_source_product_code") or candidate.get("source_product_code") or candidate.get("retailer_article_number") or "").strip()
+        if candidate_code in catalog_codes:
+            candidate["score"] = max(float(candidate.get("score") or 0.0), 0.95)
+            candidate["candidate_status"] = "probable_candidate"
+            candidate["is_probable"] = True
+            candidate["catalog_boost_applied"] = True
+            candidate["created_by"] = "external_database_off_index_matcher_v2_catalog_boost"
+            candidate.setdefault("score_breakdown", {})["catalog_boost_score"] = 0.95
+
     if not include_below_threshold:
         scored = [candidate for candidate in scored if candidate["score"] >= PROBABLE_CANDIDATE_THRESHOLD]
 
