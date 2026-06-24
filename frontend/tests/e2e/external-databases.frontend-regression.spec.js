@@ -356,7 +356,7 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(fallbackRow).toBeVisible();
     await expect(fallbackRow).toContainText('Geen externe match');
     await expect(fallbackRow.locator('input[type="radio"]')).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Koppel artikel' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Koppel artikel', exact: true })).toBeDisabled();
 
     await expectNoConsoleErrors(consoleErrors);
   });
