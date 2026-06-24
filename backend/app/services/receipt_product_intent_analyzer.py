@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass
+from typing import Any
 
 from app.services.product_intent_classifier import classify_product_intent
-from app.services.product_taxonomy_store import contains_taxonomy_term, normalize_taxonomy_text
+from app.services.product_taxonomy_store import (
+    contains_taxonomy_term,
+    get_taxonomy_metadata_for_intent,
+    load_product_variant_terms,
+    normalize_taxonomy_text,
+)
 
 
 QUANTITY_PATTERN = re.compile(
@@ -12,106 +18,7 @@ QUANTITY_PATTERN = re.compile(
     flags=re.IGNORECASE,
 )
 
-PRODUCT_TYPE_BY_INTENT_PREFIX = {
-    "zuivel.melk": "melk",
-    "zuivel.yoghurt": "yoghurt",
-    "zuivel.vla": "vla",
-    "zuivel.kaas": "kaas",
-    "zuivel.creme_fraiche": "crème fraîche",
-    "fruit.banaan": "banaan",
-    "fruit.appel": "appel",
-    "bakkerij.brood": "brood",
-    "groente.spinazie": "spinazie",
-    "groente.courgette": "courgette",
-    "groente.zoete_aardappel": "zoete aardappel",
-    "groente.aardappel": "aardappel",
-    "eieren.ei": "ei",
-    "graan.rijst": "rijst",
-    "saus.tomatensaus": "tomatensaus",
-    "groente.tomaat": "tomaat",
-    "maaltijd.pizza": "pizza",
-    "kruiden.specerijenmix": "specerijenmix",
-    "vleeswaren.ham": "ham",
-    "vleeswaren.kipfilet": "kipfilet",
-    "drank.frisdrank": "frisdrank",
-    "pasta.droog": "pasta",
-    "snack.chips": "chips",
-    "ontbijt.muesli": "muesli",
-    "ontbijt.havermout": "havermout",
-    "drank.water": "water",
-}
-
-CATEGORY_BY_INTENT_PREFIX = {
-    "zuivel.": "zuivel",
-    "fruit.": "fruit",
-    "bakkerij.": "bakkerij",
-    "groente.": "groente",
-    "eieren.": "eieren",
-    "graan.": "graan",
-    "saus.": "saus",
-    "maaltijd.": "maaltijd",
-    "kruiden.": "kruiden",
-    "vleeswaren.": "vleeswaren",
-    "drank.": "drank",
-    "pasta.": "pasta",
-    "snack.": "snack",
-    "ontbijt.": "ontbijt",
-}
-
-VARIANT_TERMS = (
-    "gouda",
-    "gerasp",
-    "geraspt",
-    "rasp",
-    "raspkaas",
-    "italiaans",
-    "mozzarella",
-    "parmezaan",
-    "grana padano",
-    "emmentaler",
-    "jong belegen",
-    "jong",
-    "jonge",
-    "belegen",
-    "oud",
-    "48",
-    "30",
-    "halfvol",
-    "halfvolle",
-    "vol",
-    "volle",
-    "mager",
-    "magere",
-    "naturel",
-    "paprika",
-    "mild",
-    "hot",
-    "zero",
-    "bruisend",
-    "ongezouten",
-    "volkoren",
-    "vrije uitloop",
-    "diepvries",
-    "basilicum",
-    "linguine",
-)
-
-STOPWORDS = {
-    "de",
-    "het",
-    "een",
-    "en",
-    "of",
-    "met",
-    "voor",
-    "van",
-    "lidl",
-    "ah",
-    "aldi",
-    "jumbo",
-    "plus",
-    "picnic",
-}
+STOPWORDS = {"de", "het", "een", "en", "of", "met", "voor", "van"}
 
 
 @dataclass(frozen=True)
@@ -128,17 +35,6 @@ class ReceiptProductAnalysis:
     quantity_label: str
     searchable_terms: list[str]
     requires_user_confirmation: bool
-
-
-def _category_for_intent(intent_key: str) -> str:
-    for prefix, category in CATEGORY_BY_INTENT_PREFIX.items():
-        if intent_key.startswith(prefix):
-            return category
-    return ""
-
-
-def _product_type_for_intent(intent_key: str) -> str:
-    return PRODUCT_TYPE_BY_INTENT_PREFIX.get(intent_key, "")
 
 
 def _extract_quantity(normalized_text: str) -> tuple[str, str, str]:
@@ -159,13 +55,13 @@ def _extract_quantity(normalized_text: str) -> tuple[str, str, str]:
     return amount, normalized_unit, f"{amount} {normalized_unit}"
 
 
-def _extract_variant_terms(normalized_text: str) -> list[str]:
-    variants: list[str] = []
-    for term in VARIANT_TERMS:
-        normalized_term = normalize_taxonomy_text(term)
+def _extract_variant_matches(normalized_text: str, product_intent: str) -> list[dict[str, Any]]:
+    matches: list[dict[str, Any]] = []
+    for rule in load_product_variant_terms(product_intent or None):
+        normalized_term = str(rule.get("normalized_variant_term") or "")
         if normalized_term and contains_taxonomy_term(normalized_text, normalized_term):
-            variants.append(normalized_term)
-    return variants
+            matches.append(dict(rule))
+    return matches
 
 
 def _deduplicate(values: list[str]) -> list[str]:
@@ -180,26 +76,55 @@ def _deduplicate(values: list[str]) -> list[str]:
     return result
 
 
-def analyze_receipt_product_line(receipt_line_text: str | None, retailer_code: str | None = None) -> ReceiptProductAnalysis:
-    raw_text = str(receipt_line_text or "").strip()
-    normalized_text = normalize_taxonomy_text(raw_text)
-    normalized_retailer = normalize_taxonomy_text(retailer_code)
-    product_intent = classify_product_intent(normalized_text, retailer_code=normalized_retailer)
-    category = _category_for_intent(product_intent)
-    product_type = _product_type_for_intent(product_intent)
-    quantity_amount, quantity_unit, quantity_label = _extract_quantity(normalized_text)
-    variant_terms = _extract_variant_terms(normalized_text)
-
+def _build_searchable_terms(
+    normalized_text: str,
+    product_intent: str,
+    category: str,
+    product_type: str,
+    variant_matches: list[dict[str, Any]],
+    quantity_label: str,
+) -> list[str]:
     tokens = [token for token in normalized_text.split() if len(token) >= 3 and token not in STOPWORDS]
-    searchable_terms = _deduplicate([
+    variant_terms = [str(match.get("normalized_variant_term") or "") for match in variant_matches]
+    variant_search_terms: list[str] = []
+
+    for match in variant_matches:
+        variant = str(match.get("normalized_variant_term") or "")
+        variant_search_terms.extend(str(term or "") for term in (match.get("search_terms") or []))
+        if variant and product_type and not contains_taxonomy_term(variant, product_type):
+            variant_search_terms.append(f"{variant} {product_type}")
+
+    return _deduplicate([
         normalized_text,
         product_intent,
         category,
         product_type,
         *variant_terms,
+        *variant_search_terms,
         quantity_label,
         *tokens,
     ])
+
+
+def analyze_receipt_product_line(receipt_line_text: str | None, retailer_code: str | None = None) -> ReceiptProductAnalysis:
+    raw_text = str(receipt_line_text or "").strip()
+    normalized_text = normalize_taxonomy_text(raw_text)
+    normalized_retailer = normalize_taxonomy_text(retailer_code)
+    product_intent = classify_product_intent(normalized_text, retailer_code=normalized_retailer)
+    taxonomy_metadata = get_taxonomy_metadata_for_intent(product_intent)
+    category = taxonomy_metadata.get("category") or ""
+    product_type = taxonomy_metadata.get("product_type") or ""
+    quantity_amount, quantity_unit, quantity_label = _extract_quantity(normalized_text)
+    variant_matches = _extract_variant_matches(normalized_text, product_intent)
+    variant_terms = _deduplicate([str(match.get("normalized_variant_term") or "") for match in variant_matches])
+    searchable_terms = _build_searchable_terms(
+        normalized_text=normalized_text,
+        product_intent=product_intent,
+        category=category,
+        product_type=product_type,
+        variant_matches=variant_matches,
+        quantity_label=quantity_label,
+    )
 
     return ReceiptProductAnalysis(
         raw_text=raw_text,
