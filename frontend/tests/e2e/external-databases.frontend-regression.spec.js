@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectAnyVisible,
@@ -313,11 +313,11 @@ test.describe('Externe databases frontend-regressie', () => {
               candidate_id: 'candidate-fallback-regression',
               candidate_name: 'Fallback kandidaat',
               candidate_brand: '-',
-              external_source_name: 'Rezzerv fallback',
-              external_source_product_code: '',
+              external_source_name: 'receipt_product_intent_fallback',
+              external_source_product_code: 'fallback:creme-frache',
               variant: 'Geen externe match',
               score: 0.1,
-              candidate_status: 'receipt_unresolved_fallback',
+              candidate_status: 'candidate',
               is_linked_to_catalog: false,
               is_linkable_to_catalog: true,
             },
@@ -363,3 +363,4 @@ test.describe('Externe databases frontend-regressie', () => {
 
 
 });
+

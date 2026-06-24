@@ -66,6 +66,30 @@ function isFallbackCandidateStatus(value) {
   return FALLBACK_CANDIDATE_STATUSES.has(normalizeCandidateStatus(value))
 }
 
+function isFallbackSignal(value) {
+  const normalized = normalizeCandidateStatus(value)
+  return normalized.includes('fallback') || normalized.includes('unresolved') || normalized.includes('no_external_match')
+}
+
+function isFallbackCandidate(candidate) {
+  if (!candidate) return false
+  return [
+    candidate.candidate_status,
+    candidate.status,
+    candidate.status_label,
+    candidate.external_source_name,
+    candidate.external_source_product_code,
+    candidate.candidate_source_name,
+    candidate.candidate_source_product_code,
+    candidate.source_name,
+    candidate.source_product_code,
+    candidate.candidate_source,
+    candidate.variant,
+    candidate.candidate_id,
+    candidate.id,
+  ].some((value) => isFallbackCandidateStatus(value) || isFallbackSignal(value))
+}
+
 function candidateStatusLabel(value) {
   const normalized = normalizeCandidateStatus(value)
   const labels = {
@@ -185,6 +209,8 @@ function isBackendLinkedCandidate(candidate) {
 function candidateStatusFromBackend(candidate, linked) {
   if (linked) return 'Gekoppeld'
 
+  if (isFallbackCandidate(candidate)) return 'Geen externe match'
+
   const rawLabel = text(candidate.status_label, '')
   if (rawLabel && rawLabel.toLowerCase() !== 'gekoppeld') return rawLabel
 
@@ -204,7 +230,7 @@ function buildReceiptItems(candidates) {
     const linked = isBackendLinkedCandidate(candidate)
 
     const rawStatus = candidateRawStatus(candidate)
-    const isFallbackCandidate = isFallbackCandidateStatus(rawStatus)
+    const isFallbackCandidate = isFallbackCandidate(candidate)
 
     const candidateItem = {
       id: candidateKey(candidate),
@@ -259,7 +285,7 @@ function buildReceiptItems(candidates) {
       candidate.candidates.forEach((nestedCandidate) => {
         const nestedLinked = isBackendLinkedCandidate(nestedCandidate)
         const nestedRawStatus = candidateRawStatus(nestedCandidate)
-        const nestedIsFallbackCandidate = isFallbackCandidateStatus(nestedRawStatus)
+        const nestedIsFallbackCandidate = isFallbackCandidate(nestedCandidate)
 
         const nestedItem = {
           id: candidateKey(nestedCandidate),
@@ -478,6 +504,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const selectedCandidateCanBeLinked = Boolean(
     selectedCandidate &&
     selectedCandidate.isLinkableToCatalog === true &&
+    selectedCandidate.isFallbackCandidate !== true &&
     selectedCandidateIsLinked === false
   )
 
