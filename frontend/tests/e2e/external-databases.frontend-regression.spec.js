@@ -392,7 +392,7 @@ test.describe('Externe databases frontend-regressie', () => {
     await receiptTable.locator('select').first().selectOption('linked');
     await expect(receiptTable.locator('tbody tr', { hasText: 'Gekoppeld filter product' })).toBeVisible();
     await expect(receiptTable.locator('tbody tr', { hasText: 'Niet gekoppeld filter product' })).toHaveCount(0);
-    await expect(page.getByTestId('external-receipt-item-candidates-table')).not.toContainText('Niet gekoppeld filter kandidaat');
+    await expect(page.getByText('Niet gekoppeld filter kandidaat')).toHaveCount(0);
 
     await expectNoConsoleErrors(consoleErrors);
   });
