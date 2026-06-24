@@ -40,7 +40,7 @@ _EMPTY_ENRICHMENT = RetailerCatalogEnrichment(
 
 LIDL_CATALOG_RULES: tuple[dict[str, Any], ...] = (
     {
-        "receipt_terms": ("mexicaanse kruidenm", "mexicaanse kruidenmix", "taco kruidenmix", "burrito kruidenmix", "fajita kruidenmix"),
+        "receipt_terms": ("mexicaanse kruiden", "mexicaanse kruidenm", "mexicaanse kruidenmix", "taco kruidenmix", "burrito kruidenmix", "fajita kruidenmix"),
         "source_product_code": "21175",
         "catalog_product_name": "Kania Mexicaanse kruidenmix",
         "brand": "Kania/Kanig",
