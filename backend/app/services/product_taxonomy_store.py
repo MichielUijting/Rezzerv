@@ -58,7 +58,7 @@ def normalize_taxonomy_text(value: str | None) -> str:
     normalized = str(value or "").strip().lower()
     normalized = normalized.replace(".", " ")
     normalized = normalized.replace("-", " ")
-    normalized = re.sub(r"[^a-z0-9áéíóúàèìòùäëïöüçñ\s]+", " ", normalized, flags=re.IGNORECASE)
+    normalized = re.sub(r"[^a-z0-9áéíóúàèìòùäëïöüâêîôûçñ\s]+", " ", normalized, flags=re.IGNORECASE)
     return " ".join(normalized.split())
 
 
