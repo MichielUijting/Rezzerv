@@ -15,8 +15,10 @@ def test_matchflow_applies_product_evidence_scoring_to_candidates():
 
     candidates = result["candidates"]
     assert candidates
-    boosted = [candidate for candidate in candidates if candidate.get("product_evidence_boost_applied")]
-    assert boosted
+    evidence_scored = [candidate for candidate in candidates if "product_evidence_score" in candidate]
+    assert evidence_scored
+    assert evidence_scored[0]["product_evidence_score"] >= 0.0
+    assert evidence_scored[0].get("product_evidence_packet", {}).get("matched") is True
     assert all(candidate["creates_global_product"] is False for candidate in candidates)
     assert all(candidate["creates_household_article"] is False for candidate in candidates)
     assert all(candidate["creates_inventory_event"] is False for candidate in candidates)
