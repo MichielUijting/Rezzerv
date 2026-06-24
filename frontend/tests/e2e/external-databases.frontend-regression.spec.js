@@ -291,4 +291,75 @@ test.describe('Externe databases frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
+  test('Fallbackkandidaat is zichtbaar maar niet koppelbaar', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+
+    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [
+            {
+              context_key: 'ctx-fallback-regression',
+              receipt_line_id: 'receipt-line-fallback-regression',
+              purchase_import_line_id: 'purchase-line-fallback-regression',
+              receipt_line_text: 'Fallback kandidaat regressietest',
+              retailer_code: 'lidl',
+              retailer_article_number: '12345',
+              gtin: '',
+              quantity_label: '1 stuk',
+              price: 1.23,
+              candidate_id: 'candidate-fallback-regression',
+              candidate_name: 'Fallback kandidaat',
+              candidate_brand: '-',
+              external_source_name: 'Rezzerv fallback',
+              external_source_product_code: '',
+              variant: 'Geen externe match',
+              score: 0.1,
+              candidate_status: 'receipt_unresolved_fallback',
+              is_linked_to_catalog: false,
+              is_linkable_to_catalog: true,
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.route('**/api/external-databases/receipt-items/ensure-candidates', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok' }),
+      });
+    });
+
+    await expectRouteLoads(page, '/externe-databases', [
+      'Externe databases',
+      'Bonartikelen',
+      'Kandidaten',
+      'Product',
+    ]);
+
+    const receiptTable = page.getByTestId('external-receipt-items-table');
+    const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Fallback kandidaat regressietest' });
+    await expect(receiptRow).toBeVisible();
+    await expect(receiptRow.locator('td').nth(9)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(10)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(11)).toHaveText('0');
+
+    await receiptRow.dblclick();
+
+    const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
+    await expect(candidateTable).toBeVisible();
+    const fallbackRow = candidateTable.locator('tbody tr', { hasText: 'Fallback kandidaat' });
+    await expect(fallbackRow).toBeVisible();
+    await expect(fallbackRow).toContainText('Geen externe match');
+    await expect(fallbackRow.locator('input[type="radio"]')).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Koppel artikel' })).toBeDisabled();
+
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
+
 });
