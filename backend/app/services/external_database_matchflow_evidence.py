@@ -9,6 +9,7 @@ from app.services import external_product_candidate_store as candidate_store
 from app.services.external_candidate_normalization import normalize_external_candidates
 from app.services.external_database_matchers import match_retailer_receipt_line as _base_match_retailer_receipt_line
 from app.services.external_product_alias_store import find_alias_candidates, save_alias_from_candidate
+from app.services.lidl_local_catalog_index import search_lidl_local_catalog_candidates
 from app.services.product_evidence_packet import apply_product_evidence_to_candidates, build_product_evidence_packet_dict
 
 
@@ -32,15 +33,24 @@ M2C2I20_EXTERNAL_CODE_FIELDS = (
 _M2C2I20A_PERFORMANCE_INDEXES_READY = False
 
 
+def _m2c2i21_catalog_candidates(retailer_code: str, receipt_line_text: str) -> list[dict[str, Any]]:
+    if str(retailer_code or "").strip().lower() != "lidl":
+        return []
+    return search_lidl_local_catalog_candidates(receipt_line_text, limit=5)
+
+
 def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
     base_candidates = list(result.get("candidates") or [])
     alias_candidates = find_alias_candidates(retailer_code, receipt_line_text)
-    candidates = alias_candidates + base_candidates
+    catalog_candidates = _m2c2i21_catalog_candidates(retailer_code, receipt_line_text)
+    candidates = alias_candidates + catalog_candidates + base_candidates
     if not candidates:
         enriched_empty = dict(result)
         enriched_empty["uses_product_evidence_scoring"] = True
         enriched_empty["uses_candidate_deduplication"] = False
         enriched_empty["uses_retailer_alias_learning"] = bool(alias_candidates)
+        enriched_empty["uses_lidl_local_catalog_index"] = bool(catalog_candidates)
+        enriched_empty["lidl_local_catalog_candidate_count"] = len(catalog_candidates)
         enriched_empty["candidate_count_before_deduplication"] = 0
         enriched_empty["candidate_count_after_deduplication"] = 0
         enriched_empty["creates_global_product"] = False
@@ -70,6 +80,8 @@ def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retai
     enriched["uses_product_evidence_scoring"] = True
     enriched["uses_candidate_deduplication"] = len(normalized) < len(rescored)
     enriched["uses_retailer_alias_learning"] = bool(alias_candidates)
+    enriched["uses_lidl_local_catalog_index"] = bool(catalog_candidates)
+    enriched["lidl_local_catalog_candidate_count"] = len(catalog_candidates)
     enriched["candidate_count_before_deduplication"] = len(rescored)
     enriched["candidate_count_after_deduplication"] = len(normalized[:5])
     enriched["alias_candidate_count"] = len(alias_candidates)
