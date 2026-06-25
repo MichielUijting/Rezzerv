@@ -7,6 +7,7 @@ from app.services.product_taxonomy_store import normalize_taxonomy_text
 SOURCE_PRIORITY = {
     "lidl_catalog_enrichment": 100,
     "retailer_alias_learning": 95,
+    "lidl_catalog_index": 92,
     "lidl_product_group": 90,
     "product_taxonomy_seed": 80,
     "OFF-index": 70,
@@ -62,6 +63,34 @@ def _identity_key(candidate: dict[str, Any], evidence_packet: dict[str, Any] | N
     return f"name:{source_name}:{candidate_name}"
 
 
+def _append_unique(target: list[str], value: Any) -> None:
+    text = str(value or "").strip()
+    if text and text not in target:
+        target.append(text)
+
+
+def _collect_source_names(*candidates: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for candidate in candidates:
+        for merged in candidate.get("merged_source_names") or []:
+            _append_unique(values, merged)
+        _append_unique(values, _source_name(candidate))
+    return values
+
+
+def _collect_source_codes(*candidates: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for candidate in candidates:
+        for merged in candidate.get("merged_source_product_codes") or []:
+            _append_unique(values, merged)
+        _append_unique(values, _source_code(candidate))
+    return values
+
+
+def _has_lidl_catalog_source(candidate: dict[str, Any]) -> bool:
+    return _source_name(candidate) == "lidl_catalog_index" or "lidl_catalog_index" in (candidate.get("merged_source_names") or [])
+
+
 def _merge_candidates(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
     primary, secondary = (incoming, existing) if _priority(incoming) > _priority(existing) else (existing, incoming)
     result = dict(primary)
@@ -74,18 +103,12 @@ def _merge_candidates(existing: dict[str, Any], incoming: dict[str, Any]) -> dic
     if evidence_packet:
         result["product_evidence_packet"] = evidence_packet
 
-    source_names = []
-    source_codes = []
-    for candidate in [existing, incoming]:
-        source_name = _source_name(candidate)
-        source_code = _source_code(candidate)
-        if source_name and source_name not in source_names:
-            source_names.append(source_name)
-        if source_code and source_code not in source_codes:
-            source_codes.append(source_code)
+    source_names = _collect_source_names(existing, incoming)
+    source_codes = _collect_source_codes(existing, incoming)
 
     result["merged_source_names"] = source_names
     result["merged_source_product_codes"] = source_codes
+    result["has_lidl_local_catalog_index_source"] = "lidl_catalog_index" in source_names
     result["deduplicated_candidate_count"] = int(existing.get("deduplicated_candidate_count") or 1) + int(incoming.get("deduplicated_candidate_count") or 1)
     result.setdefault("score_breakdown", {})["deduplicated_candidate_count"] = result["deduplicated_candidate_count"]
 
@@ -104,6 +127,7 @@ def normalize_external_candidates(candidates: list[dict[str, Any]], evidence_pac
         item.setdefault("source_name", item.get("candidate_source_name"))
         item.setdefault("source_product_code", item.get("candidate_source_product_code"))
         item.setdefault("retailer_article_number", item.get("candidate_source_product_code"))
+        item.setdefault("has_lidl_local_catalog_index_source", _has_lidl_catalog_source(item))
         for flag in ["creates_global_product", "creates_household_article", "creates_inventory_event"]:
             item[flag] = False
 
