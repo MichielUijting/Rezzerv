@@ -6,6 +6,7 @@ from app.services.product_taxonomy_store import normalize_taxonomy_text
 
 SOURCE_PRIORITY = {
     "lidl_catalog_enrichment": 100,
+    "retailer_alias_learning": 95,
     "lidl_product_group": 90,
     "product_taxonomy_seed": 80,
     "OFF-index": 70,

@@ -5,13 +5,25 @@ from typing import Any
 from app.services import external_product_candidate_store as candidate_store
 from app.services.external_candidate_normalization import normalize_external_candidates
 from app.services.external_database_matchers import match_retailer_receipt_line as _base_match_retailer_receipt_line
+from app.services.external_product_alias_store import find_alias_candidates, save_alias_from_candidate
 from app.services.product_evidence_packet import apply_product_evidence_to_candidates, build_product_evidence_packet_dict
 
 
 def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
-    candidates = list(result.get("candidates") or [])
+    base_candidates = list(result.get("candidates") or [])
+    alias_candidates = find_alias_candidates(retailer_code, receipt_line_text)
+    candidates = alias_candidates + base_candidates
     if not candidates:
-        return result
+        enriched_empty = dict(result)
+        enriched_empty["uses_product_evidence_scoring"] = True
+        enriched_empty["uses_candidate_deduplication"] = False
+        enriched_empty["uses_retailer_alias_learning"] = bool(alias_candidates)
+        enriched_empty["candidate_count_before_deduplication"] = 0
+        enriched_empty["candidate_count_after_deduplication"] = 0
+        enriched_empty["creates_global_product"] = False
+        enriched_empty["creates_household_article"] = False
+        enriched_empty["creates_inventory_event"] = False
+        return enriched_empty
 
     evidence_packet = build_product_evidence_packet_dict(receipt_line_text, retailer_code=retailer_code)
     rescored = apply_product_evidence_to_candidates(
@@ -22,12 +34,22 @@ def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retai
     )
     normalized = normalize_external_candidates(rescored, evidence_packet=evidence_packet)
 
+    if normalized:
+        save_alias_from_candidate(
+            retailer_code=retailer_code,
+            receipt_line_text=receipt_line_text,
+            candidate=normalized[0],
+            learned_from="matchflow_evidence",
+        )
+
     enriched = dict(result)
     enriched["candidates"] = normalized[:5]
     enriched["uses_product_evidence_scoring"] = True
     enriched["uses_candidate_deduplication"] = len(normalized) < len(rescored)
+    enriched["uses_retailer_alias_learning"] = bool(alias_candidates)
     enriched["candidate_count_before_deduplication"] = len(rescored)
     enriched["candidate_count_after_deduplication"] = len(normalized[:5])
+    enriched["alias_candidate_count"] = len(alias_candidates)
     enriched["creates_global_product"] = False
     enriched["creates_household_article"] = False
     enriched["creates_inventory_event"] = False
