@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import difflib
 import json
+import re
 import uuid
 from datetime import datetime, timezone
 from functools import lru_cache
@@ -226,3 +228,135 @@ def ensure_lidl_local_catalog_index() -> dict[str, Any]:
         "creates_household_article": False,
         "creates_inventory_event": False,
     }
+
+
+def _normalize(value: str | None) -> str:
+    normalized = normalize_taxonomy_text(value)
+    normalized = re.sub(r"[^a-z0-9áéíóúàèìòùäëïöüçñ\s-]+", " ", normalized, flags=re.IGNORECASE)
+    return " ".join(normalized.split())
+
+
+def _text_similarity(left: str, right: str) -> float:
+    left_normalized = _normalize(left)
+    right_normalized = _normalize(right)
+    if not left_normalized or not right_normalized:
+        return 0.0
+    if left_normalized == right_normalized:
+        return 1.0
+    if left_normalized in right_normalized or right_normalized in left_normalized:
+        return 0.92
+    return difflib.SequenceMatcher(None, left_normalized, right_normalized).ratio()
+
+
+def _token_overlap(left: str, right: str) -> float:
+    left_tokens = {token for token in _normalize(left).split() if len(token) >= 3}
+    right_tokens = {token for token in _normalize(right).split() if len(token) >= 3}
+    if not left_tokens or not right_tokens:
+        return 0.0
+    return len(left_tokens & right_tokens) / max(1, len(left_tokens | right_tokens))
+
+
+def _score_catalog_row(receipt_line_text: str, row: dict[str, Any]) -> dict[str, Any]:
+    product_name = str(row.get("product_name") or "").strip()
+    brand = str(row.get("brand") or "").strip()
+    category = str(row.get("category") or "").strip()
+    product_type = str(row.get("product_type") or "").strip()
+    quantity_label = str(row.get("quantity_label") or "").strip()
+    search_terms = str(row.get("search_terms") or "").strip()
+    source_product_code = str(row.get("source_product_code") or "").strip()
+    confidence_base = float(row.get("confidence_base") or 0.0)
+
+    text_score = max(
+        _text_similarity(receipt_line_text, product_name),
+        _token_overlap(receipt_line_text, product_name),
+        _token_overlap(receipt_line_text, search_terms),
+    )
+    brand_score = 1.0 if brand and _normalize(brand) in _normalize(receipt_line_text) else (0.70 if brand else 0.45)
+    product_type_score = max(_text_similarity(receipt_line_text, product_type), _token_overlap(receipt_line_text, category))
+    quantity_score = 0.80 if quantity_label else 0.50
+    source_score = max(0.80, min(confidence_base, 0.96))
+    variant_score = max(0.70, _token_overlap(receipt_line_text, category))
+
+    breakdown = {
+        "text_score": round(text_score, 3),
+        "brand_score": round(brand_score, 3),
+        "product_type_score": round(product_type_score, 3),
+        "quantity_score": round(quantity_score, 3),
+        "variant_score": round(variant_score, 3),
+        "source_score": round(source_score, 3),
+    }
+    score = round(
+        breakdown["text_score"] * 0.30
+        + breakdown["brand_score"] * 0.20
+        + breakdown["product_type_score"] * 0.20
+        + breakdown["quantity_score"] * 0.10
+        + breakdown["variant_score"] * 0.10
+        + breakdown["source_score"] * 0.10,
+        3,
+    )
+    candidate_status = "probable_candidate" if score >= 0.85 else "possible_candidate" if score >= 0.70 else "weak_candidate"
+    return {
+        "candidate_name": product_name or source_product_code or "Onbekend Lidl-catalogusproduct",
+        "candidate_brand": brand,
+        "candidate_source_name": LIDL_CATALOG_INDEX_SOURCE,
+        "candidate_source_product_code": source_product_code or "unknown",
+        "source_name": LIDL_CATALOG_INDEX_SOURCE,
+        "source_product_code": source_product_code or "unknown",
+        "retailer_article_number": source_product_code or "",
+        "quantity_label": quantity_label,
+        "variant": product_type or category,
+        "source_url": str(row.get("source_url") or "").strip(),
+        "score": score,
+        "score_breakdown": breakdown,
+        "candidate_status": candidate_status,
+        "is_probable": score >= 0.85,
+        "is_user_confirmed": False,
+        "is_external_database_override": False,
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_inventory_event": False,
+        "created_by": "m2c2i21_lidl_local_catalog_index",
+    }
+
+
+def search_lidl_local_catalog_candidates(receipt_line_text: str, limit: int = 5) -> list[dict[str, Any]]:
+    ensure_lidl_local_catalog_index()
+    normalized = _normalize(receipt_line_text)
+    tokens = [token for token in normalized.split() if len(token) >= 3]
+    if not tokens:
+        return []
+
+    params: dict[str, Any] = {"source_name": LIDL_CATALOG_INDEX_SOURCE, "retailer_code": "lidl", "limit": 80}
+    where_parts: list[str] = []
+    search_expr = """
+        lower(COALESCE(product_name, '') || ' ' ||
+              COALESCE(brand, '') || ' ' ||
+              COALESCE(category, '') || ' ' ||
+              COALESCE(product_type, '') || ' ' ||
+              COALESCE(quantity_label, '') || ' ' ||
+              COALESCE(search_terms, '') || ' ' ||
+              COALESCE(source_product_code, ''))
+    """
+    for index, token in enumerate(tokens[:8]):
+        key = f"token_{index}"
+        where_parts.append(f"{search_expr} LIKE :{key}")
+        params[key] = f"%{token}%"
+
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                f"""
+                SELECT *
+                FROM external_product_index
+                WHERE source_name = :source_name
+                  AND retailer_code = :retailer_code
+                  AND ({' OR '.join(where_parts)})
+                LIMIT :limit
+                """
+            ),
+            params,
+        ).mappings().all()
+
+    scored = [_score_catalog_row(receipt_line_text, dict(row)) for row in rows]
+    scored.sort(key=lambda item: (-float(item.get("score") or 0.0), str(item.get("candidate_name") or "")))
+    return scored[: max(1, min(int(limit or 5), 5))]
