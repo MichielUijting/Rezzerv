@@ -4,16 +4,71 @@
 
 Aantonen dat bonartikelen met een externe artikelcode niet opnieuw door de kandidaatzoekflow gaan.
 
-## Technische test
+## Technische smoke zonder pytest
+
+De backend-container bevat geen pytest. Gebruik daarom een gewone Python-smoke via stdin.
 
 ```powershell
-docker compose exec backend python -m pytest backend/tests/test_m2c2i20_external_resolved_state.py -q
+@'
+from app.services import external_database_matchflow_evidence as m
+
+resolved = {
+    "is_receipt_item_placeholder": True,
+    "purchase_import_line_id": "pil-1",
+    "receipt_line_text": "Veldsla",
+    "retailer_code": "lidl",
+    "retailer_article_number": "lidl:groente.veldsla",
+}
+
+unresolved = {
+    "is_receipt_item_placeholder": True,
+    "purchase_import_line_id": "pil-2",
+    "receipt_line_text": "Nieuw onbekend artikel",
+    "retailer_code": "lidl",
+}
+
+assert m.is_m2c2i20_external_resolved_item(resolved) is True
+assert m.m2c2i20_external_product_code(resolved) == "lidl:groente.veldsla"
+assert m.is_m2c2i20_external_resolved_item(unresolved) is False
+
+unresolved_items, resolved_items = m._m2c2i20_split_resolved_items([resolved, unresolved])
+
+assert unresolved_items == [unresolved]
+assert resolved_items == [resolved]
+
+result = m._m2c2i20_enrich_ensure_result(
+    {
+        "ok": True,
+        "total": 1,
+        "processed": 1,
+        "saved_count": 0,
+        "updated_count": 0,
+        "skipped_count": 0,
+        "errors": [],
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_inventory_event": False,
+    },
+    original_total=2,
+    resolved_items=resolved_items,
+)
+
+assert result["total"] == 2
+assert result["external_resolved_skipped_count"] == 1
+assert result["external_resolved_skipped"][0]["external_product_code"] == "lidl:groente.veldsla"
+assert result["m2c2i20_resolved_state_gate"] is True
+assert result["creates_global_product"] is False
+assert result["creates_household_article"] is False
+assert result["creates_inventory_event"] is False
+
+print("M2C2i-20 smoke OK: resolved bonartikelen worden niet opnieuw gezocht.")
+'@ | docker compose exec -T backend python
 ```
 
 Verwacht:
 
 ```text
-3 passed
+M2C2i-20 smoke OK: resolved bonartikelen worden niet opnieuw gezocht.
 ```
 
 ## Functionele test in Externe databases
