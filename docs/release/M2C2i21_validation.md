@@ -40,7 +40,12 @@ match = m.match_retailer_receipt_line("lidl", "Veldsla", include_below_threshold
 assert match["uses_lidl_local_catalog_index"] is True
 assert match["lidl_local_catalog_candidate_count"] >= 1
 assert len(match["candidates"]) <= 5
-assert any(c["candidate_source_name"] == "lidl_catalog_index" for c in match["candidates"])
+assert any(
+    c.get("candidate_source_name") == "lidl_catalog_index"
+    or c.get("has_lidl_local_catalog_index_source") is True
+    or "lidl_catalog_index" in (c.get("merged_source_names") or [])
+    for c in match["candidates"]
+)
 assert match["creates_global_product"] is False
 assert match["creates_household_article"] is False
 assert match["creates_inventory_event"] is False
@@ -61,7 +66,7 @@ M2C2i-21 smoke OK: lokale Lidl-catalogusindex levert kandidaten zonder mutaties.
 2. Gebruik een Lidl-bonregel die nog geen externe artikelcode heeft maar wel als product in de Lidl-catalogusdata voorkomt.
 3. Ververs/haal kandidaten op.
 4. Controleer dat maximaal 5 kandidaten worden getoond.
-5. Controleer dat minimaal één kandidaat bron `lidl_catalog_index` heeft.
+5. Controleer dat de kandidaatbron direct of via samengevoegde bronnen herleidbaar is naar `lidl_catalog_index`.
 6. Controleer dat er geen Mijn-artikel wordt aangemaakt.
 7. Controleer dat er geen voorraadmutatie ontstaat.
 
@@ -69,6 +74,6 @@ M2C2i-21 smoke OK: lokale Lidl-catalogusindex levert kandidaten zonder mutaties.
 
 - Onbekende Lidl-bonregel krijgt cataloguskandidaat uit lokale index.
 - Kandidaten zijn maximaal 5.
-- Bron is herkenbaar als `lidl_catalog_index`.
+- Bron is direct of via samengevoegde bronnen herkenbaar als `lidl_catalog_index`.
 - Geen live externe afhankelijkheid.
 - Geen global product, household article of inventory event.
