@@ -40,12 +40,8 @@ match = m.match_retailer_receipt_line("lidl", "Veldsla", include_below_threshold
 assert match["uses_lidl_local_catalog_index"] is True
 assert match["lidl_local_catalog_candidate_count"] >= 1
 assert len(match["candidates"]) <= 5
-assert any(
-    c.get("candidate_source_name") == "lidl_catalog_index"
-    or c.get("has_lidl_local_catalog_index_source") is True
-    or "lidl_catalog_index" in (c.get("merged_source_names") or [])
-    for c in match["candidates"]
-)
+assert any("lidl_catalog_index" in (c.get("merged_source_names") or [c.get("candidate_source_name")]) for c in match["candidates"])
+assert any(c.get("has_lidl_local_catalog_index_source") is True for c in match["candidates"])
 assert match["creates_global_product"] is False
 assert match["creates_household_article"] is False
 assert match["creates_inventory_event"] is False
