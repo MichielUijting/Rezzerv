@@ -5,7 +5,7 @@ import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Input from '../../ui/Input'
 import Button from '../../ui/Button'
-import ReceiptItemsOverview from './ReceiptItemsOverview'
+import ReceiptItemsOverview from './ReceiptItemsOverviewResolved'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './externalDatabases.css'
 
@@ -253,5 +253,3 @@ export default function ExternalDatabasesPage() {
     </AppShell>
   )
 }
-
-
