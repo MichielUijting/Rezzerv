@@ -15,9 +15,22 @@ M2C2i-20a voegt lichte database-indexen toe rond de bestaande resolved-state flo
 
 Daarnaast stopt de ensure-flow direct als de aangeleverde zichtbare items allemaal al resolved zijn. Dan wordt geen lege kandidaatzoekronde meer doorgezet.
 
+## Opstartroutine
+
+Gebruik bij lokale validatie altijd een wachttijd van 90 seconden na het starten of rebuilden van containers. Daarmee krijgen backend, frontend en database genoeg tijd om stabiel op te komen voordat de UI of smoke wordt getest.
+
+```powershell
+cd C:\Users\Gebruiker\Rezzerv_Github
+git fetch origin
+git switch m2c2i20a-external-db-pagination-performance
+git pull --ff-only origin m2c2i20a-external-db-pagination-performance
+docker compose up -d --build backend frontend
+Start-Sleep -Seconds 90
+```
+
 ## PO-test
 
-1. Start lokaal vanaf `main` na merge.
+1. Start lokaal volgens de opstartroutine hierboven.
 2. Open `http://localhost:5174/externe-databases`.
 3. Ga naar een volgende pagina in de tabel.
 4. Herhaal dit een paar keer.
