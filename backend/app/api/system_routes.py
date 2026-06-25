@@ -21,6 +21,7 @@ from fastapi import APIRouter, Body, HTTPException, Query
 
 from app.api.route_governance import build_route_governance_manifest
 from app.db import get_runtime_datastore_info
+from app.services.external_candidate_confirmation import confirm_external_candidate_for_receipt_item
 from app.services.external_database_matchers import (
     get_external_database_summary,
     list_external_database_retailers,
@@ -75,6 +76,18 @@ def api_version():
 @router.post('/api/external-databases/catalog/promote-candidate')
 def external_databases_promote_selected_candidate(payload: dict[str, Any] = Body(default_factory=dict)):
     return promote_external_product_candidate(
+        candidate_id=str(payload.get('candidate_id') or ''),
+        force_overwrite=bool(payload.get('force_overwrite', False)),
+    )
+
+
+@router.post('/api/external-databases/candidates/confirm-external')
+def external_databases_confirm_external_candidate(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Bevestig alleen externe kandidaat op bonregel/importregel.
+
+    Deze route maakt geen global_product, geen Mijn artikel en geen voorraadmutatie.
+    """
+    return confirm_external_candidate_for_receipt_item(
         candidate_id=str(payload.get('candidate_id') or ''),
         force_overwrite=bool(payload.get('force_overwrite', False)),
     )
