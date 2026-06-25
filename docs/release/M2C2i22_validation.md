@@ -17,7 +17,7 @@ Start-Sleep -Seconds 90
 
 ## Smoke zonder pytest
 
-Deze smoke maakt tijdelijk een kandidaat en een minimale importregel aan, bevestigt de kandidaat, en controleert daarna dat alleen de externe artikelcode is vastgelegd.
+Deze smoke maakt tijdelijk alleen een candidate aan en bevestigt die. Daarmee testen we de kernregel: de candidate wordt external resolved, zonder `global_product_id` of andere product-/voorraadmutaties. In de echte UI-flow wordt dezelfde functie gebruikt met een bestaande `purchase_import_line_id`, waardoor ook de externe artikelcode op de importregel wordt vastgelegd als de kolom bestaat.
 
 ```powershell
 @'
@@ -25,7 +25,6 @@ from app.db import engine
 from sqlalchemy import text
 from app.services.external_product_candidate_store import ensure_external_product_candidates_schema
 from app.services.external_candidate_confirmation import confirm_external_candidate_for_receipt_item
-import uuid
 
 ensure_external_product_candidates_schema()
 line_id = "m2c2i22-smoke-line"
@@ -34,24 +33,6 @@ context_key = "purchase-import-line:" + line_id
 
 with engine.begin() as conn:
     conn.execute(text("DELETE FROM external_product_candidates WHERE id = :id OR purchase_import_line_id = :line_id"), {"id": candidate_id, "line_id": line_id})
-    if conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='purchase_import_lines'")).first():
-        cols = {row.get('name') for row in conn.execute(text("PRAGMA table_info(purchase_import_lines)")).mappings().all()}
-        if {'id', 'article_name_raw'}.issubset(cols):
-            conn.execute(text("DELETE FROM purchase_import_lines WHERE id = :id"), {"id": line_id})
-            insert_cols = ["id", "article_name_raw"]
-            insert_vals = [":id", ":article_name_raw"]
-            params = {"id": line_id, "article_name_raw": "Veldsla"}
-            if "external_article_code" in cols:
-                insert_cols.append("external_article_code")
-                insert_vals.append("''")
-            if "created_at" in cols:
-                insert_cols.append("created_at")
-                insert_vals.append("CURRENT_TIMESTAMP")
-            if "updated_at" in cols:
-                insert_cols.append("updated_at")
-                insert_vals.append("CURRENT_TIMESTAMP")
-            conn.execute(text(f"INSERT INTO purchase_import_lines ({', '.join(insert_cols)}) VALUES ({', '.join(insert_vals)})"), params)
-
     conn.execute(text("""
         INSERT INTO external_product_candidates (
             id, purchase_import_line_id, context_key, retailer_code, receipt_line_text,
