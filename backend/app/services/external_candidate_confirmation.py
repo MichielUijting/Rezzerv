@@ -62,8 +62,31 @@ def _candidate_context_key(candidate: dict[str, Any]) -> str:
     )
 
 
-def _set_sql_fragment(column_names: list[str]) -> str:
-    return ",\n                        ".join(f"{column_name} = :{column_name}" for column_name in column_names)
+def _append_update(updates: dict[str, Any], columns: set[str], column_name: str, value: Any) -> None:
+    if column_name in columns:
+        updates[column_name] = value
+
+
+def _apply_row_update(conn, table_name: str, row_id_column: str, row_id: str, updates: dict[str, Any]) -> int:
+    if not row_id or not updates:
+        return 0
+
+    inline_timestamp_columns = {name for name, value in updates.items() if value == "__CURRENT_TIMESTAMP__"}
+    param_updates = {name: value for name, value in updates.items() if name not in inline_timestamp_columns}
+    assignments = [f"{name} = CURRENT_TIMESTAMP" for name in inline_timestamp_columns]
+    assignments.extend(f"{name} = :{name}" for name in param_updates)
+
+    result = conn.execute(
+        text(
+            f"""
+            UPDATE {table_name}
+            SET {', '.join(assignments)}
+            WHERE {row_id_column} = :row_id
+            """
+        ),
+        {**param_updates, "row_id": row_id},
+    )
+    return int(result.rowcount or 0)
 
 
 def _update_purchase_import_line(conn, purchase_import_line_id: str, external_code: str, source_name: str, candidate: dict[str, Any]) -> int:
@@ -74,43 +97,17 @@ def _update_purchase_import_line(conn, purchase_import_line_id: str, external_co
     updates: dict[str, Any] = {}
 
     for column_name in ("external_article_code", "external_product_code", "retailer_article_number"):
-        if column_name in columns:
-            updates[column_name] = external_code
+        _append_update(updates, columns, column_name, external_code)
 
     for column_name in ("external_source_name", "source_name", "external_product_source"):
-        if column_name in columns:
-            updates[column_name] = source_name
+        _append_update(updates, columns, column_name, source_name)
 
-    for column_name in ("external_match_status", "status"):
-        if column_name in columns:
-            updates[column_name] = M2C2I22_CONFIRMED_STATUS
+    _append_update(updates, columns, "external_match_status", M2C2I22_CONFIRMED_STATUS)
+    _append_update(updates, columns, "matched_external_candidate_id", str(candidate.get("id") or "").strip())
+    _append_update(updates, columns, "matched_external_candidate_name", str(candidate.get("candidate_name") or "").strip())
+    _append_update(updates, columns, "updated_at", "__CURRENT_TIMESTAMP__")
 
-    if "matched_external_candidate_id" in columns:
-        updates["matched_external_candidate_id"] = str(candidate.get("id") or "").strip()
-    if "matched_external_candidate_name" in columns:
-        updates["matched_external_candidate_name"] = str(candidate.get("candidate_name") or "").strip()
-    if "updated_at" in columns:
-        updates["updated_at"] = _now_timestamp_sql(conn)
-
-    if not updates:
-        return 0
-
-    inline_timestamp_columns = {name for name, value in updates.items() if value == "__CURRENT_TIMESTAMP__"}
-    param_updates = {name: value for name, value in updates.items() if name not in inline_timestamp_columns}
-    assignments = [f"{name} = CURRENT_TIMESTAMP" for name in inline_timestamp_columns]
-    assignments.extend(f"{name} = :{name}" for name in param_updates)
-
-    result = conn.execute(
-        text(
-            f"""
-            UPDATE purchase_import_lines
-            SET {', '.join(assignments)}
-            WHERE id = :purchase_import_line_id
-            """
-        ),
-        {**param_updates, "purchase_import_line_id": purchase_import_line_id},
-    )
-    return int(result.rowcount or 0)
+    return _apply_row_update(conn, "purchase_import_lines", "id", purchase_import_line_id, updates)
 
 
 def _update_receipt_line(conn, receipt_line_id: str, external_code: str, source_name: str, candidate: dict[str, Any]) -> int:
@@ -121,47 +118,17 @@ def _update_receipt_line(conn, receipt_line_id: str, external_code: str, source_
     updates: dict[str, Any] = {}
 
     for column_name in ("external_article_code", "external_product_code", "retailer_article_number"):
-        if column_name in columns:
-            updates[column_name] = external_code
+        _append_update(updates, columns, column_name, external_code)
 
     for column_name in ("external_source_name", "source_name", "external_product_source"):
-        if column_name in columns:
-            updates[column_name] = source_name
+        _append_update(updates, columns, column_name, source_name)
 
-    for column_name in ("external_match_status", "status"):
-        if column_name in columns:
-            updates[column_name] = M2C2I22_CONFIRMED_STATUS
+    _append_update(updates, columns, "external_match_status", M2C2I22_CONFIRMED_STATUS)
+    _append_update(updates, columns, "matched_external_candidate_id", str(candidate.get("id") or "").strip())
+    _append_update(updates, columns, "matched_external_candidate_name", str(candidate.get("candidate_name") or "").strip())
+    _append_update(updates, columns, "updated_at", "__CURRENT_TIMESTAMP__")
 
-    if "matched_external_candidate_id" in columns:
-        updates["matched_external_candidate_id"] = str(candidate.get("id") or "").strip()
-    if "matched_external_candidate_name" in columns:
-        updates["matched_external_candidate_name"] = str(candidate.get("candidate_name") or "").strip()
-    if "updated_at" in columns:
-        updates["updated_at"] = _now_timestamp_sql(conn)
-
-    if not updates:
-        return 0
-
-    inline_timestamp_columns = {name for name, value in updates.items() if value == "__CURRENT_TIMESTAMP__"}
-    param_updates = {name: value for name, value in updates.items() if name not in inline_timestamp_columns}
-    assignments = [f"{name} = CURRENT_TIMESTAMP" for name in inline_timestamp_columns]
-    assignments.extend(f"{name} = :{name}" for name in param_updates)
-
-    result = conn.execute(
-        text(
-            f"""
-            UPDATE receipt_lines
-            SET {', '.join(assignments)}
-            WHERE id = :receipt_line_id
-            """
-        ),
-        {**param_updates, "receipt_line_id": receipt_line_id},
-    )
-    return int(result.rowcount or 0)
-
-
-def _now_timestamp_sql(conn) -> str:
-    return "__CURRENT_TIMESTAMP__"
+    return _apply_row_update(conn, "receipt_lines", "id", receipt_line_id, updates)
 
 
 def confirm_external_candidate_for_receipt_item(candidate_id: str, force_overwrite: bool = False) -> dict[str, Any]:
