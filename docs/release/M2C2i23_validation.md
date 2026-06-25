@@ -2,7 +2,7 @@
 
 ## Doelvalidatie
 
-Aantonen dat de Externe databases-UI bevestigde externe kandidaten zichtbaar maakt als `Extern bevestigd`, en dat bevestigen geen product-/voorraadmutaties veroorzaakt.
+Aantonen dat de Externe databases-UI bevestigde herkenningen zichtbaar maakt als `Herkenning bevestigd`, en dat bevestigen geen product-/voorraadmutaties veroorzaakt.
 
 ## Opstartroutine
 
@@ -63,33 +63,34 @@ with engine.begin() as conn:
     assert not row["global_product_id"]
     assert int(row["is_user_confirmed"] or 0) == 1
 
-print("M2C2i-23 smoke OK: bevestigde externe kandidaat is external_resolved zonder mutaties.")
+print("M2C2i-23 smoke OK: herkenning bevestigd zonder product- of voorraadmutaties.")
 '@ | docker compose exec -T backend python
 ```
 
 Verwacht:
 
 ```text
-M2C2i-23 smoke OK: bevestigde externe kandidaat is external_resolved zonder mutaties.
+M2C2i-23 smoke OK: herkenning bevestigd zonder product- of voorraadmutaties.
 ```
 
 ## PO-test in de UI
 
 1. Open `http://localhost:5174/externe-databases`.
-2. Dubbelklik een bonartikel met externe kandidaten.
-3. Selecteer een externe kandidaat.
-4. Klik `Bevestig externe kandidaat`.
-5. Controleer dat de status in de tabel `Extern bevestigd` wordt.
-6. Controleer dat de externe artikelcode zichtbaar blijft.
-7. Klik `Kandidaten bijlezen` of `Vernieuwen`.
-8. Controleer dat de status `Extern bevestigd` behouden blijft.
+2. De sectie heet `Bonartikelen herkennen`.
+3. Dubbelklik een bonartikel met herkenningskandidaten.
+4. Selecteer een herkenningskandidaat.
+5. Klik `Bevestig herkenning`.
+6. Controleer dat de status in de tabel `Herkenning bevestigd` wordt.
+7. Controleer dat de `Winkel-/broncode` zichtbaar blijft.
+8. Klik `Herkenningskandidaten bijlezen` of `Vernieuwen`.
+9. Controleer dat de status `Herkenning bevestigd` behouden blijft.
 
 ## GO-criteria
 
-- Bevestigde kandidaat is zichtbaar als `Extern bevestigd`.
-- Externe artikelcode is zichtbaar in de hoofdregel.
-- Detailkandidaat toont bron en externe code.
-- Refresh veroorzaakt geen nieuwe kandidaatzoeking voor resolved regels.
+- Bevestigde kandidaat is zichtbaar als `Herkenning bevestigd`.
+- Winkel-/broncode is zichtbaar in de hoofdregel.
+- Detailkandidaat toont bron en winkel-/broncode.
+- Refresh veroorzaakt geen nieuwe kandidaatzoeking voor bevestigde herkenningen.
 - Geen `global_products`-aanmaak.
 - Geen Mijn-artikel-aanmaak.
 - Geen voorraadmutatie.
