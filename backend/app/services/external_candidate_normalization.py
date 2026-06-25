@@ -63,10 +63,32 @@ def _identity_key(candidate: dict[str, Any], evidence_packet: dict[str, Any] | N
     return f"name:{source_name}:{candidate_name}"
 
 
+def _append_unique(target: list[str], value: Any) -> None:
+    text = str(value or "").strip()
+    if text and text not in target:
+        target.append(text)
+
+
+def _collect_source_names(*candidates: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for candidate in candidates:
+        for merged in candidate.get("merged_source_names") or []:
+            _append_unique(values, merged)
+        _append_unique(values, _source_name(candidate))
+    return values
+
+
+def _collect_source_codes(*candidates: dict[str, Any]) -> list[str]:
+    values: list[str] = []
+    for candidate in candidates:
+        for merged in candidate.get("merged_source_product_codes") or []:
+            _append_unique(values, merged)
+        _append_unique(values, _source_code(candidate))
+    return values
+
+
 def _has_lidl_catalog_source(candidate: dict[str, Any]) -> bool:
-    if _source_name(candidate) == "lidl_catalog_index":
-        return True
-    return "lidl_catalog_index" in (candidate.get("merged_source_names") or [])
+    return _source_name(candidate) == "lidl_catalog_index" or "lidl_catalog_index" in (candidate.get("merged_source_names") or [])
 
 
 def _merge_candidates(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
@@ -81,15 +103,8 @@ def _merge_candidates(existing: dict[str, Any], incoming: dict[str, Any]) -> dic
     if evidence_packet:
         result["product_evidence_packet"] = evidence_packet
 
-    source_names = []
-    source_codes = []
-    for candidate in [existing, incoming]:
-        source_name = _source_name(candidate)
-        source_code = _source_code(candidate)
-        if source_name and source_name not in source_names:
-            source_names.append(source_name)
-        if source_code and source_code not in source_codes:
-            source_codes.append(source_code)
+    source_names = _collect_source_names(existing, incoming)
+    source_codes = _collect_source_codes(existing, incoming)
 
     result["merged_source_names"] = source_names
     result["merged_source_product_codes"] = source_codes
