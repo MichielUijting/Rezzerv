@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import text
+
+from app.db import engine
 from app.services import external_product_candidate_store as candidate_store
 from app.services.external_candidate_normalization import normalize_external_candidates
 from app.services.external_database_matchers import match_retailer_receipt_line as _base_match_retailer_receipt_line
@@ -25,6 +28,8 @@ M2C2I20_EXTERNAL_CODE_FIELDS = (
     "gtin",
     "ean",
 )
+
+_M2C2I20A_PERFORMANCE_INDEXES_READY = False
 
 
 def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
@@ -155,6 +160,54 @@ def _m2c2i20_split_resolved_items(items: list[dict[str, Any]] | None) -> tuple[l
     return unresolved, resolved
 
 
+def _m2c2i20a_ensure_performance_indexes() -> None:
+    """Maak lichte indexen voor de Externe databases paging/refresh-flow.
+
+    De UI werkt bonartikelgedreven. Bij paginawissels en refreshes filteren we vooral op
+    context_key, purchase_import_line_id en receipt_line_id. Zonder indexen groeit de
+    reactietijd merkbaar zodra external_product_candidates meer historie bevat.
+    """
+    global _M2C2I20A_PERFORMANCE_INDEXES_READY
+    if _M2C2I20A_PERFORMANCE_INDEXES_READY:
+        return
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS idx_m2c2i20a_candidates_context_updated
+                ON external_product_candidates (context_key, updated_at)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS idx_m2c2i20a_candidates_purchase_line
+                ON external_product_candidates (purchase_import_line_id, updated_at)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS idx_m2c2i20a_candidates_receipt_line
+                ON external_product_candidates (receipt_line_id, updated_at)
+                """
+            )
+        )
+        conn.execute(
+            text(
+                """
+                CREATE INDEX IF NOT EXISTS idx_m2c2i20a_candidates_status_context
+                ON external_product_candidates (candidate_status, status, context_key)
+                """
+            )
+        )
+
+    _M2C2I20A_PERFORMANCE_INDEXES_READY = True
+
+
 def _m2c2i20_call_candidate_store_ensure(args: tuple[Any, ...], kwargs: dict[str, Any], unresolved_items: list[dict[str, Any]]) -> dict[str, Any]:
     next_kwargs = dict(kwargs)
     if "items" in next_kwargs:
@@ -171,6 +224,7 @@ def _m2c2i20_enrich_ensure_result(result: dict[str, Any], original_total: int, r
     enriched["external_resolved_skipped_count"] = len(resolved_skips)
     enriched["external_resolved_skipped"] = resolved_skips
     enriched["m2c2i20_resolved_state_gate"] = True
+    enriched["m2c2i20a_performance_indexes"] = True
     enriched["creates_global_product"] = False
     enriched["creates_household_article"] = False
     enriched["creates_inventory_event"] = False
@@ -187,6 +241,8 @@ def save_matchpreview_candidates(*args: Any, **kwargs: Any) -> dict[str, Any]:
 
 
 def ensure_external_receipt_item_candidates(*args: Any, **kwargs: Any) -> dict[str, Any]:
+    _m2c2i20a_ensure_performance_indexes()
+
     items = kwargs.get("items") if "items" in kwargs else (args[0] if args else None)
     if items is not None:
         normalized_items = [dict(item) for item in (items or []) if isinstance(item, dict)]
@@ -201,6 +257,19 @@ def ensure_external_receipt_item_candidates(*args: Any, **kwargs: Any) -> dict[s
     try:
         if items is None:
             return candidate_store.ensure_external_receipt_item_candidates(*args, **kwargs)
+        if not unresolved_items:
+            return _m2c2i20_enrich_ensure_result(
+                {
+                    "ok": True,
+                    "processed": 0,
+                    "saved_count": 0,
+                    "updated_count": 0,
+                    "skipped_count": 0,
+                    "errors": [],
+                },
+                len(normalized_items),
+                resolved_items,
+            )
         result = _m2c2i20_call_candidate_store_ensure(args, kwargs, unresolved_items)
         return _m2c2i20_enrich_ensure_result(result, len(normalized_items), resolved_items)
     finally:
