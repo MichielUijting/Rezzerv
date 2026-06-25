@@ -183,19 +183,18 @@ def _candidate_code(candidate: dict[str, Any]) -> str:
 
 
 def score_candidate_with_product_evidence(candidate: dict[str, Any], evidence_packet: dict[str, Any]) -> dict[str, Any]:
-    """Verhoog OFF-kandidaatscore op basis van veilig productbewijs.
-
-    Zonder GTIN blijft de evidence-boost begrensd op 0.85, behalve wanneer de
-    kandidaat exact hetzelfde retailer-artikelnummer of dezelfde code draagt.
-    De functie muteert geen product-, artikel- of voorraadtabellen.
-    """
     if not evidence_packet.get("matched"):
-        return dict(candidate)
+        result = dict(candidate)
+        result["creates_global_product"] = False
+        result["creates_household_article"] = False
+        result["creates_inventory_event"] = False
+        return result
 
     candidate_name = _field(candidate, ["candidate_name", "product_name", "name", "generic_name"])
     candidate_brand = _field(candidate, ["candidate_brand", "brand", "brands"])
     candidate_quantity = _field(candidate, ["quantity_label", "quantity", "net_content", "packaging"])
     candidate_code = normalize_taxonomy_text(_candidate_code(candidate))
+    candidate_source = str(candidate.get("candidate_source_name") or candidate.get("source_name") or "").strip()
     retailer_article_code = normalize_taxonomy_text(evidence_packet.get("retailer_article_code"))
     gtin = normalize_taxonomy_text(evidence_packet.get("gtin"))
 
@@ -217,6 +216,10 @@ def score_candidate_with_product_evidence(candidate: dict[str, Any], evidence_pa
     target_score = current_score
     if code_match >= 1.0:
         target_score = max(target_score, 0.95)
+    elif candidate_source == "lidl_catalog_enrichment" and name_match >= 0.45:
+        target_score = max(target_score, 0.92)
+    elif name_match >= 0.55 and brand_match >= 0.5:
+        target_score = max(target_score, 0.88)
     elif evidence_score >= 0.55:
         target_score = max(target_score, min(0.85, current_score + 0.20))
 
@@ -237,7 +240,8 @@ def apply_product_evidence_to_candidates(
     receipt_line_text: str | None,
     retailer_code: str | None,
     candidates: list[dict[str, Any]],
+    evidence_packet: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    evidence_packet = build_product_evidence_packet_dict(receipt_line_text, retailer_code=retailer_code)
-    rescored = [score_candidate_with_product_evidence(candidate, evidence_packet) for candidate in candidates]
+    packet = evidence_packet or build_product_evidence_packet_dict(receipt_line_text, retailer_code=retailer_code)
+    rescored = [score_candidate_with_product_evidence(candidate, packet) for candidate in candidates]
     return sorted(rescored, key=lambda item: (-float(item.get("score") or 0.0), str(item.get("candidate_name") or "")))

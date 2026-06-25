@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from app.services import external_product_candidate_store as candidate_store
+from app.services.external_candidate_normalization import normalize_external_candidates
 from app.services.external_database_matchers import match_retailer_receipt_line as _base_match_retailer_receipt_line
-from app.services.product_evidence_packet import apply_product_evidence_to_candidates
+from app.services.product_evidence_packet import apply_product_evidence_to_candidates, build_product_evidence_packet_dict
 
 
 def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
@@ -12,14 +13,21 @@ def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retai
     if not candidates:
         return result
 
+    evidence_packet = build_product_evidence_packet_dict(receipt_line_text, retailer_code=retailer_code)
     rescored = apply_product_evidence_to_candidates(
         receipt_line_text,
         retailer_code,
         candidates,
+        evidence_packet=evidence_packet,
     )
+    normalized = normalize_external_candidates(rescored, evidence_packet=evidence_packet)
+
     enriched = dict(result)
-    enriched["candidates"] = rescored[: len(candidates)]
+    enriched["candidates"] = normalized[:5]
     enriched["uses_product_evidence_scoring"] = True
+    enriched["uses_candidate_deduplication"] = len(normalized) < len(rescored)
+    enriched["candidate_count_before_deduplication"] = len(rescored)
+    enriched["candidate_count_after_deduplication"] = len(normalized[:5])
     enriched["creates_global_product"] = False
     enriched["creates_household_article"] = False
     enriched["creates_inventory_event"] = False
