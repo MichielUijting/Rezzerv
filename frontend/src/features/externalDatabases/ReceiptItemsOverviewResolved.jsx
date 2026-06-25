@@ -24,12 +24,6 @@ function scoreText(value) {
   return number.toLocaleString('nl-NL', { minimumFractionDigits: 3, maximumFractionDigits: 3 })
 }
 
-function numberText(value) {
-  const number = Number(value)
-  if (!Number.isFinite(number)) return '-'
-  return number.toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
 function retailerLabel(value) {
   const normalized = String(value || '').trim()
   const key = normalized.toLowerCase()
@@ -80,15 +74,15 @@ function isFallback(row) {
 }
 
 function statusLabel(row) {
-  if (isCatalogLinked(row)) return 'Catalogus gekoppeld'
-  if (isExternalResolved(row)) return 'Extern bevestigd'
-  if (isFallback(row)) return 'Geen externe match'
+  if (isCatalogLinked(row)) return 'Artikel gekoppeld'
+  if (isExternalResolved(row)) return 'Herkenning bevestigd'
+  if (isFallback(row)) return 'Geen herkenning'
   const raw = statusKey(row?.candidate_status || row?.status)
   const labels = {
-    probable_candidate: 'Waarschijnlijke kandidaat',
-    possible_candidate: 'Kandidaat',
+    probable_candidate: 'Waarschijnlijke herkenning',
+    possible_candidate: 'Herkenningskandidaat',
     weak_candidate: 'Lage zekerheid',
-    candidate: 'Kandidaat',
+    candidate: 'Herkenningskandidaat',
     no_candidate: 'Nog niet verwerkt',
   }
   return labels[raw] || valueText(row?.candidate_status || row?.status || 'Nog niet verwerkt')
@@ -134,8 +128,7 @@ function buildRows(payloadItems) {
       receiptLineText: valueText(row.receipt_line_text),
       retailerCode: retailerLabel(row.retailer_code),
       retailerCodeRaw: valueText(row.retailer_code, ''),
-      articleNumber: valueText(externalCode(row)),
-      gtin: valueText(row.gtin || row.ean),
+      externalReference: valueText(externalCode(row)),
       quantity: valueText(row.quantity_label),
       price: row.price ?? '-',
       candidateCount: 0,
@@ -145,14 +138,14 @@ function buildRows(payloadItems) {
       candidates: [],
     }
 
-    if (!current.articleNumber || current.articleNumber === '-') current.articleNumber = valueText(externalCode(row))
+    if (!current.externalReference || current.externalReference === '-') current.externalReference = valueText(externalCode(row))
     if (isExternalResolved(row)) {
       current.externalResolved = true
-      current.status = 'Extern bevestigd'
+      current.status = 'Herkenning bevestigd'
     }
     if (isCatalogLinked(row)) {
       current.catalogLinked = true
-      current.status = 'Catalogus gekoppeld'
+      current.status = 'Artikel gekoppeld'
     }
 
     if (!placeholder && row.candidate_name) {
@@ -161,8 +154,8 @@ function buildRows(payloadItems) {
       if (!candidate.fallback) current.candidateCount += 1
       if (candidate.externalResolved && !current.catalogLinked) {
         current.externalResolved = true
-        current.status = 'Extern bevestigd'
-        current.articleNumber = candidate.code
+        current.status = 'Herkenning bevestigd'
+        current.externalReference = candidate.code
       }
     }
 
@@ -173,19 +166,19 @@ function buildRows(payloadItems) {
         if (!candidate.fallback) current.candidateCount += 1
         if (candidate.externalResolved && !current.catalogLinked) {
           current.externalResolved = true
-          current.status = 'Extern bevestigd'
-          current.articleNumber = candidate.code
+          current.status = 'Herkenning bevestigd'
+          current.externalReference = candidate.code
         }
         if (candidate.catalogLinked) {
           current.catalogLinked = true
-          current.status = 'Catalogus gekoppeld'
-          current.articleNumber = candidate.code
+          current.status = 'Artikel gekoppeld'
+          current.externalReference = candidate.code
         }
       })
     }
 
     if (current.candidateCount > 0 && !current.externalResolved && !current.catalogLinked) {
-      current.status = 'Kandidaten gevonden'
+      current.status = 'Herkenningskandidaten gevonden'
     }
 
     grouped.set(key, current)
@@ -251,7 +244,7 @@ export default function ReceiptItemsOverviewResolved({ onError, onMessage }) {
   const filteredItems = useMemo(() => {
     const normalized = filter.toLowerCase().trim()
     if (!normalized) return items
-    return items.filter((item) => [item.receiptLineText, item.retailerCode, item.articleNumber, item.status, item.bestCandidateName].join(' ').toLowerCase().includes(normalized))
+    return items.filter((item) => [item.receiptLineText, item.retailerCode, item.externalReference, item.status, item.bestCandidateName].join(' ').toLowerCase().includes(normalized))
   }, [items, filter])
 
   const pageCount = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
@@ -274,17 +267,17 @@ export default function ReceiptItemsOverviewResolved({ onError, onMessage }) {
             retailer_code: item.retailerCodeRaw || item.retailerCode,
             purchase_import_line_id: item.purchaseImportLineId,
             receipt_line_id: item.receiptLineId,
-            retailer_article_number: item.externalResolved ? item.articleNumber : '',
+            retailer_article_number: item.externalResolved ? item.externalReference : '',
             external_match_status: item.externalResolved ? 'external_resolved' : '',
           })),
         }),
       })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data?.detail || 'Kandidaten bijlezen is mislukt')
+      if (!response.ok) throw new Error(data?.detail || 'Herkenningskandidaten bijlezen is mislukt')
       await loadItems()
-      onMessage?.(`Bijlezen afgerond. Resolved overgeslagen: ${data?.external_resolved_skipped_count ?? 0}.`)
+      onMessage?.(`Bijlezen afgerond. Bevestigde herkenningen overgeslagen: ${data?.external_resolved_skipped_count ?? 0}.`)
     } catch (err) {
-      onError?.(err?.message || 'Kandidaten bijlezen is mislukt')
+      onError?.(err?.message || 'Herkenningskandidaten bijlezen is mislukt')
     } finally {
       setIsEnsuring(false)
     }
@@ -300,13 +293,13 @@ export default function ReceiptItemsOverviewResolved({ onError, onMessage }) {
         body: JSON.stringify({ candidate_id: selectedCandidate.raw?.id || selectedCandidate.id }),
       })
       const data = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(data?.detail || 'Externe kandidaat bevestigen is mislukt')
-      if (!data?.confirmed) throw new Error(data?.reason || 'Externe kandidaat is niet bevestigd')
-      onMessage?.(`Externe kandidaat bevestigd: ${data.external_product_code || selectedCandidate.code}`)
+      if (!response.ok) throw new Error(data?.detail || 'Herkenning bevestigen is mislukt')
+      if (!data?.confirmed) throw new Error(data?.reason || 'Herkenning is niet bevestigd')
+      onMessage?.(`Herkenning bevestigd met code: ${data.external_product_code || selectedCandidate.code}`)
       setSelectedCandidateId('')
       await loadItems()
     } catch (err) {
-      onError?.(err?.message || 'Externe kandidaat bevestigen is mislukt')
+      onError?.(err?.message || 'Herkenning bevestigen is mislukt')
     } finally {
       setIsConfirming(false)
     }
@@ -320,16 +313,16 @@ export default function ReceiptItemsOverviewResolved({ onError, onMessage }) {
   return (
     <div className="rz-external-receipt-overview">
       <div className="rz-external-databases-section-header">
-        <h3>Bonartikelen voor externe herkenning</h3>
+        <h3>Bonartikelen herkennen</h3>
         <div className="rz-external-databases-actions">
           <Button type="button" variant="secondary" disabled={isLoading} onClick={loadItems}>{isLoading ? 'Laden...' : 'Vernieuwen'}</Button>
-          <Button type="button" variant="secondary" disabled={isEnsuring || !visibleItems.length} onClick={ensureVisibleCandidates}>{isEnsuring ? 'Bijlezen...' : 'Kandidaten bijlezen'}</Button>
+          <Button type="button" variant="secondary" disabled={isEnsuring || !visibleItems.length} onClick={ensureVisibleCandidates}>{isEnsuring ? 'Bijlezen...' : 'Herkenningskandidaten bijlezen'}</Button>
         </div>
       </div>
 
-      <div className="rz-external-databases-muted">Bevestigen legt alleen externe artikelcode vast. Geen Mijn artikel, global product of voorraadmutatie.</div>
+      <div className="rz-external-databases-muted">Bevestigen betekent alleen: deze bonregel is herkend als deze winkel-/broncode. Er ontstaat geen Mijn artikel, product of voorraadmutatie.</div>
       <div className="rz-external-databases-actions">
-        <input className="rz-table-filter" value={filter} onChange={(event) => { setFilter(event.target.value); setPage(1) }} placeholder="Zoek bonartikel, status of artikelcode" />
+        <input className="rz-table-filter" value={filter} onChange={(event) => { setFilter(event.target.value); setPage(1) }} placeholder="Zoek bonartikel, status of winkel-/broncode" />
       </div>
 
       <div className="rz-table-scroll rz-table-scroll--wide">
@@ -338,9 +331,9 @@ export default function ReceiptItemsOverviewResolved({ onError, onMessage }) {
             <tr className="rz-table-header">
               <th>Bonartikel</th>
               <th>Winkelketen</th>
-              <th>Status</th>
-              <th>Externe artikelcode</th>
-              <th>Kandidaat</th>
+              <th>Status herkenning</th>
+              <th>Winkel-/broncode</th>
+              <th>Beste herkenning</th>
               <th className="rz-num">Score</th>
               <th className="rz-num">Kandidaten</th>
             </tr>
@@ -351,7 +344,7 @@ export default function ReceiptItemsOverviewResolved({ onError, onMessage }) {
                 <td>{item.receiptLineText}</td>
                 <td>{item.retailerCode}</td>
                 <td>{item.status}</td>
-                <td>{item.articleNumber || '-'}</td>
+                <td>{item.externalReference || '-'}</td>
                 <td>{item.bestCandidateName || '-'}</td>
                 <td className="rz-num">{scoreText(item.bestCandidateScore)}</td>
                 <td className="rz-num">{item.candidateCount}</td>
@@ -370,17 +363,17 @@ export default function ReceiptItemsOverviewResolved({ onError, onMessage }) {
       <div className="rz-external-receipt-detail">
         {selectedItem ? (
           <>
-            <h3>Externe kandidaten voor: {selectedItem.receiptLineText}</h3>
+            <h3>Herkenningskandidaten voor: {selectedItem.receiptLineText}</h3>
             <div className="rz-table-scroll">
               <Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table">
                 <thead>
                   <tr className="rz-table-header">
                     <th>Keuze</th>
-                    <th>Kandidaat</th>
+                    <th>Herkenning</th>
                     <th>Score</th>
                     <th>Merk</th>
                     <th>Bron</th>
-                    <th>Externe code</th>
+                    <th>Winkel-/broncode</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -397,18 +390,18 @@ export default function ReceiptItemsOverviewResolved({ onError, onMessage }) {
                       <td>{candidate.code}</td>
                       <td>{candidate.status}</td>
                     </tr>
-                  )) : <tr><td colSpan="7">Geen externe kandidaten gevonden voor dit bonartikel.</td></tr>}
+                  )) : <tr><td colSpan="7">Geen herkenningskandidaten gevonden voor dit bonartikel.</td></tr>}
                 </tbody>
               </Table>
             </div>
             <div className="rz-external-databases-actions rz-external-detail-actions">
               <Button type="button" disabled={!canConfirmSelectedCandidate || isConfirming} onClick={confirmSelectedCandidate}>
-                {isConfirming ? 'Bevestigen...' : 'Bevestig externe kandidaat'}
+                {isConfirming ? 'Bevestigen...' : 'Bevestig herkenning'}
               </Button>
-              <span className="rz-external-databases-muted">Status na bevestigen: Extern bevestigd.</span>
+              <span className="rz-external-databases-muted">Na bevestigen blijft alleen de winkel-/broncode aan de bonregel hangen.</span>
             </div>
           </>
-        ) : <p className="rz-external-databases-muted">Dubbelklik op een bonartikel om externe kandidaten te bekijken.</p>}
+        ) : <p className="rz-external-databases-muted">Dubbelklik op een bonartikel om herkenningskandidaten te bekijken.</p>}
       </div>
     </div>
   )
