@@ -7,6 +7,7 @@ from app.services.product_taxonomy_store import normalize_taxonomy_text
 SOURCE_PRIORITY = {
     "lidl_catalog_enrichment": 100,
     "retailer_alias_learning": 95,
+    "lidl_catalog_index": 92,
     "lidl_product_group": 90,
     "product_taxonomy_seed": 80,
     "OFF-index": 70,
@@ -62,6 +63,12 @@ def _identity_key(candidate: dict[str, Any], evidence_packet: dict[str, Any] | N
     return f"name:{source_name}:{candidate_name}"
 
 
+def _has_lidl_catalog_source(candidate: dict[str, Any]) -> bool:
+    if _source_name(candidate) == "lidl_catalog_index":
+        return True
+    return "lidl_catalog_index" in (candidate.get("merged_source_names") or [])
+
+
 def _merge_candidates(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
     primary, secondary = (incoming, existing) if _priority(incoming) > _priority(existing) else (existing, incoming)
     result = dict(primary)
@@ -86,6 +93,7 @@ def _merge_candidates(existing: dict[str, Any], incoming: dict[str, Any]) -> dic
 
     result["merged_source_names"] = source_names
     result["merged_source_product_codes"] = source_codes
+    result["has_lidl_local_catalog_index_source"] = "lidl_catalog_index" in source_names
     result["deduplicated_candidate_count"] = int(existing.get("deduplicated_candidate_count") or 1) + int(incoming.get("deduplicated_candidate_count") or 1)
     result.setdefault("score_breakdown", {})["deduplicated_candidate_count"] = result["deduplicated_candidate_count"]
 
@@ -104,6 +112,7 @@ def normalize_external_candidates(candidates: list[dict[str, Any]], evidence_pac
         item.setdefault("source_name", item.get("candidate_source_name"))
         item.setdefault("source_product_code", item.get("candidate_source_product_code"))
         item.setdefault("retailer_article_number", item.get("candidate_source_product_code"))
+        item.setdefault("has_lidl_local_catalog_index_source", _has_lidl_catalog_source(item))
         for flag in ["creates_global_product", "creates_household_article", "creates_inventory_event"]:
             item[flag] = False
 
