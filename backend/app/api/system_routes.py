@@ -44,7 +44,7 @@ from app.services.external_product_catalog_store import (
 )
 from app.services.external_receipt_auto_coverage import install_receipt_auto_candidate_coverage
 from app.services.external_receipt_coverage_report import build_blind_receipt_coverage_report
-from app.services.external_receipt_item_projection_patch import install_receipt_table_line_projection
+from app.services.external_receipt_item_projection import install_receipt_table_line_projection
 from app.services.external_relation_batch_store import (
     apply_external_relation_batch_decision,
     list_external_relation_batch_items,
