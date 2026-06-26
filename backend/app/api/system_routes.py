@@ -21,6 +21,7 @@ from fastapi import APIRouter, Body, HTTPException, Query
 
 from app.api.route_governance import build_route_governance_manifest
 from app.db import get_runtime_datastore_info
+from app.services.external_candidate_diagnostics import diagnose_real_candidate_coverage
 from app.services.external_database_matchers import (
     get_external_database_summary,
     list_external_database_retailers,
@@ -97,6 +98,19 @@ def external_databases_match_preview(retailer_code: str, payload: dict[str, Any]
     if not receipt_line_text:
         raise HTTPException(status_code=400, detail='Bonregel is verplicht voor matchpreview')
     return match_retailer_receipt_line(
+        retailer_code=retailer_code,
+        receipt_line_text=receipt_line_text,
+        include_below_threshold=include_below_threshold,
+    )
+
+
+@router.post('/api/external-databases/retailers/{retailer_code}/diagnose-real-candidates')
+def external_databases_diagnose_real_candidates(retailer_code: str, payload: dict[str, Any] = Body(default_factory=dict)):
+    receipt_line_text = str(payload.get('receipt_line_text') or payload.get('query') or '').strip()
+    include_below_threshold = bool(payload.get('include_below_threshold', True))
+    if not receipt_line_text:
+        raise HTTPException(status_code=400, detail='Bonregel is verplicht voor kandidatendiagnose')
+    return diagnose_real_candidate_coverage(
         retailer_code=retailer_code,
         receipt_line_text=receipt_line_text,
         include_below_threshold=include_below_threshold,
