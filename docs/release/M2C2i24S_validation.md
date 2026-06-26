@@ -6,7 +6,7 @@ M2C2i-24S valideert blind of nieuwe bonartikelen generiek door de externe-herken
 
 De test mag niet vooraf weten welke artikelnamen worden getest.
 
-M2C2i-24S-a voegt productgedrag toe: na het opslaan van nieuwe bonartikelen wordt de kandidaatdekking automatisch aangeroepen.
+M2C2i-24S-a voegt productgedrag toe: na het opslaan van nieuwe bonartikelen wordt de herkenning automatisch aangeroepen.
 
 ## Rebuild
 
