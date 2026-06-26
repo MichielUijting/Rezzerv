@@ -6,6 +6,8 @@ M2C2i-24S valideert blind of nieuwe bonartikelen generiek door de externe-herken
 
 De test mag niet vooraf weten welke artikelnamen worden getest.
 
+M2C2i-24S-a voegt productgedrag toe: na het opslaan van nieuwe bonartikelen wordt de externe kandidaatdekking automatisch aangeroepen.
+
 ## Rebuild
 
 ```powershell
@@ -13,7 +15,7 @@ docker compose up -d --build backend frontend
 Start-Sleep -Seconds 90
 ```
 
-## Smoke via backend-Python
+## Smoke via backend-Python — blind rapport
 
 ```powershell
 @'
@@ -54,6 +56,61 @@ print('items_without_real_candidate:', result['items_without_real_candidate'])
 '@ | docker compose exec -T backend python
 ```
 
+## Smoke via backend-Python — automatische hook geïnstalleerd
+
+```powershell
+@'
+from app.services.external_receipt_auto_coverage import install_receipt_auto_candidate_coverage
+
+result = install_receipt_auto_candidate_coverage()
+
+assert result['ok'] is True
+assert result['creates_global_product'] is False
+assert result['creates_household_article'] is False
+assert result['creates_inventory_event'] is False
+
+print('M2C2i-24S-a hook OK:', result['patched'])
+'@ | docker compose exec -T backend python
+```
+
+## Smoke via backend-Python — bestaande bon opnieuw door auto-dekking halen
+
+Gebruik een bestaande `receipt_table_id` om te bewijzen dat de automatische service echte kandidaatcache kan vullen zonder Mijn-artikel of voorraadmutatie.
+
+```powershell
+@'
+from sqlalchemy import text
+from app.db import engine
+from app.services.external_receipt_auto_coverage import auto_ensure_external_candidates_for_receipt_table
+
+with engine.begin() as conn:
+    row = conn.execute(text('''
+        SELECT rt.id
+        FROM receipt_tables rt
+        JOIN receipt_table_lines rtl ON rtl.receipt_table_id = rt.id
+        WHERE COALESCE(rt.deleted_at, '') = ''
+        ORDER BY rt.created_at DESC, rt.id DESC
+        LIMIT 1
+    ''')).mappings().first()
+
+assert row, 'Geen receipt_table met regels gevonden'
+result = auto_ensure_external_candidates_for_receipt_table(str(row['id']))
+
+assert result['ok'] is True
+assert result['creates_global_product'] is False
+assert result['creates_household_article'] is False
+assert result['creates_inventory_event'] is False
+assert result['item_count'] >= 1
+
+print('M2C2i-24S-a auto coverage OK voor receipt_table_id:', row['id'])
+print('item_count:', result['item_count'])
+print('processed:', result['processed'])
+print('saved_count:', result['saved_count'])
+print('updated_count:', result['updated_count'])
+print('skipped_count:', result['skipped_count'])
+'@ | docker compose exec -T backend python
+```
+
 ## API-validatie
 
 ```powershell
@@ -77,6 +134,9 @@ Akkoord wanneer:
 - legacy_fallback_item_count = 0
 - bonregels met brondata tonen echte kandidaat
 - bonregels zonder brondata tonen veilig geen echte bronmatch
+- automatische hook is geïnstalleerd bij startup
+- nieuwe bonnen krijgen external_candidate_coverage in de ingest response
 - geen Mijn-artikel
+- geen global product
 - geen voorraadmutatie
 ```
