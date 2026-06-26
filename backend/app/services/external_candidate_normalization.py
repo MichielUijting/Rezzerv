@@ -9,6 +9,7 @@ SOURCE_PRIORITY = {
     "lidl_product_group": 90,
     "product_taxonomy_seed": 80,
     "OFF-index": 70,
+    "learned_receipt_line": 60,
     "receipt_product_intent_fallback": 10,
     "receipt_unresolved_fallback": 0,
 }
@@ -61,12 +62,22 @@ def _identity_key(candidate: dict[str, Any], evidence_packet: dict[str, Any] | N
     return f"name:{source_name}:{candidate_name}"
 
 
+def _candidate_status_for_result(result: dict[str, Any], primary: dict[str, Any]) -> str:
+    source_name = _source_name(result)
+    existing_status = str(primary.get("candidate_status") or result.get("candidate_status") or "").strip()
+    if source_name == "learned_receipt_line":
+        return "concept_candidate"
+    if float(result.get("score") or 0.0) >= 0.85:
+        return "probable_candidate"
+    return existing_status or "possible_candidate"
+
+
 def _merge_candidates(existing: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
     primary, secondary = (incoming, existing) if _priority(incoming) > _priority(existing) else (existing, incoming)
     result = dict(primary)
 
     result["score"] = round(max(float(existing.get("score") or 0.0), float(incoming.get("score") or 0.0)), 3)
-    result["candidate_status"] = "probable_candidate" if result["score"] >= 0.85 else primary.get("candidate_status", "possible_candidate")
+    result["candidate_status"] = _candidate_status_for_result(result, primary)
     result["is_probable"] = result["score"] >= 0.85
 
     evidence_packet = primary.get("product_evidence_packet") or secondary.get("product_evidence_packet")
@@ -103,6 +114,10 @@ def normalize_external_candidates(candidates: list[dict[str, Any]], evidence_pac
         item.setdefault("source_name", item.get("candidate_source_name"))
         item.setdefault("source_product_code", item.get("candidate_source_product_code"))
         item.setdefault("retailer_article_number", item.get("candidate_source_product_code"))
+        if _source_name(item) == "learned_receipt_line":
+            item["candidate_status"] = "concept_candidate"
+            item["is_probable"] = False
+            item.setdefault("score_breakdown", {})["concept_candidate"] = True
         for flag in ["creates_global_product", "creates_household_article", "creates_inventory_event"]:
             item[flag] = False
 
