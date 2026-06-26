@@ -42,6 +42,7 @@ from app.services.external_product_catalog_store import (
     list_catalog_products,
     promote_highest_candidate_to_catalog,
 )
+from app.services.external_receipt_auto_coverage import install_receipt_auto_candidate_coverage
 from app.services.external_receipt_coverage_report import build_blind_receipt_coverage_report
 from app.services.external_relation_batch_store import (
     apply_external_relation_batch_decision,
@@ -225,7 +226,13 @@ def route_governance_manifest():
 
 @router.on_event('startup')
 def warm_receipt_runtime_at_startup():
-    """Warm receipt OCR/preprocessing runtime to avoid first-upload cold-start failures."""
+    """Warm receipt OCR/preprocessing runtime and install receipt hooks."""
+    try:
+        auto_coverage_result = install_receipt_auto_candidate_coverage()
+        logger.info('Automatische externe kandidaatdekking geïnstalleerd: %s', auto_coverage_result)
+    except Exception as exc:
+        logger.warning('Automatische externe kandidaatdekking kon niet worden geïnstalleerd: %s', exc)
+
     try:
         from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import warm_receipt_image_preprocessing
         from app.services.receipt_service import warm_receipt_ocr_runtime
