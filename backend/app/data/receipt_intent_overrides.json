@@ -6,7 +6,7 @@
       "category": "Wijn",
       "product_type": "Rode wijn",
       "trigger_terms": ["malbec"],
-      "variant_terms": ["malbec", "argentijnse", "argentijns", "argentinie", "argentinie"],
+      "variant_terms": ["malbec", "argentijnse", "argentijns", "argentinie"],
       "search_terms": ["wijn", "rode wijn", "malbec", "argentijnse malbec"]
     }
   ]
