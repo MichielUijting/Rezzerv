@@ -5,22 +5,13 @@ from typing import Any
 from app.services.receipt_product_intent_analyzer import analyze_receipt_product_line
 from app.services.product_taxonomy_store import normalize_taxonomy_text
 
-FALLBACK_SCORE = 0.35
-UNRESOLVED_SCORE = 0.10
-
-
-
-def _candidate_display_name(receipt_line_text: str | None, analysis) -> str:
-    raw_text = str(receipt_line_text or "").strip()
-    if analysis.product_type:
-        parts = [*analysis.variant_terms, analysis.product_type, analysis.quantity_label]
-        display = " ".join(part for part in parts if part).strip()
-        return display or raw_text or "Onbekend extern artikel"
-    return f"Onbekend extern artikel: {raw_text or 'lege bonregel'}"
-
-
 
 def _build_retailer_catalog_candidate(analysis) -> dict[str, Any] | None:
+    """Bouw alleen kandidaten uit echte retailer/cataloguskennis.
+
+    M2C2i-19S: fallback-kandidaten op basis van alleen de bonregeltekst zijn
+    expliciet niet toegestaan. Geen catalogusmatch betekent geen kandidaat.
+    """
     catalog_match = dict(analysis.retailer_catalog_match or {})
     if not catalog_match.get("matched"):
         return None
@@ -31,12 +22,12 @@ def _build_retailer_catalog_candidate(analysis) -> dict[str, Any] | None:
     source_name = str(catalog_match.get("source_name") or "lidl_catalog_enrichment").strip()
 
     return {
-        "candidate_name": candidate_name or _candidate_display_name(analysis.raw_text, analysis),
+        "candidate_name": candidate_name,
         "candidate_brand": str(catalog_match.get("brand") or "").strip(),
         "candidate_source_name": source_name,
-        "candidate_source_product_code": source_product_code or "unknown",
+        "candidate_source_product_code": source_product_code,
         "source_name": source_name,
-        "source_product_code": source_product_code or "unknown",
+        "source_product_code": source_product_code,
         "retailer_article_number": source_product_code,
         "quantity_label": str(catalog_match.get("quantity_label") or analysis.quantity_label or "").strip(),
         "variant": " ".join(analysis.variant_terms),
@@ -66,85 +57,48 @@ def _build_retailer_catalog_candidate(analysis) -> dict[str, Any] | None:
         "creates_global_product": False,
         "creates_household_article": False,
         "creates_inventory_event": False,
-        "created_by": "m2c2i11_lidl_catalog_enrichment",
+        "created_by": "m2c2i19s_real_catalog_candidate",
     }
 
 
+def build_receipt_fallback_candidate(receipt_line_text: str | None, retailer_code: str | None = None) -> dict[str, Any] | None:
+    """Compatibility wrapper: retourneert alleen echte cataloguskandidaten.
 
-def build_receipt_fallback_candidate(receipt_line_text: str | None, retailer_code: str | None = None) -> dict[str, Any]:
-    """Maak een veilige kandidaat op basis van catalogusverrijking of bonregel.
-
-    M2C2i-11b: als een retailer-catalogusmatch bestaat, wordt die eerst als
-    zichtbare externe/cataloguskandidaat getoond. Alleen wanneer er geen
-    catalogusmatch is, valt Rezzerv terug op de onzekere bonregel-fallback.
-    De kandidaat mag nooit automatisch een global product, Mijn artikel of
-    voorraadmutatie aanmaken.
+    De oude betekenis van deze functie was: maak altijd minimaal één fallback-
+    kandidaat. Dat principe is verworpen. Deze wrapper blijft bestaan om imports
+    niet te breken, maar geeft ``None`` terug wanneer er geen echte match is.
     """
     analysis = analyze_receipt_product_line(receipt_line_text, retailer_code=retailer_code)
-    catalog_candidate = _build_retailer_catalog_candidate(analysis)
-    if catalog_candidate:
-        return catalog_candidate
-
-    has_intent = bool(analysis.product_intent)
-    score = FALLBACK_SCORE if has_intent else UNRESOLVED_SCORE
-    status = "fallback_candidate" if has_intent else "unresolved_candidate"
-    source_name = "receipt_product_intent_fallback" if has_intent else "receipt_unresolved_fallback"
-
-    return {
-        "candidate_name": _candidate_display_name(receipt_line_text, analysis),
-        "candidate_brand": "",
-        "candidate_source_name": source_name,
-        "candidate_source_product_code": f"fallback:{analysis.normalized_text or 'empty'}",
-        "source_name": source_name,
-        "source_product_code": f"fallback:{analysis.normalized_text or 'empty'}",
-        "retailer_article_number": "",
-        "quantity_label": analysis.quantity_label,
-        "variant": " ".join(analysis.variant_terms),
-        "source_url": "",
-        "score": score,
-        "score_breakdown": {
-            "text_score": 0.0,
-            "brand_score": 0.0,
-            "product_type_score": 0.35 if has_intent else 0.0,
-            "quantity_score": 0.35 if analysis.quantity_label else 0.0,
-            "variant_score": 0.35 if analysis.variant_terms else 0.0,
-            "source_score": 0.10,
-            "intent_score": 1.0 if has_intent else 0.0,
-            "fallback_score": score,
-        },
-        "receipt_product_intent": analysis.product_intent,
-        "candidate_product_intent": analysis.product_intent,
-        "candidate_category": analysis.category,
-        "candidate_product_type": analysis.product_type,
-        "intent_score": 1.0 if has_intent else 0.0,
-        "has_meaningful_intent_match": True,
-        "candidate_status": status,
-        "is_probable": False,
-        "is_user_confirmed": False,
-        "is_external_database_override": False,
-        "requires_user_confirmation": True,
-        "creates_global_product": False,
-        "creates_household_article": False,
-        "creates_inventory_event": False,
-        "created_by": "m2c2i9b_receipt_candidate_coverage",
-    }
-
+    return _build_retailer_catalog_candidate(analysis)
 
 
 def ensure_candidate_coverage(match_result: dict[str, Any], receipt_line_text: str | None, retailer_code: str | None = None) -> dict[str, Any]:
-    """Garandeer dat een match-resultaat minimaal één kandidaat bevat."""
+    """Verrijk alleen met echte cataloguskandidaat; nooit met fallback.
+
+    M2C2i-19S: onbekend zonder echte externe/cataloguskennis blijft onbekend.
+    """
     candidates = list(match_result.get("candidates") or [])
     if candidates:
-        return match_result
+        result = dict(match_result)
+        result["uses_coverage_fallback"] = False
+        return result
 
     normalized_retailer = normalize_taxonomy_text(retailer_code or match_result.get("retailer_code"))
-    fallback_candidate = build_receipt_fallback_candidate(receipt_line_text, retailer_code=normalized_retailer)
+    catalog_candidate = build_receipt_fallback_candidate(receipt_line_text, retailer_code=normalized_retailer)
     result = dict(match_result)
     result["retailer_code"] = normalized_retailer
     result["receipt_line_text"] = str(receipt_line_text or result.get("receipt_line_text") or "")
-    result["candidates"] = [fallback_candidate]
-    result["candidate_source"] = fallback_candidate["candidate_source_name"]
-    result["uses_coverage_fallback"] = fallback_candidate.get("candidate_status") in {"fallback_candidate", "unresolved_candidate"}
+
+    if catalog_candidate:
+        result["candidates"] = [catalog_candidate]
+        result["candidate_source"] = catalog_candidate["candidate_source_name"]
+        result["uses_coverage_fallback"] = False
+    else:
+        result["candidates"] = []
+        result["candidate_source"] = "no_real_candidate"
+        result["uses_coverage_fallback"] = False
+        result["no_candidate_reason"] = "no_real_external_or_catalog_match"
+
     result["uses_legacy_fallback"] = False
     result["creates_global_product"] = False
     result["creates_household_article"] = False
