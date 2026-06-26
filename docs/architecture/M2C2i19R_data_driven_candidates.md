@@ -1,12 +1,14 @@
-# M2C2i-19R — Data-gedreven artikelkandidaten
+# M2C2i-19R — Self-learning artikelkandidaten
 
 ## Doel
 
-Nieuwe bonartikelen moeten zinvolle externe artikelkandidaten kunnen krijgen zonder Python-code te wijzigen.
+Nieuwe bonartikelen moeten zinvolle externe artikelkandidaten kunnen krijgen zonder Python-code te wijzigen en zonder handmatig JSON uit te breiden.
 
 ```text
 bonregel
-→ data-index
+→ zoek bestaande external_product_index
+→ geen kandidaat?
+→ leer conceptkandidaat in database
 → kandidaatlijst
 → geen Mijn artikel
 → geen voorraadmutatie
@@ -18,36 +20,42 @@ Deze recovery-stap start vanaf commit `63cd33ef`, de stabiele stand na M2C2i-17 
 
 M2C2i-19R wijzigt geen frontend. De bestaande Externe databases-UI blijft intact.
 
-## Data in plaats van code
+## JSON versus runtime-leren
 
-Productkennis hoort in data:
+JSON-bestanden blijven alleen optionele startdata. De programmatuur schrijft niet in Git-/bronbestanden tijdens runtime.
 
-```text
-backend/app/data/external_product_index/*.json
-```
-
-Deze JSON-bestanden worden geladen naar:
+Runtime-kennis gaat naar de database:
 
 ```text
 external_product_index
 ```
 
-Nieuwe herkenning toevoegen betekent daardoor:
+Een onbekende bonregel krijgt automatisch een veilige conceptkandidaat:
 
 ```text
-JSON-data aanpassen
-→ seed/import uitvoeren
-→ kandidaatzoeking gebruikt nieuwe data
+source_name = learned_receipt_line
+source_product_code = learned:<retailer>:<stable-id>
+product_name = opgeschoonde bonregeltekst
+category = Concept uit bonregel
 ```
+
+## Waarom niet letterlijk JSON schrijven?
+
+```text
+container-rebuild kan runtime-bestanden wissen
+bronbestanden zijn geen runtime-database
+versiebeheer en concurrency worden onveilig
+```
+
+Daarom is de database de levende index. Later kunnen we eventueel een export naar JSON maken voor beheer of review.
 
 ## Performance-afspraak
 
-De index-seeding is idempotent:
-
-- bij een lege index worden seedregels geladen;
-- als de index al voldoende seedregels bevat, worden regels niet bij elke zoekactie opnieuw herschreven;
-- er komt geen nieuwe frontendcomponent;
-- er komt geen automatische brede pagina-herberekening.
+- Seeddata wordt idempotent geladen.
+- Een onbekende bonregel wordt één keer geleerd.
+- De volgende keer wordt dezelfde kandidaat direct uit `external_product_index` gelezen.
+- Er komt geen nieuwe frontendcomponent.
+- Er komt geen automatische brede pagina-herberekening.
 
 ## Safety
 
@@ -67,3 +75,4 @@ creates_inventory_event = false
 - Geen voorraadmutatie.
 - Geen cataloguskoppeling.
 - Geen automatische resolved-state.
+- Geen runtime-writes naar Git-JSON.
