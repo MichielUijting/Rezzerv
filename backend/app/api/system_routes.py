@@ -42,6 +42,7 @@ from app.services.external_product_catalog_store import (
     list_catalog_products,
     promote_highest_candidate_to_catalog,
 )
+from app.services.external_receipt_coverage_report import build_blind_receipt_coverage_report
 from app.services.external_relation_batch_store import (
     apply_external_relation_batch_decision,
     list_external_relation_batch_items,
@@ -140,6 +141,14 @@ def external_databases_receipt_items(limit: int = Query(default=200)):
 def external_databases_ensure_receipt_item_candidates(payload: dict[str, Any] = Body(default_factory=dict)):
     return ensure_external_receipt_item_candidates(
         items=list(payload.get('items') or []),
+        include_below_threshold=bool(payload.get('include_below_threshold', True)),
+    )
+
+
+@router.post('/api/external-databases/coverage/receipt-items')
+def external_databases_blind_receipt_item_coverage(payload: dict[str, Any] = Body(default_factory=dict)):
+    return build_blind_receipt_coverage_report(
+        limit=int(payload.get('limit') or 500),
         include_below_threshold=bool(payload.get('include_below_threshold', True)),
     )
 
