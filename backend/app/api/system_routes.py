@@ -44,6 +44,7 @@ from app.services.external_product_catalog_store import (
 )
 from app.services.external_receipt_auto_coverage import install_receipt_auto_candidate_coverage
 from app.services.external_receipt_coverage_report import build_blind_receipt_coverage_report
+from app.services.external_receipt_item_projection_patch import install_receipt_table_line_projection
 from app.services.external_relation_batch_store import (
     apply_external_relation_batch_decision,
     list_external_relation_batch_items,
@@ -232,6 +233,12 @@ def warm_receipt_runtime_at_startup():
         logger.info('Automatische externe kandidaatdekking geïnstalleerd: %s', auto_coverage_result)
     except Exception as exc:
         logger.warning('Automatische externe kandidaatdekking kon niet worden geïnstalleerd: %s', exc)
+
+    try:
+        projection_result = install_receipt_table_line_projection()
+        logger.info('Receipt-table-line projectie geïnstalleerd: %s', projection_result)
+    except Exception as exc:
+        logger.warning('Receipt-table-line projectie kon niet worden geïnstalleerd: %s', exc)
 
     try:
         from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import warm_receipt_image_preprocessing
