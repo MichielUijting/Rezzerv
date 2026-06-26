@@ -260,21 +260,22 @@ def _existing_index_row_count(conn) -> int:
 def ensure_external_product_index_seeded(minimum_rows: int = 1, force: bool = False) -> dict[str, Any]:
     """Seed external_product_index from data files, idempotently.
 
-    M2C2i-19R: product knowledge belongs in data. Search may call this safely; after the
-    first seed it does not rewrite rows on every candidate lookup.
+    M2C2i-19R: product knowledge belongs in data. After the database already contains
+    all data-seed rows, search does not rewrite rows on every candidate lookup.
     """
     global _INDEX_SEED_READY
     ensure_external_product_index_schema()
+    rows = _json_seed_rows()
+    required_count = max(int(minimum_rows or 1), len(rows))
 
     with engine.begin() as conn:
         existing_count = _existing_index_row_count(conn)
-        if _INDEX_SEED_READY and not force:
-            return {"ok": True, "seeded": False, "reason": "already_seeded_in_process", "existing_count": existing_count, "source": "data"}
-        if existing_count >= minimum_rows and not force:
+        if _INDEX_SEED_READY and existing_count >= required_count and not force:
+            return {"ok": True, "seeded": False, "reason": "already_seeded_in_process", "existing_count": existing_count, "expected_count": required_count, "source": "data"}
+        if existing_count >= required_count and not force:
             _INDEX_SEED_READY = True
-            return {"ok": True, "seeded": False, "reason": "index_already_has_rows", "existing_count": existing_count, "source": "data"}
+            return {"ok": True, "seeded": False, "reason": "index_already_has_seed_rows", "existing_count": existing_count, "expected_count": required_count, "source": "data"}
 
-        rows = _json_seed_rows()
         dialect_name = str(engine.dialect.name or "").lower()
         written = 0
         for row in rows:
@@ -318,7 +319,7 @@ def ensure_external_product_index_seeded(minimum_rows: int = 1, force: bool = Fa
             written += 1
 
     _INDEX_SEED_READY = True
-    return {"ok": True, "seeded": True, "inserted": written, "source": "data", "creates_global_product": False, "creates_household_article": False, "creates_inventory_event": False}
+    return {"ok": True, "seeded": True, "inserted": written, "expected_count": required_count, "source": "data", "creates_global_product": False, "creates_household_article": False, "creates_inventory_event": False}
 
 
 def search_external_product_index_candidates(
