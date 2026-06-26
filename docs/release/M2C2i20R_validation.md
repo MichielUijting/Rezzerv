@@ -2,7 +2,7 @@
 
 ## Doelvalidatie
 
-Aantonen dat een onbekende bonregel als conceptkandidaat wordt geleerd en via de bestaande candidate-save/ensure-flow in `external_product_candidates` terechtkomt.
+Aantonen dat een onbekende Lidl-bonregel als conceptkandidaat wordt geleerd en via de bestaande candidate-save/ensure-flow in `external_product_candidates` terechtkomt, ook wanneer de oude matcher alleen zwakke of niet-bruikbare kandidaten teruggeeft.
 
 ## Opstartroutine
 
@@ -22,9 +22,9 @@ Start-Sleep -Seconds 90
 from app.db import engine
 from sqlalchemy import text
 from app.services.external_product_candidate_store import build_candidate_context_key, list_saved_external_product_candidates
-from app.services.external_database_matchflow_evidence import ensure_external_receipt_item_candidates
+from app.services.external_database_matchflow_evidence import ensure_external_receipt_item_candidates, match_retailer_receipt_line
 
-receipt_text = "M2C2i20R onbekende UI flow testregel"
+receipt_text = "M2C2i20R onbekende Lidl bonregel zonder zinvolle match"
 retailer_code = "lidl"
 line_id = "m2c2i20r-smoke-line"
 context_key = build_candidate_context_key(retailer_code, receipt_text, purchase_import_line_id=line_id)
@@ -32,6 +32,12 @@ context_key = build_candidate_context_key(retailer_code, receipt_text, purchase_
 with engine.begin() as conn:
     conn.execute(text("DELETE FROM external_product_candidates WHERE context_key = :context_key"), {"context_key": context_key})
     conn.execute(text("DELETE FROM external_product_index WHERE source_name = 'learned_receipt_line' AND product_name = :name"), {"name": receipt_text})
+
+preview = match_retailer_receipt_line(retailer_code, receipt_text, include_below_threshold=True)
+assert preview["candidates"]
+assert preview["uses_self_learning_external_index"] is True
+assert preview["self_learning_external_index"]["trigger"] == "no_useful_candidate"
+assert any(candidate.get("candidate_source_name") == "learned_receipt_line" for candidate in preview["candidates"])
 
 result = ensure_external_receipt_item_candidates(
     items=[{
@@ -84,7 +90,7 @@ M2C2i-20R smoke OK: conceptkandidaat komt in bestaande candidate-flow zonder pro
 
 1. Open `http://localhost:5174/externe-databases`.
 2. Gebruik de bestaande UI.
-3. Kies een onbekend bonartikel.
+3. Kies een onbekend Lidl-bonartikel.
 4. Klik de bestaande actie om kandidaten bij te lezen.
 5. Controleer dat er een kandidaat verschijnt.
 6. Controleer dat er geen Mijn artikel en geen voorraadmutatie ontstaat.
@@ -92,6 +98,7 @@ M2C2i-20R smoke OK: conceptkandidaat komt in bestaande candidate-flow zonder pro
 ## GO-criteria
 
 - Onbekende bonregel levert een `concept_candidate` op.
+- Ook bij zwakke oude Lidl-kandidaten wordt alsnog een self-learning kandidaat toegevoegd.
 - De kandidaat staat in `external_product_candidates`.
 - De kandidaat gebruikt bron `learned_receipt_line`.
 - De tweede run maakt geen dubbele nieuwe kandidaat.
