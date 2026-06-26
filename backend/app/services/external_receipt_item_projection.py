@@ -109,19 +109,6 @@ def _candidate_context_keys(rows: list[dict[str, Any]]) -> set[str]:
     return {_text(row.get("context_key")) for row in rows if _text(row.get("context_key"))}
 
 
-def _receipt_key(row: dict[str, Any]) -> str:
-    if hasattr(candidate_store, "_m2c2i_fix7a3_normalized_receipt_key"):
-        return candidate_store._m2c2i_fix7a3_normalized_receipt_key(
-            row.get("retailer_code"),
-            row.get("receipt_line_text"),
-        )
-
-    retailer = _text(row.get("retailer_code")).lower()
-    receipt_text = _text(row.get("receipt_line_text")).lower().replace(".", "")
-    receipt_text = " ".join(receipt_text.split())
-    return f"{retailer}|{receipt_text}"
-
-
 def _receipt_table_line_placeholder(row: dict[str, Any]) -> dict[str, Any]:
     receipt_line_id = _text(row.get("receipt_line_id"))
     retailer_code = _text(row.get("retailer_code")).lower() or "onbekend"
@@ -231,17 +218,11 @@ def _enrich_receipt_table_items(result: dict[str, Any], limit: int) -> dict[str,
             candidates,
         )
 
-    # Receipt-table-lines zijn de echte bonregels uit de nieuwe uploadflow en moeten
-    # leidend zijn in de bestaande externe-herkenningsweergave. Purchase-import-lines
-    # blijven alleen als legacy-aanvulling zichtbaar voor bonartikelteksten die nog niet
-    # via receipt_table_lines aanwezig zijn. Zo verdwijnen nieuwe bonregels niet opnieuw
-    # door de oude dedupe op retailer + bonregeltekst.
-    receipt_keys = {_receipt_key(item) for item in receipt_placeholders if _receipt_key(item)}
-    legacy_items = [item for item in items if _receipt_key(item) not in receipt_keys]
-    combined = [_project_best_candidate(item) for item in receipt_placeholders + legacy_items]
-
+    combined = [_project_best_candidate(item) for item in items + receipt_placeholders]
     if hasattr(candidate_store, "_m2c2i_fix2_apply_status_fields"):
         combined = candidate_store._m2c2i_fix2_apply_status_fields(combined)
+    if hasattr(candidate_store, "_m2c2i_fix7b_dedupe_top_receipt_items"):
+        combined = candidate_store._m2c2i_fix7b_dedupe_top_receipt_items(combined)
 
     next_result = dict(result)
     next_result["items"] = combined[:normalized_limit]
@@ -249,7 +230,6 @@ def _enrich_receipt_table_items(result: dict[str, Any], limit: int) -> dict[str,
     next_result["total"] = len(next_result["items"])
     next_result["uses_candidate_projection_normalization"] = True
     next_result["uses_receipt_table_line_projection"] = True
-    next_result["receipt_table_lines_are_leading"] = True
     next_result["creates_global_product"] = False
     next_result["creates_household_article"] = False
     next_result["creates_inventory_event"] = False
