@@ -13,6 +13,9 @@ from app.db import engine
 from app.services.product_taxonomy_store import _seed_payload
 
 CATALOG_SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "lidl_catalog_enrichment_seed.json"
+EXTERNAL_PRODUCT_INDEX_DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "external_product_index"
+
+_INDEX_SEED_READY = False
 
 INDEX_COLUMNS: dict[str, str] = {
     "id": "TEXT PRIMARY KEY",
@@ -97,6 +100,7 @@ def ensure_external_product_index_schema() -> None:
         _add_missing_columns(conn)
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_gtin ON external_product_index (gtin)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_source ON external_product_index (source_name)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_retailer ON external_product_index (retailer_code)"))
         conn.execute(text("CREATE INDEX IF NOT EXISTS idx_external_product_index_search ON external_product_index (normalized_search_text)"))
 
 
@@ -106,103 +110,173 @@ def _catalog_payload() -> dict[str, Any]:
     return json.loads(CATALOG_SEED_PATH.read_text(encoding="utf-8"))
 
 
-def _json_seed_rows() -> list[dict[str, Any]]:
-    timestamp = now_iso()
+def _row_id(source_name: str, retailer_code: str, source_product_code: str, product_name: str) -> str:
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"rezzerv-external-index:{source_name}:{retailer_code}:{source_product_code}:{product_name}"))
+
+
+def _build_row(
+    *,
+    source_name: str,
+    retailer_code: str,
+    source_product_code: str,
+    product_name: str,
+    brand: str = "",
+    quantity: str = "",
+    category: str = "",
+    source_url: str = "",
+    search_terms: list[str] | tuple[str, ...] | None = None,
+    timestamp: str,
+) -> dict[str, Any]:
+    normalized_search_text = normalize_index_text(" ".join([
+        retailer_code,
+        source_name,
+        source_product_code,
+        product_name,
+        brand,
+        quantity,
+        category,
+        *(search_terms or []),
+    ]))
+    return {
+        "id": _row_id(source_name, retailer_code, source_product_code, product_name),
+        "source_name": source_name,
+        "source_product_code": source_product_code,
+        "gtin": "",
+        "ean": "",
+        "code": source_product_code,
+        "product_name": product_name,
+        "brand": brand,
+        "brands": brand,
+        "quantity": quantity,
+        "net_content": quantity,
+        "packaging": quantity,
+        "category": category,
+        "categories": category,
+        "image_url": "",
+        "source_url": source_url,
+        "retailer_code": retailer_code,
+        "normalized_search_text": normalized_search_text,
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
+
+
+def _taxonomy_seed_rows(timestamp: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     retailers = [("lidl", "Lidl")]
     for retailer_code, retailer_name in retailers:
-        for index, item in enumerate(_seed_payload().get("taxonomy") or []):
+        for item in _seed_payload().get("taxonomy") or []:
             intent_key = str(item.get("intent_key") or "").strip()
+            if not intent_key:
+                continue
             canonical = str(item.get("canonical_name") or intent_key).strip()
             category = str(item.get("category") or "").strip()
             product_type = str(item.get("product_type") or "").strip()
             synonyms = [str(value or "") for value in (item.get("synonyms") or [])]
             source_product_code = f"{retailer_code}:{intent_key}"
-            product_name = f"{retailer_name} {canonical}".strip()
-            brand = retailer_name
-            normalized_search_text = normalize_index_text(" ".join([
-                retailer_name,
-                retailer_code,
-                brand,
-                product_name,
-                canonical,
-                category,
-                product_type,
-                intent_key,
-                *synonyms,
-                source_product_code,
-            ]))
-            rows.append({
-                "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"rezzerv-taxonomy-index:{retailer_code}:{intent_key}")),
-                "source_name": "product_taxonomy_seed",
-                "source_product_code": source_product_code,
-                "gtin": "",
-                "ean": "",
-                "code": source_product_code,
-                "product_name": product_name,
-                "brand": brand,
-                "brands": brand,
-                "quantity": "",
-                "net_content": "",
-                "packaging": "",
-                "category": category,
-                "categories": category,
-                "image_url": "",
-                "source_url": "",
-                "retailer_code": retailer_code,
-                "normalized_search_text": normalized_search_text,
-                "created_at": timestamp,
-                "updated_at": timestamp,
-            })
+            rows.append(_build_row(
+                source_name="product_taxonomy_seed",
+                retailer_code=retailer_code,
+                source_product_code=source_product_code,
+                product_name=f"{retailer_name} {canonical}".strip(),
+                brand=retailer_name,
+                category=category,
+                search_terms=[canonical, product_type, intent_key, *synonyms],
+                timestamp=timestamp,
+            ))
+    return rows
+
+
+def _catalog_seed_rows(timestamp: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
     for rule in _catalog_payload().get("rules") or []:
         source_product_code = str(rule.get("source_product_code") or "").strip()
         if not source_product_code:
             continue
-        product_name = str(rule.get("catalog_product_name") or "").strip()
-        brand = str(rule.get("brand") or "").strip()
-        category = str(rule.get("category") or "").strip()
-        quantity = str(rule.get("quantity_label") or "").strip()
         search_terms = [str(value or "") for value in (rule.get("search_terms") or [])]
-        normalized_search_text = normalize_index_text(" ".join([
-            "lidl",
-            brand,
-            product_name,
-            category,
-            quantity,
-            source_product_code,
-            *search_terms,
-        ]))
-        rows.append({
-            "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"rezzerv-catalog-index:lidl:{source_product_code}")),
-            "source_name": "lidl_catalog_enrichment",
-            "source_product_code": source_product_code,
-            "gtin": "",
-            "ean": "",
-            "code": source_product_code,
-            "product_name": product_name,
-            "brand": brand,
-            "brands": brand,
-            "quantity": quantity,
-            "net_content": quantity,
-            "packaging": quantity,
-            "category": category,
-            "categories": category,
-            "image_url": "",
-            "source_url": str(rule.get("source_url") or "").strip(),
-            "retailer_code": "lidl",
-            "normalized_search_text": normalized_search_text,
-            "created_at": timestamp,
-            "updated_at": timestamp,
-        })
+        rows.append(_build_row(
+            source_name="lidl_catalog_enrichment",
+            retailer_code="lidl",
+            source_product_code=source_product_code,
+            product_name=str(rule.get("catalog_product_name") or "").strip(),
+            brand=str(rule.get("brand") or "").strip(),
+            quantity=str(rule.get("quantity_label") or "").strip(),
+            category=str(rule.get("category") or "").strip(),
+            source_url=str(rule.get("source_url") or "").strip(),
+            search_terms=search_terms,
+            timestamp=timestamp,
+        ))
     return rows
 
 
-def ensure_external_product_index_seeded(minimum_rows: int = 1) -> dict[str, Any]:
+def _data_file_seed_rows(timestamp: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    if not EXTERNAL_PRODUCT_INDEX_DATA_DIR.exists():
+        return rows
+
+    for path in sorted(EXTERNAL_PRODUCT_INDEX_DATA_DIR.glob("*.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        source_name = str(payload.get("source_name") or path.stem).strip()
+        default_retailer_code = str(payload.get("retailer_code") or "").strip().lower()
+        products = payload.get("products") if isinstance(payload, dict) else None
+        if products is None and isinstance(payload, list):
+            products = payload
+        for product in products or []:
+            source_product_code = str(product.get("source_product_code") or product.get("code") or product.get("gtin") or product.get("ean") or "").strip()
+            product_name = str(product.get("product_name") or product.get("name") or "").strip()
+            if not source_product_code or not product_name:
+                continue
+            retailer_code = str(product.get("retailer_code") or default_retailer_code or "").strip().lower()
+            search_terms = [str(value or "") for value in (product.get("search_terms") or [])]
+            rows.append(_build_row(
+                source_name=source_name,
+                retailer_code=retailer_code,
+                source_product_code=source_product_code,
+                product_name=product_name,
+                brand=str(product.get("brand") or product.get("brands") or "").strip(),
+                quantity=str(product.get("quantity") or product.get("quantity_label") or product.get("net_content") or "").strip(),
+                category=str(product.get("category") or product.get("categories") or "").strip(),
+                source_url=str(product.get("source_url") or product.get("url") or "").strip(),
+                search_terms=search_terms,
+                timestamp=timestamp,
+            ))
+    return rows
+
+
+def _json_seed_rows() -> list[dict[str, Any]]:
+    timestamp = now_iso()
+    return [
+        *_taxonomy_seed_rows(timestamp),
+        *_catalog_seed_rows(timestamp),
+        *_data_file_seed_rows(timestamp),
+    ]
+
+
+def _existing_index_row_count(conn) -> int:
+    row = conn.execute(text("SELECT COUNT(*) AS count FROM external_product_index")).mappings().first()
+    return int(row.get("count") or 0) if row else 0
+
+
+def ensure_external_product_index_seeded(minimum_rows: int = 1, force: bool = False) -> dict[str, Any]:
+    """Seed external_product_index from data files, idempotently.
+
+    M2C2i-19R: product knowledge belongs in data. Search may call this safely; after the
+    first seed it does not rewrite rows on every candidate lookup.
+    """
+    global _INDEX_SEED_READY
     ensure_external_product_index_schema()
-    rows = _json_seed_rows()
+
     with engine.begin() as conn:
+        existing_count = _existing_index_row_count(conn)
+        if _INDEX_SEED_READY and not force:
+            return {"ok": True, "seeded": False, "reason": "already_seeded_in_process", "existing_count": existing_count, "source": "data"}
+        if existing_count >= minimum_rows and not force:
+            _INDEX_SEED_READY = True
+            return {"ok": True, "seeded": False, "reason": "index_already_has_rows", "existing_count": existing_count, "source": "data"}
+
+        rows = _json_seed_rows()
         dialect_name = str(engine.dialect.name or "").lower()
-        inserted = 0
+        written = 0
         for row in rows:
             if dialect_name == "sqlite":
                 conn.execute(text("""
@@ -241,8 +315,10 @@ def ensure_external_product_index_seeded(minimum_rows: int = 1) -> dict[str, Any
                         normalized_search_text = EXCLUDED.normalized_search_text,
                         updated_at = EXCLUDED.updated_at
                 """), row)
-            inserted += 1
-    return {"ok": True, "seeded": True, "inserted": inserted, "source": "json_seed"}
+            written += 1
+
+    _INDEX_SEED_READY = True
+    return {"ok": True, "seeded": True, "inserted": written, "source": "data", "creates_global_product": False, "creates_household_article": False, "creates_inventory_event": False}
 
 
 def search_external_product_index_candidates(
@@ -263,17 +339,20 @@ def search_external_product_index_candidates(
         seen_tokens.add(token)
     if not tokens:
         return []
+
     params: dict[str, Any] = {"limit": max(10, min(int(limit or 120), 200))}
     where_parts: list[str] = []
     for index, token in enumerate(tokens[:16]):
         key = f"token_{index}"
         where_parts.append(f"normalized_search_text LIKE :{key}")
         params[key] = f"%{token}%"
+
     retailer_filter_sql = ""
     normalized_retailer = normalize_index_text(retailer_code)
     if normalized_retailer:
         params["retailer_code"] = normalized_retailer
         retailer_filter_sql = " AND (COALESCE(retailer_code, '') = :retailer_code OR COALESCE(retailer_code, '') = '')"
+
     with engine.begin() as conn:
         rows = conn.execute(text(f"""
             SELECT *
