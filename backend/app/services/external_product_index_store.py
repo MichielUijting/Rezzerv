@@ -14,6 +14,7 @@ from app.services.product_taxonomy_store import _seed_payload
 
 CATALOG_SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "lidl_catalog_enrichment_seed.json"
 EXTERNAL_PRODUCT_INDEX_DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "external_product_index"
+LEARNED_SOURCE_NAME = "learned_receipt_line"
 
 _INDEX_SEED_READY = False
 
@@ -75,6 +76,11 @@ def normalize_index_text(value: str | None) -> str:
     normalized = normalized.replace(".", " ").replace("-", " ")
     normalized = re.sub(r"[^a-z0-9áéíóúàèìòùäëïöüâêîôûçñ\s]+", " ", normalized, flags=re.IGNORECASE)
     return " ".join(normalized.split())
+
+
+def _display_name(value: str | None) -> str:
+    normalized = " ".join(str(value or "").replace(".", " ").split())
+    return normalized[:1].upper() + normalized[1:] if normalized else "Onbekend bonartikel"
 
 
 def _sqlite_columns(conn) -> set[str]:
@@ -258,10 +264,10 @@ def _existing_index_row_count(conn) -> int:
 
 
 def ensure_external_product_index_seeded(minimum_rows: int = 1, force: bool = False) -> dict[str, Any]:
-    """Seed external_product_index from data files, idempotently.
+    """Seed external_product_index from bundled data, idempotently.
 
-    M2C2i-19R: product knowledge belongs in data. After the database already contains
-    all data-seed rows, search does not rewrite rows on every candidate lookup.
+    Seeds zijn startdata. Nieuwe onbekende bonregels worden runtime in de database
+    geleerd via ``ensure_learned_external_product_candidate``.
     """
     global _INDEX_SEED_READY
     ensure_external_product_index_schema()
@@ -320,6 +326,69 @@ def ensure_external_product_index_seeded(minimum_rows: int = 1, force: bool = Fa
 
     _INDEX_SEED_READY = True
     return {"ok": True, "seeded": True, "inserted": written, "expected_count": required_count, "source": "data", "creates_global_product": False, "creates_household_article": False, "creates_inventory_event": False}
+
+
+def _learned_source_product_code(retailer_code: str | None, receipt_line_text: str) -> str:
+    normalized_retailer = normalize_index_text(retailer_code) or "unknown-retailer"
+    normalized_text = normalize_index_text(receipt_line_text)
+    stable_id = uuid.uuid5(uuid.NAMESPACE_URL, f"rezzerv-learned-receipt-line:{normalized_retailer}:{normalized_text}")
+    return f"learned:{normalized_retailer}:{stable_id.hex[:12]}"
+
+
+def ensure_learned_external_product_candidate(receipt_line_text: str, retailer_code: str | None = None) -> dict[str, Any]:
+    """Leer een veilige conceptkandidaat uit een onbekende bonregel.
+
+    Dit schrijft niet naar JSON en maakt geen Rezzerv-artikel. Het vult alleen de levende
+    external_product_index zodat dezelfde bonregel de volgende keer direct een kandidaat heeft.
+    """
+    ensure_external_product_index_seeded()
+    normalized_text = normalize_index_text(receipt_line_text)
+    if not normalized_text:
+        return {"ok": False, "learned": False, "reason": "empty_receipt_line"}
+
+    timestamp = now_iso()
+    normalized_retailer = normalize_index_text(retailer_code)
+    source_product_code = _learned_source_product_code(normalized_retailer, receipt_line_text)
+    row = _build_row(
+        source_name=LEARNED_SOURCE_NAME,
+        retailer_code=normalized_retailer,
+        source_product_code=source_product_code,
+        product_name=_display_name(receipt_line_text),
+        brand=normalized_retailer.upper() if normalized_retailer else "",
+        category="Concept uit bonregel",
+        search_terms=[receipt_line_text, normalized_text, "concept kandidaat"],
+        timestamp=timestamp,
+    )
+
+    with engine.begin() as conn:
+        existing = conn.execute(
+            text("""
+                SELECT *
+                FROM external_product_index
+                WHERE source_name = :source_name
+                  AND source_product_code = :source_product_code
+                LIMIT 1
+            """),
+            {"source_name": LEARNED_SOURCE_NAME, "source_product_code": source_product_code},
+        ).mappings().first()
+        if existing:
+            return {"ok": True, "learned": False, "reason": "already_exists", "item": dict(existing), "creates_global_product": False, "creates_household_article": False, "creates_inventory_event": False}
+
+        conn.execute(text("""
+            INSERT INTO external_product_index (
+                id, source_name, source_product_code, gtin, ean, code,
+                product_name, brand, brands, quantity, net_content, packaging,
+                category, categories, image_url, source_url, retailer_code,
+                normalized_search_text, created_at, updated_at
+            ) VALUES (
+                :id, :source_name, :source_product_code, :gtin, :ean, :code,
+                :product_name, :brand, :brands, :quantity, :net_content, :packaging,
+                :category, :categories, :image_url, :source_url, :retailer_code,
+                :normalized_search_text, :created_at, :updated_at
+            )
+        """), row)
+
+    return {"ok": True, "learned": True, "item": row, "creates_global_product": False, "creates_household_article": False, "creates_inventory_event": False}
 
 
 def search_external_product_index_candidates(
