@@ -89,6 +89,7 @@ Akkoord wanneer:
 - bonregels zonder brondata tonen veilig geen echte bronmatch
 - automatische hook is geïnstalleerd bij startup
 - nieuwe bonnen krijgen external_candidate_coverage in de ingest response
+- kandidaatcache in external_product_candidates mag worden gevuld
 - geen Mijn-artikel
 - geen global product
 - geen voorraadmutatie
