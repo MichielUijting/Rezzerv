@@ -1,5 +1,5 @@
 {
-  "version": "m2c2i18-lidl-catalog-enrichment-v2",
+  "version": "m2c2i22s-lidl-catalog-enrichment-v3",
   "rules": [
     {
       "receipt_terms": ["mexicaanse kruiden", "mexicaanse kruidenm", "mexicaanse kruidenmix", "mexicaanse kruidenm", "taco kruidenmix", "burrito kruidenmix", "fajita kruidenmix"],
@@ -384,6 +384,18 @@
       "source_url": "",
       "confidence": 0.9,
       "search_terms": ["winterpeen", "carrot"]
+    },
+    {
+      "receipt_terms": ["argentijnse malbec", "malbec", "rode wijn malbec"],
+      "source_product_code": "lidl:wijn.argentijnse-malbec",
+      "catalog_product_name": "Lidl Argentijnse Malbec",
+      "brand": "Lidl Wijn",
+      "category": "Wijn",
+      "product_type": "Rode wijn",
+      "quantity_label": "1 fles",
+      "source_url": "",
+      "confidence": 0.9,
+      "search_terms": ["argentijnse malbec", "malbec", "argentijnse", "rode wijn", "wijn"]
     }
   ]
 }
