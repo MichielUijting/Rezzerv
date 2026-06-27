@@ -87,3 +87,33 @@ def contains_spaarzegels_priced_token(value: str) -> str | None:
 
 def contains_spaarzegels_non_product_token(value: str) -> bool:
     return token_match_from_terms(value, spaarzegels_non_product_label_tokens()) is not None
+
+
+def is_spaarzegels_financial_line(value: str | None) -> bool:
+    """Return True for paid Spaarzegels receipt lines.
+
+    The line remains a receipt financial line. Callers must keep the line_total
+    available for receipt total checks, but must not route it into product,
+    household article or inventory matching.
+    """
+    normalized = str(value or "").strip().lower()
+    if not normalized:
+        return False
+    if not re.search(r"(?<!\d)-?\d+[\.,]\d{2}(?!\d)", normalized):
+        return False
+    return contains_spaarzegels_priced_token(normalized) is not None
+
+
+def spaarzegels_financial_metadata(value: str | None) -> dict[str, Any]:
+    """Build generic financial-only metadata for paid Spaarzegels lines."""
+    matched = contains_spaarzegels_priced_token(str(value or ""))
+    if not matched or not is_spaarzegels_financial_line(value):
+        return {}
+    return {
+        "line_type": "spaarzegels",
+        "is_spaarzegels": True,
+        "include_in_receipt_total": True,
+        "exclude_from_inventory": True,
+        "external_matching_allowed": False,
+        "matched_spaarzegels_term": matched,
+    }
