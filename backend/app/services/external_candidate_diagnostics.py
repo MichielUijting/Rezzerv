@@ -5,7 +5,8 @@ from typing import Any
 from sqlalchemy import text
 
 from app.db import engine
-from app.services.external_database_matchers import match_retailer_receipt_line, normalize_match_text
+from app.services.external_database_matchers import normalize_match_text
+from app.services.external_database_matchflow_evidence import match_retailer_receipt_line
 from app.services.external_product_index_store import search_external_product_index_candidates
 from app.services.receipt_product_intent_analyzer import analyze_receipt_product_line
 
@@ -142,6 +143,8 @@ def diagnose_real_candidate_coverage(retailer_code: str, receipt_line_text: str,
 
     Deze functie schrijft niets. Ze verklaart waarom een bonregel wel of geen echte
     kandidaat heeft en markeert expliciet of verboden fallbackdata aanwezig is.
+    De diagnose gebruikt dezelfde evidence-matchflow als de kandidaatopbouw,
+    zodat read-only rapportage en productiepad dezelfde scorelogica tonen.
     """
     normalized_retailer = normalize_match_text(retailer_code)
     normalized_receipt = normalize_match_text(receipt_line_text)
@@ -218,6 +221,8 @@ def diagnose_real_candidate_coverage(retailer_code: str, receipt_line_text: str,
         "candidate_source": match.get("candidate_source"),
         "uses_coverage_fallback": bool(match.get("uses_coverage_fallback")),
         "uses_legacy_fallback": bool(match.get("uses_legacy_fallback")),
+        "uses_strong_text_containment_boost": bool(match.get("uses_strong_text_containment_boost")),
+        "strong_text_containment_min_score": match.get("strong_text_containment_min_score"),
         "no_candidate_reason": match.get("no_candidate_reason") or status,
         "diagnostic_reasons": reasons,
         "index_probe": {
