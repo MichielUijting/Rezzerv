@@ -89,24 +89,13 @@ def _generic_recall_candidates(receipt_line_text: str, retailer_code: str) -> tu
     }
 
 
-def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
-    candidates = list(result.get("candidates") or [])
-    recall_meta: dict[str, Any] = {}
-    if not candidates:
-        candidates, recall_meta = _generic_recall_candidates(receipt_line_text, retailer_code)
-        if not candidates:
-            enriched_empty = dict(result)
-            enriched_empty.update(recall_meta)
-            enriched_empty["candidates"] = []
-            enriched_empty["uses_product_evidence_scoring"] = False
-            enriched_empty["uses_visible_candidate_score_filter"] = True
-            enriched_empty["minimum_visible_candidate_score"] = MIN_VISIBLE_CANDIDATE_SCORE
-            enriched_empty["candidate_count_after_score_filter"] = 0
-            enriched_empty["creates_global_product"] = False
-            enriched_empty["creates_household_article"] = False
-            enriched_empty["creates_inventory_event"] = False
-            return enriched_empty
-
+def _score_and_filter_candidates(
+    result: dict[str, Any],
+    candidates: list[dict[str, Any]],
+    receipt_line_text: str,
+    retailer_code: str,
+    recall_meta: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     evidence_packet = build_product_evidence_packet_dict(receipt_line_text, retailer_code=retailer_code)
     rescored = apply_product_evidence_to_candidates(
         receipt_line_text,
@@ -118,7 +107,7 @@ def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retai
     visible = [candidate for candidate in normalized if _is_visible_candidate(candidate)]
 
     enriched = dict(result)
-    enriched.update(recall_meta)
+    enriched.update(recall_meta or {})
     enriched["candidates"] = visible[:5]
     enriched["uses_product_evidence_scoring"] = True
     enriched["uses_candidate_deduplication"] = len(normalized) < len(rescored)
@@ -132,6 +121,64 @@ def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retai
     enriched["creates_household_article"] = False
     enriched["creates_inventory_event"] = False
     return enriched
+
+
+def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
+    primary_candidates = list(result.get("candidates") or [])
+
+    if primary_candidates:
+        primary_enriched = _score_and_filter_candidates(
+            result,
+            primary_candidates,
+            receipt_line_text,
+            retailer_code,
+        )
+        if primary_enriched.get("candidates"):
+            primary_enriched["uses_generic_recall_expansion"] = False
+            primary_enriched["generic_recall_reason"] = "primary_candidates_passed_score_filter"
+            return primary_enriched
+
+        # Primair zijn er alleen zwakke kandidaten. Dat mag de bredere zoekslag
+        # niet blokkeren, anders blijft de score altijd laag.
+        recall_candidates, recall_meta = _generic_recall_candidates(receipt_line_text, retailer_code)
+        recall_meta["generic_recall_reason"] = "primary_candidates_failed_score_filter"
+        recall_meta["primary_candidate_count_before_recall"] = len(primary_candidates)
+        recall_meta["primary_candidate_count_after_score_filter"] = 0
+        if recall_candidates:
+            return _score_and_filter_candidates(
+                result,
+                recall_candidates,
+                receipt_line_text,
+                retailer_code,
+                recall_meta=recall_meta,
+            )
+
+        primary_enriched.update(recall_meta)
+        primary_enriched["candidates"] = []
+        return primary_enriched
+
+    recall_candidates, recall_meta = _generic_recall_candidates(receipt_line_text, retailer_code)
+    recall_meta["generic_recall_reason"] = "no_primary_candidates"
+    if recall_candidates:
+        return _score_and_filter_candidates(
+            result,
+            recall_candidates,
+            receipt_line_text,
+            retailer_code,
+            recall_meta=recall_meta,
+        )
+
+    enriched_empty = dict(result)
+    enriched_empty.update(recall_meta)
+    enriched_empty["candidates"] = []
+    enriched_empty["uses_product_evidence_scoring"] = False
+    enriched_empty["uses_visible_candidate_score_filter"] = True
+    enriched_empty["minimum_visible_candidate_score"] = MIN_VISIBLE_CANDIDATE_SCORE
+    enriched_empty["candidate_count_after_score_filter"] = 0
+    enriched_empty["creates_global_product"] = False
+    enriched_empty["creates_household_article"] = False
+    enriched_empty["creates_inventory_event"] = False
+    return enriched_empty
 
 
 def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, include_below_threshold: bool = True) -> dict[str, Any]:
