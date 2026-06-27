@@ -71,12 +71,20 @@ def _unique_terms(values: list[str]) -> list[str]:
     return terms
 
 
-def _rank_query_terms(search_terms: list[str]) -> list[str]:
-    """Prefer specific OFF searches over broad terms like just 'teriyaki'."""
+def _rank_query_terms(search_terms: list[str], *, receipt_line_text: str = "") -> list[str]:
+    """Prefer candidate/taxonomy terms over noisy receipt text.
+
+    Receipt OCR lines such as '2X WERELDGER.Z-AFR B0BO' are useful evidence, but
+    they are poor OFF queries. They are only used as fallback when there is no
+    candidate/taxonomy term.
+    """
+    normalized_receipt = _normalize(receipt_line_text)
+    preferred = [term for term in search_terms if _normalize(term) != normalized_receipt]
+    fallback = [term for term in search_terms if _normalize(term) == normalized_receipt]
     return sorted(
-        search_terms,
+        preferred,
         key=lambda term: (-len(term.split()), -len(term), term),
-    )
+    ) + fallback
 
 
 def build_off_search_terms(
@@ -105,8 +113,8 @@ def build_off_search_terms(
         candidate_brand or "",
         category or "",
         product_type or "",
-        receipt_line_text,
         *taxonomy_terms,
+        receipt_line_text,
     ])[:12]
 
 
@@ -275,7 +283,7 @@ def search_open_food_facts_preview(payload: dict[str, Any]) -> dict[str, Any]:
     limit = max(1, min(int(payload.get("limit") or 5), OFF_SEARCH_MAX_RESULTS))
     requested_query_limit = int(payload.get("max_queries") or OFF_SEARCH_MAX_QUERIES)
     query_limit = max(1, min(requested_query_limit, OFF_SEARCH_MAX_QUERIES))
-    query_terms = _rank_query_terms([term for term in search_terms if term])[:query_limit]
+    query_terms = _rank_query_terms([term for term in search_terms if term], receipt_line_text=receipt_line_text)[:query_limit]
     if not query_terms:
         query_terms = [_normalize(receipt_line_text)]
 
