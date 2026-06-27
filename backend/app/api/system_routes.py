@@ -49,6 +49,7 @@ from app.services.external_relation_batch_store import (
     apply_external_relation_batch_decision,
     list_external_relation_batch_items,
 )
+from app.services.open_food_facts_search_preview import search_open_food_facts_preview
 
 router = APIRouter()
 logger = logging.getLogger('rezzerv.api')
@@ -132,6 +133,20 @@ def external_databases_save_candidates(retailer_code: str, payload: dict[str, An
         purchase_import_line_id=str(payload.get('purchase_import_line_id') or '').strip() or None,
         include_below_threshold=bool(payload.get('include_below_threshold', False)),
     )
+
+
+@router.post('/api/external-databases/off/search-preview')
+def external_databases_open_food_facts_search_preview(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Read-only OFF search from Rezzerv candidate evidence.
+
+    M2C2i-25A/B: this endpoint only searches and scores Open Food Facts results.
+    It must not create global products, household articles, inventory events or
+    external candidate rows.
+    """
+    result = search_open_food_facts_preview(payload)
+    if not bool(result.get('ok', True)):
+        raise HTTPException(status_code=400, detail=result.get('error') or 'OFF search-preview kon niet worden uitgevoerd')
+    return result
 
 
 @router.get('/api/external-databases/receipt-items')
