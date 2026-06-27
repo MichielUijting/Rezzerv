@@ -1,5 +1,5 @@
 {
-  "version": "m2c2i24s-c-product-taxonomy-coverage-v1",
+  "version": "m2c2i24s-c-product-taxonomy-coverage-v2",
   "taxonomy": [
     {"intent_key": "zuivel.vla", "canonical_name": "Bananenvla", "category": "Zuivel", "product_type": "Vla", "synonyms": ["bananenvla", "vla banaan", "vla"]},
     {"intent_key": "zuivel.kwark", "canonical_name": "Kwark", "category": "Zuivel", "product_type": "Kwark", "synonyms": ["romige kwark", "kwark kaneel", "kwark wit", "kwark"]},
@@ -40,6 +40,7 @@
     {"intent_key": "saus.jachtsaus", "canonical_name": "Jachtsaus", "category": "Saus", "product_type": "Jachtsaus", "synonyms": ["jachtsaus"]},
     {"intent_key": "saus.aspergesoep", "canonical_name": "Aspergesoep", "category": "Soep", "product_type": "Aspergesoep", "synonyms": ["aspergesoep", "vp aspergesoep"]},
     {"intent_key": "saus.bouillon", "canonical_name": "Bouillon", "category": "Soep", "product_type": "Bouillon", "synonyms": ["groentebouillonblok", "bouillonblok", "bouillon", "ah bouillon"]},
+    {"intent_key": "soep.groentebasis", "canonical_name": "Soepgroente", "category": "Soep", "product_type": "Soepgroente", "synonyms": ["soepgroente basis", "soepgr basis", "t soepgr basis", "soepgroente"]},
     {"intent_key": "groente.tomaat", "canonical_name": "Tomaat", "category": "Groente", "product_type": "Tomaat", "synonyms": ["tomaten", "tomaat", "snacktomaten"]},
     {"intent_key": "maaltijd.pizza", "canonical_name": "Pizza", "category": "Maaltijd", "product_type": "Pizza", "synonyms": ["pizza margherita", "pizza"]},
     {"intent_key": "maaltijd.teriyaki", "canonical_name": "Teriyaki", "category": "Maaltijd", "product_type": "Wereldgerecht", "synonyms": ["wereldgerecht teriyaki", "teriyaki"]},
@@ -58,10 +59,13 @@
     {"intent_key": "drank.wijn", "canonical_name": "Wijn", "category": "Drank", "product_type": "Wijn", "synonyms": ["fairtrade chenin", "chenin blanc", "chenin", "puglia primitivo", "primitivo", "malbec", "wijn"]},
     {"intent_key": "drank.koffie", "canonical_name": "Koffie", "category": "Drank", "product_type": "Koffie", "synonyms": ["espresso d oro", "espresso", "koffie"]},
     {"intent_key": "drank.thee", "canonical_name": "Thee", "category": "Drank", "product_type": "Thee", "synonyms": ["rooibos mango", "rooibos", "thee"]},
+    {"intent_key": "drank.limoensap", "canonical_name": "Limoensap", "category": "Drank", "product_type": "Limoensap", "synonyms": ["lemondor limoensap", "limoensap", "lime juice"]},
     {"intent_key": "pasta.droog", "canonical_name": "Droge pasta", "category": "Pasta", "product_type": "Droge pasta", "synonyms": ["lasagnebladen", "lasagne", "gebronsde pasta linguin", "gebronste pasta linguine", "pasta linguine", "linguine", "spaghetti", "penne rigate", "penne", "pasta"]},
+    {"intent_key": "graan.tortilla", "canonical_name": "Tortilla", "category": "Graan", "product_type": "Tortilla", "synonyms": ["ah tortilla", "tortilla", "wrap", "wraps"]},
     {"intent_key": "snack.chips", "canonical_name": "Chips", "category": "Snack", "product_type": "Chips", "synonyms": ["paprika chips", "chips paprika", "naturel chips", "chips", "kroepoek", "kroep cassave", "cassave"]},
     {"intent_key": "snack.noten", "canonical_name": "Noten", "category": "Snack", "product_type": "Noten", "synonyms": ["cashewnoten ongezout", "cashewnoten", "notenmix", "noten"]},
     {"intent_key": "snack.snoep", "canonical_name": "Snoep", "category": "Snack", "product_type": "Snoep", "synonyms": ["katja snoep", "snoep"]},
+    {"intent_key": "snack.chocolade", "canonical_name": "Chocolade", "category": "Snack", "product_type": "Chocolade", "synonyms": ["melkchocolade", "chocolade"]},
     {"intent_key": "snack.stroopwafel", "canonical_name": "Stroopwafel", "category": "Snack", "product_type": "Stroopwafel", "synonyms": ["stroopwafels", "stroopwafel"]},
     {"intent_key": "ontbijt.muesli", "canonical_name": "Muesli", "category": "Ontbijt", "product_type": "Muesli", "synonyms": ["muesli naturel", "muesli"]},
     {"intent_key": "ontbijt.havermout", "canonical_name": "Havermout", "category": "Ontbijt", "product_type": "Havermout", "synonyms": ["7 granen ontbijt", "havermout", "ontbijt"]},
@@ -69,7 +73,11 @@
     {"intent_key": "babyvoeding.groente", "canonical_name": "Babyvoeding groente", "category": "Babyvoeding", "product_type": "Groente", "synonyms": ["groente ringen", "melty veggie sticks", "veggie sticks"]},
     {"intent_key": "huishouden.inlegkruisje", "canonical_name": "Inlegkruisje", "category": "Huishouden", "product_type": "Inlegkruisje", "synonyms": ["care inlegkruisje", "inlegkruisje", "inlegkr"]},
     {"intent_key": "bakkerij.gebak", "canonical_name": "Gebak", "category": "Bakkerij", "product_type": "Gebak", "synonyms": ["strawberry schnitte", "schnitte", "gebak"]},
-    {"intent_key": "bakkerij.poedersuiker", "canonical_name": "Poedersuiker", "category": "Bakkerij", "product_type": "Poedersuiker", "synonyms": ["poedersuiker"]}
+    {"intent_key": "bakkerij.poedersuiker", "canonical_name": "Poedersuiker", "category": "Bakkerij", "product_type": "Poedersuiker", "synonyms": ["poedersuiker"]},
+    {"intent_key": "nonfood.smartphonehouder", "canonical_name": "Smartphonehouder", "category": "Non-food", "product_type": "Smartphonehouder", "synonyms": ["auto smartphonehouder", "smartphonehouder", "tronic auto smartphonehouder"]},
+    {"intent_key": "nonfood.powerbank", "canonical_name": "Powerbank", "category": "Non-food", "product_type": "Powerbank", "synonyms": ["powerbank 10000 mah", "powerbank", "tronic powerbank"]},
+    {"intent_key": "nonfood.oordopjes", "canonical_name": "Bluetooth oordopjes", "category": "Non-food", "product_type": "Oordopjes", "synonyms": ["bluetooth oordopjes", "oordopjes", "silvercrest bluetooth oordopjes"]},
+    {"intent_key": "nonfood.kruislijnlaser", "canonical_name": "Kruislijnlaser", "category": "Non-food", "product_type": "Kruislijnlaser", "synonyms": ["kruislijnlaser", "parkside kruislijnlaser"]}
   ],
   "retailer_receipt_terms": [
     {"retailer_code": "lidl", "receipt_term": "gouda belegen gerasp", "normalized_term": "gouda belegen geraspte kaas", "intent_key": "zuivel.kaas", "confidence": 0.98, "source": "m2c2i10a_lidl_receipt_term"},
@@ -90,6 +98,7 @@
     {"retailer_code": "albert heijn", "receipt_term": "T AH M GEHAKT", "normalized_term": "mager gehakt", "intent_key": "vlees.gehakt", "confidence": 0.90, "source": "m2c2i24s_c_receipt_term"},
     {"retailer_code": "albert heijn", "receipt_term": "AH GRF ROOKV", "normalized_term": "rookworst", "intent_key": "vleeswaren.rookworst", "confidence": 0.85, "source": "m2c2i24s_c_receipt_term"},
     {"retailer_code": "albert heijn", "receipt_term": "AH HV MELK", "normalized_term": "halfvolle melk", "intent_key": "zuivel.melk", "confidence": 0.90, "source": "m2c2i24s_c_receipt_term"},
+    {"retailer_code": "albert heijn", "receipt_term": "T SOEPGR BASIS", "normalized_term": "soepgroente basis", "intent_key": "soep.groentebasis", "confidence": 0.90, "source": "m2c2i24s_c_receipt_term"},
     {"retailer_code": "plus", "receipt_term": "RONIGE KWARK KANEELB", "normalized_term": "romige kwark kaneel", "intent_key": "zuivel.kwark", "confidence": 0.85, "source": "m2c2i24s_c_receipt_term"},
     {"retailer_code": "plus", "receipt_term": "KIKKERWTEN", "normalized_term": "kikkererwten", "intent_key": "peulvrucht.kikkererwt", "confidence": 0.90, "source": "m2c2i24s_c_receipt_term"}
   ],
