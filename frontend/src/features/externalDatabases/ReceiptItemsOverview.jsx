@@ -348,6 +348,9 @@ function buildReceiptItems(candidates) {
     }
 
     if (!current.contextKey && candidate.context_key) current.contextKey = String(candidate.context_key)
+    if (!current.receiptLineId && candidate.receipt_line_id) current.receiptLineId = String(candidate.receipt_line_id)
+    if (!current.purchaseImportLineId && candidate.purchase_import_line_id) current.purchaseImportLineId = String(candidate.purchase_import_line_id)
+
     grouped.set(key, current)
   })
 
@@ -499,7 +502,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     return rows
   }, [items, filters, sortKey, sortDesc])
 
-  // De backend levert ÃƒÂ©ÃƒÂ©n rij per bonartikelcontext.
+  // De backend levert één rij per bonartikelcontext.
   // Niet extra ontdubbelen op artikeltekst: gelijke omschrijvingen met andere artikelcode zijn aparte bonartikelen.
   const dedupedItems = filteredItems
 
@@ -667,7 +670,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   function exportSelectedItems() {
     const selectedRows = items.filter((item) => selectedItemIds.includes(item.id))
     if (!selectedRows.length) {
-      onMessage?.('Selecteer eerst ÃƒÂ©ÃƒÂ©n of meer bonartikelen om te exporteren.')
+      onMessage?.('Selecteer eerst één of meer bonartikelen om te exporteren.')
       return
     }
 
@@ -866,7 +869,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       ) : null}
 
       <div className="rz-table-scroll rz-table-scroll--wide">
-        <Table dataTestId="external-receipt-items-table" tableClassName="rz-external-receipt-table">
+        <Table dataTestId="external-receipt-items-table" tableClassName="rz-external-receipt-table" resizableColumns>
           <colgroup>
             <col className="rz-external-receipt-col-select" />
             <col className="rz-external-receipt-col-receipt" />
@@ -939,93 +942,65 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
         </Table>
       </div>
 
-      <div className="rz-external-databases-pagination">
-        <Button type="button" variant="secondary" disabled={currentPage <= 1 || candidateProgress.active} onClick={() => goToPage(currentPage - 1)}>Vorige</Button>
-        <span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span>
-        <Button type="button" variant="secondary" disabled={currentPage >= pageCount || candidateProgress.active} onClick={() => goToPage(currentPage + 1)}>Volgende</Button>
-      </div>
+      {selectedItem ? (
+        <div className="rz-external-receipt-detail">
+          <h3>Kandidaten voor: {selectedItem.receiptLineText}</h3>
+          <dl>
+            <dt>Winkelketen</dt><dd>{selectedItem.retailerCode}</dd>
+            <dt>Artikelnummer</dt><dd>{selectedItem.articleNumber}</dd>
+            <dt>GTIN / EAN</dt><dd>{selectedItem.gtin}</dd>
+            <dt>Status</dt><dd>{selectedItem.status}</dd>
+          </dl>
 
-      <div className="rz-external-receipt-detail">
-        {selectedItem ? (
-          <>
-            <h3>Koppelen kandidaten in artikel-catalogus</h3>
+          <Table tableClassName="rz-external-candidate-detail-table" resizableColumns>
+            <colgroup>
+              <col className="rz-external-candidate-col-choice" />
+              <col className="rz-external-candidate-col-name" />
+              <col className="rz-external-candidate-col-brand" />
+              <col className="rz-external-candidate-col-source" />
+              <col className="rz-external-candidate-col-code" />
+              <col className="rz-external-candidate-col-variant" />
+              <col className="rz-external-candidate-col-score" />
+              <col className="rz-external-candidate-col-status" />
+            </colgroup>
+            <thead>
+              <tr className="rz-table-header">
+                <th>Keuze</th>
+                <th>Kandidaat</th>
+                <th>Merk</th>
+                <th>Bron</th>
+                <th>Code</th>
+                <th>Variant</th>
+                <th className="rz-num">Score</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {selectedItem.candidates.length ? selectedItem.candidates.map((candidate) => (
+                <tr key={candidate.id} className={selectedCandidateId === candidate.id ? 'rz-row-selected' : ''}>
+                  <td className="rz-check"><input type="radio" name="external-candidate" checked={selectedCandidateId === candidate.id} disabled={!candidate.isLinkableToCatalog && !candidate.isLinkedToCatalog} onChange={() => setSelectedCandidateId(candidate.id)} /></td>
+                  <td>{candidate.candidateName}</td>
+                  <td>{candidate.brand}</td>
+                  <td>{candidate.source}</td>
+                  <td>{candidate.externalCode}</td>
+                  <td>{candidate.variant}</td>
+                  <td className="rz-num">{scoreText(candidate.score)}</td>
+                  <td>{candidate.status}</td>
+                </tr>
+              )) : <tr><td colSpan="8">Geen externe kandidaten voor dit bonartikel.</td></tr>}
+            </tbody>
+          </Table>
 
-            <div className="rz-table-scroll">
-              <Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table">
-                <colgroup>
-                  <col className="rz-external-candidate-col-choice" />
-                  <col className="rz-external-candidate-col-name" />
-                  <col className="rz-external-candidate-col-score" />
-                  <col className="rz-external-candidate-col-brand" />
-                  <col className="rz-external-candidate-col-source" />
-                  <col className="rz-external-candidate-col-code" />
-                  <col className="rz-external-candidate-col-variant" />
-                  <col className="rz-external-candidate-col-status" />
-                </colgroup>
-                <thead>
-                  <tr className="rz-table-header">
-                    <th>Keuze</th>
-                    <th>Kandidaat</th>
-                    <th>Score</th>
-                    <th>Merk</th>
-                    <th>Bron</th>
-                    <th>Externe code</th>
-                    <th>Variant</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedItemCandidatesAreLoading ? (
-                    <tr><td colSpan="8">Kandidaten worden bijgewerkt voor dit bonartikel...</td></tr>
-                  ) : selectedCandidates.length ? selectedCandidates.map((candidate) => {
-                    const candidateSelectable = candidate.isLinkedToCatalog || candidate.isLinkableToCatalog
-                    return (
-                    <tr key={candidate.id}>
-                      <td className="rz-check">
-                        <input
-                          type="radio"
-                          name="external-candidate-choice"
-                          checked={selectedCandidateId === candidate.id}
-                          disabled={!candidateSelectable}
-                          aria-label={candidateSelectable ? 'Kandidaat selecteren' : 'Informatieve fallback, niet koppelbaar'}
-                          onChange={() => candidateSelectable && setSelectedCandidateId(candidate.id)}
-                        />
-                      </td>
-                      <td>{candidate.candidateName}</td>
-                      <td className="rz-num">{scoreText(candidate.score)}</td>
-                      <td>{candidate.brand}</td>
-                      <td>{candidate.source}</td>
-                      <td>{candidate.externalCode}</td>
-                      <td>{candidate.variant}</td>
-                      <td>{candidate.status}</td>
-                    </tr>
-                    )
-                  }) : <tr><td colSpan="8">Geen externe kandidaten gevonden voor dit bonartikel.</td></tr>}
-                </tbody>
-              </Table>
-            </div>
-
-            <div className="rz-external-databases-actions rz-external-detail-actions">
-              <Button
-                type="button"
-                disabled={!selectedCandidateCanBeLinked || isProcessingCandidate}
-                onClick={processSelectedCandidate}
-              >
-                {isProcessingCandidate ? 'Verwerken...' : 'Koppel artikel'}
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={!selectedCandidateIsLinked || isUnlinking}
-                onClick={handleUnlinkSelectedCandidate}
-              >
-                {isUnlinking ? 'Ontkoppelen...' : 'Ontkoppel artikel'}
-              </Button>
-            </div>
-          </>
-        ) : <p className="rz-external-databases-muted">Dubbelklik op een bonartikel om de externe kandidaten te bekijken.</p>}
-      </div>
+          <div className="rz-external-databases-actions">
+            <Button type="button" disabled={!selectedCandidateCanBeLinked || isProcessingCandidate} onClick={() => processSelectedCandidate()}>
+              {isProcessingCandidate ? 'Verwerken...' : 'Kandidaat koppelen'}
+            </Button>
+            <Button type="button" variant="secondary" disabled={!selectedCandidateIsLinked || isUnlinking} onClick={handleUnlinkSelectedCandidate}>
+              {isUnlinking ? 'Ontkoppelen...' : 'Koppeling verwijderen'}
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
-
