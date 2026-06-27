@@ -7,6 +7,15 @@ from app.services.external_product_candidate_store import list_external_receipt_
 from app.services.external_database_matchers import normalize_match_text
 
 
+NON_PRODUCT_RECEIPT_TERMS = (
+    "koopzegel",
+    "koopzegels",
+    "pluspunt",
+    "pluspunten",
+    "verzendkosten",
+)
+
+
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
@@ -33,6 +42,21 @@ def _receipt_line_id(item: dict[str, Any]) -> str:
 
 def _purchase_import_line_id(item: dict[str, Any]) -> str:
     return _text(item.get("purchase_import_line_id"))
+
+
+def _is_non_product_receipt_line(receipt_line_text: str) -> bool:
+    normalized = normalize_match_text(receipt_line_text)
+    if not normalized:
+        return True
+    if any(term in normalized for term in NON_PRODUCT_RECEIPT_TERMS):
+        return True
+
+    tokens = normalized.split()
+    # Statiegeld-/retourregels zoals "51 X 0,10 5,10" zijn administratief,
+    # geen herkenbaar product waarvoor een externe productkandidaat nodig is.
+    if len(tokens) >= 3 and tokens[0].isdigit() and tokens[1] == "x" and any(token.startswith("0") for token in tokens[2:]):
+        return True
+    return False
 
 
 def _best_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
@@ -97,6 +121,8 @@ def build_blind_receipt_coverage_report(
     receipt_items_response = list_external_receipt_items(limit=normalized_limit)
     raw_items = list(receipt_items_response.get("items") or [])
     blind_items = _build_blind_item_set(raw_items)
+    product_items = [item for item in blind_items if not _is_non_product_receipt_line(item.get("receipt_line_text") or "")]
+    excluded_non_product_items = [item for item in blind_items if _is_non_product_receipt_line(item.get("receipt_line_text") or "")]
 
     results: list[dict[str, Any]] = []
     total_candidates = 0
@@ -105,7 +131,7 @@ def build_blind_receipt_coverage_report(
     total_coverage_fallback = 0
     total_legacy_fallback = 0
 
-    for item in blind_items:
+    for item in product_items:
         diagnosis = diagnose_real_candidate_coverage(
             retailer_code=item["retailer_code"],
             receipt_line_text=item["receipt_line_text"],
@@ -166,6 +192,9 @@ def build_blind_receipt_coverage_report(
         "source": "current_receipt_items",
         "limit": normalized_limit,
         "include_below_threshold": bool(include_below_threshold),
+        "total_receipt_items": len(blind_items),
+        "excluded_non_product_item_count": len(excluded_non_product_items),
+        "excluded_non_product_items": excluded_non_product_items,
         "total_items": len(results),
         "items_with_real_candidate": items_with_real_candidate,
         "items_without_real_candidate": items_without_real_candidate,
