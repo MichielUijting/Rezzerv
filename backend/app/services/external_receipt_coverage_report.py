@@ -24,8 +24,23 @@ def _context_key(item: dict[str, Any]) -> str:
     return _text(item.get("context_key")) or _text(item.get("id"))
 
 
+def _canonical_retailer_code(value: str) -> str:
+    normalized = normalize_match_text(value)
+    if "lidl" in normalized:
+        return "lidl"
+    if "jumbo" in normalized:
+        return "jumbo"
+    if "albert heijn" in normalized or normalized == "ah" or normalized.startswith("ah "):
+        return "albert heijn"
+    if "aldi" in normalized:
+        return "aldi"
+    if normalized == "plus" or normalized.startswith("plus ") or " plus" in normalized:
+        return "plus"
+    return normalized or "onbekend"
+
+
 def _retailer_code(item: dict[str, Any]) -> str:
-    return normalize_match_text(
+    return _canonical_retailer_code(
         _text(item.get("retailer_code"))
         or _text(item.get("retailerCode"))
         or "onbekend"
