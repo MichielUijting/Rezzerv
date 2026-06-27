@@ -6,7 +6,7 @@ Technical Design Reference:
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
 - Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -16,6 +16,8 @@ from __future__ import annotations
 import re
 from decimal import Decimal
 from typing import Any, Callable
+
+from app.receipt_ingestion.spaarzegels_terms import contains_spaarzegels_non_product_token
 
 TRAILING_AMOUNT_RE = re.compile(r"(?<!\d)(?P<amount>-?\d{1,6}(?:[\.,]\d{2}))(?!\d)\s*(?:EUR|[A-Z]{1,3})?\s*$", re.IGNORECASE)
 DISCOUNT_COMPENSATION_RE = re.compile(
@@ -37,12 +39,6 @@ _NON_PRODUCT_LABEL_TOKENS = (
     "terminal",
     "transactie",
     "kaart",
-    "saldo",
-    "punten",
-    "koopzegel",
-    "koopzegels",
-    "zegel",
-    "zegels",
     "openingstijden",
     "medewerker",
     "store",
@@ -91,6 +87,8 @@ def _looks_like_safe_article_label(value: str | None, *, is_invalid_label: Calla
         return False
     if any(token in lowered for token in _NON_PRODUCT_LABEL_TOKENS):
         return False
+    if contains_spaarzegels_non_product_token(lowered):
+        return False
     if is_invalid_label is not None and is_invalid_label(label):
         return False
     return True
@@ -130,11 +128,12 @@ def should_append_generic_article_discount_cluster(
     """Detect a generic article discount/free-product cluster.
 
     Pattern:
-    - product line with positive amount, e.g. "JUMBO STROOPWAFELS 1,65"
-    - next line with negative discount/free compensation, e.g. "Gratis stroopwafels -1,65"
+    - product line with positive amount
+    - next line with negative discount/free compensation
 
     Returns one candidate article line carrying gross line_total and discount_amount.
-    It intentionally excludes savings/value lines such as koopzegels.
+    Value-line knowledge comes from the managed dictionary and is excluded from
+    this generic article-discount path.
     """
     if source_index < 0 or source_index + 1 >= len(lines):
         return None
