@@ -4,8 +4,13 @@ from typing import Any
 
 from app.services import external_product_candidate_store as candidate_store
 from app.services.external_candidate_normalization import normalize_external_candidates
-from app.services.external_database_matchers import match_retailer_receipt_line as _base_match_retailer_receipt_line
+from app.services.external_database_matchers import (
+    _m2c2i2_score_candidate,
+    match_retailer_receipt_line as _base_match_retailer_receipt_line,
+)
+from app.services.external_product_index_store import search_external_product_index_candidates
 from app.services.product_evidence_packet import apply_product_evidence_to_candidates, build_product_evidence_packet_dict
+from app.services.receipt_product_intent_analyzer import analyze_receipt_product_line
 
 MIN_VISIBLE_CANDIDATE_SCORE = 0.70
 VISIBLE_CANDIDATE_STATUSES = {
@@ -41,10 +46,66 @@ def _is_visible_candidate(candidate: dict[str, Any]) -> bool:
     return _candidate_score(candidate) >= MIN_VISIBLE_CANDIDATE_SCORE
 
 
+def _generic_recall_candidates(receipt_line_text: str, retailer_code: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Zoek breder in de externe index met datagedreven analyse-termen.
+
+    Deze recall-stap bevat geen productnamen of productspecifieke regels. De
+    extra zoektermen komen uit de bestaande taxonomie, retailerdata en de
+    genormaliseerde bonregel. Kandidaten blijven daarna door dezelfde scoring en
+    minimumscore-filter gaan als de primaire matchflow.
+    """
+    analysis = analyze_receipt_product_line(receipt_line_text, retailer_code=retailer_code)
+    search_terms = [term for term in analysis.searchable_terms if str(term or "").strip()]
+    rows = search_external_product_index_candidates(
+        receipt_line_text,
+        limit=200,
+        retailer_code=analysis.retailer_code or retailer_code,
+        additional_search_terms=search_terms,
+    )
+
+    scored = [_m2c2i2_score_candidate(receipt_line_text, row) for row in rows]
+    if analysis.product_intent:
+        scored = [
+            candidate
+            for candidate in scored
+            if candidate.get("candidate_product_intent") == analysis.product_intent
+        ]
+    else:
+        scored = [
+            candidate
+            for candidate in scored
+            if candidate.get("has_meaningful_intent_match", True)
+        ]
+
+    scored.sort(key=lambda item: (-_candidate_score(item), str(item.get("candidate_name") or "")))
+    return scored[:10], {
+        "uses_generic_recall_expansion": True,
+        "generic_recall_search_terms": search_terms[:20],
+        "generic_recall_index_rows": len(rows),
+        "generic_recall_scored_rows": len(scored),
+        "generic_recall_product_intent": analysis.product_intent,
+        "generic_recall_category": analysis.category,
+        "generic_recall_product_type": analysis.product_type,
+    }
+
+
 def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
     candidates = list(result.get("candidates") or [])
+    recall_meta: dict[str, Any] = {}
     if not candidates:
-        return result
+        candidates, recall_meta = _generic_recall_candidates(receipt_line_text, retailer_code)
+        if not candidates:
+            enriched_empty = dict(result)
+            enriched_empty.update(recall_meta)
+            enriched_empty["candidates"] = []
+            enriched_empty["uses_product_evidence_scoring"] = False
+            enriched_empty["uses_visible_candidate_score_filter"] = True
+            enriched_empty["minimum_visible_candidate_score"] = MIN_VISIBLE_CANDIDATE_SCORE
+            enriched_empty["candidate_count_after_score_filter"] = 0
+            enriched_empty["creates_global_product"] = False
+            enriched_empty["creates_household_article"] = False
+            enriched_empty["creates_inventory_event"] = False
+            return enriched_empty
 
     evidence_packet = build_product_evidence_packet_dict(receipt_line_text, retailer_code=retailer_code)
     rescored = apply_product_evidence_to_candidates(
@@ -57,6 +118,7 @@ def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retai
     visible = [candidate for candidate in normalized if _is_visible_candidate(candidate)]
 
     enriched = dict(result)
+    enriched.update(recall_meta)
     enriched["candidates"] = visible[:5]
     enriched["uses_product_evidence_scoring"] = True
     enriched["uses_candidate_deduplication"] = len(normalized) < len(rescored)
