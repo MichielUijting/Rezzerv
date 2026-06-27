@@ -184,6 +184,31 @@ table.rz-table{
   outline: 2px solid var(--color-brand-primary);
 }
 
+.rz-table--resizable-columns thead tr:first-child th{
+  position: relative;
+}
+
+.rz-table--resizable-columns thead tr:first-child th::after{
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+}
+
+.rz-table--resizable-columns thead tr:first-child th:hover::after{
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.rz-table-column-resizing,
+.rz-table-column-resizing *{
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
 /* Rezzerv table density: compact body rows */
 .rz-table.rz-table--compact {
   --rz-table-body-row-height: 28px;
