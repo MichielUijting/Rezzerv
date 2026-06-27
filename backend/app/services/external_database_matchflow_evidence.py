@@ -10,10 +10,13 @@ from app.services.external_database_matchers import (
     normalize_match_text,
 )
 from app.services.product_evidence_packet import apply_product_evidence_to_candidates, build_product_evidence_packet_dict
+from app.services.product_intent_classifier import classify_product_intent
+from app.services.product_taxonomy_store import normalize_taxonomy_text
 
 STRONG_CONTAINMENT_MIN_SCORE = 0.70
 STRONG_CONTAINMENT_TEXT_SCORE = 0.92
 STRONG_CONTAINMENT_MIN_TOKEN_COUNT = 1
+TAXONOMY_INTENT_MATCH_MIN_SCORE = 0.70
 
 
 def _candidate_score(candidate: dict[str, Any]) -> float:
@@ -25,6 +28,25 @@ def _candidate_score(candidate: dict[str, Any]) -> float:
 
 def _meaningful_tokens(value: str) -> set[str]:
     return {token for token in normalize_match_text(value).split() if len(token) >= 3}
+
+
+def _candidate_source_code(candidate: dict[str, Any]) -> str:
+    for key in ("candidate_source_product_code", "source_product_code", "code", "retailer_article_number"):
+        value = str(candidate.get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def _candidate_intent(candidate: dict[str, Any]) -> str:
+    explicit_intent = str(candidate.get("candidate_product_intent") or candidate.get("product_intent") or "").strip()
+    if explicit_intent:
+        return explicit_intent
+
+    source_code = _candidate_source_code(candidate)
+    if ":" in source_code:
+        return source_code.split(":", 1)[1].strip()
+    return ""
 
 
 def _text_overlap(receipt_line_text: str, candidate_name: str) -> tuple[bool, float, list[str]]:
@@ -80,6 +102,35 @@ def _apply_strong_text_containment_boost(
     return boosted
 
 
+def _apply_taxonomy_intent_match_boost(
+    candidates: list[dict[str, Any]],
+    receipt_line_text: str,
+    retailer_code: str,
+) -> list[dict[str, Any]]:
+    receipt_intent = classify_product_intent(receipt_line_text, retailer_code=retailer_code)
+    if not receipt_intent:
+        return candidates
+
+    boosted: list[dict[str, Any]] = []
+    for candidate in candidates:
+        next_candidate = dict(candidate)
+        candidate_intent = _candidate_intent(next_candidate)
+        current_score = _candidate_score(next_candidate)
+        if candidate_intent == receipt_intent and current_score < TAXONOMY_INTENT_MATCH_MIN_SCORE:
+            next_candidate["score"] = TAXONOMY_INTENT_MATCH_MIN_SCORE
+            next_candidate["candidate_status"] = candidate_status_for_score(TAXONOMY_INTENT_MATCH_MIN_SCORE)
+            next_candidate["is_probable"] = TAXONOMY_INTENT_MATCH_MIN_SCORE >= 0.85
+            next_candidate["taxonomy_intent_match_boost_applied"] = True
+            next_candidate["taxonomy_intent_match_key"] = receipt_intent
+            breakdown = dict(next_candidate.get("score_breakdown") or {})
+            breakdown["taxonomy_intent_match_score"] = TAXONOMY_INTENT_MATCH_MIN_SCORE
+            next_candidate["score_breakdown"] = breakdown
+        else:
+            next_candidate["taxonomy_intent_match_boost_applied"] = False
+        boosted.append(next_candidate)
+    return boosted
+
+
 def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
     candidates = list(result.get("candidates") or [])
     if not candidates:
@@ -94,6 +145,7 @@ def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retai
     )
     normalized = normalize_external_candidates(rescored, evidence_packet=evidence_packet)
     boosted = _apply_strong_text_containment_boost(normalized, receipt_line_text)
+    boosted = _apply_taxonomy_intent_match_boost(boosted, receipt_line_text, normalize_taxonomy_text(retailer_code))
     boosted.sort(key=lambda candidate: (-_candidate_score(candidate), str(candidate.get("candidate_name") or "")))
 
     enriched = dict(result)
@@ -104,7 +156,12 @@ def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retai
         bool(candidate.get("strong_text_containment_boost_applied"))
         for candidate in boosted
     )
+    enriched["uses_taxonomy_intent_match_boost"] = any(
+        bool(candidate.get("taxonomy_intent_match_boost_applied"))
+        for candidate in boosted
+    )
     enriched["strong_text_containment_min_score"] = STRONG_CONTAINMENT_MIN_SCORE
+    enriched["taxonomy_intent_match_min_score"] = TAXONOMY_INTENT_MATCH_MIN_SCORE
     enriched["candidate_count_before_deduplication"] = len(rescored)
     enriched["candidate_count_after_deduplication"] = len(normalized[:5])
     enriched["creates_global_product"] = False
