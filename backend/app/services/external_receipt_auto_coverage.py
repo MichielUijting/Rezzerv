@@ -18,15 +18,6 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _has_external_article_code(item: dict[str, Any]) -> bool:
-    return bool(
-        _text(item.get("retailer_article_number"))
-        or _text(item.get("external_article_code"))
-        or _text(item.get("gtin"))
-        or _text(item.get("barcode"))
-    )
-
-
 def _receipt_table_exists(conn) -> bool:
     dialect_name = str(engine.dialect.name or "").lower()
     if dialect_name == "sqlite":
@@ -101,9 +92,6 @@ def auto_ensure_external_candidates_for_receipt_table(
     Dit is productgedrag, geen PO-rapport. De functie mag uitsluitend kandidaatcache
     vullen in `external_product_candidates`. Ze maakt geen Mijn artikel, geen
     global product en geen voorraadmutatie.
-
-    Harde domeinregel: als een bonregel al een externe artikelcode heeft, is het
-    artikel al extern herleidbaar. Dan zoeken of schrijven we geen kandidaatartikel.
     """
     items = _receipt_table_items(receipt_table_id)
     if not items:
@@ -116,27 +104,16 @@ def auto_ensure_external_candidates_for_receipt_table(
             "saved_count": 0,
             "updated_count": 0,
             "skipped_count": 0,
-            "skipped_external_code_count": 0,
             "errors": [],
             "creates_global_product": False,
             "creates_household_article": False,
             "creates_inventory_event": False,
         }
 
-    coded_items = [item for item in items if _has_external_article_code(item)]
-    searchable_items = [item for item in items if not _has_external_article_code(item)]
-
     result = ensure_external_receipt_item_candidates(
-        items=searchable_items,
+        items=items,
         include_below_threshold=include_below_threshold,
-    ) if searchable_items else {
-        "ok": True,
-        "processed": 0,
-        "saved_count": 0,
-        "updated_count": 0,
-        "skipped_count": 0,
-        "errors": [],
-    }
+    )
 
     return {
         "ok": bool(result.get("ok", True)),
@@ -146,8 +123,7 @@ def auto_ensure_external_candidates_for_receipt_table(
         "processed": int(result.get("processed") or 0),
         "saved_count": int(result.get("saved_count") or 0),
         "updated_count": int(result.get("updated_count") or 0),
-        "skipped_count": int(result.get("skipped_count") or 0) + len(coded_items),
-        "skipped_external_code_count": len(coded_items),
+        "skipped_count": int(result.get("skipped_count") or 0),
         "errors": list(result.get("errors") or []),
         "creates_global_product": False,
         "creates_household_article": False,
