@@ -4,98 +4,15 @@ from typing import Any
 
 from app.services import external_product_candidate_store as candidate_store
 from app.services.external_candidate_normalization import normalize_external_candidates
-from app.services.external_database_matchers import (
-    _m2c2i2_score_candidate,
-    match_retailer_receipt_line as _base_match_retailer_receipt_line,
-)
-from app.services.external_product_index_store import search_external_product_index_candidates
+from app.services.external_database_matchers import match_retailer_receipt_line as _base_match_retailer_receipt_line
 from app.services.product_evidence_packet import apply_product_evidence_to_candidates, build_product_evidence_packet_dict
-from app.services.receipt_product_intent_analyzer import analyze_receipt_product_line
-
-MIN_VISIBLE_CANDIDATE_SCORE = 0.70
-VISIBLE_CANDIDATE_STATUSES = {
-    "possible_candidate",
-    "probable_candidate",
-    "linked_to_catalog",
-    "user_confirmed",
-    "external_database_override",
-}
 
 
-def _candidate_score(candidate: dict[str, Any]) -> float:
-    try:
-        return float(candidate.get("score") or 0)
-    except (TypeError, ValueError):
-        return 0.0
+def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
+    candidates = list(result.get("candidates") or [])
+    if not candidates:
+        return result
 
-
-def _is_visible_candidate(candidate: dict[str, Any]) -> bool:
-    """Generieke kwaliteitsgrens voor kandidaatartikelen.
-
-    Dit bevat nadrukkelijk geen artikelinhoudelijke kennis. Kandidaten onder de
-    minimumscore blijven diagnostisch mogelijk, maar worden niet als bruikbaar
-    kandidaatartikel opgeslagen/getoond in de reguliere matchflow.
-    """
-    status = str(candidate.get("candidate_status") or candidate.get("status") or "").strip().lower()
-    if status in VISIBLE_CANDIDATE_STATUSES:
-        return _candidate_score(candidate) >= MIN_VISIBLE_CANDIDATE_SCORE or status in {
-            "linked_to_catalog",
-            "user_confirmed",
-            "external_database_override",
-        }
-    return _candidate_score(candidate) >= MIN_VISIBLE_CANDIDATE_SCORE
-
-
-def _generic_recall_candidates(receipt_line_text: str, retailer_code: str) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Zoek breder in de externe index met datagedreven analyse-termen.
-
-    Deze recall-stap bevat geen productnamen of productspecifieke regels. De
-    extra zoektermen komen uit de bestaande taxonomie, retailerdata en de
-    genormaliseerde bonregel. Kandidaten blijven daarna door dezelfde scoring en
-    minimumscore-filter gaan als de primaire matchflow.
-    """
-    analysis = analyze_receipt_product_line(receipt_line_text, retailer_code=retailer_code)
-    search_terms = [term for term in analysis.searchable_terms if str(term or "").strip()]
-    rows = search_external_product_index_candidates(
-        receipt_line_text,
-        limit=200,
-        retailer_code=analysis.retailer_code or retailer_code,
-        additional_search_terms=search_terms,
-    )
-
-    scored = [_m2c2i2_score_candidate(receipt_line_text, row) for row in rows]
-    if analysis.product_intent:
-        scored = [
-            candidate
-            for candidate in scored
-            if candidate.get("candidate_product_intent") == analysis.product_intent
-        ]
-    else:
-        scored = [
-            candidate
-            for candidate in scored
-            if candidate.get("has_meaningful_intent_match", True)
-        ]
-
-    scored.sort(key=lambda item: (-_candidate_score(item), str(item.get("candidate_name") or "")))
-    return scored[:10], {
-        "uses_generic_recall_expansion": True,
-        "generic_recall_search_terms": search_terms[:20],
-        "generic_recall_index_rows": len(rows),
-        "generic_recall_scored_rows": len(scored),
-        "generic_recall_product_intent": analysis.product_intent,
-        "generic_recall_category": analysis.category,
-        "generic_recall_product_type": analysis.product_type,
-    }
-
-
-def _score_and_filter_candidates(
-    result: dict[str, Any],
-    candidates: list[dict[str, Any]],
-    receipt_line_text: str,
-    retailer_code: str,
-    recall_meta: dict[str, Any] | None = None,
-) -> dict[str, Any]:
     evidence_packet = build_product_evidence_packet_dict(receipt_line_text, retailer_code=retailer_code)
     rescored = apply_product_evidence_to_candidates(
         receipt_line_text,
@@ -104,81 +21,17 @@ def _score_and_filter_candidates(
         evidence_packet=evidence_packet,
     )
     normalized = normalize_external_candidates(rescored, evidence_packet=evidence_packet)
-    visible = [candidate for candidate in normalized if _is_visible_candidate(candidate)]
 
     enriched = dict(result)
-    enriched.update(recall_meta or {})
-    enriched["candidates"] = visible[:5]
+    enriched["candidates"] = normalized[:5]
     enriched["uses_product_evidence_scoring"] = True
     enriched["uses_candidate_deduplication"] = len(normalized) < len(rescored)
-    enriched["uses_visible_candidate_score_filter"] = True
-    enriched["minimum_visible_candidate_score"] = MIN_VISIBLE_CANDIDATE_SCORE
     enriched["candidate_count_before_deduplication"] = len(rescored)
-    enriched["candidate_count_after_deduplication"] = len(normalized)
-    enriched["candidate_count_after_score_filter"] = len(visible[:5])
-    enriched["suppressed_weak_candidate_count"] = max(0, len(normalized) - len(visible))
+    enriched["candidate_count_after_deduplication"] = len(normalized[:5])
     enriched["creates_global_product"] = False
     enriched["creates_household_article"] = False
     enriched["creates_inventory_event"] = False
     return enriched
-
-
-def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retailer_code: str) -> dict[str, Any]:
-    primary_candidates = list(result.get("candidates") or [])
-
-    if primary_candidates:
-        primary_enriched = _score_and_filter_candidates(
-            result,
-            primary_candidates,
-            receipt_line_text,
-            retailer_code,
-        )
-        if primary_enriched.get("candidates"):
-            primary_enriched["uses_generic_recall_expansion"] = False
-            primary_enriched["generic_recall_reason"] = "primary_candidates_passed_score_filter"
-            return primary_enriched
-
-        # Primair zijn er alleen zwakke kandidaten. Dat mag de bredere zoekslag
-        # niet blokkeren, anders blijft de score altijd laag.
-        recall_candidates, recall_meta = _generic_recall_candidates(receipt_line_text, retailer_code)
-        recall_meta["generic_recall_reason"] = "primary_candidates_failed_score_filter"
-        recall_meta["primary_candidate_count_before_recall"] = len(primary_candidates)
-        recall_meta["primary_candidate_count_after_score_filter"] = 0
-        if recall_candidates:
-            return _score_and_filter_candidates(
-                result,
-                recall_candidates,
-                receipt_line_text,
-                retailer_code,
-                recall_meta=recall_meta,
-            )
-
-        primary_enriched.update(recall_meta)
-        primary_enriched["candidates"] = []
-        return primary_enriched
-
-    recall_candidates, recall_meta = _generic_recall_candidates(receipt_line_text, retailer_code)
-    recall_meta["generic_recall_reason"] = "no_primary_candidates"
-    if recall_candidates:
-        return _score_and_filter_candidates(
-            result,
-            recall_candidates,
-            receipt_line_text,
-            retailer_code,
-            recall_meta=recall_meta,
-        )
-
-    enriched_empty = dict(result)
-    enriched_empty.update(recall_meta)
-    enriched_empty["candidates"] = []
-    enriched_empty["uses_product_evidence_scoring"] = False
-    enriched_empty["uses_visible_candidate_score_filter"] = True
-    enriched_empty["minimum_visible_candidate_score"] = MIN_VISIBLE_CANDIDATE_SCORE
-    enriched_empty["candidate_count_after_score_filter"] = 0
-    enriched_empty["creates_global_product"] = False
-    enriched_empty["creates_household_article"] = False
-    enriched_empty["creates_inventory_event"] = False
-    return enriched_empty
 
 
 def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, include_below_threshold: bool = True) -> dict[str, Any]:
