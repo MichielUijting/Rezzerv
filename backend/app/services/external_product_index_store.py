@@ -14,6 +14,16 @@ from app.services.product_taxonomy_store import _seed_payload
 
 CATALOG_SEED_PATH = Path(__file__).resolve().parents[1] / "data" / "lidl_catalog_enrichment_seed.json"
 
+# M2C2i24S-c: taxonomie-indexrijen zijn generiek per ondersteunde retailer.
+# Productbetekenis komt uit de taxonomie-data, niet uit Python-artikelregels.
+TAXONOMY_INDEX_RETAILERS: tuple[tuple[str, str], ...] = (
+    ("lidl", "Lidl"),
+    ("jumbo", "Jumbo"),
+    ("albert heijn", "Albert Heijn"),
+    ("aldi", "Aldi"),
+    ("plus", "PLUS"),
+)
+
 INDEX_COLUMNS: dict[str, str] = {
     "id": "TEXT PRIMARY KEY",
     "source_name": "TEXT",
@@ -106,54 +116,68 @@ def _catalog_payload() -> dict[str, Any]:
     return json.loads(CATALOG_SEED_PATH.read_text(encoding="utf-8"))
 
 
+def _taxonomy_index_row(
+    retailer_code: str,
+    retailer_name: str,
+    item: dict[str, Any],
+    timestamp: str,
+) -> dict[str, Any] | None:
+    intent_key = str(item.get("intent_key") or "").strip()
+    if not intent_key:
+        return None
+
+    canonical = str(item.get("canonical_name") or intent_key).strip()
+    category = str(item.get("category") or "").strip()
+    product_type = str(item.get("product_type") or "").strip()
+    synonyms = [str(value or "") for value in (item.get("synonyms") or [])]
+    source_product_code = f"{retailer_code}:{intent_key}"
+    product_name = f"{retailer_name} {canonical}".strip()
+    brand = retailer_name
+    normalized_search_text = normalize_index_text(" ".join([
+        retailer_name,
+        retailer_code,
+        brand,
+        product_name,
+        canonical,
+        category,
+        product_type,
+        intent_key,
+        *synonyms,
+        source_product_code,
+    ]))
+    return {
+        "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"rezzerv-taxonomy-index:{retailer_code}:{intent_key}")),
+        "source_name": "product_taxonomy_seed",
+        "source_product_code": source_product_code,
+        "gtin": "",
+        "ean": "",
+        "code": source_product_code,
+        "product_name": product_name,
+        "brand": brand,
+        "brands": brand,
+        "quantity": "",
+        "net_content": "",
+        "packaging": "",
+        "category": category,
+        "categories": category,
+        "image_url": "",
+        "source_url": "",
+        "retailer_code": retailer_code,
+        "normalized_search_text": normalized_search_text,
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
+
+
 def _json_seed_rows() -> list[dict[str, Any]]:
     timestamp = now_iso()
     rows: list[dict[str, Any]] = []
-    retailers = [("lidl", "Lidl")]
-    for retailer_code, retailer_name in retailers:
-        for index, item in enumerate(_seed_payload().get("taxonomy") or []):
-            intent_key = str(item.get("intent_key") or "").strip()
-            canonical = str(item.get("canonical_name") or intent_key).strip()
-            category = str(item.get("category") or "").strip()
-            product_type = str(item.get("product_type") or "").strip()
-            synonyms = [str(value or "") for value in (item.get("synonyms") or [])]
-            source_product_code = f"{retailer_code}:{intent_key}"
-            product_name = f"{retailer_name} {canonical}".strip()
-            brand = retailer_name
-            normalized_search_text = normalize_index_text(" ".join([
-                retailer_name,
-                retailer_code,
-                brand,
-                product_name,
-                canonical,
-                category,
-                product_type,
-                intent_key,
-                *synonyms,
-                source_product_code,
-            ]))
-            rows.append({
-                "id": str(uuid.uuid5(uuid.NAMESPACE_URL, f"rezzerv-taxonomy-index:{retailer_code}:{intent_key}")),
-                "source_name": "product_taxonomy_seed",
-                "source_product_code": source_product_code,
-                "gtin": "",
-                "ean": "",
-                "code": source_product_code,
-                "product_name": product_name,
-                "brand": brand,
-                "brands": brand,
-                "quantity": "",
-                "net_content": "",
-                "packaging": "",
-                "category": category,
-                "categories": category,
-                "image_url": "",
-                "source_url": "",
-                "retailer_code": retailer_code,
-                "normalized_search_text": normalized_search_text,
-                "created_at": timestamp,
-                "updated_at": timestamp,
-            })
+    for retailer_code, retailer_name in TAXONOMY_INDEX_RETAILERS:
+        for item in _seed_payload().get("taxonomy") or []:
+            row = _taxonomy_index_row(retailer_code, retailer_name, item, timestamp)
+            if row:
+                rows.append(row)
+
     for rule in _catalog_payload().get("rules") or []:
         source_product_code = str(rule.get("source_product_code") or "").strip()
         if not source_product_code:
@@ -238,11 +262,21 @@ def ensure_external_product_index_seeded(minimum_rows: int = 1) -> dict[str, Any
                         brand = EXCLUDED.brand,
                         quantity = EXCLUDED.quantity,
                         category = EXCLUDED.category,
+                        retailer_code = EXCLUDED.retailer_code,
                         normalized_search_text = EXCLUDED.normalized_search_text,
                         updated_at = EXCLUDED.updated_at
                 """), row)
             inserted += 1
-    return {"ok": True, "seeded": True, "inserted": inserted, "source": "json_seed"}
+    return {
+        "ok": True,
+        "seeded": True,
+        "inserted": inserted,
+        "source": "json_seed",
+        "taxonomy_index_retailers": [retailer_code for retailer_code, _ in TAXONOMY_INDEX_RETAILERS],
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_inventory_event": False,
+    }
 
 
 def search_external_product_index_candidates(

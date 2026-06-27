@@ -42,10 +42,14 @@ from app.services.external_product_catalog_store import (
     list_catalog_products,
     promote_highest_candidate_to_catalog,
 )
+from app.services.external_receipt_auto_coverage import install_receipt_auto_candidate_coverage
+from app.services.external_receipt_coverage_report import build_blind_receipt_coverage_report
+from app.services.external_receipt_item_projection import install_receipt_table_line_projection
 from app.services.external_relation_batch_store import (
     apply_external_relation_batch_decision,
     list_external_relation_batch_items,
 )
+from app.services.open_food_facts_search_preview import search_open_food_facts_preview
 
 router = APIRouter()
 logger = logging.getLogger('rezzerv.api')
@@ -131,6 +135,20 @@ def external_databases_save_candidates(retailer_code: str, payload: dict[str, An
     )
 
 
+@router.post('/api/external-databases/off/search-preview')
+def external_databases_open_food_facts_search_preview(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Read-only OFF search from Rezzerv candidate evidence.
+
+    M2C2i-25A/B: this endpoint only searches and scores Open Food Facts results.
+    It must not create global products, household articles, inventory events or
+    external candidate rows.
+    """
+    result = search_open_food_facts_preview(payload)
+    if not bool(result.get('ok', True)):
+        raise HTTPException(status_code=400, detail=result.get('error') or 'OFF search-preview kon niet worden uitgevoerd')
+    return result
+
+
 @router.get('/api/external-databases/receipt-items')
 def external_databases_receipt_items(limit: int = Query(default=200)):
     return list_external_receipt_items(limit=limit)
@@ -140,6 +158,14 @@ def external_databases_receipt_items(limit: int = Query(default=200)):
 def external_databases_ensure_receipt_item_candidates(payload: dict[str, Any] = Body(default_factory=dict)):
     return ensure_external_receipt_item_candidates(
         items=list(payload.get('items') or []),
+        include_below_threshold=bool(payload.get('include_below_threshold', True)),
+    )
+
+
+@router.post('/api/external-databases/coverage/receipt-items')
+def external_databases_blind_receipt_item_coverage(payload: dict[str, Any] = Body(default_factory=dict)):
+    return build_blind_receipt_coverage_report(
+        limit=int(payload.get('limit') or 500),
         include_below_threshold=bool(payload.get('include_below_threshold', True)),
     )
 
@@ -216,7 +242,19 @@ def route_governance_manifest():
 
 @router.on_event('startup')
 def warm_receipt_runtime_at_startup():
-    """Warm receipt OCR/preprocessing runtime to avoid first-upload cold-start failures."""
+    """Warm receipt OCR/preprocessing runtime and install receipt hooks."""
+    try:
+        auto_coverage_result = install_receipt_auto_candidate_coverage()
+        logger.info('Automatische externe kandidaatdekking geïnstalleerd: %s', auto_coverage_result)
+    except Exception as exc:
+        logger.warning('Automatische externe kandidaatdekking kon niet worden geïnstalleerd: %s', exc)
+
+    try:
+        projection_result = install_receipt_table_line_projection()
+        logger.info('Receipt-table-line projectie geïnstalleerd: %s', projection_result)
+    except Exception as exc:
+        logger.warning('Receipt-table-line projectie kon niet worden geïnstalleerd: %s', exc)
+
     try:
         from app.receipt_ingestion.preprocessing.receipt_image_preprocessing import warm_receipt_image_preprocessing
         from app.services.receipt_service import warm_receipt_ocr_runtime
