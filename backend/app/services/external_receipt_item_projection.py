@@ -109,6 +109,19 @@ def _candidate_context_keys(rows: list[dict[str, Any]]) -> set[str]:
     return {_text(row.get("context_key")) for row in rows if _text(row.get("context_key"))}
 
 
+def _receipt_key(row: dict[str, Any]) -> str:
+    if hasattr(candidate_store, "_m2c2i_fix7a3_normalized_receipt_key"):
+        return candidate_store._m2c2i_fix7a3_normalized_receipt_key(
+            row.get("retailer_code"),
+            row.get("receipt_line_text"),
+        )
+
+    retailer = _text(row.get("retailer_code")).lower()
+    receipt_text = _text(row.get("receipt_line_text")).lower().replace(".", "")
+    receipt_text = " ".join(receipt_text.split())
+    return f"{retailer}|{receipt_text}"
+
+
 def _receipt_table_line_placeholder(row: dict[str, Any]) -> dict[str, Any]:
     receipt_line_id = _text(row.get("receipt_line_id"))
     retailer_code = _text(row.get("retailer_code")).lower() or "onbekend"
@@ -205,6 +218,104 @@ def _latest_candidates(limit: int) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def _candidates_by_receipt_key(placeholders: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for placeholder in placeholders:
+        key = _receipt_key(placeholder)
+        if not key or key == "|":
+            continue
+        candidates = [dict(candidate) for candidate in list(placeholder.get("candidates") or []) if isinstance(candidate, dict)]
+        if not candidates:
+            continue
+        grouped.setdefault(key, []).extend(candidates)
+    return grouped
+
+
+def _merge_candidates_preserving_visible_item(
+    item: dict[str, Any],
+    extra_candidates: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Vul alleen kandidaatdetails aan; vervang de zichtbare bonartikelrij niet.
+
+    Bestaande artikelcodes/catalogusstatussen van purchase_import_lines blijven leidend.
+    Receipt-table-line-kandidaten zijn detailvoorstellen onder dezelfde bonartikeltekst.
+    """
+    if not extra_candidates:
+        return item
+
+    next_item = dict(item)
+    original_values = {
+        "retailer_article_number": next_item.get("retailer_article_number"),
+        "candidate_source_product_code": next_item.get("candidate_source_product_code"),
+        "source_product_code": next_item.get("source_product_code"),
+        "gtin": next_item.get("gtin"),
+        "global_product_id": next_item.get("global_product_id"),
+        "status": next_item.get("status"),
+        "candidate_status": next_item.get("candidate_status"),
+        "is_linked_to_catalog": next_item.get("is_linked_to_catalog"),
+        "is_existing_link_for_receipt_item": next_item.get("is_existing_link_for_receipt_item"),
+        "canonical_catalog_product_id": next_item.get("canonical_catalog_product_id"),
+    }
+
+    merged_candidates = _dedupe_detail_candidates(
+        [dict(candidate) for candidate in list(next_item.get("candidates") or []) if isinstance(candidate, dict)]
+        + [dict(candidate) for candidate in extra_candidates if isinstance(candidate, dict)]
+    )
+    next_item["candidates"] = merged_candidates
+    next_item["candidate_count"] = len(merged_candidates)
+    next_item["has_receipt_table_line_candidate_details"] = bool(merged_candidates)
+
+    status = _text(next_item.get("status") or next_item.get("candidate_status")).lower()
+    if merged_candidates and status in {"", "no_candidate"}:
+        next_item["status"] = "candidate"
+        next_item["candidate_status"] = "candidate"
+
+    # Zet originele zichtbare artikelcodes en cataloguskoppelingen terug zodra die al bestonden.
+    # Daarmee kan de nieuwe receipt_table_lines-projectie niets goeds uit de oude weergave wissen.
+    for field_name, value in original_values.items():
+        if _text(value):
+            next_item[field_name] = value
+
+    return next_item
+
+
+def _merge_receipt_table_candidates_into_existing_items(
+    items: list[dict[str, Any]],
+    receipt_placeholders: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    candidates_by_key = _candidates_by_receipt_key(receipt_placeholders)
+    if not candidates_by_key:
+        return items, 0
+
+    merged_count = 0
+    merged_items: list[dict[str, Any]] = []
+    for item in items:
+        key = _receipt_key(item)
+        extra_candidates = candidates_by_key.get(key, [])
+        if extra_candidates:
+            merged_count += 1
+            merged_items.append(_merge_candidates_preserving_visible_item(item, extra_candidates))
+        else:
+            merged_items.append(item)
+
+    return merged_items, merged_count
+
+
+def _append_missing_receipt_table_placeholders(
+    items: list[dict[str, Any]],
+    receipt_placeholders: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    visible_keys = {_receipt_key(item) for item in items if _receipt_key(item)}
+    missing = [
+        placeholder
+        for placeholder in receipt_placeholders
+        if _receipt_key(placeholder) and _receipt_key(placeholder) not in visible_keys
+    ]
+    if not missing:
+        return items, 0
+    return items + missing, len(missing)
+
+
 def _enrich_receipt_table_items(result: dict[str, Any], limit: int) -> dict[str, Any]:
     normalized_limit = max(1, min(int(limit or 500), 500))
     items = [dict(item) for item in list(result.get("items") or []) if isinstance(item, dict)]
@@ -218,7 +329,16 @@ def _enrich_receipt_table_items(result: dict[str, Any], limit: int) -> dict[str,
             candidates,
         )
 
-    combined = [_project_best_candidate(item) for item in items + receipt_placeholders]
+    items_with_merged_candidates, merged_existing_rows = _merge_receipt_table_candidates_into_existing_items(
+        items,
+        receipt_placeholders,
+    )
+    combined, appended_receipt_table_rows = _append_missing_receipt_table_placeholders(
+        items_with_merged_candidates,
+        receipt_placeholders,
+    )
+
+    combined = [_project_best_candidate(item) for item in combined]
     if hasattr(candidate_store, "_m2c2i_fix2_apply_status_fields"):
         combined = candidate_store._m2c2i_fix2_apply_status_fields(combined)
     if hasattr(candidate_store, "_m2c2i_fix7b_dedupe_top_receipt_items"):
@@ -227,9 +347,12 @@ def _enrich_receipt_table_items(result: dict[str, Any], limit: int) -> dict[str,
     next_result = dict(result)
     next_result["items"] = combined[:normalized_limit]
     next_result["receipt_table_line_rows"] = len(receipt_placeholders)
+    next_result["receipt_table_candidate_merge_rows"] = merged_existing_rows
+    next_result["receipt_table_placeholder_append_rows"] = appended_receipt_table_rows
     next_result["total"] = len(next_result["items"])
     next_result["uses_candidate_projection_normalization"] = True
     next_result["uses_receipt_table_line_projection"] = True
+    next_result["receipt_table_lines_are_supplemental"] = True
     next_result["creates_global_product"] = False
     next_result["creates_household_article"] = False
     next_result["creates_inventory_event"] = False
