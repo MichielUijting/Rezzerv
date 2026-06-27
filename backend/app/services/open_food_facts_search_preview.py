@@ -12,8 +12,9 @@ from app.services.external_retailer_taxonomy import build_off_query_terms
 from app.services.product_taxonomy_store import normalize_taxonomy_text
 
 OFF_SEARCH_BASE_URL = os.getenv("REZZERV_OFF_SEARCH_BASE_URL", "https://world.openfoodfacts.org/cgi/search.pl").strip()
-OFF_SEARCH_TIMEOUT_SECONDS = float(os.getenv("REZZERV_OFF_SEARCH_TIMEOUT_SECONDS", "4.0") or 4.0)
+OFF_SEARCH_TIMEOUT_SECONDS = float(os.getenv("REZZERV_OFF_SEARCH_TIMEOUT_SECONDS", "2.0") or 2.0)
 OFF_SEARCH_MAX_RESULTS = 10
+OFF_SEARCH_MAX_QUERIES = max(1, min(int(os.getenv("REZZERV_OFF_SEARCH_MAX_QUERIES", "1") or 1), 4))
 OFF_SEARCH_FIELDS = ",".join([
     "code",
     "product_name",
@@ -70,6 +71,14 @@ def _unique_terms(values: list[str]) -> list[str]:
     return terms
 
 
+def _rank_query_terms(search_terms: list[str]) -> list[str]:
+    """Prefer specific OFF searches over broad terms like just 'teriyaki'."""
+    return sorted(
+        search_terms,
+        key=lambda term: (-len(term.split()), -len(term), term),
+    )
+
+
 def build_off_search_terms(
     *,
     receipt_line_text: str,
@@ -88,11 +97,11 @@ def build_off_search_terms(
     normalized_candidate_name = _candidate_name_without_retailer(candidate_name or "", retailer_code)
     taxonomy_terms = build_off_query_terms(receipt_line_text, retailer_code)
     return _unique_terms([
-        normalized_candidate_name,
+        f"{normalized_candidate_name} {product_type or ''} {category or ''}",
         f"{normalized_candidate_name} {product_type or ''}",
         f"{normalized_candidate_name} {category or ''}",
-        f"{normalized_candidate_name} {product_type or ''} {category or ''}",
         f"{normalized_candidate_name} {quantity_label or ''}",
+        normalized_candidate_name,
         candidate_brand or "",
         category or "",
         product_type or "",
@@ -226,7 +235,7 @@ def _query_off(search_term: str, page_size: int) -> tuple[list[dict[str, Any]], 
         url,
         headers={
             "Accept": "application/json",
-            "User-Agent": "Rezzerv/dev (M2C2i-25 OFF search preview)",
+            "User-Agent": "Rezzerv/dev (M2C2i-25 OFF search preview; contact: product-owner-local-test)",
         },
         method="GET",
     )
@@ -264,7 +273,9 @@ def search_open_food_facts_preview(payload: dict[str, Any]) -> dict[str, Any]:
         quantity_label=_text(payload.get("quantity_label")),
     )
     limit = max(1, min(int(payload.get("limit") or 5), OFF_SEARCH_MAX_RESULTS))
-    query_terms = [term for term in search_terms if term][:4]
+    requested_query_limit = int(payload.get("max_queries") or OFF_SEARCH_MAX_QUERIES)
+    query_limit = max(1, min(requested_query_limit, OFF_SEARCH_MAX_QUERIES))
+    query_terms = _rank_query_terms([term for term in search_terms if term])[:query_limit]
     if not query_terms:
         query_terms = [_normalize(receipt_line_text)]
 
@@ -292,14 +303,20 @@ def search_open_food_facts_preview(payload: dict[str, Any]) -> dict[str, Any]:
                 results_by_code[normalized["code"]] = normalized
 
     results = sorted(results_by_code.values(), key=lambda item: (-float(item.get("score") or 0), item.get("product_name") or ""))[:limit]
+    external_source_available = bool(diagnostics) and len(errors) < len(query_terms)
+    status = "found" if results else ("no_results" if external_source_available else "external_source_unavailable")
     return {
         "ok": True,
         "source_name": "open_food_facts",
         "mode": "read_only_search_preview",
+        "status": status,
+        "external_source_available": external_source_available,
         "receipt_line_text": receipt_line_text,
         "retailer_code": retailer_code,
         "search_terms": search_terms,
         "queried_terms": query_terms,
+        "query_limit": query_limit,
+        "timeout_seconds": OFF_SEARCH_TIMEOUT_SECONDS,
         "results": results,
         "result_count": len(results),
         "diagnostics": diagnostics,
