@@ -214,7 +214,7 @@ export default function ExternalDatabasesPage() {
           ) : null}
           {saveResult ? <div className="rz-inline-feedback rz-inline-feedback--success">Kandidaten opgeslagen: {saveResult.saved_count ?? 0} nieuw, {saveResult.updated_count ?? 0} bijgewerkt, {saveResult.skipped_count ?? 0} overgeslagen.</div> : null}
           {matchResult ? (
-            <Table dataTestId="external-database-candidates-table" tableClassName="rz-external-databases-table">
+            <Table dataTestId="external-database-candidates-table" tableClassName="rz-external-databases-table" resizableColumns>
               <colgroup><col className="rz-external-databases-col-candidate" /><col className="rz-external-databases-col-brand" /><col className="rz-external-databases-col-code" /><col className="rz-external-databases-col-variant" /><col className="rz-external-databases-col-score" /><col className="rz-external-databases-col-status" /></colgroup>
               <thead><tr className="rz-table-header"><th>Kandidaat</th><th>Merk</th><th>Artikelnummer</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr></thead>
               <tbody>{candidates.length ? candidates.map((candidate) => <tr key={`${candidate.candidate_name}-${candidate.retailer_article_number}-${candidate.variant}`}><td>{candidate.candidate_name}</td><td>{candidate.candidate_brand}</td><td>{candidate.retailer_article_number}</td><td>{candidate.variant || '-'}</td><td className="rz-num">{formatScore(candidate.score)}</td><td><StatusBadge status={candidate.candidate_status} /></td></tr>) : <tr><td colSpan="6">Geen kandidaten gevonden boven de drempel.</td></tr>}</tbody>
@@ -225,7 +225,7 @@ export default function ExternalDatabasesPage() {
     }
 
     return (
-      <Table dataTestId="external-database-retailers-table" tableClassName="rz-external-databases-retailer-table">
+      <Table dataTestId="external-database-retailers-table" tableClassName="rz-external-databases-retailer-table" resizableColumns>
         <colgroup><col className="rz-external-databases-col-retailer" /><col className="rz-external-databases-col-retailer-status" /><col className="rz-external-databases-col-retailer-threshold" /><col className="rz-external-databases-col-retailer-examples" /></colgroup>
         <thead><tr className="rz-table-header"><th>Winkelketen</th><th>Status</th><th className="rz-num">Drempel</th><th>Voorbeelden</th></tr></thead>
         <tbody>{retailers.length ? retailers.map((retailer) => <tr key={retailer.retailer_code}><td>{retailer.retailer_name}</td><td>{retailer.status}</td><td className="rz-num">{formatScore(retailer.probable_candidate_threshold)}</td><td>{(retailer.supported_examples || []).join(', ')}</td></tr>) : <tr><td colSpan="4">Geen winkelketens gevonden.</td></tr>}</tbody>
@@ -253,5 +253,3 @@ export default function ExternalDatabasesPage() {
     </AppShell>
   )
 }
-
-
