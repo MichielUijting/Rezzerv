@@ -28,8 +28,10 @@ def product_intent_match_score(receipt_text: str | None, candidate_text: str | N
     receipt_intent = classify_product_intent(receipt_text, retailer_code=retailer_code)
     candidate_intent = classify_product_intent(candidate_text, retailer_code=retailer_code)
 
+    # Onbekende intent is neutraal, niet negatief. Anders worden goede tekstuele
+    # matches kunstmatig gehalveerd zodra de taxonomie de productsoort nog niet kent.
     if not receipt_intent or not candidate_intent:
-        return 0.50
+        return 1.00
 
     if receipt_intent == candidate_intent:
         return 1.00
