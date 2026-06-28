@@ -22,6 +22,13 @@ def _number(value: Any) -> float | None:
         return None
 
 
+def _amount_text(value: Any) -> str:
+    number = _number(value)
+    if number is None:
+        return ""
+    return f"{number:.2f}"
+
+
 def _stamp_program_code(store_name: str | None) -> str:
     normalized = re.sub(r"[^a-z0-9]+", "_", _text(store_name).lower()).strip("_")
     return f"{normalized or 'unknown'}_spaarzegels"
@@ -104,15 +111,17 @@ def _spaarzegels_transaction_rows(conn, receipt_table_id: str) -> list[dict[str,
     transaction_rows: list[dict[str, Any]] = []
     for row in rows:
         row_data = dict(row)
+        line_total_text = _amount_text(row_data.get("line_total"))
+        unit_price_text = _amount_text(row_data.get("unit_price"))
         if not is_spaarzegels_flow_excluded({
             "receipt_line_text": row_data.get("raw_label") or row_data.get("normalized_label"),
             "raw_label": row_data.get("raw_label"),
             "normalized_label": row_data.get("normalized_label"),
             "quantity_label": row_data.get("quantity_label"),
             "quantity": row_data.get("quantity"),
-            "unit_price": row_data.get("unit_price"),
-            "line_total": row_data.get("line_total"),
-            "price": row_data.get("line_total"),
+            "unit_price": unit_price_text,
+            "line_total": line_total_text,
+            "price": line_total_text,
         }):
             continue
         transaction_rows.append({
