@@ -46,6 +46,13 @@ try {
   $frontendPath = Join-Path $repoRoot "frontend"
   $frontendPath = $frontendPath.Replace("\", "/")
 
+  $testFiles = @(
+    "tests/e2e/kassa.frontend-regression.spec.js",
+    "tests/e2e/uitpakken.frontend-regression.spec.js",
+    "tests/e2e/external-databases.frontend-regression.spec.js",
+    "tests/e2e/external-databases-off.frontend-regression.spec.js"
+  ) -join " "
+
   docker run --rm `
     --add-host=host.docker.internal:host-gateway `
     -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:5174 `
@@ -54,7 +61,7 @@ try {
     -v rezzerv_playwright_node_modules:/work/node_modules `
     -w /work `
     mcr.microsoft.com/playwright:v1.61.0-noble `
-    bash -lc "npm install --package-lock=false && ./node_modules/.bin/playwright test tests/e2e/kassa.frontend-regression.spec.js tests/e2e/uitpakken.frontend-regression.spec.js tests/e2e/external-databases.frontend-regression.spec.js"
+    bash -lc "npm install --package-lock=false && ./node_modules/.bin/playwright test --workers=3 $testFiles"
 
   if ($LASTEXITCODE -ne 0) {
     throw "Playwright frontend regressie is gefaald met exitcode $LASTEXITCODE."
