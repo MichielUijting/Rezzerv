@@ -166,6 +166,12 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(offCandidateRow.getByRole('cell', { name: '8710000000002', exact: true })).toBeVisible();
     await expect(page.getByTestId('external-off-candidates-table')).toHaveCount(0);
 
+    const confirmationDialog = page.getByRole('dialog');
+    if (await confirmationDialog.isVisible().catch(() => false)) {
+      await confirmationDialog.getByRole('button', { name: 'Sluiten' }).click();
+      await expect(confirmationDialog).toHaveCount(0);
+    }
+
     await offCandidateRow.locator('input[type="radio"]').check();
     await expect(page.getByRole('button', { name: 'Koppel artikel' })).toBeEnabled();
 
