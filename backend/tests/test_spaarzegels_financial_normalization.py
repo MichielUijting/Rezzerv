@@ -92,3 +92,9 @@ def test_gateway_preserves_quantity_unit_price_total_for_spaarzegels_pair():
     trace = line["producer_trace"]
     assert trace["line_type"] == "spaarzegels"
     assert trace["external_matching_allowed"] is False
+
+
+if __name__ == "__main__":
+    test_spaarzegels_financial_pair_combines_label_and_detail_line()
+    test_gateway_preserves_quantity_unit_price_total_for_spaarzegels_pair()
+    print("SPAARZEGELS_NORMALIZATION_OK")
