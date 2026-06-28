@@ -11,6 +11,7 @@ from sqlalchemy import text
 from app.db import engine
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 from app.services.external_database_matchflow_evidence import ensure_external_receipt_item_candidates
+from app.services.loyalty_stamp_transaction_service import sync_loyalty_stamp_transactions_for_receipt_table
 
 LOGGER = logging.getLogger(__name__)
 
@@ -94,6 +95,11 @@ def _receipt_table_items(receipt_table_id: str) -> list[dict[str, Any]]:
     return items
 
 
+def _sync_stamp_transactions(receipt_table_id: str) -> dict[str, Any]:
+    with engine.begin() as conn:
+        return sync_loyalty_stamp_transactions_for_receipt_table(conn, receipt_table_id)
+
+
 def auto_ensure_external_candidates_for_receipt_table(
     receipt_table_id: str,
     include_below_threshold: bool = True,
@@ -156,6 +162,12 @@ def _with_receipt_auto_coverage(original: Callable[..., Any]) -> Callable[..., A
             return next_result
 
         try:
+            next_result["loyalty_stamp_transactions"] = _sync_stamp_transactions(receipt_table_id)
+        except Exception as exc:  # pragma: no cover
+            LOGGER.warning("Spaarzegeltransacties synchroniseren mislukt voor bon %s: %s", receipt_table_id, exc)
+            next_result["loyalty_stamp_transactions"] = {"ok": False, "receipt_table_id": receipt_table_id, "error": str(exc)}
+
+        try:
             next_result["external_candidate_coverage"] = auto_ensure_external_candidates_for_receipt_table(
                 receipt_table_id,
                 include_below_threshold=True,
@@ -197,6 +209,12 @@ def _with_reparse_auto_coverage(original: Callable[..., Any]) -> Callable[..., A
                 receipt_table_id = _text(kwargs.get("receipt_table_id"))
         if not receipt_table_id:
             return next_result
+
+        try:
+            next_result["loyalty_stamp_transactions"] = _sync_stamp_transactions(receipt_table_id)
+        except Exception as exc:  # pragma: no cover
+            LOGGER.warning("Spaarzegeltransacties synchroniseren na heranalyse mislukt voor bon %s: %s", receipt_table_id, exc)
+            next_result["loyalty_stamp_transactions"] = {"ok": False, "receipt_table_id": receipt_table_id, "error": str(exc)}
 
         try:
             next_result["external_candidate_coverage"] = auto_ensure_external_candidates_for_receipt_table(
