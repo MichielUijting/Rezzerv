@@ -6,7 +6,7 @@ Technical Design Reference:
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
 - Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -18,6 +18,7 @@ from typing import Any
 
 from app.receipt_ingestion.duplicate_lines import is_near_duplicate_of_previous
 from app.receipt_ingestion.line_classifier import classification_allows_append
+from app.receipt_ingestion.spaarzegels_terms import spaarzegels_financial_metadata
 
 
 CleanLabel = Callable[[str | None], str]
@@ -86,7 +87,7 @@ def append_product_candidate(
     is_invalid_label: InvalidLabelCheck | None = None,
     confidence_score: float = 0.85,
 ) -> int | None:
-    """Single guarded gateway for appending receipt product candidates."""
+    """Single guarded gateway for appending receipt financial/product lines."""
     label_value = clean_label(label)
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
@@ -131,6 +132,11 @@ def append_product_candidate(
 
     raw_label_value = clean_label(raw_line) if savings_action_path and raw_line else label_value
     line_total_float = amount_to_float(line_total)
+    financial_metadata = spaarzegels_financial_metadata(
+        raw_label_value or label_value,
+        label_text=label_value,
+        detail_text=raw_label_value or normalized_line or raw_line,
+    )
 
     candidate_line = {
         'raw_label': raw_label_value,
@@ -144,6 +150,9 @@ def append_product_candidate(
         'confidence_score': confidence_score,
         'source_index': source_index,
     }
+    if financial_metadata:
+        candidate_line.update(financial_metadata)
+
     if extracted and is_near_duplicate_of_previous(candidate_line, extracted[-1]):
         _consolidate_with_previous(extracted[-1], candidate_line)
         return len(extracted) - 1
@@ -170,6 +179,15 @@ def append_product_candidate(
         'classification_trace': classification_trace,
         'validated_savings_action_path': savings_action_path,
     }
+    if financial_metadata:
+        producer_trace.update({
+            'line_type': financial_metadata.get('line_type'),
+            'is_spaarzegels': True,
+            'include_in_receipt_total': True,
+            'exclude_from_inventory': True,
+            'external_matching_allowed': False,
+            'matched_spaarzegels_term': financial_metadata.get('matched_spaarzegels_term'),
+        })
 
     candidate_line['producer_trace'] = producer_trace
     extracted.append(candidate_line)

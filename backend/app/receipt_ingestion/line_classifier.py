@@ -6,7 +6,7 @@ Technical Design Reference:
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
 - Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -18,6 +18,12 @@ from collections.abc import Callable
 from typing import Any
 
 from app.receipt_ingestion.profiles.aldi import is_aldi_context, is_aldi_non_product_line
+from app.receipt_ingestion.spaarzegels_terms import (
+    contains_spaarzegels_metadata_token,
+    contains_spaarzegels_priced_token,
+    matches_spaarzegels_value_label,
+    spaarzegels_metadata_tokens,
+)
 
 BLOCKING_CLASSIFICATIONS = {'ignore', 'metadata', 'footer_payment_tax'}
 FOOTER_TOKENS = ('btw', 'vat', 'totaal', 'subtotaal', 'betaal', 'bankpas', 'pin', 'terminal', 'transactie')
@@ -45,11 +51,6 @@ GENERIC_DISCOUNT_TOKENS = (
     'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
     'lidl plus korting', 'totaal korting', 'coupon', 'voucher', 'gratis',
 )
-GENERIC_LOYALTY_TOKENS = (
-    'zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'pluspunt',
-    'spaar', 'spaarkaart', 'loyalty', 'bonuskaart', 'klantnummer', 'klant:',
-    'digitale zegels', 'digitale spaarkaart', 'campagne', 'punten saldo', 'saldo punten',
-)
 GENERIC_METADATA_TOKENS = (
     'openingstijd', 'openingstijden', 'ma-vr', 'ma tm', 'ma t/m', 'periode',
     'filiaal', 'kassa', 'kassabon', 'bonnr', 'bon nr', 'bonnummer', 'referentie',
@@ -63,8 +64,6 @@ PRICED_DISCOUNT_ARTICLE_TOKENS = (
     'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
     'lidl plus korting', 'totaal korting',
 )
-PRICED_LOYALTY_ARTICLE_TOKENS = ('zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'pluspunt')
-VALUE_LINE_LABEL_PATTERNS = (r'koopzegels?(?:\s+premium)?', r'pluspunten?')
 
 
 def _default_false(_: str) -> bool:
@@ -80,8 +79,7 @@ def _has_amount(value: str) -> bool:
 
 
 def _is_value_line_label_without_amount(lowered: str) -> bool:
-    normalized = re.sub(r'\s+', ' ', str(lowered or '').strip().lower())
-    return any(re.fullmatch(pattern, normalized) for pattern in VALUE_LINE_LABEL_PATTERNS)
+    return matches_spaarzegels_value_label(lowered)
 
 
 def _token_match(lowered: str, tokens: tuple[str, ...]) -> str | None:
@@ -100,7 +98,7 @@ def _priced_article_value_token(lowered: str) -> str | None:
         return None
     if _token_match(lowered, GENERIC_DEPOSIT_RETURN_TOKENS):
         return None
-    return _token_match(lowered, PRICED_LOYALTY_ARTICLE_TOKENS) or _token_match(lowered, PRICED_DISCOUNT_ARTICLE_TOKENS)
+    return contains_spaarzegels_priced_token(lowered) or _token_match(lowered, PRICED_DISCOUNT_ARTICLE_TOKENS)
 
 
 def _footer_or_metadata(lowered: str) -> str:
@@ -147,11 +145,11 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
             return _decision(classification, rule, token)
     token = _priced_article_value_token(lowered)
     if token:
-        return _decision('product_candidate', 'GENERIC_PRICED_DISCOUNT_OR_LOYALTY_LINE', token)
+        return _decision('product_candidate', 'GENERIC_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE', token)
     for tokens, classification, rule in (
         (GENERIC_TOTAL_TOKENS, 'footer_payment_tax', 'GENERIC_TOTAL_TOKENS'),
         (GENERIC_DISCOUNT_TOKENS, 'footer_payment_tax', 'GENERIC_DISCOUNT_TOKENS'),
-        (GENERIC_LOYALTY_TOKENS, 'metadata', 'GENERIC_LOYALTY_TOKENS'),
+        (spaarzegels_metadata_tokens(), 'metadata', 'GENERIC_SPAARZEGELS_TERMS'),
     ):
         token = _token_match(lowered, tokens)
         if token:
@@ -202,10 +200,10 @@ def _store_specific_non_article_trace(line: str, store_name: str | None = None, 
     if 'plus' in store_key:
         token = _priced_article_value_token(lowered)
         if token:
-            return _decision('product_candidate', 'PLUS_PRICED_DISCOUNT_OR_LOYALTY_LINE', token, stage='store_specific')
-        token = _token_match(lowered, ('pluspunten', 'plus punten', 'digitale spaarkaart', 'spaarkaart', 'klant:', 'klantnummer', 'koopzegels', 'zegels', 'zegel', 'punten saldo', 'saldo punten', 'persoonlijke bonus'))
+            return _decision('product_candidate', 'PLUS_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE', token, stage='store_specific')
+        token = contains_spaarzegels_metadata_token(lowered)
         if token:
-            return _decision('metadata', 'PLUS_LOYALTY_TOKENS', token, stage='store_specific')
+            return _decision('metadata', 'PLUS_SPAARZEGELS_TERMS', token, stage='store_specific')
         token = _token_match(lowered, ('plus', 'bedankt', 'welkom', 'filiaal', 'kassabon', 'www.', 'kvk', 'iban', 'tel', 'servicebalie', 'klantenservice'))
         if token and not re.search(r'\d+[,.]\d{2}', lowered):
             return _decision('metadata', 'PLUS_METADATA_TOKENS_NO_AMOUNT', token, stage='store_specific')
@@ -239,8 +237,8 @@ def _non_article_reason(classification: str | None, line: str) -> str:
             return 'date_or_time_metadata'
         if any(day in lowered for day in DUTCH_DAY_TOKENS):
             return 'date_or_period_metadata'
-        if any(token in lowered for token in ('pluspunten', 'spaarkaart', 'koopzegel', 'klantnummer', 'zegels', 'bonuskaart')):
-            return 'loyalty_or_savings_metadata'
+        if contains_spaarzegels_metadata_token(lowered):
+            return 'spaarzegels_metadata'
         return 'receipt_metadata'
     if classification == 'ignore':
         return 'noise_or_unclassified_line'

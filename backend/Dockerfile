@@ -29,6 +29,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
 
 COPY app ./app
 COPY receipt_ingestion ./receipt_ingestion
+COPY tests ./tests
 COPY sitecustomize.py ./sitecustomize.py
 COPY VERSION.txt ./VERSION.txt
 

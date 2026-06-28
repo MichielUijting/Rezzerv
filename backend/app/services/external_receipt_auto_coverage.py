@@ -9,6 +9,7 @@ from typing import Any, Callable
 from sqlalchemy import text
 
 from app.db import engine
+from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_financial_line
 from app.services.external_database_matchflow_evidence import ensure_external_receipt_item_candidates
 
 LOGGER = logging.getLogger(__name__)
@@ -35,6 +36,13 @@ def _receipt_table_exists(conn) -> bool:
             """
         )
     ).first() is not None
+
+
+def _is_external_matching_allowed(row: dict[str, Any]) -> bool:
+    receipt_text = _text(row.get("receipt_line_text")) or _text(row.get("normalized_label"))
+    if is_spaarzegels_financial_line(receipt_text):
+        return False
+    return True
 
 
 def _receipt_table_items(receipt_table_id: str) -> list[dict[str, Any]]:
@@ -68,16 +76,19 @@ def _receipt_table_items(receipt_table_id: str) -> list[dict[str, Any]]:
 
     items: list[dict[str, Any]] = []
     for row in rows:
-        receipt_text = _text(row.get("receipt_line_text")) or _text(row.get("normalized_label"))
+        row_data = dict(row)
+        receipt_text = _text(row_data.get("receipt_line_text")) or _text(row_data.get("normalized_label"))
         if not receipt_text:
             continue
+        if not _is_external_matching_allowed(row_data):
+            continue
         items.append({
-            "receipt_line_id": _text(row.get("receipt_line_id")),
+            "receipt_line_id": _text(row_data.get("receipt_line_id")),
             "receipt_line_text": receipt_text,
-            "retailer_code": _text(row.get("retailer_code")),
-            "retailer_article_number": _text(row.get("retailer_article_number")),
-            "quantity_label": _text(row.get("quantity_label")),
-            "price": row.get("price"),
+            "retailer_code": _text(row_data.get("retailer_code")),
+            "retailer_article_number": _text(row_data.get("retailer_article_number")),
+            "quantity_label": _text(row_data.get("quantity_label")),
+            "price": row_data.get("price"),
         })
 
     return items
@@ -87,11 +98,12 @@ def auto_ensure_external_candidates_for_receipt_table(
     receipt_table_id: str,
     include_below_threshold: bool = True,
 ) -> dict[str, Any]:
-    """Lees echte externe kandidaten bij voor alle regels van een nieuw opgeslagen bon.
+    """Lees echte externe kandidaten bij voor alle productregels van een nieuw opgeslagen bon.
 
     Dit is productgedrag, geen PO-rapport. De functie mag uitsluitend kandidaatcache
     vullen in `external_product_candidates`. Ze maakt geen Mijn artikel, geen
-    global product en geen voorraadmutatie.
+    global product en geen voorraadmutatie. Spaarzegels blijven financiële
+    bonregels voor de kassasom, maar worden niet naar productmatching gestuurd.
     """
     items = _receipt_table_items(receipt_table_id)
     if not items:
