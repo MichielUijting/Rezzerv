@@ -59,6 +59,72 @@ VERSION_FILE_PATH = Path(__file__).resolve().parents[2] / 'VERSION.txt'
 VERSION_TAG = VERSION_FILE_PATH.read_text(encoding='utf-8').strip() if VERSION_FILE_PATH.exists() else 'dev'
 
 
+TAXONOMY_SEED_MARKERS = (
+    'product_taxonomy_seed',
+    'taxonomy_seed',
+    'retailer_seed_file',
+    'seed_file',
+    'm2c2i9_seed',
+    'receipt_product_intent_fallback',
+)
+
+
+def _is_taxonomy_seed_candidate(candidate: Any) -> bool:
+    if not isinstance(candidate, dict):
+        return False
+    values = [
+        candidate.get('candidate_source_name'),
+        candidate.get('source_name'),
+        candidate.get('candidate_source'),
+        candidate.get('candidate_source_product_code'),
+        candidate.get('source_product_code'),
+        candidate.get('retailer_article_number'),
+        candidate.get('variant'),
+        candidate.get('candidate_status'),
+        candidate.get('status'),
+        candidate.get('created_by'),
+        candidate.get('source'),
+    ]
+    haystack = ' '.join(str(value or '').strip().lower() for value in values)
+    return any(marker in haystack for marker in TAXONOMY_SEED_MARKERS)
+
+
+def _without_taxonomy_seed_candidates(payload: Any) -> Any:
+    if not isinstance(payload, dict):
+        return payload
+
+    next_payload = dict(payload)
+    next_items = []
+    removed_count = 0
+
+    for item in list(payload.get('items') or []):
+        if not isinstance(item, dict):
+            next_items.append(item)
+            continue
+
+        if _is_taxonomy_seed_candidate(item) and not item.get('is_receipt_item_placeholder'):
+            removed_count += 1
+            continue
+
+        next_item = dict(item)
+        if isinstance(next_item.get('candidates'), list):
+            filtered_candidates = []
+            for candidate in next_item.get('candidates') or []:
+                if _is_taxonomy_seed_candidate(candidate):
+                    removed_count += 1
+                    continue
+                filtered_candidates.append(candidate)
+            next_item['candidates'] = filtered_candidates
+            next_item['candidate_count'] = len(filtered_candidates)
+
+        next_items.append(next_item)
+
+    next_payload['items'] = next_items
+    next_payload['total'] = len(next_items)
+    next_payload['taxonomy_seed_candidates_removed'] = removed_count
+    return next_payload
+
+
 @router.get('/api/health')
 def health():
     datastore_info = get_runtime_datastore_info()
@@ -165,7 +231,7 @@ def external_databases_open_food_facts_save_candidates(payload: dict[str, Any] =
 
 @router.get('/api/external-databases/receipt-items')
 def external_databases_receipt_items(limit: int = Query(default=200)):
-    return list_external_receipt_items(limit=limit)
+    return _without_taxonomy_seed_candidates(list_external_receipt_items(limit=limit))
 
 
 @router.post('/api/external-databases/receipt-items/ensure-candidates')
@@ -201,7 +267,7 @@ def external_databases_saved_candidates(
             receipt_line_id=receipt_line_id,
             purchase_import_line_id=purchase_import_line_id,
         )
-    return list_saved_external_product_candidates(context_key=resolved_context_key, limit=limit)
+    return _without_taxonomy_seed_candidates(list_saved_external_product_candidates(context_key=resolved_context_key, limit=limit))
 
 
 @router.post('/api/external-databases/catalog/promote-highest')
