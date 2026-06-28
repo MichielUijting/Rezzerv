@@ -33,9 +33,29 @@ OFF_SEARCH_FIELDS_LIST = [
     "image_front_url",
 ]
 OFF_SEARCH_FIELDS = ",".join(OFF_SEARCH_FIELDS_LIST)
+FLAVORED_PRODUCT_TOKENS = {
+    "aardbei",
+    "aardbeien",
+    "banaan",
+    "bananen",
+    "caramel",
+    "choco",
+    "chocolade",
+    "cacao",
+    "framboos",
+    "frambozen",
+    "hazelnoot",
+    "koffie",
+    "mokka",
+    "stracciatella",
+    "vanille",
+    "yoghurt",
+}
 
 
 def _text(value: Any) -> str:
+    if isinstance(value, list):
+        return " ".join(_text(item) for item in value if _text(item))
     return str(value or "").strip()
 
 
@@ -121,34 +141,78 @@ def _score_overlap(query_tokens: set[str], candidate_tokens: set[str]) -> float:
     return max(len(overlap) / max(1, len(query_tokens)), len(overlap) / max(1, len(candidate_tokens)))
 
 
-def _score_off_product(product: dict[str, Any], search_terms: list[str], payload: dict[str, Any]) -> tuple[float, dict[str, float]]:
-    query_text = " ".join([*search_terms, _text(payload.get("candidate_name")), _text(payload.get("category")), _text(payload.get("product_type"))])
-    query_tokens = _tokens(query_text)
+def _requested_product_text(payload: dict[str, Any]) -> str:
+    return _text(payload.get("candidate_name") or payload.get("receipt_line_text") or payload.get("query"))
+
+
+def _product_name_score(requested_text: str, product_name: str) -> float:
+    requested_norm = _normalize(requested_text)
+    product_norm = _normalize(product_name)
+    if not requested_norm or not product_norm:
+        return 0.0
+    if requested_norm == product_norm:
+        return 1.0
+    if requested_norm in product_norm or product_norm in requested_norm:
+        return 0.82
+    return _score_overlap(_tokens(requested_norm), _tokens(product_norm))
+
+
+def _flavored_mismatch_penalty(payload: dict[str, Any], product: dict[str, Any]) -> float:
+    requested_tokens = _tokens(" ".join([
+        _requested_product_text(payload),
+        _text(payload.get("category")),
+        _text(payload.get("product_type")),
+    ]))
     product_name = _text(product.get("product_name_nl") or product.get("product_name"))
-    product_tokens = _tokens(" ".join([product_name, _text(product.get("brands")), _text(product.get("categories")), _text(product.get("quantity"))]))
-    text_score = _score_overlap(query_tokens, product_tokens)
+    product_tokens = _tokens(product_name)
+    unexpected_flavor_tokens = (product_tokens & FLAVORED_PRODUCT_TOKENS) - requested_tokens
+    if not unexpected_flavor_tokens:
+        return 0.0
+    return 0.35
+
+
+def _score_off_product(product: dict[str, Any], search_terms: list[str], payload: dict[str, Any]) -> tuple[float, dict[str, float]]:
+    product_name = _text(product.get("product_name_nl") or product.get("product_name"))
+    requested_text = _requested_product_text(payload)
+    name_score = _product_name_score(requested_text, product_name)
+
     brand_tokens = _tokens(payload.get("candidate_brand")) | _tokens(payload.get("retailer_code"))
     product_brand_tokens = _tokens(product.get("brands"))
     brand_score = _score_overlap(brand_tokens, product_brand_tokens) if brand_tokens else 0.0
+
     category_tokens = _tokens(" ".join([_text(payload.get("category")), _text(payload.get("product_type"))]))
-    product_category_tokens = _tokens(product.get("categories"))
+    product_category_tokens = _tokens(product.get("categories")) | _tokens(" ".join(product.get("categories_tags") or []))
     category_score = _score_overlap(category_tokens, product_category_tokens) if category_tokens else 0.0
+
     quantity_tokens = _tokens(payload.get("quantity_label"))
     product_quantity_tokens = _tokens(product.get("quantity"))
     quantity_score = _score_overlap(quantity_tokens, product_quantity_tokens) if quantity_tokens else 0.0
+
     country_tokens = _tokens(product.get("countries")) | _tokens(" ".join(product.get("countries_tags") or []))
     store_tokens = _tokens(product.get("stores")) | _tokens(" ".join(product.get("stores_tags") or []))
     nl_score = 1.0 if ({"netherlands", "nederland", "nl"} & country_tokens) else 0.0
     retailer_score = _score_overlap(_tokens(payload.get("retailer_code")), store_tokens) if payload.get("retailer_code") else 0.0
     image_score = 1.0 if _text(product.get("image_front_small_url") or product.get("image_front_url")) else 0.0
-    score = text_score * 0.44 + brand_score * 0.16 + category_score * 0.16 + quantity_score * 0.08 + max(nl_score, retailer_score) * 0.10 + image_score * 0.06
-    return round(min(max(score, 0.0), 1.0), 3), {
-        "text_score": round(text_score, 3),
+    flavored_mismatch_penalty = _flavored_mismatch_penalty(payload, product)
+
+    score = (
+        name_score * 0.60
+        + brand_score * 0.08
+        + category_score * 0.10
+        + quantity_score * 0.07
+        + max(nl_score, retailer_score) * 0.10
+        + image_score * 0.05
+        - flavored_mismatch_penalty
+    )
+    score = round(min(max(score, 0.0), 1.0), 3)
+    return score, {
+        "name_score": round(name_score, 3),
         "brand_score": round(brand_score, 3),
         "category_score": round(category_score, 3),
         "quantity_score": round(quantity_score, 3),
         "market_or_store_score": round(max(nl_score, retailer_score), 3),
         "image_score": round(image_score, 3),
+        "flavored_mismatch_penalty": round(flavored_mismatch_penalty, 3),
     }
 
 
