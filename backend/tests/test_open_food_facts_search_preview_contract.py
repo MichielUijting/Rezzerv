@@ -73,7 +73,68 @@ def test_search_preview_uses_search_a_licious_and_stays_read_only():
     assert result["creates_inventory_event"] is False
 
 
+def test_plain_milk_ranks_above_flavored_milk():
+    original_query = off._query_provider_with_fallback
+    original_provider = off.OFF_SEARCH_PROVIDER
+    original_max_queries = off.OFF_SEARCH_MAX_QUERIES
+    original_timeout = off.OFF_SEARCH_TIMEOUT_SECONDS
+
+    def fake_query(search_term: str, page_size: int):
+        return [
+            {
+                "code": "8710000000001",
+                "product_name": "Chocolade melk halfvol",
+                "brands": "Jumbo",
+                "quantity": "1 l",
+                "categories": "Dranken, Zuivelproducten, Chocolademelken",
+                "stores": "Jumbo",
+                "image_front_url": "https://example.test/choco.jpg",
+            },
+            {
+                "code": "8710000000002",
+                "product_name": "Halfvolle melk",
+                "brands": "Jumbo",
+                "quantity": "1 l",
+                "categories": "Zuivelproducten, Melk",
+                "stores": "Jumbo",
+            },
+        ], [{"search_term": search_term, "provider": "search_a_licious", "http_status": 200, "url": "memory://search", "raw_count": 2}], []
+
+    try:
+        off._query_provider_with_fallback = fake_query
+        off.OFF_SEARCH_PROVIDER = "search_a_licious"
+        off.OFF_SEARCH_MAX_QUERIES = 1
+        off.OFF_SEARCH_TIMEOUT_SECONDS = 8.0
+        result = off.search_open_food_facts_preview(
+            {
+                "receipt_line_text": "halfvolle melk",
+                "retailer_code": "jumbo",
+                "candidate_name": "Halfvolle melk",
+                "category": "zuivel",
+                "quantity_label": "1 l",
+                "limit": 5,
+                "max_queries": 1,
+            }
+        )
+    finally:
+        off._query_provider_with_fallback = original_query
+        off.OFF_SEARCH_PROVIDER = original_provider
+        off.OFF_SEARCH_MAX_QUERIES = original_max_queries
+        off.OFF_SEARCH_TIMEOUT_SECONDS = original_timeout
+
+    assert result["ok"] is True
+    assert result["result_count"] == 2
+    assert result["results"][0]["product_name"] == "Halfvolle melk"
+    assert result["results"][1]["product_name"] == "Chocolade melk halfvol"
+    assert result["results"][0]["score"] > result["results"][1]["score"]
+    assert result["results"][1]["score_breakdown"]["flavored_mismatch_penalty"] == 0.35
+    assert result["results"][0]["creates_global_product"] is False
+    assert result["results"][0]["creates_household_article"] is False
+    assert result["results"][0]["creates_inventory_event"] is False
+
+
 if __name__ == "__main__":
     test_backend_container_has_off_runtime_config()
     test_search_preview_uses_search_a_licious_and_stays_read_only()
+    test_plain_milk_ranks_above_flavored_milk()
     print("OFF_SEARCH_PREVIEW_CONTRACT_OK")
