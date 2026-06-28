@@ -132,7 +132,11 @@ def append_product_candidate(
 
     raw_label_value = clean_label(raw_line) if savings_action_path and raw_line else label_value
     line_total_float = amount_to_float(line_total)
-    financial_metadata = spaarzegels_financial_metadata(raw_label_value or label_value)
+    financial_metadata = spaarzegels_financial_metadata(
+        raw_label_value or label_value,
+        label_text=label_value,
+        detail_text=raw_label_value or normalized_line or raw_line,
+    )
 
     candidate_line = {
         'raw_label': raw_label_value,
