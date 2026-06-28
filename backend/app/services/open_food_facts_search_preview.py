@@ -11,11 +11,13 @@ from typing import Any
 from app.services.external_retailer_taxonomy import build_off_query_terms
 from app.services.product_taxonomy_store import normalize_taxonomy_text
 
+OFF_SEARCH_PROVIDER = os.getenv("REZZERV_OFF_SEARCH_PROVIDER", "search_a_licious").strip() or "search_a_licious"
+OFF_SEARCH_A_LICIOUS_BASE_URL = os.getenv("REZZERV_OFF_SEARCH_A_LICIOUS_BASE_URL", "https://search.openfoodfacts.org/search").strip()
 OFF_SEARCH_BASE_URL = os.getenv("REZZERV_OFF_SEARCH_BASE_URL", "https://world.openfoodfacts.org/cgi/search.pl").strip()
-OFF_SEARCH_TIMEOUT_SECONDS = float(os.getenv("REZZERV_OFF_SEARCH_TIMEOUT_SECONDS", "2.0") or 2.0)
+OFF_SEARCH_TIMEOUT_SECONDS = float(os.getenv("REZZERV_OFF_SEARCH_TIMEOUT_SECONDS", "8") or 8)
 OFF_SEARCH_MAX_RESULTS = 10
-OFF_SEARCH_MAX_QUERIES = max(1, min(int(os.getenv("REZZERV_OFF_SEARCH_MAX_QUERIES", "1") or 1), 4))
-OFF_SEARCH_FIELDS = ",".join([
+OFF_SEARCH_MAX_QUERIES = max(1, min(int(os.getenv("REZZERV_OFF_SEARCH_MAX_QUERIES", "3") or 3), 4))
+OFF_SEARCH_FIELDS_LIST = [
     "code",
     "product_name",
     "product_name_nl",
@@ -29,7 +31,8 @@ OFF_SEARCH_FIELDS = ",".join([
     "stores_tags",
     "image_front_small_url",
     "image_front_url",
-])
+]
+OFF_SEARCH_FIELDS = ",".join(OFF_SEARCH_FIELDS_LIST)
 
 
 def _text(value: Any) -> str:
@@ -72,19 +75,10 @@ def _unique_terms(values: list[str]) -> list[str]:
 
 
 def _rank_query_terms(search_terms: list[str], *, receipt_line_text: str = "") -> list[str]:
-    """Prefer candidate/taxonomy terms over noisy receipt text.
-
-    Receipt OCR lines such as '2X WERELDGER.Z-AFR B0BO' are useful evidence, but
-    they are poor OFF queries. They are only used as fallback when there is no
-    candidate/taxonomy term.
-    """
     normalized_receipt = _normalize(receipt_line_text)
     preferred = [term for term in search_terms if _normalize(term) != normalized_receipt]
     fallback = [term for term in search_terms if _normalize(term) == normalized_receipt]
-    return sorted(
-        preferred,
-        key=lambda term: (-len(term.split()), -len(term), term),
-    ) + fallback
+    return sorted(preferred, key=lambda term: (-len(term.split()), -len(term), term)) + fallback
 
 
 def build_off_search_terms(
@@ -97,11 +91,6 @@ def build_off_search_terms(
     product_type: str | None = None,
     quantity_label: str | None = None,
 ) -> list[str]:
-    """Build a conservative OFF text-search profile from a Rezzerv candidate.
-
-    These terms are query hints only. They are not article numbers and must never
-    be presented as barcode/GTIN evidence.
-    """
     normalized_candidate_name = _candidate_name_without_retailer(candidate_name or "", retailer_code)
     taxonomy_terms = build_off_query_terms(receipt_line_text, retailer_code)
     return _unique_terms([
@@ -129,57 +118,31 @@ def _score_overlap(query_tokens: set[str], candidate_tokens: set[str]) -> float:
     if not query_tokens or not candidate_tokens:
         return 0.0
     overlap = query_tokens & candidate_tokens
-    return max(
-        len(overlap) / max(1, len(query_tokens)),
-        len(overlap) / max(1, len(candidate_tokens)),
-    )
+    return max(len(overlap) / max(1, len(query_tokens)), len(overlap) / max(1, len(candidate_tokens)))
 
 
 def _score_off_product(product: dict[str, Any], search_terms: list[str], payload: dict[str, Any]) -> tuple[float, dict[str, float]]:
-    query_text = " ".join([
-        *search_terms,
-        _text(payload.get("candidate_name")),
-        _text(payload.get("category")),
-        _text(payload.get("product_type")),
-    ])
+    query_text = " ".join([*search_terms, _text(payload.get("candidate_name")), _text(payload.get("category")), _text(payload.get("product_type"))])
     query_tokens = _tokens(query_text)
     product_name = _text(product.get("product_name_nl") or product.get("product_name"))
-    product_tokens = _tokens(" ".join([
-        product_name,
-        _text(product.get("brands")),
-        _text(product.get("categories")),
-        _text(product.get("quantity")),
-    ]))
-
+    product_tokens = _tokens(" ".join([product_name, _text(product.get("brands")), _text(product.get("categories")), _text(product.get("quantity"))]))
     text_score = _score_overlap(query_tokens, product_tokens)
-
     brand_tokens = _tokens(payload.get("candidate_brand")) | _tokens(payload.get("retailer_code"))
     product_brand_tokens = _tokens(product.get("brands"))
     brand_score = _score_overlap(brand_tokens, product_brand_tokens) if brand_tokens else 0.0
-
     category_tokens = _tokens(" ".join([_text(payload.get("category")), _text(payload.get("product_type"))]))
     product_category_tokens = _tokens(product.get("categories"))
     category_score = _score_overlap(category_tokens, product_category_tokens) if category_tokens else 0.0
-
     quantity_tokens = _tokens(payload.get("quantity_label"))
     product_quantity_tokens = _tokens(product.get("quantity"))
     quantity_score = _score_overlap(quantity_tokens, product_quantity_tokens) if quantity_tokens else 0.0
-
     country_tokens = _tokens(product.get("countries")) | _tokens(" ".join(product.get("countries_tags") or []))
     store_tokens = _tokens(product.get("stores")) | _tokens(" ".join(product.get("stores_tags") or []))
     nl_score = 1.0 if ({"netherlands", "nederland", "nl"} & country_tokens) else 0.0
     retailer_score = _score_overlap(_tokens(payload.get("retailer_code")), store_tokens) if payload.get("retailer_code") else 0.0
     image_score = 1.0 if _text(product.get("image_front_small_url") or product.get("image_front_url")) else 0.0
-
-    score = (
-        text_score * 0.44
-        + brand_score * 0.16
-        + category_score * 0.16
-        + quantity_score * 0.08
-        + max(nl_score, retailer_score) * 0.10
-        + image_score * 0.06
-    )
-    breakdown = {
+    score = text_score * 0.44 + brand_score * 0.16 + category_score * 0.16 + quantity_score * 0.08 + max(nl_score, retailer_score) * 0.10 + image_score * 0.06
+    return round(min(max(score, 0.0), 1.0), 3), {
         "text_score": round(text_score, 3),
         "brand_score": round(brand_score, 3),
         "category_score": round(category_score, 3),
@@ -187,11 +150,10 @@ def _score_off_product(product: dict[str, Any], search_terms: list[str], payload
         "market_or_store_score": round(max(nl_score, retailer_score), 3),
         "image_score": round(image_score, 3),
     }
-    return round(min(max(score, 0.0), 1.0), 3), breakdown
 
 
 def _normalize_off_product(product: dict[str, Any], search_terms: list[str], payload: dict[str, Any]) -> dict[str, Any] | None:
-    code = _text(product.get("code"))
+    code = _text(product.get("code") or product.get("id") or product.get("_id"))
     if not code:
         return None
     product_name = _text(product.get("product_name_nl") or product.get("product_name"))
@@ -229,7 +191,56 @@ def _normalize_off_product(product: dict[str, Any], search_terms: list[str], pay
     }
 
 
-def _query_off(search_term: str, page_size: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+def _extract_search_a_licious_products(payload: Any) -> list[dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return []
+    candidates = payload.get("products") or payload.get("items") or payload.get("results") or payload.get("documents") or payload.get("hits") or []
+    if isinstance(candidates, dict):
+        candidates = candidates.get("hits") or candidates.get("items") or candidates.get("results") or []
+    products: list[dict[str, Any]] = []
+    if not isinstance(candidates, list):
+        return products
+    for item in candidates:
+        if not isinstance(item, dict):
+            continue
+        source = item.get("_source") or item.get("source") or item.get("document") or item.get("data") or item
+        if isinstance(source, dict):
+            products.append(source)
+    return products
+
+
+def _query_search_a_licious(search_term: str, page_size: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    request_payload = {
+        "q": search_term,
+        "page_size": max(1, min(page_size, OFF_SEARCH_MAX_RESULTS)),
+        "page": 1,
+        "fields": OFF_SEARCH_FIELDS_LIST,
+        "langs": ["nl", "en"],
+        "boost_phrase": True,
+    }
+    request = urllib.request.Request(
+        OFF_SEARCH_A_LICIOUS_BASE_URL,
+        data=json.dumps(request_payload).encode("utf-8"),
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Rezzerv OFF search preview",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=OFF_SEARCH_TIMEOUT_SECONDS) as response:
+        http_status = getattr(response, "status", None) or response.getcode()
+        payload = json.loads(response.read().decode("utf-8"))
+    products = _extract_search_a_licious_products(payload)
+    return products, {
+        "provider": "search_a_licious",
+        "http_status": http_status,
+        "url": OFF_SEARCH_A_LICIOUS_BASE_URL,
+        "raw_count": len(products),
+    }
+
+
+def _query_legacy_cgi(search_term: str, page_size: int) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     params = {
         "search_terms": search_term,
         "search_simple": "1",
@@ -241,10 +252,7 @@ def _query_off(search_term: str, page_size: int) -> tuple[list[dict[str, Any]], 
     url = f"{OFF_SEARCH_BASE_URL}?{urllib.parse.urlencode(params)}"
     request = urllib.request.Request(
         url,
-        headers={
-            "Accept": "application/json",
-            "User-Agent": "Rezzerv/dev (M2C2i-25 OFF search preview; contact: product-owner-local-test)",
-        },
+        headers={"Accept": "application/json", "User-Agent": "Rezzerv OFF search preview"},
         method="GET",
     )
     with urllib.request.urlopen(request, timeout=OFF_SEARCH_TIMEOUT_SECONDS) as response:
@@ -252,10 +260,32 @@ def _query_off(search_term: str, page_size: int) -> tuple[list[dict[str, Any]], 
         payload = json.loads(response.read().decode("utf-8"))
     products = payload.get("products") or []
     return [product for product in products if isinstance(product, dict)], {
+        "provider": "legacy_cgi",
         "http_status": http_status,
         "url": url,
         "raw_count": len(products),
     }
+
+
+def _query_provider_with_fallback(search_term: str, page_size: int) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    diagnostics: list[dict[str, Any]] = []
+    errors: list[str] = []
+    providers = ["search_a_licious", "legacy_cgi"] if OFF_SEARCH_PROVIDER == "search_a_licious" else ["legacy_cgi"]
+    for provider in providers:
+        try:
+            if provider == "search_a_licious":
+                products, diagnostic = _query_search_a_licious(search_term, page_size)
+            else:
+                products, diagnostic = _query_legacy_cgi(search_term, page_size)
+            diagnostics.append({"search_term": search_term, **diagnostic})
+            return products, diagnostics, errors
+        except urllib.error.HTTPError as exc:
+            errors.append(f"OFF {provider} HTTP-fout voor '{search_term}': {exc.code}")
+            continue
+        except Exception as exc:  # pragma: no cover - network dependent
+            errors.append(f"OFF {provider} zoekfout voor '{search_term}': {exc}")
+            continue
+    return [], diagnostics, errors
 
 
 def search_open_food_facts_preview(payload: dict[str, Any]) -> dict[str, Any]:
@@ -270,7 +300,6 @@ def search_open_food_facts_preview(payload: dict[str, Any]) -> dict[str, Any]:
             "creates_household_article": False,
             "creates_inventory_event": False,
         }
-
     search_terms = build_off_search_terms(
         receipt_line_text=receipt_line_text,
         retailer_code=retailer_code,
@@ -286,22 +315,13 @@ def search_open_food_facts_preview(payload: dict[str, Any]) -> dict[str, Any]:
     query_terms = _rank_query_terms([term for term in search_terms if term], receipt_line_text=receipt_line_text)[:query_limit]
     if not query_terms:
         query_terms = [_normalize(receipt_line_text)]
-
     results_by_code: dict[str, dict[str, Any]] = {}
     diagnostics: list[dict[str, Any]] = []
     errors: list[str] = []
-
     for term in query_terms:
-        try:
-            products, diagnostic = _query_off(term, page_size=limit)
-            diagnostics.append({"search_term": term, **diagnostic})
-        except urllib.error.HTTPError as exc:
-            errors.append(f"OFF HTTP-fout voor '{term}': {exc.code}")
-            continue
-        except Exception as exc:  # pragma: no cover - netwerkafhankelijk
-            errors.append(f"OFF zoekfout voor '{term}': {exc}")
-            continue
-
+        products, term_diagnostics, term_errors = _query_provider_with_fallback(term, page_size=limit)
+        diagnostics.extend(term_diagnostics)
+        errors.extend(term_errors)
         for product in products:
             normalized = _normalize_off_product(product, search_terms, payload)
             if not normalized:
@@ -309,16 +329,22 @@ def search_open_food_facts_preview(payload: dict[str, Any]) -> dict[str, Any]:
             existing = results_by_code.get(normalized["code"])
             if not existing or float(normalized.get("score") or 0) > float(existing.get("score") or 0):
                 results_by_code[normalized["code"]] = normalized
-
     results = sorted(results_by_code.values(), key=lambda item: (-float(item.get("score") or 0), item.get("product_name") or ""))[:limit]
-    external_source_available = bool(diagnostics) and len(errors) < len(query_terms)
+    external_source_available = bool(diagnostics)
     status = "found" if results else ("no_results" if external_source_available else "external_source_unavailable")
+    provider_names = []
+    for diagnostic in diagnostics:
+        provider = diagnostic.get("provider")
+        if provider and provider not in provider_names:
+            provider_names.append(provider)
     return {
         "ok": True,
         "source_name": "open_food_facts",
         "mode": "read_only_search_preview",
         "status": status,
         "external_source_available": external_source_available,
+        "provider": OFF_SEARCH_PROVIDER,
+        "providers_used": provider_names,
         "receipt_line_text": receipt_line_text,
         "retailer_code": retailer_code,
         "search_terms": search_terms,
