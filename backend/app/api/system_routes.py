@@ -49,6 +49,7 @@ from app.services.external_relation_batch_store import (
     apply_external_relation_batch_decision,
     list_external_relation_batch_items,
 )
+from app.services.open_food_facts_candidate_store import save_open_food_facts_preview_candidates
 from app.services.open_food_facts_search_preview import search_open_food_facts_preview
 
 router = APIRouter()
@@ -56,6 +57,72 @@ logger = logging.getLogger('rezzerv.api')
 
 VERSION_FILE_PATH = Path(__file__).resolve().parents[2] / 'VERSION.txt'
 VERSION_TAG = VERSION_FILE_PATH.read_text(encoding='utf-8').strip() if VERSION_FILE_PATH.exists() else 'dev'
+
+
+TAXONOMY_SEED_MARKERS = (
+    'product_taxonomy_seed',
+    'taxonomy_seed',
+    'retailer_seed_file',
+    'seed_file',
+    'm2c2i9_seed',
+    'receipt_product_intent_fallback',
+)
+
+
+def _is_taxonomy_seed_candidate(candidate: Any) -> bool:
+    if not isinstance(candidate, dict):
+        return False
+    values = [
+        candidate.get('candidate_source_name'),
+        candidate.get('source_name'),
+        candidate.get('candidate_source'),
+        candidate.get('candidate_source_product_code'),
+        candidate.get('source_product_code'),
+        candidate.get('retailer_article_number'),
+        candidate.get('variant'),
+        candidate.get('candidate_status'),
+        candidate.get('status'),
+        candidate.get('created_by'),
+        candidate.get('source'),
+    ]
+    haystack = ' '.join(str(value or '').strip().lower() for value in values)
+    return any(marker in haystack for marker in TAXONOMY_SEED_MARKERS)
+
+
+def _without_taxonomy_seed_candidates(payload: Any) -> Any:
+    if not isinstance(payload, dict):
+        return payload
+
+    next_payload = dict(payload)
+    next_items = []
+    removed_count = 0
+
+    for item in list(payload.get('items') or []):
+        if not isinstance(item, dict):
+            next_items.append(item)
+            continue
+
+        if _is_taxonomy_seed_candidate(item) and not item.get('is_receipt_item_placeholder'):
+            removed_count += 1
+            continue
+
+        next_item = dict(item)
+        if isinstance(next_item.get('candidates'), list):
+            filtered_candidates = []
+            for candidate in next_item.get('candidates') or []:
+                if _is_taxonomy_seed_candidate(candidate):
+                    removed_count += 1
+                    continue
+                filtered_candidates.append(candidate)
+            next_item['candidates'] = filtered_candidates
+            next_item['candidate_count'] = len(filtered_candidates)
+
+        next_items.append(next_item)
+
+    next_payload['items'] = next_items
+    next_payload['total'] = len(next_items)
+    next_payload['taxonomy_seed_candidates_removed'] = removed_count
+    return next_payload
 
 
 @router.get('/api/health')
@@ -149,9 +216,22 @@ def external_databases_open_food_facts_search_preview(payload: dict[str, Any] = 
     return result
 
 
+@router.post('/api/external-databases/off/save-candidates')
+def external_databases_open_food_facts_save_candidates(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Store OFF preview results as explicit external candidates only.
+
+    This endpoint does not create global products, household articles or
+    inventory events. Linking still requires explicit user selection.
+    """
+    result = save_open_food_facts_preview_candidates(payload)
+    if not bool(result.get('ok', True)):
+        raise HTTPException(status_code=400, detail=result.get('error') or 'OFF kandidaten konden niet worden opgeslagen')
+    return result
+
+
 @router.get('/api/external-databases/receipt-items')
 def external_databases_receipt_items(limit: int = Query(default=200)):
-    return list_external_receipt_items(limit=limit)
+    return _without_taxonomy_seed_candidates(list_external_receipt_items(limit=limit))
 
 
 @router.post('/api/external-databases/receipt-items/ensure-candidates')
@@ -187,7 +267,7 @@ def external_databases_saved_candidates(
             receipt_line_id=receipt_line_id,
             purchase_import_line_id=purchase_import_line_id,
         )
-    return list_saved_external_product_candidates(context_key=resolved_context_key, limit=limit)
+    return _without_taxonomy_seed_candidates(list_saved_external_product_candidates(context_key=resolved_context_key, limit=limit))
 
 
 @router.post('/api/external-databases/catalog/promote-highest')
@@ -260,6 +340,6 @@ def warm_receipt_runtime_at_startup():
         from app.services.receipt_service import warm_receipt_ocr_runtime
         preprocessing_result = warm_receipt_image_preprocessing()
         ocr_result = warm_receipt_ocr_runtime()
-        logger.info('Receipt runtime warmup voltooid: preprocessing=%s ocr=%s', preprocessing_result, ocr_result)
+        logger.info('Receipt runtime warmup voltooid: preprocessing=%s ocr=%s', preprocessing_result)
     except Exception as exc:
         logger.warning('Receipt runtime warmup mislukt; upload fallback blijft actief: %s', exc)

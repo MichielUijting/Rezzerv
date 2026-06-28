@@ -5,39 +5,87 @@ import {
   expectRouteLoads,
 } from './helpers/rezzervAssertions.js';
 
-test.describe('Externe databases OFF read-only preview', () => {
-  test('Raadpleeg OFF toont kandidaten zonder koppelbare mutatie', async ({ page }) => {
+function receiptItemsPayload(includeOffCandidate = false) {
+  const candidates = [
+    {
+      candidate_id: 'candidate-off-preview-existing',
+      id: 'candidate-off-preview-existing',
+      candidate_name: 'Halfvolle melk bestaand',
+      candidate_brand: 'Jumbo',
+      external_source_name: 'Open Food Facts',
+      candidate_source_name: 'Open Food Facts',
+      external_source_product_code: '8710000000000',
+      candidate_source_product_code: '8710000000000',
+      source_product_code: '8710000000000',
+      retailer_article_number: '8710000000000',
+      variant: 'Standaard',
+      score: 0.7,
+      candidate_status: 'candidate',
+      is_linked_to_catalog: false,
+      is_linkable_to_catalog: true,
+    },
+  ];
+
+  if (includeOffCandidate) {
+    candidates.push({
+      candidate_id: 'candidate-off-saved-best',
+      id: 'candidate-off-saved-best',
+      candidate_name: 'Halfvolle melk',
+      candidate_brand: 'Jumbo',
+      external_source_name: 'Open Food Facts',
+      candidate_source_name: 'Open Food Facts',
+      external_source_product_code: '8710000000002',
+      candidate_source_product_code: '8710000000002',
+      source_product_code: '8710000000002',
+      retailer_article_number: '8710000000002',
+      quantity_label: '1 l',
+      variant: '1 l',
+      score: 0.82,
+      candidate_status: 'candidate',
+      is_linked_to_catalog: false,
+      is_linkable_to_catalog: true,
+    });
+  }
+
+  return {
+    items: [
+      {
+        context_key: 'ctx-off-preview-regression',
+        receipt_line_id: 'receipt-line-off-preview-regression',
+        purchase_import_line_id: 'purchase-line-off-preview-regression',
+        receipt_line_text: 'halfvolle melk',
+        retailer_code: 'jumbo',
+        retailer_article_number: '',
+        gtin: '',
+        quantity_label: '1 l',
+        price: 1.29,
+        candidate_id: 'receipt-item-placeholder-off',
+        candidate_name: '',
+        candidate_brand: '',
+        external_source_name: '',
+        external_source_product_code: '',
+        variant: '',
+        score: 0,
+        candidate_status: 'candidate',
+        is_receipt_item_placeholder: true,
+        is_linked_to_catalog: false,
+        is_linkable_to_catalog: false,
+        candidates,
+      },
+    ],
+  };
+}
+
+test.describe('Externe databases OFF candidate flow', () => {
+  test('Raadpleeg OFF noteert kandidaten in onderste tabel voor expliciet koppelen', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
+    let includeOffCandidate = false;
 
     await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({
-          items: [
-            {
-              context_key: 'ctx-off-preview-regression',
-              receipt_line_id: 'receipt-line-off-preview-regression',
-              purchase_import_line_id: 'purchase-line-off-preview-regression',
-              receipt_line_text: 'halfvolle melk',
-              retailer_code: 'jumbo',
-              retailer_article_number: '',
-              gtin: '',
-              quantity_label: '1 l',
-              price: 1.29,
-              candidate_id: 'candidate-off-preview-existing',
-              candidate_name: 'Halfvolle melk',
-              candidate_brand: 'Jumbo',
-              external_source_name: 'Open Food Facts',
-              external_source_product_code: '8710000000000',
-              variant: 'Standaard',
-              score: 0.7,
-              candidate_status: 'candidate',
-              is_linked_to_catalog: false,
-              is_linkable_to_catalog: true,
-            },
-          ],
-        }),
+        body: JSON.stringify(receiptItemsPayload(includeOffCandidate)),
       });
     });
 
@@ -50,51 +98,36 @@ test.describe('Externe databases OFF read-only preview', () => {
     });
 
     let offRequestBody = null;
-    await page.route('**/api/external-databases/off/search-preview', async (route) => {
+    await page.route('**/api/external-databases/off/save-candidates', async (route) => {
       offRequestBody = route.request().postDataJSON();
+      includeOffCandidate = true;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
           ok: true,
           source_name: 'open_food_facts',
-          mode: 'read_only_search_preview',
-          status: 'found',
-          external_source_available: true,
-          provider: 'search_a_licious',
-          providers_used: ['search_a_licious'],
-          receipt_line_text: 'halfvolle melk',
+          context_key: 'ctx-off-preview-regression',
           retailer_code: 'jumbo',
-          queried_terms: ['halfvolle melk 1 l'],
-          query_limit: 1,
-          timeout_seconds: 8,
-          results: [
-            {
-              source_name: 'open_food_facts',
-              source_product_code: '8710000000002',
-              candidate_source_product_code: '8710000000002',
-              code: '8710000000002',
-              gtin: '8710000000002',
-              ean: '8710000000002',
-              barcode: '8710000000002',
-              product_name: 'Halfvolle melk',
-              candidate_name: 'Halfvolle melk',
-              brands: 'Jumbo',
-              candidate_brand: 'Jumbo',
-              quantity: '1 l',
-              quantity_label: '1 l',
-              score: 0.82,
-              candidate_status: 'off_candidate',
-              requires_user_selection: true,
-              creates_global_product: false,
-              creates_household_article: false,
-              creates_inventory_event: false,
-            },
-          ],
-          result_count: 1,
-          diagnostics: [{ search_term: 'halfvolle melk 1 l', provider: 'search_a_licious', http_status: 200, raw_count: 1 }],
-          errors: [],
-          requires_user_selection: true,
+          receipt_line_text: 'halfvolle melk',
+          candidate_count: 1,
+          saved_count: 1,
+          updated_count: 0,
+          skipped_count: 0,
+          saved_candidate_ids: ['candidate-off-saved-best'],
+          updated_candidate_ids: [],
+          preview: {
+            ok: true,
+            source_name: 'open_food_facts',
+            mode: 'read_only_search_preview',
+            status: 'found',
+            external_source_available: true,
+            provider: 'search_a_licious',
+            result_count: 1,
+            creates_global_product: false,
+            creates_household_article: false,
+            creates_inventory_event: false,
+          },
           creates_global_product: false,
           creates_household_article: false,
           creates_inventory_event: false,
@@ -116,25 +149,39 @@ test.describe('Externe databases OFF read-only preview', () => {
     await expect(receiptRow).toBeVisible();
     await receiptRow.dblclick();
 
-    await expect(page.getByText('Koppelen kandidaten in artikel-catalogus')).toBeVisible();
+    const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
+    await expect(candidateTable).toBeVisible();
+    await expect(candidateTable.getByText('Halfvolle melk bestaand')).toBeVisible();
+    await expect(candidateTable.getByText('8710000000002')).toHaveCount(0);
+
     await page.getByRole('button', { name: 'Raadpleeg OFF' }).click();
 
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('OFF-status: Gevonden');
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Provider: search_a_licious');
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Productmutatie: nee');
 
-    const offTable = page.getByTestId('external-off-candidates-table');
-    await expect(offTable).toBeVisible();
-    await expect(offTable.getByText('Halfvolle melk')).toBeVisible();
-    await expect(offTable.getByText('8710000000002')).toBeVisible();
-    await expect(offTable.getByText('Alleen raadplegen')).toBeVisible();
+    const offCandidateRow = candidateTable.locator('tbody tr', { hasText: '8710000000002' });
+    await expect(offCandidateRow).toBeVisible();
+    await expect(offCandidateRow.getByRole('cell', { name: 'Halfvolle melk', exact: true })).toBeVisible();
+    await expect(offCandidateRow.getByRole('cell', { name: '8710000000002', exact: true })).toBeVisible();
+    await expect(page.getByTestId('external-off-candidates-table')).toHaveCount(0);
 
-    await expect(page.getByRole('button', { name: 'Koppel artikel' })).toBeDisabled();
+    const confirmationDialog = page.getByRole('dialog');
+    if (await confirmationDialog.isVisible().catch(() => false)) {
+      await confirmationDialog.getByRole('button', { name: 'Sluiten' }).click();
+      await expect(confirmationDialog).toHaveCount(0);
+    }
+
+    await offCandidateRow.locator('input[type="radio"]').check();
+    await expect(page.getByRole('button', { name: 'Koppel artikel' })).toBeEnabled();
+
     expect(offRequestBody).toMatchObject({
       receipt_line_text: 'halfvolle melk',
       retailer_code: 'jumbo',
-      candidate_name: 'Halfvolle melk',
+      candidate_name: 'Halfvolle melk bestaand',
       quantity_label: '1 l',
+      receipt_line_id: 'receipt-line-off-preview-regression',
+      purchase_import_line_id: 'purchase-line-off-preview-regression',
       limit: 5,
     });
 

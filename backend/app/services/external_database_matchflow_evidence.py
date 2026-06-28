@@ -7,8 +7,10 @@ from app.services import external_product_candidate_store as candidate_store
 from app.services.external_candidate_normalization import normalize_external_candidates
 from app.services.external_database_matchers import (
     candidate_status_for_score,
-    match_retailer_receipt_line as _base_match_retailer_receipt_line,
     normalize_match_text,
+)
+from app.services.external_database_off_index_matchers import (
+    match_retailer_receipt_line as _base_match_retailer_receipt_line,
 )
 from app.services.product_evidence_packet import apply_product_evidence_to_candidates, build_product_evidence_packet_dict
 from app.services.product_intent_classifier import classify_product_intent
