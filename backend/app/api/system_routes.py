@@ -49,6 +49,7 @@ from app.services.external_relation_batch_store import (
     apply_external_relation_batch_decision,
     list_external_relation_batch_items,
 )
+from app.services.open_food_facts_candidate_store import save_open_food_facts_preview_candidates
 from app.services.open_food_facts_search_preview import search_open_food_facts_preview
 
 router = APIRouter()
@@ -146,6 +147,19 @@ def external_databases_open_food_facts_search_preview(payload: dict[str, Any] = 
     result = search_open_food_facts_preview(payload)
     if not bool(result.get('ok', True)):
         raise HTTPException(status_code=400, detail=result.get('error') or 'OFF search-preview kon niet worden uitgevoerd')
+    return result
+
+
+@router.post('/api/external-databases/off/save-candidates')
+def external_databases_open_food_facts_save_candidates(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Store OFF preview results as explicit external candidates only.
+
+    This endpoint does not create global products, household articles or
+    inventory events. Linking still requires explicit user selection.
+    """
+    result = save_open_food_facts_preview_candidates(payload)
+    if not bool(result.get('ok', True)):
+        raise HTTPException(status_code=400, detail=result.get('error') or 'OFF kandidaten konden niet worden opgeslagen')
     return result
 
 
@@ -260,6 +274,6 @@ def warm_receipt_runtime_at_startup():
         from app.services.receipt_service import warm_receipt_ocr_runtime
         preprocessing_result = warm_receipt_image_preprocessing()
         ocr_result = warm_receipt_ocr_runtime()
-        logger.info('Receipt runtime warmup voltooid: preprocessing=%s ocr=%s', preprocessing_result, ocr_result)
+        logger.info('Receipt runtime warmup voltooid: preprocessing=%s ocr=%s', preprocessing_result)
     except Exception as exc:
         logger.warning('Receipt runtime warmup mislukt; upload fallback blijft actief: %s', exc)
