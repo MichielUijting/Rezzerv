@@ -7,9 +7,30 @@ $ErrorActionPreference = "Stop"
 Write-Host "=== Rezzerv frontend regressie: Kassa + Uitpakken ===" -ForegroundColor Cyan
 
 function Invoke-RegressionFixtureCleanup {
+  param(
+    [int]$MaxAttempts = 5
+  )
+
   Write-Host "`n=== Regression fixture cleanup ===" -ForegroundColor Cyan
   $headers = @{ Authorization = "Bearer rezzerv-dev-token::admin@rezzerv.local" }
-  Invoke-RestMethod -Method Post -Uri "http://localhost:8011/api/testing/fixtures/cleanup" -Headers $headers | Out-Host
+  $lastError = $null
+
+  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+    try {
+      if ($attempt -gt 1) {
+        Write-Host "Cleanup opnieuw proberen ($attempt/$MaxAttempts)..." -ForegroundColor Yellow
+      }
+      Invoke-RestMethod -Method Post -Uri "http://localhost:8011/api/testing/fixtures/cleanup" -Headers $headers | Out-Host
+      return
+    } catch {
+      $lastError = $_
+      if ($attempt -lt $MaxAttempts) {
+        Start-Sleep -Seconds ([Math]::Min(2 * $attempt, 6))
+      }
+    }
+  }
+
+  throw $lastError
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
