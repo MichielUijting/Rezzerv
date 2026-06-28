@@ -110,6 +110,34 @@ def is_spaarzegels_financial_pair(*, label_text: str | None, detail_text: str | 
     return contains_spaarzegels_priced_token(combined) is not None
 
 
+def is_spaarzegels_financial_context(*values: str | None) -> bool:
+    combined = _combined_text(*values)
+    if not combined or not _has_amount(combined):
+        return False
+    return contains_spaarzegels_priced_token(combined) is not None
+
+
+def is_spaarzegels_flow_excluded(value: Any) -> bool:
+    if not isinstance(value, dict):
+        return False
+    if value.get("line_type") == "spaarzegels" or value.get("is_spaarzegels") is True:
+        return True
+    if value.get("exclude_from_inventory") is True or value.get("external_matching_allowed") is False:
+        return True
+    trace = value.get("producer_trace")
+    if isinstance(trace, dict):
+        return is_spaarzegels_flow_excluded(trace)
+    return is_spaarzegels_financial_context(
+        value.get("receipt_line_text"),
+        value.get("raw_label"),
+        value.get("normalized_label"),
+        value.get("line_total"),
+        value.get("unit_price"),
+        value.get("price"),
+        value.get("quantity_label"),
+    )
+
+
 def spaarzegels_financial_metadata(
     value: str | None = None,
     *,

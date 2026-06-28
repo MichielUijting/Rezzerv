@@ -9,7 +9,7 @@ from typing import Any, Callable
 from sqlalchemy import text
 
 from app.db import engine
-from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_financial_line
+from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 from app.services.external_database_matchflow_evidence import ensure_external_receipt_item_candidates
 
 LOGGER = logging.getLogger(__name__)
@@ -39,10 +39,7 @@ def _receipt_table_exists(conn) -> bool:
 
 
 def _is_external_matching_allowed(row: dict[str, Any]) -> bool:
-    receipt_text = _text(row.get("receipt_line_text")) or _text(row.get("normalized_label"))
-    if is_spaarzegels_financial_line(receipt_text):
-        return False
-    return True
+    return not is_spaarzegels_flow_excluded(row)
 
 
 def _receipt_table_items(receipt_table_id: str) -> list[dict[str, Any]]:
@@ -61,9 +58,12 @@ def _receipt_table_items(receipt_table_id: str) -> list[dict[str, Any]]:
                     rtl.id AS receipt_line_id,
                     rt.store_name AS retailer_code,
                     COALESCE(NULLIF(rtl.raw_label, ''), rtl.normalized_label) AS receipt_line_text,
+                    rtl.raw_label AS raw_label,
                     rtl.normalized_label AS normalized_label,
                     rtl.barcode AS retailer_article_number,
                     TRIM(COALESCE(CAST(rtl.quantity AS TEXT), '') || ' ' || COALESCE(CAST(rtl.unit AS TEXT), '')) AS quantity_label,
+                    rtl.unit_price AS unit_price,
+                    rtl.line_total AS line_total,
                     rtl.line_total AS price
                 FROM receipt_table_lines rtl
                 JOIN receipt_tables rt ON rt.id = rtl.receipt_table_id

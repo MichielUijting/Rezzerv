@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded, is_spaarzegels_financial_context
 from app.services import external_product_candidate_store as candidate_store
 from app.services.external_candidate_normalization import normalize_external_candidates
 from app.services.external_database_matchers import (
@@ -170,7 +171,39 @@ def _with_evidence_scoring(result: dict[str, Any], receipt_line_text: str, retai
     return enriched
 
 
+def _external_matching_blocked_result(retailer_code: str, receipt_line_text: str) -> dict[str, Any]:
+    return {
+        "ok": True,
+        "retailer_code": retailer_code,
+        "receipt_line_text": receipt_line_text,
+        "candidates": [],
+        "candidate_count": 0,
+        "processed": 0,
+        "saved_count": 0,
+        "updated_count": 0,
+        "skipped_count": 1,
+        "external_matching_allowed": False,
+        "excluded_from_external_database": True,
+        "exclusion_reason": "spaarzegels_financial_line",
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_inventory_event": False,
+    }
+
+
+def _item_allows_external_matching(item: dict[str, Any]) -> bool:
+    return not is_spaarzegels_flow_excluded(item)
+
+
+def _filter_external_matching_items(items: Any) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    return [dict(item) for item in items if isinstance(item, dict) and _item_allows_external_matching(item)]
+
+
 def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, include_below_threshold: bool = True) -> dict[str, Any]:
+    if is_spaarzegels_financial_context(receipt_line_text):
+        return _external_matching_blocked_result(retailer_code, receipt_line_text)
     result = _base_match_retailer_receipt_line(
         retailer_code=retailer_code,
         receipt_line_text=receipt_line_text,
@@ -183,6 +216,9 @@ def save_matchpreview_candidates(*args: Any, **kwargs: Any) -> dict[str, Any]:
     previous_matcher = candidate_store.match_retailer_receipt_line
     candidate_store.match_retailer_receipt_line = match_retailer_receipt_line
     try:
+        if "items" in kwargs:
+            kwargs = dict(kwargs)
+            kwargs["items"] = _filter_external_matching_items(kwargs.get("items"))
         return candidate_store.save_matchpreview_candidates(*args, **kwargs)
     finally:
         candidate_store.match_retailer_receipt_line = previous_matcher
@@ -192,6 +228,17 @@ def ensure_external_receipt_item_candidates(*args: Any, **kwargs: Any) -> dict[s
     previous_matcher = candidate_store.match_retailer_receipt_line
     candidate_store.match_retailer_receipt_line = match_retailer_receipt_line
     try:
+        if "items" in kwargs:
+            kwargs = dict(kwargs)
+            original_items = kwargs.get("items")
+            filtered_items = _filter_external_matching_items(original_items)
+            kwargs["items"] = filtered_items
+            result = candidate_store.ensure_external_receipt_item_candidates(*args, **kwargs)
+            if isinstance(original_items, list):
+                result = dict(result)
+                result["spaarzegels_excluded_count"] = len(original_items) - len(filtered_items)
+                result["external_matching_guardrail"] = "spaarzegels_financial_lines_excluded"
+            return result
         return candidate_store.ensure_external_receipt_item_candidates(*args, **kwargs)
     finally:
         candidate_store.match_retailer_receipt_line = previous_matcher
