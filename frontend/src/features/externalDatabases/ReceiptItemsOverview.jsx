@@ -82,6 +82,8 @@ function candidateStatusLabel(candidate, linked) {
   if (normalized === 'user_confirmed') return 'Bevestigd'
   if (normalized === 'probable_candidate') return 'Waarschijnlijke kandidaat'
   if (normalized === 'weak_candidate') return 'Lage zekerheid'
+  if (normalized === 'off_candidate') return 'OFF-kandidaat'
+  if (normalized === 'off_low_score_candidate') return 'OFF lage zekerheid'
   return text(candidate?.status_label || candidate?.candidate_status || candidate?.status || 'Kandidaat')
 }
 
@@ -246,10 +248,6 @@ function csvValue(value) {
   return `"${String(value ?? '').replaceAll('"', '""')}"`
 }
 
-function offCandidateKey(candidate) {
-  return text(candidate.code || candidate.gtin || candidate.ean || candidate.source_product_code || candidate.product_name, 'off-candidate')
-}
-
 function offStatusLabel(preview) {
   if (!preview) return '-'
   if (preview.status === 'found') return 'Gevonden'
@@ -337,7 +335,6 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const selectedCandidates = selectedItem?.candidates || []
   const selectedCandidate = selectedCandidates.find((candidate) => candidate.id === selectedCandidateId) || null
   const selectedCandidateCanBeLinked = Boolean(selectedCandidate && selectedCandidate.isLinkableToCatalog && !selectedCandidate.isFallbackCandidate && !selectedCandidate.isLinkedToCatalog)
-  const offResults = Array.isArray(offPreview?.results) ? offPreview.results : []
 
   function selectReceiptItem(item) {
     setSelectedItem(item)
@@ -413,12 +410,14 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     setOffPreview(null)
     setOffError('')
     try {
-      const response = await fetchJsonWithAuth('/api/external-databases/off/search-preview', {
+      const response = await fetchJsonWithAuth('/api/external-databases/off/save-candidates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           receipt_line_text: selectedItem.receiptLineText,
           retailer_code: selectedItem.retailerCodeRaw,
+          receipt_line_id: selectedItem.receiptLineId,
+          purchase_import_line_id: selectedItem.purchaseImportLineId,
           candidate_name: selectedItem.bestCandidateName || selectedItem.receiptLineText,
           quantity_label: selectedItem.quantity,
           limit: 5,
@@ -426,7 +425,9 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data?.detail || 'Open Food Facts kon niet worden geraadpleegd')
-      setOffPreview(data)
+      setOffPreview(data.preview || data)
+      onMessage?.(`OFF-kandidaten genoteerd: ${(data.saved_count ?? 0) + (data.updated_count ?? 0)}.`)
+      await loadItems()
     } catch (err) {
       setOffError(err?.message || 'Open Food Facts kon niet worden geraadpleegd')
     } finally {
@@ -474,10 +475,9 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
           <p>Kandidaten voor: {selectedItem.receiptLineText}</p>
           <dl><dt>Winkelketen</dt><dd>{selectedItem.retailerCode}</dd><dt>Artikelnummer</dt><dd>{selectedItem.articleNumber}</dd><dt>GTIN / EAN</dt><dd>{selectedItem.gtin}</dd><dt>Status</dt><dd>{selectedItem.status}</dd></dl>
           <Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table" resizableColumns><thead><tr className="rz-table-header"><th>Keuze</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>Artikelnummer</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr></thead><tbody>{selectedCandidates.length ? selectedCandidates.map((candidate) => <tr key={candidate.id} className={selectedCandidateId === candidate.id ? 'rz-row-selected' : ''}><td className="rz-check"><input type="radio" name="external-candidate" checked={selectedCandidateId === candidate.id} disabled={!candidate.isLinkableToCatalog && !candidate.isLinkedToCatalog} onChange={() => setSelectedCandidateId(candidate.id)} /></td><td>{candidate.candidateName}</td><td>{candidate.brand}</td><td>{candidate.source}</td><td>{candidate.externalCode}</td><td>{candidate.variant}</td><td className="rz-num">{scoreText(candidate.score)}</td><td>{candidate.status}</td></tr>) : <tr><td colSpan="8">Geen externe kandidaten voor dit bonartikel.</td></tr>}</tbody></Table>
-          <div className="rz-external-databases-actions"><Button type="button" disabled={!selectedCandidateCanBeLinked} onClick={processSelectedCandidate}>Koppel artikel</Button><Button type="button" variant="secondary" disabled={isOffLoading} onClick={consultOpenFoodFacts}>{isOffLoading ? 'OFF raadplegen...' : 'Raadpleeg OFF'}</Button><span className="rz-external-databases-muted">OFF is preview-only en maakt geen product-, artikel- of voorraadmutatie.</span></div>
+          <div className="rz-external-databases-actions"><Button type="button" disabled={!selectedCandidateCanBeLinked} onClick={processSelectedCandidate}>Koppel artikel</Button><Button type="button" variant="secondary" disabled={isOffLoading} onClick={consultOpenFoodFacts}>{isOffLoading ? 'OFF raadplegen...' : 'Raadpleeg OFF'}</Button><span className="rz-external-databases-muted">OFF-kandidaten worden eerst genoteerd als externe kandidaat; koppelen blijft een expliciete keuze.</span></div>
           {offError ? <div className="rz-inline-feedback">{offError}</div> : null}
-          {offPreview ? <div className="rz-external-databases-preview-meta" data-testid="external-off-preview-meta"><span>OFF-status: {offStatusLabel(offPreview)}</span><span>Provider: {text(offPreview.provider)}</span><span>Resultaten: {offPreview.result_count ?? offResults.length}</span><span>Productmutatie: nee</span></div> : null}
-          {offPreview ? <Table dataTestId="external-off-candidates-table" tableClassName="rz-external-off-candidate-table" resizableColumns><thead><tr className="rz-table-header"><th>Kandidaat</th><th>Merk</th><th>GTIN / EAN</th><th>Omvang</th><th className="rz-num">Score</th><th>Status</th></tr></thead><tbody>{offResults.length ? offResults.map((candidate) => <tr key={offCandidateKey(candidate)}><td>{text(candidate.product_name || candidate.candidate_name)}</td><td>{text(candidate.brands || candidate.candidate_brand)}</td><td>{gtinText(candidate.gtin || candidate.ean || candidate.barcode || candidate.code)}</td><td>{text(candidate.quantity || candidate.quantity_label)}</td><td className="rz-num">{scoreText(candidate.score)}</td><td>Alleen raadplegen</td></tr>) : <tr><td colSpan="6">Geen OFF-kandidaten gevonden.</td></tr>}</tbody></Table> : null}
+          {offPreview ? <div className="rz-external-databases-preview-meta" data-testid="external-off-preview-meta"><span>OFF-status: {offStatusLabel(offPreview)}</span><span>Provider: {text(offPreview.provider)}</span><span>Productmutatie: nee</span></div> : null}
         </div>
       ) : null}
     </div>
