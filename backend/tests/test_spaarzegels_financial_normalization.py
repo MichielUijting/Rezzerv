@@ -11,8 +11,10 @@ if str(APP_ROOT) not in sys.path:
 from app.receipt_ingestion.product_candidate_gateway import append_product_candidate
 from app.receipt_ingestion.spaarzegels_terms import (
     is_spaarzegels_financial_pair,
+    is_spaarzegels_flow_excluded,
     spaarzegels_financial_metadata,
 )
+from app.services.external_database_matchflow_evidence import _filter_external_matching_items
 
 
 def _clean(value: str | None) -> str:
@@ -41,24 +43,7 @@ def _classify(_value: str) -> str:
     return "product_candidate"
 
 
-def test_spaarzegels_financial_pair_combines_label_and_detail_line():
-    assert is_spaarzegels_financial_pair(
-        label_text="Koopzegels",
-        detail_text="2 x 0.10 0.20",
-    )
-
-    metadata = spaarzegels_financial_metadata(
-        label_text="Koopzegels",
-        detail_text="2 x 0.10 0.20",
-    )
-
-    assert metadata["line_type"] == "spaarzegels"
-    assert metadata["include_in_receipt_total"] is True
-    assert metadata["exclude_from_inventory"] is True
-    assert metadata["external_matching_allowed"] is False
-
-
-def test_gateway_preserves_quantity_unit_price_total_for_spaarzegels_pair():
+def _spaarzegels_line() -> dict:
     extracted: list[dict] = []
 
     appended_index = append_product_candidate(
@@ -85,8 +70,29 @@ def test_gateway_preserves_quantity_unit_price_total_for_spaarzegels_pair():
 
     assert appended_index == 0
     assert len(extracted) == 1
+    return extracted[0]
 
-    line = extracted[0]
+
+def test_spaarzegels_financial_pair_combines_label_and_detail_line():
+    assert is_spaarzegels_financial_pair(
+        label_text="Koopzegels",
+        detail_text="2 x 0.10 0.20",
+    )
+
+    metadata = spaarzegels_financial_metadata(
+        label_text="Koopzegels",
+        detail_text="2 x 0.10 0.20",
+    )
+
+    assert metadata["line_type"] == "spaarzegels"
+    assert metadata["include_in_receipt_total"] is True
+    assert metadata["exclude_from_inventory"] is True
+    assert metadata["external_matching_allowed"] is False
+
+
+def test_gateway_preserves_quantity_unit_price_total_for_spaarzegels_pair():
+    line = _spaarzegels_line()
+
     assert line["quantity"] == 2.0
     assert line["unit_price"] == 0.10
     assert line["line_total"] == 0.20
@@ -100,7 +106,45 @@ def test_gateway_preserves_quantity_unit_price_total_for_spaarzegels_pair():
     assert trace["external_matching_allowed"] is False
 
 
+def test_spaarzegels_are_excluded_from_external_database_items():
+    spaarzegels_line = _spaarzegels_line()
+    product_line = {
+        "receipt_line_id": "product-1",
+        "receipt_line_text": "Halfvolle melk",
+        "raw_label": "Halfvolle melk",
+        "normalized_label": "Halfvolle melk",
+        "line_total": 1.29,
+        "unit_price": 1.29,
+        "price": 1.29,
+    }
+
+    external_items = [
+        {
+            "receipt_line_id": "spaarzegels-1",
+            "receipt_line_text": spaarzegels_line["raw_label"],
+            "raw_label": spaarzegels_line["raw_label"],
+            "normalized_label": spaarzegels_line["normalized_label"],
+            "quantity_label": str(spaarzegels_line["quantity"]),
+            "unit_price": spaarzegels_line["unit_price"],
+            "line_total": spaarzegels_line["line_total"],
+            "price": spaarzegels_line["line_total"],
+            "line_type": spaarzegels_line["line_type"],
+            "is_spaarzegels": spaarzegels_line["is_spaarzegels"],
+            "external_matching_allowed": spaarzegels_line["external_matching_allowed"],
+        },
+        product_line,
+    ]
+
+    assert is_spaarzegels_flow_excluded(external_items[0]) is True
+    assert is_spaarzegels_flow_excluded(product_line) is False
+
+    filtered_items = _filter_external_matching_items(external_items)
+
+    assert filtered_items == [product_line]
+
+
 if __name__ == "__main__":
     test_spaarzegels_financial_pair_combines_label_and_detail_line()
     test_gateway_preserves_quantity_unit_price_total_for_spaarzegels_pair()
+    test_spaarzegels_are_excluded_from_external_database_items()
     print("SPAARZEGELS_NORMALIZATION_OK")
