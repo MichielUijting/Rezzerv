@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 TERMS_PATH = Path(__file__).resolve().parents[1] / "data" / "receipt_spaarzegels_terms.json"
+AMOUNT_RE = re.compile(r"(?<!\d)-?\d+[\.,]\d{2}(?!\d)")
 
 
 def _as_tuple(values: Any) -> tuple[str, ...]:
@@ -30,12 +31,6 @@ def _as_tuple(values: Any) -> tuple[str, ...]:
 
 @lru_cache(maxsize=1)
 def load_spaarzegels_terms() -> dict[str, tuple[str, ...]]:
-    """Load managed receipt terms for Spaarzegels.
-
-    Product-/bontermkennis hoort in data, niet in parsercode. Deze loader houdt
-    de parser generiek: code vraagt alleen om termgroepen en beslist daarna op
-    generieke classificatieregels.
-    """
     try:
         payload = json.loads(TERMS_PATH.read_text(encoding="utf-8"))
     except Exception:
@@ -64,6 +59,18 @@ def spaarzegels_non_product_label_tokens() -> tuple[str, ...]:
     return load_spaarzegels_terms()["non_product_label_tokens"]
 
 
+def _normalize_text(value: str | None) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def _combined_text(*values: str | None) -> str:
+    return " ".join(_normalize_text(value) for value in values if str(value or "").strip()).strip()
+
+
+def _has_amount(value: str | None) -> bool:
+    return AMOUNT_RE.search(str(value or "")) is not None
+
+
 def token_match_from_terms(value: str, tokens: tuple[str, ...]) -> str | None:
     lowered = str(value or "").lower()
     for token in tokens:
@@ -73,7 +80,7 @@ def token_match_from_terms(value: str, tokens: tuple[str, ...]) -> str | None:
 
 
 def matches_spaarzegels_value_label(value: str) -> bool:
-    normalized = re.sub(r"\s+", " ", str(value or "").strip().lower())
+    normalized = _normalize_text(value)
     return any(re.fullmatch(pattern, normalized) for pattern in spaarzegels_value_label_patterns())
 
 
@@ -90,24 +97,32 @@ def contains_spaarzegels_non_product_token(value: str) -> bool:
 
 
 def is_spaarzegels_financial_line(value: str | None) -> bool:
-    """Return True for paid Spaarzegels receipt lines.
-
-    The line remains a receipt financial line. Callers must keep the line_total
-    available for receipt total checks, but must not route it into product,
-    household article or inventory matching.
-    """
-    normalized = str(value or "").strip().lower()
-    if not normalized:
-        return False
-    if not re.search(r"(?<!\d)-?\d+[\.,]\d{2}(?!\d)", normalized):
+    normalized = _normalize_text(value)
+    if not normalized or not _has_amount(normalized):
         return False
     return contains_spaarzegels_priced_token(normalized) is not None
 
 
-def spaarzegels_financial_metadata(value: str | None) -> dict[str, Any]:
-    """Build generic financial-only metadata for paid Spaarzegels lines."""
-    matched = contains_spaarzegels_priced_token(str(value or ""))
-    if not matched or not is_spaarzegels_financial_line(value):
+def is_spaarzegels_financial_pair(*, label_text: str | None, detail_text: str | None) -> bool:
+    combined = _combined_text(label_text, detail_text)
+    if not combined or not _has_amount(combined):
+        return False
+    return contains_spaarzegels_priced_token(combined) is not None
+
+
+def spaarzegels_financial_metadata(
+    value: str | None = None,
+    *,
+    label_text: str | None = None,
+    detail_text: str | None = None,
+) -> dict[str, Any]:
+    combined = _combined_text(value, label_text, detail_text)
+    matched = contains_spaarzegels_priced_token(combined)
+    if not matched:
+        return {}
+    if value is not None and is_spaarzegels_financial_line(value):
+        pass
+    elif not is_spaarzegels_financial_pair(label_text=label_text, detail_text=detail_text):
         return {}
     return {
         "line_type": "spaarzegels",
