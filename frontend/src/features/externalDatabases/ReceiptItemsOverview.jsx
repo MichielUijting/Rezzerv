@@ -4,22 +4,10 @@ import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 
 const PAGE_SIZE = 10
-
-const FALLBACK_CANDIDATE_STATUSES = new Set([
-  'fallback_candidate',
-  'receipt_fallback_candidate',
-  'receipt_unresolved_fallback',
-  'unresolved_fallback',
-  'unresolved',
-  'no_external_match',
-])
+const FALLBACK_MARKERS = ['fallback', 'unresolved', 'no_external_match', 'receipt_product_intent_fallback']
 
 function text(value, fallback = '-') {
-  if (Array.isArray(value)) {
-    const normalized = value.map((item) => text(item, '')).filter(Boolean).join(', ')
-    return normalized || fallback
-  }
-  const normalized = String(value || '').trim()
+  const normalized = String(value ?? '').trim()
   return normalized || fallback
 }
 
@@ -37,152 +25,89 @@ function scoreText(value) {
 }
 
 function gtinText(value) {
-  const normalized = String(value || '').trim()
-  if (/^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(normalized)) return normalized
-  return '-'
-}
-
-function normalizeCandidateStatus(value) {
-  return String(value || '').trim().toLowerCase()
-}
-
-function isFallbackCandidateStatus(value) {
-  return FALLBACK_CANDIDATE_STATUSES.has(normalizeCandidateStatus(value))
-}
-
-function isFallbackSignal(value) {
-  const normalized = normalizeCandidateStatus(value)
-  return normalized.includes('fallback') || normalized.includes('unresolved') || normalized.includes('no_external_match')
-}
-
-function detectFallbackCandidate(candidate) {
-  if (!candidate) return false
-  return [
-    candidate.candidate_status,
-    candidate.status,
-    candidate.status_label,
-    candidate.external_source_name,
-    candidate.external_source_product_code,
-    candidate.candidate_source_name,
-    candidate.candidate_source_product_code,
-    candidate.source_name,
-    candidate.source_product_code,
-    candidate.candidate_source,
-    candidate.variant,
-    candidate.candidate_id,
-    candidate.id,
-  ].some((value) => isFallbackCandidateStatus(value) || isFallbackSignal(value))
-}
-
-function candidateStatusLabel(candidate, linked) {
-  if (linked) return 'Gekoppeld'
-  if (detectFallbackCandidate(candidate)) return 'Geen externe match'
-  const normalized = normalizeCandidateStatus(candidate?.candidate_status || candidate?.status)
-  if (normalized === 'linked_to_catalog') return 'Gekoppeld'
-  if (normalized === 'user_confirmed') return 'Bevestigd'
-  if (normalized === 'probable_candidate') return 'Waarschijnlijke kandidaat'
-  if (normalized === 'weak_candidate') return 'Lage zekerheid'
-  if (normalized === 'off_candidate') return 'OFF-kandidaat'
-  if (normalized === 'off_low_score_candidate') return 'OFF lage zekerheid'
-  return text(candidate?.status_label || candidate?.candidate_status || candidate?.status || 'Kandidaat')
+  const normalized = text(value, '')
+  return /^\d{8}$|^\d{12}$|^\d{13}$|^\d{14}$/.test(normalized) ? normalized : '-'
 }
 
 function retailerLabel(value) {
-  const normalized = String(value || '').trim()
-  const key = normalized.toLowerCase()
-  const labels = {
-    ah: 'Albert Heijn',
-    albert_heijn: 'Albert Heijn',
-    'albert heijn': 'Albert Heijn',
-    jumbo: 'Jumbo',
-    lidl: 'Lidl',
-    aldi: 'Aldi',
-    plus: 'PLUS',
-    picnic: 'Picnic',
-  }
-  return labels[key] || normalized || 'Onbekend'
+  const normalized = text(value, '')
+  const labels = { ah: 'Albert Heijn', albert_heijn: 'Albert Heijn', jumbo: 'Jumbo', lidl: 'Lidl', aldi: 'Aldi', plus: 'PLUS', picnic: 'Picnic' }
+  return labels[normalized.toLowerCase()] || normalized || 'Onbekend'
 }
 
-function rowKey(item) {
-  return text(item.context_key || item.receipt_line_id || item.purchase_import_line_id || item.receipt_line_text, 'receipt-item')
+function isFallbackCandidate(candidate) {
+  const haystack = [
+    candidate?.candidate_status,
+    candidate?.status,
+    candidate?.external_source_name,
+    candidate?.external_source_product_code,
+    candidate?.candidate_source_name,
+    candidate?.candidate_source_product_code,
+    candidate?.source_name,
+    candidate?.source_product_code,
+    candidate?.variant,
+    candidate?.candidate_id,
+    candidate?.id,
+  ].map((value) => text(value, '').toLowerCase()).join(' ')
+  return FALLBACK_MARKERS.some((marker) => haystack.includes(marker))
+}
+
+function candidateStatusLabel(candidate, linked, fallback) {
+  if (linked) return 'Gekoppeld'
+  if (fallback) return 'Geen externe match'
+  const status = text(candidate?.candidate_status || candidate?.status, '').toLowerCase()
+  if (status === 'linked_to_catalog') return 'Gekoppeld'
+  if (status === 'user_confirmed') return 'Bevestigd'
+  if (status === 'probable_candidate') return 'Waarschijnlijke kandidaat'
+  if (status === 'weak_candidate') return 'Lage zekerheid'
+  if (status === 'off_candidate') return 'OFF-kandidaat'
+  if (status === 'off_low_score_candidate') return 'OFF lage zekerheid'
+  return text(candidate?.status_label || candidate?.candidate_status || candidate?.status || 'Kandidaat')
 }
 
 function candidateKey(candidate) {
-  return text(
-    candidate.candidate_id ||
-    candidate.id ||
-    `${candidate.candidate_name}-${candidate.external_source_product_code || candidate.candidate_source_product_code}-${candidate.variant}`,
-    'candidate'
-  )
+  return text(candidate?.candidate_id || candidate?.id || `${candidate?.candidate_name}-${candidate?.candidate_source_product_code || candidate?.external_source_product_code}-${candidate?.variant}`, 'candidate')
 }
 
-function candidateDedupValue(value) {
-  return String(value || '').trim().toLowerCase()
+function hasCatalogLink(candidate) {
+  return Boolean(candidate?.is_linked_to_catalog === true || text(candidate?.global_product_id, '') || text(candidate?.product_identity_id, '') || text(candidate?.matched_global_product_id, '') || text(candidate?.matched_global_article_id, ''))
 }
 
-function candidateDedupKey(candidate) {
-  const raw = candidate?.raw || {}
-  const source = candidateDedupValue(candidate.source || raw.external_source_name || raw.candidate_source_name || raw.source_name)
-  const externalCode = candidateDedupValue(candidate.externalCode || raw.external_source_product_code || raw.candidate_source_product_code || raw.source_product_code || raw.retailer_article_number)
-  const gtin = candidateDedupValue(raw.gtin || raw.ean)
-  if (source && externalCode) return `source:${source}|code:${externalCode}`
-  if (gtin) return `gtin:${gtin}`
-  const name = candidateDedupValue(candidate.candidateName || raw.candidate_name)
-  const brand = candidateDedupValue(candidate.brand || raw.candidate_brand)
-  const variant = candidateDedupValue(candidate.variant || raw.variant)
-  return `fallback:${name}|brand:${brand}|variant:${variant}`
-}
-
-function preferCandidate(current, next) {
-  if (!current) return next
-  if (next.isLinkedToCatalog && !current.isLinkedToCatalog) return next
-  if (current.isLinkedToCatalog && !next.isLinkedToCatalog) return current
-  return Number(next.score || 0) > Number(current.score || 0) ? next : current
+function buildCandidate(candidate) {
+  const linked = candidate?.is_linked_to_catalog === true
+  const fallback = isFallbackCandidate(candidate)
+  return {
+    id: candidateKey(candidate),
+    candidateName: text(candidate?.candidate_name),
+    brand: text(candidate?.candidate_brand),
+    source: text(candidate?.external_source_name || candidate?.candidate_source_name || candidate?.source_name),
+    externalCode: text(candidate?.external_source_product_code || candidate?.candidate_source_product_code || candidate?.source_product_code || candidate?.retailer_article_number),
+    variant: text(candidate?.variant),
+    score: candidate?.score,
+    status: candidateStatusLabel(candidate, linked, fallback),
+    isLinkedToCatalog: linked,
+    catalogLinked: hasCatalogLink(candidate),
+    isFallbackCandidate: fallback,
+    isLinkableToCatalog: Boolean(candidate?.is_linkable_to_catalog) && !linked && !fallback,
+    raw: candidate,
+  }
 }
 
 function dedupeCandidates(candidates) {
   const deduped = new Map()
   candidates.forEach((candidate) => {
-    const key = candidateDedupKey(candidate)
-    deduped.set(key, preferCandidate(deduped.get(key), candidate))
+    const raw = candidate.raw || {}
+    const source = text(candidate.source || raw.external_source_name || raw.candidate_source_name || raw.source_name, '').toLowerCase()
+    const code = text(candidate.externalCode || raw.external_source_product_code || raw.candidate_source_product_code || raw.source_product_code || raw.retailer_article_number, '').toLowerCase()
+    const key = source && code ? `${source}:${code}` : `${candidate.candidateName}:${candidate.brand}:${candidate.variant}`.toLowerCase()
+    const current = deduped.get(key)
+    if (!current || candidate.isLinkedToCatalog || Number(candidate.score || 0) > Number(current.score || 0)) deduped.set(key, candidate)
   })
   return Array.from(deduped.values())
 }
 
-function hasCatalogLink(candidate) {
-  return Boolean(
-    candidate?.is_linked_to_catalog === true ||
-    text(candidate?.global_product_id, '') ||
-    text(candidate?.product_identity_id, '') ||
-    text(candidate?.matched_global_product_id, '') ||
-    text(candidate?.matched_global_article_id, '')
-  )
-}
-
-function buildCandidate(candidate) {
-  const linked = candidate?.is_linked_to_catalog === true
-  const isFallbackCandidate = detectFallbackCandidate(candidate)
-  return {
-    id: candidateKey(candidate),
-    candidateName: text(candidate.candidate_name),
-    brand: text(candidate.candidate_brand),
-    source: text(candidate.external_source_name || candidate.candidate_source_name || candidate.source_name),
-    externalCode: text(candidate.external_source_product_code || candidate.candidate_source_product_code || candidate.source_product_code || candidate.retailer_article_number),
-    variant: text(candidate.variant),
-    score: candidate.score,
-    status: candidateStatusLabel(candidate, linked),
-    isLinkedToCatalog: linked,
-    catalogLinked: hasCatalogLink(candidate),
-    isFallbackCandidate,
-    isLinkableToCatalog: Boolean(candidate.is_linkable_to_catalog) && !linked && !isFallbackCandidate,
-    raw: candidate,
-  }
-}
-
-function bestCandidateForItem(candidates) {
-  const linkedCandidate = candidates.find((candidate) => candidate.isLinkedToCatalog)
-  if (linkedCandidate) return linkedCandidate
-  return candidates.find((candidate) => !candidate.isFallbackCandidate) || null
+function rowKey(item) {
+  return text(item.context_key || item.receipt_line_id || item.purchase_import_line_id || item.receipt_line_text, 'receipt-item')
 }
 
 function buildReceiptItems(rawItems) {
@@ -206,46 +131,34 @@ function buildReceiptItems(rawItems) {
       status: 'Nog niet verwerkt',
       candidates: [],
     }
-    const nestedCandidates = rawItem.is_receipt_item_placeholder && Array.isArray(rawItem.candidates) ? rawItem.candidates : [rawItem]
-    nestedCandidates.forEach((candidate) => {
-      if (rawItem.is_receipt_item_placeholder && !candidate) return
-      if (rawItem.is_receipt_item_placeholder === true || !rawItem.is_receipt_item_placeholder) {
-        const candidateItem = buildCandidate(candidate)
-        current.candidates.push(candidateItem)
-        if (candidateItem.catalogLinked) {
-          current.catalogLinked = true
-          current.status = 'Gekoppeld'
-        }
+    const nested = rawItem.is_receipt_item_placeholder && Array.isArray(rawItem.candidates) ? rawItem.candidates : [rawItem]
+    nested.filter(Boolean).forEach((candidate) => {
+      const built = buildCandidate(candidate)
+      current.candidates.push(built)
+      if (built.catalogLinked) {
+        current.catalogLinked = true
+        current.status = 'Gekoppeld'
       }
     })
-    if (!current.catalogLinked && current.candidates.some((candidate) => !candidate.isFallbackCandidate)) current.status = 'Kandidaten gevonden'
-    if (!current.catalogLinked && !current.candidates.some((candidate) => !candidate.isFallbackCandidate) && current.candidates.some((candidate) => candidate.isFallbackCandidate)) current.status = 'Geen externe match'
     grouped.set(key, current)
   })
   return Array.from(grouped.values()).map((item) => {
     const candidates = dedupeCandidates(item.candidates).sort((left, right) => Number(right.score || 0) - Number(left.score || 0))
-    const bestCandidate = bestCandidateForItem(candidates)
+    const linked = candidates.find((candidate) => candidate.isLinkedToCatalog)
+    const best = linked || candidates.find((candidate) => !candidate.isFallbackCandidate) || null
+    const hasRealCandidate = candidates.some((candidate) => !candidate.isFallbackCandidate)
+    const hasFallback = candidates.some((candidate) => candidate.isFallbackCandidate)
     return {
       ...item,
       candidates,
+      status: item.catalogLinked ? 'Gekoppeld' : (hasRealCandidate ? 'Kandidaten gevonden' : (hasFallback ? 'Geen externe match' : item.status)),
       candidateCount: candidates.filter((candidate) => !candidate.isFallbackCandidate).length,
-      bestCandidateName: text(bestCandidate?.candidateName, ''),
-      bestCandidateScore: bestCandidate?.score ?? null,
-      articleNumber: text(bestCandidate?.externalCode, '-'),
-      gtin: gtinText(bestCandidate?.raw?.gtin || bestCandidate?.raw?.ean),
+      bestCandidateName: text(best?.candidateName, ''),
+      bestCandidateScore: best?.score ?? null,
+      articleNumber: text(best?.externalCode, '-'),
+      gtin: gtinText(best?.raw?.gtin || best?.raw?.ean),
     }
   })
-}
-
-function sortValue(item, key) {
-  if (key === 'candidateCount') return Number(item.candidateCount || 0)
-  if (key === 'bestCandidateScore') return Number(item.bestCandidateScore || 0)
-  if (key === 'catalogLinked') return item.catalogLinked ? 1 : 0
-  return String(item[key] || '').toLowerCase()
-}
-
-function csvValue(value) {
-  return `"${String(value ?? '').replaceAll('"', '""')}"`
 }
 
 function offStatusLabel(preview) {
@@ -308,8 +221,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       String(item.candidateCount || '').toLowerCase().includes(filters.candidateCount.toLowerCase())
     ))
     rows.sort((leftItem, rightItem) => {
-      const left = sortValue(leftItem, sortKey)
-      const right = sortValue(rightItem, sortKey)
+      const left = String(leftItem[sortKey] ?? '').toLowerCase()
+      const right = String(rightItem[sortKey] ?? '').toLowerCase()
       if (left < right) return sortDesc ? 1 : -1
       if (left > right) return sortDesc ? -1 : 1
       return 0
@@ -336,47 +249,26 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const selectedCandidate = selectedCandidates.find((candidate) => candidate.id === selectedCandidateId) || null
   const selectedCandidateCanBeLinked = Boolean(selectedCandidate && selectedCandidate.isLinkableToCatalog && !selectedCandidate.isFallbackCandidate && !selectedCandidate.isLinkedToCatalog)
 
+  function updateFilter(key, value) { setFilters((current) => ({ ...current, [key]: value })); setPage(1) }
+  function updateSort(key) { if (sortKey === key) setSortDesc((value) => !value); else { setSortKey(key); setSortDesc(false) }; setPage(1) }
+  function sortMark(key) { return sortKey === key && !sortDesc ? '^' : 'v' }
+  function toggleSelectedItem(itemId) { setSelectedItemIds((current) => current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId]) }
+  function toggleVisibleItems() { setSelectedItemIds((current) => allVisibleSelected ? current.filter((id) => !visibleIds.includes(id)) : Array.from(new Set([...current, ...visibleIds]))) }
+  function goToPage(targetPage) { setPage(Math.max(1, Math.min(pageCount, targetPage))) }
+
   function selectReceiptItem(item) {
     setSelectedItem(item)
     setSelectedCandidateId('')
     setOffPreview(null)
     setOffError('')
-  }
-
-  function toggleSelectedItem(itemId) {
-    setSelectedItemIds((current) => current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId])
-  }
-
-  function toggleVisibleItems() {
-    setSelectedItemIds((current) => allVisibleSelected ? current.filter((id) => !visibleIds.includes(id)) : Array.from(new Set([...current, ...visibleIds])))
-  }
-
-  function updateFilter(key, value) {
-    setFilters((current) => ({ ...current, [key]: value }))
-    setPage(1)
-  }
-
-  function updateSort(key) {
-    if (sortKey === key) setSortDesc((value) => !value)
-    else { setSortKey(key); setSortDesc(false) }
-    setPage(1)
-  }
-
-  function sortMark(key) {
-    if (sortKey !== key) return 'v'
-    return sortDesc ? 'v' : '^'
-  }
-
-  function goToPage(targetPage) {
-    setPage(Math.max(1, Math.min(pageCount, targetPage)))
+    consultOpenFoodFactsForItem(item)
   }
 
   function exportSelectedItems() {
     const selectedRows = items.filter((item) => selectedItemIds.includes(item.id))
     if (!selectedRows.length) { onMessage?.('Selecteer eerst één of meer bonartikelen om te exporteren.'); return }
     const rows = [['Bonartikel', 'Winkelketen', 'Catalogus', 'Artikelnummer', 'GTIN / EAN', 'Omvang / gewicht', 'Prijs', 'Aantal', 'Kandidaat', 'Score', 'Externe kandidaten'], ...selectedRows.map((item) => [item.receiptLineText, item.retailerCode, item.catalogLinked ? 'Gekoppeld' : 'Niet gekoppeld', item.articleNumber, item.gtin, item.quantity, numberText(item.price), item.amount, item.bestCandidateName || '-', scoreText(item.bestCandidateScore), item.candidateCount])]
-    const csv = rows.map((row) => row.map(csvValue).join(';')).join('\r\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const blob = new Blob([rows.map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -389,11 +281,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   async function processSelectedCandidate() {
     if (!selectedItem || !selectedCandidate || !selectedCandidateCanBeLinked) return
     try {
-      const response = await fetchJsonWithAuth('/api/external-databases/catalog/promote-candidate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidate_id: selectedCandidate.raw?.id || selectedCandidate.id }),
-      })
+      const response = await fetchJsonWithAuth('/api/external-databases/catalog/promote-candidate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ candidate_id: selectedCandidate.raw?.id || selectedCandidate.id }) })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data?.detail || 'Kandidaat verwerken is mislukt')
       onMessage?.(data?.promoted ? 'Kandidaat is gekoppeld.' : 'Cataloguskoppeling is afgerond zonder mutatie.')
@@ -404,29 +292,16 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     }
   }
 
-  async function consultOpenFoodFacts() {
-    if (!selectedItem) return
+  async function consultOpenFoodFactsForItem(item) {
+    if (!item) return
     setIsOffLoading(true)
     setOffPreview(null)
     setOffError('')
     try {
-      const response = await fetchJsonWithAuth('/api/external-databases/off/save-candidates', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          receipt_line_text: selectedItem.receiptLineText,
-          retailer_code: selectedItem.retailerCodeRaw,
-          receipt_line_id: selectedItem.receiptLineId,
-          purchase_import_line_id: selectedItem.purchaseImportLineId,
-          candidate_name: selectedItem.bestCandidateName || selectedItem.receiptLineText,
-          quantity_label: selectedItem.quantity,
-          limit: 5,
-        }),
-      })
+      const response = await fetchJsonWithAuth('/api/external-databases/off/save-candidates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ receipt_line_text: item.receiptLineText, retailer_code: item.retailerCodeRaw, receipt_line_id: item.receiptLineId, purchase_import_line_id: item.purchaseImportLineId, candidate_name: item.bestCandidateName || item.receiptLineText, quantity_label: item.quantity, limit: 5 }) })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(data?.detail || 'Open Food Facts kon niet worden geraadpleegd')
       setOffPreview(data.preview || data)
-      onMessage?.(`OFF-kandidaten genoteerd: ${(data.saved_count ?? 0) + (data.updated_count ?? 0)}.`)
       await loadItems()
     } catch (err) {
       setOffError(err?.message || 'Open Food Facts kon niet worden geraadpleegd')
@@ -437,49 +312,12 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
 
   return (
     <div className="rz-external-receipt-overview">
-      <div className="rz-external-databases-section-header">
-        <h3>Bonartikelen voor externe herkenning</h3>
-        <Button type="button" variant="secondary" disabled={isLoading} onClick={loadItems}>Vernieuwen</Button>
-      </div>
-      <div className="rz-external-databases-actions">
-        <Button type="button" variant="secondary" disabled={!selectedItemIds.length} onClick={exportSelectedItems}>Exporteren</Button>
-        <span className="rz-external-databases-muted">Geselecteerd: {selectedItemIds.length}</span>
-      </div>
+      <div className="rz-external-databases-section-header"><h3>Bonartikelen voor externe herkenning</h3><Button type="button" variant="secondary" disabled={isLoading} onClick={loadItems}>Vernieuwen</Button></div>
+      <div className="rz-external-databases-actions"><Button type="button" variant="secondary" disabled={!selectedItemIds.length} onClick={exportSelectedItems}>Exporteren</Button><span className="rz-external-databases-muted">Geselecteerd: {selectedItemIds.length}</span></div>
       {isLoading ? <div>Bonartikelen worden geladen...</div> : null}
-
-      <div className="rz-table-scroll rz-table-scroll--wide">
-        <Table dataTestId="external-receipt-items-table" tableClassName="rz-external-receipt-table" resizableColumns>
-          <colgroup><col /><col /><col /><col /><col /><col /><col /><col /><col /><col /><col /><col /></colgroup>
-          <thead>
-            <tr className="rz-table-header"><th className="rz-check"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleItems} /></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('receiptLineText')}>Bonartikel <span>{sortMark('receiptLineText')}</span></button></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('retailerCode')}>Winkelketen <span>{sortMark('retailerCode')}</span></button></th><th className="rz-check"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('catalogLinked')}>Catalogus <span>{sortMark('catalogLinked')}</span></button></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('articleNumber')}>Artikelnummer <span>{sortMark('articleNumber')}</span></button></th><th>GTIN / EAN</th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('quantity')}>Omvang / gewicht <span>{sortMark('quantity')}</span></button></th><th className="rz-num">Prijs</th><th className="rz-num">Aantal</th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateName')}>Kandidaat <span>{sortMark('bestCandidateName')}</span></button></th><th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateScore')}>Score <span>{sortMark('bestCandidateScore')}</span></button></th><th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('candidateCount')}>Externe kandidaten <span>{sortMark('candidateCount')}</span></button></th></tr>
-            <tr className="rz-external-databases-filter-row"><th></th><th><input className="rz-table-filter" value={filters.receiptLineText} onChange={(event) => updateFilter('receiptLineText', event.target.value)} placeholder="Zoek" /></th><th><input className="rz-table-filter" value={filters.retailerCode} onChange={(event) => updateFilter('retailerCode', event.target.value)} placeholder="Filter" /></th><th><select className="rz-table-filter" value={filters.catalogLinked} onChange={(event) => updateFilter('catalogLinked', event.target.value)} aria-label="Catalogus filter"><option value="all">Alle</option><option value="linked">Gekoppeld</option><option value="unlinked">Niet gekoppeld</option></select></th><th><input className="rz-table-filter" value={filters.articleNumber} onChange={(event) => updateFilter('articleNumber', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.gtin} onChange={(event) => updateFilter('gtin', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.quantity} onChange={(event) => updateFilter('quantity', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.price} onChange={(event) => updateFilter('price', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.amount} onChange={(event) => updateFilter('amount', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.bestCandidateName} onChange={(event) => updateFilter('bestCandidateName', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.bestCandidateScore} onChange={(event) => updateFilter('bestCandidateScore', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.candidateCount} onChange={(event) => updateFilter('candidateCount', event.target.value)} placeholder="Filter" /></th></tr>
-          </thead>
-          <tbody>
-            {visibleItems.length ? visibleItems.map((item) => <tr key={item.id} className={selectedItem?.id === item.id ? 'rz-row-active' : ''} onDoubleClick={() => selectReceiptItem(item)}><td className="rz-check"><input type="checkbox" checked={selectedItemIds.includes(item.id)} onChange={() => toggleSelectedItem(item.id)} /></td><td>{item.receiptLineText}</td><td>{item.retailerCode}</td><td className="rz-check"><input type="checkbox" checked={item.catalogLinked} readOnly /></td><td>{item.articleNumber}</td><td>{item.gtin}</td><td>{item.quantity}</td><td className="rz-num">{numberText(item.price)}</td><td className="rz-num">{item.amount}</td><td>{item.bestCandidateName || '-'}</td><td className="rz-num">{scoreText(item.bestCandidateScore)}</td><td className="rz-num">{item.candidateCount}</td></tr>) : <tr><td colSpan="12">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}
-            {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="12"></td></tr>)}
-          </tbody>
-        </Table>
-      </div>
-
-      <div className="rz-external-databases-pagination" aria-label="Paginering bonartikelen">
-        <Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => goToPage(1)}>Eerste</Button>
-        <Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)}>Vorige</Button>
-        <span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span>
-        <Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)}>Volgende</Button>
-        <Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => goToPage(pageCount)}>Laatste</Button>
-      </div>
-
-      {selectedItem ? (
-        <div className="rz-external-receipt-detail">
-          <h3>Koppelen kandidaten in artikel-catalogus</h3>
-          <p>Kandidaten voor: {selectedItem.receiptLineText}</p>
-          <dl><dt>Winkelketen</dt><dd>{selectedItem.retailerCode}</dd><dt>Artikelnummer</dt><dd>{selectedItem.articleNumber}</dd><dt>GTIN / EAN</dt><dd>{selectedItem.gtin}</dd><dt>Status</dt><dd>{selectedItem.status}</dd></dl>
-          <Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table" resizableColumns><thead><tr className="rz-table-header"><th>Keuze</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>Artikelnummer</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr></thead><tbody>{selectedCandidates.length ? selectedCandidates.map((candidate) => <tr key={candidate.id} className={selectedCandidateId === candidate.id ? 'rz-row-selected' : ''}><td className="rz-check"><input type="radio" name="external-candidate" checked={selectedCandidateId === candidate.id} disabled={!candidate.isLinkableToCatalog && !candidate.isLinkedToCatalog} onChange={() => setSelectedCandidateId(candidate.id)} /></td><td>{candidate.candidateName}</td><td>{candidate.brand}</td><td>{candidate.source}</td><td>{candidate.externalCode}</td><td>{candidate.variant}</td><td className="rz-num">{scoreText(candidate.score)}</td><td>{candidate.status}</td></tr>) : <tr><td colSpan="8">Geen externe kandidaten voor dit bonartikel.</td></tr>}</tbody></Table>
-          <div className="rz-external-databases-actions"><Button type="button" disabled={!selectedCandidateCanBeLinked} onClick={processSelectedCandidate}>Koppel artikel</Button><Button type="button" variant="secondary" disabled={isOffLoading} onClick={consultOpenFoodFacts}>{isOffLoading ? 'OFF raadplegen...' : 'Raadpleeg OFF'}</Button><span className="rz-external-databases-muted">OFF-kandidaten worden eerst genoteerd als externe kandidaat; koppelen blijft een expliciete keuze.</span></div>
-          {offError ? <div className="rz-inline-feedback">{offError}</div> : null}
-          {offPreview ? <div className="rz-external-databases-preview-meta" data-testid="external-off-preview-meta"><span>OFF-status: {offStatusLabel(offPreview)}</span><span>Provider: {text(offPreview.provider)}</span><span>Productmutatie: nee</span></div> : null}
-        </div>
-      ) : null}
+      <div className="rz-table-scroll rz-table-scroll--wide"><Table dataTestId="external-receipt-items-table" tableClassName="rz-external-receipt-table" resizableColumns><colgroup><col /><col /><col /><col /><col /><col /><col /><col /><col /><col /><col /><col /></colgroup><thead><tr className="rz-table-header"><th className="rz-check"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleItems} /></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('receiptLineText')}>Bonartikel <span>{sortMark('receiptLineText')}</span></button></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('retailerCode')}>Winkelketen <span>{sortMark('retailerCode')}</span></button></th><th className="rz-check"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('catalogLinked')}>Catalogus <span>{sortMark('catalogLinked')}</span></button></th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('articleNumber')}>Artikelnummer <span>{sortMark('articleNumber')}</span></button></th><th>GTIN / EAN</th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('quantity')}>Omvang / gewicht <span>{sortMark('quantity')}</span></button></th><th className="rz-num">Prijs</th><th className="rz-num">Aantal</th><th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateName')}>Kandidaat <span>{sortMark('bestCandidateName')}</span></button></th><th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateScore')}>Score <span>{sortMark('bestCandidateScore')}</span></button></th><th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('candidateCount')}>Externe kandidaten <span>{sortMark('candidateCount')}</span></button></th></tr><tr className="rz-external-databases-filter-row"><th></th><th><input className="rz-table-filter" value={filters.receiptLineText} onChange={(event) => updateFilter('receiptLineText', event.target.value)} placeholder="Zoek" /></th><th><input className="rz-table-filter" value={filters.retailerCode} onChange={(event) => updateFilter('retailerCode', event.target.value)} placeholder="Filter" /></th><th><select className="rz-table-filter" value={filters.catalogLinked} onChange={(event) => updateFilter('catalogLinked', event.target.value)} aria-label="Catalogus filter"><option value="all">Alle</option><option value="linked">Gekoppeld</option><option value="unlinked">Niet gekoppeld</option></select></th><th><input className="rz-table-filter" value={filters.articleNumber} onChange={(event) => updateFilter('articleNumber', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.gtin} onChange={(event) => updateFilter('gtin', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.quantity} onChange={(event) => updateFilter('quantity', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.price} onChange={(event) => updateFilter('price', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.amount} onChange={(event) => updateFilter('amount', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.bestCandidateName} onChange={(event) => updateFilter('bestCandidateName', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.bestCandidateScore} onChange={(event) => updateFilter('bestCandidateScore', event.target.value)} placeholder="Filter" /></th><th><input className="rz-table-filter" value={filters.candidateCount} onChange={(event) => updateFilter('candidateCount', event.target.value)} placeholder="Filter" /></th></tr></thead><tbody>{visibleItems.length ? visibleItems.map((item) => <tr key={item.id} className={selectedItem?.id === item.id ? 'rz-row-active' : ''} onDoubleClick={() => selectReceiptItem(item)}><td className="rz-check"><input type="checkbox" checked={selectedItemIds.includes(item.id)} onChange={() => toggleSelectedItem(item.id)} /></td><td>{item.receiptLineText}</td><td>{item.retailerCode}</td><td className="rz-check"><input type="checkbox" checked={item.catalogLinked} readOnly /></td><td>{item.articleNumber}</td><td>{item.gtin}</td><td>{item.quantity}</td><td className="rz-num">{numberText(item.price)}</td><td className="rz-num">{item.amount}</td><td>{item.bestCandidateName || '-'}</td><td className="rz-num">{scoreText(item.bestCandidateScore)}</td><td className="rz-num">{item.candidateCount}</td></tr>) : <tr><td colSpan="12">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}{Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="12"></td></tr>)}</tbody></Table></div>
+      <div className="rz-external-databases-pagination" aria-label="Paginering bonartikelen"><Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => goToPage(1)}>Eerste</Button><Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)}>Vorige</Button><span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span><Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)}>Volgende</Button><Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => goToPage(pageCount)}>Laatste</Button></div>
+      {selectedItem ? <div className="rz-external-receipt-detail"><h3>Koppelen kandidaten in artikel-catalogus</h3><p>Kandidaten voor: {selectedItem.receiptLineText}</p><dl><dt>Winkelketen</dt><dd>{selectedItem.retailerCode}</dd><dt>Artikelnummer</dt><dd>{selectedItem.articleNumber}</dd><dt>GTIN / EAN</dt><dd>{selectedItem.gtin}</dd><dt>Status</dt><dd>{selectedItem.status}</dd></dl><Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table" resizableColumns><thead><tr className="rz-table-header"><th>Keuze</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>Artikelnummer</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr></thead><tbody>{selectedCandidates.length ? selectedCandidates.map((candidate) => <tr key={candidate.id} className={selectedCandidateId === candidate.id ? 'rz-row-selected' : ''}><td className="rz-check"><input type="radio" name="external-candidate" checked={selectedCandidateId === candidate.id} disabled={!candidate.isLinkableToCatalog && !candidate.isLinkedToCatalog} onChange={() => setSelectedCandidateId(candidate.id)} /></td><td>{candidate.candidateName}</td><td>{candidate.brand}</td><td>{candidate.source}</td><td>{candidate.externalCode}</td><td>{candidate.variant}</td><td className="rz-num">{scoreText(candidate.score)}</td><td>{candidate.status}</td></tr>) : <tr><td colSpan="8">Geen externe kandidaten voor dit bonartikel.</td></tr>}</tbody></Table><div className="rz-external-databases-actions"><Button type="button" disabled={!selectedCandidateCanBeLinked} onClick={processSelectedCandidate}>Koppel artikel</Button><span className="rz-external-databases-muted">{isOffLoading ? 'OFF wordt automatisch geraadpleegd...' : 'OFF wordt automatisch geraadpleegd bij openen van dit detail; koppelen blijft een expliciete keuze.'}</span></div>{offError ? <div className="rz-inline-feedback">{offError}</div> : null}{offPreview ? <div className="rz-external-databases-preview-meta" data-testid="external-off-preview-meta"><span>OFF-status: {offStatusLabel(offPreview)}</span><span>Provider: {text(offPreview.provider)}</span><span>Productmutatie: nee</span></div> : null}</div> : null}
     </div>
   )
 }
