@@ -77,7 +77,7 @@ function receiptItemsPayload(includeOffCandidate = false) {
 }
 
 test.describe('Externe databases OFF candidate flow', () => {
-  test('Raadpleeg OFF noteert kandidaten in onderste tabel voor expliciet koppelen', async ({ page }) => {
+  test('Detail openen raadpleegt OFF automatisch en noteert kandidaten in onderste tabel', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let includeOffCandidate = false;
 
@@ -151,10 +151,7 @@ test.describe('Externe databases OFF candidate flow', () => {
 
     const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
     await expect(candidateTable).toBeVisible();
-    await expect(candidateTable.getByText('Halfvolle melk bestaand')).toBeVisible();
-    await expect(candidateTable.getByText('8710000000002')).toHaveCount(0);
-
-    await page.getByRole('button', { name: 'Raadpleeg OFF' }).click();
+    await expect(page.getByRole('button', { name: 'Raadpleeg OFF' })).toHaveCount(0);
 
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('OFF-status: Gevonden');
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Provider: search_a_licious');
@@ -165,12 +162,6 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(offCandidateRow.getByRole('cell', { name: 'Halfvolle melk', exact: true })).toBeVisible();
     await expect(offCandidateRow.getByRole('cell', { name: '8710000000002', exact: true })).toBeVisible();
     await expect(page.getByTestId('external-off-candidates-table')).toHaveCount(0);
-
-    const confirmationDialog = page.getByRole('dialog');
-    if (await confirmationDialog.isVisible().catch(() => false)) {
-      await confirmationDialog.getByRole('button', { name: 'Sluiten' }).click();
-      await expect(confirmationDialog).toHaveCount(0);
-    }
 
     await offCandidateRow.locator('input[type="radio"]').check();
     await expect(page.getByRole('button', { name: 'Koppel artikel' })).toBeEnabled();
