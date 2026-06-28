@@ -160,12 +160,12 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Provider: search_a_licious');
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Productmutatie: nee');
 
-    await expect(candidateTable.getByText('Halfvolle melk')).toBeVisible();
-    await expect(candidateTable.getByText('8710000000002')).toBeVisible();
-    await expect(page.getByTestId('external-off-candidates-table')).toHaveCount(0);
-
     const offCandidateRow = candidateTable.locator('tbody tr', { hasText: '8710000000002' });
     await expect(offCandidateRow).toBeVisible();
+    await expect(offCandidateRow.getByRole('cell', { name: 'Halfvolle melk', exact: true })).toBeVisible();
+    await expect(offCandidateRow.getByRole('cell', { name: '8710000000002', exact: true })).toBeVisible();
+    await expect(page.getByTestId('external-off-candidates-table')).toHaveCount(0);
+
     await offCandidateRow.locator('input[type="radio"]').check();
     await expect(page.getByRole('button', { name: 'Koppel artikel' })).toBeEnabled();
 
