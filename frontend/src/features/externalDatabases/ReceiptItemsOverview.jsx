@@ -206,6 +206,7 @@ function buildCandidate(candidate) {
     isLinkedToCatalog: linked,
     catalogLinked: hasCatalogLink(candidate),
     isFallbackCandidate: fallback,
+    isSearchHelper: type === 'Zoekhulp',
     isLinkableToCatalog: Boolean(candidate?.is_linkable_to_catalog) && universal && !linked && !fallback,
     raw: candidate,
   }
@@ -402,7 +403,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const emptyRows = Math.max(0, PAGE_SIZE - visibleItems.length)
   const visibleIds = visibleItems.map((item) => item.id)
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedItemIds.includes(id))
-  const selectedCandidates = selectedItem?.candidates || []
+  const selectedCandidates = (selectedItem?.candidates || []).filter((candidate) => !candidate.isSearchHelper)
   const selectedCandidate = selectedCandidates.find((candidate) => candidate.id === selectedCandidateId) || null
   const selectedCandidateCanBeLinked = Boolean(selectedCandidate && selectedCandidate.isLinkableToCatalog && !selectedCandidate.isFallbackCandidate && !selectedCandidate.isLinkedToCatalog)
   const selectedCandidateCanBeUnlinked = Boolean(selectedCandidate && selectedCandidate.isLinkedToCatalog)
@@ -584,7 +585,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       {selectedItem ? (
         <div className="rz-external-receipt-detail">
           <h3>Koppelen kandidaten in artikel-catalogus</h3>
-          <p>Kandidaten voor: {selectedItem.receiptLineText}</p>
+          <p>Universele kandidaten voor: {selectedItem.receiptLineText}</p>
           <dl>
             <dt>Winkelketen</dt><dd>{selectedItem.retailerCode}</dd>
             <dt>Bonartikelnummer</dt><dd>{selectedItem.articleNumber}</dd>
@@ -593,13 +594,12 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
           </dl>
           <Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table" resizableColumns>
             <thead>
-              <tr className="rz-table-header"><th>Keuze</th><th>Type</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>Universele code / GTIN-EAN</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr>
+              <tr className="rz-table-header"><th>Keuze</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>GTIN / EAN</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr>
             </thead>
             <tbody>
               {selectedCandidates.length ? selectedCandidates.map((candidate) => (
                 <tr key={candidate.id} className={selectedCandidateId === candidate.id ? 'rz-row-selected' : ''}>
                   <td className="rz-check"><input type="radio" name="external-candidate" checked={selectedCandidateId === candidate.id} disabled={!candidate.isLinkableToCatalog && !candidate.isLinkedToCatalog} onChange={() => setSelectedCandidateId(candidate.id)} /></td>
-                  <td>{candidate.type}</td>
                   <td>{candidate.candidateName}</td>
                   <td>{candidate.brand}</td>
                   <td>{candidate.source}</td>
@@ -608,7 +608,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
                   <td className="rz-num">{scoreText(candidate.score)}</td>
                   <td>{candidate.status}</td>
                 </tr>
-              )) : <tr><td colSpan="9">Geen externe kandidaten voor dit bonartikel.</td></tr>}
+              )) : <tr><td colSpan="8">Geen universele kandidaten voor dit bonartikel.</td></tr>}
             </tbody>
           </Table>
           <div className="rz-external-databases-actions">
@@ -617,7 +617,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
             <span className="rz-external-databases-muted">
               {selectedItemHasKnownGtin
                 ? 'GTIN/EAN is al bekend; OFF-kandidaten worden niet automatisch toegevoegd.'
-                : (isOffLoading ? 'OFF wordt automatisch geraadpleegd...' : 'OFF wordt automatisch geraadpleegd bij openen van dit detail; koppelen blijft een expliciete keuze voor een universele code.')}
+                : (isOffLoading ? 'OFF wordt automatisch geraadpleegd...' : 'OFF wordt automatisch geraadpleegd bij openen van dit detail; alleen universele codes worden als keuze getoond.')}
             </span>
           </div>
           {offError ? <div className="rz-inline-feedback">{offError}</div> : null}
