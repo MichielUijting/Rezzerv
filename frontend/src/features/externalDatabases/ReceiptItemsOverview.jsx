@@ -5,6 +5,10 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 
 const PAGE_SIZE = 10
 const MIN_VISIBLE_CANDIDATE_SCORE = 0.5
+const RECEIPT_TABLE_STYLE = { width: '1180px', minWidth: '1180px' }
+const CANDIDATE_TABLE_STYLE = { width: '860px', minWidth: '860px' }
+const RECEIPT_COL_WIDTHS = ['40px', '120px', '82px', '72px', '94px', '88px', '86px', '72px', '72px', '108px', '116px', '72px', '84px']
+const CANDIDATE_COL_WIDTHS = ['40px', '160px', '130px', '130px', '130px', '72px', '100px']
 const FALLBACK_MARKERS = ['fallback', 'unresolved', 'no_external_match', 'receipt_product_intent_fallback']
 const PSEUDO_ARTICLE_CODE_MARKERS = [
   'receipt_product_intent_fallback',
@@ -321,6 +325,7 @@ function buildReceiptItems(rawItems) {
         : (item.catalogLinked ? 'Gekoppeld' : (hasSelectableCandidate ? 'Universele kandidaten gevonden' : (hasVisibleCandidate ? 'Kandidaten gevonden' : (hasFallback ? 'Geen externe match' : item.status)))),
       candidateCount: candidates.filter((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate)).length,
       bestCandidateName: item.hasKnownGtin ? '' : text(displayBest?.candidateName, ''),
+      bestCandidateCode: item.hasKnownGtin ? '' : text(selectableBest?.externalCode, ''),
       bestCandidateScore: item.hasKnownGtin ? null : displayBest?.score ?? null,
       articleNumber: item.articleNumber,
       gtin: item.gtin,
@@ -347,7 +352,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const [isOffLoading, setIsOffLoading] = useState(false)
   const [offPreview, setOffPreview] = useState(null)
   const [offError, setOffError] = useState('')
-  const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', catalogLinked: 'all', articleNumber: '', gtin: '', quantity: '', price: '', amount: '', bestCandidateName: '', bestCandidateScore: '', candidateCount: '' })
+  const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', catalogLinked: 'all', articleNumber: '', gtin: '', quantity: '', price: '', amount: '', bestCandidateName: '', bestCandidateCode: '', bestCandidateScore: '', candidateCount: '' })
   const [sortKey, setSortKey] = useState('receiptLineText')
   const [sortDesc, setSortDesc] = useState(false)
   const [page, setPage] = useState(1)
@@ -386,6 +391,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       numberText(item.price).toLowerCase().includes(filters.price.toLowerCase()) &&
       String(item.amount || '').toLowerCase().includes(filters.amount.toLowerCase()) &&
       String(item.bestCandidateName || '').toLowerCase().includes(filters.bestCandidateName.toLowerCase()) &&
+      String(item.bestCandidateCode || '').toLowerCase().includes(filters.bestCandidateCode.toLowerCase()) &&
       scoreText(item.bestCandidateScore).toLowerCase().includes(filters.bestCandidateScore.toLowerCase()) &&
       String(item.candidateCount || '').toLowerCase().includes(filters.candidateCount.toLowerCase())
     ))
@@ -439,8 +445,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     const selectedRows = items.filter((item) => selectedItemIds.includes(item.id))
     if (!selectedRows.length) { onMessage?.('Selecteer eerst een of meer bonartikelen om te exporteren.'); return }
     const rows = [
-      ['Bonartikel', 'Winkelketen', 'Catalogus', 'Artikelnummer', 'GTIN / EAN', 'Omvang / gewicht', 'Prijs', 'Aantal', 'Kandidaat', 'Score', 'Externe kandidaten'],
-      ...selectedRows.map((item) => [item.receiptLineText, item.retailerCode, item.catalogLinked ? 'Gekoppeld' : 'Niet gekoppeld', item.articleNumber, item.gtin, item.quantity, numberText(item.price), item.amount, item.bestCandidateName || '-', scoreText(item.bestCandidateScore), item.candidateCount]),
+      ['Bonartikel', 'Winkelketen', 'Catalogus', 'Artikelnummer', 'GTIN / EAN', 'Omvang / gewicht', 'Prijs', 'Aantal', 'Kandidaat', 'Kandidaat GTIN / EAN', 'Score', 'Externe kandidaten'],
+      ...selectedRows.map((item) => [item.receiptLineText, item.retailerCode, item.catalogLinked ? 'Gekoppeld' : 'Niet gekoppeld', item.articleNumber, item.gtin, item.quantity, numberText(item.price), item.amount, item.bestCandidateName || '-', item.bestCandidateCode || '-', scoreText(item.bestCandidateScore), item.candidateCount]),
     ]
     const blob = new Blob([rows.map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -531,8 +537,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       {isLoading ? <div>Bonartikelen worden geladen...</div> : null}
 
       <div className="rz-table-scroll rz-table-scroll--wide">
-        <Table dataTestId="external-receipt-items-table" tableClassName="rz-external-receipt-table" resizableColumns>
-          <colgroup><col /><col /><col /><col /><col /><col /><col /><col /><col /><col /><col /><col /></colgroup>
+        <Table dataTestId="external-receipt-items-table" tableClassName="rz-external-receipt-table" tableStyle={RECEIPT_TABLE_STYLE}>
+          <colgroup>{RECEIPT_COL_WIDTHS.map((width, index) => <col key={`receipt-col-${index}`} style={{ width }} />)}</colgroup>
           <thead>
             <tr className="rz-table-header">
               <th className="rz-check"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisibleItems} /></th>
@@ -545,8 +551,9 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
               <th className="rz-num">Prijs</th>
               <th className="rz-num">Aantal</th>
               <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateName')}>Kandidaat <span>{sortMark('bestCandidateName')}</span></button></th>
+              <th>Kand. GTIN/EAN</th>
               <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateScore')}>Score <span>{sortMark('bestCandidateScore')}</span></button></th>
-              <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('candidateCount')}>Externe kandidaten <span>{sortMark('candidateCount')}</span></button></th>
+              <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('candidateCount')}>Externe <span>{sortMark('candidateCount')}</span></button></th>
             </tr>
             <tr className="rz-external-databases-filter-row">
               <th></th>
@@ -559,6 +566,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
               <th><input className="rz-table-filter" value={filters.price} onChange={(event) => updateFilter('price', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.amount} onChange={(event) => updateFilter('amount', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.bestCandidateName} onChange={(event) => updateFilter('bestCandidateName', event.target.value)} placeholder="Filter" /></th>
+              <th><input className="rz-table-filter" value={filters.bestCandidateCode} onChange={(event) => updateFilter('bestCandidateCode', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.bestCandidateScore} onChange={(event) => updateFilter('bestCandidateScore', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.candidateCount} onChange={(event) => updateFilter('candidateCount', event.target.value)} placeholder="Filter" /></th>
             </tr>
@@ -576,11 +584,12 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
                 <td className="rz-num">{numberText(item.price)}</td>
                 <td className="rz-num">{item.amount}</td>
                 <td>{item.bestCandidateName || '-'}</td>
+                <td>{item.bestCandidateCode || '-'}</td>
                 <td className="rz-num">{scoreText(item.bestCandidateScore)}</td>
                 <td className="rz-num">{item.candidateCount}</td>
               </tr>
-            )) : <tr><td colSpan="12">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}
-            {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="12"></td></tr>)}
+            )) : <tr><td colSpan="13">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}
+            {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="13"></td></tr>)}
           </tbody>
         </Table>
       </div>
@@ -603,7 +612,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
             <dt>GTIN / EAN</dt><dd>{selectedItem.gtin}</dd>
             <dt>Status</dt><dd>{selectedItem.status}</dd>
           </dl>
-          <Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table" resizableColumns>
+          <Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table" tableStyle={CANDIDATE_TABLE_STYLE}>
+            <colgroup>{CANDIDATE_COL_WIDTHS.map((width, index) => <col key={`candidate-col-${index}`} style={{ width }} />)}</colgroup>
             <thead>
               <tr className="rz-table-header"><th>Keuze</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>GTIN / EAN</th><th className="rz-num">Score</th><th>Status</th></tr>
             </thead>
