@@ -6,7 +6,7 @@ Technical Design Reference:
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
 - Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -126,6 +126,25 @@ def _without_taxonomy_seed_candidates(payload: Any) -> Any:
     return next_payload
 
 
+def _receipt_item_text(item: dict[str, Any]) -> str:
+    return ' '.join(
+        str(value or '').strip().lower()
+        for value in (
+            item.get('receipt_line_text'),
+            item.get('raw_label'),
+            item.get('normalized_label'),
+            item.get('candidate_name'),
+        )
+        if str(value or '').strip()
+    )
+
+
+def _is_verzendkosten_receipt_item(item: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    return 'verzendkosten' in _receipt_item_text(item)
+
+
 def _is_spaarzegels_receipt_item(item: Any) -> bool:
     if not isinstance(item, dict):
         return False
@@ -146,6 +165,10 @@ def _is_spaarzegels_receipt_item(item: Any) -> bool:
     })
 
 
+def _is_excluded_receipt_item(item: Any) -> bool:
+    return _is_spaarzegels_receipt_item(item) or _is_verzendkosten_receipt_item(item)
+
+
 def _without_spaarzegels_receipt_items(payload: Any) -> Any:
     if not isinstance(payload, dict):
         return payload
@@ -159,7 +182,7 @@ def _without_spaarzegels_receipt_items(payload: Any) -> Any:
             next_items.append(item)
             continue
 
-        if _is_spaarzegels_receipt_item(item):
+        if _is_excluded_receipt_item(item):
             removed_count += 1
             continue
 
@@ -167,7 +190,7 @@ def _without_spaarzegels_receipt_items(payload: Any) -> Any:
         if isinstance(next_item.get('candidates'), list):
             filtered_candidates = []
             for candidate in next_item.get('candidates') or []:
-                if _is_spaarzegels_receipt_item(candidate):
+                if _is_excluded_receipt_item(candidate):
                     removed_count += 1
                     continue
                 filtered_candidates.append(candidate)
