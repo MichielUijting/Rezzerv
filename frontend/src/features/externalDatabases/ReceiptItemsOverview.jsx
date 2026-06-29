@@ -266,7 +266,7 @@ function buildReceiptItems(rawItems) {
       candidateCount: candidates.filter((candidate) => !candidate.isFallbackCandidate).length,
       bestCandidateName: item.hasKnownGtin ? '' : text(best?.candidateName, ''),
       bestCandidateScore: item.hasKnownGtin ? null : best?.score ?? null,
-      articleNumber: best ? articleNumberText(best.externalCode, item.articleNumber) : item.articleNumber,
+      articleNumber: item.articleNumber,
       gtin: candidateGtin !== '-' ? candidateGtin : item.gtin,
     }
   })
