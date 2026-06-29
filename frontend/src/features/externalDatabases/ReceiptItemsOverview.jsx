@@ -581,7 +581,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
 
       {selectedItem ? (
         <div className="rz-external-receipt-detail">
-          <h3>Koppelen universele artikelcode</h3>
+          <h3>Koppelen kandidaten in artikel-catalogus</h3>
           <p>Kandidaten voor: {selectedItem.receiptLineText}</p>
           <dl>
             <dt>Winkelketen</dt><dd>{selectedItem.retailerCode}</dd>
