@@ -110,7 +110,8 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(receiptRow.locator('td').nth(4)).toHaveText('12345');
     await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Mosterd');
-    await expect(receiptRow.locator('td').nth(10)).toContainText('0,800');
+    await expect(receiptRow.locator('td').nth(10)).toContainText('8710000000001');
+    await expect(receiptRow.locator('td').nth(11)).toContainText('0,800');
 
     await receiptRow.dblclick();
     const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
@@ -134,7 +135,8 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(receiptRow.locator('td').nth(4)).toHaveText('12345');
     await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Product');
-    await expect(receiptRow.locator('td').nth(10)).toContainText('0,900');
+    await expect(receiptRow.locator('td').nth(10)).toContainText('-');
+    await expect(receiptRow.locator('td').nth(11)).toContainText('0,900');
     await expectNoConsoleErrors(consoleErrors);
   });
 
@@ -194,7 +196,8 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(receiptRow).toBeVisible();
     await expect(receiptRow.locator('td').nth(9)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(10)).toHaveText('-');
-    await expect(receiptRow.locator('td').nth(11)).toHaveText('0');
+    await expect(receiptRow.locator('td').nth(11)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(12)).toHaveText('0');
     await receiptRow.dblclick();
     const fallbackRow = page.getByTestId('external-receipt-item-candidates-table').locator('tbody tr', { hasText: 'Fallback kandidaat' });
     await expect(fallbackRow).toBeVisible();
