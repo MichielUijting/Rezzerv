@@ -164,7 +164,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(page.getByTestId('external-off-candidates-table')).toHaveCount(0);
 
     await offCandidateRow.locator('input[type="radio"]').check();
-    await expect(page.getByRole('button', { name: 'Koppel artikel' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Koppel artikel', exact: true })).toBeEnabled();
 
     expect(offRequestBody).toMatchObject({
       receipt_line_text: 'halfvolle melk',
