@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectAnyVisible,
@@ -73,7 +73,6 @@ test.describe('Externe databases frontend-regressie', () => {
         candidate_brand: 'Testmerk',
         external_source_name: 'Open Food Facts',
         external_source_product_code: '8710000000001',
-        gtin: '',
         variant: 'Standaard',
         score: 0.4,
         candidate_status: 'candidate',
@@ -136,6 +135,20 @@ test.describe('Externe databases frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
+  test('Bovenste tabel verbergt pseudo-artikelcodes met winkelketen en categorie', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    await routeReceiptItems(page, [{
+      context_key: 'ctx-pseudo-code-regression', receipt_line_id: 'receipt-line-pseudo-code-regression', purchase_import_line_id: 'purchase-line-pseudo-code-regression', receipt_line_text: 'Pseudo artikelcode regressietest', retailer_code: 'lidl', retailer_article_number: 'lidl:zuivel:kaas', source_product_code: 'lidl:zuivel:kaas', candidate_source_product_code: 'lidl:zuivel:kaas', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_status: 'no_candidate', is_receipt_item_placeholder: true,
+    }]);
+
+    const receiptTable = await openExternalDatabases(page);
+    const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Pseudo artikelcode regressietest' });
+    await expect(receiptRow).toBeVisible();
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
+    await expect(receiptRow).not.toContainText('lidl:zuivel:kaas');
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
   test('Bovenste tabel gebruikt gekoppelde kandidaat boven hoogste score', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     await routeReceiptItems(page, [
@@ -195,5 +208,3 @@ test.describe('Externe databases frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 });
-
-
