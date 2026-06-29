@@ -295,22 +295,24 @@ function buildReceiptItems(rawItems) {
         if (left.hasUniversalCode !== right.hasUniversalCode) return left.hasUniversalCode ? -1 : 1
         return Number(right.score || 0) - Number(left.score || 0)
       })
-    const linked = candidates.find((candidate) => candidate.isLinkedToCatalog && candidate.hasUniversalCode)
-    const best = linked || candidates.find((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate) || null
-    const hasRealCandidate = candidates.some((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate)
+    const linked = candidates.find((candidate) => candidate.isLinkedToCatalog)
+    const displayBest = linked || candidates.find((candidate) => !candidate.isFallbackCandidate) || null
+    const selectableBest = candidates.find((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate) || null
+    const hasSelectableCandidate = candidates.some((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate)
+    const hasVisibleCandidate = candidates.some((candidate) => !candidate.isFallbackCandidate)
     const hasFallback = candidates.some((candidate) => candidate.isFallbackCandidate)
-    const candidateGtin = gtinText(best?.raw?.gtin || best?.raw?.ean || best?.externalCode)
     return {
       ...item,
       candidates,
       status: item.hasKnownGtin
         ? 'GTIN / EAN bekend'
-        : (item.catalogLinked ? 'Gekoppeld' : (hasRealCandidate ? 'Universele kandidaten gevonden' : (hasFallback ? 'Geen externe match' : item.status))),
+        : (item.catalogLinked ? 'Gekoppeld' : (hasSelectableCandidate ? 'Universele kandidaten gevonden' : (hasVisibleCandidate ? 'Zoekhulpen gevonden' : (hasFallback ? 'Geen externe match' : item.status)))),
       candidateCount: candidates.filter((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate).length,
-      bestCandidateName: item.hasKnownGtin ? '' : text(best?.candidateName, ''),
-      bestCandidateScore: item.hasKnownGtin ? null : best?.score ?? null,
+      bestCandidateName: item.hasKnownGtin ? '' : text(displayBest?.candidateName, ''),
+      bestCandidateScore: item.hasKnownGtin ? null : displayBest?.score ?? null,
       articleNumber: item.articleNumber,
-      gtin: candidateGtin !== '-' ? candidateGtin : item.gtin,
+      gtin: item.gtin,
+      bestSelectableCandidateName: item.hasKnownGtin ? '' : text(selectableBest?.candidateName, ''),
     }
   })
 }
