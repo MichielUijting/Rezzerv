@@ -4,6 +4,7 @@ import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 
 const PAGE_SIZE = 10
+const MIN_VISIBLE_CANDIDATE_SCORE = 0.5
 const FALLBACK_MARKERS = ['fallback', 'unresolved', 'no_external_match', 'receipt_product_intent_fallback']
 const PSEUDO_ARTICLE_CODE_MARKERS = [
   'receipt_product_intent_fallback',
@@ -212,6 +213,16 @@ function buildCandidate(candidate) {
   }
 }
 
+function candidateMeetsScoreThreshold(candidate) {
+  if (candidate?.isLinkedToCatalog || candidate?.isFallbackCandidate) return true
+  const score = Number(candidate?.score)
+  return Number.isFinite(score) && score >= MIN_VISIBLE_CANDIDATE_SCORE
+}
+
+function isVisibleSelectionCandidate(candidate) {
+  return !candidate?.isSearchHelper && candidateMeetsScoreThreshold(candidate)
+}
+
 function dedupeCandidates(candidates) {
   const deduped = new Map()
   candidates.forEach((candidate) => {
@@ -297,18 +308,18 @@ function buildReceiptItems(rawItems) {
         return Number(right.score || 0) - Number(left.score || 0)
       })
     const linked = candidates.find((candidate) => candidate.isLinkedToCatalog)
-    const displayBest = linked || candidates.find((candidate) => !candidate.isFallbackCandidate) || null
-    const selectableBest = candidates.find((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate) || null
-    const hasSelectableCandidate = candidates.some((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate)
-    const hasVisibleCandidate = candidates.some((candidate) => !candidate.isFallbackCandidate)
+    const displayBest = linked || candidates.find((candidate) => !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate)) || null
+    const selectableBest = candidates.find((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate)) || null
+    const hasSelectableCandidate = candidates.some((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate))
+    const hasVisibleCandidate = candidates.some((candidate) => !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate))
     const hasFallback = candidates.some((candidate) => candidate.isFallbackCandidate)
     return {
       ...item,
       candidates,
       status: item.hasKnownGtin
         ? 'GTIN / EAN bekend'
-        : (item.catalogLinked ? 'Gekoppeld' : (hasSelectableCandidate ? 'Universele kandidaten gevonden' : (hasVisibleCandidate ? 'Zoekhulpen gevonden' : (hasFallback ? 'Geen externe match' : item.status)))),
-      candidateCount: candidates.filter((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate).length,
+        : (item.catalogLinked ? 'Gekoppeld' : (hasSelectableCandidate ? 'Universele kandidaten gevonden' : (hasVisibleCandidate ? 'Kandidaten gevonden' : (hasFallback ? 'Geen externe match' : item.status)))),
+      candidateCount: candidates.filter((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate)).length,
       bestCandidateName: item.hasKnownGtin ? '' : text(displayBest?.candidateName, ''),
       bestCandidateScore: item.hasKnownGtin ? null : displayBest?.score ?? null,
       articleNumber: item.articleNumber,
@@ -403,7 +414,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const emptyRows = Math.max(0, PAGE_SIZE - visibleItems.length)
   const visibleIds = visibleItems.map((item) => item.id)
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedItemIds.includes(id))
-  const selectedCandidates = (selectedItem?.candidates || []).filter((candidate) => !candidate.isSearchHelper)
+  const selectedCandidates = (selectedItem?.candidates || []).filter(isVisibleSelectionCandidate)
   const selectedCandidate = selectedCandidates.find((candidate) => candidate.id === selectedCandidateId) || null
   const selectedCandidateCanBeLinked = Boolean(selectedCandidate && selectedCandidate.isLinkableToCatalog && !selectedCandidate.isFallbackCandidate && !selectedCandidate.isLinkedToCatalog)
   const selectedCandidateCanBeUnlinked = Boolean(selectedCandidate && selectedCandidate.isLinkedToCatalog)
@@ -594,7 +605,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
           </dl>
           <Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table" resizableColumns>
             <thead>
-              <tr className="rz-table-header"><th>Keuze</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>GTIN / EAN</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr>
+              <tr className="rz-table-header"><th>Keuze</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>GTIN / EAN</th><th className="rz-num">Score</th><th>Status</th></tr>
             </thead>
             <tbody>
               {selectedCandidates.length ? selectedCandidates.map((candidate) => (
@@ -604,11 +615,10 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
                   <td>{candidate.brand}</td>
                   <td>{candidate.source}</td>
                   <td>{candidate.externalCode}</td>
-                  <td>{candidate.variant}</td>
                   <td className="rz-num">{scoreText(candidate.score)}</td>
                   <td>{candidate.status}</td>
                 </tr>
-              )) : <tr><td colSpan="8">Geen universele kandidaten voor dit bonartikel.</td></tr>}
+              )) : <tr><td colSpan="7">Geen universele kandidaten met score 0,500 of hoger voor dit bonartikel.</td></tr>}
             </tbody>
           </Table>
           <div className="rz-external-databases-actions">
@@ -617,7 +627,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
             <span className="rz-external-databases-muted">
               {selectedItemHasKnownGtin
                 ? 'GTIN/EAN is al bekend; OFF-kandidaten worden niet automatisch toegevoegd.'
-                : (isOffLoading ? 'OFF wordt automatisch geraadpleegd...' : 'OFF wordt automatisch geraadpleegd bij openen van dit detail; alleen universele codes worden als keuze getoond.')}
+                : (isOffLoading ? 'OFF wordt automatisch geraadpleegd...' : 'OFF wordt automatisch geraadpleegd bij openen van dit detail; alleen universele codes met score 0,500 of hoger worden als keuze getoond.')}
             </span>
           </div>
           {offError ? <div className="rz-inline-feedback">{offError}</div> : null}
