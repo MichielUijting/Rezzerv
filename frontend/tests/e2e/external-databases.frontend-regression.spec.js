@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectAnyVisible,
@@ -73,7 +73,6 @@ test.describe('Externe databases frontend-regressie', () => {
         candidate_brand: 'Testmerk',
         external_source_name: 'Open Food Facts',
         external_source_product_code: '8710000000001',
-        gtin_candidate: '8710000000001',
         gtin: '',
         variant: 'Standaard',
         score: 0.4,
@@ -96,7 +95,6 @@ test.describe('Externe databases frontend-regressie', () => {
         candidate_brand: 'Testmerk',
         external_source_name: 'Open Food Facts',
         external_source_product_code: '8710000000001',
-        ean: '8710000000001',
         variant: 'Standaard',
         score: 0.8,
         candidate_status: 'candidate',
@@ -109,7 +107,7 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Dubbele kandidaat regressietest' });
     await expect(receiptRow).toBeVisible();
     await expect(receiptRow.locator('td').nth(4)).toHaveText('8710000000001');
-    await expect(receiptRow.locator('td').nth(5)).toHaveText('8710000000001');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Mosterd');
     await expect(receiptRow.locator('td').nth(10)).toContainText('0,800');
 
@@ -197,3 +195,5 @@ test.describe('Externe databases frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 });
+
+

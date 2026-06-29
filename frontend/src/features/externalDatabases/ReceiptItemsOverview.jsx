@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -325,7 +325,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
 
   function exportSelectedItems() {
     const selectedRows = items.filter((item) => selectedItemIds.includes(item.id))
-    if (!selectedRows.length) { onMessage?.('Selecteer eerst één of meer bonartikelen om te exporteren.'); return }
+    if (!selectedRows.length) { onMessage?.('Selecteer eerst Ã©Ã©n of meer bonartikelen om te exporteren.'); return }
     const rows = [
       ['Bonartikel', 'Winkelketen', 'Catalogus', 'Artikelnummer', 'GTIN / EAN', 'Omvang / gewicht', 'Prijs', 'Aantal', 'Kandidaat', 'Score', 'Externe kandidaten'],
       ...selectedRows.map((item) => [item.receiptLineText, item.retailerCode, item.catalogLinked ? 'Gekoppeld' : 'Niet gekoppeld', item.articleNumber, item.gtin, item.quantity, numberText(item.price), item.amount, item.bestCandidateName || '-', scoreText(item.bestCandidateScore), item.candidateCount]),
@@ -526,3 +526,5 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     </div>
   )
 }
+
+
