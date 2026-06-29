@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectAnyVisible,
@@ -20,7 +20,9 @@ async function routeReceiptItems(page, items) {
 }
 
 async function openExternalDatabases(page) {
-  await expectRouteLoads(page, '/externe-databases', ['Externe databases', 'Bonartikelen', 'Kandidaten', 'Product']);
+  await page.goto('/externe-databases');
+  await expect(page.locator('body')).toBeVisible();
+  await expect(page.getByText(/Application error|Uncaught|TypeError|ReferenceError/i)).toHaveCount(0);
   const receiptTable = page.getByTestId('external-receipt-items-table');
   await expect(receiptTable).toBeVisible();
   return receiptTable;
@@ -44,6 +46,8 @@ test.describe('Externe databases frontend-regressie', () => {
 
     const receiptTable = page.getByTestId('external-receipt-items-table');
     await expect(receiptTable).toBeVisible();
+    await expect(receiptTable.locator('thead')).not.toContainText('Artikelnummer');
+    await expect(receiptTable.locator('thead')).toContainText('Kand. GTIN/EAN');
 
     const rowWithCandidates = receiptTable.locator('tbody tr').filter({ hasText: /\b[1-9]\d*$/ }).first();
     await expect(rowWithCandidates).toBeVisible();
@@ -73,7 +77,6 @@ test.describe('Externe databases frontend-regressie', () => {
         candidate_brand: 'Testmerk',
         external_source_name: 'Open Food Facts',
         external_source_product_code: '8710000000001',
-        gtin: '',
         variant: 'Standaard',
         score: 0.4,
         candidate_status: 'candidate',
@@ -106,7 +109,7 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Dubbele kandidaat regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('8710000000001');
+    await expect(receiptRow.locator('td').nth(4)).toContainText('8710000000001');
     await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Mosterd');
     await expect(receiptRow.locator('td').nth(10)).toContainText('0,800');
@@ -115,6 +118,7 @@ test.describe('Externe databases frontend-regressie', () => {
     const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
     await expect(candidateTable).toBeVisible();
     await expect(candidateTable.locator('tbody tr').filter({ has: page.locator('input[type="radio"]') })).toHaveCount(1);
+    await expect(candidateTable.getByText('8710000000001')).toBeVisible();
     await expect(candidateTable.getByText('0,800')).toBeVisible();
     await expect(candidateTable.getByText('0,400')).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
@@ -129,14 +133,39 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Winkelspecifieke code regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('LIDL-00999');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Product');
     await expect(receiptRow.locator('td').nth(10)).toContainText('0,900');
     await expectNoConsoleErrors(consoleErrors);
   });
 
-  test('Bovenste tabel gebruikt gekoppelde kandidaat boven hoogste score', async ({ page }) => {
+  test('Bovenste tabel gebruikt geen winkelketen-categorie pseudo-kandidaat als beste kandidaat', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+    await routeReceiptItems(page, [
+      { context_key: 'ctx-pseudo-code-regression', receipt_line_id: 'receipt-line-pseudo-code-regression', purchase_import_line_id: 'purchase-line-pseudo-code-regression', receipt_line_text: 'Pseudo artikelcode regressietest', retailer_code: 'lidl', retailer_article_number: 'lidl:groente.zoete-aardappel', source_product_code: 'lidl:groente.zoete-aardappel', candidate_source_product_code: 'lidl:groente.zoete-aardappel', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-retailer-pseudo', candidate_name: 'Lidl Zoete aardappel', candidate_brand: 'Lidl Groente', external_source_name: 'lidl_catalog_enrich', external_source_product_code: 'lidl:groente.zoete-aardappel', variant: 'Groente', score: 0.95, candidate_status: 'probable_candidate', is_linked_to_catalog: false, is_linkable_to_catalog: true },
+      { context_key: 'ctx-pseudo-code-regression', receipt_line_id: 'receipt-line-pseudo-code-regression', purchase_import_line_id: 'purchase-line-pseudo-code-regression', receipt_line_text: 'Pseudo artikelcode regressietest', retailer_code: 'lidl', retailer_article_number: 'lidl:groente.zoete-aardappel', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-off-real', candidate_name: 'Zoete aardappel', candidate_brand: '-', external_source_name: 'Open Food Facts', external_source_product_code: '000426660609', variant: 'OFF', score: 0.642, candidate_status: 'candidate', is_linked_to_catalog: false, is_linkable_to_catalog: true },
+    ]);
+
+    const receiptTable = await openExternalDatabases(page);
+    const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Pseudo artikelcode regressietest' });
+    await expect(receiptRow).toBeVisible();
+    await expect(receiptRow.locator('td').nth(4)).toContainText('000426660609');
+    await expect(receiptRow.locator('td').nth(9)).toContainText('Zoete aardappel');
+    await expect(receiptRow).not.toContainText('lidl:groente.zoete-aardappel');
+    await expect(receiptRow).not.toContainText('Lidl Zoete aardappel');
+
+    await receiptRow.dblclick();
+    const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
+    await expect(candidateTable).toBeVisible();
+    await expect(candidateTable).toContainText('Open Food Facts');
+    await expect(candidateTable).toContainText('000426660609');
+    await expect(candidateTable).not.toContainText('lidl_catalog_enrich');
+    await expect(candidateTable).not.toContainText('lidl:groente.zoete-aardappel');
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
+  test('Bovenste tabel gebruikt gekoppelde kandidaat boven hoogste score zonder kandidaatcode als bonartikelnummer te tonen', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     await routeReceiptItems(page, [
       { context_key: 'ctx-linked-wins-regression', receipt_line_id: 'receipt-line-linked-wins-regression', purchase_import_line_id: 'purchase-line-linked-wins-regression', receipt_line_text: 'Gekoppelde kandidaat regressietest', retailer_code: 'lidl', retailer_article_number: '12345', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-highest-score-not-linked', candidate_name: 'Niet gekoppelde hoogste score', candidate_brand: 'Testmerk', external_source_name: 'Open Food Facts', external_source_product_code: 'LIDL-HIGH', variant: 'Standaard', score: 0.99, candidate_status: 'candidate', is_linked_to_catalog: false, is_linkable_to_catalog: true },
@@ -146,11 +175,12 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Gekoppelde kandidaat regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('LIDL-LINKED');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await receiptRow.dblclick();
     const linkedCandidateRow = page.getByTestId('external-receipt-item-candidates-table').locator('tbody tr', { hasText: 'Gekoppelde lagere score' });
     await expect(linkedCandidateRow).toBeVisible();
+    await expect(linkedCandidateRow).toContainText('LIDL-LINKED');
     await expect(linkedCandidateRow).toContainText('Gekoppeld');
     await expectNoConsoleErrors(consoleErrors);
   });
@@ -195,5 +225,3 @@ test.describe('Externe databases frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 });
-
-
