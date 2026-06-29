@@ -1,10 +1,18 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 
 const PAGE_SIZE = 10
 const FALLBACK_MARKERS = ['fallback', 'unresolved', 'no_external_match', 'receipt_product_intent_fallback']
+const PSEUDO_ARTICLE_CODE_MARKERS = [
+  'receipt_product_intent_fallback',
+  'product_taxonomy_seed',
+  'taxonomy_seed',
+  'retailer_seed_file',
+  'seed_file',
+  'm2c2i9_seed',
+]
 
 function text(value, fallback = '-') {
   const normalized = String(value ?? '').trim()
@@ -31,6 +39,21 @@ function gtinText(value) {
 
 function hasKnownGtin(value) {
   return gtinText(value) !== '-'
+}
+
+function isPseudoArticleCode(value) {
+  const normalized = text(value, '').toLowerCase()
+  if (!normalized) return false
+  if (PSEUDO_ARTICLE_CODE_MARKERS.some((marker) => normalized.includes(marker))) return true
+  return /^[a-z0-9_-]+:[a-z0-9_-]+(?::|$)/i.test(normalized)
+}
+
+function articleNumberText(...values) {
+  for (const value of values) {
+    const normalized = text(value, '')
+    if (normalized && !isPseudoArticleCode(normalized)) return normalized
+  }
+  return '-'
 }
 
 function retailerLabel(value) {
@@ -139,12 +162,11 @@ function rowKey(item) {
 }
 
 function rawArticleNumber(rawItem) {
-  return text(
-    rawItem.retailer_article_number ||
-    rawItem.source_product_code ||
-    rawItem.candidate_source_product_code ||
-    rawItem.external_article_code,
-    '-'
+  return articleNumberText(
+    rawItem.retailer_article_number,
+    rawItem.source_product_code,
+    rawItem.candidate_source_product_code,
+    rawItem.external_article_code
   )
 }
 
@@ -211,7 +233,7 @@ function buildReceiptItems(rawItems) {
       candidateCount: candidates.filter((candidate) => !candidate.isFallbackCandidate).length,
       bestCandidateName: item.hasKnownGtin ? '' : text(best?.candidateName, ''),
       bestCandidateScore: item.hasKnownGtin ? null : best?.score ?? null,
-      articleNumber: best ? text(best.externalCode, item.articleNumber) : item.articleNumber,
+      articleNumber: best ? articleNumberText(best.externalCode, item.articleNumber) : item.articleNumber,
       gtin: candidateGtin !== '-' ? candidateGtin : item.gtin,
     }
   })
@@ -325,7 +347,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
 
   function exportSelectedItems() {
     const selectedRows = items.filter((item) => selectedItemIds.includes(item.id))
-    if (!selectedRows.length) { onMessage?.('Selecteer eerst Ã©Ã©n of meer bonartikelen om te exporteren.'); return }
+    if (!selectedRows.length) { onMessage?.('Selecteer eerst een of meer bonartikelen om te exporteren.'); return }
     const rows = [
       ['Bonartikel', 'Winkelketen', 'Catalogus', 'Artikelnummer', 'GTIN / EAN', 'Omvang / gewicht', 'Prijs', 'Aantal', 'Kandidaat', 'Score', 'Externe kandidaten'],
       ...selectedRows.map((item) => [item.receiptLineText, item.retailerCode, item.catalogLinked ? 'Gekoppeld' : 'Niet gekoppeld', item.articleNumber, item.gtin, item.quantity, numberText(item.price), item.amount, item.bestCandidateName || '-', scoreText(item.bestCandidateScore), item.candidateCount]),
@@ -526,5 +548,3 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     </div>
   )
 }
-
-
