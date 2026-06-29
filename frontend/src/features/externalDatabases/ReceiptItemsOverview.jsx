@@ -5,9 +5,9 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 
 const PAGE_SIZE = 10
 const MIN_VISIBLE_CANDIDATE_SCORE = 0.5
-const RECEIPT_TABLE_STYLE = { width: '1180px', minWidth: '1180px' }
+const RECEIPT_TABLE_STYLE = { width: '1086px', minWidth: '1086px' }
 const CANDIDATE_TABLE_STYLE = { width: '860px', minWidth: '860px' }
-const RECEIPT_COL_WIDTHS = ['40px', '120px', '82px', '72px', '94px', '88px', '86px', '72px', '72px', '108px', '116px', '72px', '84px']
+const RECEIPT_COL_WIDTHS = ['40px', '120px', '82px', '72px', '116px', '88px', '86px', '72px', '72px', '108px', '72px', '84px']
 const CANDIDATE_COL_WIDTHS = ['40px', '160px', '130px', '130px', '130px', '72px', '100px']
 const FALLBACK_MARKERS = ['fallback', 'unresolved', 'no_external_match', 'receipt_product_intent_fallback']
 const PSEUDO_ARTICLE_CODE_MARKERS = ['receipt_product_intent_fallback', 'product_taxonomy_seed', 'taxonomy_seed', 'retailer_seed_file', 'seed_file', 'm2c2i9_seed']
@@ -39,14 +39,6 @@ function gtinText(value) {
 
 function hasKnownGtin(value) {
   return gtinText(value) !== '-'
-}
-
-function firstNonEmpty(...values) {
-  for (const value of values) {
-    const normalized = text(value, '')
-    if (normalized) return normalized
-  }
-  return ''
 }
 
 function isRetailerPseudoArticleCode(value) {
@@ -301,7 +293,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const [isOffLoading, setIsOffLoading] = useState(false)
   const [offPreview, setOffPreview] = useState(null)
   const [offError, setOffError] = useState('')
-  const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', catalogLinked: 'all', articleNumber: '', gtin: '', quantity: '', price: '', amount: '', bestCandidateName: '', bestCandidateCode: '', bestCandidateScore: '', candidateCount: '' })
+  const [filters, setFilters] = useState({ receiptLineText: '', retailerCode: '', catalogLinked: 'all', gtin: '', quantity: '', price: '', amount: '', bestCandidateName: '', bestCandidateCode: '', bestCandidateScore: '', candidateCount: '' })
   const [sortKey, setSortKey] = useState('receiptLineText')
   const [sortDesc, setSortDesc] = useState(false)
   const [page, setPage] = useState(1)
@@ -334,7 +326,6 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       item.receiptLineText.toLowerCase().includes(filters.receiptLineText.toLowerCase()) &&
       item.retailerCode.toLowerCase().includes(filters.retailerCode.toLowerCase()) &&
       ((filters.catalogLinked === 'all') || (filters.catalogLinked === 'linked' && item.catalogLinked) || (filters.catalogLinked === 'unlinked' && !item.catalogLinked)) &&
-      item.articleNumber.toLowerCase().includes(filters.articleNumber.toLowerCase()) &&
       item.gtin.toLowerCase().includes(filters.gtin.toLowerCase()) &&
       item.quantity.toLowerCase().includes(filters.quantity.toLowerCase()) &&
       numberText(item.price).toLowerCase().includes(filters.price.toLowerCase()) &&
@@ -394,8 +385,8 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     const selectedRows = items.filter((item) => selectedItemIds.includes(item.id))
     if (!selectedRows.length) { onMessage?.('Selecteer eerst een of meer bonartikelen om te exporteren.'); return }
     const rows = [
-      ['Bonartikel', 'Winkelketen', 'Catalogus', 'Artikelnummer', 'GTIN / EAN', 'Omvang / gewicht', 'Prijs', 'Aantal', 'Kandidaat', 'Kandidaat GTIN / EAN', 'Score', 'Externe kandidaten'],
-      ...selectedRows.map((item) => [item.receiptLineText, item.retailerCode, item.catalogLinked ? 'Gekoppeld' : 'Niet gekoppeld', item.articleNumber, item.gtin, item.quantity, numberText(item.price), item.amount, item.bestCandidateName || '-', item.bestCandidateCode || '-', scoreText(item.bestCandidateScore), item.candidateCount]),
+      ['Bonartikel', 'Winkelketen', 'Catalogus', 'Kandidaat GTIN / EAN', 'GTIN / EAN', 'Omvang / gewicht', 'Prijs', 'Aantal', 'Kandidaat', 'Score', 'Externe kandidaten'],
+      ...selectedRows.map((item) => [item.receiptLineText, item.retailerCode, item.catalogLinked ? 'Gekoppeld' : 'Niet gekoppeld', item.bestCandidateCode || '-', item.gtin, item.quantity, numberText(item.price), item.amount, item.bestCandidateName || '-', scoreText(item.bestCandidateScore), item.candidateCount]),
     ]
     const blob = new Blob([rows.map((row) => row.map((value) => `"${String(value ?? '').replaceAll('"', '""')}"`).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -478,13 +469,12 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
               <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('receiptLineText')}>Bonartikel <span>{sortMark('receiptLineText')}</span></button></th>
               <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('retailerCode')}>Winkelketen <span>{sortMark('retailerCode')}</span></button></th>
               <th className="rz-check"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('catalogLinked')}>Catalogus <span>{sortMark('catalogLinked')}</span></button></th>
-              <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('articleNumber')}>Artikelnummer <span>{sortMark('articleNumber')}</span></button></th>
+              <th>Kand. GTIN/EAN</th>
               <th>GTIN / EAN</th>
               <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('quantity')}>Omvang / gewicht <span>{sortMark('quantity')}</span></button></th>
               <th className="rz-num">Prijs</th>
               <th className="rz-num">Aantal</th>
               <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateName')}>Kandidaat <span>{sortMark('bestCandidateName')}</span></button></th>
-              <th>Kand. GTIN/EAN</th>
               <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('bestCandidateScore')}>Score <span>{sortMark('bestCandidateScore')}</span></button></th>
               <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('candidateCount')}>Externe <span>{sortMark('candidateCount')}</span></button></th>
             </tr>
@@ -493,13 +483,12 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
               <th><input className="rz-table-filter" value={filters.receiptLineText} onChange={(event) => updateFilter('receiptLineText', event.target.value)} placeholder="Zoek" /></th>
               <th><input className="rz-table-filter" value={filters.retailerCode} onChange={(event) => updateFilter('retailerCode', event.target.value)} placeholder="Filter" /></th>
               <th><select className="rz-table-filter" value={filters.catalogLinked} onChange={(event) => updateFilter('catalogLinked', event.target.value)} aria-label="Catalogus filter"><option value="all">Alle</option><option value="linked">Gekoppeld</option><option value="unlinked">Niet gekoppeld</option></select></th>
-              <th><input className="rz-table-filter" value={filters.articleNumber} onChange={(event) => updateFilter('articleNumber', event.target.value)} placeholder="Filter" /></th>
+              <th><input className="rz-table-filter" value={filters.bestCandidateCode} onChange={(event) => updateFilter('bestCandidateCode', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.gtin} onChange={(event) => updateFilter('gtin', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.quantity} onChange={(event) => updateFilter('quantity', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.price} onChange={(event) => updateFilter('price', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.amount} onChange={(event) => updateFilter('amount', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.bestCandidateName} onChange={(event) => updateFilter('bestCandidateName', event.target.value)} placeholder="Filter" /></th>
-              <th><input className="rz-table-filter" value={filters.bestCandidateCode} onChange={(event) => updateFilter('bestCandidateCode', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.bestCandidateScore} onChange={(event) => updateFilter('bestCandidateScore', event.target.value)} placeholder="Filter" /></th>
               <th><input className="rz-table-filter" value={filters.candidateCount} onChange={(event) => updateFilter('candidateCount', event.target.value)} placeholder="Filter" /></th>
             </tr>
@@ -511,18 +500,17 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
                 <td>{item.receiptLineText}</td>
                 <td>{item.retailerCode}</td>
                 <td className="rz-check"><input type="checkbox" checked={item.catalogLinked} readOnly /></td>
-                <td>{item.articleNumber}</td>
+                <td>{item.bestCandidateCode || '-'}</td>
                 <td>{item.gtin}</td>
                 <td>{item.quantity}</td>
                 <td className="rz-num">{numberText(item.price)}</td>
                 <td className="rz-num">{item.amount}</td>
                 <td>{item.bestCandidateName || '-'}</td>
-                <td>{item.bestCandidateCode || '-'}</td>
                 <td className="rz-num">{scoreText(item.bestCandidateScore)}</td>
                 <td className="rz-num">{item.candidateCount}</td>
               </tr>
-            )) : <tr><td colSpan="13">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}
-            {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="13"></td></tr>)}
+            )) : <tr><td colSpan="12">Geen bonartikelen beschikbaar voor externe herkenning.</td></tr>}
+            {Array.from({ length: emptyRows }).map((_, index) => <tr key={`empty-${index}`}><td colSpan="12"></td></tr>)}
           </tbody>
         </Table>
       </div>
