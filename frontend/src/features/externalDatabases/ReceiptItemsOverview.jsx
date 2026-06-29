@@ -98,13 +98,15 @@ function isFallbackCandidate(candidate) {
 
 function isPseudoArticleCandidate(candidate) {
   if (isFallbackCandidate(candidate)) return false
-  return [
-    candidate?.external_source_product_code,
-    candidate?.candidate_source_product_code,
-    candidate?.source_product_code,
-    candidate?.retailer_article_number,
+  const explicitCandidateCode = text(
+    candidate?.external_source_product_code ||
+    candidate?.candidate_source_product_code ||
+    candidate?.source_product_code ||
     candidate?.external_article_code,
-  ].some((value) => isRetailerPseudoArticleCode(value))
+    ''
+  )
+  if (explicitCandidateCode) return isRetailerPseudoArticleCode(explicitCandidateCode)
+  return isRetailerPseudoArticleCode(candidate?.retailer_article_number)
 }
 
 function candidateStatusLabel(candidate, linked, fallback) {
