@@ -18,6 +18,18 @@ from app.services.product_intent_classifier import (
     product_intent_match_score,
 )
 
+RETAILER_ONLY_SCORE_CAP = 0.69
+RETAILER_CODE_PATTERN = re.compile(r"^[A-Z][A-Z0-9 _-]{1,20}-\d{2,}$", flags=re.IGNORECASE)
+UNIVERSAL_NUMERIC_CODE_PATTERN = re.compile(r"^\d{8,14}$")
+RETAILER_SEED_SOURCES = {
+    "product_taxonomy_seed",
+    "taxonomy_seed",
+    "retailer_seed_file",
+    "seed_file",
+    "lidl_catalog_enrichment",
+    "lidl_catalog_enrich",
+}
+
 
 def _value(row: dict[str, Any], names: list[str]) -> str:
     for name in names:
@@ -40,6 +52,34 @@ def _token_overlap_score(left: str, right: str) -> float:
     return len(overlap) / max(1, len(left_tokens | right_tokens))
 
 
+def _normalized_code(value: str | None) -> str:
+    return re.sub(r"\D+", "", str(value or "").strip())
+
+
+def _has_universal_numeric_code(row: dict[str, Any], source_product_code: str) -> bool:
+    for value in [source_product_code, row.get("gtin"), row.get("ean"), row.get("code")]:
+        normalized = _normalized_code(str(value or ""))
+        if UNIVERSAL_NUMERIC_CODE_PATTERN.fullmatch(normalized):
+            return True
+    return False
+
+
+def _is_retailer_only_code(source_product_code: str) -> bool:
+    normalized = str(source_product_code or "").strip()
+    if not normalized or normalized.lower() == "unknown":
+        return False
+    if UNIVERSAL_NUMERIC_CODE_PATTERN.fullmatch(_normalized_code(normalized)) and re.fullmatch(r"\d+", normalized):
+        return False
+    if ":" in normalized:
+        return True
+    return bool(RETAILER_CODE_PATTERN.fullmatch(normalized))
+
+
+def _is_retailer_seed_source(source_name: str) -> bool:
+    normalized = normalize_match_text(source_name).replace(" ", "_")
+    return normalized in RETAILER_SEED_SOURCES or normalized.endswith("_catalog_enrichment") or normalized.endswith("_catalog_enrich")
+
+
 def _score_off_index_candidate(receipt_line_text: str, row: dict[str, Any]) -> dict[str, Any]:
     product_name = _value(row, ["product_name", "name", "generic_name"])
     brand = _value(row, ["brand", "brands"])
@@ -48,6 +88,11 @@ def _score_off_index_candidate(receipt_line_text: str, row: dict[str, Any]) -> d
     source_name = _value(row, ["source_name"]) or "OFF-index"
     source_product_code = _value(row, ["source_product_code", "gtin", "ean", "code"]) or "unknown"
     source_url = _value(row, ["source_url", "url", "product_url"])
+
+    has_universal_code = _has_universal_numeric_code(row, source_product_code)
+    is_retailer_only_code = _is_retailer_only_code(source_product_code)
+    is_retailer_seed_source = _is_retailer_seed_source(source_name)
+    is_retailer_index_candidate = is_retailer_only_code or is_retailer_seed_source
 
     candidate_intent_text = " ".join(part for part in [product_name, category] if part)
     receipt_product_intent = classify_product_intent(receipt_line_text)
@@ -63,16 +108,28 @@ def _score_off_index_candidate(receipt_line_text: str, row: dict[str, Any]) -> d
     normalized_receipt = normalize_match_text(receipt_line_text)
     normalized_brand = normalize_match_text(brand)
     brand_score = 1.0 if normalized_brand and normalized_brand in normalized_receipt else (0.60 if brand else 0.40)
+    if is_retailer_index_candidate and not has_universal_code:
+        brand_score = min(brand_score, 0.55)
 
     receipt_numbers = _numeric_tokens(receipt_line_text)
     quantity_numbers = _numeric_tokens(quantity_label)
     quantity_score = 1.0 if receipt_numbers and quantity_numbers and receipt_numbers & quantity_numbers else (0.65 if quantity_label else 0.45)
 
     normalized_code = normalize_match_text(source_product_code)
-    code_score = 1.0 if normalized_code and normalized_code in normalized_receipt else (0.55 if source_product_code != "unknown" else 0.35)
+    if has_universal_code:
+        code_score = 1.0 if normalized_code and normalized_code in normalized_receipt else 0.82
+    elif is_retailer_only_code:
+        code_score = 0.20
+    else:
+        code_score = 0.55 if source_product_code != "unknown" else 0.35
 
     category_score = max(0.45, _token_overlap_score(receipt_line_text, category)) if category else 0.40
-    source_score = 0.92 if source_name == "OFF-index" else 0.80
+    if has_universal_code:
+        source_score = 1.0
+    elif is_retailer_index_candidate:
+        source_score = 0.50
+    else:
+        source_score = 0.80
 
     breakdown = {
         "text_score": round(text_score, 3),
@@ -84,12 +141,18 @@ def _score_off_index_candidate(receipt_line_text: str, row: dict[str, Any]) -> d
         "code_score": round(code_score, 3),
         "category_score": round(category_score, 3),
         "intent_score": round(intent_score, 3),
+        "has_universal_code": has_universal_code,
+        "is_retailer_index_candidate": is_retailer_index_candidate,
+        "retailer_only_score_cap": RETAILER_ONLY_SCORE_CAP if is_retailer_index_candidate and not has_universal_code else None,
     }
 
-    base_score = sum(breakdown[key] * SCORE_WEIGHTS[key] for key in SCORE_WEIGHTS)
+    base_score = sum(float(breakdown[key]) * SCORE_WEIGHTS[key] for key in SCORE_WEIGHTS)
     score = min(1.0, base_score + (code_score * 0.08) + (category_score * 0.04))
     score = round(score * intent_score, 3)
+    if is_retailer_index_candidate and not has_universal_code:
+        score = min(score, RETAILER_ONLY_SCORE_CAP)
 
+    candidate_status = candidate_status_for_score(score)
     return {
         "candidate_name": product_name or source_product_code,
         "candidate_brand": brand,
@@ -107,19 +170,26 @@ def _score_off_index_candidate(receipt_line_text: str, row: dict[str, Any]) -> d
         "candidate_product_intent": candidate_product_intent,
         "intent_score": round(intent_score, 3),
         "has_meaningful_intent_match": has_meaningful_intent_match,
-        "candidate_status": candidate_status_for_score(score),
+        "has_universal_code": has_universal_code,
+        "is_retailer_index_candidate": is_retailer_index_candidate,
+        "candidate_status": candidate_status,
         "is_probable": score >= PROBABLE_CANDIDATE_THRESHOLD,
         "is_user_confirmed": False,
         "is_external_database_override": False,
         "creates_global_product": False,
         "creates_household_article": False,
         "creates_inventory_event": False,
-        "created_by": "external_database_off_index_matcher_v3_no_taxonomy_seed",
+        "created_by": "external_database_off_index_matcher_v4_universal_gtin_preferred",
     }
 
 
+def _candidate_sort_key(item: dict[str, Any]) -> tuple[int, float, str]:
+    universal_priority = 1 if item.get("has_universal_code") else 0
+    return (-universal_priority, -float(item.get("score") or 0.0), str(item.get("candidate_name") or ""))
+
+
 def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, include_below_threshold: bool = True) -> dict[str, Any]:
-    """Match against real OFF index rows only; never emit product taxonomy seed candidates."""
+    """Match against real OFF index rows and prefer universal GTIN/EAN-coded candidates."""
     normalized_retailer = normalize_match_text(retailer_code)
     receipt_product_intent = classify_product_intent(receipt_line_text)
 
@@ -148,7 +218,7 @@ def match_retailer_receipt_line(retailer_code: str, receipt_line_text: str, incl
     if not include_below_threshold:
         scored = [candidate for candidate in scored if candidate["score"] >= PROBABLE_CANDIDATE_THRESHOLD]
 
-    scored.sort(key=lambda item: (-item["score"], item["candidate_name"]))
+    scored.sort(key=_candidate_sort_key)
     scored = scored[:5]
 
     candidate_source = "external_product_index" if scored else "external_product_index_no_match"
