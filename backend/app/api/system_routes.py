@@ -21,6 +21,7 @@ from fastapi import APIRouter, Body, HTTPException, Query
 
 from app.api.route_governance import build_route_governance_manifest
 from app.db import get_runtime_datastore_info
+from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 from app.services.external_candidate_diagnostics import diagnose_real_candidate_coverage
 from app.services.external_database_matchers import (
     get_external_database_summary,
@@ -122,6 +123,62 @@ def _without_taxonomy_seed_candidates(payload: Any) -> Any:
     next_payload['items'] = next_items
     next_payload['total'] = len(next_items)
     next_payload['taxonomy_seed_candidates_removed'] = removed_count
+    return next_payload
+
+
+def _is_spaarzegels_receipt_item(item: Any) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if is_spaarzegels_flow_excluded(item):
+        return True
+    return is_spaarzegels_flow_excluded({
+        'line_type': item.get('line_type'),
+        'is_spaarzegels': item.get('is_spaarzegels'),
+        'exclude_from_inventory': item.get('exclude_from_inventory'),
+        'external_matching_allowed': item.get('external_matching_allowed'),
+        'receipt_line_text': item.get('receipt_line_text'),
+        'raw_label': item.get('raw_label') or item.get('candidate_name'),
+        'normalized_label': item.get('normalized_label') or item.get('candidate_name'),
+        'line_total': item.get('line_total') or item.get('price'),
+        'unit_price': item.get('unit_price'),
+        'price': item.get('price'),
+        'quantity_label': item.get('quantity_label'),
+    })
+
+
+def _without_spaarzegels_receipt_items(payload: Any) -> Any:
+    if not isinstance(payload, dict):
+        return payload
+
+    next_payload = dict(payload)
+    next_items = []
+    removed_count = 0
+
+    for item in list(payload.get('items') or []):
+        if not isinstance(item, dict):
+            next_items.append(item)
+            continue
+
+        if _is_spaarzegels_receipt_item(item):
+            removed_count += 1
+            continue
+
+        next_item = dict(item)
+        if isinstance(next_item.get('candidates'), list):
+            filtered_candidates = []
+            for candidate in next_item.get('candidates') or []:
+                if _is_spaarzegels_receipt_item(candidate):
+                    removed_count += 1
+                    continue
+                filtered_candidates.append(candidate)
+            next_item['candidates'] = filtered_candidates
+            next_item['candidate_count'] = len(filtered_candidates)
+
+        next_items.append(next_item)
+
+    next_payload['items'] = next_items
+    next_payload['total'] = len(next_items)
+    next_payload['spaarzegels_excluded_count'] = int(next_payload.get('spaarzegels_excluded_count') or 0) + removed_count
     return next_payload
 
 
@@ -231,7 +288,9 @@ def external_databases_open_food_facts_save_candidates(payload: dict[str, Any] =
 
 @router.get('/api/external-databases/receipt-items')
 def external_databases_receipt_items(limit: int = Query(default=200)):
-    return _without_taxonomy_seed_candidates(list_external_receipt_items(limit=limit))
+    payload = list_external_receipt_items(limit=limit)
+    payload = _without_taxonomy_seed_candidates(payload)
+    return _without_spaarzegels_receipt_items(payload)
 
 
 @router.post('/api/external-databases/receipt-items/ensure-candidates')
