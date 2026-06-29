@@ -14,6 +14,7 @@ const PSEUDO_ARTICLE_CODE_MARKERS = [
   'm2c2i9_seed',
 ]
 const RETAILER_PSEUDO_CODE_PREFIXES = ['ah', 'albert heijn', 'albert_heijn', 'lidl', 'aldi', 'plus', 'jumbo', 'picnic']
+const RETAILER_INDEX_CODE_PATTERN = /^[A-Z][A-Z0-9 _-]{1,20}-\d{2,}$/i
 
 function text(value, fallback = '-') {
   const normalized = String(value ?? '').trim()
@@ -48,6 +49,14 @@ function isRetailerPseudoArticleCode(value) {
   if (colonIndex < 1) return false
   const prefix = normalized.slice(0, colonIndex).trim()
   return RETAILER_PSEUDO_CODE_PREFIXES.includes(prefix)
+}
+
+function isRetailerIndexCode(value) {
+  const normalized = text(value, '')
+  if (!normalized) return false
+  if (isRetailerPseudoArticleCode(normalized)) return true
+  if (gtinText(normalized) !== '-') return false
+  return RETAILER_INDEX_CODE_PATTERN.test(normalized)
 }
 
 function isPseudoArticleCode(value) {
@@ -96,6 +105,11 @@ function isFallbackCandidate(candidate) {
   return FALLBACK_MARKERS.some((marker) => haystack.includes(marker))
 }
 
+function isSeedOrCatalogSource(candidate) {
+  const source = text(candidate?.external_source_name || candidate?.candidate_source_name || candidate?.source_name, '').toLowerCase().replaceAll(' ', '_')
+  return source.includes('taxonomy_seed') || source.includes('seed_file') || source.includes('catalog_enrich') || source.includes('catalog_enrichment')
+}
+
 function isPseudoArticleCandidate(candidate) {
   if (isFallbackCandidate(candidate)) return false
   const explicitCandidateCode = text(
@@ -109,9 +123,10 @@ function isPseudoArticleCandidate(candidate) {
   return isRetailerPseudoArticleCode(candidate?.retailer_article_number)
 }
 
-function candidateStatusLabel(candidate, linked, fallback) {
+function candidateStatusLabel(candidate, linked, fallback, universal) {
   if (linked) return 'Gekoppeld'
   if (fallback) return 'Geen externe match'
+  if (!universal) return 'Zoekhulp'
   const status = text(candidate?.candidate_status || candidate?.status, '').toLowerCase()
   if (status === 'linked_to_catalog') return 'Gekoppeld'
   if (status === 'user_confirmed') return 'Bevestigd'
@@ -151,22 +166,47 @@ function candidateArticleNumber(candidate) {
   )
 }
 
+function candidateHasUniversalCode(candidate, externalCode) {
+  if (candidate?.has_universal_code === true) return true
+  return [
+    externalCode,
+    candidate?.gtin,
+    candidate?.ean,
+    candidate?.code,
+    candidate?.external_source_product_code,
+    candidate?.candidate_source_product_code,
+    candidate?.source_product_code,
+  ].some((value) => gtinText(value) !== '-')
+}
+
+function candidateTypeLabel(candidate, externalCode, universal) {
+  if (universal) return 'Universele code'
+  if (candidate?.is_retailer_index_candidate === true || isRetailerIndexCode(externalCode) || isSeedOrCatalogSource(candidate)) return 'Zoekhulp'
+  if (isFallbackCandidate(candidate)) return 'Fallback'
+  return 'Niet-universeel'
+}
+
 function buildCandidate(candidate) {
   const linked = candidate?.is_linked_to_catalog === true
   const fallback = isFallbackCandidate(candidate)
+  const externalCode = candidateArticleNumber(candidate)
+  const universal = candidateHasUniversalCode(candidate, externalCode)
+  const type = candidateTypeLabel(candidate, externalCode, universal)
   return {
     id: candidateKey(candidate),
     candidateName: text(candidate?.candidate_name),
     brand: text(candidate?.candidate_brand),
     source: text(candidate?.external_source_name || candidate?.candidate_source_name || candidate?.source_name),
-    externalCode: candidateArticleNumber(candidate),
+    externalCode,
     variant: text(candidate?.variant),
     score: candidate?.score,
-    status: candidateStatusLabel(candidate, linked, fallback),
+    status: candidateStatusLabel(candidate, linked, fallback, universal),
+    type,
+    hasUniversalCode: universal,
     isLinkedToCatalog: linked,
     catalogLinked: hasCatalogLink(candidate),
     isFallbackCandidate: fallback,
-    isLinkableToCatalog: Boolean(candidate?.is_linkable_to_catalog) && !linked && !fallback,
+    isLinkableToCatalog: Boolean(candidate?.is_linkable_to_catalog) && universal && !linked && !fallback,
     raw: candidate,
   }
 }
@@ -251,19 +291,22 @@ function buildReceiptItems(rawItems) {
   return Array.from(grouped.values()).map((item) => {
     const candidates = item.hasKnownGtin
       ? []
-      : dedupeCandidates(item.candidates).sort((left, right) => Number(right.score || 0) - Number(left.score || 0))
-    const linked = candidates.find((candidate) => candidate.isLinkedToCatalog)
-    const best = linked || candidates.find((candidate) => !candidate.isFallbackCandidate) || null
-    const hasRealCandidate = candidates.some((candidate) => !candidate.isFallbackCandidate)
+      : dedupeCandidates(item.candidates).sort((left, right) => {
+        if (left.hasUniversalCode !== right.hasUniversalCode) return left.hasUniversalCode ? -1 : 1
+        return Number(right.score || 0) - Number(left.score || 0)
+      })
+    const linked = candidates.find((candidate) => candidate.isLinkedToCatalog && candidate.hasUniversalCode)
+    const best = linked || candidates.find((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate) || null
+    const hasRealCandidate = candidates.some((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate)
     const hasFallback = candidates.some((candidate) => candidate.isFallbackCandidate)
-    const candidateGtin = gtinText(best?.raw?.gtin || best?.raw?.ean)
+    const candidateGtin = gtinText(best?.raw?.gtin || best?.raw?.ean || best?.externalCode)
     return {
       ...item,
       candidates,
       status: item.hasKnownGtin
         ? 'GTIN / EAN bekend'
-        : (item.catalogLinked ? 'Gekoppeld' : (hasRealCandidate ? 'Kandidaten gevonden' : (hasFallback ? 'Geen externe match' : item.status))),
-      candidateCount: candidates.filter((candidate) => !candidate.isFallbackCandidate).length,
+        : (item.catalogLinked ? 'Gekoppeld' : (hasRealCandidate ? 'Universele kandidaten gevonden' : (hasFallback ? 'Geen externe match' : item.status))),
+      candidateCount: candidates.filter((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate).length,
       bestCandidateName: item.hasKnownGtin ? '' : text(best?.candidateName, ''),
       bestCandidateScore: item.hasKnownGtin ? null : best?.score ?? null,
       articleNumber: item.articleNumber,
@@ -538,22 +581,23 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
 
       {selectedItem ? (
         <div className="rz-external-receipt-detail">
-          <h3>Koppelen kandidaten in artikel-catalogus</h3>
+          <h3>Koppelen universele artikelcode</h3>
           <p>Kandidaten voor: {selectedItem.receiptLineText}</p>
           <dl>
             <dt>Winkelketen</dt><dd>{selectedItem.retailerCode}</dd>
-            <dt>Artikelnummer</dt><dd>{selectedItem.articleNumber}</dd>
+            <dt>Bonartikelnummer</dt><dd>{selectedItem.articleNumber}</dd>
             <dt>GTIN / EAN</dt><dd>{selectedItem.gtin}</dd>
             <dt>Status</dt><dd>{selectedItem.status}</dd>
           </dl>
           <Table dataTestId="external-receipt-item-candidates-table" tableClassName="rz-external-candidate-detail-table" resizableColumns>
             <thead>
-              <tr className="rz-table-header"><th>Keuze</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>Artikelnummer</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr>
+              <tr className="rz-table-header"><th>Keuze</th><th>Type</th><th>Kandidaat</th><th>Merk</th><th>Bron</th><th>Universele code / GTIN-EAN</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr>
             </thead>
             <tbody>
               {selectedCandidates.length ? selectedCandidates.map((candidate) => (
                 <tr key={candidate.id} className={selectedCandidateId === candidate.id ? 'rz-row-selected' : ''}>
                   <td className="rz-check"><input type="radio" name="external-candidate" checked={selectedCandidateId === candidate.id} disabled={!candidate.isLinkableToCatalog && !candidate.isLinkedToCatalog} onChange={() => setSelectedCandidateId(candidate.id)} /></td>
+                  <td>{candidate.type}</td>
                   <td>{candidate.candidateName}</td>
                   <td>{candidate.brand}</td>
                   <td>{candidate.source}</td>
@@ -562,7 +606,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
                   <td className="rz-num">{scoreText(candidate.score)}</td>
                   <td>{candidate.status}</td>
                 </tr>
-              )) : <tr><td colSpan="8">Geen externe kandidaten voor dit bonartikel.</td></tr>}
+              )) : <tr><td colSpan="9">Geen externe kandidaten voor dit bonartikel.</td></tr>}
             </tbody>
           </Table>
           <div className="rz-external-databases-actions">
@@ -571,7 +615,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
             <span className="rz-external-databases-muted">
               {selectedItemHasKnownGtin
                 ? 'GTIN/EAN is al bekend; OFF-kandidaten worden niet automatisch toegevoegd.'
-                : (isOffLoading ? 'OFF wordt automatisch geraadpleegd...' : 'OFF wordt automatisch geraadpleegd bij openen van dit detail; koppelen blijft een expliciete keuze.')}
+                : (isOffLoading ? 'OFF wordt automatisch geraadpleegd...' : 'OFF wordt automatisch geraadpleegd bij openen van dit detail; koppelen blijft een expliciete keuze voor een universele code.')}
             </span>
           </div>
           {offError ? <div className="rz-inline-feedback">{offError}</div> : null}
