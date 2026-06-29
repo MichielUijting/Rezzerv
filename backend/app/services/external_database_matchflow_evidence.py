@@ -33,6 +33,24 @@ def _meaningful_tokens(value: str) -> set[str]:
     return {token for token in normalize_match_text(value).split() if len(token) >= 3}
 
 
+def _is_valid_gtin(value: Any) -> bool:
+    normalized = str(value or "").strip()
+    return bool(normalized.isdigit() and len(normalized) in {8, 12, 13, 14})
+
+
+def _item_has_known_gtin(item: dict[str, Any]) -> bool:
+    return any(
+        _is_valid_gtin(item.get(field))
+        for field in (
+            "gtin",
+            "ean",
+            "barcode",
+            "retailer_article_number",
+            "external_article_code",
+        )
+    )
+
+
 def _candidate_source_code(candidate: dict[str, Any]) -> str:
     for key in ("candidate_source_product_code", "source_product_code", "code", "retailer_article_number"):
         value = str(candidate.get(key) or "").strip()
@@ -194,7 +212,7 @@ def _external_matching_blocked_result(retailer_code: str, receipt_line_text: str
 
 
 def _item_allows_external_matching(item: dict[str, Any]) -> bool:
-    return not is_spaarzegels_flow_excluded(item)
+    return not is_spaarzegels_flow_excluded(item) and not _item_has_known_gtin(item)
 
 
 def _filter_external_matching_items(items: Any) -> list[dict[str, Any]]:
@@ -238,8 +256,19 @@ def ensure_external_receipt_item_candidates(*args: Any, **kwargs: Any) -> dict[s
             result = candidate_store.ensure_external_receipt_item_candidates(*args, **kwargs)
             if isinstance(original_items, list):
                 result = dict(result)
-                result["spaarzegels_excluded_count"] = len(original_items) - len(filtered_items)
-                result["external_matching_guardrail"] = "spaarzegels_financial_lines_excluded"
+                excluded_count = len(original_items) - len(filtered_items)
+                spaarzegels_count = len([
+                    item for item in original_items
+                    if isinstance(item, dict) and is_spaarzegels_flow_excluded(item)
+                ])
+                known_gtin_count = len([
+                    item for item in original_items
+                    if isinstance(item, dict) and _item_has_known_gtin(item)
+                ])
+                result["spaarzegels_excluded_count"] = spaarzegels_count
+                result["known_gtin_excluded_count"] = known_gtin_count
+                result["external_matching_excluded_count"] = excluded_count
+                result["external_matching_guardrail"] = "spaarzegels_and_known_gtin_rows_excluded"
             return result
         return candidate_store.ensure_external_receipt_item_candidates(*args, **kwargs)
     finally:
