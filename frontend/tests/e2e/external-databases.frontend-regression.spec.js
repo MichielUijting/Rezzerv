@@ -107,7 +107,7 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Dubbele kandidaat regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('12345');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Mosterd');
     await expect(receiptRow.locator('td').nth(10)).toContainText('8710000000001');
@@ -132,7 +132,7 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Winkelspecifieke code regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('12345');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(9)).toContainText('Rezzerv Test Product');
     await expect(receiptRow.locator('td').nth(10)).toContainText('-');
@@ -175,7 +175,7 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Gekoppelde kandidaat regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('12345');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await receiptRow.dblclick();
     const linkedCandidateRow = page.getByTestId('external-receipt-item-candidates-table').locator('tbody tr', { hasText: 'Gekoppelde lagere score' });
