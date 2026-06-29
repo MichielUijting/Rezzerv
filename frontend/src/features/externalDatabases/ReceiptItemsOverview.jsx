@@ -13,6 +13,7 @@ const PSEUDO_ARTICLE_CODE_MARKERS = [
   'seed_file',
   'm2c2i9_seed',
 ]
+const RETAILER_PSEUDO_CODE_PREFIXES = ['ah', 'albert heijn', 'albert_heijn', 'lidl', 'aldi', 'plus', 'jumbo', 'picnic']
 
 function text(value, fallback = '-') {
   const normalized = String(value ?? '').trim()
@@ -41,11 +42,19 @@ function hasKnownGtin(value) {
   return gtinText(value) !== '-'
 }
 
+function isRetailerPseudoArticleCode(value) {
+  const normalized = text(value, '').toLowerCase()
+  const colonIndex = normalized.indexOf(':')
+  if (colonIndex < 1) return false
+  const prefix = normalized.slice(0, colonIndex).trim()
+  return RETAILER_PSEUDO_CODE_PREFIXES.includes(prefix)
+}
+
 function isPseudoArticleCode(value) {
   const normalized = text(value, '').toLowerCase()
   if (!normalized) return false
   if (PSEUDO_ARTICLE_CODE_MARKERS.some((marker) => normalized.includes(marker))) return true
-  return /^[a-z0-9_-]+:[a-z0-9_-]+(?::|$)/i.test(normalized)
+  return isRetailerPseudoArticleCode(normalized)
 }
 
 function articleNumberText(...values) {
@@ -87,6 +96,17 @@ function isFallbackCandidate(candidate) {
   return FALLBACK_MARKERS.some((marker) => haystack.includes(marker))
 }
 
+function isPseudoArticleCandidate(candidate) {
+  if (isFallbackCandidate(candidate)) return false
+  return [
+    candidate?.external_source_product_code,
+    candidate?.candidate_source_product_code,
+    candidate?.source_product_code,
+    candidate?.retailer_article_number,
+    candidate?.external_article_code,
+  ].some((value) => isRetailerPseudoArticleCode(value))
+}
+
 function candidateStatusLabel(candidate, linked, fallback) {
   if (linked) return 'Gekoppeld'
   if (fallback) return 'Geen externe match'
@@ -119,6 +139,16 @@ function hasCatalogLink(candidate) {
   )
 }
 
+function candidateArticleNumber(candidate) {
+  return articleNumberText(
+    candidate?.external_source_product_code,
+    candidate?.candidate_source_product_code,
+    candidate?.source_product_code,
+    candidate?.retailer_article_number,
+    candidate?.external_article_code
+  )
+}
+
 function buildCandidate(candidate) {
   const linked = candidate?.is_linked_to_catalog === true
   const fallback = isFallbackCandidate(candidate)
@@ -127,7 +157,7 @@ function buildCandidate(candidate) {
     candidateName: text(candidate?.candidate_name),
     brand: text(candidate?.candidate_brand),
     source: text(candidate?.external_source_name || candidate?.candidate_source_name || candidate?.source_name),
-    externalCode: text(candidate?.external_source_product_code || candidate?.candidate_source_product_code || candidate?.source_product_code || candidate?.retailer_article_number),
+    externalCode: candidateArticleNumber(candidate),
     variant: text(candidate?.variant),
     score: candidate?.score,
     status: candidateStatusLabel(candidate, linked, fallback),
@@ -204,6 +234,7 @@ function buildReceiptItems(rawItems) {
 
     nested.filter(Boolean).forEach((candidate) => {
       if (current.hasKnownGtin) return
+      if (isPseudoArticleCandidate(candidate)) return
       const built = buildCandidate(candidate)
       if (built.raw?.is_receipt_item_placeholder && built.raw?.candidate_status === 'no_candidate') return
       current.candidates.push(built)
