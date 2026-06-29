@@ -20,6 +20,11 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _is_valid_gtin(value: Any) -> bool:
+    normalized = _text(value)
+    return bool(normalized.isdigit() and len(normalized) in {8, 12, 13, 14})
+
+
 def _receipt_table_exists(conn) -> bool:
     dialect_name = str(engine.dialect.name or "").lower()
     if dialect_name == "sqlite":
@@ -40,7 +45,9 @@ def _receipt_table_exists(conn) -> bool:
 
 
 def _is_external_matching_allowed(row: dict[str, Any]) -> bool:
-    return not is_spaarzegels_flow_excluded(row)
+    if is_spaarzegels_flow_excluded(row):
+        return False
+    return not _is_valid_gtin(row.get("gtin") or row.get("barcode") or row.get("retailer_article_number"))
 
 
 def _receipt_table_items(receipt_table_id: str) -> list[dict[str, Any]]:
@@ -62,6 +69,7 @@ def _receipt_table_items(receipt_table_id: str) -> list[dict[str, Any]]:
                     rtl.raw_label AS raw_label,
                     rtl.normalized_label AS normalized_label,
                     rtl.barcode AS retailer_article_number,
+                    rtl.barcode AS gtin,
                     TRIM(COALESCE(CAST(rtl.quantity AS TEXT), '') || ' ' || COALESCE(CAST(rtl.unit AS TEXT), '')) AS quantity_label,
                     rtl.unit_price AS unit_price,
                     rtl.line_total AS line_total,
@@ -88,6 +96,7 @@ def _receipt_table_items(receipt_table_id: str) -> list[dict[str, Any]]:
             "receipt_line_text": receipt_text,
             "retailer_code": _text(row_data.get("retailer_code")),
             "retailer_article_number": _text(row_data.get("retailer_article_number")),
+            "gtin": _text(row_data.get("gtin")),
             "quantity_label": _text(row_data.get("quantity_label")),
             "price": row_data.get("price"),
         })
@@ -104,12 +113,13 @@ def auto_ensure_external_candidates_for_receipt_table(
     receipt_table_id: str,
     include_below_threshold: bool = True,
 ) -> dict[str, Any]:
-    """Lees echte externe kandidaten bij voor alle productregels van een nieuw opgeslagen bon.
+    """Lees echte externe kandidaten bij voor productregels zonder bekende GTIN/EAN.
 
     Dit is productgedrag, geen PO-rapport. De functie mag uitsluitend kandidaatcache
     vullen in `external_product_candidates`. Ze maakt geen Mijn artikel, geen
-    global product en geen voorraadmutatie. Spaarzegels blijven financiële
-    bonregels voor de kassasom, maar worden niet naar productmatching gestuurd.
+    global product en geen voorraadmutatie. Regels met een bestaande geldige
+    GTIN/EAN hebben al een externe identiteit en worden niet opnieuw van
+    kandidaatartikelen voorzien.
     """
     items = _receipt_table_items(receipt_table_id)
     if not items:
@@ -258,28 +268,33 @@ def install_receipt_auto_candidate_coverage() -> dict[str, Any]:
     """Installeer runtime hooks voor nieuwe bonnen.
 
     FastAPI importeert `ingest_receipt` en `reparse_receipt` ook rechtstreeks in
-    `app.main`. Daarom patchen we zowel de service-module als, als die al geladen
-    is, de globale namen in `app.main`.
+    route-modules. Daarom patchen we zowel de oorspronkelijke modules als reeds
+    geladen route-modules die callable referenties bevatten.
     """
     patched: list[str] = []
 
-    receipt_service = importlib.import_module("app.services.receipt_service")
-    if _patch_module_function(receipt_service, "ingest_receipt", _with_receipt_auto_coverage):
-        patched.append("app.services.receipt_service.ingest_receipt")
-    if _patch_module_function(receipt_service, "reparse_receipt", _with_reparse_auto_coverage):
-        patched.append("app.services.receipt_service.reparse_receipt")
+    targets = [
+        ("app.receipt_ingestion.service", ["ingest_receipt"]),
+        ("app.receipt_ingestion.receipt_reparse_service", ["reparse_receipt"]),
+    ]
 
-    main_module = sys.modules.get("app.main")
-    if main_module is not None:
-        if _patch_module_function(main_module, "ingest_receipt", _with_receipt_auto_coverage):
-            patched.append("app.main.ingest_receipt")
-        if _patch_module_function(main_module, "reparse_receipt", _with_reparse_auto_coverage):
-            patched.append("app.main.reparse_receipt")
+    for module_name, function_names in targets:
+        try:
+            module = importlib.import_module(module_name)
+        except Exception as exc:  # pragma: no cover
+            LOGGER.warning("Module %s kon niet worden geladen voor kandidaatdekking: %s", module_name, exc)
+            continue
+        for function_name in function_names:
+            wrapper_factory = _with_reparse_auto_coverage if function_name == "reparse_receipt" else _with_receipt_auto_coverage
+            if _patch_module_function(module, function_name, wrapper_factory):
+                patched.append(f"{module_name}.{function_name}")
 
-    return {
-        "ok": True,
-        "patched": patched,
-        "creates_global_product": False,
-        "creates_household_article": False,
-        "creates_inventory_event": False,
-    }
+    for module_name, module in list(sys.modules.items()):
+        if not module_name.startswith("app.api"):
+            continue
+        for function_name in ["ingest_receipt", "reparse_receipt"]:
+            wrapper_factory = _with_reparse_auto_coverage if function_name == "reparse_receipt" else _with_receipt_auto_coverage
+            if _patch_module_function(module, function_name, wrapper_factory):
+                patched.append(f"{module_name}.{function_name}")
+
+    return {"ok": True, "patched": patched}
