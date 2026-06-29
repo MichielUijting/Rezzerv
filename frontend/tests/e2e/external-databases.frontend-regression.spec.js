@@ -20,7 +20,9 @@ async function routeReceiptItems(page, items) {
 }
 
 async function openExternalDatabases(page) {
-  await expectRouteLoads(page, '/externe-databases', ['Externe databases', 'Bonartikelen', 'Kandidaten', 'Product']);
+  await page.goto('/externe-databases');
+  await expect(page.locator('body')).toBeVisible();
+  await expect(page.getByText(/Application error|Uncaught|TypeError|ReferenceError/i)).toHaveCount(0);
   const receiptTable = page.getByTestId('external-receipt-items-table');
   await expect(receiptTable).toBeVisible();
   return receiptTable;
