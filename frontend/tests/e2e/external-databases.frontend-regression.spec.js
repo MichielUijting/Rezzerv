@@ -135,17 +135,28 @@ test.describe('Externe databases frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
-  test('Bovenste tabel verbergt pseudo-artikelcodes met winkelketen en categorie', async ({ page }) => {
+  test('Bovenste tabel gebruikt geen winkelketen-categorie pseudo-kandidaat als beste kandidaat', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
-    await routeReceiptItems(page, [{
-      context_key: 'ctx-pseudo-code-regression', receipt_line_id: 'receipt-line-pseudo-code-regression', purchase_import_line_id: 'purchase-line-pseudo-code-regression', receipt_line_text: 'Pseudo artikelcode regressietest', retailer_code: 'lidl', retailer_article_number: 'lidl:zuivel:kaas', source_product_code: 'lidl:zuivel:kaas', candidate_source_product_code: 'lidl:zuivel:kaas', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_status: 'no_candidate', is_receipt_item_placeholder: true,
-    }]);
+    await routeReceiptItems(page, [
+      { context_key: 'ctx-pseudo-code-regression', receipt_line_id: 'receipt-line-pseudo-code-regression', purchase_import_line_id: 'purchase-line-pseudo-code-regression', receipt_line_text: 'Pseudo artikelcode regressietest', retailer_code: 'lidl', retailer_article_number: 'lidl:groente.zoete-aardappel', source_product_code: 'lidl:groente.zoete-aardappel', candidate_source_product_code: 'lidl:groente.zoete-aardappel', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-retailer-pseudo', candidate_name: 'Lidl Zoete aardappel', candidate_brand: 'Lidl Groente', external_source_name: 'lidl_catalog_enrich', external_source_product_code: 'lidl:groente.zoete-aardappel', variant: 'Groente', score: 0.95, candidate_status: 'probable_candidate', is_linked_to_catalog: false, is_linkable_to_catalog: true },
+      { context_key: 'ctx-pseudo-code-regression', receipt_line_id: 'receipt-line-pseudo-code-regression', purchase_import_line_id: 'purchase-line-pseudo-code-regression', receipt_line_text: 'Pseudo artikelcode regressietest', retailer_code: 'lidl', retailer_article_number: 'lidl:groente.zoete-aardappel', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-off-real', candidate_name: 'Zoete aardappel', candidate_brand: '-', external_source_name: 'Open Food Facts', external_source_product_code: '000426660609', variant: 'OFF', score: 0.642, candidate_status: 'candidate', is_linked_to_catalog: false, is_linkable_to_catalog: true },
+    ]);
 
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Pseudo artikelcode regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
-    await expect(receiptRow).not.toContainText('lidl:zuivel:kaas');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('000426660609');
+    await expect(receiptRow.locator('td').nth(9)).toContainText('Zoete aardappel');
+    await expect(receiptRow).not.toContainText('lidl:groente.zoete-aardappel');
+    await expect(receiptRow).not.toContainText('Lidl Zoete aardappel');
+
+    await receiptRow.dblclick();
+    const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
+    await expect(candidateTable).toBeVisible();
+    await expect(candidateTable).toContainText('Open Food Facts');
+    await expect(candidateTable).toContainText('000426660609');
+    await expect(candidateTable).not.toContainText('lidl_catalog_enrich');
+    await expect(candidateTable).not.toContainText('lidl:groente.zoete-aardappel');
     await expectNoConsoleErrors(consoleErrors);
   });
 
