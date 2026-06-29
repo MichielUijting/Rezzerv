@@ -71,7 +71,8 @@ try {
     "tests/e2e/kassa.frontend-regression.spec.js",
     "tests/e2e/uitpakken.frontend-regression.spec.js",
     "tests/e2e/external-databases.frontend-regression.spec.js",
-    "tests/e2e/external-databases-off.frontend-regression.spec.js"
+    "tests/e2e/external-databases-off.frontend-regression.spec.js",
+    "tests/e2e/external-databases-unlink.frontend-regression.spec.js"
   ) -join " "
 
   docker run --rm `
