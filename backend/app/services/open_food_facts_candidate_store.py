@@ -24,6 +24,18 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _is_valid_gtin(value: Any) -> bool:
+    normalized = _text(value)
+    return bool(normalized.isdigit() and len(normalized) in {8, 12, 13, 14})
+
+
+def _payload_has_known_gtin(payload: dict[str, Any]) -> bool:
+    return any(
+        _is_valid_gtin(payload.get(field))
+        for field in ("gtin", "ean", "barcode", "retailer_article_number", "article_number")
+    )
+
+
 def _off_candidate_from_result(result: dict[str, Any]) -> dict[str, Any]:
     code = _text(
         result.get("candidate_source_product_code")
@@ -57,7 +69,8 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
 
     This creates external candidate rows only. It does not create global products,
     household articles or inventory events. A separate explicit user action is still
-    required to link/promote a candidate.
+    required to link/promote a candidate. Rows that already carry a valid GTIN/EAN
+    are skipped because the external identity is already known.
     """
     ensure_external_product_candidates_schema()
 
@@ -83,6 +96,35 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
         receipt_line_id=receipt_line_id,
         purchase_import_line_id=purchase_import_line_id,
     )
+
+    if _payload_has_known_gtin(payload):
+        return {
+            "ok": True,
+            "preview": {
+                "ok": True,
+                "status": "skipped_known_gtin",
+                "provider": "known_gtin_guardrail",
+                "result_count": 0,
+                "creates_global_product": False,
+                "creates_household_article": False,
+                "creates_inventory_event": False,
+            },
+            "source_name": "open_food_facts",
+            "context_key": context_key,
+            "retailer_code": retailer_code,
+            "receipt_line_text": receipt_line_text,
+            "candidate_count": 0,
+            "saved_count": 0,
+            "updated_count": 0,
+            "skipped_count": 1,
+            "skipped": [{"reason": "known_gtin_present"}],
+            "candidates": [],
+            "requires_user_selection": False,
+            "creates_global_product": False,
+            "creates_household_article": False,
+            "creates_inventory_event": False,
+        }
+
     storage_purchase_import_line_id = purchase_import_line_id or build_preview_import_line_fallback(context_key)
 
     preview = search_open_food_facts_preview(payload)
