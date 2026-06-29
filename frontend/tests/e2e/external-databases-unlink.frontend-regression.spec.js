@@ -102,9 +102,9 @@ test.describe('Externe databases ontkoppelen regressie', () => {
     await expect(linkedCandidateRow).toContainText('Gekoppeld');
     await linkedCandidateRow.locator('input[type="radio"]').check();
 
-    await expect(page.getByRole('button', { name: 'Koppel artikel' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Ontkoppel artikel' })).toBeEnabled();
-    await page.getByRole('button', { name: 'Ontkoppel artikel' }).click();
+    await expect(page.getByRole('button', { name: 'Koppel artikel', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Ontkoppel artikel', exact: true })).toBeEnabled();
+    await page.getByRole('button', { name: 'Ontkoppel artikel', exact: true }).click();
 
     expect(unlinkRequestBody).toMatchObject({
       context_keys: ['ctx-unlink-regression'],
