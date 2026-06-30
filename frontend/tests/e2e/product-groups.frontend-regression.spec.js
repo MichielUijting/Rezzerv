@@ -15,20 +15,20 @@ async function routeProductGroups(page) {
         items: [
           {
             inventory_group_key: 'saus.mosterd',
-            display_name: 'Mosterd',
+            display_name: 'Mosterd extra lange productgroepnaam',
             base_unit: 'kg',
             item_count: assigned ? 2 : 1,
             products: [
-              { inventory_id: 'test-mosterd', product_name: 'Mosterd', stock_quantity: 1 },
-              ...(assigned ? [{ inventory_id: 'test-boor', product_name: 'Boormachine', stock_quantity: 1 }] : []),
+              { inventory_id: 'test-mosterd', product_name: 'Mosterd fijne Dijon extra lange artikelnaam', stock_quantity: 1 },
+              ...(assigned ? [{ inventory_id: 'test-boor', product_name: 'Boormachine met zeer lange artikelnaam', stock_quantity: 1 }] : []),
             ],
           },
         ],
         group_options: [
-          { inventory_group_key: 'saus.mosterd', display_name: 'Mosterd', default_base_unit: 'kg' },
+          { inventory_group_key: 'saus.mosterd', display_name: 'Mosterd extra lange productgroepnaam', default_base_unit: 'kg' },
         ],
         unresolved_items: assigned ? [] : [
-          { inventory_id: 'test-boor', product_name: 'Boormachine', stock_quantity: 1, reason: 'no_inventory_group_match' },
+          { inventory_id: 'test-boor', product_name: 'Boormachine met zeer lange artikelnaam', stock_quantity: 1, reason: 'no_inventory_group_match' },
         ],
         total_groups: 1,
         total_unresolved_items: assigned ? 0 : 1,
@@ -70,15 +70,22 @@ test.describe('Productgroepen frontend-regressie', () => {
     await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Onbekende inhoud');
     await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Locaties');
     await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Betrouwbaarheid');
-    await expect(page.getByTestId('product-groups-table')).toContainText('Mosterd');
-    await expect(page.getByTestId('product-groups-detail-table')).toContainText('Mosterd');
-    await expect(page.getByTestId('product-groups-unresolved-table')).toContainText('Boormachine');
+    await expect(page.getByTestId('product-groups-table')).toContainText('Mosterd extra lange productgroepnaam');
+    await expect(page.getByTestId('product-groups-detail-table')).toContainText('Mosterd fijne Dijon extra lange artikelnaam');
+    await expect(page.getByTestId('product-groups-unresolved-table')).toContainText('Boormachine met zeer lange artikelnaam');
 
-    await page.getByLabel('Productgroep voor Boormachine').selectOption('saus.mosterd');
+    await page.getByRole('button', { name: 'Groepen controleren' }).click();
+    await expect(page.getByTestId('product-groups-feedback-success')).toContainText('Productgroepen zijn gecontroleerd en bijgewerkt.');
+    await expect(page.getByTestId('product-groups-page').locator('.rz-inline-feedback')).toHaveCount(0);
+    await page.getByTestId('product-groups-feedback-success-ok-button').click();
+
+    await page.getByLabel('Productgroep voor Boormachine met zeer lange artikelnaam').selectOption('saus.mosterd');
     await page.getByRole('button', { name: 'Bevestigen' }).click();
 
-    await expect(page.getByTestId('product-groups-unresolved-table')).not.toContainText('Boormachine');
-    await expect(page.getByTestId('product-groups-detail-table')).toContainText('Boormachine');
+    await expect(page.getByTestId('product-groups-feedback-success')).toContainText('Artikel is aan de productgroep toegevoegd.');
+    await page.getByTestId('product-groups-feedback-success-ok-button').click();
+    await expect(page.getByTestId('product-groups-unresolved-table')).not.toContainText('Boormachine met zeer lange artikelnaam');
+    await expect(page.getByTestId('product-groups-detail-table')).toContainText('Boormachine met zeer lange artikelnaam');
     await expectNoConsoleErrors(consoleErrors);
   });
 });
