@@ -6,13 +6,10 @@ import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
+import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import './productGroups.css'
 
-const COMBINED_COLUMN_STYLES = [
-  { width: '430px', minWidth: '430px' },
-  { width: '360px', minWidth: '360px' },
-  { width: '160px', minWidth: '160px' },
-]
+const UNIT_OPTIONS = ['stuk', 'kg', 'g', 'l', 'ml', 'rol']
 
 export default function ProductGroupsPage() {
   const navigate = useNavigate()
@@ -22,9 +19,21 @@ export default function ProductGroupsPage() {
   const [originalAssignments, setOriginalAssignments] = useState({})
   const [articleSearch, setArticleSearch] = useState('')
   const [groupFilter, setGroupFilter] = useState('')
+  const [crudGroupKey, setCrudGroupKey] = useState('')
+  const [crudName, setCrudName] = useState('')
+  const [crudUnit, setCrudUnit] = useState('stuk')
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshingSchema, setIsRefreshingSchema] = useState(false)
+  const [isSavingGroup, setIsSavingGroup] = useState(false)
   const [savingInventoryId, setSavingInventoryId] = useState('')
+
+  const productGroupsTableColumns = useMemo(() => ([
+    { key: 'artikel', width: 360 },
+    { key: 'productgroep', width: 360 },
+    { key: 'bevestigen', width: 160 },
+  ]), [])
+  const columnDefaults = useMemo(() => Object.fromEntries(productGroupsTableColumns.map(({ key, width }) => [key, width])), [productGroupsTableColumns])
+  const { widths: tableWidths, startResize: startTableResize } = useResizableColumnWidths(columnDefaults)
 
   function showError(message, technicalDetail = '') {
     showFeedback({
@@ -34,6 +43,15 @@ export default function ProductGroupsPage() {
       technicalDetail,
       showTechnicalToggle: Boolean(technicalDetail),
       testId: 'product-groups-feedback-error',
+    })
+  }
+
+  function showSuccess(message) {
+    showFeedback({
+      variant: 'success',
+      title: 'Gelukt',
+      message,
+      testId: 'product-groups-feedback-success',
     })
   }
 
@@ -74,12 +92,7 @@ export default function ProductGroupsPage() {
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload?.detail || 'Schema-initialisatie is mislukt')
       await loadGroups()
-      showFeedback({
-        variant: 'success',
-        title: 'Gelukt',
-        message: 'Productgroepen zijn gecontroleerd en bijgewerkt.',
-        testId: 'product-groups-feedback-success',
-      })
+      showSuccess('Productgroepen zijn gecontroleerd en bijgewerkt.')
     } catch (err) {
       showError(err?.message || 'Schema-initialisatie is mislukt', err?.stack || '')
     } finally {
@@ -101,17 +114,41 @@ export default function ProductGroupsPage() {
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload?.detail || 'Artikel kon niet worden ingedeeld')
       await loadGroups()
-      showFeedback({
-        variant: 'success',
-        title: 'Gelukt',
-        message: 'Artikel is aan de productgroep toegevoegd.',
-        testId: 'product-groups-feedback-success',
-      })
+      showSuccess('Artikel is aan de productgroep toegevoegd.')
     } catch (err) {
       showError(err?.message || 'Artikel kon niet worden ingedeeld', err?.stack || '')
     } finally {
       setSavingInventoryId('')
     }
+  }
+
+  async function saveProductGroup(method, url, successMessage) {
+    setIsSavingGroup(true)
+    try {
+      const response = await fetchJsonWithAuth(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: method === 'DELETE' ? undefined : JSON.stringify({ display_name: crudName, default_base_unit: crudUnit }),
+      })
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload?.detail || 'Productgroep kon niet worden opgeslagen')
+      setCrudGroupKey('')
+      setCrudName('')
+      setCrudUnit('stuk')
+      await loadGroups()
+      showSuccess(successMessage)
+    } catch (err) {
+      showError(err?.message || 'Productgroep kon niet worden opgeslagen', err?.stack || '')
+    } finally {
+      setIsSavingGroup(false)
+    }
+  }
+
+  function selectCrudGroup(key, groupOptions) {
+    setCrudGroupKey(key)
+    const selected = groupOptions.find((group) => group.inventory_group_key === key)
+    setCrudName(selected?.display_name || '')
+    setCrudUnit(selected?.default_base_unit || selected?.base_unit || 'stuk')
   }
 
   useEffect(() => {
@@ -174,43 +211,48 @@ export default function ProductGroupsPage() {
             </div>
           </div>
 
+          <section className="rz-product-groups-crud" aria-label="Productgroepen beheren">
+            <select className="rz-input rz-inline-input" aria-label="Bestaande productgroep" value={crudGroupKey} onChange={(event) => selectCrudGroup(event.target.value, groupOptions)}>
+              <option value="">Nieuwe productgroep</option>
+              {groupOptions.map((group) => <option key={group.inventory_group_key} value={group.inventory_group_key}>{group.display_name}</option>)}
+            </select>
+            <input className="rz-input rz-inline-input" aria-label="Productgroepnaam" placeholder="Productgroepnaam" value={crudName} onChange={(event) => setCrudName(event.target.value)} />
+            <select className="rz-input rz-inline-input" aria-label="Eenheid productgroep" value={crudUnit} onChange={(event) => setCrudUnit(event.target.value)}>
+              {UNIT_OPTIONS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+            </select>
+            <Button type="button" variant="secondary" disabled={isSavingGroup || !crudName.trim()} onClick={() => saveProductGroup('POST', '/api/product-groups', 'Productgroep is toegevoegd.')}>Toevoegen</Button>
+            <Button type="button" variant="secondary" disabled={isSavingGroup || !crudGroupKey || !crudName.trim()} onClick={() => saveProductGroup('PUT', `/api/product-groups/${encodeURIComponent(crudGroupKey)}`, 'Productgroep is bijgewerkt.')}>Bijwerken</Button>
+            <Button type="button" variant="secondary" disabled={isSavingGroup || !crudGroupKey} onClick={() => saveProductGroup('DELETE', `/api/product-groups/${encodeURIComponent(crudGroupKey)}`, 'Productgroep is verwijderd.')}>Verwijderen</Button>
+          </section>
+
           <section className="rz-product-groups-section">
             <div className="rz-product-groups-section-header">
               <h3>Productgroepen</h3>
               {isLoading ? <span className="rz-product-groups-muted">Productgroepen worden geladen...</span> : null}
             </div>
-            <Table dataTestId="product-groups-table" tableClassName="rz-product-groups-table rz-product-groups-table--combined" tableStyle={{ width: '950px', minWidth: '950px' }} resizableColumns>
-              <colgroup>{COMBINED_COLUMN_STYLES.map((style, index) => <col key={`combined-col-${index}`} style={style} />)}</colgroup>
+            <Table dataTestId="product-groups-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(tableWidths), minWidth: buildTableWidth(tableWidths) }}>
+              <colgroup>
+                <col style={{ width: `${tableWidths.artikel}px` }} />
+                <col style={{ width: `${tableWidths.productgroep}px` }} />
+                <col style={{ width: `${tableWidths.bevestigen}px` }} />
+              </colgroup>
               <thead>
                 <tr className="rz-table-header">
-                  <th style={COMBINED_COLUMN_STYLES[0]}>Artikel</th>
-                  <th style={COMBINED_COLUMN_STYLES[1]}>Productgroep</th>
-                  <th style={COMBINED_COLUMN_STYLES[2]}>Bevestigen</th>
+                  <ResizableHeaderCell columnKey="artikel" widths={tableWidths} onStartResize={startTableResize}>Artikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="productgroep" widths={tableWidths} onStartResize={startTableResize}>Productgroep</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="bevestigen" widths={tableWidths} onStartResize={startTableResize}>Bevestigen</ResizableHeaderCell>
                 </tr>
-                <tr className="rz-table-filter-row">
-                  <th style={COMBINED_COLUMN_STYLES[0]}>
-                    <input
-                      className="rz-input rz-product-groups-filter-input"
-                      aria-label="Zoek artikel"
-                      placeholder="Zoek"
-                      value={articleSearch}
-                      onChange={(event) => setArticleSearch(event.target.value)}
-                    />
+                <tr className="rz-table-filters">
+                  <th>
+                    <input className="rz-input rz-inline-input" aria-label="Zoek artikel" placeholder="Zoek" value={articleSearch} onChange={(event) => setArticleSearch(event.target.value)} />
                   </th>
-                  <th style={COMBINED_COLUMN_STYLES[1]}>
-                    <select
-                      className="rz-input rz-product-groups-select"
-                      aria-label="Filter productgroep"
-                      value={groupFilter}
-                      onChange={(event) => setGroupFilter(event.target.value)}
-                    >
+                  <th>
+                    <select className="rz-input rz-inline-input" aria-label="Filter productgroep" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
                       <option value="">Filter</option>
-                      {groupOptions.map((group) => (
-                        <option key={group.inventory_group_key} value={group.inventory_group_key}>{group.display_name || group.inventory_group_key}</option>
-                      ))}
+                      {groupOptions.map((group) => <option key={group.inventory_group_key} value={group.inventory_group_key}>{group.display_name || group.inventory_group_key}</option>)}
                     </select>
                   </th>
-                  <th style={COMBINED_COLUMN_STYLES[2]}></th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
@@ -222,21 +264,14 @@ export default function ProductGroupsPage() {
                   const canSave = Boolean(selectedValue) && (isChanged || !row.is_classified)
                   return (
                     <tr key={inventoryId}>
-                      <td style={COMBINED_COLUMN_STYLES[0]}>{row.article_name || '-'}</td>
-                      <td style={COMBINED_COLUMN_STYLES[1]}>
-                        <select
-                          className="rz-input rz-product-groups-select"
-                          aria-label={`Productgroep voor ${row.article_name}`}
-                          value={selectedValue}
-                          onChange={(event) => setSelectedAssignments((current) => ({ ...current, [inventoryId]: event.target.value }))}
-                        >
+                      <td className="rz-receipts-cell">{row.article_name || '-'}</td>
+                      <td>
+                        <select className="rz-input rz-inline-input" aria-label={`Productgroep voor ${row.article_name}`} value={selectedValue} onChange={(event) => setSelectedAssignments((current) => ({ ...current, [inventoryId]: event.target.value }))}>
                           <option value="">Kies productgroep</option>
-                          {groupOptions.map((group) => (
-                            <option key={group.inventory_group_key} value={group.inventory_group_key}>{group.display_name || group.inventory_group_key}</option>
-                          ))}
+                          {groupOptions.map((group) => <option key={group.inventory_group_key} value={group.inventory_group_key}>{group.display_name || group.inventory_group_key}</option>)}
                         </select>
                       </td>
-                      <td style={COMBINED_COLUMN_STYLES[2]}>
+                      <td>
                         <Button type="button" variant="secondary" disabled={!canSave || savingInventoryId === inventoryId} onClick={() => assignGroup(row)}>
                           {savingInventoryId === inventoryId ? 'Bezig...' : 'Bevestigen'}
                         </Button>
