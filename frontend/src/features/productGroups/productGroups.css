@@ -50,7 +50,28 @@
 }
 
 .rz-product-groups-table {
+  table-layout: fixed;
+}
+
+.rz-product-groups-table--groups {
+  width: 660px;
+  min-width: 660px;
+}
+
+.rz-product-groups-table--detail {
+  width: 680px;
   min-width: 680px;
+}
+
+.rz-product-groups-table--unresolved {
+  width: 850px;
+  min-width: 850px;
+}
+
+.rz-product-groups-table th,
+.rz-product-groups-table td {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .rz-product-groups-selected-row {
@@ -63,7 +84,8 @@
 }
 
 .rz-product-groups-select {
-  min-width: 220px;
+  width: 100%;
+  min-width: 240px;
 }
 
 @media (max-width: 760px) {
