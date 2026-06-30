@@ -21,6 +21,14 @@ from app.services.product_inventory_group_store import (
 router = APIRouter()
 
 
+def _payload_text(payload: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        value = str(payload.get(key) or '').strip()
+        if value:
+            return value
+    return ''
+
+
 @router.get('/api/inventory/groups')
 def inventory_groups(household_id: str | None = Query(default=None)):
     """Return inventory aggregated by Rezzerv product meaning.
@@ -41,6 +49,8 @@ def product_group_create(payload: dict[str, Any] = Body(default_factory=dict)):
     result = create_product_group(
         display_name=str(payload.get('display_name') or '').strip(),
         default_base_unit=str(payload.get('default_base_unit') or 'stuk').strip() or 'stuk',
+        family_name=_payload_text(payload, 'gpc_family_name', 'family_name', 'hoofdgroep'),
+        class_name=_payload_text(payload, 'gpc_class_name', 'class_name', 'groep'),
     )
     if not bool(result.get('ok', False)):
         raise HTTPException(status_code=400, detail=result.get('error') or 'Productgroep kon niet worden toegevoegd')
@@ -53,6 +63,8 @@ def product_group_update(inventory_group_key: str, payload: dict[str, Any] = Bod
         inventory_group_key=inventory_group_key,
         display_name=str(payload.get('display_name') or '').strip(),
         default_base_unit=str(payload.get('default_base_unit') or 'stuk').strip() or 'stuk',
+        family_name=_payload_text(payload, 'gpc_family_name', 'family_name', 'hoofdgroep'),
+        class_name=_payload_text(payload, 'gpc_class_name', 'class_name', 'groep'),
     )
     if not bool(result.get('ok', False)):
         raise HTTPException(status_code=400, detail=result.get('error') or 'Productgroep kon niet worden bijgewerkt')
