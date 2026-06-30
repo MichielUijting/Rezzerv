@@ -176,7 +176,6 @@ export default function ProductGroupsPage() {
           <section className="rz-product-groups-section">
             <div className="rz-product-groups-section-header">
               <h3>Artikelen in productgroep</h3>
-              <span className="rz-product-groups-muted">{selectedGroup?.display_name || 'Geen productgroep geselecteerd'}</span>
             </div>
             <Table dataTestId="product-groups-detail-table" tableClassName="rz-product-groups-table rz-product-groups-table--detail" tableStyle={{ width: '760px', minWidth: '760px' }} resizableColumns>
               <colgroup>{DETAIL_COLUMN_STYLES.map((style, index) => <col key={`detail-col-${index}`} style={style} />)}</colgroup>
@@ -200,7 +199,6 @@ export default function ProductGroupsPage() {
           <section className="rz-product-groups-section">
             <div className="rz-product-groups-section-header">
               <h3>Nog te classificeren artikelen</h3>
-              <span className="rz-product-groups-muted">Kies een productgroep en bevestig.</span>
             </div>
             <Table dataTestId="product-groups-unresolved-table" tableClassName="rz-product-groups-table rz-product-groups-table--unresolved" tableStyle={{ width: '900px', minWidth: '900px' }} resizableColumns>
               <colgroup>{UNRESOLVED_COLUMN_STYLES.map((style, index) => <col key={`unresolved-col-${index}`} style={style} />)}</colgroup>
