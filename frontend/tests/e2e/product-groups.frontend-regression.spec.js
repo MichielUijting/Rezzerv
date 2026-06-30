@@ -5,6 +5,7 @@ import {
 } from './helpers/rezzervAssertions.js';
 
 async function routeProductGroups(page) {
+  let assigned = false;
   await page.route('**/api/inventory/groups', async (route) => {
     await route.fulfill({
       status: 200,
@@ -16,20 +17,21 @@ async function routeProductGroups(page) {
             inventory_group_key: 'saus.mosterd',
             display_name: 'Mosterd',
             base_unit: 'kg',
-            total_normalized_quantity: 0,
-            known_quantity_items: 0,
-            unknown_quantity_items: 1,
-            item_count: 1,
-            locations: ['Kelderkast'],
-            products: [],
-            confidence: 0.25,
+            item_count: assigned ? 2 : 1,
+            products: [
+              { inventory_id: 'test-mosterd', product_name: 'Mosterd', stock_quantity: 1 },
+              ...(assigned ? [{ inventory_id: 'test-boor', product_name: 'Boormachine', stock_quantity: 1 }] : []),
+            ],
           },
         ],
-        unresolved_items: [
+        group_options: [
+          { inventory_group_key: 'saus.mosterd', display_name: 'Mosterd', default_base_unit: 'kg' },
+        ],
+        unresolved_items: assigned ? [] : [
           { inventory_id: 'test-boor', product_name: 'Boormachine', stock_quantity: 1, reason: 'no_inventory_group_match' },
         ],
         total_groups: 1,
-        total_unresolved_items: 1,
+        total_unresolved_items: assigned ? 0 : 1,
         source: 'inventory_group_projection_v1',
         mutates_inventory: false,
       }),
@@ -42,10 +44,18 @@ async function routeProductGroups(page) {
       body: JSON.stringify({ ok: true, schema: 'product_inventory_groups', seed: 'm2c2i30a_seed', mutates_inventory: false }),
     });
   });
+  await page.route('**/api/inventory/items/test-boor/group', async (route) => {
+    assigned = true;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ ok: true, inventory_id: 'test-boor', inventory_group_key: 'saus.mosterd', mutates_inventory: false }),
+    });
+  });
 }
 
 test.describe('Productgroepen frontend-regressie', () => {
-  test('Landingspagina toont Productgroepen en opent beheerpagina', async ({ page }) => {
+  test('Landingspagina opent vereenvoudigde beheerpagina en classificeert artikel', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     await routeProductGroups(page);
 
@@ -55,10 +65,20 @@ test.describe('Productgroepen frontend-regressie', () => {
 
     await expect(page).toHaveURL(/\/productgroepen$/);
     await expect(page.getByTestId('product-groups-page')).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Productgroepen' })).toBeVisible();
+    await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Groepssleutel');
+    await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Voorraad');
+    await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Onbekende inhoud');
+    await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Locaties');
+    await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Betrouwbaarheid');
     await expect(page.getByTestId('product-groups-table')).toContainText('Mosterd');
+    await expect(page.getByTestId('product-groups-detail-table')).toContainText('Mosterd');
     await expect(page.getByTestId('product-groups-unresolved-table')).toContainText('Boormachine');
-    await expect(page.getByText('Nee', { exact: true })).toBeVisible();
+
+    await page.getByLabel('Productgroep voor Boormachine').selectOption('saus.mosterd');
+    await page.getByRole('button', { name: 'Bevestigen' }).click();
+
+    await expect(page.getByTestId('product-groups-unresolved-table')).not.toContainText('Boormachine');
+    await expect(page.getByTestId('product-groups-detail-table')).toContainText('Boormachine');
     await expectNoConsoleErrors(consoleErrors);
   });
 });
