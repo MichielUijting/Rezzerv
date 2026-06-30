@@ -55,7 +55,7 @@ async function routeProductGroups(page) {
 }
 
 test.describe('Productgroepen frontend-regressie', () => {
-  test('Landingspagina opent vereenvoudigde beheerpagina en classificeert artikel', async ({ page }) => {
+  test('Landingspagina opent gecombineerde beheergrid en classificeert artikel', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     await routeProductGroups(page);
 
@@ -65,14 +65,23 @@ test.describe('Productgroepen frontend-regressie', () => {
 
     await expect(page).toHaveURL(/\/productgroepen$/);
     await expect(page.getByTestId('product-groups-page')).toBeVisible();
-    await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Groepssleutel');
-    await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Voorraad');
-    await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Onbekende inhoud');
-    await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Locaties');
-    await expect(page.getByTestId('product-groups-table').locator('thead')).not.toContainText('Betrouwbaarheid');
-    await expect(page.getByTestId('product-groups-table')).toContainText('Mosterd extra lange productgroepnaam');
-    await expect(page.getByTestId('product-groups-detail-table')).toContainText('Mosterd fijne Dijon extra lange artikelnaam');
-    await expect(page.getByTestId('product-groups-unresolved-table')).toContainText('Boormachine met zeer lange artikelnaam');
+    const table = page.getByTestId('product-groups-table');
+    await expect(table.locator('thead')).toContainText('Artikel');
+    await expect(table.locator('thead')).toContainText('Productgroep');
+    await expect(table.locator('thead')).toContainText('Eenheid');
+    await expect(table.locator('thead')).toContainText('Status');
+    await expect(table.locator('thead')).toContainText('Actie');
+    await expect(table.locator('thead')).not.toContainText('Groepssleutel');
+    await expect(table.locator('thead')).not.toContainText('Voorraad');
+    await expect(table.locator('thead')).not.toContainText('Onbekende inhoud');
+    await expect(table.locator('thead')).not.toContainText('Locaties');
+    await expect(table.locator('thead')).not.toContainText('Betrouwbaarheid');
+    await expect(page.getByTestId('product-groups-page')).not.toHaveText(/Artikelen in productgroep/);
+    await expect(page.getByTestId('product-groups-page')).not.toHaveText(/Nog te classificeren artikelen/);
+    await expect(table).toContainText('Mosterd fijne Dijon extra lange artikelnaam');
+    await expect(table).toContainText('Boormachine met zeer lange artikelnaam');
+    await expect(table).toContainText('Geclassificeerd');
+    await expect(table).toContainText('Nog te classificeren');
 
     await page.getByRole('button', { name: 'Groepen controleren' }).click();
     await expect(page.getByTestId('product-groups-feedback-success')).toContainText('Productgroepen zijn gecontroleerd en bijgewerkt.');
@@ -84,8 +93,8 @@ test.describe('Productgroepen frontend-regressie', () => {
 
     await expect(page.getByTestId('product-groups-feedback-success')).toContainText('Artikel is aan de productgroep toegevoegd.');
     await page.getByTestId('product-groups-feedback-success-ok-button').click();
-    await expect(page.getByTestId('product-groups-unresolved-table')).not.toContainText('Boormachine met zeer lange artikelnaam');
-    await expect(page.getByTestId('product-groups-detail-table')).toContainText('Boormachine met zeer lange artikelnaam');
+    await expect(table).toContainText('Boormachine met zeer lange artikelnaam');
+    await expect(table).not.toContainText('Nog te classificeren');
     await expectNoConsoleErrors(consoleErrors);
   });
 });
