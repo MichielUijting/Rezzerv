@@ -92,6 +92,66 @@ CREATE INDEX IF NOT EXISTS idx_product_taxonomy_terms_intent
 ON product_taxonomy_terms (intent_key, active)
 """
 
+SCHEMA_COLUMNS: dict[str, dict[str, str]] = {
+    "product_taxonomy": {
+        "id": "TEXT",
+        "intent_key": "TEXT",
+        "canonical_name": "TEXT",
+        "category": "TEXT",
+        "product_type": "TEXT",
+        "default_base_unit": "TEXT",
+        "active": "INTEGER DEFAULT 1",
+        "created_at": "TEXT",
+        "updated_at": "TEXT",
+    },
+    "product_taxonomy_terms": {
+        "id": "TEXT",
+        "intent_key": "TEXT",
+        "term": "TEXT",
+        "term_type": "TEXT",
+        "language": "TEXT DEFAULT 'nl'",
+        "confidence": "REAL DEFAULT 1.0",
+        "source": "TEXT",
+        "active": "INTEGER DEFAULT 1",
+        "created_at": "TEXT",
+        "updated_at": "TEXT",
+    },
+    "product_inventory_groups": {
+        "inventory_group_key": "TEXT",
+        "display_name": "TEXT",
+        "default_base_unit": "TEXT",
+        "aggregation_mode": "TEXT DEFAULT 'sum_quantity'",
+        "active": "INTEGER DEFAULT 1",
+        "created_at": "TEXT",
+        "updated_at": "TEXT",
+    },
+    "product_group_memberships": {
+        "id": "TEXT",
+        "global_product_id": "TEXT",
+        "inventory_group_key": "TEXT",
+        "comparison_group_key": "TEXT",
+        "confidence": "REAL DEFAULT 1.0",
+        "source": "TEXT",
+        "confirmed_by_user": "INTEGER DEFAULT 0",
+        "active": "INTEGER DEFAULT 1",
+        "created_at": "TEXT",
+        "updated_at": "TEXT",
+    },
+    "product_unit_conversions": {
+        "id": "TEXT",
+        "global_product_id": "TEXT",
+        "inventory_group_key": "TEXT",
+        "content_value": "REAL",
+        "content_unit": "TEXT",
+        "base_quantity": "REAL",
+        "base_unit": "TEXT",
+        "confidence": "REAL DEFAULT 1.0",
+        "source": "TEXT",
+        "created_at": "TEXT",
+        "updated_at": "TEXT",
+    },
+}
+
 DEFAULT_TAXONOMY = [
     {
         "intent_key": "groente.courgette",
@@ -138,6 +198,45 @@ def normalize_text(value: Any) -> str:
     return " ".join(re.sub(r"[^a-z0-9]+", " ", normalized).split())
 
 
+def _get_columns(conn, table_name: str) -> set[str]:
+    dialect_name = str(engine.dialect.name or "").lower()
+    if dialect_name == "sqlite":
+        rows = conn.execute(text(f"PRAGMA table_info({table_name})")).mappings().all()
+        return {str(row.get("name") or "") for row in rows}
+    rows = conn.execute(
+        text(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = :table_name
+            """
+        ),
+        {"table_name": table_name},
+    ).mappings().all()
+    return {str(row.get("column_name") or "") for row in rows}
+
+
+def _ensure_missing_columns(conn, table_name: str) -> None:
+    existing_columns = _get_columns(conn, table_name)
+    expected_columns = SCHEMA_COLUMNS.get(table_name, {})
+    for column_name, column_definition in expected_columns.items():
+        if column_name in existing_columns:
+            continue
+        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"))
+
+
+def _ensure_row_ids(conn, table_name: str) -> None:
+    columns = _get_columns(conn, table_name)
+    if "id" not in columns:
+        return
+    rows = conn.execute(text(f"SELECT rowid FROM {table_name} WHERE id IS NULL OR trim(id) = ''")).mappings().all()
+    for row in rows:
+        conn.execute(
+            text(f"UPDATE {table_name} SET id = :id WHERE rowid = :rowid"),
+            {"id": str(uuid.uuid4()), "rowid": row.get("rowid")},
+        )
+
+
 def ensure_product_inventory_group_schema() -> None:
     with engine.begin() as conn:
         conn.execute(text(PRODUCT_TAXONOMY_SQL))
@@ -145,6 +244,9 @@ def ensure_product_inventory_group_schema() -> None:
         conn.execute(text(PRODUCT_INVENTORY_GROUPS_SQL))
         conn.execute(text(PRODUCT_GROUP_MEMBERSHIPS_SQL))
         conn.execute(text(PRODUCT_UNIT_CONVERSIONS_SQL))
+        for table_name in SCHEMA_COLUMNS:
+            _ensure_missing_columns(conn, table_name)
+            _ensure_row_ids(conn, table_name)
         conn.execute(text(GROUP_MEMBERSHIP_INDEX_SQL))
         conn.execute(text(TAXONOMY_TERM_INDEX_SQL))
         seed_default_inventory_groups(conn)
@@ -177,6 +279,29 @@ def seed_default_inventory_groups(conn) -> None:
                     "updated_at": timestamp,
                 },
             )
+        else:
+            conn.execute(
+                text(
+                    """
+                    UPDATE product_taxonomy
+                    SET canonical_name = COALESCE(NULLIF(canonical_name, ''), :canonical_name),
+                        category = COALESCE(NULLIF(category, ''), :category),
+                        product_type = COALESCE(NULLIF(product_type, ''), :product_type),
+                        default_base_unit = COALESCE(NULLIF(default_base_unit, ''), :default_base_unit),
+                        active = COALESCE(active, 1),
+                        updated_at = :updated_at
+                    WHERE intent_key = :intent_key
+                    """
+                ),
+                {
+                    "intent_key": intent_key,
+                    "canonical_name": item["canonical_name"],
+                    "category": item["category"],
+                    "product_type": item["product_type"],
+                    "default_base_unit": item["default_base_unit"],
+                    "updated_at": timestamp,
+                },
+            )
 
         if not _row_exists(conn, "SELECT 1 FROM product_inventory_groups WHERE inventory_group_key = :key LIMIT 1", {"key": intent_key}):
             conn.execute(
@@ -191,6 +316,26 @@ def seed_default_inventory_groups(conn) -> None:
                     "display_name": item["canonical_name"],
                     "default_base_unit": item["default_base_unit"],
                     "created_at": timestamp,
+                    "updated_at": timestamp,
+                },
+            )
+        else:
+            conn.execute(
+                text(
+                    """
+                    UPDATE product_inventory_groups
+                    SET display_name = COALESCE(NULLIF(display_name, ''), :display_name),
+                        default_base_unit = COALESCE(NULLIF(default_base_unit, ''), :default_base_unit),
+                        aggregation_mode = COALESCE(NULLIF(aggregation_mode, ''), 'sum_quantity'),
+                        active = COALESCE(active, 1),
+                        updated_at = :updated_at
+                    WHERE inventory_group_key = :inventory_group_key
+                    """
+                ),
+                {
+                    "inventory_group_key": intent_key,
+                    "display_name": item["canonical_name"],
+                    "default_base_unit": item["default_base_unit"],
                     "updated_at": timestamp,
                 },
             )
@@ -223,38 +368,14 @@ def seed_default_inventory_groups(conn) -> None:
                 )
 
 
-def _table_columns(conn, table_name: str) -> set[str]:
-    dialect_name = str(engine.dialect.name or "").lower()
-    if dialect_name == "sqlite":
-        rows = conn.execute(text(f"PRAGMA table_info({table_name})")).mappings().all()
-        return {str(row.get("name") or "") for row in rows}
-    rows = conn.execute(
-        text(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name = :table_name
-            """
-        ),
-        {"table_name": table_name},
-    ).mappings().all()
-    return {str(row.get("column_name") or "") for row in rows}
-
-
 def _inventory_rows(conn, household_id: str | None = None) -> list[dict[str, Any]]:
-    columns = _table_columns(conn, "inventory")
+    columns = _get_columns(conn, "inventory")
     if not columns:
         return []
 
     select_columns = ["i.id", "i.naam AS product_name", "i.aantal AS stock_quantity"]
-    if "household_id" in columns:
-        select_columns.append("i.household_id")
-    else:
-        select_columns.append("NULL AS household_id")
-    if "household_article_id" in columns:
-        select_columns.append("i.household_article_id")
-    else:
-        select_columns.append("NULL AS household_article_id")
+    select_columns.append("i.household_id" if "household_id" in columns else "NULL AS household_id")
+    select_columns.append("i.household_article_id" if "household_article_id" in columns else "NULL AS household_article_id")
     if "space_id" in columns:
         select_columns.append("s.naam AS location_name")
         join_space = "LEFT JOIN spaces s ON s.id = i.space_id"
@@ -268,7 +389,7 @@ def _inventory_rows(conn, household_id: str | None = None) -> list[dict[str, Any
         select_columns.append("NULL AS sublocation_name")
         join_sublocation = ""
 
-    where_parts = ["COALESCE(i.status, 'active') = 'active"] if "status" in columns else ["1 = 1"]
+    where_parts = ["COALESCE(i.status, 'active') = 'active'"] if "status" in columns else ["1 = 1"]
     params: dict[str, Any] = {}
     if household_id and "household_id" in columns:
         where_parts.append("COALESCE(i.household_id, '') = COALESCE(:household_id, '')")
@@ -331,11 +452,6 @@ def _parse_number(value: str) -> float | None:
 
 
 def infer_normalized_quantity(product_name: str, stock_quantity: float, base_unit: str) -> tuple[float | None, str, str, float]:
-    """Infer a base quantity from generic unit expressions in the product name.
-
-    This function deliberately only parses units. It does not contain product-specific
-    rules such as a default bottle size for wine.
-    """
     normalized_name = normalize_text(product_name)
     quantity = float(stock_quantity or 0)
     unit = str(base_unit or "stuk").strip().lower() or "stuk"
