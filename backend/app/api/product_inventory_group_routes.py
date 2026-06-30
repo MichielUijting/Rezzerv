@@ -11,11 +11,11 @@ from app.services.product_group_crud_store import (
     list_product_groups,
     update_product_group,
 )
+from app.services.product_inventory_group_projection_service import list_inventory_groups_with_hierarchy
 from app.services.product_inventory_group_store import (
     assign_inventory_item_to_group,
     ensure_product_inventory_group_schema,
     link_global_product_to_inventory_group,
-    list_inventory_groups,
 )
 
 router = APIRouter()
@@ -25,10 +25,10 @@ router = APIRouter()
 def inventory_groups(household_id: str | None = Query(default=None)):
     """Return inventory aggregated by Rezzerv product meaning.
 
-    M2C2i-30A/30B: this projection groups inventory across shops and brands.
+    M2C2i-30A/30B/30C: this projection groups inventory across shops and brands.
     It does not create inventory events and does not change stock quantities.
     """
-    return list_inventory_groups(household_id=household_id)
+    return list_inventory_groups_with_hierarchy(household_id=household_id)
 
 
 @router.get('/api/product-groups')
