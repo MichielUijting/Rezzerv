@@ -27,31 +27,6 @@
   flex-wrap: wrap;
 }
 
-.rz-product-groups-summary {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin: 18px 0 24px;
-}
-
-.rz-product-groups-summary-card {
-  border: 1px solid rgba(23, 79, 46, 0.24);
-  border-radius: 12px;
-  padding: 14px 16px;
-  background: #fff;
-}
-
-.rz-product-groups-summary-label {
-  font-size: 0.86rem;
-  color: #666;
-  margin-bottom: 4px;
-}
-
-.rz-product-groups-summary-value {
-  font-size: 1.3rem;
-  color: var(--rz-green-dark, #174f2e);
-}
-
 .rz-product-groups-section {
   margin-top: 24px;
 }
@@ -75,7 +50,20 @@
 }
 
 .rz-product-groups-table {
-  min-width: 920px;
+  min-width: 680px;
+}
+
+.rz-product-groups-selected-row {
+  outline: 2px solid rgba(23, 79, 46, 0.32);
+  outline-offset: -2px;
+}
+
+.rz-product-groups-table tbody tr {
+  cursor: default;
+}
+
+.rz-product-groups-select {
+  min-width: 220px;
 }
 
 @media (max-width: 760px) {
