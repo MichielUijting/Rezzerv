@@ -38,9 +38,6 @@ async function routeProductGroups(page) {
       }),
     });
   });
-  await page.route('**/api/admin/inventory/groups/ensure-schema', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, schema: 'product_inventory_groups', seed: 'm2c2i30a_seed', mutates_inventory: false }) });
-  });
   await page.route('**/api/product-groups', async (route) => {
     if (route.request().method() === 'POST') {
       groupOptions.push({ inventory_group_key: 'productgroep.soep', display_name: 'Soep', default_base_unit: 'stuk' });
@@ -78,11 +75,8 @@ test.describe('Productgroepen frontend-regressie', () => {
 
     await expect(page).toHaveURL(/\/productgroepen$/);
     await expect(page.getByTestId('product-groups-page')).toBeVisible();
-    await expect(page.getByLabel('Bestaande productgroep')).toBeVisible();
-    await expect(page.getByLabel('Productgroepnaam')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Toevoegen' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Bijwerken' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Verwijderen' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Terug' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Groepen controleren' })).toHaveCount(0);
 
     const table = page.getByTestId('product-groups-table');
     await expect(table.locator('thead tr').first()).toContainText('Artikel');
@@ -100,6 +94,13 @@ test.describe('Productgroepen frontend-regressie', () => {
     await expect(table).toContainText('Boormachine met zeer lange artikelnaam');
     await expect(table).not.toContainText('Mosterd fijne Dijon extra lange artikelnaam');
     await page.getByLabel('Zoek artikel').fill('');
+
+    await expect(page.getByLabel('Bestaande productgroep')).toBeVisible();
+    await expect(page.getByLabel('Productgroepnaam')).toBeVisible();
+    await expect(page.getByLabel('Eenheid productgroep')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Toevoegen' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Bijwerken' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Verwijderen' })).toBeVisible();
 
     await page.getByLabel('Productgroepnaam').fill('Soep');
     await page.getByRole('button', { name: 'Toevoegen' }).click();

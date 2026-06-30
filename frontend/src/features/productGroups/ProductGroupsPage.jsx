@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
@@ -9,10 +8,7 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import './productGroups.css'
 
-const UNIT_OPTIONS = ['stuk', 'kg', 'g', 'l', 'ml', 'rol']
-
 export default function ProductGroupsPage() {
-  const navigate = useNavigate()
   const { showFeedback } = useAppFeedback()
   const [data, setData] = useState(null)
   const [selectedAssignments, setSelectedAssignments] = useState({})
@@ -21,9 +17,7 @@ export default function ProductGroupsPage() {
   const [groupFilter, setGroupFilter] = useState('')
   const [crudGroupKey, setCrudGroupKey] = useState('')
   const [crudName, setCrudName] = useState('')
-  const [crudUnit, setCrudUnit] = useState('stuk')
   const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshingSchema, setIsRefreshingSchema] = useState(false)
   const [isSavingGroup, setIsSavingGroup] = useState(false)
   const [savingInventoryId, setSavingInventoryId] = useState('')
 
@@ -85,21 +79,6 @@ export default function ProductGroupsPage() {
     }
   }
 
-  async function ensureSchema() {
-    setIsRefreshingSchema(true)
-    try {
-      const response = await fetchJsonWithAuth('/api/admin/inventory/groups/ensure-schema', { method: 'POST' })
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload?.detail || 'Schema-initialisatie is mislukt')
-      await loadGroups()
-      showSuccess('Productgroepen zijn gecontroleerd en bijgewerkt.')
-    } catch (err) {
-      showError(err?.message || 'Schema-initialisatie is mislukt', err?.stack || '')
-    } finally {
-      setIsRefreshingSchema(false)
-    }
-  }
-
   async function assignGroup(row) {
     const inventoryId = row?.inventory_id || ''
     const inventoryGroupKey = selectedAssignments[inventoryId] || ''
@@ -128,13 +107,12 @@ export default function ProductGroupsPage() {
       const response = await fetchJsonWithAuth(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: method === 'DELETE' ? undefined : JSON.stringify({ display_name: crudName, default_base_unit: crudUnit }),
+        body: method === 'DELETE' ? undefined : JSON.stringify({ display_name: crudName, default_base_unit: 'stuk' }),
       })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload?.detail || 'Productgroep kon niet worden opgeslagen')
       setCrudGroupKey('')
       setCrudName('')
-      setCrudUnit('stuk')
       await loadGroups()
       showSuccess(successMessage)
     } catch (err) {
@@ -148,7 +126,6 @@ export default function ProductGroupsPage() {
     setCrudGroupKey(key)
     const selected = groupOptions.find((group) => group.inventory_group_key === key)
     setCrudName(selected?.display_name || '')
-    setCrudUnit(selected?.default_base_unit || selected?.base_unit || 'stuk')
   }
 
   useEffect(() => {
@@ -205,25 +182,7 @@ export default function ProductGroupsPage() {
               <h2 className="rz-product-groups-title">Productgroepen beheren</h2>
               <p className="rz-product-groups-subtitle">Koppel voorraadartikelen aan productgroepen om voorraad over winkels heen te kunnen bepalen. Deze pagina muteert geen voorraad.</p>
             </div>
-            <div className="rz-product-groups-actions">
-              <Button type="button" variant="secondary" onClick={ensureSchema} disabled={isRefreshingSchema}>{isRefreshingSchema ? 'Controleren...' : 'Groepen controleren'}</Button>
-              <Button type="button" variant="primary" onClick={() => navigate('/home')}>Terug</Button>
-            </div>
           </div>
-
-          <section className="rz-product-groups-crud" aria-label="Productgroepen beheren">
-            <select className="rz-input rz-inline-input" aria-label="Bestaande productgroep" value={crudGroupKey} onChange={(event) => selectCrudGroup(event.target.value, groupOptions)}>
-              <option value="">Nieuwe productgroep</option>
-              {groupOptions.map((group) => <option key={group.inventory_group_key} value={group.inventory_group_key}>{group.display_name}</option>)}
-            </select>
-            <input className="rz-input rz-inline-input" aria-label="Productgroepnaam" placeholder="Productgroepnaam" value={crudName} onChange={(event) => setCrudName(event.target.value)} />
-            <select className="rz-input rz-inline-input" aria-label="Eenheid productgroep" value={crudUnit} onChange={(event) => setCrudUnit(event.target.value)}>
-              {UNIT_OPTIONS.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
-            </select>
-            <Button type="button" variant="secondary" disabled={isSavingGroup || !crudName.trim()} onClick={() => saveProductGroup('POST', '/api/product-groups', 'Productgroep is toegevoegd.')}>Toevoegen</Button>
-            <Button type="button" variant="secondary" disabled={isSavingGroup || !crudGroupKey || !crudName.trim()} onClick={() => saveProductGroup('PUT', `/api/product-groups/${encodeURIComponent(crudGroupKey)}`, 'Productgroep is bijgewerkt.')}>Bijwerken</Button>
-            <Button type="button" variant="secondary" disabled={isSavingGroup || !crudGroupKey} onClick={() => saveProductGroup('DELETE', `/api/product-groups/${encodeURIComponent(crudGroupKey)}`, 'Productgroep is verwijderd.')}>Verwijderen</Button>
-          </section>
 
           <section className="rz-product-groups-section">
             <div className="rz-product-groups-section-header">
@@ -247,7 +206,7 @@ export default function ProductGroupsPage() {
                     <input className="rz-input rz-inline-input" aria-label="Zoek artikel" placeholder="Zoek" value={articleSearch} onChange={(event) => setArticleSearch(event.target.value)} />
                   </th>
                   <th>
-                    <select className="rz-input rz-inline-input" aria-label="Filter productgroep" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
+                    <select className="rz-input rz-inline-input rz-product-groups-filter-select" aria-label="Filter productgroep" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
                       <option value="">Filter</option>
                       {groupOptions.map((group) => <option key={group.inventory_group_key} value={group.inventory_group_key}>{group.display_name || group.inventory_group_key}</option>)}
                     </select>
@@ -283,6 +242,22 @@ export default function ProductGroupsPage() {
                 )}
               </tbody>
             </Table>
+          </section>
+        </ScreenCard>
+
+        <ScreenCard fullWidth>
+          <section className="rz-product-groups-crud-frame" aria-label="Productgroep beheren">
+            <h3>Productgroep beheren</h3>
+            <div className="rz-product-groups-crud">
+              <select className="rz-input rz-inline-input" aria-label="Bestaande productgroep" value={crudGroupKey} onChange={(event) => selectCrudGroup(event.target.value, groupOptions)}>
+                <option value="">Nieuwe productgroep</option>
+                {groupOptions.map((group) => <option key={group.inventory_group_key} value={group.inventory_group_key}>{group.display_name}</option>)}
+              </select>
+              <input className="rz-input rz-inline-input" aria-label="Productgroepnaam" placeholder="Productgroepnaam" value={crudName} onChange={(event) => setCrudName(event.target.value)} />
+              <Button type="button" variant="secondary" disabled={isSavingGroup || !crudName.trim()} onClick={() => saveProductGroup('POST', '/api/product-groups', 'Productgroep is toegevoegd.')}>Toevoegen</Button>
+              <Button type="button" variant="secondary" disabled={isSavingGroup || !crudGroupKey || !crudName.trim()} onClick={() => saveProductGroup('PUT', `/api/product-groups/${encodeURIComponent(crudGroupKey)}`, 'Productgroep is bijgewerkt.')}>Bijwerken</Button>
+              <Button type="button" variant="secondary" disabled={isSavingGroup || !crudGroupKey} onClick={() => saveProductGroup('DELETE', `/api/product-groups/${encodeURIComponent(crudGroupKey)}`, 'Productgroep is verwijderd.')}>Verwijderen</Button>
+            </div>
           </section>
         </ScreenCard>
       </div>

@@ -1,5 +1,7 @@
 .rz-product-groups {
   width: 100%;
+  display: grid;
+  gap: 16px;
 }
 
 .rz-product-groups-header {
@@ -20,7 +22,6 @@
   color: #4a4a4a;
 }
 
-.rz-product-groups-actions,
 .rz-product-groups-crud {
   display: flex;
   align-items: center;
@@ -28,16 +29,17 @@
   flex-wrap: wrap;
 }
 
-.rz-product-groups-crud {
-  margin: 18px 0 20px;
+.rz-product-groups-crud-frame h3 {
+  margin: 0 0 14px;
+  color: var(--rz-green-dark, #174f2e);
 }
 
 .rz-product-groups-crud .rz-inline-input {
-  min-width: 170px;
+  min-width: 190px;
 }
 
 .rz-product-groups-crud input.rz-inline-input {
-  min-width: 260px;
+  min-width: 300px;
 }
 
 .rz-product-groups-section {
@@ -62,12 +64,27 @@
   font-size: 0.92rem;
 }
 
+.rz-product-groups .rz-table-filters th {
+  vertical-align: middle;
+}
+
+.rz-product-groups .rz-table-filters .rz-inline-input {
+  height: 20px;
+  line-height: 20px;
+  padding-top: 0;
+  padding-bottom: 0;
+  box-sizing: border-box;
+}
+
+.rz-product-groups .rz-product-groups-filter-select {
+  display: block;
+}
+
 @media (max-width: 760px) {
   .rz-product-groups-header {
     flex-direction: column;
   }
 
-  .rz-product-groups-actions,
   .rz-product-groups-crud {
     width: 100%;
   }
