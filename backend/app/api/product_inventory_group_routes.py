@@ -2,19 +2,20 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Header, HTTPException, Query
 
+from app.services.gpc_import_service import import_gs1_gpc_nl, require_admin_key
 from app.services.product_group_crud_store import (
     create_product_group,
     delete_product_group,
     list_product_groups,
     update_product_group,
 )
+from app.services.product_inventory_group_projection_service import list_inventory_groups_with_hierarchy
 from app.services.product_inventory_group_store import (
     assign_inventory_item_to_group,
     ensure_product_inventory_group_schema,
     link_global_product_to_inventory_group,
-    list_inventory_groups,
 )
 
 router = APIRouter()
@@ -24,10 +25,10 @@ router = APIRouter()
 def inventory_groups(household_id: str | None = Query(default=None)):
     """Return inventory aggregated by Rezzerv product meaning.
 
-    M2C2i-30A/30B: this projection groups inventory across shops and brands.
+    M2C2i-30A/30B/30C: this projection groups inventory across shops and brands.
     It does not create inventory events and does not change stock quantities.
     """
-    return list_inventory_groups(household_id=household_id)
+    return list_inventory_groups_with_hierarchy(household_id=household_id)
 
 
 @router.get('/api/product-groups')
@@ -102,3 +103,14 @@ def inventory_groups_ensure_schema():
         'seed': 'm2c2i30a_seed',
         'mutates_inventory': False,
     }
+
+
+@router.post('/api/admin/product-groups/import-gpc-nl')
+def admin_product_groups_import_gpc_nl(x_rezzerv_admin_key: str | None = Header(default=None)):
+    try:
+        require_admin_key(x_rezzerv_admin_key)
+        return import_gs1_gpc_nl()
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f'GS1 GPC NL import is mislukt: {exc}') from exc
