@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Header, HTTPException, Query
 
+from app.services.gpc_import_service import import_gs1_gpc_nl, require_admin_key
 from app.services.product_group_crud_store import (
     create_product_group,
     delete_product_group,
@@ -102,3 +103,14 @@ def inventory_groups_ensure_schema():
         'seed': 'm2c2i30a_seed',
         'mutates_inventory': False,
     }
+
+
+@router.post('/api/admin/product-groups/import-gpc-nl')
+def admin_product_groups_import_gpc_nl(x_rezzerv_admin_key: str | None = Header(default=None)):
+    try:
+        require_admin_key(x_rezzerv_admin_key)
+        return import_gs1_gpc_nl()
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f'GS1 GPC NL import is mislukt: {exc}') from exc
