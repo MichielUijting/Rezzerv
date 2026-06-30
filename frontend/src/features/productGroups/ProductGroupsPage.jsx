@@ -125,11 +125,6 @@ export default function ProductGroupsPage() {
     if (fromApi.length) return fromApi
     return groups.map((group) => ({ inventory_group_key: group.inventory_group_key, display_name: group.display_name, default_base_unit: group.base_unit }))
   }, [data, groups])
-  const groupByKey = useMemo(() => {
-    const map = new Map()
-    for (const group of groupOptions) map.set(group.inventory_group_key, group)
-    return map
-  }, [groupOptions])
   const rows = useMemo(() => {
     const classifiedRows = []
     for (const group of groups) {
@@ -187,6 +182,11 @@ export default function ProductGroupsPage() {
             <Table dataTestId="product-groups-table" tableClassName="rz-product-groups-table rz-product-groups-table--combined" tableStyle={{ width: '950px', minWidth: '950px' }} resizableColumns>
               <colgroup>{COMBINED_COLUMN_STYLES.map((style, index) => <col key={`combined-col-${index}`} style={style} />)}</colgroup>
               <thead>
+                <tr className="rz-table-header">
+                  <th style={COMBINED_COLUMN_STYLES[0]}>Artikel</th>
+                  <th style={COMBINED_COLUMN_STYLES[1]}>Productgroep</th>
+                  <th style={COMBINED_COLUMN_STYLES[2]}>Bevestigen</th>
+                </tr>
                 <tr className="rz-table-filter-row">
                   <th style={COMBINED_COLUMN_STYLES[0]}>
                     <input
@@ -212,18 +212,12 @@ export default function ProductGroupsPage() {
                   </th>
                   <th style={COMBINED_COLUMN_STYLES[2]}></th>
                 </tr>
-                <tr className="rz-table-header">
-                  <th style={COMBINED_COLUMN_STYLES[0]}>Artikel</th>
-                  <th style={COMBINED_COLUMN_STYLES[1]}>Productgroep</th>
-                  <th style={COMBINED_COLUMN_STYLES[2]}>Bevestigen</th>
-                </tr>
               </thead>
               <tbody>
                 {filteredRows.length ? filteredRows.map((row) => {
                   const inventoryId = row.inventory_id || row.article_name
                   const selectedValue = selectedAssignments[inventoryId] || ''
                   const originalValue = originalAssignments[inventoryId] || ''
-                  const selectedGroup = groupByKey.get(selectedValue)
                   const isChanged = selectedValue !== originalValue
                   const canSave = Boolean(selectedValue) && (isChanged || !row.is_classified)
                   return (
