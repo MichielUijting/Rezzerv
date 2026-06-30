@@ -4,6 +4,12 @@ from typing import Any
 
 from fastapi import APIRouter, Body, HTTPException, Query
 
+from app.services.product_group_crud_store import (
+    create_product_group,
+    delete_product_group,
+    list_product_groups,
+    update_product_group,
+)
 from app.services.product_inventory_group_store import (
     assign_inventory_item_to_group,
     ensure_product_inventory_group_schema,
@@ -22,6 +28,42 @@ def inventory_groups(household_id: str | None = Query(default=None)):
     It does not create inventory events and does not change stock quantities.
     """
     return list_inventory_groups(household_id=household_id)
+
+
+@router.get('/api/product-groups')
+def product_groups():
+    return list_product_groups()
+
+
+@router.post('/api/product-groups')
+def product_group_create(payload: dict[str, Any] = Body(default_factory=dict)):
+    result = create_product_group(
+        display_name=str(payload.get('display_name') or '').strip(),
+        default_base_unit=str(payload.get('default_base_unit') or 'stuk').strip() or 'stuk',
+    )
+    if not bool(result.get('ok', False)):
+        raise HTTPException(status_code=400, detail=result.get('error') or 'Productgroep kon niet worden toegevoegd')
+    return result
+
+
+@router.put('/api/product-groups/{inventory_group_key:path}')
+def product_group_update(inventory_group_key: str, payload: dict[str, Any] = Body(default_factory=dict)):
+    result = update_product_group(
+        inventory_group_key=inventory_group_key,
+        display_name=str(payload.get('display_name') or '').strip(),
+        default_base_unit=str(payload.get('default_base_unit') or 'stuk').strip() or 'stuk',
+    )
+    if not bool(result.get('ok', False)):
+        raise HTTPException(status_code=400, detail=result.get('error') or 'Productgroep kon niet worden bijgewerkt')
+    return result
+
+
+@router.delete('/api/product-groups/{inventory_group_key:path}')
+def product_group_delete(inventory_group_key: str):
+    result = delete_product_group(inventory_group_key=inventory_group_key)
+    if not bool(result.get('ok', False)):
+        raise HTTPException(status_code=400, detail=result.get('error') or 'Productgroep kon niet worden verwijderd')
+    return result
 
 
 @router.post('/api/inventory/items/{inventory_id}/group')
