@@ -8,9 +8,19 @@ import { fetchJsonWithAuth } from '../../lib/authSession'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import './productGroups.css'
 
-const GROUP_COL_WIDTHS = ['420px', '120px', '120px']
-const DETAIL_COL_WIDTHS = ['680px']
-const UNRESOLVED_COL_WIDTHS = ['420px', '280px', '150px']
+const GROUP_COLUMN_STYLES = [
+  { width: '420px', minWidth: '420px' },
+  { width: '120px', minWidth: '120px' },
+  { width: '120px', minWidth: '120px' },
+]
+const DETAIL_COLUMN_STYLES = [
+  { width: '760px', minWidth: '760px' },
+]
+const UNRESOLVED_COLUMN_STYLES = [
+  { width: '430px', minWidth: '430px' },
+  { width: '310px', minWidth: '310px' },
+  { width: '160px', minWidth: '160px' },
+]
 
 export default function ProductGroupsPage() {
   const navigate = useNavigate()
@@ -136,13 +146,13 @@ export default function ProductGroupsPage() {
               <h3>Productgroepen</h3>
               {isLoading ? <span className="rz-product-groups-muted">Productgroepen worden geladen...</span> : null}
             </div>
-            <Table dataTestId="product-groups-table" tableClassName="rz-product-groups-table rz-product-groups-table--groups" resizableColumns>
-              <colgroup>{GROUP_COL_WIDTHS.map((width, index) => <col key={`group-col-${index}`} style={{ width }} />)}</colgroup>
+            <Table dataTestId="product-groups-table" tableClassName="rz-product-groups-table rz-product-groups-table--groups" tableStyle={{ width: '660px', minWidth: '660px' }} resizableColumns>
+              <colgroup>{GROUP_COLUMN_STYLES.map((style, index) => <col key={`group-col-${index}`} style={style} />)}</colgroup>
               <thead>
                 <tr className="rz-table-header">
-                  <th>Productgroep</th>
-                  <th className="rz-num">Artikelen</th>
-                  <th>Eenheid</th>
+                  <th style={GROUP_COLUMN_STYLES[0]}>Productgroep</th>
+                  <th className="rz-num" style={GROUP_COLUMN_STYLES[1]}>Artikelen</th>
+                  <th style={GROUP_COLUMN_STYLES[2]}>Eenheid</th>
                 </tr>
               </thead>
               <tbody>
@@ -152,9 +162,9 @@ export default function ProductGroupsPage() {
                     className={group.inventory_group_key === selectedGroup?.inventory_group_key ? 'rz-product-groups-selected-row' : ''}
                     onClick={() => setSelectedGroupKey(group.inventory_group_key)}
                   >
-                    <td>{group.display_name || '-'}</td>
-                    <td className="rz-num">{group.item_count ?? 0}</td>
-                    <td>{group.base_unit || '-'}</td>
+                    <td style={GROUP_COLUMN_STYLES[0]}>{group.display_name || '-'}</td>
+                    <td className="rz-num" style={GROUP_COLUMN_STYLES[1]}>{group.item_count ?? 0}</td>
+                    <td style={GROUP_COLUMN_STYLES[2]}>{group.base_unit || '-'}</td>
                   </tr>
                 )) : (
                   <tr><td colSpan="3">Geen productgroepen gevonden.</td></tr>
@@ -168,17 +178,17 @@ export default function ProductGroupsPage() {
               <h3>Artikelen in productgroep</h3>
               <span className="rz-product-groups-muted">{selectedGroup?.display_name || 'Geen productgroep geselecteerd'}</span>
             </div>
-            <Table dataTestId="product-groups-detail-table" tableClassName="rz-product-groups-table rz-product-groups-table--detail" resizableColumns>
-              <colgroup>{DETAIL_COL_WIDTHS.map((width, index) => <col key={`detail-col-${index}`} style={{ width }} />)}</colgroup>
+            <Table dataTestId="product-groups-detail-table" tableClassName="rz-product-groups-table rz-product-groups-table--detail" tableStyle={{ width: '760px', minWidth: '760px' }} resizableColumns>
+              <colgroup>{DETAIL_COLUMN_STYLES.map((style, index) => <col key={`detail-col-${index}`} style={style} />)}</colgroup>
               <thead>
                 <tr className="rz-table-header">
-                  <th>Artikel</th>
+                  <th style={DETAIL_COLUMN_STYLES[0]}>Artikel</th>
                 </tr>
               </thead>
               <tbody>
                 {selectedProducts.length ? selectedProducts.map((product) => (
                   <tr key={product.inventory_id || product.product_name}>
-                    <td>{product.product_name || '-'}</td>
+                    <td style={DETAIL_COLUMN_STYLES[0]}>{product.product_name || '-'}</td>
                   </tr>
                 )) : (
                   <tr><td>Geen artikelen in deze productgroep.</td></tr>
@@ -192,13 +202,13 @@ export default function ProductGroupsPage() {
               <h3>Nog te classificeren artikelen</h3>
               <span className="rz-product-groups-muted">Kies een productgroep en bevestig.</span>
             </div>
-            <Table dataTestId="product-groups-unresolved-table" tableClassName="rz-product-groups-table rz-product-groups-table--unresolved" resizableColumns>
-              <colgroup>{UNRESOLVED_COL_WIDTHS.map((width, index) => <col key={`unresolved-col-${index}`} style={{ width }} />)}</colgroup>
+            <Table dataTestId="product-groups-unresolved-table" tableClassName="rz-product-groups-table rz-product-groups-table--unresolved" tableStyle={{ width: '900px', minWidth: '900px' }} resizableColumns>
+              <colgroup>{UNRESOLVED_COLUMN_STYLES.map((style, index) => <col key={`unresolved-col-${index}`} style={style} />)}</colgroup>
               <thead>
                 <tr className="rz-table-header">
-                  <th>Artikel</th>
-                  <th>Productgroep</th>
-                  <th>Bevestigen</th>
+                  <th style={UNRESOLVED_COLUMN_STYLES[0]}>Artikel</th>
+                  <th style={UNRESOLVED_COLUMN_STYLES[1]}>Productgroep</th>
+                  <th style={UNRESOLVED_COLUMN_STYLES[2]}>Bevestigen</th>
                 </tr>
               </thead>
               <tbody>
@@ -207,8 +217,8 @@ export default function ProductGroupsPage() {
                   const selectedValue = selectedAssignments[inventoryId] || ''
                   return (
                     <tr key={inventoryId}>
-                      <td>{item.product_name || '-'}</td>
-                      <td>
+                      <td style={UNRESOLVED_COLUMN_STYLES[0]}>{item.product_name || '-'}</td>
+                      <td style={UNRESOLVED_COLUMN_STYLES[1]}>
                         <select
                           className="rz-input rz-product-groups-select"
                           aria-label={`Productgroep voor ${item.product_name}`}
@@ -221,7 +231,7 @@ export default function ProductGroupsPage() {
                           ))}
                         </select>
                       </td>
-                      <td>
+                      <td style={UNRESOLVED_COLUMN_STYLES[2]}>
                         <Button type="button" variant="secondary" disabled={!selectedValue || savingInventoryId === inventoryId} onClick={() => assignGroup(item)}>
                           {savingInventoryId === inventoryId ? 'Bezig...' : 'Bevestigen'}
                         </Button>
