@@ -5,27 +5,36 @@ import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import './productGroups.css'
 
-function ErrorMessage({ message }) {
-  if (!message) return null
-  return <div className="rz-inline-feedback rz-inline-feedback--error" role="alert">{message}</div>
-}
+const GROUP_COL_WIDTHS = ['420px', '120px', '120px']
+const DETAIL_COL_WIDTHS = ['680px']
+const UNRESOLVED_COL_WIDTHS = ['420px', '280px', '150px']
 
 export default function ProductGroupsPage() {
   const navigate = useNavigate()
+  const { showFeedback } = useAppFeedback()
   const [data, setData] = useState(null)
   const [selectedGroupKey, setSelectedGroupKey] = useState('')
   const [selectedAssignments, setSelectedAssignments] = useState({})
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshingSchema, setIsRefreshingSchema] = useState(false)
   const [savingInventoryId, setSavingInventoryId] = useState('')
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
 
-  async function loadGroups() {
+  function showError(message, technicalDetail = '') {
+    showFeedback({
+      variant: 'error',
+      title: 'Melding',
+      message,
+      technicalDetail,
+      showTechnicalToggle: Boolean(technicalDetail),
+      testId: 'product-groups-feedback-error',
+    })
+  }
+
+  async function loadGroups({ silent = true } = {}) {
     setIsLoading(true)
-    setError('')
     try {
       const response = await fetchJsonWithAuth('/api/inventory/groups', { method: 'GET' })
       const payload = await response.json().catch(() => ({}))
@@ -34,7 +43,7 @@ export default function ProductGroupsPage() {
       const groups = Array.isArray(payload?.items) ? payload.items : []
       if (!selectedGroupKey && groups[0]?.inventory_group_key) setSelectedGroupKey(groups[0].inventory_group_key)
     } catch (err) {
-      setError(err?.message || 'Productgroepen konden niet worden geladen')
+      if (!silent) showError(err?.message || 'Productgroepen konden niet worden geladen', err?.stack || '')
     } finally {
       setIsLoading(false)
     }
@@ -42,16 +51,19 @@ export default function ProductGroupsPage() {
 
   async function ensureSchema() {
     setIsRefreshingSchema(true)
-    setMessage('')
-    setError('')
     try {
       const response = await fetchJsonWithAuth('/api/admin/inventory/groups/ensure-schema', { method: 'POST' })
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload?.detail || 'Schema-initialisatie is mislukt')
-      setMessage('Productgroepen zijn gecontroleerd en bijgewerkt.')
       await loadGroups()
+      showFeedback({
+        variant: 'success',
+        title: 'Gelukt',
+        message: 'Productgroepen zijn gecontroleerd en bijgewerkt.',
+        testId: 'product-groups-feedback-success',
+      })
     } catch (err) {
-      setError(err?.message || 'Schema-initialisatie is mislukt')
+      showError(err?.message || 'Schema-initialisatie is mislukt', err?.stack || '')
     } finally {
       setIsRefreshingSchema(false)
     }
@@ -62,8 +74,6 @@ export default function ProductGroupsPage() {
     const inventoryGroupKey = selectedAssignments[inventoryId] || ''
     if (!inventoryId || !inventoryGroupKey) return
     setSavingInventoryId(inventoryId)
-    setMessage('')
-    setError('')
     try {
       const response = await fetchJsonWithAuth(`/api/inventory/items/${encodeURIComponent(inventoryId)}/group`, {
         method: 'POST',
@@ -78,17 +88,22 @@ export default function ProductGroupsPage() {
         delete next[inventoryId]
         return next
       })
-      setMessage('Artikel is aan de productgroep toegevoegd.')
       await loadGroups()
+      showFeedback({
+        variant: 'success',
+        title: 'Gelukt',
+        message: 'Artikel is aan de productgroep toegevoegd.',
+        testId: 'product-groups-feedback-success',
+      })
     } catch (err) {
-      setError(err?.message || 'Artikel kon niet worden ingedeeld')
+      showError(err?.message || 'Artikel kon niet worden ingedeeld', err?.stack || '')
     } finally {
       setSavingInventoryId('')
     }
   }
 
   useEffect(() => {
-    loadGroups()
+    loadGroups({ silent: false })
   }, [])
 
   const groups = useMemo(() => Array.isArray(data?.items) ? data.items : [], [data])
@@ -116,15 +131,13 @@ export default function ProductGroupsPage() {
             </div>
           </div>
 
-          {message ? <div className="rz-inline-feedback rz-inline-feedback--success">{message}</div> : null}
-          <ErrorMessage message={error} />
-
           <section className="rz-product-groups-section">
             <div className="rz-product-groups-section-header">
               <h3>Productgroepen</h3>
               {isLoading ? <span className="rz-product-groups-muted">Productgroepen worden geladen...</span> : null}
             </div>
-            <Table dataTestId="product-groups-table" tableClassName="rz-product-groups-table" resizableColumns>
+            <Table dataTestId="product-groups-table" tableClassName="rz-product-groups-table rz-product-groups-table--groups" resizableColumns>
+              <colgroup>{GROUP_COL_WIDTHS.map((width, index) => <col key={`group-col-${index}`} style={{ width }} />)}</colgroup>
               <thead>
                 <tr className="rz-table-header">
                   <th>Productgroep</th>
@@ -155,7 +168,8 @@ export default function ProductGroupsPage() {
               <h3>Artikelen in productgroep</h3>
               <span className="rz-product-groups-muted">{selectedGroup?.display_name || 'Geen productgroep geselecteerd'}</span>
             </div>
-            <Table dataTestId="product-groups-detail-table" tableClassName="rz-product-groups-table" resizableColumns>
+            <Table dataTestId="product-groups-detail-table" tableClassName="rz-product-groups-table rz-product-groups-table--detail" resizableColumns>
+              <colgroup>{DETAIL_COL_WIDTHS.map((width, index) => <col key={`detail-col-${index}`} style={{ width }} />)}</colgroup>
               <thead>
                 <tr className="rz-table-header">
                   <th>Artikel</th>
@@ -178,7 +192,8 @@ export default function ProductGroupsPage() {
               <h3>Nog te classificeren artikelen</h3>
               <span className="rz-product-groups-muted">Kies een productgroep en bevestig.</span>
             </div>
-            <Table dataTestId="product-groups-unresolved-table" tableClassName="rz-product-groups-table" resizableColumns>
+            <Table dataTestId="product-groups-unresolved-table" tableClassName="rz-product-groups-table rz-product-groups-table--unresolved" resizableColumns>
+              <colgroup>{UNRESOLVED_COL_WIDTHS.map((width, index) => <col key={`unresolved-col-${index}`} style={{ width }} />)}</colgroup>
               <thead>
                 <tr className="rz-table-header">
                   <th>Artikel</th>
