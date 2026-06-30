@@ -66,11 +66,11 @@ test.describe('Productgroepen frontend-regressie', () => {
     await expect(page).toHaveURL(/\/productgroepen$/);
     await expect(page.getByTestId('product-groups-page')).toBeVisible();
     const table = page.getByTestId('product-groups-table');
-    await expect(table.locator('thead')).toContainText('Artikel');
-    await expect(table.locator('thead')).toContainText('Productgroep');
-    await expect(table.locator('thead')).toContainText('Bevestigen');
-    await expect(table.locator('thead')).toContainText('Zoek');
-    await expect(table.locator('thead')).toContainText('Filter');
+    await expect(table.locator('thead tr').first()).toContainText('Artikel');
+    await expect(table.locator('thead tr').first()).toContainText('Productgroep');
+    await expect(table.locator('thead tr').first()).toContainText('Bevestigen');
+    await expect(table.locator('thead tr').nth(1)).toContainText('Zoek');
+    await expect(table.locator('thead tr').nth(1)).toContainText('Filter');
     await expect(table.locator('thead')).not.toContainText('Eenheid');
     await expect(table.locator('thead')).not.toContainText('Status');
     await expect(table.locator('thead')).not.toContainText('Actie');
