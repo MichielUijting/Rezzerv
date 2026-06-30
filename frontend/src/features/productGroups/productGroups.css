@@ -53,59 +53,37 @@
   table-layout: fixed;
 }
 
-.rz-product-groups-table--groups {
-  width: 660px !important;
-  min-width: 660px !important;
+.rz-product-groups-table--combined {
+  width: 1100px !important;
+  min-width: 1100px !important;
 }
 
-.rz-product-groups-table--detail {
-  width: 760px !important;
-  min-width: 760px !important;
+.rz-product-groups-table--combined th:nth-child(1),
+.rz-product-groups-table--combined td:nth-child(1) {
+  width: 360px !important;
+  min-width: 360px !important;
 }
 
-.rz-product-groups-table--unresolved {
-  width: 900px !important;
-  min-width: 900px !important;
+.rz-product-groups-table--combined th:nth-child(2),
+.rz-product-groups-table--combined td:nth-child(2) {
+  width: 300px !important;
+  min-width: 300px !important;
 }
 
-.rz-product-groups-table--groups th:nth-child(1),
-.rz-product-groups-table--groups td:nth-child(1) {
-  width: 420px !important;
-  min-width: 420px !important;
+.rz-product-groups-table--combined th:nth-child(3),
+.rz-product-groups-table--combined td:nth-child(3) {
+  width: 110px !important;
+  min-width: 110px !important;
 }
 
-.rz-product-groups-table--groups th:nth-child(2),
-.rz-product-groups-table--groups td:nth-child(2) {
-  width: 120px !important;
-  min-width: 120px !important;
+.rz-product-groups-table--combined th:nth-child(4),
+.rz-product-groups-table--combined td:nth-child(4) {
+  width: 170px !important;
+  min-width: 170px !important;
 }
 
-.rz-product-groups-table--groups th:nth-child(3),
-.rz-product-groups-table--groups td:nth-child(3) {
-  width: 120px !important;
-  min-width: 120px !important;
-}
-
-.rz-product-groups-table--detail th:nth-child(1),
-.rz-product-groups-table--detail td:nth-child(1) {
-  width: 760px !important;
-  min-width: 760px !important;
-}
-
-.rz-product-groups-table--unresolved th:nth-child(1),
-.rz-product-groups-table--unresolved td:nth-child(1) {
-  width: 430px !important;
-  min-width: 430px !important;
-}
-
-.rz-product-groups-table--unresolved th:nth-child(2),
-.rz-product-groups-table--unresolved td:nth-child(2) {
-  width: 310px !important;
-  min-width: 310px !important;
-}
-
-.rz-product-groups-table--unresolved th:nth-child(3),
-.rz-product-groups-table--unresolved td:nth-child(3) {
+.rz-product-groups-table--combined th:nth-child(5),
+.rz-product-groups-table--combined td:nth-child(5) {
   width: 160px !important;
   min-width: 160px !important;
 }
@@ -114,11 +92,6 @@
 .rz-product-groups-table td {
   white-space: normal;
   overflow-wrap: anywhere;
-}
-
-.rz-product-groups-selected-row {
-  outline: 2px solid rgba(23, 79, 46, 0.32);
-  outline-offset: -2px;
 }
 
 .rz-product-groups-table tbody tr {
