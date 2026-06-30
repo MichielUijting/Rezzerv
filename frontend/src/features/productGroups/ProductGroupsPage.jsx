@@ -9,10 +9,8 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import './productGroups.css'
 
 const COMBINED_COLUMN_STYLES = [
+  { width: '430px', minWidth: '430px' },
   { width: '360px', minWidth: '360px' },
-  { width: '300px', minWidth: '300px' },
-  { width: '110px', minWidth: '110px' },
-  { width: '170px', minWidth: '170px' },
   { width: '160px', minWidth: '160px' },
 ]
 
@@ -22,6 +20,8 @@ export default function ProductGroupsPage() {
   const [data, setData] = useState(null)
   const [selectedAssignments, setSelectedAssignments] = useState({})
   const [originalAssignments, setOriginalAssignments] = useState({})
+  const [articleSearch, setArticleSearch] = useState('')
+  const [groupFilter, setGroupFilter] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshingSchema, setIsRefreshingSchema] = useState(false)
   const [savingInventoryId, setSavingInventoryId] = useState('')
@@ -140,8 +140,6 @@ export default function ProductGroupsPage() {
           article_name: product.product_name || '-',
           inventory_group_key: group.inventory_group_key,
           inventory_group_name: group.display_name || group.inventory_group_key,
-          base_unit: group.base_unit || group.default_base_unit || '-',
-          status: 'Geclassificeerd',
           is_classified: true,
         })
       }
@@ -151,12 +149,20 @@ export default function ProductGroupsPage() {
       article_name: item.product_name || '-',
       inventory_group_key: '',
       inventory_group_name: '',
-      base_unit: '-',
-      status: 'Nog te classificeren',
       is_classified: false,
     }))
     return [...classifiedRows, ...unresolvedRows].sort((a, b) => String(a.article_name).localeCompare(String(b.article_name), 'nl'))
   }, [groups, unresolved])
+  const filteredRows = useMemo(() => {
+    const searchValue = articleSearch.trim().toLowerCase()
+    return rows.filter((row) => {
+      const inventoryId = row.inventory_id || row.article_name
+      const selectedValue = selectedAssignments[inventoryId] || row.inventory_group_key || ''
+      const articleMatches = !searchValue || String(row.article_name || '').toLowerCase().includes(searchValue)
+      const groupMatches = !groupFilter || selectedValue === groupFilter
+      return articleMatches && groupMatches
+    })
+  }, [rows, selectedAssignments, articleSearch, groupFilter])
 
   return (
     <AppShell title="Productgroepen" showExit={false}>
@@ -178,24 +184,46 @@ export default function ProductGroupsPage() {
               <h3>Productgroepen</h3>
               {isLoading ? <span className="rz-product-groups-muted">Productgroepen worden geladen...</span> : null}
             </div>
-            <Table dataTestId="product-groups-table" tableClassName="rz-product-groups-table rz-product-groups-table--combined" tableStyle={{ width: '1100px', minWidth: '1100px' }} resizableColumns>
+            <Table dataTestId="product-groups-table" tableClassName="rz-product-groups-table rz-product-groups-table--combined" tableStyle={{ width: '950px', minWidth: '950px' }} resizableColumns>
               <colgroup>{COMBINED_COLUMN_STYLES.map((style, index) => <col key={`combined-col-${index}`} style={style} />)}</colgroup>
               <thead>
+                <tr className="rz-table-filter-row">
+                  <th style={COMBINED_COLUMN_STYLES[0]}>
+                    <input
+                      className="rz-input rz-product-groups-filter-input"
+                      aria-label="Zoek artikel"
+                      placeholder="Zoek"
+                      value={articleSearch}
+                      onChange={(event) => setArticleSearch(event.target.value)}
+                    />
+                  </th>
+                  <th style={COMBINED_COLUMN_STYLES[1]}>
+                    <select
+                      className="rz-input rz-product-groups-select"
+                      aria-label="Filter productgroep"
+                      value={groupFilter}
+                      onChange={(event) => setGroupFilter(event.target.value)}
+                    >
+                      <option value="">Filter</option>
+                      {groupOptions.map((group) => (
+                        <option key={group.inventory_group_key} value={group.inventory_group_key}>{group.display_name || group.inventory_group_key}</option>
+                      ))}
+                    </select>
+                  </th>
+                  <th style={COMBINED_COLUMN_STYLES[2]}></th>
+                </tr>
                 <tr className="rz-table-header">
                   <th style={COMBINED_COLUMN_STYLES[0]}>Artikel</th>
                   <th style={COMBINED_COLUMN_STYLES[1]}>Productgroep</th>
-                  <th style={COMBINED_COLUMN_STYLES[2]}>Eenheid</th>
-                  <th style={COMBINED_COLUMN_STYLES[3]}>Status</th>
-                  <th style={COMBINED_COLUMN_STYLES[4]}>Actie</th>
+                  <th style={COMBINED_COLUMN_STYLES[2]}>Bevestigen</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.length ? rows.map((row) => {
+                {filteredRows.length ? filteredRows.map((row) => {
                   const inventoryId = row.inventory_id || row.article_name
                   const selectedValue = selectedAssignments[inventoryId] || ''
                   const originalValue = originalAssignments[inventoryId] || ''
                   const selectedGroup = groupByKey.get(selectedValue)
-                  const selectedUnit = selectedGroup?.default_base_unit || row.base_unit || '-'
                   const isChanged = selectedValue !== originalValue
                   const canSave = Boolean(selectedValue) && (isChanged || !row.is_classified)
                   return (
@@ -214,17 +242,15 @@ export default function ProductGroupsPage() {
                           ))}
                         </select>
                       </td>
-                      <td style={COMBINED_COLUMN_STYLES[2]}>{selectedValue ? selectedUnit : '-'}</td>
-                      <td style={COMBINED_COLUMN_STYLES[3]}>{selectedValue ? (row.is_classified ? 'Geclassificeerd' : 'Nog te classificeren') : 'Nog te classificeren'}</td>
-                      <td style={COMBINED_COLUMN_STYLES[4]}>
+                      <td style={COMBINED_COLUMN_STYLES[2]}>
                         <Button type="button" variant="secondary" disabled={!canSave || savingInventoryId === inventoryId} onClick={() => assignGroup(row)}>
-                          {savingInventoryId === inventoryId ? 'Bezig...' : row.is_classified ? 'Wijzigen' : 'Bevestigen'}
+                          {savingInventoryId === inventoryId ? 'Bezig...' : 'Bevestigen'}
                         </Button>
                       </td>
                     </tr>
                   )
                 }) : (
-                  <tr><td colSpan="5">Geen voorraadartikelen gevonden.</td></tr>
+                  <tr><td colSpan="3">Geen voorraadartikelen gevonden.</td></tr>
                 )}
               </tbody>
             </Table>
