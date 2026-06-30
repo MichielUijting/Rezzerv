@@ -90,10 +90,16 @@
 .rz-product-groups-select {
   width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .rz-product-groups-table .rz-table-filter-row th {
-  background: #fff;
+  background: #fff !important;
+  padding: 4px 12px !important;
+}
+
+.rz-product-groups-table .rz-table-filter-row th:empty {
+  background: #fff !important;
 }
 
 @media (max-width: 760px) {
