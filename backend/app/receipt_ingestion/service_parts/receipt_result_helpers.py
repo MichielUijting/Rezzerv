@@ -6,7 +6,7 @@ Technical Design Reference:
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
 - Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -19,6 +19,35 @@ from typing import Any
 
 from app.receipt_ingestion.amounts import parse_decimal as _parse_decimal
 from app.receipt_ingestion.parser_diagnostics import summarize_lines_parser_diagnostics
+from app.receipt_ingestion.text_encoding_normalization import normalize_receipt_text_encoding
+
+
+def _normalize_result_line_encodings(lines: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """Normalize parser result labels without changing the preserved raw label."""
+    normalized_lines: list[dict[str, Any]] = []
+    for line in lines or []:
+        if not isinstance(line, dict):
+            normalized_lines.append(line)
+            continue
+        item = dict(line)
+        label_source = item.get('normalized_label') or item.get('raw_label')
+        normalized_label, encoding_metadata = normalize_receipt_text_encoding(label_source)
+        if normalized_label:
+            item['normalized_label'] = normalized_label
+        if encoding_metadata:
+            trace = item.get('producer_trace')
+            if not isinstance(trace, dict):
+                trace = {}
+            trace.update({
+                'encoding_normalization_applied': True,
+                'encoding_original_text': encoding_metadata.get('original_text'),
+                'encoding_normalized_text': encoding_metadata.get('normalized_text'),
+                'encoding_replacements': encoding_metadata.get('encoding_replacements'),
+                'encoding_normalization_stage': 'receipt_result',
+            })
+            item['producer_trace'] = trace
+        normalized_lines.append(item)
+    return normalized_lines
 
 
 @dataclass(init=False)
@@ -65,7 +94,7 @@ class ReceiptParseResult:
         self.total_amount = total_amount
         self.discount_total = discount_total
         self.currency = currency or 'EUR'
-        self.lines = lines if lines is not None else []
+        self.lines = _normalize_result_line_encodings(lines)
         self.store_branch = store_branch
         self.parser_diagnostics = parser_diagnostics
 
@@ -159,6 +188,7 @@ def determine_final_parse_status(parse_result: ReceiptParseResult) -> str:
         return 'parsed'
 
     return 'review_needed'
+
 
 def _line_decimal_total(line: dict[str, Any]) -> Decimal:
     return _parse_decimal(str(line.get('line_total'))) or Decimal('0.00')
