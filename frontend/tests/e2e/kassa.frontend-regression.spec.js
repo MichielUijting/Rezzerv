@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectAnyVisible,
@@ -27,6 +27,8 @@ test.describe('Kassa frontend-regressie', () => {
       'Status',
     ], 'Kassa kernlabels');
 
+    await expect(page.getByRole('button', { name: 'Inleeskwaliteit' })).toHaveCount(0);
+    await expect(page.getByTestId('kassa-parse-quality-diagnostics')).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
   });
 
@@ -41,6 +43,8 @@ test.describe('Kassa frontend-regressie', () => {
     ]);
 
     await expect(page.locator('body')).toContainText(/Kassa|Kassabon|Upload|Inlezen/i);
+    await expect(page.getByRole('button', { name: 'Inleeskwaliteit' })).toHaveCount(0);
+    await expect(page.getByTestId('kassa-parse-quality-diagnostics')).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
   });
 });
