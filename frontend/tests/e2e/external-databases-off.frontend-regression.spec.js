@@ -148,7 +148,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(candidateTable).toBeVisible();
     await expect(page.getByRole('button', { name: 'Raadpleeg OFF' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Zelf zoeken' })).toBeVisible();
-    await expect(page.getByLabel('OFF zoektekst')).toHaveValue('halfvolle melk');
+    await expect(page.getByLabel('OFF zoektekst')).toHaveValue('Halfvolle melk bestaand');
 
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('OFF-status: Gevonden');
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Provider: search_a_licious');
@@ -173,7 +173,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     expect(offRequestBodies[0]).toMatchObject({
       receipt_line_text: 'halfvolle melk',
       retailer_code: 'jumbo',
-      candidate_name: 'halfvolle melk',
+      candidate_name: 'Halfvolle melk bestaand',
       quantity_label: '1 l',
       receipt_line_id: 'receipt-line-off-preview-regression',
       purchase_import_line_id: 'purchase-line-off-preview-regression',
