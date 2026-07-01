@@ -15,11 +15,19 @@ PACKAGE_RE = re.compile(
     re.IGNORECASE,
 )
 AMOUNT_RE = re.compile(r'(?<!\d)-?\d{1,6}[\.,]\d{2}(?!\d)')
-MOJIBAKE_MARKER_RE = re.compile(r'(?:Ã|Â|â[\u0080-\u00bf\u2018-\u201d\u20ac]|�)')
-TRAILING_OCR_FRAGMENT_RE = re.compile(r'(?:\s+[ÃÂâ�€]+)+\s*$')
+TRAILING_OCR_FRAGMENT_RE = re.compile(r'(?:\s+[\u00c3\u00c2\u00e2\ufffd\u20ac]+)+\s*$')
 MIXED_ALPHA_NUMERIC_TOKEN_RE = re.compile(r'\b(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9]*[A-Za-zÀ-ÖØ-öø-ÿ])(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9]*\d)[A-Za-zÀ-ÖØ-öø-ÿ0-9]{2,}\b')
 ALPHA_ZERO_ALPHA_TOKEN_RE = re.compile(r'\b[A-Za-zÀ-ÖØ-öø-ÿ]+0[A-Za-zÀ-ÖØ-öø-ÿ0-9]*\b')
 SUSPICIOUS_EDGE_TOKEN_RE = re.compile(r'(^|\s)[^A-Za-zÀ-ÖØ-öø-ÿ0-9\s]{1,2}(\s|$)|(^|\s)[A-Za-zÀ-ÖØ-öø-ÿ0-9]?[^A-Za-zÀ-ÖØ-öø-ÿ0-9\s][A-Za-zÀ-ÖØ-öø-ÿ0-9]?(\s|$)')
+MOJIBAKE_CODEPOINTS = {0x00C3, 0x00C2, 0x00E2, 0xFFFD}
+MOJIBAKE_TWO_CHAR_SEQUENCES = (
+    '\u00c3\u0080', '\u00c3\u0081', '\u00c3\u0082', '\u00c3\u0083', '\u00c3\u0084', '\u00c3\u0085',
+    '\u00c3\u0087', '\u00c3\u0088', '\u00c3\u0089', '\u00c3\u008a', '\u00c3\u008b',
+    '\u00c3\u00a0', '\u00c3\u00a1', '\u00c3\u00a2', '\u00c3\u00a3', '\u00c3\u00a4', '\u00c3\u00a5',
+    '\u00c3\u00a7', '\u00c3\u00a8', '\u00c3\u00a9', '\u00c3\u00aa', '\u00c3\u00ab',
+    '\u00c2\u00ae', '\u00c2\u00a9', '\u00c2\u00b0', '\u00c2\u00b1', '\u00c2\u00b7',
+    '\u00e2\u201a', '\u00e2\u20ac',
+)
 
 
 def _s(value: Any) -> str:
@@ -56,6 +64,15 @@ def _stored_unit(row: dict[str, Any]) -> str:
 
 def _stored_price(row: dict[str, Any]) -> Any:
     return row.get('line_total')
+
+
+def _contains_residual_encoding_artifact(text_value: str) -> bool:
+    value = str(text_value or '')
+    if not value:
+        return False
+    if any(sequence in value for sequence in MOJIBAKE_TWO_CHAR_SEQUENCES):
+        return True
+    return any(ord(char) in MOJIBAKE_CODEPOINTS for char in value)
 
 
 def _detect_package(text_value: str) -> dict[str, Any] | None:
@@ -122,7 +139,7 @@ def _product_name_noise_findings(raw_label: str, normalized_label: str, article_
     visible_label = _s(normalized_label or raw_label)
     if not combined:
         return findings
-    if MOJIBAKE_MARKER_RE.search(combined):
+    if _contains_residual_encoding_artifact(combined):
         findings.append('product_name_residual_encoding_artifact_detected')
     if TRAILING_OCR_FRAGMENT_RE.search(raw_label) or TRAILING_OCR_FRAGMENT_RE.search(normalized_label):
         findings.append('product_name_trailing_ocr_fragment_detected')
