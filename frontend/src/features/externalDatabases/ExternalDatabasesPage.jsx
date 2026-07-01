@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
@@ -26,16 +25,6 @@ function StatusBadge({ status }) {
   return <span className="rz-inline-feedback rz-external-databases-status">{label}</span>
 }
 
-function OverviewTile({ title, value, helper }) {
-  return (
-    <div className="rz-external-databases-summary-card">
-      <div className="rz-external-databases-summary-label">{title}</div>
-      <div className="rz-external-databases-summary-value">{value}</div>
-      {helper ? <div className="rz-external-databases-summary-helper">{helper}</div> : null}
-    </div>
-  )
-}
-
 function ErrorOverlay({ message, onClose }) {
   if (!message) return null
   return (
@@ -52,7 +41,6 @@ function ErrorOverlay({ message, onClose }) {
 }
 
 export default function ExternalDatabasesPage() {
-  const navigate = useNavigate()
   const [summary, setSummary] = useState(null)
   const [retailers, setRetailers] = useState([])
   const [receiptLineText, setReceiptLineText] = useState('Mexicaanse kruidenm.')
@@ -163,7 +151,6 @@ export default function ExternalDatabasesPage() {
     if (tab === TAB_LABELS.overzicht) {
       return (
         <div className="rz-external-databases-overview">
-          {isLoadingConfig ? <div>Externe databases worden geladen...</div> : null}
           <ReceiptItemsOverview onError={setError} onMessage={setError} />
         </div>
       )
@@ -243,7 +230,6 @@ export default function ExternalDatabasesPage() {
                 <h2 className="rz-external-databases-title">Externe databases</h2>
                 <p className="rz-external-databases-subtitle">Eerste versie voor externe productkandidaten. Deze preview maakt geen Mijn artikel, product of voorraadmutatie aan.</p>
               </div>
-              <Button variant="primary" type="button" onClick={() => navigate('/home')}>Terug</Button>
             </div>
             {renderTabContent(TAB_LABELS.overzicht)}
           </div>
