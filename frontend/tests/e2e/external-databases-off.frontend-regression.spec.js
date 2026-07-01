@@ -136,7 +136,10 @@ test.describe('Externe databases OFF candidate flow', () => {
     await page.goto('/externe-databases');
     await expect(page.locator('body')).toBeVisible();
     await expect(page.getByText(/Application error|Uncaught|TypeError|ReferenceError/i)).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Terug' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Vernieuwen' })).toHaveCount(0);
     await expect(page.getByText('Bonartikelen worden geladen...')).toHaveCount(0);
+    await expect(page.getByText('Externe databases worden geladen...')).toHaveCount(0);
 
     const receiptTable = page.getByTestId('external-receipt-items-table');
     await expect(receiptTable).toBeVisible();
@@ -150,6 +153,8 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(page.getByRole('button', { name: 'Raadpleeg OFF' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Zelf zoeken' })).toBeVisible();
     await expect(page.getByLabel('OFF zoektekst')).toHaveValue('Halfvolle melk bestaand');
+    await expect(page.getByRole('button', { name: 'Terug' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Vernieuwen' })).toHaveCount(0);
     await expect(page.getByText('Bonartikelen worden geladen...')).toHaveCount(0);
 
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('OFF-status: Gevonden');
@@ -166,6 +171,8 @@ test.describe('Externe databases OFF candidate flow', () => {
     await page.getByRole('button', { name: 'Zelf zoeken' }).click();
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Zoektype: handmatig');
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('Zoektekst: melk halfvol zelf zoeken');
+    await expect(page.getByRole('button', { name: 'Terug' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Vernieuwen' })).toHaveCount(0);
     await expect(page.getByText('Bonartikelen worden geladen...')).toHaveCount(0);
     await expect(candidateTable.locator('tbody tr', { hasText: '8710000000099' })).toBeVisible();
 
