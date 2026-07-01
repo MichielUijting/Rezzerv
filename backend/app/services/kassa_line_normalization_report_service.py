@@ -30,17 +30,13 @@ MOJIBAKE_TWO_CHAR_SEQUENCES = (
     '\u00c2\u00ae', '\u00c2\u00a9', '\u00c2\u00b0', '\u00c2\u00b1', '\u00c2\u00b7',
     '\u00e2\u201a', '\u00e2\u20ac',
 )
-COMMON_WORD_FINAL_SUFFIXES = (
-    'aar', 'aal', 'aan', 'aat', 'acht', 'age', 'ak', 'al', 'am', 'an', 'and', 'ant', 'ap', 'ar',
-    'as', 'ast', 'at', 'aus', 'bank', 'ck', 'de', 'den', 'der', 'ds', 'el', 'em', 'en', 'end',
-    'ent', 'er', 'ers', 'es', 'et', 'eur', 'ew', 'ie', 'ier', 'ies', 'ig', 'ij', 'ijk', 'ik',
-    'il', 'in', 'ing', 'is', 'je', 'jes', 'kaas', 'kjes', 'kse', 'la', 'le', 'len', 'lijk',
-    'mix', 'nd', 'ng', 'nk', 'ns', 'nt', 'ol', 'om', 'on', 'or', 'os', 'pjes', 'ps', 'rd',
-    'rg', 'rk', 'rt', 's', 'se', 'sel', 'sen', 'st', 'te', 'ten', 'ter', 'tje', 'tjes', 'ts',
-    'um', 'us', 'uw', 'vis', 'worst', 'x', 'zen', 'zuur',
+TRUNCATED_ALL_CAPS_FINAL_CHARS = set('BDFGHJKLMPRV')
+TRUNCATED_LOWER_FINAL_BIGRAMS = {'df', 'gm', 'kr', 'nm', 'vk'}
+COMMON_ALL_CAPS_FINAL_SUFFIXES = (
+    'AAS', 'ANK', 'AUS', 'BOL', 'DEN', 'ERS', 'EEN', 'ELS', 'GEN', 'GEL', 'ING', 'JES',
+    'KER', 'MELK', 'MIX', 'OEK', 'OEN', 'PEN', 'PES', 'PIZZA', 'PREI', 'RIJST', 'SAUS',
+    'SNOEP', 'TEN', 'TER', 'WATER', 'WIT',
 )
-VOWELS = set('aeiouyAEIOUYáàäâéèëêíìïîóòöôúùüûÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛ')
-CONSONANTS = set('bcdfghjklmnpqrstvwxzBCDFGHJKLMNPQRSTVWXZ')
 
 
 def _s(value: Any) -> str:
@@ -92,24 +88,30 @@ def _alpha_tokens(text_value: str) -> list[str]:
     return ALPHA_TOKEN_RE.findall(text_value or '')
 
 
-def _is_short_alpha_token(token: str) -> bool:
-    return token.isalpha() and len(token) <= 3
-
-
 def _is_all_caps_alpha_token(token: str) -> bool:
     return token.isalpha() and token.upper() == token and token.lower() != token
 
 
-def _has_unusual_final_consonant_pattern(token: str) -> bool:
-    value = token.strip()
-    if len(value) < 5:
+def _is_short_abbreviation_token(token: str) -> bool:
+    return _is_all_caps_alpha_token(token) and len(token) <= 3
+
+
+def _has_possible_truncated_word(text_value: str, alpha_tokens: list[str]) -> bool:
+    if not alpha_tokens:
         return False
-    lower = value.lower()
-    if lower.endswith(COMMON_WORD_FINAL_SUFFIXES):
+    token = alpha_tokens[-1].strip()
+    if len(token) < 5:
         return False
-    if re.search(r'[bcdfghjklmnpqrstvwxz]{3,}$', lower):
+    if _is_all_caps_alpha_token(token):
+        if token.endswith(COMMON_ALL_CAPS_FINAL_SUFFIXES):
+            return False
+        if re.search(r'[BCDFGHJKLMNPQRSTVWXZ]{3,}$', token):
+            return True
+        return 5 <= len(token) <= 8 and token[-1] in TRUNCATED_ALL_CAPS_FINAL_CHARS
+    lower = token.lower()
+    if lower[-2:] in TRUNCATED_LOWER_FINAL_BIGRAMS:
         return True
-    return value[-1] in CONSONANTS and sum(1 for char in value if char in VOWELS) >= 1
+    return bool(re.search(r'[bcdfghjklmnpqrstvwxz]{3,}$', lower))
 
 
 def _detect_package(text_value: str) -> dict[str, Any] | None:
@@ -189,15 +191,15 @@ def _product_name_noise_findings(raw_label: str, normalized_label: str, article_
         findings.append('product_name_suspicious_symbol_token_detected')
 
     alpha_tokens = _alpha_tokens(visible_label)
-    short_alpha_tokens = [token for token in alpha_tokens if _is_short_alpha_token(token)]
+    short_alpha_tokens = [token for token in alpha_tokens if _is_short_abbreviation_token(token)]
     all_caps_tokens = [token for token in alpha_tokens if _is_all_caps_alpha_token(token)]
     if short_alpha_tokens:
         findings.append('product_name_short_abbreviation_token_detected')
     if len(short_alpha_tokens) >= 2:
         findings.append('product_name_multiple_short_tokens_detected')
-    if all_caps_tokens and short_alpha_tokens and len(alpha_tokens) >= 2:
+    if short_alpha_tokens and len(all_caps_tokens) >= 2:
         findings.append('product_name_all_caps_abbreviation_pattern_detected')
-    if any(_has_unusual_final_consonant_pattern(token) for token in alpha_tokens):
+    if _has_possible_truncated_word(visible_label, alpha_tokens):
         findings.append('product_name_possible_truncated_word_detected')
     if NUMERIC_SUFFIX_WITHOUT_UNIT_RE.search(visible_label) and not PACKAGE_RE.search(visible_label):
         findings.append('product_name_numeric_suffix_without_unit_detected')
