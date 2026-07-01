@@ -5,7 +5,7 @@ Technical Design Reference:
 - Runtime Type: production
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
-- Reads Data: see generated inventory
+- Reads Data: no
 - Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
@@ -18,6 +18,7 @@ from typing import Any
 
 from app.receipt_ingestion.duplicate_lines import is_near_duplicate_of_previous
 from app.receipt_ingestion.line_classifier import classification_allows_append
+from app.receipt_ingestion.package_label_extraction import apply_package_extraction_to_candidate
 from app.receipt_ingestion.spaarzegels_terms import spaarzegels_financial_metadata
 
 
@@ -131,6 +132,12 @@ def append_product_candidate(
         line_total = amount1
 
     raw_label_value = clean_label(raw_line) if savings_action_path and raw_line else label_value
+    label_value, quantity, unit_value, package_metadata = apply_package_extraction_to_candidate(
+        label_value,
+        quantity=quantity,
+        unit='kg' if qty_raw and 'kg' in qty_raw.lower() else None,
+    )
+    raw_label_value = raw_label_value or label_value
     line_total_float = amount_to_float(line_total)
     financial_metadata = spaarzegels_financial_metadata(
         raw_label_value or label_value,
@@ -142,7 +149,7 @@ def append_product_candidate(
         'raw_label': raw_label_value,
         'normalized_label': label_value,
         'quantity': amount_to_float(quantity),
-        'unit': 'kg' if qty_raw and 'kg' in qty_raw.lower() else None,
+        'unit': unit_value,
         'unit_price': amount_to_float(unit_price),
         'line_total': line_total_float,
         'discount_amount': None,
@@ -179,6 +186,13 @@ def append_product_candidate(
         'classification_trace': classification_trace,
         'validated_savings_action_path': savings_action_path,
     }
+    if package_metadata:
+        producer_trace.update({
+            'package_extraction_applied': True,
+            'package_text': package_metadata.get('package_text'),
+            'package_quantity': package_metadata.get('package_quantity'),
+            'package_unit': package_metadata.get('package_unit'),
+        })
     if financial_metadata:
         producer_trace.update({
             'line_type': financial_metadata.get('line_type'),
