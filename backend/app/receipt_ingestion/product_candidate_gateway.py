@@ -19,6 +19,7 @@ from typing import Any
 from app.receipt_ingestion.duplicate_lines import is_near_duplicate_of_previous
 from app.receipt_ingestion.line_classifier import classification_allows_append
 from app.receipt_ingestion.package_label_extraction import apply_package_extraction_to_candidate
+from app.receipt_ingestion.product_name_normalization import normalize_product_name_label
 from app.receipt_ingestion.spaarzegels_terms import spaarzegels_financial_metadata
 
 
@@ -137,6 +138,7 @@ def append_product_candidate(
         quantity=quantity,
         unit='kg' if qty_raw and 'kg' in qty_raw.lower() else None,
     )
+    label_value, quantity, name_metadata = normalize_product_name_label(label_value, quantity=quantity)
     raw_label_value = raw_label_value or label_value
     line_total_float = amount_to_float(line_total)
     financial_metadata = spaarzegels_financial_metadata(
@@ -192,6 +194,13 @@ def append_product_candidate(
             'package_text': package_metadata.get('package_text'),
             'package_quantity': package_metadata.get('package_quantity'),
             'package_unit': package_metadata.get('package_unit'),
+        })
+    if name_metadata:
+        producer_trace.update({
+            'product_name_normalization_applied': True,
+            'product_name_original_label': name_metadata.get('original_label'),
+            'product_name_normalized_label': name_metadata.get('normalized_label'),
+            'product_name_normalization_rules': name_metadata.get('normalization_rules'),
         })
     if financial_metadata:
         producer_trace.update({
