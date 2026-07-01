@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectAnyVisible,
@@ -41,6 +41,22 @@ test.describe('Kassa frontend-regressie', () => {
     ]);
 
     await expect(page.locator('body')).toContainText(/Kassa|Kassabon|Upload|Inlezen/i);
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
+  test('Kassa toont parsekwaliteit diagnose', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+
+    await page.goto('/kassa');
+    await expect(page.locator('body')).toBeVisible();
+    await expect(page.getByTestId('kassa-parse-quality-diagnostics')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Inleeskwaliteit' })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Inleeskwaliteit' }).click();
+    await expect(page.getByText('Kassa parsekwaliteit diagnose')).toBeVisible();
+    await expect(page.getByText('OFF zoektekst')).toBeVisible();
+    await expect(page.getByText('Parserstatus')).toBeVisible();
+
     await expectNoConsoleErrors(consoleErrors);
   });
 });
