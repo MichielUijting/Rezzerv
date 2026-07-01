@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
 from datetime import datetime, timezone
 from decimal import Decimal
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy import text
@@ -37,6 +40,7 @@ COMMON_ALL_CAPS_FINAL_SUFFIXES = (
     'KER', 'MELK', 'MIX', 'OEK', 'OEN', 'PEN', 'PES', 'PIZZA', 'PREI', 'RIJST', 'SAUS',
     'SNOEP', 'TEN', 'TER', 'WATER', 'WIT',
 )
+PRODUCT_NAME_ENRICHMENT_RULES_PATH = Path(__file__).with_name('product_name_enrichment_rules.json')
 
 
 def _s(value: Any) -> str:
@@ -112,6 +116,57 @@ def _has_possible_truncated_word(text_value: str, alpha_tokens: list[str]) -> bo
     if lower[-2:] in TRUNCATED_LOWER_FINAL_BIGRAMS:
         return True
     return bool(re.search(r'[bcdfghjklmnpqrstvwxz]{3,}$', lower))
+
+
+def _normalize_enrichment_key(value: str | None) -> str:
+    normalized = _s(value).upper()
+    normalized = re.sub(r'[^A-ZÀ-ÖØ-Þ0-9]+', ' ', normalized)
+    return re.sub(r'\s+', ' ', normalized).strip()
+
+
+@lru_cache(maxsize=1)
+def _product_name_enrichment_rules() -> dict[str, dict[str, Any]]:
+    if not PRODUCT_NAME_ENRICHMENT_RULES_PATH.exists():
+        return {}
+    try:
+        raw_rules = json.loads(PRODUCT_NAME_ENRICHMENT_RULES_PATH.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    rules: dict[str, dict[str, Any]] = {}
+    for raw_rule in raw_rules if isinstance(raw_rules, list) else []:
+        if not isinstance(raw_rule, dict):
+            continue
+        if raw_rule.get('match_type') != 'exact_normalized_label':
+            continue
+        label_key = _normalize_enrichment_key(raw_rule.get('label'))
+        suggested_product_name = _s(raw_rule.get('suggested_product_name'))
+        if not label_key or not suggested_product_name:
+            continue
+        rules[label_key] = {
+            'suggested_product_name': suggested_product_name,
+            'match_type': 'exact_normalized_label',
+            'matched_label': raw_rule.get('label'),
+            'source': raw_rule.get('source') or 'product_name_enrichment_rules',
+            'confidence': raw_rule.get('confidence') or 'medium',
+        }
+    return rules
+
+
+def _product_name_enrichment_suggestion(label: str | None) -> dict[str, Any] | None:
+    key = _normalize_enrichment_key(label)
+    if not key:
+        return None
+    rule = _product_name_enrichment_rules().get(key)
+    if not rule:
+        return None
+    return {
+        'suggested_product_name': rule['suggested_product_name'],
+        'product_name_enrichment_applied': True,
+        'product_name_enrichment_match_type': rule['match_type'],
+        'product_name_enrichment_source': rule['source'],
+        'product_name_enrichment_confidence': rule['confidence'],
+        'product_name_enrichment_matched_label': rule['matched_label'],
+    }
 
 
 def _detect_package(text_value: str) -> dict[str, Any] | None:
@@ -215,6 +270,7 @@ def _normalization_findings(
     package: dict[str, Any] | None,
     article_name: str | None,
     product_name_noise: list[str] | None = None,
+    product_name_enrichment: dict[str, Any] | None = None,
 ) -> list[str]:
     findings: list[str] = []
     stored_quantity = _stored_quantity(row)
@@ -227,6 +283,8 @@ def _normalization_findings(
         findings.append('missing_line_price')
     if role == 'product_line':
         findings.extend(product_name_noise or [])
+        if product_name_enrichment:
+            findings.append('product_name_enrichment_suggestion_available')
     if role == 'financial_loyalty_line':
         findings.append('financial_line_excluded_from_inventory_and_external_matching')
     return findings
@@ -241,6 +299,7 @@ def _diagnosis_line(receipt: dict[str, Any], row: dict[str, Any]) -> dict[str, A
     package = _detect_package(text_for_detection)
     article_name = None if role == 'financial_loyalty_line' else _generic_article_name_candidate(normalized_label or raw_label)
     product_name_noise = _product_name_noise_findings(raw_label, normalized_label, article_name) if role == 'product_line' else []
+    product_name_enrichment = _product_name_enrichment_suggestion(normalized_label or raw_label) if role == 'product_line' else None
     include_in_inventory_flow = role == 'product_line'
     external_matching_allowed = role == 'product_line'
     return {
@@ -262,6 +321,7 @@ def _diagnosis_line(receipt: dict[str, Any], row: dict[str, Any]) -> dict[str, A
         'article_name_candidate': article_name,
         'article_name_candidate_normalized': article_name.lower() if article_name else None,
         'product_name_noise_findings': product_name_noise,
+        'product_name_enrichment': product_name_enrichment,
         **(package or {
             'package_quantity_detected': None,
             'package_unit_detected': None,
@@ -271,7 +331,7 @@ def _diagnosis_line(receipt: dict[str, Any], row: dict[str, Any]) -> dict[str, A
         'is_spaarzegels': bool(financial_metadata.get('is_spaarzegels')) if financial_metadata else False,
         'exclude_from_inventory': bool(financial_metadata.get('exclude_from_inventory')) if financial_metadata else not include_in_inventory_flow,
         'matched_spaarzegels_term': financial_metadata.get('matched_spaarzegels_term') if financial_metadata else None,
-        'normalization_findings': _normalization_findings(row, role, package, article_name, product_name_noise),
+        'normalization_findings': _normalization_findings(row, role, package, article_name, product_name_noise, product_name_enrichment),
     }
 
 
@@ -322,6 +382,16 @@ def build_kassa_line_normalization_report(
         for line in lines
         for finding in (line.get('product_name_noise_findings') or [])
     )
+    product_name_enrichment_suggestions = [
+        line.get('product_name_enrichment')
+        for line in lines
+        if line.get('product_name_enrichment')
+    ]
+    product_name_enrichment_counts = Counter(
+        str(suggestion.get('confidence') or 'unknown')
+        for suggestion in product_name_enrichment_suggestions
+        if isinstance(suggestion, dict)
+    )
     return {
         'ok': True,
         'diagnosis_type': 'kassa_line_normalization_report',
@@ -338,6 +408,8 @@ def build_kassa_line_normalization_report(
             'role_counts': dict(role_counts),
             'normalization_finding_counts': dict(finding_counts),
             'product_name_noise_finding_counts': dict(product_name_noise_counts),
+            'product_name_enrichment_suggestion_count': len(product_name_enrichment_suggestions),
+            'product_name_enrichment_confidence_counts': dict(product_name_enrichment_counts),
         },
         'guardrails': {
             'mutates_inventory': False,
@@ -346,6 +418,7 @@ def build_kassa_line_normalization_report(
             'creates_catalog_link': False,
             'changes_receipt_status': False,
             'uses_parse_status_as_category_source': False,
+            'overwrites_receipt_labels': False,
         },
         'lines': lines,
     }
