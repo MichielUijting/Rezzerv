@@ -19,6 +19,8 @@ TRAILING_OCR_FRAGMENT_RE = re.compile(r'(?:\s+[\u00c3\u00c2\u00e2\ufffd\u20ac]+)
 MIXED_ALPHA_NUMERIC_TOKEN_RE = re.compile(r'\b(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9]*[A-Za-zÀ-ÖØ-öø-ÿ])(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9]*\d)[A-Za-zÀ-ÖØ-öø-ÿ0-9]{2,}\b')
 ALPHA_ZERO_ALPHA_TOKEN_RE = re.compile(r'\b[A-Za-zÀ-ÖØ-öø-ÿ]+0[A-Za-zÀ-ÖØ-öø-ÿ0-9]*\b')
 SUSPICIOUS_EDGE_TOKEN_RE = re.compile(r'(^|\s)[^A-Za-zÀ-ÖØ-öø-ÿ0-9\s]{1,2}(\s|$)|(^|\s)[A-Za-zÀ-ÖØ-öø-ÿ0-9]?[^A-Za-zÀ-ÖØ-öø-ÿ0-9\s][A-Za-zÀ-ÖØ-öø-ÿ0-9]?(\s|$)')
+ALPHA_TOKEN_RE = re.compile(r'[A-Za-zÀ-ÖØ-öø-ÿ]+')
+NUMERIC_SUFFIX_WITHOUT_UNIT_RE = re.compile(r'\b\d{2,5}\s*$')
 MOJIBAKE_CODEPOINTS = {0x00C3, 0x00C2, 0x00E2, 0xFFFD}
 MOJIBAKE_TWO_CHAR_SEQUENCES = (
     '\u00c3\u0080', '\u00c3\u0081', '\u00c3\u0082', '\u00c3\u0083', '\u00c3\u0084', '\u00c3\u0085',
@@ -28,6 +30,17 @@ MOJIBAKE_TWO_CHAR_SEQUENCES = (
     '\u00c2\u00ae', '\u00c2\u00a9', '\u00c2\u00b0', '\u00c2\u00b1', '\u00c2\u00b7',
     '\u00e2\u201a', '\u00e2\u20ac',
 )
+COMMON_WORD_FINAL_SUFFIXES = (
+    'aar', 'aal', 'aan', 'aat', 'acht', 'age', 'ak', 'al', 'am', 'an', 'and', 'ant', 'ap', 'ar',
+    'as', 'ast', 'at', 'aus', 'bank', 'ck', 'de', 'den', 'der', 'ds', 'el', 'em', 'en', 'end',
+    'ent', 'er', 'ers', 'es', 'et', 'eur', 'ew', 'ie', 'ier', 'ies', 'ig', 'ij', 'ijk', 'ik',
+    'il', 'in', 'ing', 'is', 'je', 'jes', 'kaas', 'kjes', 'kse', 'la', 'le', 'len', 'lijk',
+    'mix', 'nd', 'ng', 'nk', 'ns', 'nt', 'ol', 'om', 'on', 'or', 'os', 'pjes', 'ps', 'rd',
+    'rg', 'rk', 'rt', 's', 'se', 'sel', 'sen', 'st', 'te', 'ten', 'ter', 'tje', 'tjes', 'ts',
+    'um', 'us', 'uw', 'vis', 'worst', 'x', 'zen', 'zuur',
+)
+VOWELS = set('aeiouyAEIOUYáàäâéèëêíìïîóòöôúùüûÁÀÄÂÉÈËÊÍÌÏÎÓÒÖÔÚÙÜÛ')
+CONSONANTS = set('bcdfghjklmnpqrstvwxzBCDFGHJKLMNPQRSTVWXZ')
 
 
 def _s(value: Any) -> str:
@@ -73,6 +86,30 @@ def _contains_residual_encoding_artifact(text_value: str) -> bool:
     if any(sequence in value for sequence in MOJIBAKE_TWO_CHAR_SEQUENCES):
         return True
     return any(ord(char) in MOJIBAKE_CODEPOINTS for char in value)
+
+
+def _alpha_tokens(text_value: str) -> list[str]:
+    return ALPHA_TOKEN_RE.findall(text_value or '')
+
+
+def _is_short_alpha_token(token: str) -> bool:
+    return token.isalpha() and len(token) <= 3
+
+
+def _is_all_caps_alpha_token(token: str) -> bool:
+    return token.isalpha() and token.upper() == token and token.lower() != token
+
+
+def _has_unusual_final_consonant_pattern(token: str) -> bool:
+    value = token.strip()
+    if len(value) < 5:
+        return False
+    lower = value.lower()
+    if lower.endswith(COMMON_WORD_FINAL_SUFFIXES):
+        return False
+    if re.search(r'[bcdfghjklmnpqrstvwxz]{3,}$', lower):
+        return True
+    return value[-1] in CONSONANTS and sum(1 for char in value if char in VOWELS) >= 1
 
 
 def _detect_package(text_value: str) -> dict[str, Any] | None:
@@ -150,6 +187,21 @@ def _product_name_noise_findings(raw_label: str, normalized_label: str, article_
         findings.append('product_name_zero_inside_alpha_token_detected')
     if SUSPICIOUS_EDGE_TOKEN_RE.search(visible_label):
         findings.append('product_name_suspicious_symbol_token_detected')
+
+    alpha_tokens = _alpha_tokens(visible_label)
+    short_alpha_tokens = [token for token in alpha_tokens if _is_short_alpha_token(token)]
+    all_caps_tokens = [token for token in alpha_tokens if _is_all_caps_alpha_token(token)]
+    if short_alpha_tokens:
+        findings.append('product_name_short_abbreviation_token_detected')
+    if len(short_alpha_tokens) >= 2:
+        findings.append('product_name_multiple_short_tokens_detected')
+    if all_caps_tokens and short_alpha_tokens and len(alpha_tokens) >= 2:
+        findings.append('product_name_all_caps_abbreviation_pattern_detected')
+    if any(_has_unusual_final_consonant_pattern(token) for token in alpha_tokens):
+        findings.append('product_name_possible_truncated_word_detected')
+    if NUMERIC_SUFFIX_WITHOUT_UNIT_RE.search(visible_label) and not PACKAGE_RE.search(visible_label):
+        findings.append('product_name_numeric_suffix_without_unit_detected')
+
     if article_name and _s(article_name) != visible_label:
         findings.append('product_name_candidate_differs_from_stored_label')
     return findings
