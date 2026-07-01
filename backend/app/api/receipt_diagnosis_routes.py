@@ -14,6 +14,7 @@ from sqlalchemy import text
 
 from app.db import engine
 from app.receipt_ingestion.debug_artifact_store import read_ingest_debug_artifact_for_receipt
+from app.services.kassa_line_normalization_report_service import build_kassa_line_normalization_report
 from app.services.kassa_parse_quality_report_service import build_kassa_parse_quality_report
 from app.testing_receipt_line_diagnosis_routes import build_receipt_line_diagnosis
 from app.testing_receipt_parser_diagnosis_routes import build_receipt_parser_diagnosis
@@ -205,6 +206,17 @@ def receipt_parse_quality_report(householdId: str | None = None, limit: int = 10
 def receipt_parse_quality_report_download(householdId: str | None = None, limit: int = 100, includeInactive: bool = False, maxFindings: int = 200):
     payload = build_kassa_parse_quality_report(engine, household_id=householdId, limit=limit, include_inactive=includeInactive, max_findings=maxFindings)
     return _download_json(payload, 'parse-quality-report')
+
+
+@router.get('/receipts/line-normalization-report')
+def receipt_line_normalization_report(householdId: str | None = None, limit: int = 100, includeInactive: bool = False):
+    return build_kassa_line_normalization_report(engine, household_id=householdId, limit=limit, include_inactive=includeInactive)
+
+
+@router.get('/receipts/line-normalization-report/download')
+def receipt_line_normalization_report_download(householdId: str | None = None, limit: int = 100, includeInactive: bool = False):
+    payload = build_kassa_line_normalization_report(engine, household_id=householdId, limit=limit, include_inactive=includeInactive)
+    return _download_json(payload, 'line-normalization-report')
 
 
 @router.get('/receipts/parse-quality-diagnosis/index')
