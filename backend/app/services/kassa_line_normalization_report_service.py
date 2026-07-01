@@ -19,6 +19,8 @@ TRAILING_OCR_FRAGMENT_RE = re.compile(r'(?:\s+[\u00c3\u00c2\u00e2\ufffd\u20ac]+)
 MIXED_ALPHA_NUMERIC_TOKEN_RE = re.compile(r'\b(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9]*[A-Za-zÀ-ÖØ-öø-ÿ])(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9]*\d)[A-Za-zÀ-ÖØ-öø-ÿ0-9]{2,}\b')
 ALPHA_ZERO_ALPHA_TOKEN_RE = re.compile(r'\b[A-Za-zÀ-ÖØ-öø-ÿ]+0[A-Za-zÀ-ÖØ-öø-ÿ0-9]*\b')
 SUSPICIOUS_EDGE_TOKEN_RE = re.compile(r'(^|\s)[^A-Za-zÀ-ÖØ-öø-ÿ0-9\s]{1,2}(\s|$)|(^|\s)[A-Za-zÀ-ÖØ-öø-ÿ0-9]?[^A-Za-zÀ-ÖØ-öø-ÿ0-9\s][A-Za-zÀ-ÖØ-öø-ÿ0-9]?(\s|$)')
+ALPHA_TOKEN_RE = re.compile(r'[A-Za-zÀ-ÖØ-öø-ÿ]+')
+NUMERIC_SUFFIX_WITHOUT_UNIT_RE = re.compile(r'\b\d{2,5}\s*$')
 MOJIBAKE_CODEPOINTS = {0x00C3, 0x00C2, 0x00E2, 0xFFFD}
 MOJIBAKE_TWO_CHAR_SEQUENCES = (
     '\u00c3\u0080', '\u00c3\u0081', '\u00c3\u0082', '\u00c3\u0083', '\u00c3\u0084', '\u00c3\u0085',
@@ -27,6 +29,13 @@ MOJIBAKE_TWO_CHAR_SEQUENCES = (
     '\u00c3\u00a7', '\u00c3\u00a8', '\u00c3\u00a9', '\u00c3\u00aa', '\u00c3\u00ab',
     '\u00c2\u00ae', '\u00c2\u00a9', '\u00c2\u00b0', '\u00c2\u00b1', '\u00c2\u00b7',
     '\u00e2\u201a', '\u00e2\u20ac',
+)
+TRUNCATED_ALL_CAPS_FINAL_CHARS = set('BDFGHJKLMPRV')
+TRUNCATED_LOWER_FINAL_BIGRAMS = {'df', 'gm', 'kr', 'nm', 'vk'}
+COMMON_ALL_CAPS_FINAL_SUFFIXES = (
+    'AAS', 'ANK', 'AUS', 'BOL', 'DEN', 'ERS', 'EEN', 'ELS', 'GEN', 'GEL', 'ING', 'JES',
+    'KER', 'MELK', 'MIX', 'OEK', 'OEN', 'PEN', 'PES', 'PIZZA', 'PREI', 'RIJST', 'SAUS',
+    'SNOEP', 'TEN', 'TER', 'WATER', 'WIT',
 )
 
 
@@ -73,6 +82,36 @@ def _contains_residual_encoding_artifact(text_value: str) -> bool:
     if any(sequence in value for sequence in MOJIBAKE_TWO_CHAR_SEQUENCES):
         return True
     return any(ord(char) in MOJIBAKE_CODEPOINTS for char in value)
+
+
+def _alpha_tokens(text_value: str) -> list[str]:
+    return ALPHA_TOKEN_RE.findall(text_value or '')
+
+
+def _is_all_caps_alpha_token(token: str) -> bool:
+    return token.isalpha() and token.upper() == token and token.lower() != token
+
+
+def _is_short_abbreviation_token(token: str) -> bool:
+    return _is_all_caps_alpha_token(token) and len(token) <= 3
+
+
+def _has_possible_truncated_word(text_value: str, alpha_tokens: list[str]) -> bool:
+    if not alpha_tokens:
+        return False
+    token = alpha_tokens[-1].strip()
+    if len(token) < 5:
+        return False
+    if _is_all_caps_alpha_token(token):
+        if token.endswith(COMMON_ALL_CAPS_FINAL_SUFFIXES):
+            return False
+        if re.search(r'[BCDFGHJKLMNPQRSTVWXZ]{3,}$', token):
+            return True
+        return 5 <= len(token) <= 8 and token[-1] in TRUNCATED_ALL_CAPS_FINAL_CHARS
+    lower = token.lower()
+    if lower[-2:] in TRUNCATED_LOWER_FINAL_BIGRAMS:
+        return True
+    return bool(re.search(r'[bcdfghjklmnpqrstvwxz]{3,}$', lower))
 
 
 def _detect_package(text_value: str) -> dict[str, Any] | None:
@@ -150,6 +189,21 @@ def _product_name_noise_findings(raw_label: str, normalized_label: str, article_
         findings.append('product_name_zero_inside_alpha_token_detected')
     if SUSPICIOUS_EDGE_TOKEN_RE.search(visible_label):
         findings.append('product_name_suspicious_symbol_token_detected')
+
+    alpha_tokens = _alpha_tokens(visible_label)
+    short_alpha_tokens = [token for token in alpha_tokens if _is_short_abbreviation_token(token)]
+    all_caps_tokens = [token for token in alpha_tokens if _is_all_caps_alpha_token(token)]
+    if short_alpha_tokens:
+        findings.append('product_name_short_abbreviation_token_detected')
+    if len(short_alpha_tokens) >= 2:
+        findings.append('product_name_multiple_short_tokens_detected')
+    if short_alpha_tokens and len(all_caps_tokens) >= 2:
+        findings.append('product_name_all_caps_abbreviation_pattern_detected')
+    if _has_possible_truncated_word(visible_label, alpha_tokens):
+        findings.append('product_name_possible_truncated_word_detected')
+    if NUMERIC_SUFFIX_WITHOUT_UNIT_RE.search(visible_label) and not PACKAGE_RE.search(visible_label):
+        findings.append('product_name_numeric_suffix_without_unit_detected')
+
     if article_name and _s(article_name) != visible_label:
         findings.append('product_name_candidate_differs_from_stored_label')
     return findings
