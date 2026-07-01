@@ -6,7 +6,7 @@ Technical Design Reference:
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
 - Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+
+from app.receipt_ingestion.package_label_extraction import apply_package_extraction_to_candidate
 
 
 CleanLabel = Callable[[str | None], str]
@@ -59,7 +61,38 @@ def append_structured_product_candidate(
     if unit_price is None and line_total is None:
         return None
 
+    label_value, quantity, unit, package_metadata = apply_package_extraction_to_candidate(
+        label_value,
+        quantity=quantity,
+        unit=unit,
+    )
+
     append_allowed = True
+    producer_trace = {
+        'filename': filename,
+        'store_name': store_name,
+        'function_name': function_name,
+        'append_branch': append_branch,
+        'parser_path': parser_path,
+        'source_index': source_index,
+        'raw_line': raw_line,
+        'normalized_line': normalized_line,
+        'source_segment': source_segment,
+        'label': label_value,
+        'amount': amount_to_float(line_total),
+        'classification': 'structured_product_candidate',
+        'classification_allows_append': append_allowed,
+        'append_allowed': append_allowed,
+        'caller_line_hint': caller_line_hint,
+    }
+    if package_metadata:
+        producer_trace.update({
+            'package_extraction_applied': True,
+            'package_text': package_metadata.get('package_text'),
+            'package_quantity': package_metadata.get('package_quantity'),
+            'package_unit': package_metadata.get('package_unit'),
+        })
+
     extracted.append(
         {
             'raw_label': label_value,
@@ -72,23 +105,7 @@ def append_structured_product_candidate(
             'barcode': barcode,
             'confidence_score': confidence_score,
             'source_index': source_index,
-            'producer_trace': {
-                'filename': filename,
-                'store_name': store_name,
-                'function_name': function_name,
-                'append_branch': append_branch,
-                'parser_path': parser_path,
-                'source_index': source_index,
-                'raw_line': raw_line,
-                'normalized_line': normalized_line,
-                'source_segment': source_segment,
-                'label': label_value,
-                'amount': amount_to_float(line_total),
-                'classification': 'structured_product_candidate',
-                'classification_allows_append': append_allowed,
-                'append_allowed': append_allowed,
-                'caller_line_hint': caller_line_hint,
-            },
+            'producer_trace': producer_trace,
         }
     )
     return len(extracted) - 1
