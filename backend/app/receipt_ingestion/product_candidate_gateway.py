@@ -21,6 +21,7 @@ from app.receipt_ingestion.line_classifier import classification_allows_append
 from app.receipt_ingestion.package_label_extraction import apply_package_extraction_to_candidate
 from app.receipt_ingestion.product_name_normalization import normalize_product_name_label
 from app.receipt_ingestion.spaarzegels_terms import spaarzegels_financial_metadata
+from app.receipt_ingestion.text_encoding_normalization import normalize_receipt_text_encoding
 
 
 CleanLabel = Callable[[str | None], str]
@@ -91,6 +92,7 @@ def append_product_candidate(
 ) -> int | None:
     """Single guarded gateway for appending receipt financial/product lines."""
     label_value = clean_label(label)
+    label_value, encoding_metadata = normalize_receipt_text_encoding(label_value)
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
 
@@ -188,6 +190,13 @@ def append_product_candidate(
         'classification_trace': classification_trace,
         'validated_savings_action_path': savings_action_path,
     }
+    if encoding_metadata:
+        producer_trace.update({
+            'encoding_normalization_applied': True,
+            'encoding_original_text': encoding_metadata.get('original_text'),
+            'encoding_normalized_text': encoding_metadata.get('normalized_text'),
+            'encoding_replacements': encoding_metadata.get('encoding_replacements'),
+        })
     if package_metadata:
         producer_trace.update({
             'package_extraction_applied': True,
