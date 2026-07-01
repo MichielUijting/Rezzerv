@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import re
@@ -131,6 +131,29 @@ def _product_name_enrichment_suggestion(label: str | None) -> dict[str, Any] | N
     return {'suggested_product_name': rule['suggested_product_name'], 'product_name_enrichment_applied': True, 'product_name_enrichment_match_type': rule['match_type'], 'product_name_enrichment_source': rule['source'], 'product_name_enrichment_confidence': rule['confidence'], 'product_name_enrichment_matched_label': rule['matched_label']}
 
 
+def _product_name_enrichment_impact_audit(article_name: str | None, product_name_enrichment: dict[str, Any] | None, external_matching_allowed: bool) -> dict[str, Any] | None:
+    if not product_name_enrichment:
+        return None
+    suggested_product_name = _s(product_name_enrichment.get('suggested_product_name'))
+    current_candidate_query = _s(article_name)
+    if not suggested_product_name:
+        return None
+    query_delta = bool(
+        current_candidate_query
+        and _normalize_enrichment_key(suggested_product_name) != _normalize_enrichment_key(current_candidate_query)
+    )
+    return {
+        'audit_type': 'product_name_enrichment_external_candidate_coverage',
+        'has_enrichment_suggestion': True,
+        'current_candidate_query': current_candidate_query or None,
+        'enriched_candidate_query': suggested_product_name,
+        'enriched_query_differs_from_current_query': query_delta,
+        'current_external_matching_allowed': bool(external_matching_allowed),
+        'candidate_selection_changed_by_32i': False,
+        'external_product_lookup_performed_by_32i': False,
+        'audit_conclusion': 'enriched_query_available_not_applied' if query_delta else 'no_candidate_query_delta',
+    }
+
 def _detect_package(text_value: str) -> dict[str, Any] | None:
     match = PACKAGE_RE.search(text_value or '')
     if not match:
@@ -243,7 +266,8 @@ def _diagnosis_line(receipt: dict[str, Any], row: dict[str, Any]) -> dict[str, A
     product_name_noise = _product_name_noise_findings(raw_label, normalized_label, article_name) if role == 'product_line' else []
     product_name_enrichment = _product_name_enrichment_suggestion(normalized_label or raw_label) if role == 'product_line' else None
     include_in_inventory_flow = role == 'product_line'
-    return {'receipt_table_id': str(receipt.get('receipt_table_id') or ''), 'store_name': receipt.get('store_name'), 'purchase_at': str(receipt.get('purchase_at')) if receipt.get('purchase_at') is not None else None, 'line_id': str(row.get('id') or ''), 'line_index': int(row.get('line_index') or 0), 'raw_line': raw_label, 'stored_raw_label': raw_label, 'stored_normalized_label': normalized_label, 'stored_quantity': _num(_stored_quantity(row)), 'stored_unit': _stored_unit(row) or None, 'stored_line_price': _num(_stored_price(row)), 'detected_line_role': role, 'include_in_receipt_total': _stored_price(row) not in {None, ''}, 'include_in_inventory_flow': include_in_inventory_flow, 'external_matching_allowed': include_in_inventory_flow, 'article_name_candidate': article_name, 'article_name_candidate_normalized': article_name.lower() if article_name else None, 'product_name_noise_findings': product_name_noise, 'product_name_enrichment': product_name_enrichment, **(package or {'package_quantity_detected': None, 'package_unit_detected': None, 'package_text_detected': None}), 'line_type': financial_metadata.get('line_type') if financial_metadata else None, 'is_spaarzegels': bool(financial_metadata.get('is_spaarzegels')) if financial_metadata else False, 'exclude_from_inventory': bool(financial_metadata.get('exclude_from_inventory')) if financial_metadata else not include_in_inventory_flow, 'matched_spaarzegels_term': financial_metadata.get('matched_spaarzegels_term') if financial_metadata else None, 'normalization_findings': _normalization_findings(row, role, package, article_name, product_name_noise, product_name_enrichment)}
+    product_name_enrichment_impact_audit = _product_name_enrichment_impact_audit(article_name, product_name_enrichment, include_in_inventory_flow)
+    return {'receipt_table_id': str(receipt.get('receipt_table_id') or ''), 'store_name': receipt.get('store_name'), 'purchase_at': str(receipt.get('purchase_at')) if receipt.get('purchase_at') is not None else None, 'line_id': str(row.get('id') or ''), 'line_index': int(row.get('line_index') or 0), 'raw_line': raw_label, 'stored_raw_label': raw_label, 'stored_normalized_label': normalized_label, 'stored_quantity': _num(_stored_quantity(row)), 'stored_unit': _stored_unit(row) or None, 'stored_line_price': _num(_stored_price(row)), 'detected_line_role': role, 'include_in_receipt_total': _stored_price(row) not in {None, ''}, 'include_in_inventory_flow': include_in_inventory_flow, 'external_matching_allowed': include_in_inventory_flow, 'article_name_candidate': article_name, 'article_name_candidate_normalized': article_name.lower() if article_name else None, 'product_name_noise_findings': product_name_noise, 'product_name_enrichment': product_name_enrichment, 'product_name_enrichment_impact_audit': product_name_enrichment_impact_audit, **(package or {'package_quantity_detected': None, 'package_unit_detected': None, 'package_text_detected': None}), 'line_type': financial_metadata.get('line_type') if financial_metadata else None, 'is_spaarzegels': bool(financial_metadata.get('is_spaarzegels')) if financial_metadata else False, 'exclude_from_inventory': bool(financial_metadata.get('exclude_from_inventory')) if financial_metadata else not include_in_inventory_flow, 'matched_spaarzegels_term': financial_metadata.get('matched_spaarzegels_term') if financial_metadata else None, 'normalization_findings': _normalization_findings(row, role, package, article_name, product_name_noise, product_name_enrichment)}
 
 
 def build_kassa_line_normalization_report(engine, household_id: str | None = None, limit: int = 100, include_inactive: bool = False) -> dict[str, Any]:
@@ -282,4 +306,8 @@ def build_kassa_line_normalization_report(engine, household_id: str | None = Non
     product_name_noise_counts = Counter(finding for line in lines for finding in (line.get('product_name_noise_findings') or []))
     product_name_enrichment_suggestions = [line.get('product_name_enrichment') for line in lines if line.get('product_name_enrichment')]
     product_name_enrichment_counts = Counter(str(suggestion.get('product_name_enrichment_confidence') or 'unknown') for suggestion in product_name_enrichment_suggestions if isinstance(suggestion, dict))
-    return {'ok': True, 'diagnosis_type': 'kassa_line_normalization_report', 'generated_at': datetime.now(timezone.utc).isoformat(), 'selection': {'household_id_filter': normalized_household_id or None, 'limit': params['limit'], 'include_inactive': bool(include_inactive), 'scope': 'active_receipts_only' if not include_inactive else 'active_and_archived_receipts'}, 'summary': {'receipt_count': len(receipts), 'line_count': len(lines), 'role_counts': dict(role_counts), 'normalization_finding_counts': dict(finding_counts), 'product_name_noise_finding_counts': dict(product_name_noise_counts), 'product_name_enrichment_suggestion_count': len(product_name_enrichment_suggestions), 'product_name_enrichment_confidence_counts': dict(product_name_enrichment_counts)}, 'guardrails': {'mutates_inventory': False, 'creates_inventory_event': False, 'creates_product_group_assignment': False, 'creates_catalog_link': False, 'changes_receipt_status': False, 'uses_parse_status_as_category_source': False, 'overwrites_receipt_labels': False}, 'lines': lines}
+    product_name_enrichment_impact_audits = [line.get('product_name_enrichment_impact_audit') for line in lines if line.get('product_name_enrichment_impact_audit')]
+    product_name_enrichment_potential_query_delta_count = sum(1 for audit in product_name_enrichment_impact_audits if isinstance(audit, dict) and audit.get('enriched_query_differs_from_current_query'))
+    product_name_enrichment_external_matching_allowed_count = sum(1 for audit in product_name_enrichment_impact_audits if isinstance(audit, dict) and audit.get('current_external_matching_allowed'))
+    return {'ok': True, 'diagnosis_type': 'kassa_line_normalization_report', 'generated_at': datetime.now(timezone.utc).isoformat(), 'selection': {'household_id_filter': normalized_household_id or None, 'limit': params['limit'], 'include_inactive': bool(include_inactive), 'scope': 'active_receipts_only' if not include_inactive else 'active_and_archived_receipts'}, 'summary': {'receipt_count': len(receipts), 'line_count': len(lines), 'role_counts': dict(role_counts), 'normalization_finding_counts': dict(finding_counts), 'product_name_noise_finding_counts': dict(product_name_noise_counts), 'product_name_enrichment_suggestion_count': len(product_name_enrichment_suggestions), 'product_name_enrichment_confidence_counts': dict(product_name_enrichment_counts), 'product_name_enrichment_impact_audit_count': len(product_name_enrichment_impact_audits), 'product_name_enrichment_potential_query_delta_count': product_name_enrichment_potential_query_delta_count, 'product_name_enrichment_external_matching_allowed_count': product_name_enrichment_external_matching_allowed_count, 'product_name_enrichment_candidate_selection_changed_count': 0}, 'guardrails': {'mutates_inventory': False, 'creates_inventory_event': False, 'creates_product_group_assignment': False, 'creates_catalog_link': False, 'changes_receipt_status': False, 'uses_parse_status_as_category_source': False, 'overwrites_receipt_labels': False, 'changes_external_candidate_selection': False, 'performs_external_product_lookup': False}, 'lines': lines}
+
