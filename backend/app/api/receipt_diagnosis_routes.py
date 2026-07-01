@@ -149,11 +149,38 @@ def _diagnosis_line(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_parse_quality_diagnosis(receipt_table_id: str, household_id: str = '1') -> dict[str, Any]:
+def _receipt_where(include_inactive: bool) -> str:
+    if include_inactive:
+        return '1 = 1'
+    return "COALESCE(rt.deleted_at, '') = '' AND COALESCE(rr.deleted_at, '') = ''"
+
+
+def _receipt_index_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'receipt_table_id': str(row.get('receipt_table_id') or ''),
+        'raw_receipt_id': str(row.get('raw_receipt_id') or ''),
+        'household_id': str(row.get('household_id') or ''),
+        'store_name': row.get('store_name'),
+        'purchase_at': str(row.get('purchase_at')) if row.get('purchase_at') is not None else None,
+        'total_amount': _json_number(row.get('total_amount')),
+        'parse_status': row.get('parse_status'),
+        'line_count': _json_number(row.get('line_count')),
+        'created_at': str(row.get('created_at')) if row.get('created_at') is not None else None,
+        'original_filename': row.get('original_filename'),
+    }
+
+
+def build_parse_quality_diagnosis(receipt_table_id: str, household_id: str | None = None, include_inactive: bool = False) -> dict[str, Any]:
+    normalized_household_id = str(household_id or '').strip()
+    where_parts = ['rt.id = :receipt_table_id', _receipt_where(include_inactive)]
+    params = {'receipt_table_id': str(receipt_table_id or '').strip()}
+    if normalized_household_id:
+        where_parts.append('rt.household_id = :household_id')
+        params['household_id'] = normalized_household_id
     with engine.begin() as conn:
         receipt = conn.execute(
             text(
-                """
+                f"""
                 SELECT
                     rt.id,
                     rt.raw_receipt_id,
@@ -172,14 +199,11 @@ def build_parse_quality_diagnosis(receipt_table_id: str, household_id: str = '1'
                     rr.mime_type
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-                WHERE rt.id = :receipt_table_id
-                  AND rt.household_id = :household_id
-                  AND rt.deleted_at IS NULL
-                  AND rr.deleted_at IS NULL
+                WHERE {' AND '.join(where_parts)}
                 LIMIT 1
                 """
             ),
-            {'receipt_table_id': str(receipt_table_id or '').strip(), 'household_id': str(household_id or '1')},
+            params,
         ).mappings().first()
         if not receipt:
             raise HTTPException(status_code=404, detail='Kassabon niet gevonden voor parsekwaliteit-diagnose')
@@ -210,6 +234,7 @@ def build_parse_quality_diagnosis(receipt_table_id: str, household_id: str = '1'
         'ok': True,
         'diagnosis_type': 'kassa_parse_quality',
         'receipt_id': str(receipt['id']),
+        'receipt_table_id': str(receipt['id']),
         'raw_receipt_id': str(receipt['raw_receipt_id']),
         'household_id': str(receipt['household_id']),
         'store_name': receipt.get('store_name'),
@@ -276,39 +301,89 @@ def receipt_parser_diagnosis_download(householdId: str = '1'):
     )
 
 
+@router.get('/receipts/parse-quality-diagnosis/index')
+def receipt_parse_quality_diagnosis_index(householdId: str | None = None, limit: int = 25, includeInactive: bool = False):
+    """Read-only index met beschikbare kassabonnen voor parsekwaliteit-diagnose."""
+    normalized_household_id = str(householdId or '').strip()
+    where_parts = [_receipt_where(includeInactive)]
+    params: dict[str, Any] = {'limit': max(1, min(int(limit or 25), 100))}
+    if normalized_household_id:
+        where_parts.append('rt.household_id = :household_id')
+        params['household_id'] = normalized_household_id
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                f"""
+                SELECT
+                    rt.id AS receipt_table_id,
+                    rt.raw_receipt_id,
+                    rt.household_id,
+                    rt.store_name,
+                    rt.purchase_at,
+                    rt.total_amount,
+                    rt.parse_status,
+                    rt.line_count,
+                    rt.created_at,
+                    rr.original_filename
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                WHERE {' AND '.join(where_parts)}
+                ORDER BY datetime(rt.created_at) DESC, rt.id DESC
+                LIMIT :limit
+                """
+            ),
+            params,
+        ).mappings().all()
+    return {
+        'ok': True,
+        'diagnosis_type': 'kassa_parse_quality_index',
+        'household_id_filter': normalized_household_id or None,
+        'include_inactive': bool(includeInactive),
+        'count': len(rows),
+        'mutates_inventory': False,
+        'creates_inventory_event': False,
+        'creates_product_group_assignment': False,
+        'creates_catalog_link': False,
+        'receipts': [_receipt_index_row(dict(row)) for row in rows],
+    }
+
+
 @router.get('/receipts/{receipt_table_id}/parse-quality-diagnosis')
-def receipt_parse_quality_diagnosis(receipt_table_id: str, householdId: str = '1'):
+def receipt_parse_quality_diagnosis(receipt_table_id: str, householdId: str | None = None, includeInactive: bool = False):
     """Read-only Kassa parsekwaliteit-diagnose per kassabon.
 
     Swagger/API-first endpoint voor kwaliteitsverbetering van het inleesproces.
     Het endpoint schrijft niets, koppelt niets, wijst geen productgroep toe en
     muteert geen voorraad.
     """
-    return build_parse_quality_diagnosis(receipt_table_id, household_id=householdId)
+    return build_parse_quality_diagnosis(receipt_table_id, household_id=householdId, include_inactive=includeInactive)
 
 
 @router.get('/receipts/latest/parse-quality-diagnosis')
-def latest_receipt_parse_quality_diagnosis(householdId: str = '1'):
-    """Read-only parsekwaliteit-diagnose voor de meest recente actieve kassabon."""
-    with engine.begin() as conn:
-        row = conn.execute(
-            text(
-                """
-                SELECT rt.id AS receipt_table_id
-                FROM receipt_tables rt
-                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-                WHERE rt.household_id = :household_id
-                  AND rt.deleted_at IS NULL
-                  AND rr.deleted_at IS NULL
-                ORDER BY rt.created_at DESC, rt.id DESC
-                LIMIT 1
-                """
-            ),
-            {'household_id': str(householdId or '1')},
-        ).mappings().first()
-    if not row:
+def latest_receipt_parse_quality_diagnosis(householdId: str | None = None, includeInactive: bool = False):
+    """Read-only parsekwaliteit-diagnose voor de meest recente beschikbare kassabon."""
+    index_payload = receipt_parse_quality_diagnosis_index(householdId=householdId, limit=1, includeInactive=includeInactive)
+    receipts = index_payload.get('receipts') or []
+    if not receipts and householdId:
+        index_payload = receipt_parse_quality_diagnosis_index(householdId=None, limit=1, includeInactive=includeInactive)
+        receipts = index_payload.get('receipts') or []
+    if not receipts and not includeInactive:
+        index_payload = receipt_parse_quality_diagnosis_index(householdId=householdId, limit=1, includeInactive=True)
+        receipts = index_payload.get('receipts') or []
+    if not receipts:
         raise HTTPException(status_code=404, detail='Geen kassabon gevonden voor parsekwaliteit-diagnose')
-    return build_parse_quality_diagnosis(str(row['receipt_table_id']), household_id=householdId)
+    selected = receipts[0]
+    diagnosis = build_parse_quality_diagnosis(
+        str(selected['receipt_table_id']),
+        household_id=str(selected.get('household_id') or '') or None,
+        include_inactive=True,
+    )
+    diagnosis['selection'] = {
+        'mode': 'latest_available_receipt',
+        'requested_household_id': str(householdId or '').strip() or None,
+        'selected_receipt_table_id': selected['receipt_table_id'],
+    }
+    return diagnosis
 
 
 @router.get('/receipts/latest/ingest-debug/download')
