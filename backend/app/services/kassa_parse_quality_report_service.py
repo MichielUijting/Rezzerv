@@ -8,6 +8,8 @@ from typing import Any
 
 from sqlalchemy import text
 
+from app.receipt_ingestion.spaarzegels_terms import spaarzegels_financial_metadata
+
 PACKAGE_UNITS = {'g', 'gr', 'gram', 'kg', 'ml', 'cl', 'l', 'liter'}
 NOISE_TERMS = {'totaal', 'subtotaal', 'pin', 'contant', 'btw', 'wisselgeld', 'betaald', 'bonus', 'korting', 'kassa', 'filiaal'}
 SUSPICIOUS_PATTERN = re.compile(r'(\b[0-9][a-z]{2,}\b|\b[a-z]+[0-9][a-z0-9]*\b|\?)', re.IGNORECASE)
@@ -62,10 +64,19 @@ def _off_query(row: dict[str, Any]) -> str:
     return article
 
 
+def _spaarzegels_metadata(row: dict[str, Any]) -> dict[str, Any]:
+    return spaarzegels_financial_metadata(
+        _line_text(row, 'raw_label', 'normalized_label'),
+        label_text=_line_text(row, 'normalized_label', 'raw_label'),
+        detail_text=_line_text(row, 'raw_label', 'normalized_label'),
+    )
+
+
 def _diagnosis_line(receipt: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
     quantity = _qty(row)
     unit = _unit(row)
-    return {
+    financial_metadata = _spaarzegels_metadata(row)
+    line = {
         'receipt_table_id': str(receipt.get('receipt_table_id') or ''),
         'store_name': receipt.get('store_name'),
         'purchase_at': str(receipt.get('purchase_at')) if receipt.get('purchase_at') is not None else None,
@@ -85,9 +96,33 @@ def _diagnosis_line(receipt: dict[str, Any], row: dict[str, Any]) -> dict[str, A
         'parser_status': 'diagnose_available' if _article(row) and _price(row) not in {None, ''} else 'needs_review',
         'parser_confidence': _num(row.get('confidence_score')),
     }
+    if financial_metadata:
+        line.update({
+            'line_type': financial_metadata.get('line_type'),
+            'is_spaarzegels': bool(financial_metadata.get('is_spaarzegels')),
+            'include_in_receipt_total': bool(financial_metadata.get('include_in_receipt_total')),
+            'exclude_from_inventory': bool(financial_metadata.get('exclude_from_inventory')),
+            'external_matching_allowed': bool(financial_metadata.get('external_matching_allowed')),
+            'matched_spaarzegels_term': financial_metadata.get('matched_spaarzegels_term'),
+            'diagnosis_note': 'financial_non_inventory_line',
+        })
+    return line
+
+
+def _is_spaarzegels_financial_line(line: dict[str, Any]) -> bool:
+    return (
+        line.get('line_type') == 'spaarzegels'
+        or line.get('is_spaarzegels') is True
+        or (
+            line.get('exclude_from_inventory') is True
+            and line.get('external_matching_allowed') is False
+        )
+    )
 
 
 def _is_noise(line: dict[str, Any]) -> bool:
+    if _is_spaarzegels_financial_line(line):
+        return False
     text_value = f"{line.get('raw_line') or ''} {line.get('clean_line') or ''} {line.get('article_name') or ''}".lower()
     if any(term in text_value for term in NOISE_TERMS):
         return True
@@ -114,6 +149,10 @@ def _findings(lines: list[dict[str, Any]], max_findings: int) -> tuple[dict[str,
     for line in lines:
         raw = str(line.get('raw_line') or '')
         query = str(line.get('off_query') or '').strip()
+        is_spaarzegels = _is_spaarzegels_financial_line(line)
+        if is_spaarzegels:
+            summary['spaarzegels_financial_lines'] += 1
+            continue
         if line.get('line_price') in {None, ''}:
             summary['lines_without_price'] += 1
             findings.append(_finding('high', 'missing_price', line, 'Controleer prijsdetectie: deze regel heeft geen herkende regelprijs.'))
@@ -183,6 +222,7 @@ def build_kassa_parse_quality_report(engine, household_id: str | None = None, li
         'summary': {
             'receipt_count': len(receipts),
             'line_count': len(lines),
+            'spaarzegels_financial_lines': summary.get('spaarzegels_financial_lines', 0),
             'lines_without_price': summary.get('lines_without_price', 0),
             'lines_without_quantity': summary.get('lines_without_quantity', 0),
             'missed_package_size': summary.get('missed_package_size', 0),
@@ -194,9 +234,8 @@ def build_kassa_parse_quality_report(engine, household_id: str | None = None, li
         'parse_statuses': dict(statuses),
         'top_findings': top_findings,
         'recommendations': [
-            {'priority': 1, 'release_hint': 'M2C2i-32B', 'topic': 'Ruisregels uitsluiten'},
-            {'priority': 2, 'release_hint': 'M2C2i-32C', 'topic': 'Productnaam-normalisatie'},
-            {'priority': 3, 'release_hint': 'M2C2i-32D', 'topic': 'Hoeveelheid en verpakking herkennen'},
+            {'priority': 1, 'release_hint': 'M2C2i-32C', 'topic': 'Productnaam-normalisatie'},
+            {'priority': 2, 'release_hint': 'M2C2i-32D', 'topic': 'Hoeveelheid en verpakking herkennen'},
         ],
         'mutates_inventory': False,
         'creates_inventory_event': False,
