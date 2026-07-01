@@ -136,7 +136,7 @@ def _findings(lines: list[dict[str, Any]], max_findings: int) -> tuple[dict[str,
     return dict(summary), findings[:max(1, max_findings)]
 
 
-def build_kassa_parse_quality_report(engine, household_id: str | None = None, limit: int = 100, include_inactive: bool = True, max_findings: int = 50) -> dict[str, Any]:
+def build_kassa_parse_quality_report(engine, household_id: str | None = None, limit: int = 100, include_inactive: bool = False, max_findings: int = 50) -> dict[str, Any]:
     normalized_household_id = str(household_id or '').strip()
     where = [] if include_inactive else ["COALESCE(rt.deleted_at, '') = ''", "COALESCE(rr.deleted_at, '') = ''"]
     params: dict[str, Any] = {'limit': max(1, min(int(limit or 100), 500))}
@@ -178,6 +178,7 @@ def build_kassa_parse_quality_report(engine, household_id: str | None = None, li
             'household_id_filter': normalized_household_id or None,
             'limit': params['limit'],
             'include_inactive': bool(include_inactive),
+            'scope': 'active_receipts_only' if not include_inactive else 'active_and_archived_receipts',
         },
         'summary': {
             'receipt_count': len(receipts),
