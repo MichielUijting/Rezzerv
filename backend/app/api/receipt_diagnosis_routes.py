@@ -197,12 +197,12 @@ def receipt_parser_diagnosis_download(householdId: str = '1'):
 
 
 @router.get('/receipts/parse-quality-report')
-def receipt_parse_quality_report(householdId: str | None = None, limit: int = 100, includeInactive: bool = True, maxFindings: int = 50):
+def receipt_parse_quality_report(householdId: str | None = None, limit: int = 100, includeInactive: bool = False, maxFindings: int = 50):
     return build_kassa_parse_quality_report(engine, household_id=householdId, limit=limit, include_inactive=includeInactive, max_findings=maxFindings)
 
 
 @router.get('/receipts/parse-quality-report/download')
-def receipt_parse_quality_report_download(householdId: str | None = None, limit: int = 100, includeInactive: bool = True, maxFindings: int = 200):
+def receipt_parse_quality_report_download(householdId: str | None = None, limit: int = 100, includeInactive: bool = False, maxFindings: int = 200):
     payload = build_kassa_parse_quality_report(engine, household_id=householdId, limit=limit, include_inactive=includeInactive, max_findings=maxFindings)
     return _download_json(payload, 'parse-quality-report')
 
@@ -230,6 +230,8 @@ def receipt_parse_quality_diagnosis_index(householdId: str | None = None, limit:
         'ok': True,
         'diagnosis_type': 'kassa_parse_quality_index',
         'count': len(rows),
+        'include_inactive': bool(includeInactive),
+        'scope': 'active_receipts_only' if not includeInactive else 'active_and_archived_receipts',
         'mutates_inventory': False,
         'creates_inventory_event': False,
         'creates_product_group_assignment': False,
@@ -247,13 +249,11 @@ def receipt_parse_quality_diagnosis(receipt_table_id: str, householdId: str | No
 def latest_receipt_parse_quality_diagnosis(householdId: str | None = None, includeInactive: bool = False):
     index_payload = receipt_parse_quality_diagnosis_index(householdId=householdId, limit=1, includeInactive=includeInactive)
     receipts = index_payload.get('receipts') or []
-    if not receipts and not includeInactive:
-        receipts = receipt_parse_quality_diagnosis_index(householdId=householdId, limit=1, includeInactive=True).get('receipts') or []
     if not receipts:
-        raise HTTPException(status_code=404, detail='Geen kassabon gevonden voor parsekwaliteit-diagnose')
+        raise HTTPException(status_code=404, detail='Geen actieve kassabon gevonden voor parsekwaliteit-diagnose')
     selected = receipts[0]
-    diagnosis = build_parse_quality_diagnosis(str(selected['receipt_table_id']), household_id=str(selected.get('household_id') or '') or None, include_inactive=True)
-    diagnosis['selection'] = {'mode': 'latest_available_receipt', 'selected_receipt_table_id': selected['receipt_table_id']}
+    diagnosis = build_parse_quality_diagnosis(str(selected['receipt_table_id']), household_id=str(selected.get('household_id') or '') or None, include_inactive=includeInactive)
+    diagnosis['selection'] = {'mode': 'latest_active_receipt', 'selected_receipt_table_id': selected['receipt_table_id'], 'include_inactive': bool(includeInactive)}
     return diagnosis
 
 
