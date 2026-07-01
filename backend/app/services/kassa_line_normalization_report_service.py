@@ -15,6 +15,11 @@ PACKAGE_RE = re.compile(
     re.IGNORECASE,
 )
 AMOUNT_RE = re.compile(r'(?<!\d)-?\d{1,6}[\.,]\d{2}(?!\d)')
+MOJIBAKE_MARKER_RE = re.compile(r'(?:Ã|Â|â[\u0080-\u00bf\u2018-\u201d\u20ac]|�)')
+TRAILING_OCR_FRAGMENT_RE = re.compile(r'(?:\s+[ÃÂâ�€]+)+\s*$')
+MIXED_ALPHA_NUMERIC_TOKEN_RE = re.compile(r'\b(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9]*[A-Za-zÀ-ÖØ-öø-ÿ])(?=[A-Za-zÀ-ÖØ-öø-ÿ0-9]*\d)[A-Za-zÀ-ÖØ-öø-ÿ0-9]{2,}\b')
+ALPHA_ZERO_ALPHA_TOKEN_RE = re.compile(r'\b[A-Za-zÀ-ÖØ-öø-ÿ]+0[A-Za-zÀ-ÖØ-öø-ÿ0-9]*\b')
+SUSPICIOUS_EDGE_TOKEN_RE = re.compile(r'(^|\s)[^A-Za-zÀ-ÖØ-öø-ÿ0-9\s]{1,2}(\s|$)|(^|\s)[A-Za-zÀ-ÖØ-öø-ÿ0-9]?[^A-Za-zÀ-ÖØ-öø-ÿ0-9\s][A-Za-zÀ-ÖØ-öø-ÿ0-9]?(\s|$)')
 
 
 def _s(value: Any) -> str:
@@ -111,7 +116,35 @@ def _line_role(row: dict[str, Any], financial_metadata: dict[str, Any]) -> str:
     return 'unclassified_line'
 
 
-def _normalization_findings(row: dict[str, Any], role: str, package: dict[str, Any] | None, article_name: str | None) -> list[str]:
+def _product_name_noise_findings(raw_label: str, normalized_label: str, article_name: str | None) -> list[str]:
+    findings: list[str] = []
+    combined = _s(f'{raw_label} {normalized_label} {article_name or ""}')
+    visible_label = _s(normalized_label or raw_label)
+    if not combined:
+        return findings
+    if MOJIBAKE_MARKER_RE.search(combined):
+        findings.append('product_name_residual_encoding_artifact_detected')
+    if TRAILING_OCR_FRAGMENT_RE.search(raw_label) or TRAILING_OCR_FRAGMENT_RE.search(normalized_label):
+        findings.append('product_name_trailing_ocr_fragment_detected')
+    mixed_tokens = MIXED_ALPHA_NUMERIC_TOKEN_RE.findall(visible_label)
+    if mixed_tokens:
+        findings.append('product_name_mixed_alphanumeric_token_detected')
+    if ALPHA_ZERO_ALPHA_TOKEN_RE.search(visible_label):
+        findings.append('product_name_zero_inside_alpha_token_detected')
+    if SUSPICIOUS_EDGE_TOKEN_RE.search(visible_label):
+        findings.append('product_name_suspicious_symbol_token_detected')
+    if article_name and _s(article_name) != visible_label:
+        findings.append('product_name_candidate_differs_from_stored_label')
+    return findings
+
+
+def _normalization_findings(
+    row: dict[str, Any],
+    role: str,
+    package: dict[str, Any] | None,
+    article_name: str | None,
+    product_name_noise: list[str] | None = None,
+) -> list[str]:
     findings: list[str] = []
     stored_quantity = _stored_quantity(row)
     stored_unit = _stored_unit(row)
@@ -121,6 +154,8 @@ def _normalization_findings(row: dict[str, Any], role: str, package: dict[str, A
         findings.append('missing_article_name_candidate')
     if role == 'product_line' and _stored_price(row) in {None, ''}:
         findings.append('missing_line_price')
+    if role == 'product_line':
+        findings.extend(product_name_noise or [])
     if role == 'financial_loyalty_line':
         findings.append('financial_line_excluded_from_inventory_and_external_matching')
     return findings
@@ -134,6 +169,7 @@ def _diagnosis_line(receipt: dict[str, Any], row: dict[str, Any]) -> dict[str, A
     role = _line_role(row, financial_metadata)
     package = _detect_package(text_for_detection)
     article_name = None if role == 'financial_loyalty_line' else _generic_article_name_candidate(normalized_label or raw_label)
+    product_name_noise = _product_name_noise_findings(raw_label, normalized_label, article_name) if role == 'product_line' else []
     include_in_inventory_flow = role == 'product_line'
     external_matching_allowed = role == 'product_line'
     return {
@@ -154,6 +190,7 @@ def _diagnosis_line(receipt: dict[str, Any], row: dict[str, Any]) -> dict[str, A
         'external_matching_allowed': external_matching_allowed,
         'article_name_candidate': article_name,
         'article_name_candidate_normalized': article_name.lower() if article_name else None,
+        'product_name_noise_findings': product_name_noise,
         **(package or {
             'package_quantity_detected': None,
             'package_unit_detected': None,
@@ -163,7 +200,7 @@ def _diagnosis_line(receipt: dict[str, Any], row: dict[str, Any]) -> dict[str, A
         'is_spaarzegels': bool(financial_metadata.get('is_spaarzegels')) if financial_metadata else False,
         'exclude_from_inventory': bool(financial_metadata.get('exclude_from_inventory')) if financial_metadata else not include_in_inventory_flow,
         'matched_spaarzegels_term': financial_metadata.get('matched_spaarzegels_term') if financial_metadata else None,
-        'normalization_findings': _normalization_findings(row, role, package, article_name),
+        'normalization_findings': _normalization_findings(row, role, package, article_name, product_name_noise),
     }
 
 
@@ -209,6 +246,11 @@ def build_kassa_line_normalization_report(
         for line in lines
         for finding in (line.get('normalization_findings') or [])
     )
+    product_name_noise_counts = Counter(
+        finding
+        for line in lines
+        for finding in (line.get('product_name_noise_findings') or [])
+    )
     return {
         'ok': True,
         'diagnosis_type': 'kassa_line_normalization_report',
@@ -224,6 +266,7 @@ def build_kassa_line_normalization_report(
             'line_count': len(lines),
             'role_counts': dict(role_counts),
             'normalization_finding_counts': dict(finding_counts),
+            'product_name_noise_finding_counts': dict(product_name_noise_counts),
         },
         'guardrails': {
             'mutates_inventory': False,
