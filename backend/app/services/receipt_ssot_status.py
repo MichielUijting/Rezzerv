@@ -62,12 +62,28 @@ def _line_count(payload: dict[str, Any]) -> int:
         return 0
 
 
-def _net_line_total(payload: dict[str, Any]) -> Decimal | None:
-    for key in ("net_line_total_sum", "line_total_sum"):
-        value = _safe_decimal(payload.get(key))
-        if value is not None:
-            return value
+def _line_discount_total(payload: dict[str, Any]) -> Decimal:
+    lines = payload.get("lines")
+    if isinstance(lines, list):
+        total = Decimal("0")
+        for line in lines:
+            if not isinstance(line, dict) or int(line.get("is_deleted") or 0):
+                continue
+            value = _safe_decimal(line.get("discount_amount"))
+            if value is not None:
+                total += value
+        return total
 
+    value = _safe_decimal(payload.get("line_discount_sum"))
+    return value if value is not None else Decimal("0")
+
+
+def _receipt_discount_total(payload: dict[str, Any]) -> Decimal:
+    value = _safe_decimal(payload.get("discount_total"))
+    return value if value is not None else Decimal("0")
+
+
+def _line_total_from_lines(payload: dict[str, Any]) -> Decimal | None:
     lines = payload.get("lines")
     if not isinstance(lines, list):
         return None
@@ -89,6 +105,18 @@ def _net_line_total(payload: dict[str, Any]) -> Decimal | None:
         total += value
         seen = True
     return total if seen else None
+
+
+def _net_line_total(payload: dict[str, Any]) -> Decimal | None:
+    line_total = _line_total_from_lines(payload)
+
+    if line_total is None:
+        line_total = _safe_decimal(payload.get("line_total_sum"))
+
+    if line_total is not None:
+        return line_total + _line_discount_total(payload) + _receipt_discount_total(payload)
+
+    return _safe_decimal(payload.get("net_line_total_sum"))
 
 
 def _production_status_item(payload: dict[str, Any]) -> dict[str, Any]:
