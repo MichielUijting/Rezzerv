@@ -1,113 +1,179 @@
-"""
+﻿"""
 Technical Design Reference:
 - TD Section: TD-04 Status en SSOT
-- Module Role: Map PO norm status to API/UI fields
+- Module Role: Map production PO norm status to API/UI fields
 - Runtime Type: production
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
-- Depends On: see generated inventory
-- Reads Data: see generated inventory
-- Writes Data: see generated inventory
-- Status Authority: no
+- Depends On: receipt payload content only
+- Reads Data: none
+- Writes Data: none
+- Status Authority: yes
 - Refactor Status: cleanup
 """
 
-
 from __future__ import annotations
-import logging
-import time
+
+from decimal import Decimal
 from typing import Any
 
-from app.db import engine
-from app.services.receipt_status_baseline_service_v4 import validate_receipt_status_baseline
 
-LOGGER = logging.getLogger(__name__)
-_CACHE: dict[str, Any] = {"loaded_at": 0.0, "items": {}}
-_CACHE_TTL_SECONDS = 1.0
+def _safe_decimal(value: Any) -> Decimal | None:
+    if value is None or value == "":
+        return None
+    try:
+        return Decimal(str(value))
+    except Exception:
+        return None
+
+
+def _amount_equals(left: Any, right: Any, tolerance: Decimal = Decimal("0.01")) -> bool:
+    left_dec = _safe_decimal(left)
+    right_dec = _safe_decimal(right)
+    if left_dec is None or right_dec is None:
+        return False
+    return abs(left_dec - right_dec) <= tolerance
 
 
 def _normalize_status_label(label: Any) -> str:
-    """Normalize legacy receipt status labels for the active Kassa UI.
+    """Normalize active Kassa status labels.
 
-    Historical parser/status diagnostics may still contain manual/Handmatig.
     The active Kassa contract exposes only Gecontroleerd or Controle nodig.
     """
     normalized = str(label or "").strip()
-    if normalized in {"", "Handmatig", "manual"}:
-        return "Controle nodig"
-    return normalized
+    if normalized == "Gecontroleerd":
+        return "Gecontroleerd"
+    return "Controle nodig"
 
 
 def _status_code(label: str) -> str:
-    normalized_label = _normalize_status_label(label)
-    if normalized_label == "Gecontroleerd":
-        return "controlled"
-    return "review"
+    return "controlled" if _normalize_status_label(label) == "Gecontroleerd" else "review"
+
+
+def _line_count(payload: dict[str, Any]) -> int:
+    value = payload.get("line_count")
+    if value is None and isinstance(payload.get("lines"), list):
+        value = len([
+            line for line in payload.get("lines") or []
+            if isinstance(line, dict) and int(line.get("is_deleted") or 0) == 0
+        ])
+    try:
+        return int(value or 0)
+    except Exception:
+        return 0
+
+
+def _net_line_total(payload: dict[str, Any]) -> Decimal | None:
+    for key in ("net_line_total_sum", "line_total_sum"):
+        value = _safe_decimal(payload.get(key))
+        if value is not None:
+            return value
+
+    lines = payload.get("lines")
+    if not isinstance(lines, list):
+        return None
+
+    total = Decimal("0")
+    seen = False
+    for line in lines:
+        if not isinstance(line, dict) or int(line.get("is_deleted") or 0):
+            continue
+        value = _safe_decimal(
+            line.get("display_line_total")
+            if line.get("display_line_total") is not None
+            else line.get("corrected_line_total")
+            if line.get("corrected_line_total") is not None
+            else line.get("line_total")
+        )
+        if value is None:
+            continue
+        total += value
+        seen = True
+    return total if seen else None
+
+
+def _production_status_item(payload: dict[str, Any]) -> dict[str, Any]:
+    """Determine production Kassa status from receipt content only.
+
+    The 14-receipt baseline is regression fixture data. Baseline membership is
+    not a production criterion and must never create NO_BASELINE_MATCH.
+    """
+    failed: list[str] = []
+
+    store_name = str(payload.get("store_name") or payload.get("store_branch") or "").strip()
+    if not store_name:
+        failed.append("STORE_NAME_MISSING")
+
+    total_amount = _safe_decimal(payload.get("total_amount"))
+    if total_amount is None:
+        failed.append("TOTAL_AMOUNT_MISSING")
+
+    line_count = _line_count(payload)
+    if line_count <= 0:
+        failed.append("NO_ARTICLE_LINES")
+
+    net_line_sum = _net_line_total(payload)
+    if total_amount is not None and line_count > 0:
+        if net_line_sum is None:
+            failed.append("LINE_SUM_MISSING")
+        elif not _amount_equals(net_line_sum, total_amount):
+            failed.append("LINE_SUM_TOTAL_MISMATCH")
+
+    label = "Gecontroleerd" if not failed else "Controle nodig"
+
+    if not failed:
+        reason = (
+            "Gecontroleerd: winkel, totaalbedrag en som van artikelregels "
+            "voldoen aan productieve Kassa-statuscriteria."
+        )
+    else:
+        labels = {
+            "STORE_NAME_MISSING": "winkelnaam ontbreekt",
+            "TOTAL_AMOUNT_MISSING": "totaalbedrag ontbreekt",
+            "NO_ARTICLE_LINES": "geen artikelregels gevonden",
+            "LINE_SUM_MISSING": "som van artikelregels ontbreekt",
+            "LINE_SUM_TOTAL_MISMATCH": "som van artikelregels sluit niet aan op kassabontotaal",
+        }
+        reason = "Controle nodig: " + "; ".join(labels.get(code, code) for code in failed)
+
+    return {
+        "po_norm_status": _status_code(label),
+        "po_norm_status_label": label,
+        "po_norm_failed_criteria": failed,
+        "po_norm_reason": reason,
+    }
 
 
 def load_po_norm_status_items() -> dict[str, dict[str, Any]]:
-    now = time.monotonic()
-    cached_items = _CACHE.get("items") or {}
-    if cached_items and (now - float(_CACHE.get("loaded_at") or 0.0)) < _CACHE_TTL_SECONDS:
-        return dict(cached_items)
+    """Compatibility shim.
 
-    items: dict[str, dict[str, Any]] = {}
-    try:
-        with engine.connect() as conn:
-            validation = validate_receipt_status_baseline(conn)
-        for item in validation.get("details", []) or []:
-            receipt_table_id = str(item.get("receipt_table_id") or "").strip()
-            if not receipt_table_id:
-                continue
-            label = _normalize_status_label(item.get("po_norm_status_label") or "Controle nodig")
-            items[receipt_table_id] = {
-                "po_norm_status": _status_code(label),
-                "po_norm_status_label": label,
-                "po_norm_failed_criteria": item.get("failed_criteria") or [],
-                "po_norm_reason": item.get("reason"),
-            }
-    except Exception as exc:
-        LOGGER.warning("po_norm_status_items_load_failed error=%s", exc)
-
-    _CACHE["loaded_at"] = now
-    _CACHE["items"] = items
-    return items
+    Production status is computed per receipt payload in apply_po_norm_status.
+    The regression baseline is intentionally not loaded here.
+    """
+    return {}
 
 
 def apply_po_norm_status(payload: dict[str, Any]) -> dict[str, Any]:
     """Apply the SSOT status contract to a receipt payload for Kassa.
 
-    Parser status fields are allowed to exist in storage as diagnostics, but they
-    are not allowed to drive Kassa categorisation. This function removes them
-    from the Kassa payload and exposes only the baseline-derived status fields.
+    Parser status fields may exist in storage as diagnostics, but they are not
+    allowed to drive Kassa categorisation. The 14-receipt regression baseline is
+    also not allowed to drive production categorisation.
     """
     if not isinstance(payload, dict):
         return payload
 
-    receipt_table_id = str(payload.get("id") or payload.get("receipt_table_id") or "").strip()
-    item = load_po_norm_status_items().get(receipt_table_id) if receipt_table_id else None
-    if not item:
-        item = {
-            "po_norm_status": "review",
-            "po_norm_status_label": "Controle nodig",
-            "po_norm_failed_criteria": ["NO_BASELINE_MATCH"],
-            "po_norm_reason": "Controle nodig: geen baseline-match gevonden voor deze actieve kassabon.",
-        }
-
+    item = _production_status_item(payload)
     label = _normalize_status_label(item.get("po_norm_status_label"))
     status_code = _status_code(label)
 
     payload.pop("parse_status", None)
     payload.pop("actual_parse_status", None)
     payload.pop("actual_status_label", None)
+
     payload["po_norm_status"] = status_code
     payload["po_norm_status_label"] = label
     payload["po_norm_failed_criteria"] = item.get("po_norm_failed_criteria") or []
     payload["po_norm_reason"] = item.get("po_norm_reason")
-
-    # R9-38E4b:
-    # PO/baseline status is diagnostic for new receipts.
-    # It must not override runtime status when the parser approved the receipt
-    # and the full net formula closes.
     payload["inbox_status"] = label
     payload["status"] = label
 
