@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+import re
 
 from app.receipt_ingestion.duplicate_lines import is_near_duplicate_of_previous
 from app.receipt_ingestion.line_classifier import classification_allows_append
@@ -36,6 +37,79 @@ InvalidLabelCheck = Callable[[str], bool]
 def _is_validated_savings_action_path(function_name: str, append_branch: str) -> bool:
     """Return True only for the existing savings/action value-line parser path."""
     return function_name == '_extract_savings_action_lines' and append_branch == 'savings_action_line'
+
+
+
+
+def _is_ah_receipt_context(
+    *,
+    store_name: str | None,
+    filename: str | None,
+    raw_line: str | None,
+    normalized_line: str | None,
+    parser_path: str | None,
+) -> bool:
+    haystack = " ".join([
+        str(store_name or ""),
+        str(filename or ""),
+        str(raw_line or ""),
+        str(normalized_line or ""),
+        str(parser_path or ""),
+    ]).lower()
+    return (
+        "albert heijn" in haystack
+        or "ah to go" in haystack
+        or "bonuskaart" in haystack
+        or "jouw voordeel" in haystack
+        or "je voordeel" in haystack
+        or "profiles.ah" in haystack
+    )
+
+
+def _split_ah_leading_quantity_label(
+    label_value: str,
+    *,
+    qty_raw: str | None,
+    store_name: str | None,
+    filename: str | None,
+    raw_line: str | None,
+    normalized_line: str | None,
+    parser_path: str | None,
+) -> tuple[str, int | None, dict[str, Any] | None]:
+    if qty_raw:
+        return label_value, None, None
+    if not _is_ah_receipt_context(
+        store_name=store_name,
+        filename=filename,
+        raw_line=raw_line,
+        normalized_line=normalized_line,
+        parser_path=parser_path,
+    ):
+        return label_value, None, None
+
+    original_label = str(label_value or "").strip()
+    match = re.match(r"^\s*(?P<token>\d{1,2}|[TtIi|Nn])\s+(?P<label>\S.*)$", original_label)
+    if not match:
+        return label_value, None, None
+
+    token = match.group("token").strip()
+    remaining_label = re.sub(r"\s+", " ", match.group("label")).strip()
+    if not remaining_label or not any(ch.isalpha() for ch in remaining_label):
+        return label_value, None, None
+
+    if token.upper() in {"T", "I", "|"}:
+        quantity = 1
+    elif token.upper() == "N":
+        quantity = 2
+    else:
+        quantity = int(token)
+
+    return remaining_label, quantity, {
+        "original_label": original_label,
+        "normalized_label": remaining_label,
+        "quantity": quantity,
+        "token": token,
+    }
 
 
 def _as_float(value: Any) -> float | None:
@@ -96,6 +170,18 @@ def append_product_candidate(
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
 
+    ah_leading_quantity_metadata = None
+    ah_leading_quantity = None
+    label_value, ah_leading_quantity, ah_leading_quantity_metadata = _split_ah_leading_quantity_label(
+        label_value,
+        qty_raw=qty_raw,
+        store_name=store_name,
+        filename=filename,
+        raw_line=raw_line,
+        normalized_line=normalized_line,
+        parser_path=parser_path,
+    )
+
     savings_action_path = _is_validated_savings_action_path(function_name, append_branch)
     if is_invalid_label is not None and is_invalid_label(label_value) and not savings_action_path:
         return None
@@ -116,6 +202,8 @@ def append_product_candidate(
         }
 
     quantity = parse_quantity((qty_raw or '').replace('kg', '').replace('KG', '').strip()) if qty_raw else None
+    if quantity is None and ah_leading_quantity is not None:
+        quantity = ah_leading_quantity
     try:
         if quantity is not None and quantity <= 0:
             quantity = None
@@ -134,7 +222,11 @@ def append_product_candidate(
         unit_price = amount1
         line_total = amount1
 
-    raw_label_value = clean_label(raw_line) if savings_action_path and raw_line else label_value
+    raw_label_value = (
+        clean_label(raw_line)
+        if savings_action_path and raw_line
+        else (ah_leading_quantity_metadata.get('original_label') if ah_leading_quantity_metadata else label_value)
+    )
     label_value, quantity, unit_value, package_metadata = apply_package_extraction_to_candidate(
         label_value,
         quantity=quantity,
@@ -203,6 +295,14 @@ def append_product_candidate(
             'package_text': package_metadata.get('package_text'),
             'package_quantity': package_metadata.get('package_quantity'),
             'package_unit': package_metadata.get('package_unit'),
+        })
+    if ah_leading_quantity_metadata:
+        producer_trace.update({
+            'ah_leading_quantity_normalization_applied': True,
+            'ah_leading_quantity_original_label': ah_leading_quantity_metadata.get('original_label'),
+            'ah_leading_quantity_normalized_label': ah_leading_quantity_metadata.get('normalized_label'),
+            'ah_leading_quantity': ah_leading_quantity_metadata.get('quantity'),
+            'ah_leading_quantity_token': ah_leading_quantity_metadata.get('token'),
         })
     if name_metadata:
         producer_trace.update({
