@@ -1,4 +1,4 @@
-﻿"""
+"""
 Technical Design Reference:
 - TD Section: TD-02 Backend API-laag
 - Module Role: FastAPI entrypoint and route container
@@ -12501,12 +12501,38 @@ def get_receipt_explainability(receipt_table_id: str, authorization: Optional[st
     }
 
     explainability = build_receipt_explainability(result, source_context=source_context)
-    status_payload = apply_po_norm_status(serialize_receipt_row(dict(header_dict)))
+
+    status_input = serialize_receipt_row(dict(header_dict))
+    line_total_sum = Decimal("0")
+    line_discount_sum = Decimal("0")
+    for line in active_lines:
+        try:
+            line_total_sum += Decimal(str(line.get("line_total") or 0))
+        except Exception:
+            pass
+        try:
+            line_discount_sum += Decimal(str(line.get("discount_amount") or 0))
+        except Exception:
+            pass
+
+    try:
+        discount_total = Decimal(str(status_input.get("discount_total") or 0))
+    except Exception:
+        discount_total = Decimal("0")
+
+    status_input["line_count"] = len(active_lines)
+    status_input["line_total_sum"] = float(line_total_sum)
+    status_input["net_line_total_sum"] = float(line_total_sum + discount_total)
+
+    status_payload = apply_po_norm_status(status_input)
 
     return {
         "receipt_table_id": receipt_table_id,
         "read_only": True,
         "po_norm_status_label": status_payload.get("po_norm_status_label"),
+        "po_norm_status": status_payload.get("po_norm_status"),
+        "po_norm_failed_criteria": status_payload.get("po_norm_failed_criteria") or [],
+        "po_norm_reason": status_payload.get("po_norm_reason"),
         "explainability": explainability,
         "line_count": len(active_lines),
         "ignored_line_count": len(ignored_lines),
