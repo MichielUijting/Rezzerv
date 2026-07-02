@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+﻿import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -378,9 +378,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   async function refreshBatchDiagnostics(nextBatchId = batchId) {
     if (!nextBatchId) return null
-    const diagnostics = await fetchJson(`/api/dev/purchase-import-batches/${nextBatchId}/diagnostics`).catch(() => null)
-    setBatchDiagnostics(diagnostics)
-    return diagnostics
+    setBatchDiagnostics(null)
+    return null
   }
 
   async function refreshLocationOptions() {
@@ -650,8 +649,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? sortOptionObjects(backendArticles, (article) => articleLabel(article)) : articleFallbackOptions)
       setLocationOptions(buildActiveLocationOptions(spacesData, sublocationsData))
       setBatch(loadedBatch)
-      const diagnostics = await fetchJson(`/api/dev/purchase-import-batches/${batchId}/diagnostics`).catch(() => null)
-      setBatchDiagnostics(diagnostics)
+      setBatchDiagnostics(null)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
     } finally {
@@ -1230,29 +1228,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           <div style={{ color: '#5f7a68', fontSize: 13, padding: '10px 12px' }}>Geen locatie gevonden.</div>
                         )}
                       </div>
-                      {canManageLocations ? (
-                        <button
-                          type="button"
-                          disabled={pickerLineBusy}
-                          onClick={openLocationManagement}
-                          style={{
-                            appearance: 'none',
-                            width: '100%',
-                            border: '1px dashed #2e7d4d',
-                            background: '#f8fbf9',
-                            color: '#0f3b26',
-                            borderRadius: '10px',
-                            height: '38px',
-                            padding: '0 12px',
-                            fontSize: 14,
-                            fontWeight: 500,
-                            textAlign: 'center',
-                            cursor: pickerLineBusy ? 'not-allowed' : 'pointer',
-                          }}
-                        >
-                          Beheer locaties
-                        </button>
-                      ) : null}
                     </div>
 
                     <div style={{ display: 'grid', gap: '8px', minWidth: 0 }}>
@@ -1292,6 +1267,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     </div>
                   </div>
                   <div className="rz-modal-actions">
+                    {canManageLocations ? (
+                      <Button variant="secondary" type="button" disabled={pickerLineBusy} onClick={openLocationManagement}>
+                        Beheer locaties
+                      </Button>
+                    ) : null}
                     <Button
                       variant="secondary"
                       type="button"

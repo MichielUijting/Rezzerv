@@ -1,12 +1,12 @@
-"""
+﻿"""
 Technical Design Reference:
 - TD Section: TD-03 Receipt ingestion en parsers
 - Module Role: Receipt source parsing and data extraction
 - Runtime Type: production
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
-- Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Reads Data: none
+- Writes Data: none
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -16,13 +16,13 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-FUNCTIONAL_STATUS_LABELS = {
-    "approved": "Gecontroleerd",
-    "parsed": "Controle nodig",
-    "partial": "Controle nodig",
-    "review_needed": "Controle nodig",
-    "failed": "Controle nodig",
-    "duplicate": "Controle nodig",
+PARSER_QUALITY_LABELS = {
+    "approved": "Parser bruikbaar",
+    "parsed": "Controle parser nodig",
+    "partial": "Controle parser nodig",
+    "review_needed": "Controle parser nodig",
+    "failed": "Controle parser nodig",
+    "duplicate": "Controle parser nodig",
 }
 
 
@@ -62,7 +62,7 @@ def _discount_sum(lines: list[dict[str, Any]]) -> Decimal:
 
 def _status_explanation(result: Any, net_line_sum: Decimal | None, chosen_total: Decimal | None) -> dict[str, Any]:
     parse_status = str(getattr(result, "parse_status", "") or "").strip().lower()
-    label = FUNCTIONAL_STATUS_LABELS.get(parse_status, "Controle nodig")
+    label = PARSER_QUALITY_LABELS.get(parse_status, "Controle parser nodig")
     reasons: list[str] = []
 
     if not getattr(result, "is_receipt", False):
@@ -88,9 +88,12 @@ def _status_explanation(result: Any, net_line_sum: Decimal | None, chosen_total:
 
     return {
         "technical_parse_status": parse_status or None,
-        "po_norm_status_label": label,
+        "parser_quality_label": label,
         "reasons": reasons,
-        "ssot_note": "Functionele status voor Kassa blijft afkomstig uit receipt_status_baseline_service_v4 / apply_po_norm_status; deze explainability wijzigt geen status.",
+        "ssot_note": (
+            "Deze explainability beschrijft parserkwaliteit. De functionele "
+            "Kassa-status komt uitsluitend uit apply_po_norm_status."
+        ),
     }
 
 
@@ -98,7 +101,7 @@ def build_receipt_explainability(result: Any, source_context: dict[str, Any] | N
     """Build generic receipt parser explainability without changing parser decisions.
 
     Read-only: this explains the existing parser result and must not select a
-    different total, article line, OCR route or status.
+    different total, article line, OCR route or functional PO status.
     """
     lines = getattr(result, "lines", None) or []
     parser_diagnostics = getattr(result, "parser_diagnostics", None)

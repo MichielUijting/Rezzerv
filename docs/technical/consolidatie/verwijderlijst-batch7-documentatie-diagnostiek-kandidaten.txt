@@ -1,0 +1,8 @@
+﻿backend/receipt_ingestion/diagnostics/__init__.py
+backend/receipt_ingestion/diagnostics/summary.py
+backend/receipt_ingestion/normalized_review_diagnostics.py
+docs/architecture/R7c11_image_preprocessing_route_diagnostics.md
+docs/architecture/R7c16_perspective_geometry_diagnostics.md
+docs/architecture/R7c5_receipt_region_isolation_diagnostics.md
+docs/architecture/R7c8_paddle_text_layout_diagnostics.md
+docs/Rezzerv-v01.08.98-diagnose-op-v01.08.96-basis.txt

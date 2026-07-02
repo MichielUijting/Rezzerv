@@ -5,8 +5,8 @@ Technical Design Reference:
 - Runtime Type: production
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
-- Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Reads Data: no
+- Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -15,9 +15,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
+import re
 
 from app.receipt_ingestion.duplicate_lines import is_near_duplicate_of_previous
 from app.receipt_ingestion.line_classifier import classification_allows_append
+from app.receipt_ingestion.package_label_extraction import apply_package_extraction_to_candidate
+from app.receipt_ingestion.product_name_normalization import normalize_product_name_label
+from app.receipt_ingestion.spaarzegels_terms import spaarzegels_financial_metadata
+from app.receipt_ingestion.text_encoding_normalization import normalize_receipt_text_encoding
 
 
 CleanLabel = Callable[[str | None], str]
@@ -32,6 +37,79 @@ InvalidLabelCheck = Callable[[str], bool]
 def _is_validated_savings_action_path(function_name: str, append_branch: str) -> bool:
     """Return True only for the existing savings/action value-line parser path."""
     return function_name == '_extract_savings_action_lines' and append_branch == 'savings_action_line'
+
+
+
+
+def _is_ah_receipt_context(
+    *,
+    store_name: str | None,
+    filename: str | None,
+    raw_line: str | None,
+    normalized_line: str | None,
+    parser_path: str | None,
+) -> bool:
+    haystack = " ".join([
+        str(store_name or ""),
+        str(filename or ""),
+        str(raw_line or ""),
+        str(normalized_line or ""),
+        str(parser_path or ""),
+    ]).lower()
+    return (
+        "albert heijn" in haystack
+        or "ah to go" in haystack
+        or "bonuskaart" in haystack
+        or "jouw voordeel" in haystack
+        or "je voordeel" in haystack
+        or "profiles.ah" in haystack
+    )
+
+
+def _split_ah_leading_quantity_label(
+    label_value: str,
+    *,
+    qty_raw: str | None,
+    store_name: str | None,
+    filename: str | None,
+    raw_line: str | None,
+    normalized_line: str | None,
+    parser_path: str | None,
+) -> tuple[str, int | None, dict[str, Any] | None]:
+    if qty_raw:
+        return label_value, None, None
+    if not _is_ah_receipt_context(
+        store_name=store_name,
+        filename=filename,
+        raw_line=raw_line,
+        normalized_line=normalized_line,
+        parser_path=parser_path,
+    ):
+        return label_value, None, None
+
+    original_label = str(label_value or "").strip()
+    match = re.match(r"^\s*(?P<token>\d{1,2}|[TtIi|Nn])\s+(?P<label>\S.*)$", original_label)
+    if not match:
+        return label_value, None, None
+
+    token = match.group("token").strip()
+    remaining_label = re.sub(r"\s+", " ", match.group("label")).strip()
+    if not remaining_label or not any(ch.isalpha() for ch in remaining_label):
+        return label_value, None, None
+
+    if token.upper() in {"T", "I", "|"}:
+        quantity = 1
+    elif token.upper() == "N":
+        quantity = 2
+    else:
+        quantity = int(token)
+
+    return remaining_label, quantity, {
+        "original_label": original_label,
+        "normalized_label": remaining_label,
+        "quantity": quantity,
+        "token": token,
+    }
 
 
 def _as_float(value: Any) -> float | None:
@@ -86,10 +164,23 @@ def append_product_candidate(
     is_invalid_label: InvalidLabelCheck | None = None,
     confidence_score: float = 0.85,
 ) -> int | None:
-    """Single guarded gateway for appending receipt product candidates."""
+    """Single guarded gateway for appending receipt financial/product lines."""
     label_value = clean_label(label)
+    label_value, encoding_metadata = normalize_receipt_text_encoding(label_value)
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
+
+    ah_leading_quantity_metadata = None
+    ah_leading_quantity = None
+    label_value, ah_leading_quantity, ah_leading_quantity_metadata = _split_ah_leading_quantity_label(
+        label_value,
+        qty_raw=qty_raw,
+        store_name=store_name,
+        filename=filename,
+        raw_line=raw_line,
+        normalized_line=normalized_line,
+        parser_path=parser_path,
+    )
 
     savings_action_path = _is_validated_savings_action_path(function_name, append_branch)
     if is_invalid_label is not None and is_invalid_label(label_value) and not savings_action_path:
@@ -111,6 +202,8 @@ def append_product_candidate(
         }
 
     quantity = parse_quantity((qty_raw or '').replace('kg', '').replace('KG', '').strip()) if qty_raw else None
+    if quantity is None and ah_leading_quantity is not None:
+        quantity = ah_leading_quantity
     try:
         if quantity is not None and quantity <= 0:
             quantity = None
@@ -129,14 +222,30 @@ def append_product_candidate(
         unit_price = amount1
         line_total = amount1
 
-    raw_label_value = clean_label(raw_line) if savings_action_path and raw_line else label_value
+    raw_label_value = (
+        clean_label(raw_line)
+        if savings_action_path and raw_line
+        else (ah_leading_quantity_metadata.get('original_label') if ah_leading_quantity_metadata else label_value)
+    )
+    label_value, quantity, unit_value, package_metadata = apply_package_extraction_to_candidate(
+        label_value,
+        quantity=quantity,
+        unit='kg' if qty_raw and 'kg' in qty_raw.lower() else None,
+    )
+    label_value, quantity, name_metadata = normalize_product_name_label(label_value, quantity=quantity)
+    raw_label_value = raw_label_value or label_value
     line_total_float = amount_to_float(line_total)
+    financial_metadata = spaarzegels_financial_metadata(
+        raw_label_value or label_value,
+        label_text=label_value,
+        detail_text=raw_label_value or normalized_line or raw_line,
+    )
 
     candidate_line = {
         'raw_label': raw_label_value,
         'normalized_label': label_value,
         'quantity': amount_to_float(quantity),
-        'unit': 'kg' if qty_raw and 'kg' in qty_raw.lower() else None,
+        'unit': unit_value,
         'unit_price': amount_to_float(unit_price),
         'line_total': line_total_float,
         'discount_amount': None,
@@ -144,6 +253,9 @@ def append_product_candidate(
         'confidence_score': confidence_score,
         'source_index': source_index,
     }
+    if financial_metadata:
+        candidate_line.update(financial_metadata)
+
     if extracted and is_near_duplicate_of_previous(candidate_line, extracted[-1]):
         _consolidate_with_previous(extracted[-1], candidate_line)
         return len(extracted) - 1
@@ -170,6 +282,44 @@ def append_product_candidate(
         'classification_trace': classification_trace,
         'validated_savings_action_path': savings_action_path,
     }
+    if encoding_metadata:
+        producer_trace.update({
+            'encoding_normalization_applied': True,
+            'encoding_original_text': encoding_metadata.get('original_text'),
+            'encoding_normalized_text': encoding_metadata.get('normalized_text'),
+            'encoding_replacements': encoding_metadata.get('encoding_replacements'),
+        })
+    if package_metadata:
+        producer_trace.update({
+            'package_extraction_applied': True,
+            'package_text': package_metadata.get('package_text'),
+            'package_quantity': package_metadata.get('package_quantity'),
+            'package_unit': package_metadata.get('package_unit'),
+        })
+    if ah_leading_quantity_metadata:
+        producer_trace.update({
+            'ah_leading_quantity_normalization_applied': True,
+            'ah_leading_quantity_original_label': ah_leading_quantity_metadata.get('original_label'),
+            'ah_leading_quantity_normalized_label': ah_leading_quantity_metadata.get('normalized_label'),
+            'ah_leading_quantity': ah_leading_quantity_metadata.get('quantity'),
+            'ah_leading_quantity_token': ah_leading_quantity_metadata.get('token'),
+        })
+    if name_metadata:
+        producer_trace.update({
+            'product_name_normalization_applied': True,
+            'product_name_original_label': name_metadata.get('original_label'),
+            'product_name_normalized_label': name_metadata.get('normalized_label'),
+            'product_name_normalization_rules': name_metadata.get('normalization_rules'),
+        })
+    if financial_metadata:
+        producer_trace.update({
+            'line_type': financial_metadata.get('line_type'),
+            'is_spaarzegels': True,
+            'include_in_receipt_total': True,
+            'exclude_from_inventory': True,
+            'external_matching_allowed': False,
+            'matched_spaarzegels_term': financial_metadata.get('matched_spaarzegels_term'),
+        })
 
     candidate_line['producer_trace'] = producer_trace
     extracted.append(candidate_line)

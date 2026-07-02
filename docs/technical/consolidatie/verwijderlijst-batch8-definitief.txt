@@ -1,0 +1,3 @@
+﻿tools/debug_output/
+deprecated/regression/patches/
+patches/frontend/
