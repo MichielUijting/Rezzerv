@@ -12099,11 +12099,18 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                         WHERE rtl.receipt_table_id = rt.id
                           AND COALESCE(rtl.is_deleted, 0) = 0
                     ), 0) AS line_total_sum,
-                    COALESCE(rt.discount_total, 0) AS discount_total_effective,
                     COALESCE((
-                        SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0))
+                        SELECT SUM(COALESCE(rtl.discount_amount, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
+                          AND COALESCE(rtl.is_deleted, 0) = 0
+                    ), 0) AS line_discount_sum,
+                    COALESCE(rt.discount_total, 0) AS discount_total_effective,
+                    COALESCE((
+                        SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0) + COALESCE(rtl.discount_amount, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                          AND COALESCE(rtl.is_deleted, 0) = 0
                     ), 0) + COALESCE(rt.discount_total, 0) AS net_line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
@@ -12205,11 +12212,18 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
                         WHERE rtl.receipt_table_id = rt.id
                           AND COALESCE(rtl.is_deleted, 0) = 0
                     ), 0) AS line_total_sum,
-                    COALESCE(rt.discount_total, 0) AS discount_total_effective,
                     COALESCE((
-                        SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0))
+                        SELECT SUM(COALESCE(rtl.discount_amount, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
+                          AND COALESCE(rtl.is_deleted, 0) = 0
+                    ), 0) AS line_discount_sum,
+                    COALESCE(rt.discount_total, 0) AS discount_total_effective,
+                    COALESCE((
+                        SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0) + COALESCE(rtl.discount_amount, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                          AND COALESCE(rtl.is_deleted, 0) = 0
                     ), 0) + COALESCE(rt.discount_total, 0) AS net_line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
@@ -12302,11 +12316,18 @@ def get_receipt_detail(receipt_table_id: str, authorization: Optional[str] = Hea
                         WHERE rtl.receipt_table_id = rt.id
                           AND COALESCE(rtl.is_deleted, 0) = 0
                     ), 0) AS line_total_sum,
-                    COALESCE(rt.discount_total, 0) AS discount_total_effective,
                     COALESCE((
-                        SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0))
+                        SELECT SUM(COALESCE(rtl.discount_amount, 0))
                         FROM receipt_table_lines rtl
                         WHERE rtl.receipt_table_id = rt.id
+                          AND COALESCE(rtl.is_deleted, 0) = 0
+                    ), 0) AS line_discount_sum,
+                    COALESCE(rt.discount_total, 0) AS discount_total_effective,
+                    COALESCE((
+                        SELECT SUM(COALESCE(COALESCE(rtl.corrected_line_total, rtl.line_total), 0) + COALESCE(rtl.discount_amount, 0))
+                        FROM receipt_table_lines rtl
+                        WHERE rtl.receipt_table_id = rt.id
+                          AND COALESCE(rtl.is_deleted, 0) = 0
                     ), 0) + COALESCE(rt.discount_total, 0) AS net_line_total_sum
                 FROM receipt_tables rt
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
@@ -12522,7 +12543,8 @@ def get_receipt_explainability(receipt_table_id: str, authorization: Optional[st
 
     status_input["line_count"] = len(active_lines)
     status_input["line_total_sum"] = float(line_total_sum)
-    status_input["net_line_total_sum"] = float(line_total_sum + discount_total)
+    status_input["line_discount_sum"] = float(line_discount_sum)
+    status_input["net_line_total_sum"] = float(line_total_sum + line_discount_sum + discount_total)
 
     status_payload = apply_po_norm_status(status_input)
 
@@ -18607,9 +18629,3 @@ def generate_article_testdata(authorization: Optional[str] = Header(None)):
 
 from app.api.router import api_router
 app.include_router(api_router)
-
-
-
-
-
-
