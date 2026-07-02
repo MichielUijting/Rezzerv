@@ -958,7 +958,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     const nextDrafts = {}
     ;(receipt?.lines || []).forEach((line) => {
       nextDrafts[line.id] = {
-        article_name: line?.display_label ?? line?.corrected_raw_label ?? line?.raw_label ?? '',
+        article_name: line?.normalized_label ?? line?.display_label ?? line?.corrected_raw_label ?? line?.raw_label ?? '',
         quantity: line?.display_quantity ?? line?.corrected_quantity ?? line?.quantity ?? '',
         unit: line?.display_unit ?? line?.corrected_unit ?? line?.unit ?? '',
         unit_price: line?.display_unit_price ?? line?.corrected_unit_price ?? line?.unit_price ?? '',
@@ -976,7 +976,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   const lines = baseLines.filter((line) => !Boolean(lineDrafts[line.id]?.is_deleted ?? line?.is_deleted))
   const sortedLines = useMemo(() => sortItems(lines, lineSort, {
     lineIndex: (line) => Number(line?.line_index ?? 0),
-    article: (line) => lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || '',
+    article: (line) => lineDrafts[line.id]?.article_name || line?.normalized_label || line?.display_label || line?.raw_label || '',
     quantity: (line) => Number(lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? 0),
     unit: (line) => lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || '',
     unitPrice: (line) => Number(lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? 0),
@@ -1038,7 +1038,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
       filterable: true,
       filterLabel: filterLabels[column.key],
       getSortValue: (line) => {
-        if (column.key === 'article') return lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || ''
+        if (column.key === 'article') return lineDrafts[line.id]?.article_name || line?.normalized_label || line?.display_label || line?.raw_label || ''
         if (column.key === 'quantity') return Number(lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? 0)
         if (column.key === 'unit') return lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || ''
         if (column.key === 'unitPrice') return Number(lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? 0)
@@ -1047,7 +1047,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
         return ''
       },
       getFilterValue: (line) => {
-        if (column.key === 'article') return lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || ''
+        if (column.key === 'article') return lineDrafts[line.id]?.article_name || line?.normalized_label || line?.display_label || line?.raw_label || ''
         if (column.key === 'quantity') return lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? ''
         if (column.key === 'unit') return lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || ''
         if (column.key === 'unitPrice') return lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? ''
@@ -1261,7 +1261,7 @@ async function saveLine(lineId, overrides = null) {
     const exportLines = lines.filter((line) => selectedSet.has(line.id))
     const rows = exportLines.map((line) => {
       const draft = lineDrafts[line.id] || {}
-      return [draft.article_name || line.display_label || line.raw_label || '', draft.quantity ?? '', draft.unit || '', draft.unit_price ?? '', draft.line_total ?? '', line.discount_amount ?? '', line.barcode || '']
+      return [draft.article_name || line.normalized_label || line.display_label || line.raw_label || '', draft.quantity ?? '', draft.unit || '', draft.unit_price ?? '', draft.line_total ?? '', line.discount_amount ?? '', line.barcode || '']
     })
     const csv = [['Artikel in bon', 'Aantal', 'Eenheid', 'Stukprijs', 'Regelbedrag', 'Korting', 'Barcode'], ...rows].map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -1408,8 +1408,8 @@ async function saveLine(lineId, overrides = null) {
                     const draft = lineDrafts[line.id] || {}
                     return (
                       <tr key={line.id} data-testid={`receipt-line-row-${line.id}`} className={selected ? 'rz-row-selected' : ''}>
-                        <td><input type="checkbox" data-testid={`receipt-line-select-${line.id}`} checked={selected} onChange={() => toggleLine(line.id)} aria-label={`Selecteer regel ${draft.article_name || line.display_label || line.id}`} /></td>
-                        <td>{canEdit ? <input className="rz-input" value={draft.article_name ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'article_name', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'article_name', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'article_name', event.target.value)} /> : <span data-testid={`receipt-line-status-${line.id}`}>{draft.article_name || line.display_label || '-'}</span>}</td>
+                        <td><input type="checkbox" data-testid={`receipt-line-select-${line.id}`} checked={selected} onChange={() => toggleLine(line.id)} aria-label={`Selecteer regel ${draft.article_name || line.normalized_label || line.display_label || line.id}`} /></td>
+                        <td>{canEdit ? <input className="rz-input" value={draft.article_name ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'article_name', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'article_name', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'article_name', event.target.value)} /> : <span data-testid={`receipt-line-status-${line.id}`}>{draft.article_name || line.normalized_label || line.display_label || '-'}</span>}</td>
                         <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.001" value={draft.quantity ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'quantity', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'quantity', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'quantity', event.target.value)} /> : formatQuantity(draft.quantity ?? line.display_quantity ?? line.quantity)}</td>
                         <td>{canEdit ? <input className="rz-input" value={draft.unit ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'unit', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'unit', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'unit', event.target.value)} /> : (draft.unit || line.display_unit || '-')}</td>
                         <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.unit_price ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'unit_price', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'unit_price', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'unit_price', event.target.value)} /> : formatMoney(draft.unit_price ?? line.display_unit_price ?? line.unit_price, receipt?.currency)}</td>
