@@ -16,7 +16,6 @@ from app.db import engine
 from app.receipt_ingestion.debug_artifact_store import read_ingest_debug_artifact_for_receipt
 from app.services.kassa_line_normalization_report_service import build_kassa_line_normalization_report
 from app.services.kassa_parse_quality_report_service import build_kassa_parse_quality_report
-from app.testing_receipt_line_diagnosis_routes import build_receipt_line_diagnosis
 from app.testing_receipt_parser_diagnosis_routes import build_receipt_parser_diagnosis
 
 router = APIRouter(prefix='/api/testing', tags=['receipt-diagnosis'])
@@ -175,15 +174,6 @@ def build_parse_quality_diagnosis(receipt_table_id: str, household_id: str | Non
     }
 
 
-@router.get('/receipt-line-diagnosis')
-def receipt_line_diagnosis(householdId: str = '1', filenames: str | None = None):
-    return build_receipt_line_diagnosis(engine, household_id=householdId, filenames=None)
-
-
-@router.get('/receipt-line-diagnosis/download')
-def receipt_line_diagnosis_download(householdId: str = '1', filenames: str | None = None):
-    payload = build_receipt_line_diagnosis(engine, household_id=householdId, filenames=None)
-    return _download_json(payload, 'receipt-line-diagnosis')
 
 
 @router.get('/receipt-parser-diagnosis')
