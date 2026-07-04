@@ -121,6 +121,35 @@ def _as_float(value: Any) -> float | None:
         return None
 
 
+def _split_supporting_amount_product_label(label_value: str) -> tuple[str, dict[str, Any] | None]:
+    """Preserve product labels that were OCR/parser-prefixed with supporting amount text.
+
+    Examples:
+    - "Prijs per kg" stays unchanged and is blocked by the classifier.
+    - "Prijs per kg KOMKOMMER" becomes "KOMKOMMER" so the product line is preserved.
+    """
+    original_label = str(label_value or "").strip()
+    lowered = original_label.lower()
+
+    for token in ("prijs per kg", "prijs/kg", "prijs per stuk"):
+        token_lower = token.lower()
+        if lowered == token_lower:
+            return original_label, None
+
+        prefix = token_lower + " "
+        if lowered.startswith(prefix):
+            remaining = original_label[len(token):].strip(" :-\t")
+            if remaining and any(ch.isalpha() for ch in remaining):
+                return remaining, {
+                    "supporting_amount_prefix_normalization_applied": True,
+                    "supporting_amount_prefix_original_label": original_label,
+                    "supporting_amount_prefix_normalized_label": remaining,
+                    "supporting_amount_prefix_token": token,
+                }
+
+    return original_label, None
+
+
 def _consolidate_with_previous(previous: dict[str, Any], current: dict[str, Any]) -> None:
     previous_total = _as_float(previous.get('line_total'))
     current_total = _as_float(current.get('line_total'))
@@ -167,6 +196,7 @@ def append_product_candidate(
     """Single guarded gateway for appending receipt financial/product lines."""
     label_value = clean_label(label)
     label_value, encoding_metadata = normalize_receipt_text_encoding(label_value)
+    label_value, supporting_amount_prefix_metadata = _split_supporting_amount_product_label(label_value)
     if not label_value or len(label_value) < 2 or label_value.replace(' ', '').isdigit():
         return None
 
@@ -189,6 +219,17 @@ def append_product_candidate(
     classification_trace = trace_line(label_value) if trace_line is not None else None
     classification = str((classification_trace or {}).get('classification') or classify_line(label_value))
     classification_allowed = classification_allows_append(classification)
+
+    if supporting_amount_prefix_metadata and not classification_allowed and (amount1_raw or amount2_raw):
+        classification = 'product_candidate'
+        classification_allowed = True
+        classification_trace = {
+            'classification': classification,
+            'stage': 'runtime_gateway',
+            'rule': 'SUPPORTING_AMOUNT_PREFIX_PRODUCT_LABEL',
+            'matched': label_value,
+        }
+
     append_allowed = classification_allowed or savings_action_path
     if not append_allowed:
         return None
@@ -289,6 +330,8 @@ def append_product_candidate(
             'encoding_normalized_text': encoding_metadata.get('normalized_text'),
             'encoding_replacements': encoding_metadata.get('encoding_replacements'),
         })
+    if supporting_amount_prefix_metadata:
+        producer_trace.update(supporting_amount_prefix_metadata)
     if package_metadata:
         producer_trace.update({
             'package_extraction_applied': True,
