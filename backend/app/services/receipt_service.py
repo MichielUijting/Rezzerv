@@ -17,6 +17,7 @@ from app.receipt_ingestion.profiles.ah.corrections import (
     _ah_remove_duplicate_receipt_discount,
     _ah_fix_total_from_net_sum,
     _ah_filter_ocr_conflict_footer_noise_lines,
+    _ah_repair_image_balance_from_reliable_lines,
 )
 from app.receipt_ingestion.profiles.ah.reconstruction import (
     _r9_38e2_should_use_ah_paddle_reconstruction,
@@ -1536,6 +1537,16 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                     lines=image_result.lines or [],
                     store_name=image_result.store_name,
                 )
+
+                image_result.lines, image_result.discount_total, ah_balance_repair_diagnostics = _ah_repair_image_balance_from_reliable_lines(
+                    reliable_lines=paddle_lines or [],
+                    lines=image_result.lines or [],
+                    store_name=image_result.store_name,
+                    total_amount=image_result.total_amount,
+                    discount_total=image_result.discount_total,
+                )
+                if ah_balance_repair_diagnostics:
+                    diagnostics.update(ah_balance_repair_diagnostics)
 
                 image_result.total_amount = _ah_fix_total_from_net_sum(
                     text_lines=ah_source_lines_for_total,
