@@ -60,6 +60,11 @@ GENERIC_METADATA_TOKENS = (
 GENERIC_DEPOSIT_RETURN_TOKENS = (
     'statiegeld retour', 'retour statiegeld', 'emballage retour', 'fust retour',
 )
+GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKENS = (
+    'prijs per kg',
+    'prijs/kg',
+    'prijs per stuk',
+)
 PRICED_DISCOUNT_ARTICLE_TOKENS = (
     'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
     'lidl plus korting', 'totaal korting',
@@ -117,6 +122,9 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
         return _decision('ignore', 'EMPTY_OR_WHITESPACE_LINE')
     lowered = normalized.lower()
     upper = normalized.upper().replace(',', '.')
+    supporting_amount_token = _token_match(lowered, GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKENS)
+    if supporting_amount_token:
+        return _decision('amount_detail', 'GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKEN', supporting_amount_token)
     if _is_value_line_label_without_amount(lowered):
         return _decision('product_candidate', 'GENERIC_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION', normalized)
     if re.fullmatch(r'(?:ZA|ZO|ZON)\s+\d{1,2}\.\d{2}', upper):
@@ -371,4 +379,4 @@ def diagnose_article_line_classification(
 
 
 def classification_allows_append(classification: str | None) -> bool:
-    return classification not in BLOCKING_CLASSIFICATIONS
+    return str(classification or '') in ARTICLE_CLASSIFICATIONS
