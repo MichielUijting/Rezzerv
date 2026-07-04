@@ -36,13 +36,13 @@ test.describe('Kassa frontend-regressie', () => {
     const consoleErrors = attachConsoleErrorCollector(page);
 
     await expectRouteLoads(page, '/kassa/nieuw', [
-      'Kassa',
-      'Kassabon',
-      'Upload',
-      'Inlezen',
+      'Bon toevoegen',
+      'Sleep hier je kassabon',
+      'Bestanden kiezen',
+      'Camera openen',
     ]);
 
-    await expect(page.locator('body')).toContainText(/Kassa|Kassabon|Upload|Inlezen/i);
+    await expect(page.locator('body')).toContainText(/Bon toevoegen|Sleep hier je kassabon|Bestanden kiezen|Camera openen/i);
     await expect(page.getByRole('button', { name: 'Inleeskwaliteit' })).toHaveCount(0);
     await expect(page.getByTestId('kassa-parse-quality-diagnostics')).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
