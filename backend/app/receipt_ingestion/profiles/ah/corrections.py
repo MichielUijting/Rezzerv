@@ -522,6 +522,167 @@ def _ah_apply_discount_to_best_bonus_target(lines: list[dict[str, Any]], discoun
     }
 
 
+
+def _ah_filter_savings_discount_block_lines(
+    *,
+    text_lines: list[str],
+    lines: list[dict[str, Any]],
+    store_name: str | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Remove AH savings-block discount rows that OCR exposed as product lines.
+
+    AH image receipts can contain an explicit savings block between the product
+    subtotal and "JOUW VOORDEEL". Rows with KRAS/BBOX/BONUS prefixes in that
+    block are discount evidence, not article rows. Koopzegels remain protected
+    value lines after the final subtotal.
+    """
+    if not _is_ah_store_context(store_name, text_lines):
+        return lines, None
+
+    normalized_lines = [
+        re.sub(r"\s+", " ", str(line or "")).strip()
+        for line in (text_lines or [])
+    ]
+
+    first_subtotal_index: int | None = None
+    savings_total_index: int | None = None
+
+    for index, line in enumerate(normalized_lines):
+        lowered = line.lower()
+        if first_subtotal_index is None and "subtotaal" in lowered:
+            first_subtotal_index = index
+            continue
+        if first_subtotal_index is not None and (
+            "jouw voordeel" in lowered or "je voordeel" in lowered
+        ):
+            savings_total_index = index
+            break
+
+    if first_subtotal_index is None or savings_total_index is None:
+        return lines, None
+    if savings_total_index <= first_subtotal_index:
+        return lines, None
+
+    discount_prefix_re = re.compile(r"^\s*(kras|bbox|bonus)\b", re.I)
+
+    kept: list[dict[str, Any]] = []
+    removed: list[dict[str, Any]] = []
+
+    for line in lines or []:
+        if not isinstance(line, dict):
+            kept.append(line)
+            continue
+
+        trace = line.get("producer_trace") or {}
+        source_index_raw = line.get("source_index", trace.get("source_index"))
+        try:
+            source_index = int(source_index_raw)
+        except Exception:
+            kept.append(line)
+            continue
+
+        label = str(
+            line.get("raw_label")
+            or line.get("normalized_label")
+            or line.get("display_label")
+            or ""
+        ).strip()
+
+        if (
+            first_subtotal_index < source_index < savings_total_index
+            and discount_prefix_re.search(label)
+        ):
+            removed.append(dict(line))
+            continue
+
+        kept.append(line)
+
+    if not removed:
+        return lines, None
+
+    return kept, {
+        "m2c2i129b_ah_savings_discount_block_filter": {
+            "applied": True,
+            "removed_count": len(removed),
+            "removed_labels": [
+                str(
+                    line.get("raw_label")
+                    or line.get("normalized_label")
+                    or line.get("display_label")
+                    or ""
+                )
+                for line in removed
+            ],
+            "first_subtotal_index": int(first_subtotal_index),
+            "savings_total_index": int(savings_total_index),
+            "reason": "AH KRAS/BBOX/BONUS savings-block rows between product subtotal and JOUW VOORDEEL are not article rows",
+        }
+    }
+
+
+
+def _ah_apply_visible_savings_total_discount(
+    *,
+    text_lines: list[str],
+    lines: list[dict[str, Any]],
+    discount_total: Decimal | None,
+    store_name: str | None,
+) -> tuple[Decimal | None, dict[str, Any] | None]:
+    """Apply visible AH 'JOUW VOORDEEL' as receipt-level discount remainder.
+
+    The visible AH savings total includes line-level discounts already attached
+    to product rows. To avoid double counting, only the remainder is stored as
+    receipt-level discount_total.
+    """
+    if not _is_ah_store_context(store_name, text_lines):
+        return discount_total, None
+
+    visible_savings: Decimal | None = None
+    for raw in text_lines or []:
+        line = re.sub(r"\s+", " ", str(raw or "")).strip()
+        lowered = line.lower()
+        if "jouw voordeel" not in lowered and "je voordeel" not in lowered:
+            continue
+        matches = re.findall(r"(?<!\d)(\d{1,5}[\.,]\d{2})(?!\d)", line)
+        if not matches:
+            continue
+        candidate = _parse_decimal(matches[-1])
+        if candidate is not None and candidate > Decimal("0.00"):
+            visible_savings = candidate.quantize(Decimal("0.01"))
+            break
+
+    if visible_savings is None:
+        return discount_total, None
+
+    line_discount_sum = sum(
+        (
+            _r9_38e1_decimal(line.get("discount_amount"))
+            for line in (lines or [])
+            if isinstance(line, dict)
+        ),
+        Decimal("0.00"),
+    ).quantize(Decimal("0.01"))
+
+    current_receipt_discount = _r9_38e1_decimal(discount_total)
+
+    target_total_discount = (-visible_savings).quantize(Decimal("0.01"))
+    remainder = (target_total_discount - line_discount_sum).quantize(Decimal("0.01"))
+
+    if remainder == current_receipt_discount:
+        return discount_total, None
+
+    return (remainder if remainder != Decimal("0.00") else None), {
+        "m2c2i129b_ah_visible_savings_total_discount": {
+            "applied": True,
+            "visible_savings_total": float(visible_savings),
+            "line_discount_sum": float(line_discount_sum),
+            "previous_discount_total": float(current_receipt_discount),
+            "new_discount_total": float(remainder),
+            "reason": "AH visible JOUW VOORDEEL total is applied as discount remainder after existing line discounts",
+        }
+    }
+
+
 def _ah_repair_image_balance_from_reliable_lines(
     *,
     reliable_lines: list[str],

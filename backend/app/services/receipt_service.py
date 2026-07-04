@@ -17,6 +17,8 @@ from app.receipt_ingestion.profiles.ah.corrections import (
     _ah_remove_duplicate_receipt_discount,
     _ah_fix_total_from_net_sum,
     _ah_filter_ocr_conflict_footer_noise_lines,
+    _ah_filter_savings_discount_block_lines,
+    _ah_apply_visible_savings_total_discount,
     _ah_repair_image_balance_from_reliable_lines,
 )
 from app.receipt_ingestion.profiles.ah.reconstruction import (
@@ -1438,6 +1440,10 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
         )
 
         image_result = _choose_better_receipt_result(paddle_result, tesseract_result)
+        ah_ocr_context = bool(
+            ah_ocr_context
+            or str(getattr(image_result, 'store_name', '') or '').strip().lower() == 'albert heijn'
+        )
         if ah_paddle_merged_product_line and tesseract_result.is_receipt:
             image_result = tesseract_result
         if plus_safe_rotation_fallback_lines:
@@ -1504,6 +1510,8 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                 ah_paddle_refinement_diagnostics = None
                 ah_paddle_refinement_b_diagnostics = None
                 ah_paddle_refinement_c_diagnostics = None
+                ah_savings_discount_block_diagnostics = None
+                ah_visible_savings_discount_diagnostics = None
                 if _r9_38e2_should_use_ah_paddle_reconstruction(
                     store_name=image_result.store_name,
                     paddle_lines=paddle_lines or [],
@@ -1537,6 +1545,23 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                     lines=image_result.lines or [],
                     store_name=image_result.store_name,
                 )
+
+                image_result.lines, ah_savings_discount_block_diagnostics = _ah_filter_savings_discount_block_lines(
+                    text_lines=chosen_lines or paddle_lines or tesseract_lines or [],
+                    lines=image_result.lines or [],
+                    store_name=image_result.store_name,
+                )
+                if ah_savings_discount_block_diagnostics:
+                    diagnostics.update(ah_savings_discount_block_diagnostics)
+
+                image_result.discount_total, ah_visible_savings_discount_diagnostics = _ah_apply_visible_savings_total_discount(
+                    text_lines=chosen_lines or paddle_lines or tesseract_lines or [],
+                    lines=image_result.lines or [],
+                    discount_total=image_result.discount_total,
+                    store_name=image_result.store_name,
+                )
+                if ah_visible_savings_discount_diagnostics:
+                    diagnostics.update(ah_visible_savings_discount_diagnostics)
 
                 image_result.lines, image_result.discount_total, ah_balance_repair_diagnostics = _ah_repair_image_balance_from_reliable_lines(
                     reliable_lines=paddle_lines or [],
@@ -1579,6 +1604,8 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                     'ah_total_before_final_repair': float(ah_total_before) if ah_total_before is not None else None,
                     'ah_total_after_final_repair': float(image_result.total_amount) if image_result.total_amount is not None else None,
                     **(ah_footer_noise_diagnostics or {}),
+                    **(ah_savings_discount_block_diagnostics or {}),
+                    **(ah_visible_savings_discount_diagnostics or {}),
                     **(ah_paddle_reconstruction_diagnostics or {}),
                     **(ah_paddle_refinement_diagnostics or {}),
                     **(ah_paddle_refinement_b_diagnostics or {}),
