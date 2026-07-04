@@ -89,7 +89,14 @@ def _is_value_line_label_without_amount(lowered: str) -> bool:
 
 def _token_match(lowered: str, tokens: tuple[str, ...]) -> str | None:
     for token in tokens:
-        if token in lowered:
+        token_value = str(token or '').strip().lower()
+        if not token_value:
+            continue
+        if re.fullmatch(r'[a-z0-9]+', token_value):
+            if re.search(rf'(?<![a-z0-9]){re.escape(token_value)}(?![a-z0-9])', lowered):
+                return token
+            continue
+        if token_value in lowered:
             return token
     return None
 
