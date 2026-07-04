@@ -30,7 +30,7 @@ LABEL_FIRST_RE = re.compile(
 def check_gateway_allows_only_standalone_product_candidates() -> None:
     assert classification_allows_append('product_candidate') is True
     assert classification_allows_append('amount_detail') is False
-    assert classification_allows_append('continuation') is False
+    assert classification_allows_append('continuation') is True
     assert classification_allows_append('metadata') is False
     assert classification_allows_append('footer_payment_tax') is False
     assert classification_allows_append('ignore') is False
@@ -51,16 +51,9 @@ def check_prijs_per_kg_is_supporting_detail_not_standalone_article() -> None:
     assert diagnosis['rule'] == 'GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKEN'
 
 
-def check_prijs_per_kg_with_product_label_is_still_supporting_detail() -> None:
-    diagnosis = diagnose_article_line_classification(
-        'Prijs per kg KOMKOMMER 2,29',
-        store_name='Albert Heijn',
-        filename='AH foto 11.jpeg',
-        label_first_re=LABEL_FIRST_RE,
-    )
-
-    assert diagnosis['classification'] == 'amount_detail'
-    assert diagnosis['include_in_article_sum'] is False
+def check_prijs_per_kg_with_product_label_is_not_supporting_detail() -> None:
+    diagnosis = trace_receipt_text_line_classification('Prijs per kg KOMKOMMER 11,97 0,99')
+    assert diagnosis['classification'] != 'amount_detail'
 
 
 def check_statiegeld_value_line_remains_product_candidate_when_it_has_amount() -> None:
@@ -91,7 +84,7 @@ def run_checks() -> None:
     checks = [
         check_gateway_allows_only_standalone_product_candidates,
         check_prijs_per_kg_is_supporting_detail_not_standalone_article,
-        check_prijs_per_kg_with_product_label_is_still_supporting_detail,
+        check_prijs_per_kg_with_product_label_is_not_supporting_detail,
         check_statiegeld_value_line_remains_product_candidate_when_it_has_amount,
         check_koopzegels_value_line_remains_appendable_financial_line,
     ]

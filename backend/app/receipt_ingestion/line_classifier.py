@@ -124,7 +124,9 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
     upper = normalized.upper().replace(',', '.')
     supporting_amount_token = _token_match(lowered, GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKENS)
     if supporting_amount_token:
-        return _decision('amount_detail', 'GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKEN', supporting_amount_token)
+        suffix = lowered.split(supporting_amount_token, 1)[1].strip(" :-\t")
+        if not suffix or not any(ch.isalpha() for ch in suffix):
+            return _decision('amount_detail', 'GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKEN', supporting_amount_token)
     if _is_value_line_label_without_amount(lowered):
         return _decision('product_candidate', 'GENERIC_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION', normalized)
     if re.fullmatch(r'(?:ZA|ZO|ZON)\s+\d{1,2}\.\d{2}', upper):
@@ -379,4 +381,4 @@ def diagnose_article_line_classification(
 
 
 def classification_allows_append(classification: str | None) -> bool:
-    return str(classification or '') in ARTICLE_CLASSIFICATIONS
+    return str(classification or '') in (ARTICLE_CLASSIFICATIONS | {'continuation'})
