@@ -29,11 +29,6 @@ def _install_when_ready() -> None:
             except Exception:
                 pass
             try:
-                from .receipt_recompute_policy_patch import install_recompute_policy_patch
-                install_recompute_policy_patch(module)
-            except Exception:
-                pass
-            try:
                 from .services.receipt_parser_quality_patch import install_parser_quality_patch
                 install_parser_quality_patch(module)
             except Exception:
