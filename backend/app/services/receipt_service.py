@@ -104,6 +104,7 @@ from app.receipt_ingestion.service_parts.text_extraction import (
     _ocr_pdf_text_with_ocrmypdf,
     _preprocess_pdf_text,
 )
+from app.services.receipt_status_baseline_service import STATUS_LABELS
 from app.receipt_ingestion.service_parts.image_ocr_flow import (
     _ocr_image_text_with_paddle,
     _ocr_image_text_with_tesseract,
@@ -246,10 +247,14 @@ def find_existing_receipt_by_fingerprint(conn, household_id: str, fingerprint: s
             SELECT
                 rt.id AS receipt_table_id,
                 rr.id AS raw_receipt_id,
+                rr.original_filename,
+                rr.sha256_hash,
                 rt.store_name,
+                rt.store_branch,
                 rt.purchase_at,
                 rt.total_amount,
-                rt.parse_status
+                rt.parse_status,
+                rt.line_count
             FROM receipt_tables rt
             JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
             WHERE {' AND '.join(where_parts)}
@@ -1694,6 +1699,54 @@ def ensure_default_receipt_sources(engine, receipt_root: Path, household_id: str
     return defaults
 
 
+
+def _format_duplicate_amount(value: Any) -> str:
+    if value is None or value == '':
+        return 'onbekend bedrag'
+    try:
+        amount = Decimal(str(value)).quantize(Decimal('0.01'))
+        return f"€ {str(amount).replace('.', ',')}"
+    except Exception:
+        return str(value)
+
+
+def _po_norm_status_label_for_duplicate(parse_status: Any) -> str:
+    normalized = str(parse_status or '').strip()
+    return STATUS_LABELS.get(normalized, 'Controle nodig')
+
+
+def _build_duplicate_receipt_response(row: Any) -> dict[str, Any]:
+    data = dict(row or {})
+    raw_receipt_id = data.get('raw_receipt_id') or data.get('id')
+    receipt_table_id = data.get('receipt_table_id')
+    parse_status = data.get('parse_status') or data.get('raw_status')
+    filename = str(data.get('original_filename') or 'bestaande bon').strip() or 'bestaande bon'
+    purchase_at = data.get('purchase_at') or 'onbekende datum'
+    total_amount = data.get('total_amount')
+    status_label = _po_norm_status_label_for_duplicate(parse_status)
+    existing_receipt = {
+        'raw_receipt_id': raw_receipt_id,
+        'receipt_table_id': receipt_table_id,
+        'original_filename': filename,
+        'store_name': data.get('store_name'),
+        'store_branch': data.get('store_branch'),
+        'purchase_at': data.get('purchase_at'),
+        'total_amount': total_amount,
+        'parse_status': parse_status,
+        'line_count': data.get('line_count'),
+        'po_norm_status_label': status_label,
+    }
+    return {
+        'raw_receipt_id': raw_receipt_id,
+        'receipt_table_id': receipt_table_id,
+        'duplicate': True,
+        'duplicate_message': f"Deze bon is al ingelezen als {filename} op {purchase_at} totaal {_format_duplicate_amount(total_amount)}.",
+        'parse_status': parse_status,
+        'po_norm_status_label': status_label,
+        'existing_receipt': existing_receipt,
+    }
+
+
 def _store_raw_file(storage_root: Path, household_id: str, raw_receipt_id: str, filename: str, file_bytes: bytes) -> str:
     now = datetime.utcnow()
     target_dir = storage_root / str(household_id) / now.strftime('%Y') / now.strftime('%m')
@@ -1712,7 +1765,18 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
         duplicate = conn.execute(
             text(
                 '''
-                SELECT rr.id, rr.raw_status
+                SELECT
+                    rr.id AS raw_receipt_id,
+                    rr.raw_status,
+                    rr.original_filename,
+                    rr.sha256_hash,
+                    rt.id AS receipt_table_id,
+                    rt.store_name,
+                    rt.store_branch,
+                    rt.purchase_at,
+                    rt.total_amount,
+                    rt.parse_status,
+                    rt.line_count
                 FROM raw_receipts rr
                 LEFT JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id
                 WHERE rr.household_id = :household_id
@@ -1725,17 +1789,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             {'household_id': household_id, 'sha256_hash': digest},
         ).mappings().first()
         if duplicate:
-            existing_table = conn.execute(
-                text('SELECT id, parse_status FROM receipt_tables WHERE raw_receipt_id = :raw_receipt_id LIMIT 1'),
-                {'raw_receipt_id': duplicate['id']},
-            ).mappings().first()
-            return {
-                'raw_receipt_id': duplicate['id'],
-                'receipt_table_id': existing_table['id'] if existing_table else None,
-                'duplicate': True,
-                'duplicate_message': 'Deze kassabon is al eerder toegevoegd en is niet opnieuw geladen.',
-                'parse_status': existing_table['parse_status'] if existing_table else duplicate['raw_status'],
-            }
+            return _build_duplicate_receipt_response(duplicate)
 
     parse_result = parse_receipt_content(file_bytes, filename, detected_mime)
     if reject_non_receipt and not parse_result.is_receipt:
@@ -1745,13 +1799,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
         with engine.begin() as conn:
             existing_by_fingerprint = find_existing_receipt_by_fingerprint(conn, household_id, parse_fingerprint)
             if existing_by_fingerprint:
-                return {
-                    'raw_receipt_id': existing_by_fingerprint['raw_receipt_id'],
-                    'receipt_table_id': existing_by_fingerprint['receipt_table_id'],
-                    'duplicate': True,
-                    'duplicate_message': 'Deze kassabon is al eerder toegevoegd en is niet opnieuw geladen.',
-                    'parse_status': existing_by_fingerprint['parse_status'],
-                }
+                return _build_duplicate_receipt_response(existing_by_fingerprint)
     raw_receipt_id = uuid.uuid4().hex
     storage_path = _store_raw_file(receipt_storage_root, household_id, raw_receipt_id, filename, file_bytes)
 

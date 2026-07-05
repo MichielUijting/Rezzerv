@@ -44,6 +44,27 @@ function formatMoney(value, currency = 'EUR') {
   }
 }
 
+
+function getDuplicateReceiptTableId(result) {
+  return String(result?.existing_receipt?.receipt_table_id || result?.receipt_table_id || result?.receiptTableId || '')
+}
+
+function formatDuplicateImportMessageV2(result) {
+  const existing = result?.existing_receipt || {}
+  if (result?.duplicate_message) return String(result.duplicate_message)
+  const filename = String(existing.original_filename || '').trim()
+  const purchaseAt = existing.purchase_at ? formatDateTime(existing.purchase_at) : ''
+  const total = existing.total_amount !== undefined && existing.total_amount !== null ? formatMoney(existing.total_amount, existing.currency || 'EUR') : ''
+  const statusLabel = String(existing.po_norm_status_label || '').trim()
+  const parts = ['Deze bon is al ingelezen']
+  if (filename) parts.push(`als ${filename}`)
+  if (purchaseAt) parts.push(`op ${purchaseAt}`)
+  if (total && total !== '-') parts.push(`totaal ${total}`)
+  if (statusLabel) parts.push(`status ${statusLabel}`)
+  return `${parts.join(' ')}.`
+}
+
+
 function emailPartLabel(value) {
   if (value === 'attachment') return 'Bijlage uit e-mail'
   if (value === 'html_body') return 'HTML-body van e-mail'
@@ -2162,7 +2183,7 @@ export default function KassaPage() {
         }
         if (sharedResult?.shareStatus === 'success') {
           if (sharedResult.duplicate) {
-            announceDuplicate(sharedResult)
+            await announceDuplicate(sharedResult, items)
           } else {
             setDuplicateNotice('')
             setStatus('Gedeelde bon ontvangen. De bon staat nu in de Kassa.')
@@ -2198,22 +2219,40 @@ export default function KassaPage() {
     return () => window.clearTimeout(timeoutId)
   }, [receiptInboxFocusId])
 
-  function announceDuplicate(result) {
-    const message = formatDuplicateImportMessage(result)
+  async function announceDuplicate(result, sourceItems = receipts) {
+    const message = formatDuplicateImportMessageV2(result)
+    const existingReceiptId = getDuplicateReceiptTableId(result)
     setError('')
     setStatus('')
     setDuplicateNotice(message)
     showKassaFeedback('warning', message, {
       title: 'Bon al ingelezen',
-      detail: 'Deze upload is niet opnieuw toegevoegd. De bestaande kassabon blijft ongewijzigd in Kassa.',
-      key: 'kassa-duplicate-receipt',
+      detail: existingReceiptId ? 'De bestaande kassabon is geopend in Kassa.' : 'Deze upload is niet opnieuw toegevoegd. De bestaande kassabon blijft ongewijzigd in Kassa.',
+      key: `kassa-duplicate-receipt-${existingReceiptId || 'unknown'}`,
       dedupeMs: 0,
       testId: 'kassa-duplicate-overlay',
     })
+
+    if (existingReceiptId) {
+      setFilters(DEFAULT_RECEIPT_FILTERS)
+      setReceiptInboxFocusId(existingReceiptId)
+      setSelectedReceiptIds([existingReceiptId])
+      const refreshedItems = await loadReceipts(householdId, {
+        preserveDuplicateNotice: true,
+        openReceiptId: existingReceiptId,
+      })
+      const itemsForOpen = Array.isArray(refreshedItems) && refreshedItems.length ? refreshedItems : sourceItems
+      await openReceiptDetail(existingReceiptId, itemsForOpen)
+      if (isAddReceiptRoute) navigate('/kassa')
+    }
+
     try {
       window.requestAnimationFrame(() => {
+        const targetRow = existingReceiptId
+          ? document.querySelector(`[data-testid="kassa-row-${existingReceiptId}"]`)
+          : null
         const feedback = document.querySelector('[data-testid="receipt-duplicate-feedback"]')
-        feedback?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        ;(targetRow || feedback)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       })
     } catch {
       // ignore scroll issues
@@ -2540,7 +2579,7 @@ export default function KassaPage() {
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
       if (result?.duplicate) {
-        announceDuplicate(result)
+        await announceDuplicate(result)
       } else {
         clearCameraDraft()
             setOpenedReceiptId('')
@@ -2640,7 +2679,7 @@ export default function KassaPage() {
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
       if (result?.duplicate) {
-        announceDuplicate(result)
+        await announceDuplicate(result)
       } else {
         setOpenedReceiptId('')
         setOpenedReceipt(null)
@@ -2719,7 +2758,7 @@ export default function KassaPage() {
       const isBatchImport = Boolean(result?.batch)
       let keepUploading = false
       if (result?.duplicate && !isBatchImport) {
-        announceDuplicate(result)
+        await announceDuplicate(result)
       } else if (isBatchImport && result?.async && result?.batch_id) {
         setOpenedReceiptId('')
         setOpenedReceipt(null)
