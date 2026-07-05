@@ -43,6 +43,11 @@ def dec(value: Any) -> Decimal:
         return Decimal("0.00")
 
 
+def money(value: Any) -> str:
+    amount = dec(value)
+    return f"€ {str(amount).replace('.', ',')}"
+
+
 def clean_label(value: Any) -> str:
     text_value = AMOUNT_RE.sub(" ", str(value or "").lower())
     text_value = re.sub(r"[^a-z0-9à-öø-ÿ]+", " ", text_value)
@@ -134,6 +139,11 @@ def duplicate_matrix(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         visible = [row for row in group if row.get("receipt_table_id") and not row.get("receipt_deleted_at")]
         first = visible[0] if visible else group[0]
         for row in group:
+            duplicate_of = None if row.get("raw_receipt_id") == first.get("raw_receipt_id") else {
+                "original_filename": first.get("original_filename"),
+                "raw_receipt_id": first.get("raw_receipt_id"),
+                "receipt_table_id": first.get("receipt_table_id"),
+            }
             matrix.append({
                 "original_filename": row.get("original_filename"),
                 "sha256_hash": digest,
@@ -141,15 +151,16 @@ def duplicate_matrix(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "receipt_table_id": row.get("receipt_table_id"),
                 "visible_in_kassa": bool(row.get("receipt_table_id") and not row.get("receipt_deleted_at")),
                 "duplicate_group_size": len(group),
-                "duplicate_of": None if row.get("raw_receipt_id") == first.get("raw_receipt_id") else {
-                    "original_filename": first.get("original_filename"),
-                    "raw_receipt_id": first.get("raw_receipt_id"),
-                    "receipt_table_id": first.get("receipt_table_id"),
-                },
+                "duplicate_of": duplicate_of,
                 "store_name": row.get("store_name"),
                 "purchase_at": row.get("purchase_at"),
                 "total_amount": float(dec(row.get("total_amount"))) if row.get("total_amount") is not None else None,
                 "parse_status": row.get("parse_status") or row.get("raw_status"),
+                "duplicate_visibility_message": (
+                    f"Deze bon is al ingelezen als {first.get('original_filename') or 'bestaande bon'} "
+                    f"op {first.get('purchase_at') or 'onbekende datum'} totaal {money(first.get('total_amount'))}."
+                ),
+                "duplicate_open_receipt_table_id": first.get("receipt_table_id"),
             })
     return matrix
 
