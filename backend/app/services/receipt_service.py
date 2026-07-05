@@ -698,8 +698,68 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
         r'(?:\s+(?P<amount2>-?\d{1,6}(?:[\.,]\d{2})))?(?:\s+(?:EUR|[A-Z]{1,3}))?$',
         re.IGNORECASE,
     )
+    amount_first_tail_re = re.compile(
+        r'^(?P<amount>-?(?:\d{1,6}|[QOqOo])[\.,]\s?\d{2})\s*(?P<vat>[A-Z8]{1,3})?\s+(?P<tail>(?=.*[A-Za-z]).+)$',
+        re.IGNORECASE,
+    )
+    amount_first_weight_re = re.compile(
+        r'^(?P<amount>-?(?:\d{1,6}|[QOqOo])[\.,]\s?[\dZSs]{2})\s*(?P<vat>[A-Z8]{1,3})?\s*'
+        r'(?P<qty>\d+(?:[\.,]\d+)?)\s*kg\s*x\s*(?P<unit_price>\d{1,6}(?:[\.,]\d{2}))',
+        re.IGNORECASE,
+    )
+
+    loose_weight_detail_re = re.compile(
+        r'^(?P<qty>\d+(?:[\.,]\d+)?)\s*kg\s*x\s*(?P<unit_price>\d{1,6}(?:[\.,]\d{2}))',
+        re.IGNORECASE,
+    )
+
     pending_label: str | None = None
     pending_line_index: int | None = None
+
+    def clean_tail_label(value: str | None) -> str | None:
+        tail = re.sub(r'\s+', ' ', str(value or '')).strip(' .:-')
+        tail = re.sub(r'^(?:[A-Z]{1,3}|8)\s+', '', tail, flags=re.IGNORECASE).strip(' .:-')
+        tail = re.sub(r'\s+(?:[A-Z]{1,3}|8)$', '', tail, flags=re.IGNORECASE).strip(' .:-')
+        if not tail or not _contains_letter(tail):
+            return None
+        if _looks_like_non_product_receipt_label(tail):
+            return None
+        return tail
+
+    def clean_ocr_amount(value: str | None) -> str | None:
+        token = re.sub(r'\s+', '', str(value or '').strip())
+        if not token:
+            return None
+        token = token.replace('−', '-')
+        token = re.sub(r'^[QOqOo](?=[\.,])', '0', token)
+        token = token.replace('Z', '7').replace('z', '7')
+        token = token.replace('S', '5').replace('s', '5')
+        token = re.sub(r'[^0-9,\.\-]', '', token)
+        return token
+
+
+    def split_pending_label_amount(value: str | None) -> tuple[str | None, str | None]:
+        candidate = re.sub(r'\s+', ' ', str(value or '')).strip()
+        if not candidate:
+            return None, None
+
+        # Generic OCR case:
+        # "<label> Q,5ZBL..." / "<label> 0,57B..." where the amount belongs
+        # to the previous line total and trailing VAT/noise got glued to label.
+        match = re.match(
+            r'^(?P<label>.*?[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9 .&''’/-]*?)\s+'
+            r'(?P<amount>[QOqOo0-9][\.,]\s?[0-9ZSsz]{2})(?P<tail>[A-Za-z8]{1,8}.*)?$',
+            candidate,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return candidate, None
+
+        label = clean_tail_label(match.group('label')) or match.group('label').strip(' .:-')
+        amount = clean_ocr_amount(match.group('amount'))
+        if not label or not amount:
+            return candidate, None
+        return label, amount
 
     def append_line(label: str, qty_raw: str | None, amount1_raw: str | None, amount2_raw: str | None, *, source_index: int) -> int | None:
         return append_product_candidate(
@@ -754,6 +814,53 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
         normalized = re.sub(r'(?<=\d)/(?!/)(?=\d{2}\b)', ',', normalized)
         normalized = re.sub(r'^[^A-Za-z0-9]+', '', normalized).strip()
         normalized = re.sub(r'[^A-Za-z0-9]+$', '', normalized).strip()
+        normalized = re.sub(r'(?P<prefix>-?(?:\d{1,6}|[QOqOo])[\.,])\s+(?=\d{2}\b)', r'\g<prefix>', normalized)
+        normalized = re.sub(r'(?<=\d[\.,]\d{2})(?=[A-Z]{1,3}\b)', ' ', normalized)
+
+        loose_weight_detail_match = loose_weight_detail_re.match(normalized)
+        if pending_label and loose_weight_detail_match:
+            pending_clean_label, pending_amount = split_pending_label_amount(pending_label)
+            if pending_amount:
+                append_line(
+                    pending_clean_label or pending_label,
+                    f"{loose_weight_detail_match.group('qty')} kg",
+                    loose_weight_detail_match.group('unit_price'),
+                    pending_amount,
+                    source_index=source_index,
+                )
+                pending_label = None
+                pending_line_index = None
+                continue
+
+        amount_first_weight_match = amount_first_weight_re.match(normalized)
+        if pending_label and amount_first_weight_match:
+            append_line(
+                pending_label,
+                f"{amount_first_weight_match.group('qty')} kg",
+                amount_first_weight_match.group('unit_price'),
+                clean_ocr_amount(amount_first_weight_match.group('amount')),
+                source_index=source_index,
+            )
+            pending_label = None
+            pending_line_index = None
+            continue
+
+        amount_first_tail_match = amount_first_tail_re.match(normalized)
+        if amount_first_tail_match:
+            amount_raw = clean_ocr_amount(amount_first_tail_match.group('amount'))
+            tail_label = clean_tail_label(amount_first_tail_match.group('tail'))
+            if pending_label and amount_raw:
+                append_line(
+                    pending_label,
+                    None,
+                    amount_raw,
+                    None,
+                    source_index=source_index,
+                )
+            pending_label = tail_label
+            pending_line_index = None
+            continue
+
         classification = _classify_receipt_text_line(
             normalized,
             store_name=store_name,
@@ -774,7 +881,14 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
             pending_label = None
             continue
         if classification == 'amount_detail' and detail_match and pending_label:
-            append_line(pending_label, detail_match.group('qty'), detail_match.group('amount1'), detail_match.group('amount2'), source_index=source_index)
+            pending_clean_label, pending_amount = split_pending_label_amount(pending_label)
+            append_line(
+                pending_clean_label or pending_label,
+                detail_match.group('qty'),
+                detail_match.group('amount1'),
+                pending_amount or detail_match.group('amount2'),
+                source_index=source_index,
+            )
             pending_label = None
             pending_line_index = None
             continue
