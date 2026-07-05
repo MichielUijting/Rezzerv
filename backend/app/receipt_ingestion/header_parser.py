@@ -24,6 +24,23 @@ from app.receipt_ingestion.fingerprints import (
     _is_plausible_total_amount,
 )
 
+
+def _looks_like_fuzzy_total_label(value: str | None) -> bool:
+    """Recognize OCR variants of receipt total labels across store profiles."""
+    candidate = re.sub(r'\s+', ' ', str(value or '')).strip(' .:-')
+    if not candidate:
+        return False
+    first_token = candidate.split()[0].lower()
+    normalized = (
+        first_token
+        .replace('0', 'o')
+        .replace('1', 'l')
+        .replace('i', 'l')
+        .replace('|', 'l')
+        .replace('!', 'l')
+    )
+    return normalized in {'totaal', 'totall', 'totaai'}
+
 KNOWN_STORES = [
     'Albert Heijn', 'AH', 'Jumbo', 'Lidl', 'Plus', 'ALDI', 'Aldi', 'Action',
     'Gamma', 'Hornbach', 'Picnic', 'Bol', 'bol.com', 'Coolblue', 'Karwei',
@@ -154,6 +171,16 @@ def _purchase_at_from_lines(lines: Iterable[str], filename: str) -> str | None:
     candidates: list[tuple[int, str]] = []
     for candidate in list(lines):
         normalized_candidate = str(candidate or '').strip()
+        normalized_candidate = re.sub(
+            r'\b(\d{1,2})\s+(\d{1,2}[/-]\d{4})\b',
+            r'\1-\2',
+            normalized_candidate,
+        )
+        normalized_candidate = re.sub(
+            r'\b(\d{1,2}[/-]\d{1,2}[/-]\d{4})-\s+(\d{1,2}:\d{2}(?::\d{2})?)\b',
+            r'\1 \2',
+            normalized_candidate,
+        )
         lowered = normalized_candidate.lower()
         for pattern in patterns:
             match = pattern.search(normalized_candidate)
@@ -252,14 +279,17 @@ def _total_amount_from_lines(lines: list[str], filename: str) -> tuple[Decimal |
         if any(token in lowered for token in ('voordeel', 'korting', 'waarvan', 'bonus box')):
             continue
 
-        explicit = bool(explicit_total_pattern.search(lowered))
+        explicit = bool(explicit_total_pattern.search(lowered) or _looks_like_fuzzy_total_label(lowered))
+        explicit_line_start = bool(_looks_like_fuzzy_total_label(lowered))
         payment = bool(payment_pattern.search(lowered))
         if not explicit and not payment:
             continue
 
         amount = parsed_matches[-1]
         score = 0
-        if explicit:
+        if explicit_line_start:
+            score += 120
+        elif explicit:
             score += 40
         if payment:
             score += 25

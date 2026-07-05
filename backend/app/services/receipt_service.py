@@ -200,9 +200,30 @@ IGNORED_LINE_MARKERS = {
     'kassa', 'kassabon', 'ticket', 'bonnr', 'filiaal', 'adres', 'datum', 'tijd', 'transactie'
 }
 
+
 LOGGER = logging.getLogger(__name__)
 _PADDLE_OCR_INSTANCE = None
 
+
+def _looks_like_fuzzy_total_label(value: str | None) -> bool:
+    """Recognize OCR variants of receipt total labels.
+
+    Generic across store profiles. This must not depend on filenames, receipt ids,
+    hashes, article names, or store-specific receipt examples.
+    """
+    candidate = re.sub(r'\s+', ' ', str(value or '')).strip(' .:-')
+    if not candidate:
+        return False
+    first_token = candidate.split()[0].lower()
+    normalized = (
+        first_token
+        .replace('0', 'o')
+        .replace('1', 'l')
+        .replace('i', 'l')
+        .replace('|', 'l')
+        .replace('!', 'l')
+    )
+    return normalized in {'totaal', 'totall', 'totaai'}
 
 
 def _column_exists(conn, table_name: str, column_name: str) -> bool:
@@ -553,7 +574,7 @@ def _should_skip_receipt_line(line: str, *, store_name: str | None = None, filen
         return True
     if lowered.startswith(('bonus ', 'bbox ', 'korting ', 'retour ', 'refund ')):
         return True
-    if 'totaal' in lowered:
+    if 'totaal' in lowered or _looks_like_fuzzy_total_label(lowered):
         return True
     if re.match(r'^(?:\d+%|%)\b', lowered):
         return True
