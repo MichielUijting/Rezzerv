@@ -208,9 +208,36 @@ def test_spaarzegels_transactions_are_stored_idempotently():
     assert row["source"] == "receipt_table_line"
 
 
+
+
+def test_amount_only_spaarzegels_line_is_extracted_as_financial_line():
+    from app.services.receipt_service import _extract_savings_action_lines
+
+    lines = _extract_savings_action_lines(
+        [
+            "PRODUCT ALPHA 1,00",
+            "KOOPZEGEL DIGITAAL 2,70",
+            "Totaal 3,70",
+        ],
+        store_name="Jumbo",
+    )
+
+    assert len(lines) == 1
+    line = lines[0]
+    assert line["raw_label"] == "KOOPZEGEL DIGITAAL 2,70"
+    assert line["quantity"] == 1.0
+    assert line["unit_price"] == 2.70
+    assert line["line_total"] == 2.70
+    assert line["line_type"] == "spaarzegels"
+    assert line["include_in_receipt_total"] is True
+    assert line["exclude_from_inventory"] is True
+    assert line["external_matching_allowed"] is False
+
+
 if __name__ == "__main__":
     test_spaarzegels_financial_pair_combines_label_and_detail_line()
     test_gateway_preserves_quantity_unit_price_total_for_spaarzegels_pair()
     test_spaarzegels_are_excluded_from_external_database_items()
     test_spaarzegels_transactions_are_stored_idempotently()
+    test_amount_only_spaarzegels_line_is_extracted_as_financial_line()
     print("SPAARZEGELS_NORMALIZATION_OK")
