@@ -387,6 +387,10 @@ def _extract_savings_action_lines(lines: list[str], store_name: str | None = Non
         r'^(?P<prefix>[^\d-]*)?(?P<qty>\d+(?:[\.,]\d+)?)\s+(?P<label>.+?)\s+(?P<amount>-?\d{1,6}(?:[\.,]\d{2}))(?:\s+(?:EUR|[A-Z]{1,3}))?$',
         re.IGNORECASE,
     )
+    amount_only_re = re.compile(
+        r'^(?P<label>.*?(?:koopzegels?|pluspunten|spaarzegels?|espaarzegels?|spaaracties?).*?)\s+(?P<amount>-?\d{1,6}(?:[\.,]\d{2}))(?:\s+(?:EUR|[A-Z]{1,3}))?$',
+        re.IGNORECASE,
+    )
     trigger_tokens = (
         'koopzegel', 'koopzegels', 'pluspunten',
         'spaarzegel', 'spaarzegels',
@@ -405,13 +409,22 @@ def _extract_savings_action_lines(lines: list[str], store_name: str | None = Non
         if any(token in lowered for token in skip_tokens):
             continue
         match = qty_first_re.match(normalized)
-        if not match:
-            continue
-        quantity = _parse_quantity(match.group('qty'))
-        line_total = _parse_decimal(match.group('amount'))
+        if match:
+            qty_raw = match.group('qty')
+            amount_raw = match.group('amount')
+            label_value = _clean_receipt_label(match.group('label'))
+            quantity = _parse_quantity(qty_raw)
+        else:
+            amount_match = amount_only_re.match(normalized)
+            if not amount_match:
+                continue
+            qty_raw = '1'
+            amount_raw = amount_match.group('amount')
+            label_value = _clean_receipt_label(amount_match.group('label'))
+            quantity = _parse_quantity(qty_raw)
+        line_total = _parse_decimal(amount_raw)
         if quantity is None or line_total is None or quantity <= 0 or line_total <= 0:
             continue
-        label_value = _clean_receipt_label(match.group('label'))
         if not label_value:
             continue
 
@@ -419,9 +432,9 @@ def _extract_savings_action_lines(lines: list[str], store_name: str | None = Non
         append_product_candidate(
             extracted,
             label=label_value,
-            qty_raw=match.group('qty'),
+            qty_raw=qty_raw,
             amount1_raw=str(unit_price),
-            amount2_raw=match.group('amount'),
+            amount2_raw=amount_raw,
             source_index=source_index,
             raw_line=raw_line,
             normalized_line=normalized,
