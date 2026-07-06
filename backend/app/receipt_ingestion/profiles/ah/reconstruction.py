@@ -102,7 +102,7 @@ def _r9_38e2_extract_leading_quantities(line: str) -> list[int]:
             quantities.append(int(cleaned))
             continue
         # AH OCR sometimes reads 1 as T/I/N at the start of the row.
-        if cleaned.upper() in {"T", "I", "|"}:
+        if cleaned.upper() in {"T", "I", "|", "H", "F"}:
             quantities.append(1)
             continue
         if cleaned.upper() == "N":
@@ -118,7 +118,7 @@ def _r9_38e2_remove_leading_quantity_tokens(line: str) -> str:
     idx = 0
     while idx < len(tokens):
         cleaned = tokens[idx].strip()
-        if re.fullmatch(r"\d{1,2}", cleaned) or cleaned.upper() in {"T", "I", "|", "N"}:
+        if re.fullmatch(r"\d{1,2}", cleaned) or cleaned.upper() in {"T", "I", "|", "H", "F", "N"}:
             idx += 1
             continue
         break
@@ -189,7 +189,7 @@ def _r9_38e2_reconstruct_ah_lines_from_paddle(paddle_lines: list[str]) -> tuple[
             continue
 
         if "koopzegel" in low or "koopzegels" in low:
-            m = re.search(r"(\d{1,4})\s+KOOPZEGELS?\s+(\d{1,5}[\.,]\d{2})", line, re.I)
+            m = re.search(r"(\d{1,4})\s+KOOPZEGELS?(?:\s+PREMIUM)?\s+(\d{1,5}[\.,]\d{2})", line, re.I)
             if m:
                 qty = int(m.group(1))
                 total = _r9_38e2_parse_amount(m.group(2))
@@ -203,6 +203,60 @@ def _r9_38e2_reconstruct_ah_lines_from_paddle(paddle_lines: list[str]) -> tuple[
                     raw_line=line,
                 )
                 koopzegels_line["normalized_label"] = "KOOPZEGELS"
+            continue
+
+        if "statiegeld" in low and "koopzegel" not in low:
+            amount_tokens = _r9_38e2_extract_amount_tokens(line)
+            if amount_tokens:
+                amount = _r9_38e2_parse_amount(amount_tokens[-1])
+                if amount is not None:
+                    reconstructed.append(_r9_38e2_line_dict(
+                        raw_label="STATIEGELD",
+                        quantity=1,
+                        unit_price=amount,
+                        line_total=amount,
+                        source_index=idx,
+                        raw_line=line,
+                    ))
+                    diagnostics["r9_38e2_ah_paddle_reconstruction"]["reconstructed_from_source_indices"].append(idx)
+            continue
+
+        weight_match = re.match(
+            r"^\s*(?:\d{1,2}\s+)?(?P<weight>(?:\d{1,3})?[\.,]\d{3})\s*kg\s+"
+            r"(?P<label>.+?)\s+(?P<total>\d{1,5}[\.,]\d{2})(?:\s*[A-Z])?\s*$",
+            line,
+            re.I,
+        )
+        if weight_match:
+            weight_token = weight_match.group("weight").replace(",", ".")
+            if weight_token.startswith("."):
+                weight_token = "0" + weight_token
+            weight = Decimal(weight_token)
+            total = _r9_38e2_parse_amount(weight_match.group("total"))
+            label = _r9_38e2_clean_ah_label(weight_match.group("label"))
+
+            if label and total is not None and weight > Decimal("0.000"):
+                unit = None
+                for next_raw in (paddle_lines or [])[idx + 1: idx + 3]:
+                    price_match = re.search(r"prijs\s+per\s+kg\s+(\d{1,5}[\.,]\d{2})", str(next_raw or ""), re.I)
+                    if price_match:
+                        unit = _r9_38e2_parse_amount(price_match.group(1))
+                        break
+
+                if unit is None:
+                    unit = (total / weight).quantize(Decimal("0.01"))
+
+                item = _r9_38e2_line_dict(
+                    raw_label=label,
+                    quantity=weight,
+                    unit_price=unit,
+                    line_total=total,
+                    source_index=idx,
+                    raw_line=line,
+                )
+                item["unit"] = "kg"
+                reconstructed.append(item)
+                diagnostics["r9_38e2_ah_paddle_reconstruction"]["reconstructed_from_source_indices"].append(idx)
             continue
 
         if any(token in low for token in ("subtotaal", "totaal", "jouw voordeel", "je voordeel", "airmiles", "bonus nr", "waarvan")):
@@ -230,6 +284,24 @@ def _r9_38e2_reconstruct_ah_lines_from_paddle(paddle_lines: list[str]) -> tuple[
 
         label_part = body_wo_bonus[:first_amount_match.start()].strip()
         amount_tokens = _r9_38e2_extract_amount_tokens(body_wo_bonus)
+
+        price_per_label_match = re.match(r"^\s*prijs\s+per\s+kg\s+(?P<label>.+?)\s*$", label_part, re.I)
+        if price_per_label_match and len(amount_tokens) >= 2:
+            label = _r9_38e2_clean_ah_label(price_per_label_match.group("label"))
+            qty = quantities[0] if quantities else 1
+            total = _r9_38e2_parse_amount(amount_tokens[-1])
+            if label and total is not None:
+                reconstructed.append(_r9_38e2_line_dict(
+                    raw_label=label,
+                    quantity=qty,
+                    unit_price=(total / Decimal(qty)).quantize(Decimal("0.01")) if qty else total,
+                    line_total=total,
+                    bonus_marker=has_bonus_marker,
+                    source_index=idx,
+                    raw_line=line,
+                ))
+                diagnostics["r9_38e2_ah_paddle_reconstruction"]["reconstructed_from_source_indices"].append(idx)
+            continue
 
         labels = _r9_38e2_split_label_part(label_part, len(amount_tokens))
 
@@ -478,12 +550,28 @@ def _r9_38e2a_refine_ah_reconstructed_lines(
             before_net = candidate_net
 
     # Step 2: add missing supplemental B-marked article rows from Tesseract.
+    # Do not add a supplemental line when the exact OCR source line is already
+    # represented by Paddle reconstruction.
     existing_keys = {_r9_38e2a_label_key(line.get("raw_label")) for line in refined}
+    existing_raw_lines = {
+        re.sub(r"\s+", " ", str((line.get("producer_trace") or {}).get("normalized_line") or (line.get("producer_trace") or {}).get("raw_line") or "")).strip().upper()
+        for line in refined
+        if isinstance(line, dict)
+    }
     supplemental = _r9_38e2a_extract_tesseract_b_lines(tesseract_lines or [])
 
     for item in supplemental:
         key = _r9_38e2a_label_key(item.get("raw_label"))
+        raw_key = re.sub(r"\s+", " ", str((item.get("producer_trace") or {}).get("normalized_line") or (item.get("producer_trace") or {}).get("raw_line") or "")).strip().upper()
         if not key:
+            continue
+
+        if raw_key and raw_key in existing_raw_lines:
+            changes.append({
+                "type": "supplemental_b_marked_tesseract_line_skipped_duplicate_raw_source",
+                "label": item.get("raw_label"),
+                "raw_line": (item.get("producer_trace") or {}).get("raw_line"),
+            })
             continue
 
         # If the exact item is already present as separate row, skip.
@@ -556,8 +644,12 @@ def _r9_38e2a_refine_ah_reconstructed_lines(
     }
 
 def _r9_38e2b_tesseract_label_amount_map(tesseract_lines: list[str] | None) -> dict[str, Decimal]:
-    """Build conservative label->amount evidence from Tesseract AH article rows."""
-    evidence: dict[str, Decimal] = {}
+    """Build conservative label->amount evidence from AH OCR rows.
+
+    A label key is only safe as global amount evidence when it occurs exactly
+    once. Repeated labels may represent different receipt rows.
+    """
+    parsed_rows: list[tuple[str, Decimal]] = []
 
     for raw in tesseract_lines or []:
         line = str(raw or "").strip()
@@ -566,13 +658,21 @@ def _r9_38e2b_tesseract_label_amount_map(tesseract_lines: list[str] | None) -> d
         if any(token in low for token in ("subtotaal", "totaal", "bonus", "koopzegel", "voordeel", "airmiles")):
             continue
 
-        m = re.match(r"^\s*(?:\d{1,2}|[iIlT|])\s+(.+?)\s+(\d{1,5}[\.,]\d{2})(?:\s+B\s*\|?)?\s*$", line, re.I)
+        m = re.match(r"^\s*(?:\d{1,2}|[iIlT|HF])\s+(.+?)\s+(\d{1,5}[\.,]\d{2})(?:\s+B\s*\|?)?\s*$", line, re.I)
         if not m:
             continue
 
         label = _r9_38e2a_label_key(m.group(1))
         amount = _r9_38e2_parse_amount(m.group(2))
         if label and amount is not None:
+            parsed_rows.append((label, amount))
+
+    from collections import Counter
+    counts = Counter(label for label, _amount in parsed_rows)
+
+    evidence: dict[str, Decimal] = {}
+    for label, amount in parsed_rows:
+        if counts[label] == 1:
             evidence[label] = amount
 
     return evidence
