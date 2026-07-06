@@ -74,7 +74,7 @@
     "store_address": "Fortunastraat 44, 6846 XZ Arnhem",
     "purchase_datetime": "2025-11-25T12:37:00",
     "total_eur": 34.14,
-    "line_item_count": 18,
+    "line_item_count": 17,
     "status": "baseline_confirmed_manual_from_attachment",
     "line_items": [
       {
@@ -444,7 +444,7 @@
     "store_address": "Elderveldplein 5, 6843 JA Arnhem",
     "purchase_datetime": "2025-12-16T13:37:00",
     "total_eur": 40.75,
-    "line_item_count": 18,
+    "line_item_count": 17,
     "status": "baseline_confirmed_manual_from_user_screenshot",
     "line_items": [
       {

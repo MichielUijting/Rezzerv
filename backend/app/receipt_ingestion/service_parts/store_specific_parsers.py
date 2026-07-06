@@ -395,8 +395,25 @@ def _parse_lidl_invoice_pdf_result(text: str, filename: str) -> ReceiptParseResu
 
 def _parse_bol_email_result(text: str, html_text: str, filename: str, header_date: str | None = None) -> ReceiptParseResult | None:
     haystack = _normalize_store_specific_text(html_text or text)
-    if 'bol' not in haystack.lower() and 'bol' not in filename.lower():
+    lowered_haystack = haystack.lower()
+    lowered_filename = filename.lower()
+
+    has_explicit_bol_signal = bool(
+        re.search(r'\bbol(?:\.com)?\b', lowered_haystack, flags=re.IGNORECASE)
+        or re.search(r'\bbol(?:\.com)?\b', lowered_filename, flags=re.IGNORECASE)
+    )
+    has_bol_order_signal = any(
+        marker in lowered_haystack
+        for marker in (
+            'dit heb je besteld',
+            'bestelnummer',
+            'verkoper:',
+            'bezorgdatum',
+        )
+    )
+    if not has_explicit_bol_signal or not has_bol_order_signal:
         return None
+
     purchase_at = None
     if header_date:
         from email.utils import parsedate_to_datetime
@@ -404,13 +421,44 @@ def _parse_bol_email_result(text: str, html_text: str, filename: str, header_dat
             purchase_at = parsedate_to_datetime(header_date).replace(tzinfo=None).isoformat(timespec='seconds')
         except Exception:
             purchase_at = None
-    total_match = re.search(r'(?is)Totaal\s+â‚¬\s*([0-9]+,[0-9]{2})', haystack)
+
+    bol_currency_pattern = r'(?:€|â‚¬|Ã¢â€šÂ¬|EUR)'
+    total_match = re.search(
+        rf'(?is)\bTotaal\b\s*{bol_currency_pattern}?\s*([0-9]+,[0-9]{{2}})',
+        haystack,
+    )
     total_amount = _parse_decimal(total_match.group(1)) if total_match else None
-    order_product = re.search(r'(?is)Dit heb je besteld.*?Bestelnummer:\s*([A-Z0-9-]+).*?([A-Z0-9+\-][^\n]+?)\s+Verkoper:\s+([^\n]+).*?Bezorgdatum:', haystack)
+
+    raw_lines = _normalize_text_lines(haystack)
+    label = None
+    in_order_block = False
+    for raw_line in raw_lines:
+        line = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
+        lowered_line = line.lower()
+
+        if lowered_line.startswith('bestelnummer:'):
+            in_order_block = True
+            continue
+        if in_order_block and lowered_line.startswith('verkoper:'):
+            break
+        if not in_order_block:
+            continue
+        if not line:
+            continue
+        if re.search(r'[0-9]+,[0-9]{2}', line):
+            continue
+        if lowered_line.startswith(('bezorgdatum', 'verzendkosten', 'totaal')):
+            continue
+
+        label = line
+        break
+
     extracted: list[dict[str, Any]] = []
-    if order_product:
-        label = re.sub(r'\s+', ' ', order_product.group(2)).strip()
-        price_match = re.search(r'(?is)1x\s+â‚¬\s*([0-9]+,[0-9]{2})', haystack)
+    if label is not None:
+        price_match = re.search(
+            rf'(?is)\b1\s*x\s*{bol_currency_pattern}?\s*([0-9]+,[0-9]{{2}})',
+            haystack,
+        )
         price = _parse_decimal(price_match.group(1)) if price_match else total_amount
         append_structured_product_candidate(
             extracted,
@@ -422,9 +470,9 @@ def _parse_bol_email_result(text: str, html_text: str, filename: str, header_dat
             discount_amount=None,
             barcode=None,
             source_index=None,
-            raw_line=order_product.group(0),
-            normalized_line=re.sub(r'\s+', ' ', order_product.group(0)).strip(),
-            source_segment=order_product.group(0),
+            raw_line=label,
+            normalized_line=label,
+            source_segment=label,
             filename=filename,
             store_name='Bol',
             function_name='_parse_bol_email_result',
@@ -436,6 +484,7 @@ def _parse_bol_email_result(text: str, html_text: str, filename: str, header_dat
             is_invalid_label=_looks_like_non_product_receipt_label,
             confidence_score=0.84,
         )
+
     return _receipt_result_from_manual('Bol', purchase_at, total_amount, extracted, confidence=0.84)
 
 
