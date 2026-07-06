@@ -817,6 +817,26 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
         normalized = re.sub(r'(?P<prefix>-?(?:\d{1,6}|[QOqOo])[\.,])\s+(?=\d{2}\b)', r'\g<prefix>', normalized)
         normalized = re.sub(r'(?<=\d[\.,]\d{2})(?=[A-Z]{1,3}\b)', ' ', normalized)
 
+        label_qty_x_price_total_match = re.match(
+            r'^(?P<label>\D.*?\S)\s+'
+            r'(?P<qty>\d+(?:[\.,]\d+)?)\s*x\s*'
+            r'(?P<amount1>\d{1,6}(?:[\.,]\d{2}))\s+'
+            r'(?P<amount2>\d{1,6}(?:[\.,]\d{2}))\s*(?:[A-Z]{1,3})?$',
+            normalized,
+            flags=re.IGNORECASE,
+        )
+        if label_qty_x_price_total_match:
+            append_line(
+                label_qty_x_price_total_match.group('label'),
+                label_qty_x_price_total_match.group('qty'),
+                label_qty_x_price_total_match.group('amount1'),
+                label_qty_x_price_total_match.group('amount2'),
+                source_index=source_index,
+            )
+            pending_label = None
+            pending_line_index = None
+            continue
+
         loose_weight_detail_match = loose_weight_detail_re.match(normalized)
         if pending_label and loose_weight_detail_match:
             pending_clean_label, pending_amount = split_pending_label_amount(pending_label)
