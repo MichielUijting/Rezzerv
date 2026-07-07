@@ -25,21 +25,47 @@ from app.receipt_ingestion.fingerprints import (
 )
 
 
-def _looks_like_fuzzy_total_label(value: str | None) -> bool:
-    """Recognize OCR variants of receipt total labels across store profiles."""
-    candidate = re.sub(r'\s+', ' ', str(value or '')).strip(' .:-')
-    if not candidate:
-        return False
-    first_token = candidate.split()[0].lower()
-    normalized = (
-        first_token
+def _normalize_ocr_total_token(value: str | None) -> str:
+    token = str(value or '').strip().lower()
+    token = token.strip(' .:-;')
+    token = (
+        token
         .replace('0', 'o')
         .replace('1', 'l')
         .replace('i', 'l')
         .replace('|', 'l')
         .replace('!', 'l')
     )
-    return normalized in {'totaal', 'totall', 'totaai'}
+    return re.sub(r'[^a-z0-9]+', '', token)
+
+
+def _looks_like_fuzzy_total_label(value: str | None) -> bool:
+    """Recognize OCR variants of receipt total labels across store profiles.
+
+    OCR often fuses the total label with adjacent noise (for example
+    ``Totaaleodboowns``) or reads the leading ``T`` as ``l`` (``lotaal``).  This
+    helper intentionally only inspects the first token so normal product labels
+    containing a later word such as "totaal" are not promoted to totals.
+    """
+    candidate = re.sub(r'\s+', ' ', str(value or '')).strip(' .:-;')
+    if not candidate:
+        return False
+    first_token = candidate.split()[0]
+    normalized = _normalize_ocr_total_token(first_token)
+    if normalized in {'totaal', 'totall', 'totaai', 'lotaal', 'lotall', 'lotaai'}:
+        return True
+    return bool(re.fullmatch(r'(?:t|l)otaal[a-z0-9]{1,20}', normalized))
+
+
+def _looks_like_vat_total_line(value: str | None) -> bool:
+    """Return True for VAT/tax summary rows that must not become receipt totals."""
+    lowered = re.sub(r'\s+', ' ', str(value or '')).strip().lower()
+    if not lowered:
+        return False
+    if any(token in lowered for token in ('btw', 'vat', 'biw', 'bedr.excl', 'bedr.incl', 'bedrag excl', 'bedrag incl')):
+        return True
+    return False
+
 
 KNOWN_STORES = [
     'Albert Heijn', 'AH', 'Jumbo', 'Lidl', 'Plus', 'ALDI', 'Aldi', 'Action',
@@ -228,14 +254,13 @@ def _ah_final_total_after_savings(lines: list[str], filename: str) -> Decimal | 
         return None
     savings_seen = False
     amount_pattern = re.compile(r'(-?\d{1,6}(?:[\.,]\d{2}))')
-    total_pattern = re.compile(r'(?i)^\s*totaal\b')
     for raw_line in lines:
         normalized = re.sub(r'\s+', ' ', str(raw_line or '')).strip()
         lowered = normalized.lower()
         if any(token in lowered for token in ('koopzegel', 'koopzegels', 'pluspunten')) and amount_pattern.search(normalized):
             savings_seen = True
             continue
-        if savings_seen and total_pattern.search(normalized):
+        if savings_seen and _looks_like_fuzzy_total_label(normalized):
             matches = amount_pattern.findall(normalized)
             parsed = [_parse_decimal(item) for item in matches]
             parsed = [item for item in parsed if item is not None and _is_plausible_total_amount(item)]
@@ -257,18 +282,17 @@ def _total_amount_from_lines(lines: list[str], filename: str) -> tuple[Decimal |
     amount_pattern = re.compile(r'(-?\d{1,6}(?:[\.,]\d{2}))')
     explicit_total_pattern = re.compile(r'(?i)\b(totaal|te betalen|te voldoen|eindtotaal|total due|amount due)\b')
     subtotal_pattern = re.compile(r'(?i)\b(subtotaal|subtotal)\b')
-    payment_pattern = re.compile(r'(?i)\b(bankpas|pinnen|pin|betaald|betaling)\b')
-    vat_pattern = re.compile(r'(?i)\b(btw|bedr\.excl|bedr\.incl|bedrag excl|bedrag incl)\b')
+    payment_pattern = re.compile(r'(?i)\b(bankpas|pinnen|pin|betaald|betaling|contactloos|contactless|contactiess|tontactless)\b')
     refund_pattern = re.compile(r'(?i)\b(retour|refund|credit)\b')
     candidates: list[tuple[int, int, Decimal, bool]] = []
-    in_vat_block = False
 
     for index, line in enumerate(lines):
-        lowered = str(line or '').lower()
-        if vat_pattern.search(lowered) or lowered.startswith('%'):
-            in_vat_block = True
+        raw_line = str(line or '')
+        lowered = raw_line.lower()
+        if _looks_like_vat_total_line(lowered):
+            continue
 
-        matches = amount_pattern.findall(str(line or ''))
+        matches = amount_pattern.findall(raw_line)
         parsed_matches = [_parse_decimal(item) for item in matches]
         parsed_matches = [item for item in parsed_matches if item is not None]
 
@@ -295,8 +319,6 @@ def _total_amount_from_lines(lines: list[str], filename: str) -> tuple[Decimal |
             score += 25
         if 'eur' in lowered:
             score += 10
-        if in_vat_block or vat_pattern.search(lowered):
-            score -= 100
         if refund_pattern.search(lowered):
             score -= 60
         if len(parsed_matches) > 1:
