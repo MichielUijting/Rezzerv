@@ -7,7 +7,8 @@ Purpose:
 - require exact financial closure;
 - block footer/payment/tax contamination in reconstructed article rows;
 - block missing subtotal/total;
-- block suspicious unused fragments unless they are harmless noise;
+- block suspicious unused fragments unless they are harmless noise or already consumed financial labels;
+- document that any future activation is scoped to current, non-deleted, non-archived receipts only;
 - do not alter parser output or database state.
 
 No hardcoded article names, receipt IDs, filenames or receipt-specific prices.
@@ -48,6 +49,8 @@ _SUSPICIOUS_UNUSED_RE = re.compile(
     re.IGNORECASE,
 )
 
+_STATIEGELD_RE = re.compile(r'\bstatiegeld\b', re.IGNORECASE)
+
 
 def _normalize(value: Any) -> str:
     return re.sub(r'\s+', ' ', str(value or '')).strip()
@@ -68,8 +71,21 @@ def _article_blocker_reasons(article_rows: list[dict[str, Any]]) -> list[str]:
     return reasons
 
 
-def _unused_fragment_reasons(unused_fragments: list[dict[str, Any]]) -> list[str]:
+def _has_consumed_statiegeld(diag: dict[str, Any]) -> bool:
+    bbox_rows = list(diag.get('bbox_non_article_financial_rows') or [])
+    extra_rows = list(diag.get('extra_runtime_non_article_financial_rows') or [])
+
+    for row in bbox_rows + extra_rows:
+        raw = _normalize(row.get('reconstructed_line') or row.get('raw_line'))
+        if _STATIEGELD_RE.search(raw):
+            return True
+
+    return False
+
+
+def _unused_fragment_reasons(unused_fragments: list[dict[str, Any]], diag: dict[str, Any]) -> list[str]:
     reasons: list[str] = []
+    consumed_statiegeld = _has_consumed_statiegeld(diag)
 
     for fragment in unused_fragments or []:
         text = _normalize(fragment.get('text'))
@@ -77,6 +93,12 @@ def _unused_fragment_reasons(unused_fragments: list[dict[str, Any]]) -> list[str
             continue
 
         if _ALLOWED_UNUSED_NOISE_RE.match(text):
+            continue
+
+        # PLUS-01K-a:
+        # A leftover standalone "Statiegeld" label is harmless when a statiegeld
+        # financial row has already been consumed and the receipt is financially exact.
+        if consumed_statiegeld and _STATIEGELD_RE.fullmatch(text):
             continue
 
         if _SUSPICIOUS_UNUSED_RE.search(text):
@@ -114,7 +136,7 @@ def diagnose_plus_bbox_activation_readiness(
         reasons.append('no_article_rows')
 
     reasons.extend(_article_blocker_reasons(article_rows))
-    reasons.extend(_unused_fragment_reasons(unused_text_fragments))
+    reasons.extend(_unused_fragment_reasons(unused_text_fragments, diag))
 
     if unused_unit_fragments:
         reasons.append(f'unused_unit_fragments_present:{len(unused_unit_fragments)}')
@@ -123,7 +145,13 @@ def diagnose_plus_bbox_activation_readiness(
 
     return {
         'mode': 'diagnose_only',
-        'version': 'PLUS-01K',
+        'version': 'PLUS-01K-a',
+        'scope': {
+            'current_receipts_only': True,
+            'excludes_deleted': True,
+            'excludes_archived': True,
+            'no_bulk_backfill_without_explicit_instruction': True,
+        },
         'ready_for_activation': ready,
         'readiness_reasons': reasons,
         'financial': {
