@@ -1267,8 +1267,20 @@ def _parse_result_from_text_lines(
     totals_match = _totals_match_receipt_lines(total_amount, lines, discount_total)
     zero_discount_case = _discount_or_free_total_zero_case(total_amount, lines, discount_total)
 
+    is_plus_store = str(store_name or '').strip().lower() == 'plus'
+    balanced_plus_receipt = (
+        is_plus_store
+        and total_amount is not None
+        and bool(lines)
+        and totals_match
+        and bool(store_name)
+    )
+
     if lines:
-        if total_amount is not None and totals_match and len(lines) >= 2 and (store_name or purchase_at):
+        if balanced_plus_receipt:
+            confidence = rich_confidence if explicit_total_found else partial_confidence
+            parse_status = 'parsed' if explicit_total_found else 'partial'
+        elif total_amount is not None and totals_match and len(lines) >= 2 and (store_name or purchase_at):
             confidence = rich_confidence if (explicit_total_found and store_name) else partial_confidence
             parse_status = 'parsed' if explicit_total_found and (store_name or purchase_at) else 'partial'
         elif total_amount is not None and zero_discount_case and (store_name or purchase_at):
@@ -1284,7 +1296,7 @@ def _parse_result_from_text_lines(
         confidence = review_confidence
         parse_status = 'review_needed'
 
-    if suspicious_single_line or suspicious_filename_signal or not purchase_at:
+    if suspicious_filename_signal or ((suspicious_single_line or not purchase_at) and not balanced_plus_receipt):
         confidence = min(confidence, review_confidence)
         parse_status = 'review_needed'
 
