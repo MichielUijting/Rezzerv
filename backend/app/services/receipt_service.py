@@ -732,7 +732,7 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
         token = re.sub(r'\s+', '', str(value or '').strip())
         if not token:
             return None
-        token = token.replace('−', '-')
+        token = token.replace('Ã¢Ë†â€™', '-')
         token = re.sub(r'^[QOqOo](?=[\.,])', '0', token)
         token = token.replace('Z', '7').replace('z', '7')
         token = token.replace('S', '5').replace('s', '5')
@@ -749,7 +749,7 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
         # "<label> Q,5ZBL..." / "<label> 0,57B..." where the amount belongs
         # to the previous line total and trailing VAT/noise got glued to label.
         match = re.match(
-            r'^(?P<label>.*?[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9 .&''’/-]*?)\s+'
+            r'^(?P<label>.*?[A-Za-zÃƒâ‚¬-Ãƒâ€“ÃƒËœ-ÃƒÂ¶ÃƒÂ¸-ÃƒÂ¿][A-Za-zÃƒâ‚¬-Ãƒâ€“ÃƒËœ-ÃƒÂ¶ÃƒÂ¸-ÃƒÂ¿0-9 .&''Ã¢â‚¬â„¢/-]*?)\s+'
             r'(?P<amount>[QOqOo0-9][\.,]\s?[0-9ZSsz]{2})(?P<tail>[A-Za-z8]{1,8}.*)?$',
             candidate,
             flags=re.IGNORECASE,
@@ -1503,7 +1503,7 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                 lowered = line.lower()
                 if any(token in lowered for token in payment_tokens):
                     return False
-                if not re.search(r'[A-Za-zÀ-ÖØ-öø-ÿ]{3,}', line):
+                if not re.search(r'[A-Za-zÃƒâ‚¬-Ãƒâ€“ÃƒËœ-ÃƒÂ¶ÃƒÂ¸-ÃƒÂ¿]{3,}', line):
                     continue
                 amount_matches = amount_re.findall(line)
                 if len(amount_matches) != 1:
@@ -1536,7 +1536,7 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
 
         def _ah_source_norm(value: str | None) -> str:
             normalized = str(value or '').lower()
-            normalized = normalized.replace('€', ' eur ')
+            normalized = normalized.replace('Ã¢â€šÂ¬', ' eur ')
             normalized = re.sub(r'[^a-z0-9,\.]+', ' ', normalized)
             return re.sub(r'\s+', ' ', normalized).strip()
 
@@ -1921,7 +1921,7 @@ def _format_duplicate_amount(value: Any) -> str:
         return 'onbekend bedrag'
     try:
         amount = Decimal(str(value)).quantize(Decimal('0.01'))
-        return f"€ {str(amount).replace('.', ',')}"
+        return f"Ã¢â€šÂ¬ {str(amount).replace('.', ',')}"
     except Exception:
         return str(value)
 
@@ -2271,12 +2271,12 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                 ),
                 {
                     'id': receipt_table_id,
-                    'store_name': parse_result.store_name,
-                    'store_branch': parse_result.store_branch,
-                    'purchase_at': parse_result.purchase_at,
-                    'total_amount': _amount_to_float(parse_result.total_amount),
-                    'discount_total': _amount_to_float(parse_result.discount_total),
-                    'currency': parse_result.currency,
+                    'store_name': preserved_store_name,
+                    'store_branch': preserved_store_branch,
+                    'purchase_at': preserved_purchase_at,
+                    'total_amount': preserved_total_amount,
+                    'discount_total': preserved_discount_total,
+                    'currency': preserved_currency,
                     'parse_status': determine_final_parse_status(parse_result),
                     'confidence_score': parse_result.confidence_score,
                     'line_count': len(parse_result.lines),
