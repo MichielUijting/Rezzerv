@@ -2187,6 +2187,12 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                 SELECT
                     rt.id AS receipt_table_id,
                     rt.raw_receipt_id,
+                    rt.store_name AS existing_store_name,
+                    rt.store_branch AS existing_store_branch,
+                    rt.purchase_at AS existing_purchase_at,
+                    rt.total_amount AS existing_total_amount,
+                    rt.discount_total AS existing_discount_total,
+                    rt.currency AS existing_currency,
                     rr.household_id,
                     rr.original_filename,
                     rr.mime_type,
@@ -2239,6 +2245,13 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
 
     parse_bytes, parse_filename, parse_mime_type = _resolve_reparse_source_payload(dict(record), file_bytes)
     parse_result = parse_receipt_content(parse_bytes, parse_filename, parse_mime_type)
+    existing_header = dict(record)
+    preserved_store_name = parse_result.store_name or existing_header.get('existing_store_name')
+    preserved_store_branch = parse_result.store_branch if parse_result.store_branch not in (None, '') else existing_header.get('existing_store_branch')
+    preserved_purchase_at = parse_result.purchase_at if parse_result.purchase_at not in (None, '') else existing_header.get('existing_purchase_at')
+    preserved_total_amount = _amount_to_float(parse_result.total_amount) if parse_result.total_amount is not None else existing_header.get('existing_total_amount')
+    preserved_discount_total = _amount_to_float(parse_result.discount_total) if parse_result.discount_total is not None else existing_header.get('existing_discount_total')
+    preserved_currency = parse_result.currency or existing_header.get('existing_currency') or 'EUR'
     with engine.begin() as conn:
         conn.execute(text('DELETE FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id'), {'receipt_table_id': receipt_table_id})
         conn.execute(
@@ -2271,12 +2284,12 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                 ),
                 {
                     'id': receipt_table_id,
-                    'store_name': parse_result.store_name,
-                    'store_branch': parse_result.store_branch,
-                    'purchase_at': parse_result.purchase_at,
-                    'total_amount': _amount_to_float(parse_result.total_amount),
-                    'discount_total': _amount_to_float(parse_result.discount_total),
-                    'currency': parse_result.currency,
+                    'store_name': preserved_store_name,
+                    'store_branch': preserved_store_branch,
+                    'purchase_at': preserved_purchase_at,
+                    'total_amount': preserved_total_amount,
+                    'discount_total': preserved_discount_total,
+                    'currency': preserved_currency,
                     'parse_status': determine_final_parse_status(parse_result),
                     'confidence_score': parse_result.confidence_score,
                     'line_count': len(parse_result.lines),
