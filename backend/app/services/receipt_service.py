@@ -89,6 +89,7 @@ from app.receipt_ingestion.service_parts.source_detection import (
     sanitize_filename,
     sha256_hex,
 )
+from app.receipt_ingestion.service_parts.plus_bbox_structured_result import build_plus_bbox_structured_result
 from app.receipt_ingestion.service_parts.receipt_result_helpers import (
     ReceiptParseResult,
     _choose_better_receipt_result,
@@ -107,6 +108,7 @@ from app.receipt_ingestion.service_parts.text_extraction import (
 from app.services.receipt_status_baseline_service import STATUS_LABELS
 from app.receipt_ingestion.service_parts.image_ocr_flow import (
     _ocr_image_text_with_paddle,
+    get_last_paddle_bbox_payload,
     _ocr_image_text_with_tesseract,
     warm_receipt_ocr_runtime,
 )
@@ -1440,6 +1442,23 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
             ocr_filename = filename
 
         paddle_lines, paddle_confidence = _ocr_image_text_with_paddle(ocr_file_bytes, ocr_filename)
+        # PLUS-01L-c guarded structured result injection:
+        # If PLUS bbox readiness is exact, bypass weak text-line parsing and return
+        # a structured ReceiptParseResult. Non-ready receipts remain on the existing path.
+        plus_bbox_payload = get_last_paddle_bbox_payload(ocr_filename) or {}
+        plus_structured_result = build_plus_bbox_structured_result(
+            filename=ocr_filename,
+            runtime_lines=paddle_lines or [],
+            texts=plus_bbox_payload.get('texts') or [],
+            boxes=plus_bbox_payload.get('boxes') or [],
+            confidence_score=paddle_confidence,
+            current_receipt_only=True,
+            excludes_deleted=True,
+            excludes_archived=True,
+        )
+        if plus_structured_result is not None:
+            return plus_structured_result
+
         tesseract_lines, tesseract_confidence = _ocr_image_text_with_tesseract(ocr_file_bytes, ocr_filename)
 
         paddle_result = _parse_result_from_text_lines(
@@ -1640,6 +1659,23 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
 
         if ocr_file_bytes != file_bytes:
             original_paddle_lines, original_paddle_confidence = _ocr_image_text_with_paddle(file_bytes, filename)
+            # PLUS-01L-c2 guarded structured result injection on active image branch:
+            # The primary image path uses original_paddle_lines. If PLUS bbox readiness
+            # is exact, return the structured result before generic text parsing.
+            plus_bbox_payload = get_last_paddle_bbox_payload(filename) or {}
+            plus_structured_result = build_plus_bbox_structured_result(
+                filename=filename,
+                runtime_lines=original_paddle_lines or [],
+                texts=plus_bbox_payload.get('texts') or [],
+                boxes=plus_bbox_payload.get('boxes') or [],
+                confidence_score=original_paddle_confidence,
+                current_receipt_only=True,
+                excludes_deleted=True,
+                excludes_archived=True,
+            )
+            if plus_structured_result is not None:
+                return plus_structured_result
+
             original_tesseract_lines, original_tesseract_confidence = _ocr_image_text_with_tesseract(file_bytes, filename)
             original_paddle_result = _parse_result_from_text_lines(
                 original_paddle_lines,
@@ -2173,6 +2209,34 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
     if not file_path.exists():
         raise FileNotFoundError(f'Ruwe bon ontbreekt op {file_path}')
     file_bytes = file_path.read_bytes()
+    # PLUS-01L-c current-receipt-only safety:
+    # Reparse may never modify soft-deleted / archived receipts.
+    with engine.begin() as conn:
+        active_state = conn.execute(
+            text(
+                '''
+                SELECT rt.deleted_at AS receipt_deleted_at,
+                       rr.deleted_at AS raw_deleted_at
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                WHERE rt.id = :receipt_table_id
+                LIMIT 1
+                '''
+            ),
+            {'receipt_table_id': receipt_table_id},
+        ).mappings().first()
+    if active_state and (active_state.get('receipt_deleted_at') or active_state.get('raw_deleted_at')):
+        return {
+            'receipt_table_id': receipt_table_id,
+            'parse_status': 'skipped_deleted_or_archived',
+            'line_count': 0,
+            'deleted': True,
+            'plus_bbox_structured_result': {
+                'applied': False,
+                'reason': 'deleted_or_archived_receipt',
+            },
+        }
+
     parse_bytes, parse_filename, parse_mime_type = _resolve_reparse_source_payload(dict(record), file_bytes)
     parse_result = parse_receipt_content(parse_bytes, parse_filename, parse_mime_type)
     with engine.begin() as conn:

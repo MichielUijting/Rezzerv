@@ -40,6 +40,20 @@ except Exception:  # pragma: no cover
 
 LOGGER = logging.getLogger(__name__)
 _PADDLE_OCR_INSTANCE = None
+_LAST_PADDLE_BBOX_PAYLOAD: dict[str, dict[str, Any]] = {}
+
+
+def get_last_paddle_bbox_payload(filename: str | None) -> dict[str, Any] | None:
+    """Return last Paddle OCR texts/boxes captured for this filename.
+
+    Runtime Type: internal cache.
+    This does not run OCR and does not modify parser decisions.
+    """
+    if not filename:
+        return None
+    return _LAST_PADDLE_BBOX_PAYLOAD.get(str(filename))
+
+
 _PLUS_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff'}
 _PLUS_ROW_STOP_TOKENS = ('subtotaal', 'totaal', 'btw', 'pin', 'contactless', 'contactiess', 'transactie', 'wisselgeld')
 _PLUS_ROW_DISCOUNT_TOKENS = ('actie', 'korting', 'voordeel', 'plus geeft')
@@ -313,6 +327,14 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
             except (TypeError, ValueError):
                 continue
         boxes.extend(current_boxes[: len(normalized_texts)])
+
+    # PLUS-01L-c bbox payload cache:
+    # Store Paddle texts/boxes so receipt_service can build a structured PLUS result
+    # without running OCR again and without forcing bbox rows through text parsing.
+    _LAST_PADDLE_BBOX_PAYLOAD[str(filename)] = {
+        'texts': list(texts),
+        'boxes': list(boxes),
+    }
 
     line_candidates = _group_paddle_texts_to_lines(texts, boxes if boxes else None)
     line_candidates = _apply_plus_merged_text_line_split(filename, line_candidates)
