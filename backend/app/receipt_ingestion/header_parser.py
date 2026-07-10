@@ -58,12 +58,33 @@ def _looks_like_fuzzy_total_label(value: str | None) -> bool:
 
 
 def _looks_like_vat_total_line(value: str | None) -> bool:
-    """Return True for VAT/tax summary rows that must not become receipt totals."""
+    """Return True for VAT/tax summary rows that must not become receipt totals.
+
+    Guardrail:
+    A final receipt total may legitimately be labelled as ``Totaal (incl. BTW)``.
+    Such lines are explicit receipt totals and must not be filtered merely
+    because they mention VAT/BTW. VAT summary rows such as ``BTW Totaal`` or
+    rows with ``Bedrag excl/incl`` remain excluded.
+    """
     lowered = re.sub(r'\s+', ' ', str(value or '')).strip().lower()
     if not lowered:
         return False
-    if any(token in lowered for token in ('btw', 'vat', 'biw', 'bedr.excl', 'bedr.incl', 'bedrag excl', 'bedrag incl')):
+
+    explicit_total_at_start = _looks_like_fuzzy_total_label(lowered)
+    includes_vat_marker = bool(re.search(r'\b(?:incl|inclusief)\.?\s*(?:btw|vat|biw)\b', lowered))
+
+    if explicit_total_at_start and includes_vat_marker:
+        return False
+
+    if re.search(r'^\s*(?:btw|vat|biw)\b', lowered):
         return True
+
+    if any(token in lowered for token in ('btw totaal', 'vat total', 'bedr.excl', 'bedr.incl', 'bedrag excl', 'bedrag incl')):
+        return True
+
+    if any(token in lowered for token in ('btw', 'vat', 'biw')):
+        return True
+
     return False
 
 
