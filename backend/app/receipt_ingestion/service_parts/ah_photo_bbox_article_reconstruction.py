@@ -204,6 +204,34 @@ def _normalize_article_block(lines: list[str]) -> tuple[list[str], bool]:
             index += 1
             continue
 
+        # AH photo bbox can expose an article as three separate visual fragments:
+        # quantity marker -> AH product label -> amount. Reconstruct that visible
+        # source pattern before generic row parsing so the article is not lost.
+        qty_only_match = re.fullmatch(r"(?:\d{1,2}|[TtIi|Nn])", raw)
+        if qty_only_match and index + 2 < end:
+            next_label_raw = re.sub(r"\s+", " ", str(lines[index + 1] or "")).strip()
+            next_amount_raw = re.sub(r"\s+", " ", str(lines[index + 2] or "")).strip()
+            next_label = _clean_label(next_label_raw)
+            next_amounts = _amount_tokens(next_amount_raw)
+            if (
+                next_label
+                and next_label.upper().startswith("AH ")
+                and not _amount_tokens(next_label_raw)
+                and len(next_amounts) == 1
+                and re.fullmatch(r"\d{1,5}[\.,]\d{2}", next_amount_raw)
+            ):
+                token = raw.strip().upper()
+                if token in {"T", "I", "|"}:
+                    qty = "1"
+                elif token == "N":
+                    qty = "2"
+                else:
+                    qty = raw.strip()
+                output.append(f"{qty} {next_label} {next_amounts[0]}")
+                changed = True
+                index += 3
+                continue
+
         if re.match(r"^prijs\s+per\b", lowered):
             product_row = _product_from_price_per_row(raw)
             if product_row:
