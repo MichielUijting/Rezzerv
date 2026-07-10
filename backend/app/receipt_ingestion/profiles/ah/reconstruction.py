@@ -61,10 +61,10 @@ def _r9_38e2_is_reliable_ah_paddle_context(paddle_lines: list[str] | None) -> bo
     )
 
 
-def _r9_38e2_clean_ah_label(label: str) -> str:
-    label = re.sub(r"^[^A-Za-zÀ-ÖØ-öø-ÿ0-9]+", "", str(label or "")).strip()
-    label = re.sub(r"\s+", " ", label)
-    return label.strip(" .:-")
+def _r9_38e2_clean_ah_label(label: str | None) -> str:
+    cleaned = re.sub(r"^[^A-Za-zÀ-ÖØ-öø-ÿ0-9]+", "", str(label or "")).strip()
+    cleaned = re.sub(r"\s+", " ", cleaned)
+    return cleaned.strip(" .:-")
 
 
 def _r9_38e2_label_key(label: str | None) -> str:
@@ -91,7 +91,6 @@ def _r9_38e2_line_dict(
             q = quantity
 
     label = _r9_38e2_clean_ah_label(raw_label)
-
     return {
         "raw_label": label,
         "normalized_label": label,
@@ -120,9 +119,8 @@ def _r9_38e2_extract_amount_tokens(line: str) -> list[str]:
 
 
 def _r9_38e2_extract_leading_quantities(line: str) -> list[int]:
-    tokens = str(line or "").strip().split()
     quantities: list[int] = []
-    for token in tokens:
+    for token in str(line or "").strip().split():
         cleaned = token.strip()
         if re.fullmatch(r"\d{1,2}", cleaned):
             quantities.append(int(cleaned))
@@ -159,7 +157,6 @@ def _r9_38e2_split_label_part(label_part: str, amount_count: int) -> list[str]:
         i for i, word in enumerate(words[1:], start=1)
         if word.upper().strip(".,;:") in split_markers
     ]
-
     if candidate_positions:
         pos = candidate_positions[0]
         return [
@@ -176,16 +173,9 @@ def _r9_38e2_split_label_part(label_part: str, amount_count: int) -> list[str]:
 
 
 def _r9_38e2_recover_preceding_ah_label(previous_line: str | None) -> str | None:
-    """Recover an article label that AH/Paddle merged into a loyalty row.
-
-    Generic pattern: loyalty metadata such as BONUSKAART/AIRMILES can be OCR'd
-    on the same visual row as the first article label. We strip the metadata and
-    card-like tokens and only return a conservative text label.
-    """
+    """Recover an article label that AH/Paddle merged into a loyalty row."""
     raw = str(previous_line or "").strip()
-    if not raw:
-        return None
-    if not re.search(r"bonuskaart|airmiles", raw, re.I):
+    if not raw or not re.search(r"bonuskaart|airmiles", raw, re.I):
         return None
 
     candidate = re.sub(r".*\b(?:AIRMILES\s+NR\.?|BONUSKAART)\b", "", raw, flags=re.I)
@@ -194,8 +184,7 @@ def _r9_38e2_recover_preceding_ah_label(previous_line: str | None) -> str | None
     candidate = re.sub(r"\d+", " ", candidate)
     candidate = re.sub(r"\s+", " ", candidate).strip(" .:-")
 
-    blocked = {"", "NR", "AIRMILES", "BONUSKAART"}
-    if candidate.upper() in blocked:
+    if candidate.upper() in {"", "NR", "AIRMILES", "BONUSKAART"}:
         return None
     if len(candidate) < 3 or not re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]", candidate):
         return None
@@ -228,7 +217,6 @@ def _r9_38e2_append_weight_line(
     weight = Decimal(weight_token)
     total = _r9_38e2_parse_amount(weight_match.group("total"))
     label = _r9_38e2_clean_ah_label(weight_match.group("label"))
-
     if not label or total is None or weight <= Decimal("0.000"):
         return
 
@@ -252,8 +240,18 @@ def _r9_38e2_append_weight_line(
     item["unit"] = "kg"
     reconstructed.append(item)
     diagnostics["r9_38e2_ah_paddle_reconstruction"]["reconstructed_from_source_indices"].append(idx)
-    diagnostics["r9_38e2_ah_paddle_reconstruction"].setdefault("weight_k_or_kg_added", 0)
     diagnostics["r9_38e2_ah_paddle_reconstruction"]["weight_k_or_kg_added"] += 1
+
+
+def _r9_38e2_body_has_bonus_marker(body: str) -> bool:
+    # Accept both visual patterns: "... B" and "... B 1,09".
+    return bool(re.search(r"\sB(?:\s+\d{1,5}[\.,]\d{2})?\s*$", str(body or ""), re.I))
+
+
+def _r9_38e2_remove_bonus_marker(body: str) -> str:
+    # Remove only the B marker; keep a trailing amount because it may belong to a
+    # preceding loyalty-row label, e.g. "OLIJFOLIE 4.79 B 1,09".
+    return re.sub(r"\sB(?=\s+\d{1,5}[\.,]\d{2}\s*$|\s*$)", "", str(body or ""), flags=re.I).strip()
 
 
 def _r9_38e2_reconstruct_ah_lines_from_paddle(paddle_lines: list[str]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -277,7 +275,6 @@ def _r9_38e2_reconstruct_ah_lines_from_paddle(paddle_lines: list[str]) -> tuple[
     for idx, raw in enumerate(paddle_lines or []):
         line = str(raw or "").strip()
         low = line.lower()
-
         if not line:
             continue
 
@@ -336,17 +333,16 @@ def _r9_38e2_reconstruct_ah_lines_from_paddle(paddle_lines: list[str]) -> tuple[
         if any(token in low for token in ("subtotaal", "totaal", "jouw voordeel", "je voordeel", "airmiles", "bonus nr", "waarvan")):
             continue
 
-        amounts = _r9_38e2_extract_amount_tokens(line)
-        if not amounts:
+        amount_tokens = _r9_38e2_extract_amount_tokens(line)
+        if not amount_tokens:
             continue
-
         quantities = _r9_38e2_extract_leading_quantities(line)
         if not quantities:
             continue
 
         body = _r9_38e2_remove_leading_quantity_tokens(line)
-        has_bonus_marker = bool(re.search(r"\sB\s*$", body))
-        body_wo_bonus = re.sub(r"\sB\s*$", "", body).strip()
+        has_bonus_marker = _r9_38e2_body_has_bonus_marker(body)
+        body_wo_bonus = _r9_38e2_remove_bonus_marker(body)
         first_amount_match = re.search(r"(?<!\d)\d{1,5}[\.,]\d{2}(?!\d)", body_wo_bonus)
         if not first_amount_match:
             continue
@@ -360,10 +356,6 @@ def _r9_38e2_reconstruct_ah_lines_from_paddle(paddle_lines: list[str]) -> tuple[
             qty = quantities[0]
             first_amount = _r9_38e2_parse_amount(amount_tokens[0])
             last_amount = _r9_38e2_parse_amount(amount_tokens[-1])
-
-            # AH photo rows can contain one article plus an amount whose label was
-            # merged into the previous loyalty row. Use the previous row only when
-            # it has a clear loyalty-marker pattern; otherwise keep legacy behavior.
             recovered_label = _r9_38e2_recover_preceding_ah_label((paddle_lines or [None])[idx - 1] if idx > 0 else None)
             if recovered_label and first_amount is not None and last_amount is not None and has_bonus_marker:
                 produced.append(_r9_38e2_line_dict(
@@ -417,35 +409,14 @@ def _r9_38e2_reconstruct_ah_lines_from_paddle(paddle_lines: list[str]) -> tuple[
             q2 = quantities[0] if quantities else 1
             a1 = _r9_38e2_parse_amount(amount_tokens[0])
             a2 = _r9_38e2_parse_amount(amount_tokens[1])
-
-            # In two-label AH photo rows, a right-side AH-prefixed label with a
-            # trailing B marker usually means amount order is visual-column based:
-            # last amount belongs to the left label, first amount to the right.
-            if has_bonus_marker and len(labels) >= 2 and _r9_38e2_label_key(labels[1]).startswith("AH "):
+            if has_bonus_marker and _r9_38e2_label_key(labels[1]).startswith("AH "):
                 left_amount = a2
                 right_amount = a1
             else:
                 left_amount = a1
                 right_amount = a2
-
-            produced.append(_r9_38e2_line_dict(
-                raw_label=labels[0],
-                quantity=q1,
-                unit_price=left_amount,
-                line_total=left_amount,
-                bonus_marker=False,
-                source_index=idx,
-                raw_line=line,
-            ))
-            produced.append(_r9_38e2_line_dict(
-                raw_label=labels[1],
-                quantity=q2,
-                unit_price=(right_amount / Decimal(q2)).quantize(CENT) if right_amount is not None and q2 else right_amount,
-                line_total=right_amount,
-                bonus_marker=has_bonus_marker,
-                source_index=idx,
-                raw_line=line,
-            ))
+            produced.append(_r9_38e2_line_dict(raw_label=labels[0], quantity=q1, unit_price=left_amount, line_total=left_amount, source_index=idx, raw_line=line))
+            produced.append(_r9_38e2_line_dict(raw_label=labels[1], quantity=q2, unit_price=(right_amount / Decimal(q2)).quantize(CENT) if right_amount is not None and q2 else right_amount, line_total=right_amount, bonus_marker=has_bonus_marker, source_index=idx, raw_line=line))
 
         elif len(labels) == 1 and len(amount_tokens) == 1:
             qty = quantities[0]
@@ -466,7 +437,7 @@ def _r9_38e2_reconstruct_ah_lines_from_paddle(paddle_lines: list[str]) -> tuple[
             if item.get("producer_trace", {}).get("bonus_marker"):
                 b_marked_indices.append(len(reconstructed))
             reconstructed.append(item)
-            diagnostics["r9_38e2_ah_paddle_reconstruction"]["reconstructed_from_source_indices"].append(item.get("source_index", idx))
+            diagnostics["r9_38e2_ah_paddle_reconstruction"]["reconstructed_from_source_indices"].append(idx)
 
     if bonus_total != Decimal("0.00") and b_marked_indices:
         target_idx = max(
@@ -494,13 +465,11 @@ def _r9_38e2_should_use_ah_paddle_reconstruction(
         return False
     if not _r9_38e2_is_reliable_ah_paddle_context(paddle_lines):
         return False
-
     short_noise_count = 0
     for line in current_lines or []:
         label = str((line or {}).get("raw_label") or "")
         if _ah_short_non_product_label(label):
             short_noise_count += 1
-
     return short_noise_count > 0
 
 
@@ -522,22 +491,18 @@ def _r9_38e2a_extract_tesseract_b_lines(tesseract_lines: list[str] | None) -> li
         amount = _r9_38e2_parse_amount(m.group(3))
         if not label or amount is None:
             continue
-        low = label.lower()
-        if any(token in low for token in ("subtotaal", "totaal", "bonus", "koopzegel", "voordeel")):
+        if any(token in label.lower() for token in ("subtotaal", "totaal", "bonus", "koopzegel", "voordeel")):
             continue
-        unit = (amount / Decimal(qty)).quantize(CENT) if qty else amount
-        item = _r9_38e2_line_dict(
+        supplemental.append(_r9_38e2_line_dict(
             raw_label=label,
             quantity=qty,
-            unit_price=unit,
+            unit_price=(amount / Decimal(qty)).quantize(CENT) if qty else amount,
             line_total=amount,
             bonus_marker=True,
             source_index=idx,
             raw_line=line,
             function_name="R9-38E2a_AH_tesseract_supplemental_b_line",
-        )
-        item["producer_trace"]["parser_path"] = "profiles.ah.tesseract_supplemental_b_line"
-        supplemental.append(item)
+        ))
     return supplemental
 
 
@@ -550,22 +515,18 @@ def _r9_38e2a_refine_ah_reconstructed_lines(
 ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     if not lines:
         return lines, None
-
     refined = [dict(line) for line in lines]
     changes: list[dict[str, Any]] = []
-    total = _r9_38e2_decimal(total_amount)
+    total = _r9_38e1_decimal(total_amount)
+    current_net = (
+        sum((_r9_38e1_decimal(line.get("line_total")) for line in refined), Decimal("0.00"))
+        + sum((_r9_38e1_decimal(line.get("discount_amount")) for line in refined), Decimal("0.00"))
+    ).quantize(CENT)
 
-    def net_sum(items: list[dict[str, Any]]) -> Decimal:
-        return (
-            sum((_r9_38e2_decimal(line.get("line_total")) for line in items), Decimal("0.00"))
-            + sum((_r9_38e2_decimal(line.get("discount_amount")) for line in items), Decimal("0.00"))
-        ).quantize(CENT)
-
-    current_net = net_sum(refined)
     for line in refined:
-        q = _r9_38e2_decimal(line.get("quantity"))
-        unit = _r9_38e2_decimal(line.get("unit_price"))
-        line_total = _r9_38e2_decimal(line.get("line_total"))
+        q = _r9_38e1_decimal(line.get("quantity"))
+        unit = _r9_38e1_decimal(line.get("unit_price"))
+        line_total = _r9_38e1_decimal(line.get("line_total"))
         if q != Decimal("1") or unit <= Decimal("0.00") or line_total <= Decimal("0.00"):
             continue
         if abs(unit - line_total) <= Decimal("0.02"):
@@ -582,10 +543,16 @@ def _r9_38e2a_refine_ah_reconstructed_lines(
         for line in refined
         if isinstance(line, dict)
     }
-    for item in _r9_38e2a_extract_tesseract_b_lines(tesseract_lines or []):
+    supplemental = _r9_38e2a_extract_tesseract_b_lines(tesseract_lines or [])
+    for item in supplemental:
         key = _r9_38e2a_label_key(item.get("raw_label"))
-        raw_key = re.sub(r"\s+", " ", str((item.get("producer_trace") or {}).get("normalized_line") or (item.get("producer_trace") or {}).get("raw_line") or "")).strip().upper()
-        if not key or key in existing_keys or (raw_key and raw_key in existing_raw_lines):
+        raw_key = re.sub(r"\s+", " ", str((item.get("producer_trace") or {}).get("raw_line") or "")).strip().upper()
+        if not key:
+            continue
+        if raw_key and raw_key in existing_raw_lines:
+            changes.append({"type": "supplemental_b_marked_tesseract_line_skipped_duplicate_raw_source", "label": item.get("raw_label"), "raw_line": (item.get("producer_trace") or {}).get("raw_line")})
+            continue
+        if key in existing_keys:
             continue
         refined.append(item)
         existing_keys.add(key)
@@ -603,16 +570,16 @@ def _r9_38e2a_refine_ah_reconstructed_lines(
 
     if bonus_amount != Decimal("0.00"):
         for line in refined:
-            if _r9_38e2_decimal(line.get("discount_amount")) == bonus_amount:
+            if _r9_38e1_decimal(line.get("discount_amount")) == bonus_amount:
                 line["discount_amount"] = None
-        b_candidates: list[int] = []
+        b_candidates = []
         for i, line in enumerate(refined):
             trace = line.get("producer_trace") or {}
             raw = str(trace.get("raw_line") or "")
-            if re.search(r"\sB\s*\|?\s*$", raw, re.I):
+            if _r9_38e2_body_has_bonus_marker(raw):
                 b_candidates.append(i)
         if b_candidates:
-            target_idx = max(b_candidates, key=lambda i: _r9_38e2_decimal(refined[i].get("line_total")))
+            target_idx = max(b_candidates, key=lambda i: _r9_38e1_decimal(refined[i].get("line_total")))
             refined[target_idx]["discount_amount"] = float(bonus_amount)
             changes.append({"type": "bonus_retargeted_to_highest_b_marked_line", "target": refined[target_idx].get("raw_label"), "amount": float(bonus_amount)})
 
@@ -625,8 +592,7 @@ def _r9_38e2b_tesseract_label_amount_map(tesseract_lines: list[str] | None) -> d
     parsed_rows: list[tuple[str, Decimal]] = []
     for raw in tesseract_lines or []:
         line = str(raw or "").strip()
-        low = line.lower()
-        if any(token in low for token in ("subtotaal", "totaal", "bonus", "koopzegel", "voordeel", "airmiles")):
+        if any(token in line.lower() for token in ("subtotaal", "totaal", "bonus", "koopzegel", "voordeel", "airmiles")):
             continue
         m = re.match(r"^\s*(?:\d{1,2}|[iIlT|HF])\s+(.+?)\s+(\d{1,5}[\.,]\d{2})(?:\s+B\s*\|?)?\s*$", line, re.I)
         if not m:
@@ -650,29 +616,44 @@ def _r9_38e2b_fix_quantity_one_totals_and_swaps(
     refined = [dict(line) for line in lines]
     changes: list[dict[str, Any]] = []
     evidence = _r9_38e2b_tesseract_label_amount_map(tesseract_lines or [])
-    total = _r9_38e2_decimal(total_amount)
+    total = _r9_38e1_decimal(total_amount)
 
     def net_sum(items: list[dict[str, Any]]) -> Decimal:
         return (
-            sum((_r9_38e2_decimal(x.get("line_total")) for x in items), Decimal("0.00"))
-            + sum((_r9_38e2_decimal(x.get("discount_amount")) for x in items), Decimal("0.00"))
+            sum((_r9_38e1_decimal(x.get("line_total")) for x in items), Decimal("0.00"))
+            + sum((_r9_38e1_decimal(x.get("discount_amount")) for x in items), Decimal("0.00"))
         ).quantize(CENT)
 
     current_net = net_sum(refined)
     for line in refined:
-        key = _r9_38e2a_label_key(line.get("raw_label"))
-        if key not in evidence:
+        label_key = _r9_38e2a_label_key(line.get("raw_label"))
+        if label_key not in evidence:
             continue
-        supported_amount = evidence[key]
-        current_total = _r9_38e2_decimal(line.get("line_total"))
+        supported_amount = evidence[label_key]
+        current_total = _r9_38e1_decimal(line.get("line_total"))
         if abs(current_total - supported_amount) <= Decimal("0.02"):
             continue
         candidate_net = (current_net - current_total + supported_amount).quantize(CENT)
-        q = _r9_38e2_decimal(line.get("quantity"))
-        if abs(candidate_net - total) <= abs(current_net - total) or q == Decimal("1"):
+        q = _r9_38e1_decimal(line.get("quantity"))
+        improves = abs(candidate_net - total) <= abs(current_net - total)
+        if improves or q == Decimal("1"):
             line["unit_price"] = float(supported_amount)
             line["line_total"] = float(supported_amount)
             changes.append({"type": "tesseract_supported_label_amount_correction", "label": line.get("raw_label"), "before_total": float(current_total), "after_total": float(supported_amount)})
+            current_net = candidate_net
+
+    for line in refined:
+        q = _r9_38e1_decimal(line.get("quantity"))
+        unit = _r9_38e1_decimal(line.get("unit_price"))
+        current_total = _r9_38e1_decimal(line.get("line_total"))
+        if q != Decimal("1") or unit <= Decimal("0.00") or current_total <= Decimal("0.00"):
+            continue
+        if abs(unit - current_total) <= Decimal("0.02"):
+            continue
+        candidate_net = (current_net - current_total + unit).quantize(CENT)
+        if abs(candidate_net - total) < abs(current_net - total):
+            line["line_total"] = float(unit)
+            changes.append({"type": "quantity_one_total_set_to_unit_price", "label": line.get("raw_label"), "before_total": float(current_total), "after_total": float(unit)})
             current_net = candidate_net
 
     if not changes:
@@ -684,8 +665,7 @@ def _r9_38e2c_tesseract_evidence_rows(tesseract_lines: list[str] | None) -> list
     evidence: list[dict[str, Any]] = []
     for idx, raw in enumerate(tesseract_lines or []):
         line = str(raw or "").strip()
-        low = line.lower()
-        if any(token in low for token in ("subtotaal", "totaal", "bonus", "koopzegel", "voordeel", "airmiles")):
+        if any(token in line.lower() for token in ("subtotaal", "totaal", "bonus", "koopzegel", "voordeel", "airmiles")):
             continue
         m = re.match(r"^\s*(?:\d{1,2}|[iIlT|])\s+(.+?)\s+(\d{1,5}[\.,]\d{2})(?:\s+B\s*\|?)?\s*$", line, re.I)
         if not m:
@@ -721,9 +701,8 @@ def _r9_38e2c_fix_combined_paddle_pair_by_nearby_evidence(
     for i, line in enumerate(refined):
         trace = line.get("producer_trace") or {}
         src = trace.get("source_index", line.get("source_index"))
-        if src is None:
-            continue
-        groups.setdefault(src, []).append(i)
+        if src is not None:
+            groups.setdefault(src, []).append(i)
 
     for src, indices in groups.items():
         if len(indices) < 2:
@@ -739,7 +718,10 @@ def _r9_38e2c_fix_combined_paddle_pair_by_nearby_evidence(
         used_amounts: list[Decimal] = []
         for line_idx in indices:
             key = _r9_38e2a_label_key(refined[line_idx].get("raw_label"))
-            matching = [e for e in nearby_evidence if e["label_key"] == key or key in e["label_key"] or e["label_key"] in key]
+            matching = [
+                e for e in nearby_evidence
+                if e["label_key"] == key or key in e["label_key"] or e["label_key"] in key
+            ]
             if not matching:
                 continue
             best = sorted(matching, key=lambda e: abs(int(e["source_index"]) - int(src)))[0]
@@ -750,13 +732,12 @@ def _r9_38e2c_fix_combined_paddle_pair_by_nearby_evidence(
         if not assigned:
             continue
         remaining_amounts = [amount for amount in raw_amounts if not any(abs(amount - used) <= Decimal("0.02") for used in used_amounts)]
-        unassigned_indices = [idx for idx in indices if idx not in assigned]
-        for idx, amount in zip(unassigned_indices, remaining_amounts):
+        for idx, amount in zip([idx for idx in indices if idx not in assigned], remaining_amounts):
             assigned[idx] = amount
         if len(assigned) < 2:
             continue
         for idx, amount in assigned.items():
-            old_total = _r9_38e2_decimal(refined[idx].get("line_total"))
+            old_total = _r9_38e1_decimal(refined[idx].get("line_total"))
             if abs(old_total - amount) <= Decimal("0.02"):
                 continue
             refined[idx]["unit_price"] = float(amount)
