@@ -1810,6 +1810,9 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                     total_amount=image_result.total_amount,
                 )
 
+                # Final guard after AH/image-specific repairs: supporting detail rows
+                # such as 'Prijs per kg' must not re-enter persisted product lines.
+                image_result.lines = _filter_non_product_receipt_lines(image_result.lines or [])
                 image_result.parse_status = determine_final_parse_status(image_result)
 
                 diagnostics['ah_ocr_arbitrage'] = {
