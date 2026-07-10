@@ -263,6 +263,23 @@ def _normalize_article_block(lines: list[str]) -> tuple[list[str], bool]:
             index += 1
             continue
 
+        # A bbox row can contain a visible AH article label with only its amount,
+        # e.g. "AH TAART 6,49". In the AH article block this is a single item;
+        # normalize to the canonical quantity-label-amount shape.
+        single_ah_amount_match = re.match(
+            r"^(?P<label>AH\s+[A-Za-z?-??-??-?][A-Za-z?-??-??-?0-9 '\\-]{2,}?)\s+"
+            r"(?P<amount>\d{1,5}[\.,]\d{2})(?:\s*[A-Z])?$",
+            raw,
+            flags=re.I,
+        )
+        if single_ah_amount_match:
+            label = _clean_label(single_ah_amount_match.group("label"))
+            if label and not any(token in label.lower() for token in ("subtotaal", "totaal", "bonus", "koopzegel", "prijs per")):
+                output.append(f"1 {label} {single_ah_amount_match.group('amount')}")
+                changed = True
+                index += 1
+                continue
+
         quantity_match = re.match(r"^\s*(?P<qty>\d{1,2})\s+(?P<body>.+)$", raw)
         if not quantity_match:
             output.append(raw)
