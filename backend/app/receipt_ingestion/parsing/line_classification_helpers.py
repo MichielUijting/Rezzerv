@@ -32,6 +32,7 @@ RECEIPT_NON_PRODUCT_LABEL_TOKENS = (
     'kopie', 'bonnummer', 'kassanr', 'kassa', 'filiaal', 'openingstijden', 'www.',
     'http', 'welkom', 'bedankt', 'dank u', 'tot ziens', 'coupon', 'actiecode',
     'zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'spaarkaart',
+    'besparing', 'besparingen',
 )
 
 
@@ -50,6 +51,9 @@ def _looks_like_non_product_receipt_label(label: str | None) -> bool:
     if not candidate:
         return True
     lowered = candidate.lower()
+    compact_lowered = re.sub(r"[^a-z0-9]+", "", lowered)
+    if "besparing" in compact_lowered or "besparingen" in compact_lowered:
+        return True
     if _looks_like_price_per_detail_label(candidate):
         return True
     if re.fullmatch(r'[-+]?\d+(?:[\.,]\d+)?(?:\s+[-+]?\d+(?:[\.,]\d+)?)*', candidate):
