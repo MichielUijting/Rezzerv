@@ -116,6 +116,17 @@ def _sanitize_summary_plus_line_discounts(lines: list[dict[str, Any]], summary_a
 def apply_plus_runtime_corrections(**kwargs: Any):
     lines, discount_total, diagnostics = _base_apply_plus_runtime_corrections(**kwargs)
     sanitized_lines, removed_implausible = _sanitize_implausible_plus_line_discounts(lines)
+
+    parked_receipt_discount = Decimal('0.00')
+    for item in removed_implausible:
+        parked_receipt_discount += _money(item.get('removed_discount_amount'))
+
+    if parked_receipt_discount != Decimal('0.00'):
+        discount_total = (_money(discount_total) + parked_receipt_discount).quantize(
+            Decimal('0.01'),
+            rounding=ROUND_HALF_UP,
+        )
+
     summary_amounts = _summary_discount_amounts(kwargs.get('text_lines'))
     sanitized_lines, removed_summary = _sanitize_summary_plus_line_discounts(sanitized_lines, summary_amounts)
     if removed_implausible or removed_summary:
@@ -124,6 +135,7 @@ def apply_plus_runtime_corrections(**kwargs: Any):
         if removed_implausible:
             plus_diag['implausible_line_discount_guardrail_applied'] = True
             plus_diag['removed_implausible_line_discounts'] = removed_implausible
+            plus_diag['implausible_line_discounts_parked_as_receipt_discount'] = float(parked_receipt_discount)
         if removed_summary:
             plus_diag['summary_line_discount_guardrail_applied'] = True
             plus_diag['removed_summary_line_discounts'] = removed_summary
