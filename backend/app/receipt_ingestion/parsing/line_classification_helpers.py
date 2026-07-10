@@ -45,6 +45,8 @@ def _looks_like_non_product_receipt_label(label: str | None) -> bool:
     if not candidate:
         return True
     lowered = candidate.lower()
+    if re.match(r'^prijs\s+per(?:\s+(?:kg|kilo|stuk|liter|l|100g|100ml))?\b', lowered):
+        return True
     if re.fullmatch(r'[-+]?\d+(?:[\.,]\d+)?(?:\s+[-+]?\d+(?:[\.,]\d+)?)*', candidate):
         return True
     if re.fullmatch(r'[\d\s,\.:%/\-+xX]+', candidate):
