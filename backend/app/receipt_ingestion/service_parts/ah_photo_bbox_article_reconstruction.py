@@ -82,12 +82,14 @@ def _group_texts_to_rows(texts: list[str] | None, boxes: list[Any] | None) -> li
 
 
 def _looks_like_ah(lines: list[str]) -> bool:
-    haystack = " ".join(str(line or "").lower() for line in lines[:25])
+    # Long AH photo receipts can have the first SUBTOTAAL after 25+ article rows.
+    # Do not limit the AH-context check to the first screen of OCR rows.
+    head = " ".join(str(line or "").lower() for line in lines[:80])
     return (
-        "albert heijn" in haystack
-        or "bonuskaart" in haystack
-        or "airmiles" in haystack
-    ) and "subtotaal" in haystack
+        "albert heijn" in head
+        or "bonuskaart" in head
+        or "airmiles" in head
+    ) and "subtotaal" in head
 
 
 def _amount_tokens(line: str) -> list[str]:
@@ -125,6 +127,21 @@ def _split_ah_prefixed_label(label_part: str) -> list[str]:
             if left and right:
                 return [left, right]
     return [_clean_label(label_part)]
+
+
+def _split_repeated_label(label_part: str) -> str | None:
+    words = [word for word in str(label_part or "").split() if word]
+    if len(words) < 2 or len(words) % 2 != 0:
+        return None
+    half = len(words) // 2
+    left = " ".join(words[:half])
+    right = " ".join(words[half:])
+    if left.upper() != right.upper():
+        return None
+    label = _clean_label(left)
+    if len(label) < 3:
+        return None
+    return label
 
 
 def _first_subtotal_index(lines: list[str]) -> int | None:
@@ -236,10 +253,30 @@ def _normalize_article_block(lines: list[str]) -> tuple[list[str], bool]:
         label_part = body[: first_amount.start()].strip()
         labels = _split_ah_prefixed_label(label_part)
 
+        repeated_label = _split_repeated_label(label_part)
+        if repeated_label and len(amounts) == 1 and b_marker:
+            # Paddle can collapse two identical AH article rows into one visual
+            # label phrase, e.g. "1 OLIJFOLIE OLIJFOLIE 4.79 B". The repeated
+            # label is visible twice; the amount is visible once in the same
+            # price/amount column and applies to both equal rows.
+            output.append(f"{qty} {repeated_label} {amounts[0]} B")
+            output.append(f"{qty} {repeated_label} {amounts[0]} B")
+            changed = True
+            index += 1
+            continue
+
         if pending_label and len(labels) == 1 and len(amounts) >= 2 and b_marker:
             output.append(f"{qty} {labels[0]} {amounts[0]} B")
             output.append(f"1 {pending_label} {amounts[-1]}")
             pending_label = None
+            changed = True
+            index += 1
+            continue
+
+        if len(labels) == 1 and len(amounts) >= 2 and b_marker and labels[0].upper().startswith("AH "):
+            # Right-column AH article with a trailing B amount from a neighbouring
+            # row. Keep only the visible article amount for this label.
+            output.append(f"{qty} {labels[0]} {amounts[0]}")
             changed = True
             index += 1
             continue
