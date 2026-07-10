@@ -142,6 +142,33 @@ def _header_index(lines: list[str]) -> int | None:
     return None
 
 
+def _product_from_price_per_row(raw: str) -> str | None:
+    """Return product row from AH price-per detail rows that also contain a next item.
+
+    A line like "Prijs per kg 11,97 KOMKOMMER 0,99" contains a unit-price detail
+    for the previous weighted article and a separate visible article. The unit
+    price must not become a product line; the trailing article may be preserved.
+    """
+    line = re.sub(r"\s+", " ", str(raw or "")).strip()
+    match = re.match(
+        r"^prijs\s+per\s+(?:kg|kilo|stuk)\s+"
+        r"(?:(?:\d{1,5}[\.,]\d{2})\s+)?"
+        r"(?P<label>[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9 '\-]{2,}?)\s+"
+        r"(?P<amount>\d{1,5}[\.,]\d{2})(?:\s*[A-Z])?\s*$",
+        line,
+        flags=re.I,
+    )
+    if not match:
+        return None
+    label = _clean_label(match.group("label"))
+    amount = match.group("amount")
+    if not label:
+        return None
+    if any(token in label.lower() for token in ("prijs per", "subtotaal", "totaal", "bonus", "voordeel", "koopzegel")):
+        return None
+    return f"1 {label} {amount}"
+
+
 def _normalize_article_block(lines: list[str]) -> tuple[list[str], bool]:
     start = _header_index(lines)
     end = _first_subtotal_index(lines)
@@ -157,6 +184,14 @@ def _normalize_article_block(lines: list[str]) -> tuple[list[str], bool]:
         raw = re.sub(r"\s+", " ", str(lines[index] or "")).strip()
         lowered = raw.lower()
         if not raw:
+            index += 1
+            continue
+
+        if re.match(r"^prijs\s+per\b", lowered):
+            product_row = _product_from_price_per_row(raw)
+            if product_row:
+                output.append(product_row)
+            changed = True
             index += 1
             continue
 
