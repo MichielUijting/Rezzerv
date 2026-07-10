@@ -27,7 +27,6 @@ from app.services.receipt_service import reparse_receipt
 ENGINE_URL = "sqlite:////app/data/rezzerv.db"
 RECEIPT_STORAGE_ROOT = Path("/app/data/receipts")
 AH_PHOTO_10_ID = "800894a1cf4a48598f4095be5532dc26"
-EXPECTED_TOTAL = Decimal("11.35")
 CENT = Decimal("0.01")
 
 
@@ -76,36 +75,51 @@ def maybe_money(value: Any) -> Decimal | None:
     return Decimal(str(value)).quantize(CENT)
 
 
+def table_columns(conn: Any, table_name: str) -> set[str]:
+    rows = conn.execute(text(f"PRAGMA table_info({table_name})")).mappings().all()
+    return {row["name"] for row in rows}
+
+
+def optional_select(alias: str, column: str, available: set[str]) -> str:
+    if column in available:
+        return f"{alias}.{column} AS {column}"
+    return f"NULL AS {column}"
+
+
 def fetch_snapshot(conn: Any, receipt_id: str) -> dict[str, Any] | None:
-    row = conn.execute(
-        text(
-            """
-            SELECT
-                rt.id AS receipt_table_id,
-                rt.raw_receipt_id,
-                rr.original_filename,
-                rr.source_type,
-                rr.content_type,
-                rr.storage_path,
-                rr.sha256_hash,
-                rt.store_name,
-                rt.store_branch,
-                rt.purchase_at,
-                rt.total_amount,
-                rt.discount_total,
-                rt.currency,
-                rt.parse_status,
-                rt.confidence_score,
-                rt.line_count,
-                rt.updated_at
-            FROM receipt_tables rt
-            JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
-            WHERE rt.id = :id OR rt.raw_receipt_id = :id
-            LIMIT 1
-            """
-        ),
-        {"id": receipt_id},
-    ).mappings().first()
+    rr_columns = table_columns(conn, "raw_receipts")
+
+    source_type_select = optional_select("rr", "source_type", rr_columns)
+    content_type_select = optional_select("rr", "content_type", rr_columns)
+    storage_path_select = optional_select("rr", "storage_path", rr_columns)
+    sha256_hash_select = optional_select("rr", "sha256_hash", rr_columns)
+
+    query = f"""
+        SELECT
+            rt.id AS receipt_table_id,
+            rt.raw_receipt_id,
+            rr.original_filename,
+            {source_type_select},
+            {content_type_select},
+            {storage_path_select},
+            {sha256_hash_select},
+            rt.store_name,
+            rt.store_branch,
+            rt.purchase_at,
+            rt.total_amount,
+            rt.discount_total,
+            rt.currency,
+            rt.parse_status,
+            rt.confidence_score,
+            rt.line_count,
+            rt.updated_at
+        FROM receipt_tables rt
+        JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+        WHERE rt.id = :id OR rt.raw_receipt_id = :id
+        LIMIT 1
+    """
+
+    row = conn.execute(text(query), {"id": receipt_id}).mappings().first()
 
     if not row:
         return None
