@@ -1,4 +1,4 @@
-﻿"""
+"""
 Technical Design Reference:
 - TD Section: TD-04 Status en SSOT
 - Module Role: Map production PO norm status to API/UI fields
@@ -107,16 +107,48 @@ def _line_total_from_lines(payload: dict[str, Any]) -> Decimal | None:
     return total if seen else None
 
 
-def _net_line_total(payload: dict[str, Any]) -> Decimal | None:
+def _net_line_total_variants(payload: dict[str, Any]) -> list[Decimal]:
+    """Return candidate functional totals without double-counting discounts.
+
+    Some receipt payloads carry discounts on the lines, others on the receipt
+    header. During migrations/debug output both can be present with the same
+    discount value. Kassa status should approve a receipt when one source-driven
+    financial interpretation closes, but must not add the same discount twice.
+    """
     line_total = _line_total_from_lines(payload)
 
     if line_total is None:
         line_total = _safe_decimal(payload.get("line_total_sum"))
 
-    if line_total is not None:
-        return line_total + _line_discount_total(payload) + _receipt_discount_total(payload)
+    variants: list[Decimal] = []
 
-    return _safe_decimal(payload.get("net_line_total_sum"))
+    explicit_net = _safe_decimal(payload.get("net_line_total_sum"))
+    if explicit_net is not None:
+        variants.append(explicit_net)
+
+    if line_total is not None:
+        variants.append(line_total)
+
+        line_discount = _line_discount_total(payload)
+        receipt_discount = _receipt_discount_total(payload)
+
+        if line_discount:
+            variants.append(line_total + line_discount)
+        if receipt_discount:
+            variants.append(line_total + receipt_discount)
+        if line_discount and receipt_discount and line_discount != receipt_discount:
+            variants.append(line_total + line_discount + receipt_discount)
+
+    deduped: list[Decimal] = []
+    for value in variants:
+        if value not in deduped:
+            deduped.append(value)
+    return deduped
+
+
+def _net_line_total(payload: dict[str, Any]) -> Decimal | None:
+    variants = _net_line_total_variants(payload)
+    return variants[0] if variants else None
 
 
 def _production_status_item(payload: dict[str, Any]) -> dict[str, Any]:
@@ -139,11 +171,11 @@ def _production_status_item(payload: dict[str, Any]) -> dict[str, Any]:
     if line_count <= 0:
         failed.append("NO_ARTICLE_LINES")
 
-    net_line_sum = _net_line_total(payload)
+    net_line_sums = _net_line_total_variants(payload)
     if total_amount is not None and line_count > 0:
-        if net_line_sum is None:
+        if not net_line_sums:
             failed.append("LINE_SUM_MISSING")
-        elif not _amount_equals(net_line_sum, total_amount):
+        elif not any(_amount_equals(net_line_sum, total_amount) for net_line_sum in net_line_sums):
             failed.append("LINE_SUM_TOTAL_MISMATCH")
 
     label = "Gecontroleerd" if not failed else "Controle nodig"
