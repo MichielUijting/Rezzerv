@@ -116,7 +116,7 @@ def auto_ensure_external_candidates_for_receipt_table(
     """Lees echte externe kandidaten bij voor productregels zonder bekende GTIN/EAN.
 
     Dit is productgedrag, geen PO-rapport. De functie mag uitsluitend kandidaatcache
-    vullen in `external_product_candidates`. Ze maakt geen Mijn artikel, geen
+    vullen in `external_product_candidates`. Ze maakt geen huishoudelijk artikel, geen
     global product en geen voorraadmutatie. Regels met een bestaande geldige
     GTIN/EAN hebben al een externe identiteit en worden niet opnieuw van
     kandidaatartikelen voorzien.
