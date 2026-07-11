@@ -1,1 +1,0 @@
-Temporary note: Artikelgroep terminology regression is covered in the branch summary. This file should not be merged if the full Playwright suite is preferred instead of an isolated spec.
