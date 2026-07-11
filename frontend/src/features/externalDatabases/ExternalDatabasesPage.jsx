@@ -161,7 +161,7 @@ export default function ExternalDatabasesPage() {
         <div className="rz-external-databases-test">
           <div className="rz-external-databases-section-header">
             <h3>Lidl-kandidaatpreview</h3>
-            <span className="rz-external-databases-muted">Preview-only: geen Mijn artikel, product of voorraadmutatie.</span>
+            <span className="rz-external-databases-muted">Preview-only: geen artikelgroep, product of voorraadmutatie.</span>
           </div>
           <form onSubmit={testCandidateMatch} className="rz-external-databases-form">
             <div className="rz-external-databases-form-grid">
@@ -186,7 +186,7 @@ export default function ExternalDatabasesPage() {
               <Button type="button" variant="secondary" disabled={isSaving || !candidates.length} onClick={saveCandidateMatches}>{isSaving ? 'Opslaan...' : 'Kandidaten opslaan'}</Button>
             </div>
           </form>
-          <div className="rz-external-databases-muted">Drempel probable_candidate: {formatScore(selectedRetailerConfig?.probable_candidate_threshold)}. Deze opslag maakt geen Mijn artikel, global_product of voorraadmutatie aan.</div>
+          <div className="rz-external-databases-muted">Drempel probable_candidate: {formatScore(selectedRetailerConfig?.probable_candidate_threshold)}. Deze opslag maakt geen artikelgroep, global_product of voorraadmutatie aan.</div>
           {matchResult ? (
             <div className="rz-external-databases-preview-meta" data-testid="external-database-preview-meta">
               <span>Bron: {matchResult.candidate_source || '-'}</span>
@@ -228,7 +228,7 @@ export default function ExternalDatabasesPage() {
             <div className="rz-external-databases-header">
               <div className="rz-external-databases-title-group">
                 <h2 className="rz-external-databases-title">Externe databases</h2>
-                <p className="rz-external-databases-subtitle">Eerste versie voor externe productkandidaten. Deze preview maakt geen Mijn artikel, product of voorraadmutatie aan.</p>
+                <p className="rz-external-databases-subtitle">Eerste versie voor externe productkandidaten. Deze preview maakt geen artikelgroep, product of voorraadmutatie aan.</p>
               </div>
             </div>
             {renderTabContent(TAB_LABELS.overzicht)}
