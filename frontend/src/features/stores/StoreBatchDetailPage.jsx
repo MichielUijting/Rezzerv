@@ -1,4 +1,4 @@
-﻿import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -748,7 +748,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     if (!batch || selectedLineIds.length === 0) return
     const selectedSet = new Set(selectedLineIds.map((id) => String(id)))
     const rows = lineUiStates.filter((entry) => selectedSet.has(String(entry.line.id)))
-    const header = ['Bonartikel', 'Mijn artikel', 'Locatie', 'Aantal', 'Standaardartikel', 'Status']
+    const header = ['Bonartikel', 'Artikelgroep', 'Locatie', 'Aantal', 'Standaardartikel', 'Status']
     const csvRows = rows.map((entry) => {
       const articleName = entry.line.resolved_household_article_name || articleLabel(articleOptions.find((option) => String(option.id) === String(entry.draft.articleId))) || ''
       const locationLabel = locationOptions.find((location) => String(location.id) === String(entry.draft.locationId))?.label || ''
@@ -1034,13 +1034,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Bonartikel</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Locatie / sublocatie</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Aantal</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Mijn artikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Artikelgroep</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="standaardartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-standard" sortable isSorted={tableSort.key === 'standaardartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Standaardartikel</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
                   <th>
-                    <input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of mijn artikel" />
+                    <input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of artikelgroep" />
                   </th>
                   <th>
                     <select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
