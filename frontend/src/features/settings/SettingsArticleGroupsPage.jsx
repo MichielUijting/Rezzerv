@@ -3,12 +3,12 @@ import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Table from '../../ui/Table'
-import { buildTableWidth } from '../../ui/resizableTable'
+import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 
 const UNASSIGNED_LABEL = 'Niet ingedeeld'
 const initialGroupForm = { name: '', active: true }
-const initialGroupFilters = { name: '', actiefJa: false, articles: '' }
+const initialGroupFilters = { name: '', active: false, articles: '' }
 const initialArticleFilters = { article: '', group: '' }
 const groupTableColumns = [
   { key: 'select', width: 48 },
@@ -21,8 +21,8 @@ const articleTableColumns = [
   { key: 'article', width: 420 },
   { key: 'group', width: 320 },
 ]
-const groupColumnWidths = Object.fromEntries(groupTableColumns.map(({ key, width }) => [key, width]))
-const articleColumnWidths = Object.fromEntries(articleTableColumns.map(({ key, width }) => [key, width]))
+const groupColumnDefaults = Object.fromEntries(groupTableColumns.map(({ key, width }) => [key, width]))
+const articleColumnDefaults = Object.fromEntries(articleTableColumns.map(({ key, width }) => [key, width]))
 const greenCheckboxStyle = { accentColor: '#1A3E2B', width: 16, height: 16 }
 
 function getActiveHouseholdId() {
@@ -165,6 +165,8 @@ export default function SettingsArticleGroupsPage() {
   const [showArticleActionModal, setShowArticleActionModal] = useState(false)
   const [showPendingModal, setShowPendingModal] = useState(false)
   const pendingNavigationRef = useRef(null)
+  const { widths: groupColumnWidths, startResize: startGroupResize } = useResizableColumnWidths(groupColumnDefaults)
+  const { widths: articleColumnWidths, startResize: startArticleResize } = useResizableColumnWidths(articleColumnDefaults)
 
   async function loadData() {
     setIsLoading(true)
@@ -200,24 +202,20 @@ export default function SettingsArticleGroupsPage() {
   const groupArticleCounts = useMemo(() => countArticlesByGroup(articles), [articles])
   const selectedGroup = useMemo(() => sortedGroups.find((item) => String(item.id) === String(selectedGroupId)) || null, [sortedGroups, selectedGroupId])
 
-  const groupDirtyCount = useMemo(() => {
-    return groups.reduce((count, item) => {
-      const draft = groupDrafts[String(item.id)]
-      if (!draft) return count
-      if (String(draft.name || '').trim() !== String(item.name || '').trim()) return count + 1
-      if (Boolean(draft.active) !== (String(item.status || 'active') !== 'inactive')) return count + 1
-      return count
-    }, 0)
-  }, [groups, groupDrafts])
+  const groupDirtyCount = useMemo(() => groups.reduce((count, item) => {
+    const draft = groupDrafts[String(item.id)]
+    if (!draft) return count
+    if (String(draft.name || '').trim() !== String(item.name || '').trim()) return count + 1
+    if (Boolean(draft.active) !== (String(item.status || 'active') !== 'inactive')) return count + 1
+    return count
+  }, 0), [groups, groupDrafts])
 
-  const articleDirtyCount = useMemo(() => {
-    return articles.reduce((count, item) => {
-      const draft = articleDrafts[String(item.id)]
-      if (!draft) return count
-      if (String(draft.article_group_id || '') !== String(item.article_group_id || '')) return count + 1
-      return count
-    }, 0)
-  }, [articles, articleDrafts])
+  const articleDirtyCount = useMemo(() => articles.reduce((count, item) => {
+    const draft = articleDrafts[String(item.id)]
+    if (!draft) return count
+    if (String(draft.article_group_id || '') !== String(item.article_group_id || '')) return count + 1
+    return count
+  }, 0), [articles, articleDrafts])
 
   const hasPendingChanges = groupDirtyCount > 0 || articleDirtyCount > 0
 
@@ -251,15 +249,13 @@ export default function SettingsArticleGroupsPage() {
     return () => document.removeEventListener('click', handleDocumentClick, true)
   }, [hasPendingChanges])
 
-  const filteredGroups = useMemo(() => {
-    return sortedGroups.filter((item) => {
-      const draft = groupDrafts[String(item.id)] || { name: item.name, active: String(item.status || 'active') !== 'inactive' }
-      const nameOk = !groupFilters.name || String(draft?.name || '').toLowerCase().includes(groupFilters.name.toLowerCase())
-      const activeOk = !groupFilters.actiefJa || Boolean(draft?.active)
-      const countOk = !groupFilters.articles || String(Number(groupArticleCounts[String(item.id)] || 0)).includes(groupFilters.articles)
-      return nameOk && activeOk && countOk
-    })
-  }, [sortedGroups, groupFilters, groupDrafts, groupArticleCounts])
+  const filteredGroups = useMemo(() => sortedGroups.filter((item) => {
+    const draft = groupDrafts[String(item.id)] || { name: item.name, active: String(item.status || 'active') !== 'inactive' }
+    const nameOk = !groupFilters.name || String(draft?.name || '').toLowerCase().includes(groupFilters.name.toLowerCase())
+    const activeOk = !groupFilters.active || Boolean(draft?.active)
+    const countOk = !groupFilters.articles || String(Number(groupArticleCounts[String(item.id)] || 0)).includes(groupFilters.articles)
+    return nameOk && activeOk && countOk
+  }), [sortedGroups, groupFilters, groupDrafts, groupArticleCounts])
 
   const visibleArticles = useMemo(() => {
     if (!selectedGroupId) return articles
@@ -545,37 +541,41 @@ export default function SettingsArticleGroupsPage() {
     setShowPendingModal(false)
   }
 
+  const groupTableWidth = buildTableWidth(groupColumnWidths)
+  const articleTableWidth = buildTableWidth(articleColumnWidths)
+
   return (
     <AppShell title="Artikelgroepen" showExit={false}>
       <Card className="rz-settings-spaces-card">
         <div style={{ display: 'grid', gap: 24, width: '100%' }} data-testid="settings-article-groups-page">
           <div>
             <h2 style={{ margin: 0, fontSize: 20 }}>Beheer Artikelgroepen</h2>
-            <p style={{ margin: '8px 0 0 0', color: '#667085' }}>Beheer je eigen indeling van voorraadartikelen. Rezzerv maakt geen groepen automatisch aan.</p>
           </div>
 
           <section style={{ display: 'grid', gap: 18 }}>
             <div style={{ fontWeight: 700, color: '#0f172a' }}>Artikelgroepen</div>
-            <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(groupColumnWidths), minWidth: buildTableWidth(groupColumnWidths) }}>
+            <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" tableStyle={{ tableLayout: 'fixed', width: groupTableWidth, minWidth: groupTableWidth }}>
               <colgroup>
-                <col style={{ width: '48px' }} />
-                <col style={{ width: 'auto' }} />
-                <col style={{ width: '140px' }} />
-                <col style={{ width: '180px' }} />
+                <col style={{ width: `${groupColumnWidths.select}px` }} />
+                <col style={{ width: `${groupColumnWidths.name}px` }} />
+                <col style={{ width: `${groupColumnWidths.active}px` }} />
+                <col style={{ width: `${groupColumnWidths.articles}px` }} />
               </colgroup>
               <thead>
                 <tr className="rz-table-header">
-                  <th><input type="checkbox" style={greenCheckboxStyle} checked={allFilteredGroupsSelected} onChange={toggleAllFilteredGroups} aria-label="Selecteer alle zichtbare Artikelgroepen" /></th>
-                  <th>Artikelgroep</th>
-                  <th className="rz-num">Actief</th>
-                  <th className="rz-num">Aantal artikelen</th>
+                  <ResizableHeaderCell columnKey="select" widths={groupColumnWidths} onStartResize={startGroupResize}>
+                    <input type="checkbox" style={greenCheckboxStyle} checked={allFilteredGroupsSelected} onChange={toggleAllFilteredGroups} aria-label="Selecteer alle zichtbare Artikelgroepen" />
+                  </ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="name" widths={groupColumnWidths} onStartResize={startGroupResize}>Artikelgroep</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="active" widths={groupColumnWidths} onStartResize={startGroupResize} className="rz-num">Actief</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="articles" widths={groupColumnWidths} onStartResize={startGroupResize} className="rz-num">Aantal artikelen</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
                   <th><input className="rz-input rz-inline-input" value={groupFilters.name} onChange={(event) => setGroupFilters((current) => ({ ...current, name: event.target.value }))} placeholder="Filter" aria-label="Filter op Artikelgroep" /></th>
                   <th className="rz-num">
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 20, width: '100%' }}>
-                      <input type="checkbox" className="rz-filter-checkbox" style={greenCheckboxStyle} checked={groupFilters.actiefJa} onChange={(event) => setGroupFilters((current) => ({ ...current, actiefJa: event.target.checked }))} aria-label="Filter actieve Artikelgroepen" title="Alleen actieve Artikelgroepen tonen" />
+                      <input type="checkbox" className="rz-filter-checkbox" style={greenCheckboxStyle} checked={groupFilters.active} onChange={(event) => setGroupFilters((current) => ({ ...current, active: event.target.checked }))} aria-label="Filter actieve Artikelgroepen" title="Alleen actieve Artikelgroepen tonen" />
                     </div>
                   </th>
                   <th><input className="rz-input rz-inline-input" value={groupFilters.articles} onChange={(event) => setGroupFilters((current) => ({ ...current, articles: event.target.value }))} placeholder="Filter" aria-label="Filter op aantal artikelen" /></th>
@@ -609,19 +609,21 @@ export default function SettingsArticleGroupsPage() {
           </section>
 
           <section style={{ display: 'grid', gap: 18 }}>
-            <div style={{ fontWeight: 700, color: '#0f172a' }}>Voorraadartikelen{selectedGroup ? ` in ${selectedGroup.name}` : ''}</div>
+            <div style={{ fontWeight: 700, color: '#0f172a' }}>Voorraadartikelen{selectedGroup ? ` van ${selectedGroup.name}` : ''}</div>
             <p style={{ margin: 0, color: '#667085' }}>Koppelen is handmatig. Barcodeherkenning, externe databases en Uitpakken wijzigen deze koppeling niet.</p>
-            <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(articleColumnWidths), minWidth: buildTableWidth(articleColumnWidths) }}>
+            <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" tableStyle={{ tableLayout: 'fixed', width: articleTableWidth, minWidth: articleTableWidth }}>
               <colgroup>
-                <col style={{ width: '48px' }} />
-                <col style={{ width: 'auto' }} />
-                <col style={{ width: '320px' }} />
+                <col style={{ width: `${articleColumnWidths.select}px` }} />
+                <col style={{ width: `${articleColumnWidths.article}px` }} />
+                <col style={{ width: `${articleColumnWidths.group}px` }} />
               </colgroup>
               <thead>
                 <tr className="rz-table-header">
-                  <th><input type="checkbox" style={greenCheckboxStyle} checked={allFilteredArticlesSelected} onChange={toggleAllFilteredArticles} aria-label="Selecteer alle zichtbare artikelen" /></th>
-                  <th>Artikel</th>
-                  <th>Artikelgroep</th>
+                  <ResizableHeaderCell columnKey="select" widths={articleColumnWidths} onStartResize={startArticleResize}>
+                    <input type="checkbox" style={greenCheckboxStyle} checked={allFilteredArticlesSelected} onChange={toggleAllFilteredArticles} aria-label="Selecteer alle zichtbare artikelen" />
+                  </ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="article" widths={articleColumnWidths} onStartResize={startArticleResize}>Artikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="group" widths={articleColumnWidths} onStartResize={startArticleResize}>Artikelgroep</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
