@@ -566,6 +566,51 @@ async function fetchInventoryRows() {
   return mergeInventoryRows(data.rows)
 }
 
+async function fetchArticleGroupAssignments() {
+  const response = await fetch(`/api/article-groups/household-articles?_ts=${Date.now()}`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(),
+  })
+  if (!response.ok) return { byId: new Map(), byName: new Map() }
+
+  const data = await response.json().catch(() => ({}))
+  const items = Array.isArray(data?.items) ? data.items : []
+  const byId = new Map()
+  const byName = new Map()
+
+  items.forEach((item) => {
+    const assignment = {
+      articleGroupId: item?.article_group_id || null,
+      articleGroupName: item?.article_group_name || 'Niet ingedeeld',
+    }
+
+    const id = String(item?.id || item?.household_article_id || '').trim()
+    if (id) byId.set(id, assignment)
+
+    const name = normalizeName(item?.article_name || item?.name || '')
+    if (name) byName.set(name, assignment)
+  })
+
+  return { byId, byName }
+}
+
+function applyArticleGroupsToRows(rows = [], assignments = { byId: new Map(), byName: new Map() }) {
+  const byId = assignments?.byId instanceof Map ? assignments.byId : new Map()
+  const byName = assignments?.byName instanceof Map ? assignments.byName : new Map()
+
+  return rows.map((row) => {
+    const id = String(row?.householdArticleId || row?.detailId || '').trim()
+    const name = normalizeName(row?.huishoudnaam || row?.artikel || '')
+    const assignment = byId.get(id) || byName.get(name) || null
+    const articleGroupName = assignment?.articleGroupName || row?.articleGroupName || 'Niet ingedeeld'
+
+    return {
+      ...row,
+      artikelgroep: articleGroupName,
+      articleGroupName,
+    }
+  })
+}
 async function saveInventoryRow(row) {
   const inventoryId = String(row?.inventoryId || row?.detailId || '').trim()
   if (!inventoryId) throw new Error('Voorraadregel kan niet worden opgeslagen zonder inventory-id')
@@ -598,12 +643,11 @@ async function saveInventoryRow(row) {
 const initialData = [];
 
 const editableColumns = [
-  { key: "huishoudnaam", label: "Huishoudnaam", type: "text", width: "22%" },
-  { key: "productnaam", label: "Productnaam", type: "text", width: "22%" },
-  { key: "artikelgroep", label: "Artikelgroep", type: "text", width: "16%" },
-  { key: "aantal", label: "Aantal", type: "number", width: "10%" },
-  { key: "locatie", label: "Locatie", type: "text", width: "15%" },
-  { key: "sublocatie", label: "Sublocatie", type: "text", width: "15%" }
+  { key: "huishoudnaam", label: "Voorraadartikel", type: "text", width: "28%" },
+  { key: "artikelgroep", label: "Artikelgroep", type: "text", width: "20%" },
+  { key: "aantal", label: "Aantal", type: "number", width: "13%" },
+  { key: "locatie", label: "Locatie", type: "text", width: "19.5%" },
+  { key: "sublocatie", label: "Sublocatie", type: "text", width: "19.5%" }
 ];
 
 function isColumnEditable(row, key) {
@@ -650,7 +694,6 @@ export default function Voorraad() {
   }
   const [filters, setFilters] = useState({
     huishoudnaam: "",
-    productnaam: "",
     artikelgroep: "",
     aantal: "",
     locatie: "",
@@ -658,13 +701,12 @@ export default function Voorraad() {
   });
   const [tableSort, setTableSort] = useState({ key: "huishoudnaam", direction: "asc" });
   const inventoryTableColumns = useMemo(() => ([
-    { key: "select", width: 48 },
-    { key: "huishoudnaam", width: 250 },
-    { key: "productnaam", width: 250 },
-    { key: "artikelgroep", width: 190 },
+    { key: "select", width: 44 },
+    { key: "huishoudnaam", width: 260 },
+    { key: "artikelgroep", width: 180 },
     { key: "aantal", width: 120 },
-    { key: "locatie", width: 220 },
-    { key: "sublocatie", width: 220 },
+    { key: "locatie", width: 160 },
+    { key: "sublocatie", width: 160 },
   ]), []);
   const inventoryColumnDefaults = useMemo(() => Object.fromEntries(inventoryTableColumns.map(({ key, width }) => [key, width])), [inventoryTableColumns]);
   const { widths: inventoryColumnWidths, startResize: startInventoryResize } = useResizableColumnWidths(inventoryColumnDefaults);
@@ -1145,7 +1187,7 @@ export default function Voorraad() {
 
     if (column.key === "artikelgroep") {
       return (
-        <div className="rz-inline-cell rz-inline-label" title={row?.artikelgroep || 'Niet ingedeeld'}>
+        <div className="rz-inline-cell rz-inline-label" style={{ fontWeight: 400 }} title={row?.artikelgroep || 'Niet ingedeeld'}>
           {row?.artikelgroep || 'Niet ingedeeld'}
         </div>
       )
@@ -1180,7 +1222,7 @@ export default function Voorraad() {
                 <colgroup>
                   <col style={{ width: `${inventoryColumnWidths.select}px` }} />
                   <col style={{ width: `${inventoryColumnWidths.huishoudnaam}px` }} />
-                  <col style={{ width: `${inventoryColumnWidths.productnaam}px` }} />
+                  <col style={{ width: `${inventoryColumnWidths.artikelgroep}px` }} />
                   <col style={{ width: `${inventoryColumnWidths.aantal}px` }} />
                   <col style={{ width: `${inventoryColumnWidths.locatie}px` }} />
                   <col style={{ width: `${inventoryColumnWidths.sublocatie}px` }} />
@@ -1196,8 +1238,8 @@ export default function Voorraad() {
                         aria-label="Selecteer alle zichtbare artikelen"
                       />
                     </ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="huishoudnaam" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "huishoudnaam"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Huishoudnaam</ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="productnaam" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "productnaam"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Productnaam</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="huishoudnaam" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "huishoudnaam"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Voorraadartikel</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="artikelgroep" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "artikelgroep"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}><span style={{ fontWeight: 400 }}>Artikelgroep</span></ResizableHeaderCell>
                     <ResizableHeaderCell columnKey="aantal" widths={inventoryColumnWidths} onStartResize={startInventoryResize} className="rz-num" sortable isSorted={tableSort.key === "aantal"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Aantal</ResizableHeaderCell>
                     <ResizableHeaderCell columnKey="locatie" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "locatie"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Locatie</ResizableHeaderCell>
                     <ResizableHeaderCell columnKey="sublocatie" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "sublocatie"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Sublocatie</ResizableHeaderCell>
@@ -1211,16 +1253,7 @@ export default function Voorraad() {
                         value={filters.huishoudnaam}
                         onChange={(e) => handleFilterChange("huishoudnaam", e.target.value)}
                         placeholder="Filter"
-                        aria-label="Filter op huishoudnaam"
-                      />
-                    </th>
-                    <th>
-                      <input
-                        className="rz-input rz-inline-input"
-                        value={filters.productnaam}
-                        onChange={(e) => handleFilterChange("productnaam", e.target.value)}
-                        placeholder="Filter"
-                        aria-label="Filter op productnaam"
+                        aria-label="Filter op voorraadartikel"
                       />
                     </th>
                     <th>
