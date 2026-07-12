@@ -105,6 +105,29 @@ function ActionModal({ open, title, noun, selectedCount, onClose, onDelete, onAr
   )
 }
 
+function BulkAssignArticleGroupModal({ open, selectedCount, groups, value, onChange, onClose, onApply, busy }) {
+  if (!open) return null
+  return (
+    <div className="rz-modal-backdrop" role="presentation">
+      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="article-group-bulk-assign-title">
+        <h3 id="article-group-bulk-assign-title" className="rz-modal-title">Toewijzen aan artikelgroep</h3>
+        <p className="rz-modal-text">Je wijst {selectedCount} geselecteerde voorraadartikel{selectedCount === 1 ? '' : 'en'} toe aan één Artikelgroep.</p>
+        <label className="rz-input-field">
+          <div className="rz-label">Artikelgroep</div>
+          <select className="rz-input" autoFocus value={value} onChange={(event) => onChange(event.target.value)}>
+            <option value="">{UNASSIGNED_LABEL}</option>
+            {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+          </select>
+        </label>
+        <div className="rz-modal-actions">
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Annuleren</Button>
+          <Button type="button" onClick={onApply} disabled={busy}>{busy ? 'Toewijzen…' : 'Toewijzen'}</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PendingChangesModal({ open, onSave, onDiscard, onCancel, busy }) {
   if (!open) return null
   return (
@@ -163,6 +186,8 @@ export default function SettingsArticleGroupsPage() {
   const [selectedGroupId, setSelectedGroupId] = useState('')
   const [showGroupActionModal, setShowGroupActionModal] = useState(false)
   const [showArticleActionModal, setShowArticleActionModal] = useState(false)
+  const [showAssignArticleGroupModal, setShowAssignArticleGroupModal] = useState(false)
+  const [bulkAssignGroupId, setBulkAssignGroupId] = useState('')
   const [showPendingModal, setShowPendingModal] = useState(false)
   const pendingNavigationRef = useRef(null)
   const { widths: groupColumnWidths, startResize: startGroupResize } = useResizableColumnWidths(groupColumnDefaults)
@@ -314,6 +339,23 @@ export default function SettingsArticleGroupsPage() {
     setError('')
     setGroupForm(initialGroupForm)
     setGroupModalOpen(true)
+  }
+
+  function openBulkAssignArticleGroup() {
+    if (!selectedArticleIds.length) return
+    setMessage('')
+    setError('')
+    const preferredGroupId = selectedGroupId && sortedGroups.some((group) => String(group.id) === String(selectedGroupId)) ? String(selectedGroupId) : ''
+    setBulkAssignGroupId(preferredGroupId)
+    setShowAssignArticleGroupModal(true)
+  }
+
+  function applyBulkAssignArticleGroup() {
+    if (!selectedArticleIds.length) return
+    selectedArticleIds.forEach((id) => updateArticleDraft(id, { article_group_id: bulkAssignGroupId || '' }))
+    const groupName = bulkAssignGroupId ? (sortedGroups.find((group) => String(group.id) === String(bulkAssignGroupId))?.name || 'gekozen Artikelgroep') : UNASSIGNED_LABEL
+    setShowAssignArticleGroupModal(false)
+    setMessage(`${selectedArticleIds.length} voorraadartikel${selectedArticleIds.length === 1 ? '' : 'en'} klaargezet voor Artikelgroep ${groupName}. Kies Wijzigingen opslaan om te bewaren.`)
   }
 
   function updateGroupDraft(id, patch) {
@@ -658,6 +700,7 @@ export default function SettingsArticleGroupsPage() {
             </Table>
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
               <Button type="button" variant="secondary" onClick={exportArticleLinksCsv} disabled={isLoading || selectedArticleIds.length === 0 || isSaving}>Exporteren</Button>
+              <Button type="button" variant="secondary" onClick={openBulkAssignArticleGroup} disabled={isLoading || selectedArticleIds.length === 0 || isSaving || sortedGroups.length === 0}>Toewijzen aan artikelgroep</Button>
               <Button type="button" variant="secondary" onClick={() => setShowArticleActionModal(true)} disabled={isSaving || selectedArticleIds.length === 0}>Verwijderen</Button>
             </div>
           </section>
@@ -674,6 +717,7 @@ export default function SettingsArticleGroupsPage() {
       <ArticleGroupModal open={groupModalOpen} form={groupForm} onChange={setGroupForm} onClose={() => setGroupModalOpen(false)} onSubmit={handleSaveGroup} busy={isSaving} />
       <ActionModal open={showGroupActionModal} title="Geselecteerde Artikelgroepen verwerken" noun="Artikelgroep" selectedCount={selectedGroupIds.length} onClose={() => setShowGroupActionModal(false)} onDelete={deleteSelectedGroups} onArchive={archiveSelectedGroups} busy={isSaving} />
       <ActionModal open={showArticleActionModal} title="Geselecteerde artikelkoppelingen verwerken" noun="artikel" selectedCount={selectedArticleIds.length} onClose={() => setShowArticleActionModal(false)} onDelete={clearSelectedArticleGroups} onArchive={archiveSelectedArticlesNoop} busy={isSaving} />
+      <BulkAssignArticleGroupModal open={showAssignArticleGroupModal} selectedCount={selectedArticleIds.length} groups={sortedGroups} value={bulkAssignGroupId} onChange={setBulkAssignGroupId} onClose={() => setShowAssignArticleGroupModal(false)} onApply={applyBulkAssignArticleGroup} busy={isSaving} />
       <PendingChangesModal open={showPendingModal} onSave={confirmSaveAndContinue} onDiscard={confirmDiscardAndContinue} onCancel={cancelPendingDialog} busy={isSaving} />
     </AppShell>
   )
