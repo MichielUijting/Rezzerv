@@ -502,6 +502,8 @@ function mergeInventoryRows(liveRows = []) {
         productnaam: row?.product_name || artikel,
         householdArticleName: row?.household_article_name || '',
         productName: row?.product_name || artikel,
+        householdArticleId: row?.household_article_id || '',
+        articleGroupName: row?.article_group_name || '',
         aantal,
         locatie,
         sublocatie,
@@ -537,6 +539,9 @@ function mergeInventoryRows(liveRows = []) {
       productnaam: row.productnaam || row.artikel,
       householdArticleName: row.householdArticleName || '',
       productName: row.productName || row.artikel,
+      householdArticleId: row.householdArticleId || '',
+      artikelgroep: row.articleGroupName || 'Niet ingedeeld',
+      articleGroupName: row.articleGroupName || 'Niet ingedeeld',
       aantal: row.aantal,
       locatie: hasMultipleLocations ? 'Meerdere locaties' : (locations[0] || ''),
       sublocatie: hasMultipleSublocations ? 'Meerdere sublocaties' : ((sublocations[0] || '').split('__')[1] || ''),
@@ -593,11 +598,12 @@ async function saveInventoryRow(row) {
 const initialData = [];
 
 const editableColumns = [
-  { key: "huishoudnaam", label: "Huishoudnaam", type: "text", width: "24%" },
-  { key: "productnaam", label: "Productnaam", type: "text", width: "24%" },
-  { key: "aantal", label: "Aantal", type: "number", width: "12%" },
-  { key: "locatie", label: "Locatie", type: "text", width: "20%" },
-  { key: "sublocatie", label: "Sublocatie", type: "text", width: "20%" }
+  { key: "huishoudnaam", label: "Huishoudnaam", type: "text", width: "22%" },
+  { key: "productnaam", label: "Productnaam", type: "text", width: "22%" },
+  { key: "artikelgroep", label: "Artikelgroep", type: "text", width: "16%" },
+  { key: "aantal", label: "Aantal", type: "number", width: "10%" },
+  { key: "locatie", label: "Locatie", type: "text", width: "15%" },
+  { key: "sublocatie", label: "Sublocatie", type: "text", width: "15%" }
 ];
 
 function isColumnEditable(row, key) {
@@ -629,18 +635,23 @@ export default function Voorraad() {
   }, [rows])
 
   const reloadInventoryRows = async () => {
-    const loadedRows = await fetchInventoryRows()
-    const loadedOptions = await fetchLocationOptions().catch(() => buildLocationOptionState([]))
-    const mergedLocationOptions = mergeLocationOptionStates(loadedOptions, buildLocationOptionStateFromRows(loadedRows))
+    const [loadedRows, articleGroupAssignments, loadedOptions] = await Promise.all([
+      fetchInventoryRows(),
+      fetchArticleGroupAssignments(),
+      fetchLocationOptions().catch(() => buildLocationOptionState([])),
+    ])
+    const rowsWithArticleGroups = applyArticleGroupsToRows(loadedRows, articleGroupAssignments)
+    const mergedLocationOptions = mergeLocationOptionStates(loadedOptions, buildLocationOptionStateFromRows(rowsWithArticleGroups))
     setLocalZeroRows([])
-    setRows(loadedRows)
+    setRows(rowsWithArticleGroups)
     setLocationOptions(mergedLocationOptions)
-    setLoadError(loadedRows.length ? '' : 'Nog geen live voorraad beschikbaar.')
-    return loadedRows
+    setLoadError(rowsWithArticleGroups.length ? '' : 'Nog geen live voorraad beschikbaar.')
+    return rowsWithArticleGroups
   }
   const [filters, setFilters] = useState({
     huishoudnaam: "",
     productnaam: "",
+    artikelgroep: "",
     aantal: "",
     locatie: "",
     sublocatie: ""
@@ -650,6 +661,7 @@ export default function Voorraad() {
     { key: "select", width: 48 },
     { key: "huishoudnaam", width: 250 },
     { key: "productnaam", width: 250 },
+    { key: "artikelgroep", width: 190 },
     { key: "aantal", width: 120 },
     { key: "locatie", width: 220 },
     { key: "sublocatie", width: 220 },
@@ -710,14 +722,15 @@ export default function Voorraad() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchInventoryRows(), fetchLocationOptions().catch(() => buildLocationOptionState([]))])
-      .then(([loadedRows, loadedOptions]) => {
+    Promise.all([fetchInventoryRows(), fetchArticleGroupAssignments(), fetchLocationOptions().catch(() => buildLocationOptionState([]))])
+      .then(([loadedRows, articleGroupAssignments, loadedOptions]) => {
         if (!cancelled) {
-          const mergedLocationOptions = mergeLocationOptionStates(loadedOptions, buildLocationOptionStateFromRows(loadedRows))
+          const rowsWithArticleGroups = applyArticleGroupsToRows(loadedRows, articleGroupAssignments)
+          const mergedLocationOptions = mergeLocationOptionStates(loadedOptions, buildLocationOptionStateFromRows(rowsWithArticleGroups))
           setLocalZeroRows([]);
-          setRows(loadedRows);
+          setRows(rowsWithArticleGroups);
           setLocationOptions(mergedLocationOptions);
-          setLoadError(loadedRows.length ? "" : "Nog geen live voorraad beschikbaar.");
+          setLoadError(rowsWithArticleGroups.length ? "" : "Nog geen live voorraad beschikbaar.");
         }
       })
       .catch(() => {
@@ -776,6 +789,7 @@ export default function Voorraad() {
     return sortItems(filtered, tableSort, {
       huishoudnaam: (row) => row.huishoudnaam || row.artikel || '',
       productnaam: (row) => row.productnaam || '',
+      artikelgroep: (row) => row.artikelgroep || 'Niet ingedeeld',
       aantal: (row) => Number(row.aantal ?? 0),
       locatie: (row) => row.locatie || '',
       sublocatie: (row) => row.sublocatie || '',
@@ -1129,6 +1143,14 @@ export default function Voorraad() {
       )
     }
 
+    if (column.key === "artikelgroep") {
+      return (
+        <div className="rz-inline-cell rz-inline-label" title={row?.artikelgroep || 'Niet ingedeeld'}>
+          {row?.artikelgroep || 'Niet ingedeeld'}
+        </div>
+      )
+    }
+
     return (
       <button
         type="button"
@@ -1174,11 +1196,11 @@ export default function Voorraad() {
                         aria-label="Selecteer alle zichtbare artikelen"
                       />
                     </ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="huishoudnaam" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "huishoudnaam"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Huishoudnaam</ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="productnaam" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "productnaam"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Productnaam</ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="aantal" widths={inventoryColumnWidths} onStartResize={startInventoryResize} className="rz-num" sortable isSorted={tableSort.key === "aantal"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Aantal</ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="locatie" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "locatie"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Locatie</ResizableHeaderCell>
-                    <ResizableHeaderCell columnKey="sublocatie" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "sublocatie"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Sublocatie</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="huishoudnaam" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "huishoudnaam"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Huishoudnaam</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="productnaam" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "productnaam"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Productnaam</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="aantal" widths={inventoryColumnWidths} onStartResize={startInventoryResize} className="rz-num" sortable isSorted={tableSort.key === "aantal"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Aantal</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="locatie" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "locatie"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Locatie</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="sublocatie" widths={inventoryColumnWidths} onStartResize={startInventoryResize} sortable isSorted={tableSort.key === "sublocatie"} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { huishoudnaam: "asc", productnaam: "asc", artikelgroep: "asc", aantal: "desc", locatie: "asc", sublocatie: "asc" }))}>Sublocatie</ResizableHeaderCell>
                   </tr>
 
                   <tr className="rz-table-filters">
@@ -1199,6 +1221,15 @@ export default function Voorraad() {
                         onChange={(e) => handleFilterChange("productnaam", e.target.value)}
                         placeholder="Filter"
                         aria-label="Filter op productnaam"
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="rz-input rz-inline-input"
+                        value={filters.artikelgroep}
+                        onChange={(e) => handleFilterChange("artikelgroep", e.target.value)}
+                        placeholder="Filter"
+                        aria-label="Filter op artikelgroep"
                       />
                     </th>
                     <th className="rz-num">
@@ -1270,7 +1301,7 @@ export default function Voorraad() {
 
                   {filteredRows.length === 0 && (
                     <tr>
-                      <td colSpan={6}>{loadError || "Nog geen live voorraad beschikbaar."}</td>
+                      <td colSpan={7}>{loadError || "Nog geen live voorraad beschikbaar."}</td>
                     </tr>
                   )}
                 </tbody>
