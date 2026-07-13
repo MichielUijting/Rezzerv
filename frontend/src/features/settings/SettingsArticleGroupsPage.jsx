@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -189,7 +190,6 @@ export default function SettingsArticleGroupsPage() {
   const [showAssignArticleGroupModal, setShowAssignArticleGroupModal] = useState(false)
   const [bulkAssignGroupId, setBulkAssignGroupId] = useState('')
   const [showPendingModal, setShowPendingModal] = useState(false)
-  const pendingNavigationRef = useRef(null)
   const { widths: groupColumnWidths, startResize: startGroupResize } = useResizableColumnWidths(groupColumnDefaults)
   const { widths: articleColumnWidths, startResize: startArticleResize } = useResizableColumnWidths(articleColumnDefaults)
 
@@ -207,11 +207,7 @@ export default function SettingsArticleGroupsPage() {
       setArticles(nextArticles)
       setGroupDrafts(groupDraftMapFromItems(nextGroups))
       setArticleDrafts(articleDraftMapFromItems(nextArticles))
-      setSelectedGroupId((current) => {
-        if (current && nextGroups.some((item) => String(item.id) === String(current))) return current
-        const first = [...nextGroups].sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'nl'))[0]
-        return first ? String(first.id) : ''
-      })
+      setSelectedGroupId((current) => current && nextGroups.some((item) => String(item.id) === String(current)) ? current : '')
     } catch (loadError) {
       setError(loadError?.message || 'Artikelgroepen konden niet worden geladen')
     } finally {
@@ -243,6 +239,7 @@ export default function SettingsArticleGroupsPage() {
   }, 0), [articles, articleDrafts])
 
   const hasPendingChanges = groupDirtyCount > 0 || articleDirtyCount > 0
+  const blocker = useBlocker(hasPendingChanges)
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -256,23 +253,8 @@ export default function SettingsArticleGroupsPage() {
   }, [hasPendingChanges])
 
   useEffect(() => {
-    const handleDocumentClick = (event) => {
-      if (!hasPendingChanges) return
-      const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null
-      if (!anchor) return
-      const href = anchor.getAttribute('href')
-      if (!href || href.startsWith('#') || href.startsWith('javascript:')) return
-      if (anchor.target === '_blank' || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
-      const next = new URL(anchor.href, window.location.origin)
-      const current = new URL(window.location.href)
-      if (next.pathname === current.pathname && next.search === current.search && next.hash === current.hash) return
-      event.preventDefault()
-      pendingNavigationRef.current = () => { window.location.href = next.href }
-      setShowPendingModal(true)
-    }
-    document.addEventListener('click', handleDocumentClick, true)
-    return () => document.removeEventListener('click', handleDocumentClick, true)
-  }, [hasPendingChanges])
+    if (blocker.state === 'blocked') setShowPendingModal(true)
+  }, [blocker.state])
 
   const filteredGroups = useMemo(() => sortedGroups.filter((item) => {
     const draft = groupDrafts[String(item.id)] || { name: item.name, active: String(item.status || 'active') !== 'inactive' }
@@ -561,26 +543,19 @@ export default function SettingsArticleGroupsPage() {
   async function confirmSaveAndContinue() {
     const ok = await savePendingChanges()
     if (!ok) return
-    if (pendingNavigationRef.current) {
-      const navigate = pendingNavigationRef.current
-      pendingNavigationRef.current = null
-      navigate()
-    }
+    setShowPendingModal(false)
+    if (blocker.state === 'blocked') blocker.proceed()
   }
 
   function confirmDiscardAndContinue() {
     discardPendingChanges()
     setShowPendingModal(false)
-    if (pendingNavigationRef.current) {
-      const navigate = pendingNavigationRef.current
-      pendingNavigationRef.current = null
-      navigate()
-    }
+    if (blocker.state === 'blocked') blocker.proceed()
   }
 
   function cancelPendingDialog() {
-    pendingNavigationRef.current = null
     setShowPendingModal(false)
+    if (blocker.state === 'blocked') blocker.reset()
   }
 
   const groupTableWidth = buildTableWidth(groupColumnWidths)
@@ -705,10 +680,6 @@ export default function SettingsArticleGroupsPage() {
             </div>
           </section>
 
-          <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-            <Button type="button" variant="secondary" onClick={() => { discardPendingChanges(); setShowPendingModal(false) }} disabled={isSaving || !hasPendingChanges}>Wijzigingen annuleren</Button>
-            <Button type="button" onClick={savePendingChanges} disabled={isSaving || !hasPendingChanges}>{isSaving ? 'Opslaan…' : 'Wijzigingen opslaan'}</Button>
-          </div>
         </div>
       </Card>
 
