@@ -47,7 +47,8 @@ CREATE TABLE IF NOT EXISTS product_inventory_groups (
     aggregation_mode TEXT DEFAULT 'sum_quantity',
     active INTEGER DEFAULT 1,
     created_at TEXT,
-    updated_at TEXT
+    updated_at TEXT,
+    source TEXT
 )
 """
 
@@ -99,6 +100,12 @@ CREATE INDEX IF NOT EXISTS idx_product_group_memberships_product
 ON product_group_memberships (global_product_id, inventory_group_key)
 """
 
+PRIMARY_GROUP_MEMBERSHIP_INDEX_SQL = """
+CREATE UNIQUE INDEX IF NOT EXISTS idx_product_group_memberships_one_active_product_type
+ON product_group_memberships (global_product_id)
+WHERE COALESCE(active, 1) = 1
+"""
+
 TAXONOMY_TERM_INDEX_SQL = """
 CREATE INDEX IF NOT EXISTS idx_product_taxonomy_terms_intent
 ON product_taxonomy_terms (intent_key, active)
@@ -141,6 +148,7 @@ SCHEMA_COLUMNS: dict[str, dict[str, str]] = {
         "active": "INTEGER DEFAULT 1",
         "created_at": "TEXT",
         "updated_at": "TEXT",
+        "source": "TEXT",
     },
     "product_group_memberships": {
         "id": "TEXT",
@@ -236,6 +244,8 @@ def ensure_product_inventory_group_schema() -> None:
             _ensure_missing_columns(conn, table_name)
             _ensure_row_ids(conn, table_name)
         conn.execute(text(GROUP_MEMBERSHIP_INDEX_SQL))
+        _deduplicate_active_product_type_memberships(conn)
+        conn.execute(text(PRIMARY_GROUP_MEMBERSHIP_INDEX_SQL))
         conn.execute(text(TAXONOMY_TERM_INDEX_SQL))
         conn.execute(text(INVENTORY_ITEM_GROUP_ASSIGNMENTS_INDEX_SQL))
         seed_default_inventory_groups(conn)
@@ -243,6 +253,31 @@ def ensure_product_inventory_group_schema() -> None:
 
 def _row_exists(conn, sql: str, params: dict[str, Any]) -> bool:
     return conn.execute(text(sql), params).mappings().first() is not None
+
+
+def _deduplicate_active_product_type_memberships(conn) -> None:
+    """Behoud per universeel artikel exact één actieve Producttype-koppeling."""
+    rows = conn.execute(text("""
+        SELECT id, global_product_id
+        FROM product_group_memberships
+        WHERE COALESCE(active, 1) = 1
+        ORDER BY global_product_id, COALESCE(confirmed_by_user, 0) DESC,
+                 COALESCE(updated_at, created_at, '') DESC, id DESC
+    """)).mappings().all()
+    seen: set[str] = set()
+    for row in rows:
+        product_id = str(row.get("global_product_id") or "").strip()
+        membership_id = str(row.get("id") or "").strip()
+        if not product_id or not membership_id:
+            continue
+        if product_id in seen:
+            conn.execute(text("""
+                UPDATE product_group_memberships
+                SET active = 0, updated_at = :updated_at
+                WHERE id = :id
+            """), {"id": membership_id, "updated_at": now_iso()})
+        else:
+            seen.add(product_id)
 
 
 def seed_default_inventory_groups(conn) -> None:
@@ -543,6 +578,175 @@ def assign_inventory_item_to_group(inventory_id: str, inventory_group_key: str, 
     return {"ok": True, "inventory_id": normalized_inventory_id, "inventory_group_key": normalized_group_key, "mutates_inventory": False, "creates_inventory_event": False}
 
 
+
+
+def normalize_product_type_key(value: Any) -> str:
+    return ".".join(normalize_text(value).split())
+
+
+def create_or_get_product_type_with_connection(
+    conn,
+    *,
+    inventory_group_key: str | None = None,
+    display_name: str | None = None,
+    default_base_unit: str = "stuk",
+    aggregation_mode: str = "count",
+    source: str = "user",
+) -> dict[str, Any]:
+    normalized_name = str(display_name or "").strip()
+    normalized_key = str(inventory_group_key or "").strip()
+    if not normalized_key and normalized_name:
+        normalized_key = normalize_product_type_key(normalized_name)
+    if not normalized_key:
+        return {"ok": False, "error": "Producttype is verplicht"}
+
+    existing = conn.execute(text("""
+        SELECT * FROM product_inventory_groups
+        WHERE inventory_group_key = :key
+        LIMIT 1
+    """), {"key": normalized_key}).mappings().first()
+    if existing:
+        if not bool(existing.get("active", 1)):
+            conn.execute(text("""
+                UPDATE product_inventory_groups
+                SET active = 1, updated_at = :updated_at
+                WHERE inventory_group_key = :key
+            """), {"key": normalized_key, "updated_at": now_iso()})
+        return {"ok": True, "created": False, "product_type": dict(existing)}
+
+    if not normalized_name:
+        return {"ok": False, "error": "Onbekend Producttype; display_name is verplicht voor aanmaak"}
+
+    normalized_unit = str(default_base_unit or "stuk").strip().lower() or "stuk"
+    normalized_mode = str(aggregation_mode or "count").strip().lower() or "count"
+    if normalized_mode not in {"count", "volume", "weight", "sum_quantity"}:
+        return {"ok": False, "error": "aggregation_mode moet count, volume, weight of sum_quantity zijn"}
+
+    timestamp = now_iso()
+    conn.execute(text("""
+        INSERT INTO product_inventory_groups (
+            inventory_group_key, display_name, default_base_unit,
+            aggregation_mode, active, created_at, updated_at, source
+        ) VALUES (
+            :key, :display_name, :default_base_unit,
+            :aggregation_mode, 1, :created_at, :updated_at, :source
+        )
+    """), {
+        "key": normalized_key,
+        "display_name": normalized_name,
+        "default_base_unit": normalized_unit,
+        "aggregation_mode": normalized_mode,
+        "created_at": timestamp,
+        "updated_at": timestamp,
+        "source": str(source or "user").strip() or "user",
+    })
+    created = conn.execute(text("""
+        SELECT * FROM product_inventory_groups
+        WHERE inventory_group_key = :key
+        LIMIT 1
+    """), {"key": normalized_key}).mappings().first()
+    return {"ok": True, "created": True, "product_type": dict(created or {})}
+
+
+def link_global_product_to_inventory_group_with_connection(
+    conn,
+    *,
+    global_product_id: str,
+    inventory_group_key: str,
+    comparison_group_key: str | None = None,
+    confidence: float = 1.0,
+    source: str = "user",
+    confirmed_by_user: bool = True,
+) -> dict[str, Any]:
+    normalized_product_id = str(global_product_id or "").strip()
+    normalized_group_key = str(inventory_group_key or "").strip()
+    if not normalized_product_id:
+        return {"ok": False, "error": "global_product_id is verplicht"}
+    if not normalized_group_key:
+        return {"ok": False, "error": "inventory_group_key is verplicht"}
+
+    product = conn.execute(text("SELECT id FROM global_products WHERE id = :id LIMIT 1"), {"id": normalized_product_id}).mappings().first()
+    if not product:
+        return {"ok": False, "error": "Universeel artikel niet gevonden"}
+    group = conn.execute(text("""
+        SELECT * FROM product_inventory_groups
+        WHERE inventory_group_key = :key AND COALESCE(active, 1) = 1
+        LIMIT 1
+    """), {"key": normalized_group_key}).mappings().first()
+    if not group:
+        return {"ok": False, "error": "Producttype niet gevonden"}
+
+    timestamp = now_iso()
+    conn.execute(text("""
+        UPDATE product_group_memberships
+        SET active = 0, updated_at = :updated_at
+        WHERE global_product_id = :global_product_id
+          AND COALESCE(active, 1) = 1
+          AND inventory_group_key <> :inventory_group_key
+    """), {
+        "global_product_id": normalized_product_id,
+        "inventory_group_key": normalized_group_key,
+        "updated_at": timestamp,
+    })
+
+    existing = conn.execute(text("""
+        SELECT id FROM product_group_memberships
+        WHERE global_product_id = :global_product_id
+          AND inventory_group_key = :inventory_group_key
+        LIMIT 1
+    """), {
+        "global_product_id": normalized_product_id,
+        "inventory_group_key": normalized_group_key,
+    }).mappings().first()
+
+    membership_id = str(existing.get("id")) if existing else str(uuid.uuid4())
+    params = {
+        "id": membership_id,
+        "global_product_id": normalized_product_id,
+        "inventory_group_key": normalized_group_key,
+        "comparison_group_key": str(comparison_group_key or normalized_group_key).strip(),
+        "confidence": max(0.0, min(float(confidence or 1.0), 1.0)),
+        "source": str(source or "user").strip() or "user",
+        "confirmed_by_user": 1 if confirmed_by_user else 0,
+        "updated_at": timestamp,
+        "created_at": timestamp,
+    }
+    if existing:
+        conn.execute(text("""
+            UPDATE product_group_memberships
+            SET comparison_group_key = :comparison_group_key,
+                confidence = :confidence,
+                source = :source,
+                confirmed_by_user = :confirmed_by_user,
+                active = 1,
+                updated_at = :updated_at
+            WHERE id = :id
+        """), params)
+    else:
+        conn.execute(text("""
+            INSERT INTO product_group_memberships (
+                id, global_product_id, inventory_group_key,
+                comparison_group_key, confidence, source,
+                confirmed_by_user, active, created_at, updated_at
+            ) VALUES (
+                :id, :global_product_id, :inventory_group_key,
+                :comparison_group_key, :confidence, :source,
+                :confirmed_by_user, 1, :created_at, :updated_at
+            )
+        """), params)
+
+    return {
+        "ok": True,
+        "membership_id": membership_id,
+        "global_product_id": normalized_product_id,
+        "inventory_group_key": normalized_group_key,
+        "comparison_group_key": params["comparison_group_key"],
+        "confirmed_by_user": bool(confirmed_by_user),
+        "creates_inventory_event": False,
+        "mutates_inventory": False,
+    }
+
+
 def link_global_product_to_inventory_group(
     global_product_id: str,
     inventory_group_key: str,
@@ -552,34 +756,13 @@ def link_global_product_to_inventory_group(
     confirmed_by_user: bool = True,
 ) -> dict[str, Any]:
     ensure_product_inventory_group_schema()
-    normalized_product_id = str(global_product_id or "").strip()
-    normalized_group_key = str(inventory_group_key or "").strip()
-    if not normalized_product_id:
-        return {"ok": False, "error": "global_product_id is verplicht"}
-    if not normalized_group_key:
-        return {"ok": False, "error": "inventory_group_key is verplicht"}
-    timestamp = now_iso()
     with engine.begin() as conn:
-        group = conn.execute(text("SELECT * FROM product_inventory_groups WHERE inventory_group_key = :key AND COALESCE(active, 1) = 1 LIMIT 1"), {"key": normalized_group_key}).mappings().first()
-        if not group:
-            return {"ok": False, "error": "Voorraadgroep niet gevonden"}
-        existing = conn.execute(text("""
-            SELECT id FROM product_group_memberships
-            WHERE global_product_id = :global_product_id AND inventory_group_key = :inventory_group_key
-            LIMIT 1
-        """), {"global_product_id": normalized_product_id, "inventory_group_key": normalized_group_key}).mappings().first()
-        membership_id = str(existing.get("id")) if existing else str(uuid.uuid4())
-        params = {"id": membership_id, "global_product_id": normalized_product_id, "inventory_group_key": normalized_group_key, "comparison_group_key": str(comparison_group_key or normalized_group_key).strip(), "confidence": float(confidence or 1.0), "source": str(source or "user").strip(), "confirmed_by_user": 1 if confirmed_by_user else 0, "updated_at": timestamp, "created_at": timestamp}
-        if existing:
-            conn.execute(text("""
-                UPDATE product_group_memberships
-                SET comparison_group_key = :comparison_group_key, confidence = :confidence, source = :source,
-                    confirmed_by_user = :confirmed_by_user, active = 1, updated_at = :updated_at
-                WHERE id = :id
-            """), params)
-        else:
-            conn.execute(text("""
-                INSERT INTO product_group_memberships (id, global_product_id, inventory_group_key, comparison_group_key, confidence, source, confirmed_by_user, active, created_at, updated_at)
-                VALUES (:id, :global_product_id, :inventory_group_key, :comparison_group_key, :confidence, :source, :confirmed_by_user, 1, :created_at, :updated_at)
-            """), params)
-    return {"ok": True, "membership_id": membership_id, "global_product_id": normalized_product_id, "inventory_group_key": normalized_group_key, "comparison_group_key": params["comparison_group_key"], "creates_inventory_event": False, "mutates_inventory": False}
+        return link_global_product_to_inventory_group_with_connection(
+            conn,
+            global_product_id=global_product_id,
+            inventory_group_key=inventory_group_key,
+            comparison_group_key=comparison_group_key,
+            confidence=confidence,
+            source=source,
+            confirmed_by_user=confirmed_by_user,
+        )

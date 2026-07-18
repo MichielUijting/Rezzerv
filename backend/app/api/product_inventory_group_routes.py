@@ -5,6 +5,8 @@ from typing import Any
 from fastapi import APIRouter, Body, Header, HTTPException, Query
 
 from app.services.gpc_import_service import import_gs1_gpc_nl, require_admin_key
+from app.services.external_product_candidate_store import promote_external_product_candidate_with_product_type
+from app.services.off_product_link_service import link_off_product_with_product_type
 from app.services.product_group_crud_store import (
     create_product_group,
     delete_product_group,
@@ -103,6 +105,40 @@ def product_inventory_group_link(global_product_id: str, payload: dict[str, Any]
     )
     if not bool(result.get('ok', False)):
         raise HTTPException(status_code=400, detail=result.get('error') or 'Voorraadgroep kon niet worden gekoppeld')
+    return result
+
+
+@router.post('/api/external-databases/catalog/promote-candidate-with-product-type')
+def external_candidate_product_type_link(payload: dict[str, Any] = Body(default_factory=dict)):
+    assignment = payload.get('product_type_assignment')
+    if not isinstance(assignment, dict):
+        raise HTTPException(status_code=400, detail='Producttypebeslissing is verplicht')
+    try:
+        result = promote_external_product_candidate_with_product_type(
+            candidate_id=str(payload.get('candidate_id') or '').strip(),
+            product_type_assignment=assignment,
+            force_overwrite=bool(payload.get('force_overwrite', False)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not bool(result.get('ok', False)):
+        raise HTTPException(status_code=400, detail=result.get('error') or result.get('reason') or 'Koppeling kon niet worden opgeslagen')
+    return result
+
+
+@router.post('/api/external-products/off/link')
+def external_off_product_type_link(payload: dict[str, Any] = Body(default_factory=dict)):
+    assignment = payload.get('product_type_assignment')
+    if not isinstance(assignment, dict):
+        raise HTTPException(status_code=400, detail='Producttypebeslissing is verplicht')
+    try:
+        result = link_off_product_with_product_type(
+            receipt_item_id=str(payload.get('receipt_item_id') or '').strip(),
+            off_product=payload.get('off_product') or {},
+            product_type_assignment=assignment,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return result
 
 

@@ -98,7 +98,7 @@ test.describe('Externe databases ontkoppelen regressie', () => {
     await expect(candidateTable).toContainText('Geen universele kandidaten met score 0,500 of hoger voor dit bonartikel.');
     await expect(candidateTable.getByText('Gekoppelde ontkoppel kandidaat')).toHaveCount(0);
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('OFF-status: Geen resultaten');
-    await expect(page.getByRole('button', { name: 'Koppel artikel', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Ontkoppel artikel', exact: true })).toBeDisabled();
 
     expect(offRequestBodies).toEqual([

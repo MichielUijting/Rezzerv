@@ -1790,3 +1790,129 @@ def promote_external_product_candidate(candidate_id: str, force_overwrite: bool 
         "candidate_id": normalized_candidate_id,
         "context_key": context_key,
     }
+
+
+
+def promote_external_product_candidate_with_product_type(
+    candidate_id: str,
+    *,
+    product_type_assignment: dict[str, Any],
+    force_overwrite: bool = False,
+) -> dict[str, Any]:
+    """Koppel kandidaat en Producttype atomair, zonder voorraadmutatie."""
+    from app.services.product_inventory_group_store import (
+        create_or_get_product_type_with_connection,
+        ensure_product_inventory_group_schema,
+        link_global_product_to_inventory_group_with_connection,
+    )
+
+    normalized_candidate_id = str(candidate_id or "").strip()
+    if not normalized_candidate_id:
+        return {"ok": False, "promoted": False, "reason": "missing_candidate_id"}
+    if not isinstance(product_type_assignment, dict):
+        return {"ok": False, "promoted": False, "reason": "product_type_assignment_required"}
+
+    ensure_product_inventory_group_schema()
+    with engine.begin() as conn:
+        candidate = conn.execute(text("""
+            SELECT * FROM external_product_candidates
+            WHERE id = :candidate_id
+            LIMIT 1
+        """), {"candidate_id": normalized_candidate_id}).mappings().first()
+        if not candidate:
+            return {"ok": False, "promoted": False, "reason": "candidate_not_found"}
+
+        candidate_dict = dict(candidate)
+        context_key = str(candidate_dict.get("context_key") or "").strip()
+        if not context_key:
+            return {"ok": False, "promoted": False, "reason": "missing_context_key"}
+
+        linked_rows = conn.execute(text("""
+            SELECT id
+            FROM external_product_candidates
+            WHERE context_key = :context_key
+              AND id <> :candidate_id
+              AND (
+                candidate_status IN ('linked_to_catalog', 'user_confirmed')
+                OR status IN ('linked_to_catalog', 'user_confirmed')
+                OR is_user_confirmed = 1
+                OR is_external_database_override = 1
+              )
+        """), {
+            "context_key": context_key,
+            "candidate_id": normalized_candidate_id,
+        }).mappings().all()
+        if linked_rows and not force_overwrite:
+            return {
+                "ok": True,
+                "promoted": False,
+                "requires_overwrite": True,
+                "existing_link_count": len(linked_rows),
+                "candidate_id": normalized_candidate_id,
+                "context_key": context_key,
+            }
+
+        create_payload = product_type_assignment.get("create")
+        product_type_id = str(product_type_assignment.get("product_type_id") or "").strip()
+        if isinstance(create_payload, dict):
+            type_result = create_or_get_product_type_with_connection(
+                conn,
+                inventory_group_key=str(create_payload.get("inventory_group_key") or "").strip() or None,
+                display_name=str(create_payload.get("canonical_name") or create_payload.get("display_name") or "").strip(),
+                default_base_unit=str(create_payload.get("base_unit") or create_payload.get("default_base_unit") or "stuk").strip(),
+                aggregation_mode=str(create_payload.get("aggregation_mode") or "count").strip(),
+                source=str(product_type_assignment.get("mapping_source") or "user_created_during_link").strip(),
+            )
+            if not type_result.get("ok"):
+                return {"ok": False, "promoted": False, "reason": "invalid_product_type", "error": type_result.get("error")}
+            product_type_id = str((type_result.get("product_type") or {}).get("inventory_group_key") or "").strip()
+        if not product_type_id:
+            return {"ok": False, "promoted": False, "reason": "product_type_required"}
+
+        global_product_id = _m2c2i_fix7b_create_or_reuse_catalog_product_for_candidate(conn, candidate_dict)
+        if not global_product_id:
+            raise RuntimeError("Universeel artikel kon niet worden aangemaakt of hergebruikt")
+
+        membership = link_global_product_to_inventory_group_with_connection(
+            conn,
+            global_product_id=global_product_id,
+            inventory_group_key=product_type_id,
+            comparison_group_key=product_type_id,
+            confidence=float(product_type_assignment.get("confidence_score") or 1.0),
+            source=str(product_type_assignment.get("mapping_source") or "user_confirmed_external_suggestion").strip(),
+            confirmed_by_user=True,
+        )
+        if not membership.get("ok"):
+            raise ValueError(str(membership.get("error") or "Producttype kon niet worden gekoppeld"))
+
+        conn.execute(text("""
+            UPDATE external_product_candidates
+            SET candidate_status = 'candidate', status = 'candidate',
+                is_user_confirmed = 0, is_external_database_override = 0,
+                global_product_id = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE context_key = :context_key AND id <> :candidate_id
+        """), {"context_key": context_key, "candidate_id": normalized_candidate_id})
+        conn.execute(text("""
+            UPDATE external_product_candidates
+            SET candidate_status = 'linked_to_catalog', status = 'linked_to_catalog',
+                global_product_id = :global_product_id,
+                is_user_confirmed = 1, is_external_database_override = 0,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :candidate_id
+        """), {"candidate_id": normalized_candidate_id, "global_product_id": global_product_id})
+
+    return {
+        "ok": True,
+        "promoted": True,
+        "requires_overwrite": False,
+        "candidate_id": normalized_candidate_id,
+        "context_key": context_key,
+        "global_product_id": global_product_id,
+        "product_type": {
+            "inventory_group_key": product_type_id,
+            "confirmed_by_user": True,
+        },
+        "membership_id": membership.get("membership_id"),
+        "creates_inventory_event": False,
+        "mutates_inventory": False,
+    }

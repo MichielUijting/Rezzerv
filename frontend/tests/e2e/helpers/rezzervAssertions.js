@@ -40,6 +40,28 @@ export async function expectAnyVisible(page, candidates, description = 'verwacht
 export async function expectRouteLoads(page, path, expectedTexts) {
   await page.goto(path);
   await expect(page.locator('body')).toBeVisible();
-  await expectAnyVisible(page, expectedTexts, `route ${path}`);
+
+  await expect.poll(
+    async () => {
+      for (const candidate of expectedTexts) {
+        const locator = typeof candidate === 'string'
+          ? page.getByText(candidate, { exact: false })
+          : page.getByText(candidate);
+        const count = await locator.count().catch(() => 0);
+        for (let index = 0; index < count; index++) {
+          if (await locator.nth(index).isVisible().catch(() => false)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    },
+    {
+      message: `Geen zichtbare match gevonden voor route ${path}: ${expectedTexts.map(String).join(' | ')}`,
+      timeout: 15000,
+      intervals: [100, 250, 500, 1000],
+    },
+  ).toBe(true);
+
   await expect(page.getByText(/Application error|Uncaught|TypeError|ReferenceError/i)).toHaveCount(0);
 }
