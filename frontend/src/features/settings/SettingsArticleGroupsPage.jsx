@@ -8,14 +8,13 @@ import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 
 const UNASSIGNED_LABEL = 'Niet ingedeeld'
-const initialGroupForm = { name: '', active: true }
-const initialGroupFilters = { name: '', active: false, articles: '' }
+const initialGroupForm = { name: '' }
+const initialGroupFilters = { name: '', articles: '' }
 const initialArticleFilters = { article: '', group: '' }
 const groupTableColumns = [
   { key: 'select', width: 48 },
-  { key: 'name', width: 420 },
-  { key: 'active', width: 140 },
-  { key: 'articles', width: 180 },
+  { key: 'name', width: 500 },
+  { key: 'articles', width: 220 },
 ]
 const articleTableColumns = [
   { key: 'select', width: 48 },
@@ -75,10 +74,6 @@ function ArticleGroupModal({ open, form, onChange, onClose, onSubmit, busy }) {
             <div className="rz-label">Artikelgroep naam</div>
             <input className="rz-input" autoFocus value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} placeholder="Bijvoorbeeld: Zuivel" />
           </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#0f172a', fontWeight: 600 }}>
-            <input type="checkbox" style={greenCheckboxStyle} checked={Boolean(form.active)} onChange={(event) => onChange({ ...form, active: event.target.checked })} />
-            Actief
-          </label>
         </div>
         <div className="rz-modal-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Annuleren</Button>
@@ -98,7 +93,7 @@ function ActionModal({ open, title, noun, selectedCount, onClose, onDelete, onAr
         <p className="rz-modal-text">Je hebt {selectedCount} {noun}{selectedCount === 1 ? '' : 'en'} geselecteerd. Kies wat je wilt doen.</p>
         <div className="rz-modal-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Annuleren</Button>
-          <Button type="button" variant="secondary" onClick={onArchive} disabled={busy}>{busy ? 'Bezig…' : 'Archiveren'}</Button>
+          {onArchive ? <Button type="button" variant="secondary" onClick={onArchive} disabled={busy}>{busy ? 'Bezig…' : 'Archiveren'}</Button> : null}
           <Button type="button" onClick={onDelete} disabled={busy}>{busy ? 'Bezig…' : 'Verwijderen'}</Button>
         </div>
       </div>
@@ -146,8 +141,26 @@ function PendingChangesModal({ open, onSave, onDiscard, onCancel, busy }) {
   )
 }
 
+function BulkAssignConfirmationModal({ open, selectedCount, groupName, onCancel, onSave, busy }) {
+  if (!open) return null
+  return (
+    <div className="rz-modal-backdrop" role="presentation">
+      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="article-group-bulk-confirm-title">
+        <h3 id="article-group-bulk-confirm-title" className="rz-modal-title">Bevestiging</h3>
+        <p className="rz-modal-text">
+          {selectedCount} voorraadartikel{selectedCount === 1 ? '' : 'en'} toewijzen aan Artikelgroep {groupName}.
+        </p>
+        <div className="rz-modal-actions">
+          <Button type="button" variant="secondary" onClick={onCancel} disabled={busy}>Annuleren</Button>
+          <Button type="button" onClick={onSave} disabled={busy}>{busy ? 'Opslaan…' : 'Opslaan'}</Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function groupDraftMapFromItems(items) {
-  return Object.fromEntries(items.map((item) => [String(item.id), { name: String(item.name || ''), active: String(item.status || 'active') !== 'inactive' }]))
+  return Object.fromEntries(items.map((item) => [String(item.id), { name: String(item.name || '') }]))
 }
 
 function articleDraftMapFromItems(items) {
@@ -188,6 +201,7 @@ export default function SettingsArticleGroupsPage() {
   const [showGroupActionModal, setShowGroupActionModal] = useState(false)
   const [showArticleActionModal, setShowArticleActionModal] = useState(false)
   const [showAssignArticleGroupModal, setShowAssignArticleGroupModal] = useState(false)
+  const [showBulkAssignConfirmationModal, setShowBulkAssignConfirmationModal] = useState(false)
   const [bulkAssignGroupId, setBulkAssignGroupId] = useState('')
   const [showPendingModal, setShowPendingModal] = useState(false)
   const { widths: groupColumnWidths, startResize: startGroupResize } = useResizableColumnWidths(groupColumnDefaults)
@@ -220,14 +234,19 @@ export default function SettingsArticleGroupsPage() {
   }, [])
 
   const sortedGroups = useMemo(() => [...groups].sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'nl')), [groups])
-  const groupArticleCounts = useMemo(() => countArticlesByGroup(articles), [articles])
+  const groupArticleCounts = useMemo(
+    () => countArticlesByGroup(articles.map((item) => ({
+      ...item,
+      article_group_id: articleDrafts[String(item.id)]?.article_group_id ?? item.article_group_id,
+    }))),
+    [articles, articleDrafts],
+  )
   const selectedGroup = useMemo(() => sortedGroups.find((item) => String(item.id) === String(selectedGroupId)) || null, [sortedGroups, selectedGroupId])
 
   const groupDirtyCount = useMemo(() => groups.reduce((count, item) => {
     const draft = groupDrafts[String(item.id)]
     if (!draft) return count
     if (String(draft.name || '').trim() !== String(item.name || '').trim()) return count + 1
-    if (Boolean(draft.active) !== (String(item.status || 'active') !== 'inactive')) return count + 1
     return count
   }, 0), [groups, groupDrafts])
 
@@ -257,11 +276,10 @@ export default function SettingsArticleGroupsPage() {
   }, [blocker.state])
 
   const filteredGroups = useMemo(() => sortedGroups.filter((item) => {
-    const draft = groupDrafts[String(item.id)] || { name: item.name, active: String(item.status || 'active') !== 'inactive' }
+    const draft = groupDrafts[String(item.id)] || { name: item.name }
     const nameOk = !groupFilters.name || String(draft?.name || '').toLowerCase().includes(groupFilters.name.toLowerCase())
-    const activeOk = !groupFilters.active || Boolean(draft?.active)
     const countOk = !groupFilters.articles || String(Number(groupArticleCounts[String(item.id)] || 0)).includes(groupFilters.articles)
-    return nameOk && activeOk && countOk
+    return nameOk && countOk
   }), [sortedGroups, groupFilters, groupDrafts, groupArticleCounts])
 
   const visibleArticles = useMemo(() => {
@@ -281,11 +299,20 @@ export default function SettingsArticleGroupsPage() {
       })
   }, [visibleArticles, articleFilters, articleDrafts, groups])
 
-  const allFilteredGroupsSelected = filteredGroups.length > 0 && filteredGroups.every((item) => selectedGroupIds.includes(String(item.id)))
+  const deletableFilteredGroups = useMemo(
+    () => filteredGroups.filter((item) => Number(groupArticleCounts[String(item.id)] || 0) === 0),
+    [filteredGroups, groupArticleCounts],
+  )
+  const selectedDeletableGroupIds = useMemo(
+    () => selectedGroupIds.filter((id) => Number(groupArticleCounts[String(id)] || 0) === 0),
+    [selectedGroupIds, groupArticleCounts],
+  )
+  const allFilteredGroupsSelected = deletableFilteredGroups.length > 0 && deletableFilteredGroups.every((item) => selectedGroupIds.includes(String(item.id)))
   const allFilteredArticlesSelected = filteredArticles.length > 0 && filteredArticles.every((item) => selectedArticleIds.includes(String(item.id)))
 
   function toggleSelectedGroup(id) {
     const key = String(id)
+    if (Number(groupArticleCounts[key] || 0) > 0) return
     setSelectedGroupIds((current) => current.includes(key) ? current.filter((value) => value !== key) : [...current, key])
   }
 
@@ -296,12 +323,12 @@ export default function SettingsArticleGroupsPage() {
 
   function toggleAllFilteredGroups() {
     if (allFilteredGroupsSelected) {
-      const filteredSet = new Set(filteredGroups.map((item) => String(item.id)))
+      const filteredSet = new Set(deletableFilteredGroups.map((item) => String(item.id)))
       setSelectedGroupIds((current) => current.filter((id) => !filteredSet.has(id)))
       return
     }
-    const merged = new Set(selectedGroupIds)
-    filteredGroups.forEach((item) => merged.add(String(item.id)))
+    const merged = new Set(selectedGroupIds.filter((id) => Number(groupArticleCounts[String(id)] || 0) === 0))
+    deletableFilteredGroups.forEach((item) => merged.add(String(item.id)))
     setSelectedGroupIds(Array.from(merged))
   }
 
@@ -334,10 +361,33 @@ export default function SettingsArticleGroupsPage() {
 
   function applyBulkAssignArticleGroup() {
     if (!selectedArticleIds.length) return
-    selectedArticleIds.forEach((id) => updateArticleDraft(id, { article_group_id: bulkAssignGroupId || '' }))
-    const groupName = bulkAssignGroupId ? (sortedGroups.find((group) => String(group.id) === String(bulkAssignGroupId))?.name || 'gekozen Artikelgroep') : UNASSIGNED_LABEL
     setShowAssignArticleGroupModal(false)
-    setMessage(`${selectedArticleIds.length} voorraadartikel${selectedArticleIds.length === 1 ? '' : 'en'} klaargezet voor Artikelgroep ${groupName}. Kies Wijzigingen opslaan om te bewaren.`)
+    setShowBulkAssignConfirmationModal(true)
+  }
+
+  async function confirmBulkAssignArticleGroup() {
+    if (!selectedArticleIds.length) return
+    setIsSaving(true)
+    setError('')
+    setMessage('')
+    const groupName = bulkAssignGroupId ? (sortedGroups.find((group) => String(group.id) === String(bulkAssignGroupId))?.name || 'gekozen Artikelgroep') : UNASSIGNED_LABEL
+    try {
+      for (const id of selectedArticleIds) {
+        await requestJson(`/api/household-articles/${encodeURIComponent(id)}/article-group`, {
+          method: 'PUT',
+          body: JSON.stringify({ household_id: householdId, article_group_id: bulkAssignGroupId || null }),
+        })
+      }
+      const savedCount = selectedArticleIds.length
+      await loadData()
+      setSelectedArticleIds([])
+      setShowBulkAssignConfirmationModal(false)
+      setMessage(`${savedCount} voorraadartikel${savedCount === 1 ? '' : 'en'} toegewezen aan Artikelgroep ${groupName}.`)
+    } catch (saveError) {
+      setError(saveError?.message || 'Toewijzen aan Artikelgroep mislukt.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   function updateGroupDraft(id, patch) {
@@ -360,7 +410,7 @@ export default function SettingsArticleGroupsPage() {
   async function savePendingChanges() {
     const changedGroups = groups.filter((item) => {
       const draft = groupDrafts[String(item.id)]
-      return draft && (String(draft.name || '').trim() !== String(item.name || '').trim() || Boolean(draft.active) !== (String(item.status || 'active') !== 'inactive'))
+      return draft && String(draft.name || '').trim() !== String(item.name || '').trim()
     })
     const changedArticles = articles.filter((item) => {
       const draft = articleDrafts[String(item.id)]
@@ -388,7 +438,7 @@ export default function SettingsArticleGroupsPage() {
         const draft = groupDrafts[String(item.id)]
         await requestJson(`/api/article-groups/${encodeURIComponent(item.id)}`, {
           method: 'PUT',
-          body: JSON.stringify({ household_id: householdId, name: String(draft.name || '').trim(), status: draft.active ? 'active' : 'inactive' }),
+          body: JSON.stringify({ household_id: householdId, name: String(draft.name || '').trim() }),
         })
       }
       for (const item of changedArticles) {
@@ -433,7 +483,7 @@ export default function SettingsArticleGroupsPage() {
   }
 
   async function deleteSelectedGroups() {
-    const selectedItems = groups.filter((item) => selectedGroupIds.includes(String(item.id)))
+    const selectedItems = groups.filter((item) => selectedDeletableGroupIds.includes(String(item.id)))
     if (!selectedItems.length) return
     setIsSaving(true)
     setError('')
@@ -466,33 +516,6 @@ export default function SettingsArticleGroupsPage() {
     }
   }
 
-  async function archiveSelectedGroups() {
-    const selectedItems = groups.filter((item) => selectedGroupIds.includes(String(item.id)))
-    if (!selectedItems.length) return
-    setIsSaving(true)
-    setError('')
-    setMessage('')
-    let archivedCount = 0
-    try {
-      for (const item of selectedItems) {
-        const draft = groupDrafts[String(item.id)] || item
-        await requestJson(`/api/article-groups/${encodeURIComponent(item.id)}`, {
-          method: 'PUT',
-          body: JSON.stringify({ household_id: householdId, name: String(draft.name || item.name || '').trim(), status: 'inactive' }),
-        })
-        archivedCount += 1
-      }
-      await loadData()
-      setSelectedGroupIds([])
-      setMessage(`${archivedCount} Artikelgroep${archivedCount === 1 ? '' : 'en'} gearchiveerd.`)
-    } catch (archiveError) {
-      setError(archiveError?.message || 'Artikelgroepen archiveren mislukt.')
-    } finally {
-      setIsSaving(false)
-      setShowGroupActionModal(false)
-    }
-  }
-
   function clearSelectedArticleGroups() {
     if (!selectedArticleIds.length) return
     selectedArticleIds.forEach((id) => updateArticleDraft(id, { article_group_id: '' }))
@@ -506,9 +529,9 @@ export default function SettingsArticleGroupsPage() {
   }
 
   function exportGroupsCsv() {
-    const rows = [['Artikelgroep', 'Actief', 'Aantal artikelen'], ...filteredGroups.map((item) => {
-      const draft = groupDrafts[String(item.id)] || { name: item.name, active: String(item.status || 'active') !== 'inactive' }
-      return [draft.name, draft.active ? 'Ja' : 'Nee', Number(groupArticleCounts[String(item.id)] || 0)]
+    const rows = [['Artikelgroep', 'Aantal artikelen'], ...filteredGroups.map((item) => {
+      const draft = groupDrafts[String(item.id)] || { name: item.name }
+      return [draft.name, Number(groupArticleCounts[String(item.id)] || 0)]
     })]
     const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -575,7 +598,6 @@ export default function SettingsArticleGroupsPage() {
               <colgroup>
                 <col style={{ width: `${groupColumnWidths.select}px` }} />
                 <col style={{ width: `${groupColumnWidths.name}px` }} />
-                <col style={{ width: `${groupColumnWidths.active}px` }} />
                 <col style={{ width: `${groupColumnWidths.articles}px` }} />
               </colgroup>
               <thead>
@@ -584,34 +606,29 @@ export default function SettingsArticleGroupsPage() {
                     <input type="checkbox" style={greenCheckboxStyle} checked={allFilteredGroupsSelected} onChange={toggleAllFilteredGroups} aria-label="Selecteer alle zichtbare Artikelgroepen" />
                   </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="name" widths={groupColumnWidths} onStartResize={startGroupResize}>Artikelgroep</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="active" widths={groupColumnWidths} onStartResize={startGroupResize} className="rz-num">Actief</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="articles" widths={groupColumnWidths} onStartResize={startGroupResize} className="rz-num">Aantal artikelen</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
                   <th><input className="rz-input rz-inline-input" value={groupFilters.name} onChange={(event) => setGroupFilters((current) => ({ ...current, name: event.target.value }))} placeholder="Filter" aria-label="Filter op Artikelgroep" /></th>
-                  <th className="rz-num">
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minHeight: 20, width: '100%' }}>
-                      <input type="checkbox" className="rz-filter-checkbox" style={greenCheckboxStyle} checked={groupFilters.active} onChange={(event) => setGroupFilters((current) => ({ ...current, active: event.target.checked }))} aria-label="Filter actieve Artikelgroepen" title="Alleen actieve Artikelgroepen tonen" />
-                    </div>
-                  </th>
                   <th><input className="rz-input rz-inline-input" value={groupFilters.articles} onChange={(event) => setGroupFilters((current) => ({ ...current, articles: event.target.value }))} placeholder="Filter" aria-label="Filter op aantal artikelen" /></th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr><td colSpan={4}>Artikelgroepen laden…</td></tr>
+                  <tr><td colSpan={3}>Artikelgroepen laden…</td></tr>
                 ) : filteredGroups.length === 0 ? (
-                  <tr><td colSpan={4}>Nog geen Artikelgroepen. Artikelen zonder groep worden getoond als “{UNASSIGNED_LABEL}”.</td></tr>
+                  <tr><td colSpan={3}>Nog geen Artikelgroepen. Artikelen zonder groep worden getoond als “{UNASSIGNED_LABEL}”.</td></tr>
                 ) : filteredGroups.map((item) => {
-                  const selected = selectedGroupIds.includes(String(item.id))
+                  const linkedArticleCount = Number(groupArticleCounts[String(item.id)] || 0)
+                  const canDeleteGroup = linkedArticleCount === 0
+                  const selected = canDeleteGroup && selectedGroupIds.includes(String(item.id))
                   const detailSelected = String(selectedGroupId) === String(item.id)
-                  const draft = groupDrafts[String(item.id)] || { name: item.name, active: String(item.status || 'active') !== 'inactive' }
+                  const draft = groupDrafts[String(item.id)] || { name: item.name }
                   return (
-                    <tr key={item.id} className={selected || detailSelected ? 'rz-row-selected' : ''} onDoubleClick={() => setSelectedGroupId(String(item.id))} title="Dubbelklik om artikelen van deze Artikelgroep te tonen">
-                      <td><input type="checkbox" style={greenCheckboxStyle} checked={selected} onChange={() => toggleSelectedGroup(item.id)} aria-label={`Selecteer ${item.name}`} /></td>
+                    <tr key={item.id} className={selected || detailSelected ? 'rz-row-selected' : ''} onDoubleClick={() => setSelectedGroupId(String(item.id))} title={canDeleteGroup ? 'Dubbelklik om artikelen van deze Artikelgroep te tonen' : 'Deze Artikelgroep kan niet worden verwijderd zolang er artikelen aan gekoppeld zijn'}>
+                      <td><input type="checkbox" style={greenCheckboxStyle} checked={selected} disabled={!canDeleteGroup} onChange={() => toggleSelectedGroup(item.id)} aria-label={canDeleteGroup ? `Selecteer ${item.name}` : `${item.name} kan niet worden verwijderd; ${linkedArticleCount} artikel${linkedArticleCount === 1 ? '' : 'en'} gekoppeld`} /></td>
                       <td><input className="rz-input rz-inline-input" value={draft.name} onChange={(event) => updateGroupDraft(item.id, { name: event.target.value })} aria-label={`Artikelgroepnaam ${item.name}`} /></td>
-                      <td className="rz-num"><input type="checkbox" style={greenCheckboxStyle} checked={Boolean(draft.active)} onChange={(event) => updateGroupDraft(item.id, { active: event.target.checked })} aria-label={`Actief ${item.name}`} /></td>
                       <td className="rz-num">{Number(groupArticleCounts[String(item.id)] || 0)}</td>
                     </tr>
                   )
@@ -619,14 +636,13 @@ export default function SettingsArticleGroupsPage() {
               </tbody>
             </Table>
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-              <Button type="button" variant="secondary" onClick={exportGroupsCsv} disabled={isLoading || selectedGroupIds.length === 0 || isSaving}>Exporteren</Button>
-              <Button type="button" variant="secondary" onClick={() => setShowGroupActionModal(true)} disabled={isSaving || selectedGroupIds.length === 0}>Verwijderen</Button>
+              <Button type="button" variant="secondary" onClick={() => setShowGroupActionModal(true)} disabled={isSaving || selectedDeletableGroupIds.length === 0}>Verwijderen</Button>
               <Button type="button" onClick={openCreateGroup} disabled={isSaving}>Toevoegen Artikelgroep</Button>
             </div>
           </section>
 
           <section style={{ display: 'grid', gap: 18 }}>
-            <div style={{ fontWeight: 700, color: '#0f172a' }}>Voorraadartikelen{selectedGroup ? ` van ${selectedGroup.name}` : ''}</div>
+            <div style={{ fontWeight: 700, color: '#0f172a' }}>Artikelen{selectedGroup ? ` van ${selectedGroup.name}` : ''}</div>
             <p style={{ margin: 0, color: '#667085' }}>Koppelen is handmatig. Barcodeherkenning, externe databases en Uitpakken wijzigen deze koppeling niet.</p>
             <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" tableStyle={{ tableLayout: 'fixed', width: articleTableWidth, minWidth: articleTableWidth }}>
               <colgroup>
@@ -686,9 +702,17 @@ export default function SettingsArticleGroupsPage() {
       <FeedbackOverlay type="error" message={error} onClose={() => setError('')} />
       <FeedbackOverlay type="success" message={message} onClose={() => setMessage('')} />
       <ArticleGroupModal open={groupModalOpen} form={groupForm} onChange={setGroupForm} onClose={() => setGroupModalOpen(false)} onSubmit={handleSaveGroup} busy={isSaving} />
-      <ActionModal open={showGroupActionModal} title="Geselecteerde Artikelgroepen verwerken" noun="Artikelgroep" selectedCount={selectedGroupIds.length} onClose={() => setShowGroupActionModal(false)} onDelete={deleteSelectedGroups} onArchive={archiveSelectedGroups} busy={isSaving} />
+      <ActionModal open={showGroupActionModal} title="Geselecteerde Artikelgroepen verwijderen" noun="Artikelgroep" selectedCount={selectedGroupIds.length} onClose={() => setShowGroupActionModal(false)} onDelete={deleteSelectedGroups} busy={isSaving} />
       <ActionModal open={showArticleActionModal} title="Geselecteerde artikelkoppelingen verwerken" noun="artikel" selectedCount={selectedArticleIds.length} onClose={() => setShowArticleActionModal(false)} onDelete={clearSelectedArticleGroups} onArchive={archiveSelectedArticlesNoop} busy={isSaving} />
       <BulkAssignArticleGroupModal open={showAssignArticleGroupModal} selectedCount={selectedArticleIds.length} groups={sortedGroups} value={bulkAssignGroupId} onChange={setBulkAssignGroupId} onClose={() => setShowAssignArticleGroupModal(false)} onApply={applyBulkAssignArticleGroup} busy={isSaving} />
+      <BulkAssignConfirmationModal
+        open={showBulkAssignConfirmationModal}
+        selectedCount={selectedArticleIds.length}
+        groupName={bulkAssignGroupId ? (sortedGroups.find((group) => String(group.id) === String(bulkAssignGroupId))?.name || 'gekozen Artikelgroep') : UNASSIGNED_LABEL}
+        onCancel={() => setShowBulkAssignConfirmationModal(false)}
+        onSave={confirmBulkAssignArticleGroup}
+        busy={isSaving}
+      />
       <PendingChangesModal open={showPendingModal} onSave={confirmSaveAndContinue} onDiscard={confirmDiscardAndContinue} onCancel={cancelPendingDialog} busy={isSaving} />
     </AppShell>
   )

@@ -594,6 +594,57 @@ async function fetchArticleGroupAssignments() {
   return { byId, byName }
 }
 
+async function fetchArticleGroupOptions() {
+  const householdId = String(readStoredAuthContext()?.active_household_id || '').trim()
+  const query = new URLSearchParams({ _ts: String(Date.now()) })
+  if (householdId) query.set('household_id', householdId)
+
+  const response = await fetch(`/api/article-groups?${query.toString()}`, {
+    cache: 'no-store',
+    headers: getAuthHeaders(),
+  })
+  if (!response.ok) throw new Error('Artikelgroepen konden niet worden geladen')
+
+  const data = await response.json().catch(() => ({}))
+  return (Array.isArray(data?.items) ? data.items : [])
+    .filter((item) => String(item?.status || 'active').toLowerCase() !== 'inactive')
+    .map((item) => ({
+      id: String(item?.id || '').trim(),
+      name: String(item?.name || '').trim(),
+    }))
+    .filter((item) => item.id && item.name)
+    .sort((a, b) => a.name.localeCompare(b.name, 'nl'))
+}
+
+async function saveArticleGroupAssignment(row, articleGroupId) {
+  const householdArticleId = String(row?.householdArticleId || '').trim()
+  if (!householdArticleId) throw new Error('Voorraadregel mist een gekoppeld huishoudartikel')
+  const householdId = String(readStoredAuthContext()?.active_household_id || '').trim() || null
+  const response = await fetch(`/api/household-articles/${encodeURIComponent(householdArticleId)}/article-group`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({
+      article_group_id: articleGroupId || null,
+      household_id: householdId,
+    }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(extractApiMessage(data, 'Artikelgroep kon niet worden opgeslagen'))
+  return data
+}
+
+async function createArticleGroup(name) {
+  const householdId = String(readStoredAuthContext()?.active_household_id || '').trim() || null
+  const response = await fetch('/api/article-groups', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({ household_id: householdId, name }),
+  })
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(extractApiMessage(data, 'Artikelgroep kon niet worden toegevoegd'))
+  return data
+}
+
 function applyArticleGroupsToRows(rows = [], assignments = { byId: new Map(), byName: new Map() }) {
   const byId = assignments?.byId instanceof Map ? assignments.byId : new Map()
   const byName = assignments?.byName instanceof Map ? assignments.byName : new Map()
@@ -607,6 +658,7 @@ function applyArticleGroupsToRows(rows = [], assignments = { byId: new Map(), by
     return {
       ...row,
       artikelgroep: articleGroupName,
+      articleGroupId: assignment?.articleGroupId || null,
       articleGroupName,
     }
   })
@@ -679,15 +731,17 @@ export default function Voorraad() {
   }, [rows])
 
   const reloadInventoryRows = async () => {
-    const [loadedRows, articleGroupAssignments, loadedOptions] = await Promise.all([
+    const [loadedRows, articleGroupAssignments, loadedArticleGroups, loadedOptions] = await Promise.all([
       fetchInventoryRows(),
       fetchArticleGroupAssignments(),
+      fetchArticleGroupOptions(),
       fetchLocationOptions().catch(() => buildLocationOptionState([])),
     ])
     const rowsWithArticleGroups = applyArticleGroupsToRows(loadedRows, articleGroupAssignments)
     const mergedLocationOptions = mergeLocationOptionStates(loadedOptions, buildLocationOptionStateFromRows(rowsWithArticleGroups))
     setLocalZeroRows([])
     setRows(rowsWithArticleGroups)
+    setArticleGroupOptions(loadedArticleGroups)
     setLocationOptions(mergedLocationOptions)
     setLoadError(rowsWithArticleGroups.length ? '' : 'Nog geen live voorraad beschikbaar.')
     return rowsWithArticleGroups
@@ -713,6 +767,10 @@ export default function Voorraad() {
   const [editingCell, setEditingCell] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [saveState, setSaveState] = useState({});
+  const [articleGroupOptions, setArticleGroupOptions] = useState([]);
+  const [articleGroupCreateTarget, setArticleGroupCreateTarget] = useState(null);
+  const [newArticleGroupName, setNewArticleGroupName] = useState('');
+  const [articleGroupCreateState, setArticleGroupCreateState] = useState({ status: 'idle', message: '' });
   const [locationOptions, setLocationOptions] = useState({ locations: [], sublocationsByLocation: new Map() });
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
@@ -764,13 +822,14 @@ export default function Voorraad() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([fetchInventoryRows(), fetchArticleGroupAssignments(), fetchLocationOptions().catch(() => buildLocationOptionState([]))])
-      .then(([loadedRows, articleGroupAssignments, loadedOptions]) => {
+    Promise.all([fetchInventoryRows(), fetchArticleGroupAssignments(), fetchArticleGroupOptions(), fetchLocationOptions().catch(() => buildLocationOptionState([]))])
+      .then(([loadedRows, articleGroupAssignments, loadedArticleGroups, loadedOptions]) => {
         if (!cancelled) {
           const rowsWithArticleGroups = applyArticleGroupsToRows(loadedRows, articleGroupAssignments)
           const mergedLocationOptions = mergeLocationOptionStates(loadedOptions, buildLocationOptionStateFromRows(rowsWithArticleGroups))
           setLocalZeroRows([]);
           setRows(rowsWithArticleGroups);
+          setArticleGroupOptions(loadedArticleGroups);
           setLocationOptions(mergedLocationOptions);
           setLoadError(rowsWithArticleGroups.length ? "" : "Nog geen live voorraad beschikbaar.");
         }
@@ -1084,6 +1143,98 @@ export default function Voorraad() {
     : []
   const locationOptionsEmpty = locationOptions.locations.length === 0
 
+  const isHouseholdAdmin = String(readStoredAuthContext()?.display_role || '').trim().toLowerCase() === 'admin'
+
+  const openCreateArticleGroup = (row) => {
+    if (!isHouseholdAdmin) return
+    setArticleGroupCreateTarget(row)
+    setNewArticleGroupName('')
+    setArticleGroupCreateState({ status: 'idle', message: '' })
+  }
+
+  const closeCreateArticleGroup = () => {
+    if (articleGroupCreateState.status === 'saving') return
+    setArticleGroupCreateTarget(null)
+    setNewArticleGroupName('')
+    setArticleGroupCreateState({ status: 'idle', message: '' })
+  }
+
+  const persistArticleGroup = async (row, nextGroupId) => {
+    const previousGroupId = String(row?.articleGroupId || '')
+    const previousGroupName = row?.artikelgroep || 'Niet ingedeeld'
+    const selectedGroup = articleGroupOptions.find((item) => String(item.id) === String(nextGroupId))
+    const nextGroupName = selectedGroup?.name || 'Niet ingedeeld'
+
+    setRows((prev) => prev.map((entry) => entry.id === row.id ? {
+      ...entry,
+      artikelgroep: nextGroupName,
+      articleGroupId: nextGroupId || null,
+      articleGroupName: nextGroupName,
+    } : entry))
+    setLocalZeroRows((prev) => prev.map((entry) => entry.id === row.id ? {
+      ...entry,
+      artikelgroep: nextGroupName,
+      articleGroupId: nextGroupId || null,
+      articleGroupName: nextGroupName,
+    } : entry))
+    setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saving', message: '' } }))
+
+    try {
+      await saveArticleGroupAssignment({
+        ...row,
+        articleGroupId: nextGroupId || null,
+        articleGroupName: nextGroupName,
+        artikelgroep: nextGroupName,
+      }, nextGroupId)
+      setSaveState((prev) => ({ ...prev, [row.id]: { status: 'saved', message: 'Opgeslagen' } }))
+      window.setTimeout(() => {
+        setSaveState((prev) => {
+          const next = { ...prev }
+          if (next[row.id]?.status === 'saved') delete next[row.id]
+          return next
+        })
+      }, 1600)
+    } catch (error) {
+      setRows((prev) => prev.map((entry) => entry.id === row.id ? {
+        ...entry,
+        artikelgroep: previousGroupName,
+        articleGroupId: previousGroupId || null,
+        articleGroupName: previousGroupName,
+      } : entry))
+      console.error('Artikelgroep opslaan mislukt', error)
+      setSaveState((prev) => {
+        const next = { ...prev }
+        delete next[row.id]
+        return next
+      })
+    }
+  }
+
+  const handleCreateArticleGroup = async () => {
+    const name = String(newArticleGroupName || '').trim()
+    if (!name) {
+      setArticleGroupCreateState({ status: 'error', message: 'Artikelgroepnaam is verplicht.' })
+      return
+    }
+    if (!articleGroupCreateTarget || !isHouseholdAdmin) return
+
+    setArticleGroupCreateState({ status: 'saving', message: 'Opslaan...' })
+    try {
+      const created = await createArticleGroup(name)
+      const refreshedGroups = await fetchArticleGroupOptions()
+      setArticleGroupOptions(refreshedGroups)
+      const createdGroup = refreshedGroups.find((item) => String(item.id) === String(created?.id || created?.article_group_id || ''))
+        || refreshedGroups.find((item) => normalizeName(item.name) === normalizeName(name))
+      if (!createdGroup) throw new Error('Artikelgroep is toegevoegd, maar kon niet direct worden geselecteerd')
+      await persistArticleGroup(articleGroupCreateTarget, createdGroup.id)
+      setArticleGroupCreateTarget(null)
+      setNewArticleGroupName('')
+      setArticleGroupCreateState({ status: 'idle', message: '' })
+    } catch (error) {
+      setArticleGroupCreateState({ status: 'error', message: error.message || 'Artikelgroep toevoegen mislukt' })
+    }
+  }
+
   const renderCell = (row, column) => {
     const isEditing =
       editingCell &&
@@ -1186,9 +1337,31 @@ export default function Voorraad() {
     }
 
     if (column.key === "artikelgroep") {
+      const isSavingArticleGroup = saveState[row.id]?.status === 'saving'
+      const isViewer = String(readStoredAuthContext()?.display_role || '').trim().toLowerCase() === 'viewer'
       return (
-        <div className="rz-inline-cell rz-inline-label" style={{ fontWeight: 400 }} title={row?.artikelgroep || 'Niet ingedeeld'}>
-          {row?.artikelgroep || 'Niet ingedeeld'}
+        <div style={{ display: 'grid', gap: 4 }}>
+          <select
+            className="rz-input rz-inline-input"
+            value={String(row?.articleGroupId || '')}
+            disabled={isSavingArticleGroup || isViewer}
+            onChange={(event) => {
+              const nextValue = event.target.value
+              if (nextValue === '__create_article_group__') {
+                openCreateArticleGroup(row)
+                return
+              }
+              persistArticleGroup(row, nextValue)
+            }}
+            aria-label={`Artikelgroep voor ${row?.huishoudnaam || row?.artikel || 'voorraadartikel'}`}
+            title={isViewer ? 'Alleen-lezen gebruiker kan de Artikelgroep niet wijzigen' : 'Kies Artikelgroep'}
+          >
+            <option value="">Niet ingedeeld</option>
+            {articleGroupOptions.map((option) => (
+              <option key={option.id} value={option.id}>{option.name}</option>
+            ))}
+            {isHouseholdAdmin ? <option value="__create_article_group__">+ Nieuwe Artikelgroep toevoegen</option> : null}
+          </select>
         </div>
       )
     }
@@ -1348,6 +1521,52 @@ export default function Voorraad() {
           </div>
         </div>
       </div>
+
+      {articleGroupCreateTarget ? (
+        <div className="rz-modal-backdrop" role="presentation" data-testid="inventory-create-article-group-backdrop">
+          <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="inventory-create-article-group-title">
+            <h3 id="inventory-create-article-group-title" className="rz-modal-title">Nieuwe Artikelgroep</h3>
+            <p className="rz-modal-text">
+              De nieuwe Artikelgroep wordt direct geselecteerd voor {articleGroupCreateTarget?.huishoudnaam || articleGroupCreateTarget?.artikel || 'het voorraadartikel'}.
+            </p>
+            <label className="rz-input-field">
+              <div className="rz-label">Artikelgroep naam</div>
+              <input
+                className="rz-input"
+                autoFocus
+                value={newArticleGroupName}
+                onChange={(event) => {
+                  setNewArticleGroupName(event.target.value)
+                  if (articleGroupCreateState.status === 'error') setArticleGroupCreateState({ status: 'idle', message: '' })
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    handleCreateArticleGroup()
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    closeCreateArticleGroup()
+                  }
+                }}
+                placeholder="Bijvoorbeeld: Zuivel"
+                disabled={articleGroupCreateState.status === 'saving'}
+              />
+            </label>
+            {articleGroupCreateState.message ? (
+              <div className={articleGroupCreateState.status === 'error' ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}>
+                {articleGroupCreateState.message}
+              </div>
+            ) : null}
+            <div className="rz-modal-actions">
+              <Button type="button" variant="secondary" onClick={closeCreateArticleGroup} disabled={articleGroupCreateState.status === 'saving'}>Annuleren</Button>
+              <Button type="button" variant="primary" onClick={handleCreateArticleGroup} disabled={articleGroupCreateState.status === 'saving'}>
+                {articleGroupCreateState.status === 'saving' ? 'Opslaan…' : 'Opslaan'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showPurchaseModal ? (
         <div className="rz-modal-backdrop" role="presentation" data-testid="inventory-incidental-purchase-backdrop">

@@ -463,8 +463,12 @@ def _build_receipt_line_placeholder(row: dict[str, Any]) -> dict[str, Any]:
         receipt_line_id=receipt_line_id or None,
     )
 
+    receipt_item_id = f"receipt-line:{receipt_line_id}" if receipt_line_id else ""
     return {
-        "id": f"{context_key}:receipt-item",
+        "id": receipt_item_id,
+        "receipt_item_id": receipt_item_id,
+        "receipt_item_type": "receipt_line",
+        "receipt_item_source_id": receipt_line_id or None,
         "receipt_line_id": receipt_line_id or None,
         "purchase_import_line_id": str(row.get("purchase_import_line_id") or "").strip() or None,
         "context_key": context_key,
@@ -761,8 +765,12 @@ def _m2c2h5_purchase_import_placeholder(row: dict[str, Any]) -> dict[str, Any]:
     )
     global_product_id = str(row.get("global_product_id") or "").strip()
 
+    receipt_item_id = f"purchase-import-line:{purchase_import_line_id}" if purchase_import_line_id else ""
     return {
-        "id": f"{context_key}:receipt-item",
+        "id": receipt_item_id,
+        "receipt_item_id": receipt_item_id,
+        "receipt_item_type": "purchase_import_line",
+        "receipt_item_source_id": purchase_import_line_id or None,
         "receipt_line_id": None,
         "purchase_import_line_id": purchase_import_line_id or None,
         "context_key": context_key,

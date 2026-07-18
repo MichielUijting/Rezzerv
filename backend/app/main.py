@@ -173,7 +173,8 @@ def _dev_inventory_preview_row(row):
 
 
 @app.get("/api/dev/inventory-preview")
-def dev_inventory_preview():
+def dev_inventory_preview(authorization: Optional[str] = Header(None)):
+    effective_household_id = get_request_household_id(authorization)
     with engine.begin() as conn:
         rows = conn.execute(text(
             """
@@ -182,6 +183,7 @@ def dev_inventory_preview():
                 i.naam AS artikel,
                 i.aantal,
                 i.household_id,
+                i.household_article_id AS household_article_id,
                 i.space_id,
                 i.sublocation_id,
                 s.naam AS locatie,
@@ -189,10 +191,11 @@ def dev_inventory_preview():
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
-            WHERE COALESCE(i.status, 'active') = 'active'
+            WHERE i.household_id = :household_id
+              AND COALESCE(i.status, 'active') = 'active'
             ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC
             """
-        )).mappings().all()
+        ), {"household_id": effective_household_id}).mappings().all()
 
     return {"rows": [_dev_inventory_preview_row(row) for row in rows]}
 
@@ -8113,6 +8116,7 @@ def ensure_release_3_schema():
                     id TEXT PRIMARY KEY,
                     household_id TEXT NOT NULL,
                     article_id TEXT,
+                    household_article_id TEXT,
                     article_name TEXT NOT NULL,
                     location_id TEXT,
                     location_label TEXT,
@@ -8132,6 +8136,9 @@ def ensure_release_3_schema():
             conn.execute(text("ALTER TABLE inventory_events ADD COLUMN old_quantity NUMERIC"))
         if "new_quantity" not in inventory_event_columns:
             conn.execute(text("ALTER TABLE inventory_events ADD COLUMN new_quantity NUMERIC"))
+        if "household_article_id" not in inventory_event_columns:
+            conn.execute(text("ALTER TABLE inventory_events ADD COLUMN household_article_id TEXT"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_inventory_events_household_article_id ON inventory_events (household_article_id)"))
 
 
 
@@ -8200,6 +8207,9 @@ def ensure_release_814_schema():
             conn.execute(text("ALTER TABLE inventory ADD COLUMN archived_at DATETIME"))
         if "archive_reason" not in inventory_columns:
             conn.execute(text("ALTER TABLE inventory ADD COLUMN archive_reason TEXT"))
+        if "household_article_id" not in inventory_columns:
+            conn.execute(text("ALTER TABLE inventory ADD COLUMN household_article_id TEXT"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_inventory_household_article_id ON inventory (household_article_id)"))
         conn.execute(text("UPDATE inventory SET status = COALESCE(status, 'active')"))
 
 
@@ -8921,6 +8931,72 @@ def require_resolved_location(resolved_location: dict | None):
     return resolved_location
 
 
+def resolve_or_create_inventory_household_article(
+    conn,
+    *,
+    household_id: str,
+    article_name: str,
+    preferred_household_article_id: str | None = None,
+    source: str = "inventory",
+) -> str:
+    normalized_household_id = str(household_id or "").strip()
+    normalized_article_name = normalize_household_article_name(article_name)
+    preferred_id = str(preferred_household_article_id or "").strip()
+
+    if not normalized_household_id:
+        raise HTTPException(status_code=400, detail="Huishouden ontbreekt voor voorraadmutatie")
+    if not normalized_article_name:
+        raise HTTPException(status_code=400, detail="Artikelnaam ontbreekt voor voorraadmutatie")
+
+    if preferred_id:
+        existing_id = conn.execute(
+            text("SELECT id FROM household_articles WHERE id = :id AND household_id = :household_id LIMIT 1"),
+            {"id": preferred_id, "household_id": normalized_household_id},
+        ).scalar()
+        if existing_id:
+            return str(existing_id)
+
+    matches = conn.execute(
+        text(
+            """
+            SELECT id
+            FROM household_articles
+            WHERE household_id = :household_id
+              AND lower(trim(COALESCE(custom_name, naam))) = lower(trim(:article_name))
+              AND COALESCE(status, 'active') = 'active'
+            ORDER BY datetime(created_at) ASC, id ASC
+            LIMIT 2
+            """
+        ),
+        {"household_id": normalized_household_id, "article_name": normalized_article_name},
+    ).scalars().all()
+
+    if len(matches) == 1:
+        return str(matches[0])
+    if len(matches) > 1:
+        raise HTTPException(status_code=409, detail="Meerdere huishoudartikelen gevonden; voorraadmutatie is geblokkeerd")
+
+    household_article_id = str(uuid.uuid4())
+    conn.execute(
+        text(
+            """
+            INSERT INTO household_articles (
+                id, household_id, naam, consumable, created_at, updated_at, source, status
+            ) VALUES (
+                :id, :household_id, :naam, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :source, 'active'
+            )
+            """
+        ),
+        {
+            "id": household_article_id,
+            "household_id": normalized_household_id,
+            "naam": normalized_article_name,
+            "source": str(source or "inventory").strip() or "inventory",
+        },
+    )
+    return household_article_id
+
+
 def create_inventory_event(
     conn,
     *,
@@ -8942,16 +9018,23 @@ def create_inventory_event(
     barcode: str | None = None,
 ):
     safe_location = require_resolved_location(resolved_location)
+    household_article_id = resolve_or_create_inventory_household_article(
+        conn,
+        household_id=household_id,
+        article_name=article_name,
+        preferred_household_article_id=article_id,
+        source=source,
+    )
     event_id = str(uuid.uuid4())
     conn.execute(
         text(
             """
             INSERT INTO inventory_events (
-                id, household_id, article_id, article_name, location_id, location_label,
+                id, household_id, article_id, household_article_id, article_name, location_id, location_label,
                 event_type, quantity, old_quantity, new_quantity, source, note,
                 purchase_date, supplier_name, article_number, price, currency, barcode, created_at
             ) VALUES (
-                :id, :household_id, :article_id, :article_name, :location_id, :location_label,
+                :id, :household_id, :article_id, :household_article_id, :article_name, :location_id, :location_label,
                 :event_type, :quantity, :old_quantity, :new_quantity, :source, :note,
                 :purchase_date, :supplier_name, :article_number, :price, :currency, :barcode, CURRENT_TIMESTAMP
             )
@@ -8960,7 +9043,8 @@ def create_inventory_event(
         {
             "id": event_id,
             "household_id": str(household_id),
-            "article_id": article_id,
+            "article_id": household_article_id,
+            "household_article_id": household_article_id,
             "article_name": article_name,
             "location_id": safe_location["location_id"],
             "location_label": safe_location["location_label"],
@@ -8985,6 +9069,12 @@ def apply_inventory_purchase(conn, household_id: str, article_name: str, quantit
     safe_location = require_resolved_location(resolved_location)
     space_id = safe_location["space_id"]
     sublocation_id = safe_location["sublocation_id"]
+    household_article_id = resolve_or_create_inventory_household_article(
+        conn,
+        household_id=household_id,
+        article_name=article_name,
+        source="inventory_purchase",
+    )
 
     existing = conn.execute(
         text(
@@ -8992,14 +9082,14 @@ def apply_inventory_purchase(conn, household_id: str, article_name: str, quantit
             SELECT id, aantal
             FROM inventory
             WHERE household_id = :household_id
-              AND naam = :naam
+              AND household_article_id = :household_article_id
               AND COALESCE(space_id, '') = COALESCE(:space_id, '')
               AND COALESCE(sublocation_id, '') = COALESCE(:sublocation_id, '')
             """
         ),
         {
             "household_id": household_id,
-            "naam": article_name,
+            "household_article_id": household_article_id,
             "space_id": space_id,
             "sublocation_id": sublocation_id,
         },
@@ -9024,8 +9114,14 @@ def apply_inventory_purchase(conn, household_id: str, article_name: str, quantit
     conn.execute(
         text(
             """
-            INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id, status, updated_at)
-            VALUES (:id, :naam, :aantal, :household_id, :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP)
+            INSERT INTO inventory (
+                id, naam, aantal, household_id, household_article_id,
+                space_id, sublocation_id, status, updated_at
+            )
+            VALUES (
+                :id, :naam, :aantal, :household_id, :household_article_id,
+                :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP
+            )
             """
         ),
         {
@@ -9033,6 +9129,7 @@ def apply_inventory_purchase(conn, household_id: str, article_name: str, quantit
             "naam": article_name,
             "aantal": quantity_int,
             "household_id": household_id,
+            "household_article_id": household_article_id,
             "space_id": space_id,
             "sublocation_id": sublocation_id,
         },
@@ -9056,12 +9153,19 @@ def apply_manual_inventory_adjustment(
     sublocation_id = safe_location["sublocation_id"]
 
     old_total = get_article_total_quantity(conn, household_id, old_article_name)
+    household_article_id = resolve_or_create_inventory_household_article(
+        conn,
+        household_id=household_id,
+        article_name=new_article_name,
+        source="manual_inventory",
+    )
 
     conn.execute(
         text(
             """
             UPDATE inventory
             SET naam = :naam,
+                household_article_id = :household_article_id,
                 aantal = :aantal,
                 space_id = :space_id,
                 sublocation_id = :sublocation_id,
@@ -9072,6 +9176,7 @@ def apply_manual_inventory_adjustment(
         {
             "id": inventory_id,
             "naam": new_article_name,
+            "household_article_id": household_article_id,
             "aantal": int(new_quantity),
             "space_id": space_id,
             "sublocation_id": sublocation_id,
@@ -9080,7 +9185,7 @@ def apply_manual_inventory_adjustment(
 
     new_total = get_article_total_quantity(conn, household_id, new_article_name)
     delta = int(new_quantity) - int(old_quantity)
-    article_id = build_live_article_option_id(new_article_name)
+    article_id = household_article_id
 
     if delta > 0:
         mutation_label = 'handmatige ophoging'
@@ -9113,7 +9218,7 @@ def apply_manual_inventory_adjustment(
               i.aantal AS aantal,
               i.space_id AS space_id,
               i.sublocation_id AS sublocation_id,
-              ha.id AS household_article_id,
+              i.household_article_id AS household_article_id,
               COALESCE(ha.custom_name, i.naam, '') AS household_article_name,
               COALESCE(gp.name, ha.naam, i.naam, '') AS product_name,
               COALESCE(s.naam, '') AS locatie,
@@ -9122,7 +9227,7 @@ def apply_manual_inventory_adjustment(
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
-            LEFT JOIN household_articles ha ON ha.household_id = i.household_id AND lower(trim(ha.naam)) = lower(trim(i.naam))
+            LEFT JOIN household_articles ha ON ha.id = i.household_article_id AND ha.household_id = i.household_id
             LEFT JOIN global_products gp ON gp.id = ha.global_product_id
             WHERE i.id = :id
             """
@@ -15553,7 +15658,7 @@ def inventory_preview(response: Response, authorization: Optional[str] = Header(
               i.aantal AS aantal,
               i.space_id AS space_id,
               i.sublocation_id AS sublocation_id,
-              ha.id AS household_article_id,
+              i.household_article_id AS household_article_id,
               COALESCE(ha.custom_name, i.naam, '') AS household_article_name,
               COALESCE(gp.name, ha.naam, i.naam, '') AS product_name,
               COALESCE(s.naam, '') AS locatie,
@@ -15562,7 +15667,7 @@ def inventory_preview(response: Response, authorization: Optional[str] = Header(
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
-            LEFT JOIN household_articles ha ON ha.household_id = i.household_id AND lower(trim(ha.naam)) = lower(trim(i.naam))
+            LEFT JOIN household_articles ha ON ha.id = i.household_article_id AND ha.household_id = i.household_id
             LEFT JOIN global_products gp ON gp.id = ha.global_product_id
             WHERE i.household_id = :household_id
               AND COALESCE(i.status, 'active') = 'active'

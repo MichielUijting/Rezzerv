@@ -17,11 +17,8 @@ router = APIRouter()
 
 
 @router.get('/api/article-groups')
-def article_groups(
-    household_id: str | None = Query(default=None),
-    include_inactive: bool = Query(default=False),
-):
-    return list_article_groups(household_id=household_id, include_inactive=include_inactive)
+def article_groups(household_id: str | None = Query(default=None)):
+    return list_article_groups(household_id=household_id)
 
 
 @router.post('/api/article-groups')
@@ -41,7 +38,6 @@ def article_group_update(group_id: str, payload: dict[str, Any] = Body(default_f
         group_id=group_id,
         household_id=payload.get('household_id'),
         name=payload.get('name'),
-        status=payload.get('status'),
         sort_order=payload.get('sort_order'),
     )
     if not bool(result.get('ok', False)):

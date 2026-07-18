@@ -364,15 +364,25 @@ def search_open_food_facts_preview(payload: dict[str, Any]) -> dict[str, Any]:
             "creates_household_article": False,
             "creates_inventory_event": False,
         }
-    search_terms = build_off_search_terms(
-        receipt_line_text=receipt_line_text,
-        retailer_code=retailer_code,
-        candidate_name=_text(payload.get("candidate_name")),
-        candidate_brand=_text(payload.get("candidate_brand")),
-        category=_text(payload.get("category")),
-        product_type=_text(payload.get("product_type")),
-        quantity_label=_text(payload.get("quantity_label")),
-    )
+    manual_search_text = _text(payload.get("candidate_name"))
+    is_manual_search = _text(payload.get("source")).lower() == "manual_off_search" and bool(manual_search_text)
+
+    # OFF_HANDMATIGE_ZOEKOPDRACHT_STRIKT:
+    # Een handmatige zoekactie gebruikt uitsluitend de door de gebruiker
+    # ingevoerde zoektekst. Taxonomie-, merk- en bonregelvarianten mogen deze
+    # expliciete zoekopdracht niet vervangen of verbreden.
+    if is_manual_search:
+        search_terms = _unique_terms([manual_search_text])
+    else:
+        search_terms = build_off_search_terms(
+            receipt_line_text=receipt_line_text,
+            retailer_code=retailer_code,
+            candidate_name=manual_search_text,
+            candidate_brand=_text(payload.get("candidate_brand")),
+            category=_text(payload.get("category")),
+            product_type=_text(payload.get("product_type")),
+            quantity_label=_text(payload.get("quantity_label")),
+        )
     limit = max(1, min(int(payload.get("limit") or 5), OFF_SEARCH_MAX_RESULTS))
     requested_query_limit = int(payload.get("max_queries") or OFF_SEARCH_MAX_QUERIES)
     query_limit = max(1, min(requested_query_limit, OFF_SEARCH_MAX_QUERIES))
@@ -390,6 +400,15 @@ def search_open_food_facts_preview(payload: dict[str, Any]) -> dict[str, Any]:
             normalized = _normalize_off_product(product, search_terms, payload)
             if not normalized:
                 continue
+
+            # Bij een handmatige zoekopdracht moet de productnaam inhoudelijk
+            # overeenkomen met de ingevoerde tekst. Providerresultaten zonder
+            # woordoverlap worden niet als kandidaat getoond.
+            if is_manual_search:
+                name_score = float((normalized.get("score_breakdown") or {}).get("name_score") or 0)
+                if name_score <= 0:
+                    continue
+
             existing = results_by_code.get(normalized["code"])
             if not existing or float(normalized.get("score") or 0) > float(existing.get("score") or 0):
                 results_by_code[normalized["code"]] = normalized

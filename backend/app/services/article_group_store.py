@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS article_groups (
 """
 
 ARTICLE_GROUPS_HOUSEHOLD_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_article_groups_household_status
-ON article_groups (household_id, status, normalized_name)
+CREATE INDEX IF NOT EXISTS idx_article_groups_household_name
+ON article_groups (household_id, normalized_name)
 """
 
 HOUSEHOLD_ARTICLE_GROUP_INDEX_SQL = """
@@ -90,6 +90,7 @@ def ensure_article_group_schema() -> None:
     with engine.begin() as conn:
         conn.execute(text(ARTICLE_GROUPS_SQL))
         conn.execute(text(ARTICLE_GROUPS_HOUSEHOLD_INDEX_SQL))
+        conn.execute(text("UPDATE article_groups SET status = 'active' WHERE COALESCE(status, 'active') <> 'active'"))
         _ensure_missing_column(conn, "household_articles", "article_group_id", "TEXT")
         if _table_exists(conn, "household_articles"):
             conn.execute(text(HOUSEHOLD_ARTICLE_GROUP_INDEX_SQL))
@@ -105,24 +106,21 @@ def _article_group_row(row: Any) -> dict[str, Any]:
         "household_id": str(row.get("household_id") or ""),
         "name": str(row.get("name") or ""),
         "normalized_name": str(row.get("normalized_name") or ""),
-        "status": str(row.get("status") or "active"),
         "sort_order": int(row.get("sort_order") or 0),
         "created_at": row.get("created_at"),
         "updated_at": row.get("updated_at"),
     }
 
 
-def list_article_groups(household_id: Any = None, include_inactive: bool = False) -> dict[str, Any]:
+def list_article_groups(household_id: Any = None) -> dict[str, Any]:
     ensure_article_group_schema()
     normalized_household_id = _normalize_household_id(household_id)
-    where_status = "1 = 1" if include_inactive else "COALESCE(status, 'active') = 'active'"
     with engine.begin() as conn:
         rows = conn.execute(
-            text(f"""
-                SELECT id, household_id, name, normalized_name, status, sort_order, created_at, updated_at
+            text("""
+                SELECT id, household_id, name, normalized_name, sort_order, created_at, updated_at
                 FROM article_groups
                 WHERE household_id = :household_id
-                  AND {where_status}
                 ORDER BY sort_order ASC, lower(name) ASC, id ASC
             """),
             {"household_id": normalized_household_id},
@@ -146,7 +144,6 @@ def create_article_group(household_id: Any, name: Any) -> dict[str, Any]:
                 FROM article_groups
                 WHERE household_id = :household_id
                   AND normalized_name = :normalized_name
-                  AND COALESCE(status, 'active') = 'active'
                 LIMIT 1
             """),
             {"household_id": normalized_household_id, "normalized_name": normalized_name},
@@ -173,10 +170,10 @@ def create_article_group(household_id: Any, name: Any) -> dict[str, Any]:
                 "updated_at": timestamp,
             },
         )
-    return {"ok": True, "item": {"id": group_id, "household_id": normalized_household_id, "name": display_name, "normalized_name": normalized_name, "status": "active", "sort_order": sort_order}, "mutates_inventory": False}
+    return {"ok": True, "item": {"id": group_id, "household_id": normalized_household_id, "name": display_name, "normalized_name": normalized_name, "sort_order": sort_order}, "mutates_inventory": False}
 
 
-def update_article_group(group_id: Any, household_id: Any = None, name: Any = None, status: Any = None, sort_order: Any = None) -> dict[str, Any]:
+def update_article_group(group_id: Any, household_id: Any = None, name: Any = None, sort_order: Any = None) -> dict[str, Any]:
     ensure_article_group_schema()
     normalized_group_id = str(group_id or "").strip()
     if not normalized_group_id:
@@ -203,16 +200,12 @@ def update_article_group(group_id: Any, household_id: Any = None, name: Any = No
                 WHERE household_id = :household_id
                   AND normalized_name = :normalized_name
                   AND id <> :id
-                  AND COALESCE(status, 'active') = 'active'
                 LIMIT 1
             """),
             {"household_id": normalized_household_id, "normalized_name": next_normalized_name, "id": normalized_group_id},
         ).mappings().first()
         if duplicate:
             return {"ok": False, "error": "Artikelgroep bestaat al"}
-        next_status = str(status if status is not None else existing.get("status") or "active").strip().lower() or "active"
-        if next_status not in {"active", "inactive"}:
-            return {"ok": False, "error": "Status moet active of inactive zijn"}
         try:
             next_sort_order = int(sort_order if sort_order is not None else existing.get("sort_order") or 0)
         except (TypeError, ValueError):
@@ -222,14 +215,13 @@ def update_article_group(group_id: Any, household_id: Any = None, name: Any = No
                 UPDATE article_groups
                 SET name = :name,
                     normalized_name = :normalized_name,
-                    status = :status,
                     sort_order = :sort_order,
                     updated_at = :updated_at
                 WHERE id = :id
             """),
-            {"id": normalized_group_id, "name": next_name, "normalized_name": next_normalized_name, "status": next_status, "sort_order": next_sort_order, "updated_at": timestamp},
+            {"id": normalized_group_id, "name": next_name, "normalized_name": next_normalized_name, "sort_order": next_sort_order, "updated_at": timestamp},
         )
-    return {"ok": True, "item": {"id": normalized_group_id, "household_id": normalized_household_id, "name": next_name, "normalized_name": next_normalized_name, "status": next_status, "sort_order": next_sort_order}, "mutates_inventory": False}
+    return {"ok": True, "item": {"id": normalized_group_id, "household_id": normalized_household_id, "name": next_name, "normalized_name": next_normalized_name, "sort_order": next_sort_order}, "mutates_inventory": False}
 
 
 def delete_article_group(group_id: Any, household_id: Any = None) -> dict[str, Any]:
@@ -251,11 +243,15 @@ def delete_article_group(group_id: Any, household_id: Any = None) -> dict[str, A
                 {"id": normalized_group_id},
             ).mappings().first().get("count") or 0)
         if linked_count > 0:
-            conn.execute(
-                text("UPDATE article_groups SET status = 'inactive', updated_at = :updated_at WHERE id = :id"),
-                {"id": normalized_group_id, "updated_at": now_iso()},
-            )
-            return {"ok": True, "id": normalized_group_id, "deleted": False, "deactivated": True, "linked_count": linked_count, "mutates_inventory": False}
+            return {
+                "ok": False,
+                "error": f"Artikelgroep kan niet worden verwijderd zolang er {linked_count} artikel{'en' if linked_count != 1 else ''} aan gekoppeld zijn",
+                "id": normalized_group_id,
+                "deleted": False,
+                "deactivated": False,
+                "linked_count": linked_count,
+                "mutates_inventory": False,
+            }
         conn.execute(text("DELETE FROM article_groups WHERE id = :id"), {"id": normalized_group_id})
     return {"ok": True, "id": normalized_group_id, "deleted": True, "deactivated": False, "linked_count": 0, "mutates_inventory": False}
 
@@ -278,7 +274,7 @@ def list_household_articles_for_grouping(household_id: Any = None) -> dict[str, 
         if not id_column:
             return {"ok": True, "items": [], "mutates_inventory": False}
         household_column = _first_existing(columns, ["household_id"])
-        name_columns = [col for col in ["custom_name", "name", "article_name", "display_name", "canonical_name"] if col in columns]
+        name_columns = [col for col in ["custom_name", "naam", "name", "article_name", "display_name", "canonical_name"] if col in columns]
         name_expr = "COALESCE(" + ", ".join(f"NULLIF(CAST(ha.{col} AS TEXT), '')" for col in name_columns) + ", '')" if name_columns else "''"
         group_expr = "ha.article_group_id" if "article_group_id" in columns else "NULL"
         where_clause = "1 = 1"
@@ -346,7 +342,6 @@ def assign_household_article_group(article_id: Any, article_group_id: Any = None
                     FROM article_groups
                     WHERE id = :id
                       AND household_id = :household_id
-                      AND COALESCE(status, 'active') = 'active'
                     LIMIT 1
                 """),
                 {"id": normalized_group_id, "household_id": normalized_household_id},
