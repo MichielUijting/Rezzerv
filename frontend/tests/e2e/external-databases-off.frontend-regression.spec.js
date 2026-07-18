@@ -164,7 +164,8 @@ test.describe('Externe databases OFF candidate flow', () => {
       limit: 10,
     });
 
-    await expect(page.getByRole('button', { name: 'Koppel artikel', exact: true })).toBeDisabled();
+    await expect(page.getByTestId('external-producttype-link-panel')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Ontkoppel artikel', exact: true })).toBeDisabled();
     await expectNoConsoleErrors(consoleErrors);
   });
@@ -215,7 +216,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(overlay).toHaveCount(0);
     await expect(page.getByText('OFF regressiestoring', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Zelf zoeken' })).toBeEnabled();
-    await expect(page.getByRole('button', { name: 'Koppel artikel', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Ontkoppel artikel', exact: true })).toBeDisabled();
 
     const unexpectedConsoleErrors = consoleErrors.filter(

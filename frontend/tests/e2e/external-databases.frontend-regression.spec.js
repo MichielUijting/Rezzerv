@@ -147,7 +147,7 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(candidateTable.getByText('8710000000001')).toHaveCount(0);
     await expect(candidateTable.getByText('0,800')).toHaveCount(0);
     await expect(candidateTable.getByText('0,400')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Koppel artikel', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeDisabled();
     await expectNoConsoleErrors(consoleErrors);
   });
 
@@ -240,7 +240,7 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(candidateTable).toContainText('Geen universele kandidaten met score 0,500 of hoger voor dit bonartikel.');
     await expect(candidateTable.getByText('Fallback kandidaat')).toHaveCount(0);
     await expect(candidateTable.getByText('Geen externe match')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Koppel artikel', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeDisabled();
     await expectNoConsoleErrors(consoleErrors);
   });
 

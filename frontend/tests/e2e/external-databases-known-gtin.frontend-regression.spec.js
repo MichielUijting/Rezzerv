@@ -86,7 +86,7 @@ test.describe('Externe databases bekende GTIN regressie', () => {
     await expect(candidateTable).toContainText('Geen universele kandidaten met score 0,500 of hoger voor dit bonartikel.');
     await expect(candidateTable.getByText('Onterechte kandidaat')).toHaveCount(0);
     await expect(page.getByText('GTIN/EAN is al bekend; OFF-kandidaten worden niet automatisch toegevoegd.')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Koppel artikel', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Ontkoppel artikel', exact: true })).toBeDisabled();
     expect(offSearchCalled).toBe(false);
 
