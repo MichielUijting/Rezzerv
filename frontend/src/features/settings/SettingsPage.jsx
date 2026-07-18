@@ -44,6 +44,13 @@ export default function SettingsPage() {
             </div>
             <div aria-hidden="true">→</div>
           </Link>
+          <Link to="/instellingen/artikelgroepen" style={getTileStyle(isViewer)} aria-disabled={isViewer ? 'true' : 'false'} onClick={isViewer ? handleDisabledClick : undefined}>
+            <div>
+              <div style={{ fontWeight: 600 }}>Artikelgroepen</div>
+              <div style={{ color: isViewer ? '#0f5b32' : '#667085', fontSize: '14px' }}>{isViewer ? 'Alleen Admin kan Artikelgroepen beheren.' : 'Beheer je eigen indeling van voorraadartikelen'}</div>
+            </div>
+            <div aria-hidden="true">→</div>
+          </Link>
           <Link to="/instellingen/privacy-datadeling" style={getTileStyle(false)}>
             <div>
               <div style={{ fontWeight: 600 }}>Privacy &amp; Datadeling</div>

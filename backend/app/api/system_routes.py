@@ -52,6 +52,7 @@ from app.services.external_relation_batch_store import (
 )
 from app.services.open_food_facts_candidate_store import save_open_food_facts_preview_candidates
 from app.services.open_food_facts_search_preview import search_open_food_facts_preview
+from app.services.off_search_service import OffSearchError, search_off_candidates
 
 router = APIRouter()
 logger = logging.getLogger('rezzerv.api')
@@ -280,6 +281,15 @@ def external_databases_save_candidates(retailer_code: str, payload: dict[str, An
         purchase_import_line_id=str(payload.get('purchase_import_line_id') or '').strip() or None,
         include_below_threshold=bool(payload.get('include_below_threshold', False)),
     )
+
+
+@router.post('/api/external-products/off/search')
+def external_products_open_food_facts_search(payload: dict[str, Any] = Body(default_factory=dict)):
+    """Nieuwe tijdelijke OFF-zoekflow zonder databasewrites."""
+    try:
+        return search_off_candidates(payload)
+    except OffSearchError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post('/api/external-databases/off/search-preview')

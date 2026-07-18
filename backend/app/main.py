@@ -51,6 +51,7 @@ from app.schemas.receipts import (
     ReceiptHeaderUpdateRequest,
     ReceiptLineUpdateRequest,
     ReceiptLineCreateRequest,
+    ProductIdentityLookupRequest,
 )
 from app.services.testing_service import testing_service
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
@@ -172,7 +173,8 @@ def _dev_inventory_preview_row(row):
 
 
 @app.get("/api/dev/inventory-preview")
-def dev_inventory_preview():
+def dev_inventory_preview(authorization: Optional[str] = Header(None)):
+    effective_household_id = get_request_household_id(authorization)
     with engine.begin() as conn:
         rows = conn.execute(text(
             """
@@ -181,6 +183,7 @@ def dev_inventory_preview():
                 i.naam AS artikel,
                 i.aantal,
                 i.household_id,
+                i.household_article_id AS household_article_id,
                 i.space_id,
                 i.sublocation_id,
                 s.naam AS locatie,
@@ -188,10 +191,11 @@ def dev_inventory_preview():
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
-            WHERE COALESCE(i.status, 'active') = 'active'
+            WHERE i.household_id = :household_id
+              AND COALESCE(i.status, 'active') = 'active'
             ORDER BY lower(COALESCE(i.naam, '')) ASC, i.id ASC
             """
-        )).mappings().all()
+        ), {"household_id": effective_household_id}).mappings().all()
 
     return {"rows": [_dev_inventory_preview_row(row) for row in rows]}
 
@@ -2729,6 +2733,8 @@ def normalize_product_identity_type(value: str | None) -> str:
     normalized = str(value or '').strip().lower()
     if normalized in {'barcode', 'ean', 'gtin', 'upc'}:
         return 'gtin'
+    if normalized == 'retailer_article_number':
+        return 'retailer_article_number'
     if normalized in {'store_sku', 'text_match', 'external_article_number', 'article_number'}:
         return 'external_article_number' if normalized in {'external_article_number', 'article_number'} else normalized
     return 'gtin'
@@ -2739,6 +2745,17 @@ def normalize_product_identity_value(identity_type: str | None, identity_value: 
     if normalized_type == 'gtin':
         return normalize_barcode_value(identity_value) if identity_value else None
     return normalize_identity_lookup_value(identity_value)
+
+
+def build_retailer_article_identity_value(
+    retailer_code: str | None,
+    article_code: str | None,
+) -> str | None:
+    normalized_retailer = normalize_identity_lookup_value(retailer_code)
+    normalized_article_code = normalize_identity_lookup_value(article_code)
+    if not normalized_retailer or not normalized_article_code:
+        return None
+    return f'retailer:{normalized_retailer}:{normalized_article_code}'
 
 
 @dataclass
@@ -5162,52 +5179,161 @@ def get_global_product_row_by_identity(conn, identity_value: str | None, identit
     return None
 
 
-def find_global_product_match_for_receipt_line(conn, barcode: str | None, article_name: str | None, brand: str | None = None, external_article_code: str | None = None):
+def build_product_identity_lookup_product(row) -> dict | None:
+    if not row:
+        return None
+    return {
+        "id": str(row.get("id") or ""),
+        "name": row.get("name") or None,
+        "brand": row.get("brand") or None,
+        "barcode": row.get("primary_gtin") or None,
+        "category": row.get("category") or None,
+        "size_value": float(row["size_value"]) if row.get("size_value") is not None else None,
+        "size_unit": row.get("size_unit") or None,
+        "source": row.get("source") or None,
+        "status": row.get("status") or None,
+    }
+
+
+def build_product_identity_lookup_suggestion(result: EnrichmentLookupResult) -> dict | None:
+    if result.status != "found" or not isinstance(result.payload, dict):
+        return None
+    payload = result.payload
+    return {
+        "name": payload.get("title") or None,
+        "brand": payload.get("brand") or None,
+        "barcode": result.normalized_barcode or payload.get("normalized_barcode") or None,
+        "category": payload.get("category") or None,
+        "size_value": payload.get("size_value"),
+        "size_unit": payload.get("size_unit") or None,
+        "image_url": payload.get("image_url") or None,
+        "source_url": payload.get("source_url") or result.source_url or None,
+        "source": result.source_name,
+    }
+
+
+def find_global_product_match_for_receipt_line(
+    conn,
+    barcode: str | None,
+    article_name: str | None,
+    brand: str | None = None,
+    external_article_code: str | None = None,
+    retailer_code: str | None = None,
+):
     normalized_barcode = normalize_barcode_value(barcode) if barcode else None
+
+    # Een universele barcode of GTIN heeft altijd voorrang.
     if normalized_barcode:
-        by_barcode = get_global_product_row_by_barcode(conn, normalized_barcode)
+        by_barcode = get_global_product_row_by_barcode(
+            conn,
+            normalized_barcode,
+        )
         if by_barcode:
             payload = dict(by_barcode)
             payload['match_method'] = 'gtin:primary'
             payload['confidence_score'] = 1.0
             return payload
-    normalized_external_article_code = normalize_identity_lookup_value(external_article_code or barcode)
+
+        by_gtin_identity = get_global_product_row_by_identity(
+            conn,
+            normalized_barcode,
+            identity_types=('gtin',),
+        )
+        if by_gtin_identity:
+            payload = dict(by_gtin_identity)
+            payload['match_method'] = 'identity:gtin'
+            payload['confidence_score'] = 1.0
+            return payload
+
+    normalized_external_article_code = normalize_identity_lookup_value(
+        external_article_code
+    )
+
+    # Winkelartikelcodes zijn alleen uniek binnen de winkelketen.
+    retailer_identity = build_retailer_article_identity_value(
+        retailer_code,
+        normalized_external_article_code,
+    )
+    if retailer_identity:
+        by_retailer_identity = get_global_product_row_by_identity(
+            conn,
+            retailer_identity,
+            identity_types=('retailer_article_number',),
+        )
+        if by_retailer_identity:
+            payload = dict(by_retailer_identity)
+            payload['match_method'] = (
+                'identity:retailer_article_number'
+            )
+            payload['confidence_score'] = 0.95
+            return payload
+
+    # Alleen expliciet universele externe artikelidentiteiten mogen
+    # zonder retailercontext worden hergebruikt.
     if normalized_external_article_code:
-        by_identity = get_global_product_row_by_identity(conn, normalized_external_article_code)
-        if by_identity:
-            payload = dict(by_identity)
-            identity_type = normalize_product_identity_type(by_identity.get('identity_type'))
+        by_external_identity = get_global_product_row_by_identity(
+            conn,
+            normalized_external_article_code,
+            identity_types=(
+                'external_article_number',
+                'store_sku',
+            ),
+        )
+        if by_external_identity:
+            payload = dict(by_external_identity)
+            identity_type = normalize_product_identity_type(
+                by_external_identity.get('identity_type')
+            )
             payload['match_method'] = f'identity:{identity_type}'
             payload['confidence_score'] = 0.95
             return payload
+
     normalized_name = normalize_household_article_name(article_name)
     normalized_brand = normalize_optional_text_field(brand)
     if not normalized_name:
         return None
+
     params = {'name': normalized_name}
     brand_clause = ''
     if normalized_brand:
         params['brand'] = normalized_brand
-        brand_clause = " AND lower(trim(COALESCE(brand, ''))) = lower(trim(:brand))"
+        brand_clause = (
+            " AND lower(trim(COALESCE(brand, ''))) "
+            "= lower(trim(:brand))"
+        )
+
     row = conn.execute(
         text(
             f"""
-            SELECT id, primary_gtin, name, brand, category, size_value, size_unit, source, status, created_at, updated_at
+            SELECT id, primary_gtin, name, brand, category,
+                   size_value, size_unit, source, status,
+                   created_at, updated_at
             FROM global_products
             WHERE lower(trim(name)) = lower(trim(:name)){brand_clause}
-            ORDER BY CASE WHEN primary_gtin IS NOT NULL AND trim(primary_gtin) <> '' THEN 0 ELSE 1 END,
-                     datetime(updated_at) DESC,
-                     id DESC
+            ORDER BY
+                CASE
+                    WHEN primary_gtin IS NOT NULL
+                     AND trim(primary_gtin) <> ''
+                    THEN 0 ELSE 1
+                END,
+                datetime(updated_at) DESC,
+                id DESC
             LIMIT 1
             """
         ),
         params,
     ).mappings().first()
+
     if not row:
         return None
+
     payload = dict(row)
-    payload['match_method'] = 'text:name_brand' if normalized_brand else 'text:name'
-    payload['confidence_score'] = 0.8 if normalized_brand else 0.75
+    payload['match_method'] = (
+        'text:name_brand' if normalized_brand else 'text:name'
+    )
+    payload['confidence_score'] = (
+        0.8 if normalized_brand else 0.75
+    )
     return payload
 
 
@@ -5264,12 +5390,12 @@ def find_household_article_for_global_product(conn, household_id: str, global_pr
     return dict(row) if row else None
 
 
-def resolve_receipt_line_product_links(conn, household_id: str | None, article_name: str | None, *, barcode: str | None = None, brand: str | None = None, matched_article_id: str | None = None, create_global_product: bool = True, create_household_article: bool = False, external_article_code: str | None = None):
+def resolve_receipt_line_product_links(conn, household_id: str | None, article_name: str | None, *, barcode: str | None = None, brand: str | None = None, matched_article_id: str | None = None, create_global_product: bool = True, create_household_article: bool = False, external_article_code: str | None = None, retailer_code: str | None = None):
     normalized_household_id = str(household_id or '').strip()
     normalized_barcode = normalize_barcode_value(barcode) if barcode else None
     normalized_article_name = normalize_household_article_name(article_name)
     normalized_brand = normalize_optional_text_field(brand)
-    normalized_external_article_code = normalize_identity_lookup_value(external_article_code or barcode)
+    normalized_external_article_code = normalize_identity_lookup_value(external_article_code)
     resolved_article_option_id = str(matched_article_id or '').strip() or None
     resolved_global_product_id = None
     match_method = None
@@ -5304,6 +5430,7 @@ def resolve_receipt_line_product_links(conn, household_id: str | None, article_n
             normalized_article_name,
             normalized_brand,
             external_article_code=normalized_external_article_code,
+            retailer_code=retailer_code,
         )
         if matched_product and matched_product.get('id'):
             resolved_global_product_id = str(matched_product.get('id'))
@@ -5470,6 +5597,7 @@ def sync_receipt_table_line_product_links(conn, receipt_table_id: str, line_id: 
             """
             SELECT id,
                    barcode,
+                   external_article_code,
                    COALESCE(corrected_raw_label, raw_label) AS article_name,
                    matched_article_id,
                    matched_global_product_id
@@ -5491,7 +5619,8 @@ def sync_receipt_table_line_product_links(conn, receipt_table_id: str, line_id: 
         matched_article_id=line.get('matched_article_id'),
         create_global_product=create_global_product,
         create_household_article=create_household_article,
-        external_article_code=line.get('barcode'),
+        external_article_code=line.get('external_article_code'),
+        retailer_code=receipt_header.get('store_name'),
     )
     conn.execute(
         text(
@@ -7987,6 +8116,7 @@ def ensure_release_3_schema():
                     id TEXT PRIMARY KEY,
                     household_id TEXT NOT NULL,
                     article_id TEXT,
+                    household_article_id TEXT,
                     article_name TEXT NOT NULL,
                     location_id TEXT,
                     location_label TEXT,
@@ -8006,6 +8136,9 @@ def ensure_release_3_schema():
             conn.execute(text("ALTER TABLE inventory_events ADD COLUMN old_quantity NUMERIC"))
         if "new_quantity" not in inventory_event_columns:
             conn.execute(text("ALTER TABLE inventory_events ADD COLUMN new_quantity NUMERIC"))
+        if "household_article_id" not in inventory_event_columns:
+            conn.execute(text("ALTER TABLE inventory_events ADD COLUMN household_article_id TEXT"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_inventory_events_household_article_id ON inventory_events (household_article_id)"))
 
 
 
@@ -8074,6 +8207,9 @@ def ensure_release_814_schema():
             conn.execute(text("ALTER TABLE inventory ADD COLUMN archived_at DATETIME"))
         if "archive_reason" not in inventory_columns:
             conn.execute(text("ALTER TABLE inventory ADD COLUMN archive_reason TEXT"))
+        if "household_article_id" not in inventory_columns:
+            conn.execute(text("ALTER TABLE inventory ADD COLUMN household_article_id TEXT"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_inventory_household_article_id ON inventory (household_article_id)"))
         conn.execute(text("UPDATE inventory SET status = COALESCE(status, 'active')"))
 
 
@@ -8152,6 +8288,7 @@ def ensure_release_902_schema():
                     line_total NUMERIC(12,2),
                     discount_amount NUMERIC(12,2),
                     barcode TEXT,
+                    external_article_code TEXT,
                     article_match_status TEXT NOT NULL DEFAULT 'unmatched',
                     matched_article_id TEXT,
                     matched_global_product_id TEXT,
@@ -8337,6 +8474,7 @@ def ensure_release_941_receipt_edit_schema():
             'is_deleted': 'INTEGER NOT NULL DEFAULT 0',
             'is_validated': 'INTEGER NOT NULL DEFAULT 0',
             'matched_global_product_id': 'TEXT',
+            'external_article_code': 'TEXT',
         }
         for column_name, column_type in line_additions.items():
             if column_name not in line_columns:
@@ -8793,6 +8931,72 @@ def require_resolved_location(resolved_location: dict | None):
     return resolved_location
 
 
+def resolve_or_create_inventory_household_article(
+    conn,
+    *,
+    household_id: str,
+    article_name: str,
+    preferred_household_article_id: str | None = None,
+    source: str = "inventory",
+) -> str:
+    normalized_household_id = str(household_id or "").strip()
+    normalized_article_name = normalize_household_article_name(article_name)
+    preferred_id = str(preferred_household_article_id or "").strip()
+
+    if not normalized_household_id:
+        raise HTTPException(status_code=400, detail="Huishouden ontbreekt voor voorraadmutatie")
+    if not normalized_article_name:
+        raise HTTPException(status_code=400, detail="Artikelnaam ontbreekt voor voorraadmutatie")
+
+    if preferred_id:
+        existing_id = conn.execute(
+            text("SELECT id FROM household_articles WHERE id = :id AND household_id = :household_id LIMIT 1"),
+            {"id": preferred_id, "household_id": normalized_household_id},
+        ).scalar()
+        if existing_id:
+            return str(existing_id)
+
+    matches = conn.execute(
+        text(
+            """
+            SELECT id
+            FROM household_articles
+            WHERE household_id = :household_id
+              AND lower(trim(COALESCE(custom_name, naam))) = lower(trim(:article_name))
+              AND COALESCE(status, 'active') = 'active'
+            ORDER BY datetime(created_at) ASC, id ASC
+            LIMIT 2
+            """
+        ),
+        {"household_id": normalized_household_id, "article_name": normalized_article_name},
+    ).scalars().all()
+
+    if len(matches) == 1:
+        return str(matches[0])
+    if len(matches) > 1:
+        raise HTTPException(status_code=409, detail="Meerdere huishoudartikelen gevonden; voorraadmutatie is geblokkeerd")
+
+    household_article_id = str(uuid.uuid4())
+    conn.execute(
+        text(
+            """
+            INSERT INTO household_articles (
+                id, household_id, naam, consumable, created_at, updated_at, source, status
+            ) VALUES (
+                :id, :household_id, :naam, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, :source, 'active'
+            )
+            """
+        ),
+        {
+            "id": household_article_id,
+            "household_id": normalized_household_id,
+            "naam": normalized_article_name,
+            "source": str(source or "inventory").strip() or "inventory",
+        },
+    )
+    return household_article_id
+
+
 def create_inventory_event(
     conn,
     *,
@@ -8814,16 +9018,23 @@ def create_inventory_event(
     barcode: str | None = None,
 ):
     safe_location = require_resolved_location(resolved_location)
+    household_article_id = resolve_or_create_inventory_household_article(
+        conn,
+        household_id=household_id,
+        article_name=article_name,
+        preferred_household_article_id=article_id,
+        source=source,
+    )
     event_id = str(uuid.uuid4())
     conn.execute(
         text(
             """
             INSERT INTO inventory_events (
-                id, household_id, article_id, article_name, location_id, location_label,
+                id, household_id, article_id, household_article_id, article_name, location_id, location_label,
                 event_type, quantity, old_quantity, new_quantity, source, note,
                 purchase_date, supplier_name, article_number, price, currency, barcode, created_at
             ) VALUES (
-                :id, :household_id, :article_id, :article_name, :location_id, :location_label,
+                :id, :household_id, :article_id, :household_article_id, :article_name, :location_id, :location_label,
                 :event_type, :quantity, :old_quantity, :new_quantity, :source, :note,
                 :purchase_date, :supplier_name, :article_number, :price, :currency, :barcode, CURRENT_TIMESTAMP
             )
@@ -8832,7 +9043,8 @@ def create_inventory_event(
         {
             "id": event_id,
             "household_id": str(household_id),
-            "article_id": article_id,
+            "article_id": household_article_id,
+            "household_article_id": household_article_id,
             "article_name": article_name,
             "location_id": safe_location["location_id"],
             "location_label": safe_location["location_label"],
@@ -8857,6 +9069,12 @@ def apply_inventory_purchase(conn, household_id: str, article_name: str, quantit
     safe_location = require_resolved_location(resolved_location)
     space_id = safe_location["space_id"]
     sublocation_id = safe_location["sublocation_id"]
+    household_article_id = resolve_or_create_inventory_household_article(
+        conn,
+        household_id=household_id,
+        article_name=article_name,
+        source="inventory_purchase",
+    )
 
     existing = conn.execute(
         text(
@@ -8864,14 +9082,14 @@ def apply_inventory_purchase(conn, household_id: str, article_name: str, quantit
             SELECT id, aantal
             FROM inventory
             WHERE household_id = :household_id
-              AND naam = :naam
+              AND household_article_id = :household_article_id
               AND COALESCE(space_id, '') = COALESCE(:space_id, '')
               AND COALESCE(sublocation_id, '') = COALESCE(:sublocation_id, '')
             """
         ),
         {
             "household_id": household_id,
-            "naam": article_name,
+            "household_article_id": household_article_id,
             "space_id": space_id,
             "sublocation_id": sublocation_id,
         },
@@ -8896,8 +9114,14 @@ def apply_inventory_purchase(conn, household_id: str, article_name: str, quantit
     conn.execute(
         text(
             """
-            INSERT INTO inventory (id, naam, aantal, household_id, space_id, sublocation_id, status, updated_at)
-            VALUES (:id, :naam, :aantal, :household_id, :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP)
+            INSERT INTO inventory (
+                id, naam, aantal, household_id, household_article_id,
+                space_id, sublocation_id, status, updated_at
+            )
+            VALUES (
+                :id, :naam, :aantal, :household_id, :household_article_id,
+                :space_id, :sublocation_id, 'active', CURRENT_TIMESTAMP
+            )
             """
         ),
         {
@@ -8905,6 +9129,7 @@ def apply_inventory_purchase(conn, household_id: str, article_name: str, quantit
             "naam": article_name,
             "aantal": quantity_int,
             "household_id": household_id,
+            "household_article_id": household_article_id,
             "space_id": space_id,
             "sublocation_id": sublocation_id,
         },
@@ -8928,12 +9153,19 @@ def apply_manual_inventory_adjustment(
     sublocation_id = safe_location["sublocation_id"]
 
     old_total = get_article_total_quantity(conn, household_id, old_article_name)
+    household_article_id = resolve_or_create_inventory_household_article(
+        conn,
+        household_id=household_id,
+        article_name=new_article_name,
+        source="manual_inventory",
+    )
 
     conn.execute(
         text(
             """
             UPDATE inventory
             SET naam = :naam,
+                household_article_id = :household_article_id,
                 aantal = :aantal,
                 space_id = :space_id,
                 sublocation_id = :sublocation_id,
@@ -8944,6 +9176,7 @@ def apply_manual_inventory_adjustment(
         {
             "id": inventory_id,
             "naam": new_article_name,
+            "household_article_id": household_article_id,
             "aantal": int(new_quantity),
             "space_id": space_id,
             "sublocation_id": sublocation_id,
@@ -8952,7 +9185,7 @@ def apply_manual_inventory_adjustment(
 
     new_total = get_article_total_quantity(conn, household_id, new_article_name)
     delta = int(new_quantity) - int(old_quantity)
-    article_id = build_live_article_option_id(new_article_name)
+    article_id = household_article_id
 
     if delta > 0:
         mutation_label = 'handmatige ophoging'
@@ -8985,7 +9218,7 @@ def apply_manual_inventory_adjustment(
               i.aantal AS aantal,
               i.space_id AS space_id,
               i.sublocation_id AS sublocation_id,
-              ha.id AS household_article_id,
+              i.household_article_id AS household_article_id,
               COALESCE(ha.custom_name, i.naam, '') AS household_article_name,
               COALESCE(gp.name, ha.naam, i.naam, '') AS product_name,
               COALESCE(s.naam, '') AS locatie,
@@ -8994,7 +9227,7 @@ def apply_manual_inventory_adjustment(
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
-            LEFT JOIN household_articles ha ON ha.household_id = i.household_id AND lower(trim(ha.naam)) = lower(trim(i.naam))
+            LEFT JOIN household_articles ha ON ha.id = i.household_article_id AND ha.household_id = i.household_id
             LEFT JOIN global_products gp ON gp.id = ha.global_product_id
             WHERE i.id = :id
             """
@@ -9490,7 +9723,8 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                COALESCE(corrected_quantity, quantity) AS quantity,
                COALESCE(corrected_unit, unit) AS unit,
                COALESCE(corrected_line_total, line_total) AS line_total,
-               barcode
+               barcode,
+               external_article_code
         FROM receipt_table_lines
         WHERE receipt_table_id = :receipt_table_id
           AND COALESCE(is_deleted, 0) = 0
@@ -9521,9 +9755,10 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
             raw_label,
             barcode=line.get('barcode'),
             brand=(receipt or {}).get('store_name'),
-            create_global_product=True,
-            create_household_article=False,  # M2A: geen automatisch Mijn artikel vanuit bon/import
-            external_article_code=line.get('barcode'),
+            create_global_product=False,
+            create_household_article=False,  # Alleen bestaande standaardartikelen matchen
+            external_article_code=line.get('external_article_code'),
+            retailer_code=(receipt or {}).get('store_name'),
         )
         matched_global_product_id = str((resolved_links or {}).get('matched_global_product_id') or '').strip() or None
         # M2A: bij eerste import blijft 'Mijn artikel' leeg.
@@ -9552,7 +9787,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                         ELSE suggested_household_article_id
                     END,
                     match_status = CASE
-                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :matched_household_article_id IS NOT NULL THEN 'matched'
+                        WHEN COALESCE(article_override_mode, 'auto') = 'auto' AND :matched_global_product_id IS NOT NULL THEN 'matched'
                         WHEN COALESCE(article_override_mode, 'auto') = 'auto' THEN 'unmatched'
                         ELSE match_status
                     END,
@@ -9611,7 +9846,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                 'line_price_raw': line_price_value,
                 'currency_code': (receipt or {}).get('currency') or 'EUR',
                 'ui_sort_order': int(line.get('line_index') or offset),
-                'match_status': 'matched' if matched_household_article_id else 'unmatched',
+                'match_status': 'matched' if matched_global_product_id else 'unmatched',
                 'matched_global_product_id': matched_global_product_id,
                 'matched_household_article_id': matched_household_article_id,
                 'suggested_household_article_id': matched_household_article_id,
@@ -12681,29 +12916,76 @@ def update_receipt_line(receipt_table_id: str, line_id: str, payload: ReceiptLin
 def create_receipt_line(receipt_table_id: str, payload: ReceiptLineCreateRequest, authorization: Optional[str] = Header(None)):
     with engine.begin() as conn:
         context = require_receipt_write_context(conn, receipt_table_id, authorization)
-        existing = conn.execute(text("SELECT id FROM receipt_tables WHERE id = :id LIMIT 1"), {'id': receipt_table_id}).mappings().first()
+        existing = conn.execute(
+            text("SELECT id, household_id, store_name FROM receipt_tables WHERE id = :id LIMIT 1"),
+            {'id': receipt_table_id},
+        ).mappings().first()
         if not existing:
             raise HTTPException(status_code=404, detail='Bon niet gevonden')
-        next_index = conn.execute(text("SELECT COALESCE(MAX(line_index), 0) + 1 AS next_index FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id"), {'receipt_table_id': receipt_table_id}).scalar()
+
+        normalized_barcode = normalize_barcode_value(payload.barcode) if payload.barcode else None
+        normalized_external_article_code = (
+            normalize_identity_lookup_value(payload.external_article_code)
+            if payload.external_article_code
+            else None
+        )
+
+        # Een universele barcode is leidend. De winkelartikelcode blijft hooguit
+        # als aanvullende of historische identiteit beschikbaar.
+        existing_product = find_global_product_match_for_receipt_line(
+            conn,
+            normalized_barcode,
+            payload.article_name,
+            external_article_code=normalized_external_article_code,
+            retailer_code=existing.get('store_name'),
+        )
+        matched_global_product_id = (
+            str(existing_product.get('id') or '').strip()
+            if existing_product
+            else None
+        )
+        article_match_status = 'product_matched' if matched_global_product_id else 'unmatched'
+        confidence_score = (
+            float(existing_product.get('confidence_score') or 1.0)
+            if existing_product
+            else None
+        )
+
+        next_index = conn.execute(
+            text(
+                "SELECT COALESCE(MAX(line_index), 0) + 1 AS next_index "
+                "FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id"
+            ),
+            {'receipt_table_id': receipt_table_id},
+        ).scalar()
+
         quantity = float(payload.quantity if payload.quantity is not None else 1.0)
         unit_price = float(payload.unit_price) if payload.unit_price is not None else None
-        line_total = float(payload.line_total) if payload.line_total is not None else (round(quantity * unit_price, 2) if unit_price is not None else None)
+        line_total = (
+            float(payload.line_total)
+            if payload.line_total is not None
+            else (round(quantity * unit_price, 2) if unit_price is not None else None)
+        )
+        inserted_line_id = str(uuid.uuid4())
+
         conn.execute(
             text("""
             INSERT INTO receipt_table_lines (
                 id, receipt_table_id, line_index, raw_label, corrected_raw_label, normalized_label,
                 quantity, corrected_quantity, unit, corrected_unit, unit_price, corrected_unit_price,
-                line_total, corrected_line_total, article_match_status, matched_article_id, matched_global_product_id,
+                line_total, corrected_line_total, barcode, external_article_code,
+                article_match_status, matched_article_id, matched_global_product_id,
                 confidence_score, is_deleted, is_validated, created_at, updated_at
             ) VALUES (
                 :id, :receipt_table_id, :line_index, :raw_label, :corrected_raw_label, :normalized_label,
                 :quantity, :corrected_quantity, :unit, :corrected_unit, :unit_price, :corrected_unit_price,
-                :line_total, :corrected_line_total, 'manual', :matched_article_id, NULL,
-                1.0, 0, :is_validated, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                :line_total, :corrected_line_total, :barcode, :external_article_code,
+                :article_match_status, :matched_article_id, :matched_global_product_id,
+                :confidence_score, 0, :is_validated, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
             """),
             {
-                'id': str(uuid.uuid4()),
+                'id': inserted_line_id,
                 'receipt_table_id': receipt_table_id,
                 'line_index': int(next_index or 1),
                 'raw_label': payload.article_name,
@@ -12717,15 +12999,40 @@ def create_receipt_line(receipt_table_id: str, payload: ReceiptLineCreateRequest
                 'corrected_unit_price': unit_price,
                 'line_total': line_total,
                 'corrected_line_total': line_total,
+                'barcode': normalized_barcode,
+                'external_article_code': normalized_external_article_code,
+                'article_match_status': article_match_status,
                 'matched_article_id': (str(payload.matched_article_id or '').strip() or None),
+                'matched_global_product_id': matched_global_product_id,
+                'confidence_score': confidence_score,
                 'is_validated': int(bool(payload.is_validated)),
             },
         )
-        conn.execute(text("UPDATE receipt_tables SET corrected_by_user_email = :user_email, reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {'id': receipt_table_id, 'user_email': str(context.get('email') or '').strip().lower()})
-        inserted_line_id = conn.execute(text("SELECT id FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id ORDER BY line_index DESC, created_at DESC, id DESC LIMIT 1"), {'receipt_table_id': receipt_table_id}).scalar()
-        if inserted_line_id:
-            sync_receipt_table_line_product_links(conn, receipt_table_id, str(inserted_line_id), create_global_product=True, create_household_article=False)
+
+        conn.execute(
+            text(
+                "UPDATE receipt_tables "
+                "SET corrected_by_user_email = :user_email, "
+                "reviewed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP "
+                "WHERE id = :id"
+            ),
+            {
+                'id': receipt_table_id,
+                'user_email': str(context.get('email') or '').strip().lower(),
+            },
+        )
+
+        # Alleen bestaande standaardartikelen koppelen. Een handmatig ingevoerde
+        # onbekende code of naam mag geen nieuw catalogusproduct veroorzaken.
+        sync_receipt_table_line_product_links(
+            conn,
+            receipt_table_id,
+            inserted_line_id,
+            create_global_product=False,
+            create_household_article=False,
+        )
         recompute_receipt_review_state(conn, receipt_table_id)
+
     return get_receipt_detail(receipt_table_id, authorization)
 
 
@@ -12806,7 +13113,7 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
             if row[0]
         ]
         for current_line_id in line_ids:
-            sync_receipt_table_line_product_links(conn, receipt_table_id, current_line_id, create_global_product=True, create_household_article=False)
+            sync_receipt_table_line_product_links(conn, receipt_table_id, current_line_id, create_global_product=False, create_household_article=False)
         receipt_header = conn.execute(
             text("""
             SELECT id AS receipt_table_id, household_id, store_name, store_branch, purchase_at, created_at, currency
@@ -14442,6 +14749,122 @@ def get_article_product_details_endpoint(article_name: Optional[str] = None, art
         }
 
 
+@app.post("/api/product-identities/lookup")
+def lookup_product_identity(
+    payload: ProductIdentityLookupRequest,
+    authorization: Optional[str] = Header(None),
+):
+    require_household_context(
+        authorization,
+        requested_household_id=payload.household_id,
+    )
+
+    identifier = str(payload.identifier or "").strip()
+    requested_type = str(payload.identifier_type or "auto").strip().lower()
+    retailer_code = str(payload.retailer_code or "").strip().lower() or None
+
+    if requested_type == "retailer_article_number" and not retailer_code:
+        raise HTTPException(
+            status_code=400,
+            detail="retailer_code is verplicht bij retailer_article_number",
+        )
+
+    normalized_gtin = None
+    if requested_type == "gtin":
+        try:
+            normalized_gtin = normalize_barcode_value(identifier)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    elif requested_type == "auto" and identifier.isdigit():
+        try:
+            normalized_gtin = normalize_barcode_value(identifier)
+        except ValueError:
+            normalized_gtin = None
+
+    resolved_type = requested_type
+    matched_product = None
+    match_method = None
+
+    with engine.connect() as conn:
+        if normalized_gtin:
+            matched_product = get_global_product_row_by_barcode(conn, normalized_gtin)
+            match_method = "gtin:primary" if matched_product else None
+            if not matched_product:
+                matched_product = get_global_product_row_by_identity(
+                    conn,
+                    normalized_gtin,
+                    identity_types=("gtin",),
+                )
+                match_method = "identity:gtin" if matched_product else None
+            resolved_type = "gtin"
+
+        if not matched_product and requested_type in {"auto", "external_article_number"}:
+            matched_product = get_global_product_row_by_identity(
+                conn,
+                identifier,
+                identity_types=("external_article_number",),
+            )
+            if matched_product:
+                resolved_type = "external_article_number"
+                match_method = "identity:external_article_number"
+
+        if not matched_product and requested_type in {"auto", "retailer_article_number"} and retailer_code:
+            retailer_identity = build_retailer_article_identity_value(
+                retailer_code,
+                identifier,
+            )
+            matched_product = get_global_product_row_by_identity(
+                conn,
+                retailer_identity,
+                identity_types=("retailer_article_number",),
+            )
+            if matched_product:
+                resolved_type = "retailer_article_number"
+                match_method = "identity:retailer_article_number"
+            elif requested_type == "retailer_article_number":
+                resolved_type = "retailer_article_number"
+
+    if matched_product:
+        return {
+            "valid": True,
+            "identifier_type": resolved_type,
+            "found": True,
+            "global_product_id": str(matched_product.get("id") or ""),
+            "product": build_product_identity_lookup_product(matched_product),
+            "suggestion": None,
+            "source": "internal_catalog",
+            "match_method": match_method,
+            "creates_global_product": False,
+            "creates_household_article": False,
+            "creates_candidate": False,
+            "creates_inventory_event": False,
+        }
+
+    suggestion = None
+    source = "none"
+    lookup_message = None
+    if normalized_gtin:
+        external_result = OpenFoodFactsAdapter().lookup_by_barcode(normalized_gtin)
+        suggestion = build_product_identity_lookup_suggestion(external_result)
+        source = external_result.source_name if suggestion else "none"
+        lookup_message = external_result.message
+
+    return {
+        "valid": True,
+        "identifier_type": resolved_type,
+        "found": False,
+        "global_product_id": None,
+        "product": None,
+        "suggestion": suggestion,
+        "source": source,
+        "message": lookup_message,
+        "creates_global_product": False,
+        "creates_household_article": False,
+        "creates_candidate": False,
+        "creates_inventory_event": False,
+    }
+
+
 @app.get("/api/products/sources")
 def get_product_sources(authorization: Optional[str] = Header(None)):
     require_household_context(authorization)
@@ -15235,7 +15658,7 @@ def inventory_preview(response: Response, authorization: Optional[str] = Header(
               i.aantal AS aantal,
               i.space_id AS space_id,
               i.sublocation_id AS sublocation_id,
-              ha.id AS household_article_id,
+              i.household_article_id AS household_article_id,
               COALESCE(ha.custom_name, i.naam, '') AS household_article_name,
               COALESCE(gp.name, ha.naam, i.naam, '') AS product_name,
               COALESCE(s.naam, '') AS locatie,
@@ -15244,7 +15667,7 @@ def inventory_preview(response: Response, authorization: Optional[str] = Header(
             FROM inventory i
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
-            LEFT JOIN household_articles ha ON ha.household_id = i.household_id AND lower(trim(ha.naam)) = lower(trim(i.naam))
+            LEFT JOIN household_articles ha ON ha.id = i.household_article_id AND ha.household_id = i.household_id
             LEFT JOIN global_products gp ON gp.id = ha.global_product_id
             WHERE i.household_id = :household_id
               AND COALESCE(i.status, 'active') = 'active'

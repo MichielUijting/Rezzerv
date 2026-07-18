@@ -69,34 +69,35 @@ test.describe('Productgroepen frontend-regressie', () => {
     await expect(table).toContainText('Mosterd fijne Dijon extra lange artikelnaam');
     await expect(table).toContainText('Boormachine met zeer lange artikelnaam');
 
-    await expect(page.getByLabel('Hoofdgroep voor Mosterd fijne Dijon extra lange artikelnaam')).toBeVisible();
-    await expect(page.getByLabel('Groep voor Mosterd fijne Dijon extra lange artikelnaam')).toBeVisible();
-    await expect(page.getByLabel('Productgroep voor Mosterd fijne Dijon extra lange artikelnaam')).toBeVisible();
+    await expect(page.getByLabel('Hoofdgroep voor Mosterd fijne Dijon extra lange artikelnaam', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Groep voor Mosterd fijne Dijon extra lange artikelnaam', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Productgroep voor Mosterd fijne Dijon extra lange artikelnaam', { exact: true })).toBeVisible();
 
     await page.getByLabel('Zoek artikel').fill('boor');
     await expect(table).toContainText('Boormachine met zeer lange artikelnaam');
     await expect(table).not.toContainText('Mosterd fijne Dijon extra lange artikelnaam');
     await page.getByLabel('Zoek artikel').fill('');
 
-    await page.getByLabel('Hoofdgroep voor Boormachine met zeer lange artikelnaam').selectOption('Voeding');
-    await page.getByLabel('Groep voor Boormachine met zeer lange artikelnaam').selectOption('Sauzen');
-    await page.getByLabel('Productgroep voor Boormachine met zeer lange artikelnaam').selectOption('gpc:10000001');
-    await page.getByRole('button', { name: 'Bevestigen' }).click();
+    await page.getByLabel('Hoofdgroep voor Boormachine met zeer lange artikelnaam', { exact: true }).selectOption('Voeding');
+    await page.getByLabel('Groep voor Boormachine met zeer lange artikelnaam', { exact: true }).selectOption('Sauzen');
+    await page.getByLabel('Productgroep voor Boormachine met zeer lange artikelnaam', { exact: true }).selectOption('gpc:10000001');
+    const boormachineRow = table.getByRole('row', { name: /Boormachine met zeer lange artikelnaam/ });
+    await boormachineRow.getByRole('button', { name: 'Bevestigen', exact: true }).click();
     await expect(page.getByTestId('product-groups-feedback-success')).toContainText('Artikel is aan de productgroep toegevoegd.');
     await page.getByTestId('product-groups-feedback-success-ok-button').click();
 
-    await expect(page.getByLabel('Bestaande productgroep')).toBeVisible();
-    await expect(page.getByLabel('Hoofdgroep beheren')).toBeVisible();
-    await expect(page.getByLabel('Groep beheren')).toBeVisible();
-    await expect(page.getByLabel('Productgroepnaam')).toBeVisible();
-    await expect(page.getByLabel('Eenheid productgroep')).toHaveCount(0);
+    await expect(page.getByLabel('Bestaande productgroep', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Hoofdgroep beheren', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Groep beheren', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Productgroepnaam', { exact: true })).toBeVisible();
+    await expect(page.getByLabel('Eenheid productgroep', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Toevoegen' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Bijwerken' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Verwijderen' })).toBeVisible();
 
-    await page.getByLabel('Hoofdgroep beheren').fill('Voeding');
-    await page.getByLabel('Groep beheren').fill('Soepen');
-    await page.getByLabel('Productgroepnaam').fill('Soep');
+    await page.getByLabel('Hoofdgroep beheren', { exact: true }).fill('Voeding');
+    await page.getByLabel('Groep beheren', { exact: true }).fill('Soepen');
+    await page.getByLabel('Productgroepnaam', { exact: true }).fill('Soep');
     await page.getByRole('button', { name: 'Toevoegen' }).click();
     await expect(page.getByTestId('product-groups-feedback-success')).toContainText('Productgroep is toegevoegd.');
     await page.getByTestId('product-groups-feedback-success-ok-button').click();

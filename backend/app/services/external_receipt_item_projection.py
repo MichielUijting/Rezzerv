@@ -132,8 +132,12 @@ def _receipt_table_line_placeholder(row: dict[str, Any]) -> dict[str, Any]:
         receipt_line_id=receipt_line_id or None,
     )
 
+    receipt_item_id = f"receipt-table-line:{receipt_line_id}" if receipt_line_id else ""
     return {
-        "id": f"{context_key}:receipt-item",
+        "id": receipt_item_id,
+        "receipt_item_id": receipt_item_id,
+        "receipt_item_type": "receipt_table_line",
+        "receipt_item_source_id": receipt_line_id or None,
         "receipt_line_id": receipt_line_id or None,
         "purchase_import_line_id": None,
         "context_key": context_key,

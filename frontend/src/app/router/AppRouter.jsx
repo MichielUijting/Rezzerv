@@ -9,6 +9,7 @@ import KassaPage from '../../features/kassa/KassaPage.jsx'
 import StoreBatchDetailPage from '../../features/purchaseImport/StoreBatchDetailPage'
 import SettingsPage from '../../features/settings/SettingsPage'
 import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFieldsPage'
+import SettingsArticleGroupsPage from '../../features/settings/SettingsArticleGroupsPage'
 import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHouseholdAutomationPage'
 import SettingsAlmostOutPage from '../../features/settings/SettingsAlmostOutPage'
 import SettingsStoreImportPage from '../../features/settings/SettingsStoreImportPage'
@@ -82,6 +83,7 @@ const router = createBrowserRouter([
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <ProtectedSettings allowViewer={true}><SettingsPage /></ProtectedSettings> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettings allowViewer={true}><SettingsArticleFieldsPage /></ProtectedSettings> },
+  { path: '/instellingen/artikelgroepen', element: <ProtectedSettings allowViewer={false}><SettingsArticleGroupsPage /></ProtectedSettings> },
   { path: '/instellingen/privacy-datadeling', element: <ProtectedSettings allowViewer={true}><SettingsPrivacyDataSharingPage /></ProtectedSettings> },
   { path: '/instellingen/huishoudautomatisering', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdAutomationPage /></ProtectedSettings> },
   { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettings allowViewer={false}><SettingsAlmostOutPage /></ProtectedSettings> },

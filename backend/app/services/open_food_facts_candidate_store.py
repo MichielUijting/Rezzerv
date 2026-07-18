@@ -146,6 +146,33 @@ def save_open_food_facts_preview_candidates(payload: dict[str, Any]) -> dict[str
     saved_rows: list[dict[str, Any]] = []
 
     with engine.begin() as conn:
+        # OFF_ACTUELE_ZOEKRESULTATEN_REPLACE:
+        # Verwijder eerst de nog niet beschermde OFF-kandidaten van deze context.
+        # Hierdoor worden resultaten uit eerdere zoekteksten niet meer vermengd
+        # met de actuele zoekresultaten.
+        conn.execute(
+            text(
+                """
+                DELETE FROM external_product_candidates
+                WHERE context_key = :context_key
+                  AND (
+                        lower(replace(COALESCE(candidate_source_name, ''), '_', ' ')) = 'open food facts'
+                        OR lower(replace(COALESCE(source_name, ''), '_', ' ')) = 'open food facts'
+                        OR lower(COALESCE(created_by, '')) = 'open_food_facts_search_preview_save_v1'
+                      )
+                  AND COALESCE(is_user_confirmed, 0) = 0
+                  AND COALESCE(is_external_database_override, 0) = 0
+                  AND lower(COALESCE(candidate_status, 'candidate')) NOT IN (
+                        'linked_to_catalog',
+                        'user_confirmed',
+                        'confirmed',
+                        'linked'
+                  )
+                """
+            ),
+            {"context_key": context_key},
+        )
+
         for candidate in candidates:
             if not candidate.get("candidate_name") or not candidate.get("candidate_source_product_code"):
                 skipped.append({"reason": "missing_identity", "candidate_name": candidate.get("candidate_name")})

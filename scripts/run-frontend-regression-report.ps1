@@ -4,7 +4,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== Rezzerv frontend regressie: Kassa + Uitpakken ===" -ForegroundColor Cyan
+Write-Host "=== Rezzerv centrale frontendregressie ===" -ForegroundColor Cyan
 
 function Invoke-RegressionFixtureCleanup {
   param(
@@ -72,7 +72,12 @@ try {
     "tests/e2e/uitpakken.frontend-regression.spec.js",
     "tests/e2e/external-databases.frontend-regression.spec.js",
     "tests/e2e/external-databases-off.frontend-regression.spec.js",
-    "tests/e2e/external-databases-unlink.frontend-regression.spec.js"
+    "tests/e2e/external-databases-unlink.frontend-regression.spec.js",
+    "tests/e2e/external-databases-known-gtin.frontend-regression.spec.js",
+    "tests/e2e/external-databases-no-redundant-buttons.frontend-regression.spec.js",
+    "tests/e2e/product-groups.frontend-regression.spec.js",
+    "tests/e2e/settings-article-groups.frontend-regression.spec.js",
+    "tests/e2e/article-detail.frontend-regression.spec.js"
   ) -join " "
 
   docker run --rm `

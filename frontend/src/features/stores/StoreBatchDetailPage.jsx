@@ -132,33 +132,6 @@ function firstTextValue(...values) {
   return ''
 }
 
-function selectedHouseholdArticle(draft, articleOptions) {
-  return (articleOptions || []).find((option) => String(option.id) === String(draft?.articleId || ''))
-}
-
-function householdArticleHierarchyTitle(line, draft, articleOptions) {
-  const article = selectedHouseholdArticle(draft, articleOptions)
-  const category = firstTextValue(
-    article?.category_name,
-    article?.category?.name,
-    article?.category,
-    article?.article_group,
-    article?.group_name,
-    article?.type
-  ) || 'Nog niet ingedeeld'
-  const name = firstTextValue(
-    line?.resolved_household_article_name,
-    article?.custom_name,
-    article?.name,
-    articleLabel(article)
-  ) || 'Nog niet gekoppeld'
-
-  return [
-    'Niveau 1: Huishouden',
-    `Niveau 2: ${category}`,
-    `Niveau 3: ${name}`,
-  ].join('\n')
-}
 
 function buildActiveLocationOptions(spacesData, sublocationsData) {
   const activeSpaces = Array.isArray(spacesData?.items) ? spacesData.items.filter((item) => Boolean(item?.active)) : []
@@ -270,6 +243,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [locationPickerSearch, setLocationPickerSearch] = useState('')
   const [locationPickerMode, setLocationPickerMode] = useState('single')
   const [activeLocationSpaceId, setActiveLocationSpaceId] = useState('')
+  const [pendingDefaultLocationChoice, setPendingDefaultLocationChoice] = useState(null)
   const locationHoverTimerRef = useRef(null)
 
   useDismissOnComponentClick([() => setStatus(''), () => setError(''), () => setProcessFeedback('')], Boolean(status || error || processFeedback))
@@ -503,14 +477,45 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
 
     const hasArticle = Boolean(String(pickerEntry.draft?.articleId || pickerEntry.line?.matched_household_article_id || '').trim())
-    const defaultLocationPolicy = hasArticle && nextLocationId
-      ? (window.confirm('Deze locatie voortaan als standaardlocatie voor dit artikel gebruiken?\n\nOK = voortaan standaard\nAnnuleren = alleen deze bonregel')
-          ? 'article_default'
-          : 'line_only')
-      : 'line_only'
 
-    await persistLineDraft(pickerEntry.line, { locationId: nextLocationId }, { defaultLocationPolicy })
+    if (hasArticle && nextLocationId) {
+      setPendingDefaultLocationChoice({
+        lineId: pickerEntry.line.id,
+        locationId: nextLocationId,
+      })
+      closeLocationPicker()
+      return
+    }
+
+    await persistLineDraft(
+      pickerEntry.line,
+      { locationId: nextLocationId },
+      { defaultLocationPolicy: 'line_only' }
+    )
     closeLocationPicker()
+  }
+
+  async function confirmDefaultLocationChoice(defaultLocationPolicy) {
+    const pendingChoice = pendingDefaultLocationChoice
+    if (!pendingChoice) return
+
+    const pendingEntry = lineUiStates.find(
+      (entry) => String(entry.line.id) === String(pendingChoice.lineId)
+    )
+
+    setPendingDefaultLocationChoice(null)
+
+    if (!pendingEntry) return
+
+    await persistLineDraft(
+      pendingEntry.line,
+      { locationId: pendingChoice.locationId },
+      { defaultLocationPolicy }
+    )
+  }
+
+  function cancelDefaultLocationChoice() {
+    setPendingDefaultLocationChoice(null)
   }
 
   async function persistLineDraft(line, patch = {}, options = {}) {
@@ -1092,7 +1097,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         </button>
                       </td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
-                      <td className="rz-store-batch-col-linked" title={householdArticleHierarchyTitle(line, draft, articleOptions)}>
+                      <td className="rz-store-batch-col-linked">
                         <div data-testid={`receipt-line-article-select-${line.id}`}><StoreArticleSelector
                           lineId={line.id}
                           lineName={line.article_name_raw}
@@ -1114,6 +1119,51 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               </tbody>
             </Table>
 
+          {pendingDefaultLocationChoice ? (
+            <div
+              className="rz-modal-backdrop"
+              role="presentation"
+              onClick={cancelDefaultLocationChoice}
+            >
+              <div
+                className="rz-modal-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="default-location-choice-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <h3 id="default-location-choice-title" className="rz-modal-title">
+                  Standaardlocatie instellen
+                </h3>
+                <p className="rz-modal-text">
+                  Wil je deze locatie voortaan als standaardlocatie voor dit artikel gebruiken?
+                </p>
+                <div className="rz-modal-actions">
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={cancelDefaultLocationChoice}
+                  >
+                    Annuleren
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    onClick={() => confirmDefaultLocationChoice('line_only')}
+                  >
+                    Alleen voor deze bonregel
+                  </Button>
+                  <Button
+                    variant="primary"
+                    type="button"
+                    onClick={() => confirmDefaultLocationChoice('article_default')}
+                  >
+                    Als standaardlocatie gebruiken
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
           {processResultOverlay ? (
             <div className="rz-modal-backdrop" role="presentation" onClick={() => setProcessResultOverlay('')}>
               <div
