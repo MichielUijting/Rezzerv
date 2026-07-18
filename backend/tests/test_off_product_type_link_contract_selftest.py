@@ -16,10 +16,11 @@ def _count(conn, table_name: str) -> int:
 def main() -> int:
     ensure_product_inventory_group_schema()
     suffix = uuid.uuid4().hex
+    numeric_suffix = f"{uuid.uuid4().int % 10**11:011d}"
     batch_id = f"off-link-batch-{suffix}"
     line_id = f"off-link-line-{suffix}"
     product_type_key = f"test.off.halfvolle.melk.{suffix}"
-    gtin = f"98{suffix[:11]}"
+    gtin = f"98{numeric_suffix}"
 
     with engine.begin() as conn:
         before = {
@@ -135,7 +136,7 @@ def main() -> int:
     assert result.get("mutates_inventory") is False, result
     global_product_id = str((result.get("global_product") or {}).get("id") or "")
 
-    rollback_gtin = f"97{suffix[:11]}"
+    rollback_gtin = f"97{numeric_suffix}"
     try:
         link_off_product_with_product_type(
             receipt_item_id=f"purchase-import-line:{line_id}",
