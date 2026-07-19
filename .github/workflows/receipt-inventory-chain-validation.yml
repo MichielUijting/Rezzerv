@@ -132,22 +132,29 @@ jobs:
         working-directory: frontend
         run: npm cache verify
 
-      - name: 10.5 Installeer frontend-afhankelijkheden en bewaar log
+      - name: 10.5 Controleer npm-register
+        working-directory: frontend
+        run: timeout 30s npm ping
+
+      - name: 10.6 Installeer frontend-afhankelijkheden en bewaar log
         id: frontend_install
         continue-on-error: true
         working-directory: frontend
         env:
           npm_config_audit: 'false'
           npm_config_fund: 'false'
+          npm_config_fetch_retries: '1'
+          npm_config_fetch_retry_mintimeout: '1000'
+          npm_config_fetch_retry_maxtimeout: '5000'
         run: |
           set +e
-          npm ci --no-audit --no-fund --foreground-scripts > frontend-install.log 2>&1
+          timeout 300s npm ci --no-audit --no-fund --prefer-offline --foreground-scripts > frontend-install.log 2>&1
           exit_code=$?
           echo "$exit_code" > frontend-install.exitcode
           cat frontend-install.log
           exit "$exit_code"
 
-      - name: 10.6 Controleer Vite en esbuild-installatie
+      - name: 10.7 Controleer Vite en esbuild-installatie
         if: always()
         working-directory: frontend
         run: |
@@ -156,7 +163,7 @@ jobs:
           ./node_modules/.bin/vite --version
           ./node_modules/.bin/esbuild --version
 
-      - name: 10.7 Upload installatiediagnose
+      - name: 10.8 Upload installatiediagnose
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -167,7 +174,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
 
-      - name: 10.8 Blokkeer bij rode frontendinstallatie
+      - name: 10.9 Blokkeer bij rode frontendinstallatie
         if: always()
         run: |
           test -f frontend/frontend-install.exitcode
@@ -179,7 +186,7 @@ jobs:
         working-directory: frontend
         run: |
           set +e
-          npm run build > frontend-build.log 2>&1
+          timeout 300s npm run build > frontend-build.log 2>&1
           exit_code=$?
           echo "$exit_code" > frontend-build.exitcode
           cat frontend-build.log
