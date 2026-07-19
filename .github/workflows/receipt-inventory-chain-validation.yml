@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - m2c2m-ketentest-receipt-inventory-step1
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
