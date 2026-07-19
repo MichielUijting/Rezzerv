@@ -124,6 +124,31 @@ jobs:
           npm_config_fund: 'false'
         run: npm ci --no-audit --no-fund
 
-      - name: Bouw productiefrontend
+      - name: Bouw productiefrontend en bewaar diagnose
+        id: frontend_build
+        continue-on-error: true
         working-directory: frontend
-        run: npm run build
+        run: |
+          set +e
+          npm run build > frontend-build.log 2>&1
+          exit_code=$?
+          echo "$exit_code" > frontend-build.exitcode
+          cat frontend-build.log
+          exit "$exit_code"
+
+      - name: Upload frontend-builddiagnose
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-build-diagnostic
+          path: |
+            frontend/frontend-build.log
+            frontend/frontend-build.exitcode
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Blokkeer bij rode frontendbuild
+        if: always()
+        run: |
+          test -f frontend/frontend-build.exitcode
+          test "$(cat frontend/frontend-build.exitcode)" = "0"
