@@ -32,7 +32,13 @@ jobs:
       - name: Valideer testcontract
         run: python -m backend.app.testing.receipt_inventory_chain_contract
 
-      - name: Voer geïsoleerde ketenvalidatie uit
+      - name: Valideer geïsoleerde testdatabase direct
+        run: python -m backend.app.testing.receipt_inventory_chain_test_db
+
+      - name: Voer ketenstap 3 direct uit
+        run: python -m backend.app.testing.receipt_inventory_chain_step3
+
+      - name: Voer aanvullende geïsoleerde ketenvalidatie uit
         run: python -m backend.app.testing.receipt_inventory_chain_step4
 
   validate-production-chain:
