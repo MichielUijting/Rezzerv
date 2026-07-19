@@ -61,7 +61,32 @@ jobs:
       - name: Compile productie-ketentest
         run: python -m py_compile backend/app/testing/receipt_inventory_production_chain.py
 
-      - name: Voer keten via productie-endpoint uit
+      - name: Voer productie-keten uit en bewaar uitvoer
+        id: production_chain
+        continue-on-error: true
         env:
           PYTHONPATH: backend
-        run: python backend/app/testing/receipt_inventory_production_chain.py
+        run: |
+          set +e
+          python backend/app/testing/receipt_inventory_production_chain.py > production-chain.log 2>&1
+          exit_code=$?
+          echo "$exit_code" > production-chain.exitcode
+          cat production-chain.log
+          exit "$exit_code"
+
+      - name: Upload productie-ketendiagnose
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-inventory-production-chain-diagnostic
+          path: |
+            production-chain.log
+            production-chain.exitcode
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Blokkeer bij rode productie-keten
+        if: always()
+        run: |
+          test -f production-chain.exitcode
+          test "$(cat production-chain.exitcode)" = "0"
