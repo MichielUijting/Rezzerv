@@ -864,6 +864,64 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
     return placeholders
 
 
+def _m2c2l_enrich_linked_receipt_items(
+    conn,
+    placeholders: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    global_product_ids = sorted({
+        str(item.get("global_product_id") or "").strip()
+        for item in placeholders
+        if str(item.get("global_product_id") or "").strip()
+    })
+    if not global_product_ids:
+        return placeholders
+
+    params: dict[str, Any] = {}
+    bind_names: list[str] = []
+    for index, global_product_id in enumerate(global_product_ids):
+        key = f"global_product_id_{index}"
+        params[key] = global_product_id
+        bind_names.append(f":{key}")
+
+    rows = conn.execute(
+        text(
+            f"SELECT gp.id AS global_product_id, gp.name AS linked_candidate_name, "
+            f"gp.primary_gtin AS linked_gtin, pgm.confidence AS linked_score, "
+            f"pig.inventory_group_key AS linked_product_type_id, pig.display_name AS linked_product_type, pgm.confirmed_by_user AS confirmed_by_user, "
+            f"pgm.updated_at AS membership_updated_at "
+            f"FROM global_products gp "
+            f"LEFT JOIN product_group_memberships pgm ON pgm.global_product_id = gp.id "
+            f"AND COALESCE(pgm.active, 1) = 1 "
+            f"LEFT JOIN product_inventory_groups pig ON pig.inventory_group_key = pgm.inventory_group_key "
+            f"WHERE gp.id IN ({', '.join(bind_names)}) "
+            f"ORDER BY gp.id, COALESCE(pgm.confirmed_by_user, 0) DESC, "
+            f"COALESCE(pgm.updated_at, '') DESC"
+        ),
+        params,
+    ).mappings().all()
+
+    linked_by_product: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        global_product_id = str(row.get("global_product_id") or "").strip()
+        if global_product_id and global_product_id not in linked_by_product:
+            linked_by_product[global_product_id] = dict(row)
+
+    enriched: list[dict[str, Any]] = []
+    for placeholder in placeholders:
+        next_placeholder = dict(placeholder)
+        global_product_id = str(next_placeholder.get("global_product_id") or "").strip()
+        linked = linked_by_product.get(global_product_id)
+        if linked:
+            next_placeholder["linked_candidate_name"] = str(linked.get("linked_candidate_name") or "").strip()
+            next_placeholder["linked_gtin"] = str(linked.get("linked_gtin") or "").strip()
+            next_placeholder["linked_product_type_id"] = str(linked.get("linked_product_type_id") or "").strip()
+            next_placeholder["linked_product_type"] = str(linked.get("linked_product_type") or "").strip()
+            next_placeholder["linked_score"] = linked.get("linked_score")
+        enriched.append(next_placeholder)
+
+    return enriched
+
+
 def list_external_receipt_items(limit: int = 500) -> dict[str, Any]:
     ensure_external_product_candidates_schema()
     normalized_limit = max(1, min(int(limit or 500), 500))
@@ -890,6 +948,7 @@ def list_external_receipt_items(limit: int = 500) -> dict[str, Any]:
         }
         placeholders = _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys, normalized_limit)
         placeholders = _m2c2i_fix7a3_apply_catalog_status_to_placeholders(placeholders, candidates)
+        placeholders = _m2c2l_enrich_linked_receipt_items(conn, placeholders)
 
     # Bovenste tabel is bonartikelgedreven: purchase_import_lines-placeholders zijn leidend.
     # Candidates blijven detailregels onder dezelfde bonartikelcontext.
