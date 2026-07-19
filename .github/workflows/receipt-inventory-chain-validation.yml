@@ -146,11 +146,12 @@ jobs:
         if: always()
         run: |
           set +e
-          image_id=$(docker compose images -q frontend)
-          test -n "$image_id"
+          image_name=$(docker compose config --images | tail -n 1)
+          test -n "$image_name"
           image_exit=$?
           if [ "$image_exit" -eq 0 ]; then
-            docker image inspect "$image_id" --format '{{.Id}} {{.Config.ExposedPorts}}'
+            docker image inspect "$image_name" --format '{{.Id}} {{.Config.ExposedPorts}}'
+            image_exit=$?
           fi
           echo "$image_exit" > frontend-image-check.exitcode
           exit "$image_exit"
