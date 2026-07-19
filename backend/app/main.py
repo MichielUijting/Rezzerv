@@ -63,6 +63,7 @@ import cv2
 from app.db import engine, get_runtime_datastore_info
 from app.services.external_article_product_link_service import (
     ensure_external_article_product_link_schema,
+    get_confirmed_external_article_product_link,
 )
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
@@ -5617,18 +5618,26 @@ def sync_receipt_table_line_product_links(conn, receipt_table_id: str, line_id: 
     ).mappings().first()
     if not line:
         return None
-    resolved = resolve_receipt_line_product_links(
+    confirmed_link = get_confirmed_external_article_product_link(
         conn,
-        receipt_header.get('household_id'),
-        line.get('article_name'),
-        barcode=line.get('barcode'),
-        brand=None,
-        matched_article_id=line.get('matched_article_id'),
-        create_global_product=create_global_product,
-        create_household_article=create_household_article,
-        external_article_code=line.get('external_article_code'),
         retailer_code=receipt_header.get('store_name'),
+        receipt_text=line.get('article_name'),
+        external_article_code=line.get('external_article_code'),
     )
+
+    resolved = {
+        'matched_global_product_id': (
+            confirmed_link.get('global_product_id')
+            if confirmed_link
+            else None
+        ),
+        'matched_household_article_id': None,
+        'match_method': (
+            'external_databases:confirmed'
+            if confirmed_link
+            else None
+        ),
+    }
     conn.execute(
         text(
             """
@@ -9731,7 +9740,8 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                COALESCE(corrected_unit, unit) AS unit,
                COALESCE(corrected_line_total, line_total) AS line_total,
                barcode,
-               external_article_code
+               external_article_code,
+               matched_global_product_id
         FROM receipt_table_lines
         WHERE receipt_table_id = :receipt_table_id
           AND COALESCE(is_deleted, 0) = 0
@@ -9756,18 +9766,12 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         except Exception:
             line_price_value = None
 
-        resolved_links = resolve_receipt_line_product_links(
-            conn,
-            household_id,
-            raw_label,
-            barcode=line.get('barcode'),
-            brand=None,
-            create_global_product=False,
-            create_household_article=False,  # Alleen bestaande standaardartikelen matchen
-            external_article_code=line.get('external_article_code'),
-            retailer_code=(receipt or {}).get('store_name'),
+        # Uitpakken bepaalt geen productkoppeling.
+        # De door Kassa vastgelegde koppeling wordt letterlijk overgenomen.
+        matched_global_product_id = (
+            str(line.get('matched_global_product_id') or '').strip()
+            or None
         )
-        matched_global_product_id = str((resolved_links or {}).get('matched_global_product_id') or '').strip() or None
         # M2A: bij eerste import blijft 'Mijn artikel' leeg.
         # Een global_product/catalogusmatch mag alleen product- en categoriesuggestie zijn.
         # Een household_article wordt pas gevuld door expliciete geheugenmapping of gebruikerskeuze.
@@ -9815,16 +9819,6 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                     'matched_household_article_id': matched_household_article_id,
                 },
             )
-            conn.execute(
-                text("""
-                UPDATE receipt_table_lines
-                SET matched_global_product_id = :matched_global_product_id,
-                    article_match_status = CASE WHEN :matched_global_product_id IS NOT NULL THEN 'product_matched' ELSE 'unmatched' END,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :line_id
-                """),
-                {'line_id': line.get('id'), 'matched_global_product_id': matched_global_product_id},
-            )
             continue
 
         conn.execute(
@@ -9858,16 +9852,6 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                 'matched_household_article_id': matched_household_article_id,
                 'suggested_household_article_id': matched_household_article_id,
             },
-        )
-        conn.execute(
-            text("""
-            UPDATE receipt_table_lines
-            SET matched_global_product_id = :matched_global_product_id,
-                article_match_status = CASE WHEN :matched_global_product_id IS NOT NULL THEN 'product_matched' ELSE 'unmatched' END,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :line_id
-            """),
-            {'line_id': line.get('id'), 'matched_global_product_id': matched_global_product_id},
         )
         existing_refs.add(external_line_ref)
         inserted += 1
