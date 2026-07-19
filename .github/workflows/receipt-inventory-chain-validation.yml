@@ -110,120 +110,103 @@ jobs:
       - name: Valideer SSOT-releaseguard
         run: python tools/check_r7c22_ssot_release_guard.py
 
-      - name: 10.1 Controleer Node- en npm-versies
+      - name: 10.1 Controleer Docker-versie
+        run: docker version
+
+      - name: 10.2 Controleer Docker Compose-versie
+        run: docker compose version
+
+      - name: 10.3 Valideer Compose-configuratie
+        run: docker compose config --quiet
+
+      - name: 10.4 Controleer vastgelegde frontend-toolchain
         run: |
-          node --version
-          npm --version
+          grep -F 'FROM node:18-alpine AS build' frontend/Dockerfile
+          grep -F 'RUN node ./node_modules/vite/bin/vite.js build' frontend/Dockerfile
 
-      - name: 10.2 Controleer frontend-lockbestand
-        run: |
-          test -f frontend/package.json
-          test -f frontend/package-lock.json
-          node -e "const p=require('./frontend/package-lock.json'); if (!p.lockfileVersion) process.exit(1); console.log('lockfileVersion=' + p.lockfileVersion)"
+      - name: 10.5 Maak schone Docker-builder beschikbaar
+        uses: docker/setup-buildx-action@v3
 
-      - name: 10.3 Set up Node en npm-cache
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: 10.4 Valideer npm-cache
-        working-directory: frontend
-        run: npm cache verify
-
-      - name: 10.5 Controleer npm-register
-        working-directory: frontend
-        run: timeout 30s npm ping
-
-      - name: 10.6 Installeer frontend-afhankelijkheden en bewaar log
-        id: frontend_install
+      - name: 10.6 Bouw frontend-image en bewaar log
+        id: frontend_docker_build
         continue-on-error: true
-        working-directory: frontend
         env:
-          npm_config_audit: 'false'
-          npm_config_fund: 'false'
-          npm_config_fetch_retries: '1'
-          npm_config_fetch_retry_mintimeout: '1000'
-          npm_config_fetch_retry_maxtimeout: '5000'
+          REZZERV_VERSION: ${{ github.sha }}
         run: |
           set +e
-          rm -rf node_modules
-          timeout 300s npm ci --no-audit --no-fund --prefer-offline > frontend-install.log 2>&1
+          timeout 600s docker compose build --no-cache --progress plain frontend > frontend-docker-build.log 2>&1
           exit_code=$?
-          if grep -Eq '^npm (error|ERR!)' frontend-install.log; then
-            exit_code=1
-          fi
-          mkdir -p npm-debug-logs
-          cp -f "$HOME"/.npm/_logs/*.log npm-debug-logs/ 2>/dev/null || true
-          echo "$exit_code" > frontend-install.exitcode
-          cat frontend-install.log
+          echo "$exit_code" > frontend-docker-build.exitcode
+          cat frontend-docker-build.log
           exit "$exit_code"
 
-      - name: 10.7 Controleer Vite en esbuild-installatie
-        id: frontend_toolchain
+      - name: 10.7 Controleer gebouwde frontend-image
+        id: frontend_image_check
         continue-on-error: true
         if: always()
-        working-directory: frontend
         run: |
           set +e
-          node ./node_modules/vite/bin/vite.js --version
-          vite_exit=$?
-          node -e "const esbuild=require('esbuild'); console.log('esbuild ' + esbuild.version)"
-          esbuild_exit=$?
-          toolchain_exit=0
-          if [ "$vite_exit" -ne 0 ] || [ "$esbuild_exit" -ne 0 ]; then
-            toolchain_exit=1
+          image_id=$(docker compose images -q frontend)
+          test -n "$image_id"
+          image_exit=$?
+          if [ "$image_exit" -eq 0 ]; then
+            docker image inspect "$image_id" --format '{{.Id}} {{.Config.ExposedPorts}}'
           fi
-          echo "$toolchain_exit" > frontend-toolchain.exitcode
-          exit "$toolchain_exit"
+          echo "$image_exit" > frontend-image-check.exitcode
+          exit "$image_exit"
 
-      - name: 10.8 Upload installatiediagnose
+      - name: 10.8 Upload Docker-builddiagnose
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-install-diagnostic
+          name: frontend-docker-build-diagnostic
           path: |
-            frontend/frontend-install.log
-            frontend/frontend-install.exitcode
-            frontend/frontend-toolchain.exitcode
-            frontend/npm-debug-logs
+            frontend-docker-build.log
+            frontend-docker-build.exitcode
+            frontend-image-check.exitcode
           if-no-files-found: error
           retention-days: 3
 
-      - name: 10.9 Blokkeer bij rode frontendinstallatie
+      - name: 10.9 Blokkeer bij rode Docker-build
         if: always()
         run: |
-          test -f frontend/frontend-install.exitcode
-          test -f frontend/frontend-toolchain.exitcode
-          test "$(cat frontend/frontend-install.exitcode)" = "0"
-          test "$(cat frontend/frontend-toolchain.exitcode)" = "0"
+          test -f frontend-docker-build.exitcode
+          test -f frontend-image-check.exitcode
+          test "$(cat frontend-docker-build.exitcode)" = "0"
+          test "$(cat frontend-image-check.exitcode)" = "0"
 
-      - name: 11.1 Bouw productiefrontend en bewaar diagnose
-        id: frontend_build
-        continue-on-error: true
-        working-directory: frontend
+      - name: 11.1 Start gebouwde frontendcontainer
+        run: docker compose up -d --no-deps frontend
+
+      - name: 11.2 Controleer containerstatus
         run: |
-          set +e
-          timeout 300s npm run build > frontend-build.log 2>&1
-          exit_code=$?
-          echo "$exit_code" > frontend-build.exitcode
-          cat frontend-build.log
-          exit "$exit_code"
+          container_id=$(docker compose ps -q frontend)
+          test -n "$container_id"
+          test "$(docker inspect -f '{{.State.Running}}' "$container_id")" = "true"
 
-      - name: 11.2 Upload frontend-builddiagnose
+      - name: 11.3 Controleer Nginx-output
+        run: |
+          container_id=$(docker compose ps -q frontend)
+          docker exec "$container_id" test -f /usr/share/nginx/html/index.html
+          docker exec "$container_id" sh -c 'test -n "$(find /usr/share/nginx/html/assets -maxdepth 1 -type f | head -n 1)"'
+
+      - name: 11.4 Bewaar containerdiagnose
+        if: always()
+        run: |
+          docker compose ps > frontend-container-status.log 2>&1 || true
+          docker compose logs frontend > frontend-container.log 2>&1 || true
+
+      - name: 11.5 Upload containerdiagnose
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-build-diagnostic
+          name: frontend-container-diagnostic
           path: |
-            frontend/frontend-build.log
-            frontend/frontend-build.exitcode
+            frontend-container-status.log
+            frontend-container.log
           if-no-files-found: error
           retention-days: 3
 
-      - name: 11.3 Blokkeer bij rode frontendbuild
+      - name: 11.6 Ruim Docker-runtime op
         if: always()
-        run: |
-          test -f frontend/frontend-build.exitcode
-          test "$(cat frontend/frontend-build.exitcode)" = "0"
+        run: docker compose down --remove-orphans
