@@ -61,6 +61,9 @@ import tempfile
 import cv2
 
 from app.db import engine, get_runtime_datastore_info
+from app.services.external_article_product_link_service import (
+    ensure_external_article_product_link_schema,
+)
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.receipt_diagnosis_routes import router as receipt_diagnosis_router
@@ -122,6 +125,10 @@ import logging
 from sqlalchemy import text, bindparam
 
 app = FastAPI()
+# Externe-databases-koppelingen: idempotente schema-initialisatie.
+with engine.begin() as schema_conn:
+    ensure_external_article_product_link_schema(schema_conn)
+
 logger = logging.getLogger('rezzerv.api')
 RECEIPT_UPLOAD_ERROR_PATHS = {
     '/api/receipts/import',
