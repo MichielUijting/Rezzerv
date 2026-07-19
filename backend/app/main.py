@@ -9754,7 +9754,7 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
             household_id,
             raw_label,
             barcode=line.get('barcode'),
-            brand=(receipt or {}).get('store_name'),
+            brand=None,
             create_global_product=False,
             create_household_article=False,  # Alleen bestaande standaardartikelen matchen
             external_article_code=line.get('external_article_code'),
