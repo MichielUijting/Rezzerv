@@ -5615,7 +5615,7 @@ def sync_receipt_table_line_product_links(conn, receipt_table_id: str, line_id: 
         receipt_header.get('household_id'),
         line.get('article_name'),
         barcode=line.get('barcode'),
-        brand=receipt_header.get('store_name'),
+        brand=None,
         matched_article_id=line.get('matched_article_id'),
         create_global_product=create_global_product,
         create_household_article=create_household_article,
