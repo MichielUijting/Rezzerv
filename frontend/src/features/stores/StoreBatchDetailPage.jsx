@@ -71,52 +71,19 @@ function formatReceiptLineLabel(value) {
 
 
 function standardProductLabel(line) {
-  const productName = String(
+  return String(
     line?.matched_global_product_name ||
     line?.global_product_name ||
     line?.standard_product_name ||
     line?.standardized_article_name ||
-    line?.external_article_name ||
     ''
   ).trim()
-
-  if (productName) return productName
-
-  const globalProductId = String(
-    line?.matched_global_product_id ||
-    line?.matched_global_article_id ||
-    line?.global_product_id ||
-    ''
-  ).trim()
-
-  if (globalProductId) return `Product-ID ${globalProductId}`
-
-  const externalCode = String(line?.external_article_code || '').trim()
-  if (externalCode) return `Externe code ${externalCode}`
-
-  const matchStatus = String(line?.match_status || '').trim()
-  if (matchStatus && matchStatus !== 'unmatched') return matchStatus
-
-  return '-'
 }
 
 function standardProductDetail(line) {
-  const parts = []
-  const externalCode = String(line?.external_article_code || '').trim()
-  const globalProductId = String(
-    line?.matched_global_product_id ||
-    line?.matched_global_article_id ||
-    line?.global_product_id ||
-    ''
-  ).trim()
-  const matchStatus = String(line?.match_status || '').trim()
-
-  if (externalCode) parts.push(`Code: ${externalCode}`)
-  if (globalProductId) parts.push(`Global: ${globalProductId}`)
-  if (matchStatus) parts.push(`Status: ${matchStatus}`)
-
-  return parts.join(' · ')
+  return standardProductLabel(line)
 }
+
 
 function firstTextValue(...values) {
   for (const value of values) {
@@ -753,7 +720,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     if (!batch || selectedLineIds.length === 0) return
     const selectedSet = new Set(selectedLineIds.map((id) => String(id)))
     const rows = lineUiStates.filter((entry) => selectedSet.has(String(entry.line.id)))
-    const header = ['Bonartikel', 'Artikelgroep', 'Locatie', 'Aantal', 'Standaardartikel', 'Status']
+    const header = ['Bonartikel', 'Artikelgroep', 'Locatie', 'Aantal', 'Universeel artikel', 'Status']
     const csvRows = rows.map((entry) => {
       const articleName = entry.line.resolved_household_article_name || articleLabel(articleOptions.find((option) => String(option.id) === String(entry.draft.articleId))) || ''
       const locationLabel = locationOptions.find((location) => String(location.id) === String(entry.draft.locationId))?.label || ''
@@ -1040,7 +1007,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Locatie / sublocatie</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Aantal</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Artikelgroep</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="standaardartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-standard" sortable isSorted={tableSort.key === 'standaardartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Standaardartikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="standaardartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-standard" sortable isSorted={tableSort.key === 'standaardartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Universeel artikel</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
