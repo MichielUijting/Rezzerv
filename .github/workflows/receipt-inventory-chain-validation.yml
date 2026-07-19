@@ -1,0 +1,35 @@
+name: Receipt inventory chain validation
+
+on:
+  push:
+    branches:
+      - m2c2m-ketentest-receipt-inventory-step1
+  workflow_dispatch:
+
+jobs:
+  validate-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile ketentestmodules
+        run: |
+          python -m py_compile \
+            backend/app/testing/receipt_inventory_chain_contract.py \
+            backend/app/testing/receipt_inventory_chain_test_db.py \
+            backend/app/testing/receipt_inventory_chain_step3.py
+
+      - name: Valideer testcontract
+        run: python -m backend.app.testing.receipt_inventory_chain_contract
+
+      - name: Valideer geïsoleerde fixtures
+        run: python -m backend.app.testing.receipt_inventory_chain_test_db
+
+      - name: Voer kassabon-naar-voorraadketen uit
+        run: python -m backend.app.testing.receipt_inventory_chain_step3
