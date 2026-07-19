@@ -1,15 +1,4 @@
-"""
-Technical Design Reference:
-- TD Section: TD-08 Test, baseline en regressie
-- Module Role: Geïsoleerde testdatabase voor kassabon -> Uitpakken -> Voorraad
-- Runtime Type: test
-- Status Authority: no
-- Refactor Status: keep_test_support
-
-Deze module bouwt een tijdelijke SQLite-testdatabase voor de ketentest.
-De normale Rezzerv-database wordt niet gelezen, gekopieerd of gewijzigd.
-Alle fixtures gebruiken exclusief technisch testhuishouden 0.
-"""
+"""Geïsoleerde SQLite-testdatabase voor kassabon -> Uitpakken -> Voorraad."""
 
 from __future__ import annotations
 
@@ -30,7 +19,6 @@ from backend.app.testing.receipt_inventory_chain_contract import (
     TEST_SCENARIO_ID,
     TEST_SUBLOCATION_NAME,
 )
-
 
 GLOBAL_PRODUCT_ID = 910001
 PRODUCT_IDENTITY_ID = 910002
@@ -72,8 +60,6 @@ def temporary_receipt_inventory_chain_database(
     prefix: str = "rezzerv_receipt_inventory_chain_",
     seed: bool = True,
 ) -> Iterator[ReceiptInventoryChainDatabase]:
-    """Maak en verwijder een volledig losstaande ketentestdatabase."""
-
     with tempfile.TemporaryDirectory(prefix=prefix) as tmp_dir:
         db_path = Path(tmp_dir) / "receipt_inventory_chain.sqlite"
         conn = configure_connection(sqlite3.connect(db_path))
@@ -88,15 +74,12 @@ def temporary_receipt_inventory_chain_database(
 
 
 def init_schema(conn: sqlite3.Connection) -> None:
-    """Initialiseer alleen tabellen die de ketentest nodig heeft."""
-
     conn.executescript(
         """
         create table households (
             id text primary key,
             name text not null
         );
-
         create table global_products (
             id integer primary key,
             name text not null,
@@ -104,7 +87,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             source text not null,
             status text not null default 'active'
         );
-
         create table product_identities (
             id integer primary key,
             global_product_id integer not null,
@@ -115,13 +97,11 @@ def init_schema(conn: sqlite3.Connection) -> None:
             unique(identity_type, identity_value),
             foreign key (global_product_id) references global_products(id)
         );
-
         create table product_inventory_groups (
             id integer primary key,
             name text not null unique,
             active integer not null default 1
         );
-
         create table product_group_memberships (
             global_product_id integer not null,
             product_inventory_group_id integer not null,
@@ -130,7 +110,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             foreign key (global_product_id) references global_products(id),
             foreign key (product_inventory_group_id) references product_inventory_groups(id)
         );
-
         create table household_articles (
             id integer primary key,
             household_id text not null,
@@ -141,7 +120,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             foreign key (household_id) references households(id),
             foreign key (global_product_id) references global_products(id)
         );
-
         create table spaces (
             id integer primary key,
             household_id text not null,
@@ -149,7 +127,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             active integer not null default 1,
             foreign key (household_id) references households(id)
         );
-
         create table sublocations (
             id integer primary key,
             household_id text not null,
@@ -159,7 +136,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             foreign key (household_id) references households(id),
             foreign key (space_id) references spaces(id)
         );
-
         create table receipts (
             id integer primary key,
             household_id text not null,
@@ -169,7 +145,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             created_at text not null,
             foreign key (household_id) references households(id)
         );
-
         create table receipt_lines (
             id integer primary key,
             receipt_id integer not null,
@@ -183,7 +158,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             foreign key (receipt_id) references receipts(id),
             foreign key (matched_global_product_id) references global_products(id)
         );
-
         create table purchase_import_batches (
             id integer primary key,
             household_id text not null,
@@ -194,7 +168,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             foreign key (household_id) references households(id),
             foreign key (receipt_id) references receipts(id)
         );
-
         create table purchase_import_lines (
             id integer primary key,
             batch_id integer not null,
@@ -213,7 +186,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             foreign key (target_location_id) references spaces(id),
             foreign key (target_sublocation_id) references sublocations(id)
         );
-
         create table inventory_events (
             id integer primary key autoincrement,
             household_id text not null,
@@ -230,7 +202,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
             foreign key (location_id) references spaces(id),
             foreign key (sublocation_id) references sublocations(id)
         );
-
         create table inventory (
             id integer primary key autoincrement,
             household_id text not null,
@@ -250,8 +221,6 @@ def init_schema(conn: sqlite3.Connection) -> None:
 
 
 def seed_chain_fixtures(conn: sqlite3.Connection) -> None:
-    """Seed twee unieke kassabonnen en alle vereiste ketenkoppelingen."""
-
     now = utc_now()
     conn.execute(
         "insert into households (id, name) values (?, ?)",
@@ -262,11 +231,7 @@ def seed_chain_fixtures(conn: sqlite3.Connection) -> None:
         (GLOBAL_PRODUCT_ID, TEST_PRODUCT_NAME, TEST_GTIN),
     )
     conn.execute(
-        """
-        insert into product_identities (
-            id, global_product_id, identity_type, identity_value, source, is_primary
-        ) values (?, ?, 'gtin', ?, 'test', 1)
-        """,
+        "insert into product_identities (id, global_product_id, identity_type, identity_value, source, is_primary) values (?, ?, 'gtin', ?, 'test', 1)",
         (PRODUCT_IDENTITY_ID, GLOBAL_PRODUCT_ID, TEST_GTIN),
     )
     conn.execute(
@@ -274,19 +239,11 @@ def seed_chain_fixtures(conn: sqlite3.Connection) -> None:
         (PRODUCT_TYPE_ID, TEST_PRODUCT_TYPE_NAME),
     )
     conn.execute(
-        """
-        insert into product_group_memberships (
-            global_product_id, product_inventory_group_id, is_primary
-        ) values (?, ?, 1)
-        """,
+        "insert into product_group_memberships (global_product_id, product_inventory_group_id, is_primary) values (?, ?, 1)",
         (GLOBAL_PRODUCT_ID, PRODUCT_TYPE_ID),
     )
     conn.execute(
-        """
-        insert into household_articles (
-            id, household_id, global_product_id, name, active
-        ) values (?, ?, ?, ?, 1)
-        """,
+        "insert into household_articles (id, household_id, global_product_id, name, active) values (?, ?, ?, ?, 1)",
         (HOUSEHOLD_ARTICLE_ID, TEST_HOUSEHOLD_ID, GLOBAL_PRODUCT_ID, TEST_PRODUCT_NAME),
     )
     conn.execute(
@@ -298,59 +255,25 @@ def seed_chain_fixtures(conn: sqlite3.Connection) -> None:
         (SUBLOCATION_ID, TEST_HOUSEHOLD_ID, LOCATION_ID, TEST_SUBLOCATION_NAME),
     )
 
-    receipt_fixtures = (
-        (
-            FIRST_RECEIPT_ID,
-            FIRST_RECEIPT_LINE_ID,
-            FIRST_IMPORT_BATCH_ID,
-            FIRST_IMPORT_LINE_ID,
-            FIRST_RECEIPT.receipt_key,
-            FIRST_RECEIPT.quantity,
-        ),
-        (
-            SECOND_RECEIPT_ID,
-            SECOND_RECEIPT_LINE_ID,
-            SECOND_IMPORT_BATCH_ID,
-            SECOND_IMPORT_LINE_ID,
-            SECOND_RECEIPT.receipt_key,
-            SECOND_RECEIPT.quantity,
-        ),
+    fixtures = (
+        (FIRST_RECEIPT_ID, FIRST_RECEIPT_LINE_ID, FIRST_IMPORT_BATCH_ID, FIRST_IMPORT_LINE_ID, FIRST_RECEIPT),
+        (SECOND_RECEIPT_ID, SECOND_RECEIPT_LINE_ID, SECOND_IMPORT_BATCH_ID, SECOND_IMPORT_LINE_ID, SECOND_RECEIPT),
     )
-
-    for receipt_id, receipt_line_id, batch_id, import_line_id, receipt_key, quantity in receipt_fixtures:
+    for receipt_id, receipt_line_id, batch_id, import_line_id, receipt in fixtures:
         conn.execute(
-            """
-            insert into receipts (
-                id, household_id, external_receipt_key, store_name, status, created_at
-            ) values (?, ?, ?, 'Albert Heijn', 'checked', ?)
-            """,
-            (receipt_id, TEST_HOUSEHOLD_ID, receipt_key, now),
+            "insert into receipts (id, household_id, external_receipt_key, store_name, status, created_at) values (?, ?, ?, 'Albert Heijn', 'checked', ?)",
+            (receipt_id, TEST_HOUSEHOLD_ID, receipt.receipt_key, now),
         )
         conn.execute(
-            """
-            insert into receipt_lines (
-                id, receipt_id, line_number, parsed_name, parsed_quantity,
-                barcode, matched_global_product_id, status
-            ) values (?, ?, 1, ?, ?, ?, ?, 'matched')
-            """,
-            (receipt_line_id, receipt_id, TEST_PRODUCT_NAME, str(quantity), TEST_GTIN, GLOBAL_PRODUCT_ID),
+            "insert into receipt_lines (id, receipt_id, line_number, parsed_name, parsed_quantity, barcode, matched_global_product_id, status) values (?, ?, 1, ?, ?, ?, ?, 'matched')",
+            (receipt_line_id, receipt_id, TEST_PRODUCT_NAME, str(receipt.quantity), TEST_GTIN, GLOBAL_PRODUCT_ID),
         )
         conn.execute(
-            """
-            insert into purchase_import_batches (
-                id, household_id, receipt_id, scenario_id, status, created_at
-            ) values (?, ?, ?, ?, 'open', ?)
-            """,
+            "insert into purchase_import_batches (id, household_id, receipt_id, scenario_id, status, created_at) values (?, ?, ?, ?, 'open', ?)",
             (batch_id, TEST_HOUSEHOLD_ID, receipt_id, TEST_SCENARIO_ID, now),
         )
         conn.execute(
-            """
-            insert into purchase_import_lines (
-                id, batch_id, receipt_line_id, household_id,
-                matched_household_article_id, target_location_id,
-                target_sublocation_id, quantity, status
-            ) values (?, ?, ?, ?, ?, ?, ?, ?, 'ready')
-            """,
+            "insert into purchase_import_lines (id, batch_id, receipt_line_id, household_id, matched_household_article_id, target_location_id, target_sublocation_id, quantity, status) values (?, ?, ?, ?, ?, ?, ?, ?, 'ready')",
             (
                 import_line_id,
                 batch_id,
@@ -359,7 +282,7 @@ def seed_chain_fixtures(conn: sqlite3.Connection) -> None:
                 HOUSEHOLD_ARTICLE_ID,
                 LOCATION_ID,
                 SUBLOCATION_ID,
-                str(quantity),
+                str(receipt.quantity),
             ),
         )
 
@@ -386,15 +309,10 @@ def seed_summary(conn: sqlite3.Connection) -> dict[str, int]:
         "inventory_events",
         "inventory",
     )
-    return {
-        table: int(conn.execute(f"select count(*) from {table}").fetchone()[0])
-        for table in tables
-    }
+    return {table: int(conn.execute(f"select count(*) from {table}").fetchone()[0]) for table in tables}
 
 
 def validate_seed(conn: sqlite3.Connection) -> None:
-    """Controleer dat stap 2 exact het afgesproken geïsoleerde startpunt oplevert."""
-
     expected = {
         "households": 1,
         "global_products": 1,
@@ -413,20 +331,23 @@ def validate_seed(conn: sqlite3.Connection) -> None:
     }
     assert seed_summary(conn) == expected
 
-    household_ids = {
-        str(row[0])
-        for table in (
-            "households",
-            "household_articles",
-            "spaces",
-            "sublocations",
-            "receipts",
-            "purchase_import_batches",
-            "purchase_import_lines",
-        )
-        for row in conn.execute(f"select distinct household_id from {table}").fetchall()
-    }
-    assert household_ids == {TEST_HOUSEHOLD_ID}
+    household_row = conn.execute("select id from households").fetchone()
+    assert household_row is not None
+    assert str(household_row[0]) == TEST_HOUSEHOLD_ID
+
+    for table in (
+        "household_articles",
+        "spaces",
+        "sublocations",
+        "receipts",
+        "purchase_import_batches",
+        "purchase_import_lines",
+    ):
+        household_ids = {
+            str(row[0])
+            for row in conn.execute(f"select distinct household_id from {table}").fetchall()
+        }
+        assert household_ids == {TEST_HOUSEHOLD_ID}
 
     product_link = fetch_one(
         conn,
