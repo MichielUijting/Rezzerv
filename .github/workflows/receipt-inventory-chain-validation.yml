@@ -148,20 +148,35 @@ jobs:
           npm_config_fetch_retry_maxtimeout: '5000'
         run: |
           set +e
-          timeout 300s npm ci --no-audit --no-fund --prefer-offline --foreground-scripts > frontend-install.log 2>&1
+          rm -rf node_modules
+          timeout 300s npm ci --no-audit --no-fund --prefer-offline > frontend-install.log 2>&1
           exit_code=$?
+          if grep -Eq '^npm (error|ERR!)' frontend-install.log; then
+            exit_code=1
+          fi
+          mkdir -p npm-debug-logs
+          cp -f "$HOME"/.npm/_logs/*.log npm-debug-logs/ 2>/dev/null || true
           echo "$exit_code" > frontend-install.exitcode
           cat frontend-install.log
           exit "$exit_code"
 
       - name: 10.7 Controleer Vite en esbuild-installatie
+        id: frontend_toolchain
+        continue-on-error: true
         if: always()
         working-directory: frontend
         run: |
-          test -x node_modules/.bin/vite
-          test -x node_modules/.bin/esbuild
-          ./node_modules/.bin/vite --version
-          ./node_modules/.bin/esbuild --version
+          set +e
+          node ./node_modules/vite/bin/vite.js --version
+          vite_exit=$?
+          node -e "const esbuild=require('esbuild'); console.log('esbuild ' + esbuild.version)"
+          esbuild_exit=$?
+          toolchain_exit=0
+          if [ "$vite_exit" -ne 0 ] || [ "$esbuild_exit" -ne 0 ]; then
+            toolchain_exit=1
+          fi
+          echo "$toolchain_exit" > frontend-toolchain.exitcode
+          exit "$toolchain_exit"
 
       - name: 10.8 Upload installatiediagnose
         if: always()
@@ -171,6 +186,8 @@ jobs:
           path: |
             frontend/frontend-install.log
             frontend/frontend-install.exitcode
+            frontend/frontend-toolchain.exitcode
+            frontend/npm-debug-logs
           if-no-files-found: error
           retention-days: 3
 
@@ -178,7 +195,9 @@ jobs:
         if: always()
         run: |
           test -f frontend/frontend-install.exitcode
+          test -f frontend/frontend-toolchain.exitcode
           test "$(cat frontend/frontend-install.exitcode)" = "0"
+          test "$(cat frontend/frontend-toolchain.exitcode)" = "0"
 
       - name: 11.1 Bouw productiefrontend en bewaar diagnose
         id: frontend_build
