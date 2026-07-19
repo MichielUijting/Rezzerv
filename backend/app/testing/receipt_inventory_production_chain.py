@@ -180,5 +180,9 @@ def run_production_chain() -> dict:
 
 
 if __name__ == "__main__":
-    print(run_production_chain())
-    print("RECEIPT_INVENTORY_PRODUCTION_CHAIN_GREEN")
+    try:
+        print(run_production_chain())
+        print("RECEIPT_INVENTORY_PRODUCTION_CHAIN_GREEN")
+    except Exception as exc:
+        print(f"PRODUCTION_CHAIN_FAILURE|{exc.__class__.__name__}|{exc}")
+        raise SystemExit(1)
