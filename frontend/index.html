@@ -14,6 +14,14 @@
         } catch (e) {}
       })();
     </script>
+    <script id="rezzerv-kassa-delete-guard">
+      (function () {
+        try {
+          /* Oude lokale verwijder-ID's mogen bij het openen van Kassa nooit opnieuw naar de backend worden gestuurd. */
+          localStorage.removeItem('rezzerv_kassa_deleted_receipts')
+        } catch (e) {}
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#166534" />
@@ -106,25 +114,23 @@
       }
     </style>
     <style id="rezzerv-kassa-table-fix">
-      /* Bestanden kiezen is de enige ingang voor handmatige bonuploads. */
       [data-testid="kassa-add-receipt-button"]{
         display:none !important;
       }
-
-      /* C08: kolomtitels en zoek-/filterregel blijven zichtbaar in het eigen scrollframe. */
-      .rz-kassa-inbox-scroll-frame .rz-kassa-inbox-table thead .rz-table-header > th{
+      .rz-kassa-inbox-scroll-frame .rz-kassa-inbox-table thead{
         position:sticky;
         top:0;
         z-index:4;
-        background:#f5f7f6;
-        box-shadow:0 1px 0 #d0d5dd;
-      }
-      .rz-kassa-inbox-scroll-frame .rz-kassa-inbox-table thead .rz-table-filters > th{
-        position:sticky;
-        top:var(--rz-table-header-row-height, 36px);
-        z-index:3;
         background:#ffffff;
-        box-shadow:0 1px 0 #d0d5dd;
+      }
+      .rz-kassa-inbox-scroll-frame .rz-kassa-inbox-table thead::after{
+        content:"";
+        position:absolute;
+        left:0;
+        right:0;
+        bottom:0;
+        height:1px;
+        background:#d0d5dd;
       }
     </style>
   </head>
