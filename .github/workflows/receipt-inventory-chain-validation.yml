@@ -94,6 +94,7 @@ jobs:
 
   validate-regression-gates:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -118,7 +119,10 @@ jobs:
 
       - name: Installeer frontend-afhankelijkheden
         working-directory: frontend
-        run: npm ci
+        env:
+          npm_config_audit: 'false'
+          npm_config_fund: 'false'
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Bouw productiefrontend
         working-directory: frontend
