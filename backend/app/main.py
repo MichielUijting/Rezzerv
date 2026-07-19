@@ -9876,8 +9876,8 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
 def ensure_unpack_batch_for_receipt(conn, receipt):
     # Kassa-goedkeuringspoort: alleen goedgekeurde bonnen mogen naar Uitpakken.
     receipt_table_id = str(
-        (receipt_header or {}).get('receipt_table_id')
-        or (receipt_header or {}).get('id')
+        (receipt or {}).get('receipt_table_id')
+        or (receipt or {}).get('id')
         or ''
     ).strip()
     if not receipt_table_id:
@@ -12381,7 +12381,6 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
                 WHERE rt.household_id = :household_id
-                  # Uitpakken-startpoort: toon uitsluitend goedgekeurde kassabonnen.
                   AND rt.approved_at IS NOT NULL
                   AND lower(trim(COALESCE(rt.parse_status, ''))) IN ('approved', 'approved_override')
                   AND rt.deleted_at IS NULL
