@@ -42,7 +42,7 @@ function Invoke-Checked {
     param([string]$Command, [string[]]$Arguments)
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "Commando mislukt met exitcode $LASTEXITCODE: $Command $($Arguments -join ' ')"
+        throw "Commando mislukt met exitcode ${LASTEXITCODE}: $Command $($Arguments -join ' ')"
     }
 }
 
