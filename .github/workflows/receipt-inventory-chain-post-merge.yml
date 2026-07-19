@@ -1,6 +1,9 @@
-name: Receipt inventory chain post-merge gate
+name: Receipt inventory chain merge gate
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -8,11 +11,11 @@ on:
 
 jobs:
   validate-chain-after-merge:
-    name: Verplichte ketentest na merge
+    name: Verplichte kassabonketentest
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Checkout gemergede main
+      - name: Checkout te valideren versie
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -58,16 +61,16 @@ jobs:
         run: python backend/app/testing/receipt_inventory_production_chain.py
 
       - name: 6/6 Bevestig groene merge-gate
-        run: echo 'KETENTEST NA MERGE GROEN - voorraadpad 0 -> 2 -> 5 -> 5'
+        run: echo 'KETENTEST GROEN - voorraadpad 0 -> 2 -> 5 -> 5'
 
   validate-powershell-runner:
     name: Valideer zichtbare PowerShell-runner
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - name: Checkout gemergede main
+      - name: Checkout te valideren versie
         uses: actions/checkout@v4
 
       - name: Voer PowerShell-ketentest uit
         shell: pwsh
-        run: .\scripts\run-receipt-inventory-chain.ps1
+        run: ./scripts/run-receipt-inventory-chain.ps1
