@@ -14,7 +14,7 @@ Set-Location $root
 $steps = @(
     'Controleer projectmap en uitvoeromgeving',
     'Valideer testconfiguratie',
-    'Maak geïsoleerde testomgeving gereed',
+    'Maak geisoleerde testomgeving gereed',
     'Start productie-ketentest',
     'Verwerk kassabon 1: voorraad 0 naar 2',
     'Verwerk kassabon 2: voorraad 2 naar 5',
@@ -43,6 +43,28 @@ function Invoke-Checked {
     & $Command @Arguments
     if ($LASTEXITCODE -ne 0) {
         throw "Commando mislukt met exitcode ${LASTEXITCODE}: $Command $($Arguments -join ' ')"
+    }
+}
+
+function Invoke-CapturedCommand {
+    param([scriptblock]$Command)
+
+    # Docker schrijft normale voortgangsregels ook naar stderr. Onder Windows
+    # PowerShell zouden die bij ErrorActionPreference=Stop de test onterecht
+    # afbreken. Alleen de werkelijke proces-exitcode is daarom beslissend.
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $capturedOutput = & $Command 2>&1
+        $capturedExitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+    }
+
+    return [pscustomobject]@{
+        Output = @($capturedOutput)
+        ExitCode = $capturedExitCode
     }
 }
 
@@ -97,14 +119,20 @@ try {
     } elseif ($CiMode) {
         $env:PYTHONPATH = 'backend'
         $env:RECEIPT_STORAGE_ROOT = Join-Path ([System.IO.Path]::GetTempPath()) 'rezzerv-receipts'
-        $output = & python backend/app/testing/receipt_inventory_production_chain.py 2>&1
-        $exitCode = $LASTEXITCODE
+        $result = Invoke-CapturedCommand {
+            & python backend/app/testing/receipt_inventory_production_chain.py
+        }
+        $output = $result.Output
+        $exitCode = $result.ExitCode
     } else {
-        $output = & docker compose run --rm --no-deps `
-            -e PYTHONPATH=/app `
-            -e RECEIPT_STORAGE_ROOT=/tmp/rezzerv-receipts `
-            backend python /app/app/testing/receipt_inventory_production_chain.py 2>&1
-        $exitCode = $LASTEXITCODE
+        $result = Invoke-CapturedCommand {
+            & docker compose run --rm --no-deps `
+                -e PYTHONPATH=/app `
+                -e RECEIPT_STORAGE_ROOT=/tmp/rezzerv-receipts `
+                backend python /app/app/testing/receipt_inventory_production_chain.py
+        }
+        $output = $result.Output
+        $exitCode = $result.ExitCode
     }
     $output | ForEach-Object { Write-Host $_ }
     if ($exitCode -ne 0) { throw "Productie-ketentest eindigde met exitcode $exitCode." }
