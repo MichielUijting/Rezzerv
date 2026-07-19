@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$SkipBackendBuild
+    [switch]$SkipBackendBuild,
+    [switch]$CiMode
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,9 +11,9 @@ $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
 $steps = @(
-    'Controleer projectmap en Docker',
-    'Valideer Docker Compose-configuratie',
-    'Bouw geïsoleerde backend-testomgeving',
+    'Controleer projectmap en uitvoeromgeving',
+    'Valideer testconfiguratie',
+    'Maak geïsoleerde testomgeving gereed',
     'Start productie-ketentest',
     'Verwerk kassabon 1: voorraad 0 naar 2',
     'Verwerk kassabon 2: voorraad 2 naar 5',
@@ -23,7 +24,11 @@ $total = $steps.Count
 
 function Show-Step {
     param([int]$Number, [string]$Text, [string]$State = 'RUNNING')
-    $percent = [math]::Round((($Number - 1) / $total) * 100)
+    $percent = if ($State -eq 'PASS') {
+        [math]::Round(($Number / $total) * 100)
+    } else {
+        [math]::Round((($Number - 1) / $total) * 100)
+    }
     $symbol = switch ($State) {
         'PASS' { '[GROEN]' }
         'FAIL' { '[ROOD ]' }
@@ -50,15 +55,27 @@ Write-Host ''
 try {
     Show-Step 1 $steps[0]
     if (-not (Test-Path 'docker-compose.yml')) { throw 'docker-compose.yml ontbreekt.' }
-    Invoke-Checked 'docker' @('version')
+    if ($CiMode) {
+        Invoke-Checked 'python' @('--version')
+    } else {
+        Invoke-Checked 'docker' @('version')
+    }
     Show-Step 1 $steps[0] 'PASS'
 
     Show-Step 2 $steps[1]
-    Invoke-Checked 'docker' @('compose', 'config', '--quiet')
+    if ($CiMode) {
+        if (-not (Test-Path 'backend/app/testing/receipt_inventory_production_chain.py')) {
+            throw 'Productie-ketentest ontbreekt.'
+        }
+    } else {
+        Invoke-Checked 'docker' @('compose', 'config', '--quiet')
+    }
     Show-Step 2 $steps[1] 'PASS'
 
     Show-Step 3 $steps[2]
-    if (-not $SkipBackendBuild) {
+    if ($CiMode) {
+        Write-Host 'CI gebruikt een tijdelijke Python-runtime en tijdelijke kassabonopslag.'
+    } elseif (-not $SkipBackendBuild) {
         Invoke-Checked 'docker' @('compose', 'build', 'backend')
     } else {
         Write-Host 'Backendbuild overgeslagen op expliciet verzoek.'
@@ -66,10 +83,16 @@ try {
     Show-Step 3 $steps[2] 'PASS'
 
     Show-Step 4 $steps[3]
-    $output = & docker compose run --rm --no-deps `
-        -e PYTHONPATH=/app `
-        -e RECEIPT_STORAGE_ROOT=/tmp/rezzerv-receipts `
-        backend python /app/app/testing/receipt_inventory_production_chain.py 2>&1
+    if ($CiMode) {
+        $env:PYTHONPATH = 'backend'
+        $env:RECEIPT_STORAGE_ROOT = Join-Path ([System.IO.Path]::GetTempPath()) 'rezzerv-receipts'
+        $output = & python backend/app/testing/receipt_inventory_production_chain.py 2>&1
+    } else {
+        $output = & docker compose run --rm --no-deps `
+            -e PYTHONPATH=/app `
+            -e RECEIPT_STORAGE_ROOT=/tmp/rezzerv-receipts `
+            backend python /app/app/testing/receipt_inventory_production_chain.py 2>&1
+    }
     $exitCode = $LASTEXITCODE
     $output | ForEach-Object { Write-Host $_ }
     if ($exitCode -ne 0) { throw "Productie-ketentest eindigde met exitcode $exitCode." }
