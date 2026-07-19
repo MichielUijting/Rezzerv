@@ -26,13 +26,11 @@ jobs:
           python -m py_compile \
             backend/app/testing/receipt_inventory_chain_contract.py \
             backend/app/testing/receipt_inventory_chain_test_db.py \
-            backend/app/testing/receipt_inventory_chain_step3.py
+            backend/app/testing/receipt_inventory_chain_step3.py \
+            backend/app/testing/receipt_inventory_chain_step4.py
 
       - name: Valideer testcontract
         run: python -m backend.app.testing.receipt_inventory_chain_contract
 
-      - name: Valideer geïsoleerde fixtures
-        run: python -m backend.app.testing.receipt_inventory_chain_test_db
-
-      - name: Voer kassabon-naar-voorraadketen uit
-        run: python -m backend.app.testing.receipt_inventory_chain_step3
+      - name: Voer geïsoleerde ketenvalidatie uit
+        run: python -m backend.app.testing.receipt_inventory_chain_step4
