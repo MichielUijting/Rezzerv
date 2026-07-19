@@ -225,6 +225,92 @@ test.describe('Externe databases OFF candidate flow', () => {
     expect(unexpectedConsoleErrors).toEqual([]);
   });
 
+  test('Gekoppelde bonartikelregel toont score, artikel, Producttype en definitieve GTIN', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+
+    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          items: [
+            {
+              receipt_item_id: 'purchase-import-line:linked-banana-regression',
+              receipt_item_type: 'purchase_import_line',
+              receipt_item_source_id: 'linked-banana-regression',
+              context_key: 'ctx-linked-banana-regression',
+              purchase_import_line_id: 'linked-banana-regression',
+              receipt_line_text: 'AH BANANEN',
+              retailer_code: 'ah',
+              retailer_article_number: '',
+              gtin: '',
+              quantity_label: '1 stuk',
+              price: 1.99,
+              candidate_status: 'linked_to_catalog',
+              status: 'linked_to_catalog',
+              global_product_id: 'e9cc7c77-c201-4295-b125-c88a23c88ca2',
+              canonical_catalog_product_id: 'e9cc7c77-c201-4295-b125-c88a23c88ca2',
+              is_receipt_item_placeholder: true,
+              is_linked_to_catalog: true,
+              is_existing_link_for_receipt_item: true,
+              is_linkable_to_catalog: false,
+              linked_candidate_name: 'Bananen',
+              linked_product_type_id: 'gpc:10005897',
+              linked_product_type: 'Bananen (Cavendish)',
+              linked_gtin: '8718265184886',
+              linked_score: 0.691,
+              candidates: [],
+            },
+          ],
+        }),
+      });
+    });
+
+    await page.route('**/api/inventory/groups', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ group_options: [{ inventory_group_key: 'gpc:10005897', display_name: 'Bananen (Cavendish)', default_base_unit: 'stuk' }] }),
+      });
+    });
+
+    await page.goto('/externe-databases');
+
+    const receiptTable = page.getByTestId('external-receipt-items-table');
+    await expect(receiptTable).toBeVisible();
+
+    const headers = receiptTable.locator('thead tr').first().locator('th');
+    await expect(headers.nth(3)).toContainText('Catalogus');
+    await expect(headers.nth(4)).toContainText('Score');
+    await expect(headers.nth(5)).toContainText('(Kand.) artikel');
+    await expect(headers.nth(6)).toContainText('Producttype');
+    await expect(headers.nth(7)).toContainText('(Kand.) GTIN/EAN');
+
+    const receiptRow = receiptTable.locator('tbody tr', { hasText: 'AH BANANEN' });
+    await expect(receiptRow).toBeVisible();
+    await expect(receiptRow.locator('td').nth(3).getByRole('checkbox')).toBeChecked();
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('0,691');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('Bananen');
+    await expect(receiptRow.locator('td').nth(6)).toHaveText('Bananen (Cavendish)');
+    await expect(receiptRow.locator('td').nth(7)).toHaveText('8718265184886');
+
+    await receiptRow.dblclick();
+
+    const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
+    const linkedCandidateRow = candidateTable.locator('tbody tr', { hasText: 'Bananen' });
+    await expect(linkedCandidateRow).toBeVisible();
+    await expect(linkedCandidateRow.locator('td').nth(1)).toHaveText('Bananen');
+    await expect(linkedCandidateRow.locator('td').nth(3)).toHaveText('Artikelcatalogus');
+    await expect(linkedCandidateRow.locator('td').nth(4)).toHaveText('8718265184886');
+    await expect(linkedCandidateRow.locator('td').nth(5)).toHaveText('0,691');
+    await expect(linkedCandidateRow.locator('td').nth(6)).toHaveText('Gekoppeld');
+    await expect(linkedCandidateRow.getByRole('radio')).toBeChecked();
+
+    await expect(page.getByLabel('Producttype')).toHaveValue('gpc:10005897');
+
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
   // OFF_ZOEKOVERLAY_REGRESSIETEST_INGEVOERD
 
 });
