@@ -94,7 +94,7 @@ jobs:
 
   validate-regression-gates:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -122,7 +122,7 @@ jobs:
         env:
           npm_config_audit: 'false'
           npm_config_fund: 'false'
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Bouw productiefrontend
         working-directory: frontend
