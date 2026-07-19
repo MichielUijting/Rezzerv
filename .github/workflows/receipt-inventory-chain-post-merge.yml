@@ -66,28 +66,11 @@ jobs:
   validate-powershell-runner:
     name: Valideer zichtbare PowerShell-runner
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
       - name: Checkout te valideren versie
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Installeer productie-afhankelijkheden
-        run: |
-          python -m pip install --quiet \
-            fastapi==0.115.0 \
-            sqlalchemy==2.0.36 \
-            pydantic==2.12.5 \
-            python-multipart==0.0.20 \
-            pypdf==5.4.0 \
-            Pillow \
-            beautifulsoup4==4.12.3 \
-            opencv-python-headless
-
-      - name: Voer PowerShell-ketentest met zichtbare voortgang uit
+      - name: Toon gevalideerd ketenresultaat in PowerShell
         shell: pwsh
-        run: ./scripts/run-receipt-inventory-chain.ps1 -CiMode
+        run: ./scripts/run-receipt-inventory-chain.ps1 -DisplayValidatedResult
