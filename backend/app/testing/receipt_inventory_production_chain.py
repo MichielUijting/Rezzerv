@@ -109,9 +109,8 @@ def run_production_chain() -> dict:
         }
 
         with main.engine.begin() as conn:
-            provider = conn.execute(text("SELECT id FROM store_providers WHERE code = 'receipt' LIMIT 1")).scalar()
-            assert provider, "Receipt-provider ontbreekt"
-            ids["provider_id"] = str(provider)
+            provider = main.ensure_receipt_unpack_provider(conn)
+            ids["provider_id"] = str(provider["id"])
             _insert_row(conn, "household_store_connections", {
                 "id": ids["connection_id"], "household_id": "0",
                 "store_provider_id": ids["provider_id"], "connection_status": "active",
