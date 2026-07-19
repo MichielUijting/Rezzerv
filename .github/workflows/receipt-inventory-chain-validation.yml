@@ -66,6 +66,7 @@ jobs:
         continue-on-error: true
         env:
           PYTHONPATH: backend
+          RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/rezzerv-receipts
         run: |
           set +e
           python backend/app/testing/receipt_inventory_production_chain.py > production-chain.log 2>&1
