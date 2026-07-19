@@ -9874,6 +9874,38 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
 
 
 def ensure_unpack_batch_for_receipt(conn, receipt):
+    # Kassa-goedkeuringspoort: alleen goedgekeurde bonnen mogen naar Uitpakken.
+    receipt_table_id = str(
+        (receipt_header or {}).get('receipt_table_id')
+        or (receipt_header or {}).get('id')
+        or ''
+    ).strip()
+    if not receipt_table_id:
+        return None
+
+    approval_row = conn.execute(
+        text(
+            """
+            SELECT approved_at, parse_status
+            FROM receipt_tables
+            WHERE id = :receipt_table_id
+            LIMIT 1
+            """
+        ),
+        {'receipt_table_id': receipt_table_id},
+    ).mappings().first()
+
+    approval_status = str(
+        (approval_row or {}).get('parse_status') or ''
+    ).strip().lower()
+
+    if (
+        not approval_row
+        or not approval_row.get('approved_at')
+        or approval_status not in {'approved', 'approved_override'}
+    ):
+        return None
+
     receipt_table_id = str(receipt.get('receipt_table_id') or receipt.get('id') or '').strip()
     household_id = str(receipt.get('household_id') or '').strip()
     if not receipt_table_id or not household_id:
@@ -12349,6 +12381,9 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
                 WHERE rt.household_id = :household_id
+                  # Uitpakken-startpoort: toon uitsluitend goedgekeurde kassabonnen.
+                  AND rt.approved_at IS NOT NULL
+                  AND lower(trim(COALESCE(rt.parse_status, ''))) IN ('approved', 'approved_override')
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
                 ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
