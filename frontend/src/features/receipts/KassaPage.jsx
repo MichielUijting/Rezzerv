@@ -2572,7 +2572,12 @@ export default function KassaPage() {
     })
   }
 
-  async function openReceiptDetail(receiptTableId, sourceItems = receipts, prefetchedDetail = null) {
+  async function openReceiptDetail(
+    receiptTableId,
+    sourceItems = receipts,
+    prefetchedDetail = null,
+    showImportConfirmation = false,
+  ) {
     setError('')
     try {
       const detail = prefetchedDetail || await fetchJson(`/api/receipts/${encodeURIComponent(receiptTableId)}`)
@@ -2580,7 +2585,11 @@ export default function KassaPage() {
       const mergedDetail = sourceItem ? { ...sourceItem, ...detail } : detail
       setOpenedReceiptId(receiptTableId)
       setOpenedReceipt(mergedDetail)
-      openReceiptImportConfirmation(mergedDetail)
+
+      if (showImportConfirmation) {
+        openReceiptImportConfirmation(mergedDetail)
+      }
+
       return mergedDetail
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
@@ -2782,7 +2791,12 @@ export default function KassaPage() {
 
         if (uploadedReceiptId && receiptExistsInInbox) {
           setSelectedReceiptIds([uploadedReceiptId])
-          const importedDetail = await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          await openReceiptDetail(
+            uploadedReceiptId,
+            refreshedItems,
+            null,
+            true,
+          )
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
@@ -2881,7 +2895,12 @@ export default function KassaPage() {
 
         if (uploadedReceiptId && receiptExistsInInbox) {
           setSelectedReceiptIds([uploadedReceiptId])
-          const importedDetail = await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          await openReceiptDetail(
+            uploadedReceiptId,
+            refreshedItems,
+            null,
+            true,
+          )
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
