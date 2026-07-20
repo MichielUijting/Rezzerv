@@ -51,17 +51,40 @@ function normalizeFeedback(input) {
       ? Math.max(0, Math.min(100, Number(input.progress)))
       : null,
     showTechnicalToggle: Boolean(input.showTechnicalToggle && technicalDetail),
+    inputFields: Array.isArray(input.inputFields)
+      ? input.inputFields
+        .map((field) => ({
+          name: String(field?.name || '').trim(),
+          label: String(field?.label || '').trim(),
+          type: String(field?.type || 'text').trim() || 'text',
+          value: String(field?.value ?? ''),
+          placeholder: String(field?.placeholder || ''),
+          required: Boolean(field?.required),
+          autoFocus: Boolean(field?.autoFocus),
+        }))
+        .filter((field) => field.name && field.label)
+      : [],
+    primaryActionLabel: String(input.primaryActionLabel || 'Opslaan').trim() || 'Opslaan',
+    secondaryActionLabel: String(input.secondaryActionLabel || '').trim(),
+    onPrimaryAction: typeof input.onPrimaryAction === 'function' ? input.onPrimaryAction : null,
+    onSecondaryAction: typeof input.onSecondaryAction === 'function' ? input.onSecondaryAction : null,
   }
 }
 
 export function AppFeedbackProvider({ children }) {
   const [feedback, setFeedback] = useState(null)
   const [isTechnicalOpen, setIsTechnicalOpen] = useState(false)
+  const [fieldValues, setFieldValues] = useState({})
+  const [actionError, setActionError] = useState('')
+  const [isActionPending, setIsActionPending] = useState(false)
   const lastFeedbackRef = useRef({ signature: '', at: 0 })
 
   const dismissFeedback = useCallback(() => {
     setFeedback(null)
     setIsTechnicalOpen(false)
+    setFieldValues({})
+    setActionError('')
+    setIsActionPending(false)
   }, [])
 
   const showFeedback = useCallback((nextFeedback) => {
@@ -88,6 +111,13 @@ export function AppFeedbackProvider({ children }) {
 
     lastFeedbackRef.current = { signature, at: now }
     setIsTechnicalOpen(false)
+    setActionError('')
+    setIsActionPending(false)
+    setFieldValues(
+      Object.fromEntries(
+        (normalized.inputFields || []).map((field) => [field.name, field.value]),
+      ),
+    )
     setFeedback({ ...normalized, signature })
   }, [])
 
@@ -103,8 +133,49 @@ export function AppFeedbackProvider({ children }) {
       <AppFeedbackDialog
         feedback={feedback}
         isTechnicalOpen={isTechnicalOpen}
+        fieldValues={fieldValues}
+        actionError={actionError}
+        isActionPending={isActionPending}
+        onFieldChange={(name, value) => {
+          setFieldValues((current) => ({ ...current, [name]: value }))
+          setActionError('')
+        }}
         onToggleTechnical={() => setIsTechnicalOpen((current) => !current)}
         onDismiss={dismissFeedback}
+        onPrimaryAction={async () => {
+          if (!feedback) return
+
+          const missingField = (feedback.inputFields || []).find(
+            (field) => field.required && !String(fieldValues[field.name] || '').trim(),
+          )
+
+          if (missingField) {
+            setActionError(`Vul ${missingField.label.toLowerCase()} in.`)
+            return
+          }
+
+          setIsActionPending(true)
+          setActionError('')
+
+          try {
+            const result = await feedback.onPrimaryAction?.({ ...fieldValues })
+            if (result !== false) dismissFeedback()
+          } catch (error) {
+            setActionError(
+              String(error?.message || '').trim()
+              || 'De gegevens konden niet worden opgeslagen.',
+            )
+          } finally {
+            setIsActionPending(false)
+          }
+        }}
+        onSecondaryAction={async () => {
+          try {
+            await feedback?.onSecondaryAction?.()
+          } finally {
+            dismissFeedback()
+          }
+        }}
       />
     </AppFeedbackContext.Provider>
   )
@@ -118,7 +189,18 @@ export function useAppFeedback() {
   return context
 }
 
-function AppFeedbackDialog({ feedback, isTechnicalOpen = false, onToggleTechnical, onDismiss }) {
+function AppFeedbackDialog({
+  feedback,
+  isTechnicalOpen = false,
+  fieldValues = {},
+  actionError = '',
+  isActionPending = false,
+  onFieldChange,
+  onToggleTechnical,
+  onDismiss,
+  onPrimaryAction,
+  onSecondaryAction,
+}) {
   if (!feedback) return null
 
   const {
@@ -131,6 +213,10 @@ function AppFeedbackDialog({ feedback, isTechnicalOpen = false, onToggleTechnica
     testId,
     progress,
     showTechnicalToggle,
+    inputFields,
+    primaryActionLabel,
+    secondaryActionLabel,
+    onPrimaryAction: hasPrimaryAction,
   } = feedback
 
   const canDismissWithOk = dismissMode !== 'blocked'
@@ -189,6 +275,57 @@ function AppFeedbackDialog({ feedback, isTechnicalOpen = false, onToggleTechnica
           {detail ? <div style={{ color: '#344054', fontSize: '13px', fontWeight: 500 }}>{detail}</div> : null}
         </div>
 
+        {inputFields?.length ? (
+          <div style={{ display: 'grid', gap: '12px' }}>
+            {inputFields.map((field) => (
+              <label
+                key={field.name}
+                style={{
+                  display: 'grid',
+                  gap: '6px',
+                  color: '#1A1A1A',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                <span>
+                  {field.label}
+                  {field.required ? ' *' : ''}
+                </span>
+                <input
+                  className="rz-input"
+                  type={field.type}
+                  value={fieldValues[field.name] ?? ''}
+                  placeholder={field.placeholder}
+                  required={field.required}
+                  autoFocus={field.autoFocus}
+                  disabled={isActionPending}
+                  onChange={(event) => onFieldChange?.(field.name, event.target.value)}
+                  data-testid={`${testId}-field-${field.name}`}
+                />
+              </label>
+            ))}
+          </div>
+        ) : null}
+
+        {actionError ? (
+          <div
+            role="alert"
+            data-testid={`${testId}-action-error`}
+            style={{
+              border: '1px solid #FDA29B',
+              borderRadius: '8px',
+              background: '#FFFBFA',
+              color: '#B42318',
+              padding: '10px 12px',
+              fontSize: '13px',
+              fontWeight: 600,
+            }}
+          >
+            {actionError}
+          </div>
+        ) : null}
+
         {variant === 'progress' && progress !== null ? (
           <div style={{ display: 'grid', gap: '6px' }}>
             <div style={{ height: '8px', borderRadius: '999px', background: '#E4E7EC', overflow: 'hidden' }}>
@@ -241,7 +378,30 @@ function AppFeedbackDialog({ feedback, isTechnicalOpen = false, onToggleTechnica
           </div>
         ) : null}
 
-        {canDismissWithOk ? (
+        {inputFields?.length || hasPrimaryAction ? (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', flexWrap: 'wrap' }}>
+            {secondaryActionLabel ? (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={onSecondaryAction}
+                disabled={isActionPending}
+                data-testid={`${testId}-secondary-button`}
+              >
+                {secondaryActionLabel}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="primary"
+              onClick={onPrimaryAction}
+              disabled={isActionPending}
+              data-testid={`${testId}-primary-button`}
+            >
+              {isActionPending ? 'Opslaan...' : primaryActionLabel}
+            </Button>
+          </div>
+        ) : canDismissWithOk ? (
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
             <Button
               type="button"

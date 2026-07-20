@@ -2446,15 +2446,144 @@ export default function KassaPage() {
     inboxTableFilters.items,
   ])
 
+  function applyReceiptUpdate(updated) {
+    if (!updated) return
+    setOpenedReceipt(updated)
+    setReceipts((current) => current.map((item) => {
+      const itemId = String(item?.receipt_table_id || item?.id || '')
+      const updatedId = String(updated?.receipt_table_id || updated?.id || '')
+      if (!itemId || itemId !== updatedId) return item
+      return {
+        ...item,
+        ...updated,
+        receipt_table_id: item.receipt_table_id || updated.receipt_table_id || updated.id,
+      }
+    }))
+  }
+
+  function normalizeReceiptCorrectionDate(value) {
+    const rawValue = String(value || '').trim()
+    return rawValue ? rawValue.slice(0, 10) : ''
+  }
+
+  function openReceiptImportConfirmation(receipt) {
+    const receiptId = String(receipt?.receipt_table_id || receipt?.id || '')
+    if (!receiptId) return
+
+    const needsStore = String(receipt?.store_name_source || '') === 'user_required'
+    const needsPurchaseDate = String(receipt?.purchase_at_source || '') === 'import_default'
+
+    if (!needsStore && !needsPurchaseDate) return
+
+    const inputFields = []
+
+    if (needsStore) {
+      inputFields.push({
+        name: 'store_name',
+        label: 'Winkel(keten)',
+        type: 'text',
+        value: '',
+        placeholder: 'Vul de naam van de winkel of winkelketen in',
+        required: true,
+        autoFocus: true,
+      })
+    }
+
+    if (needsPurchaseDate) {
+      inputFields.push({
+        name: 'purchase_at',
+        label: 'Aankoopdatum',
+        type: 'date',
+        value: normalizeReceiptCorrectionDate(receipt?.purchase_at),
+        required: true,
+        autoFocus: !needsStore,
+      })
+    }
+
+    const title = needsStore && needsPurchaseDate
+      ? 'Controleer winkel en aankoopdatum'
+      : needsStore
+        ? 'Winkel niet herkend'
+        : 'Aankoopdatum niet herkend'
+
+    const message = needsStore && needsPurchaseDate
+      ? 'De winkel kon niet worden gelezen en voor de aankoopdatum is de inleesdatum ingevuld.'
+      : needsStore
+        ? 'Vul de naam van de winkel of winkelketen in.'
+        : 'Als aankoopdatum is de datum van inlezen ingevuld.'
+
+    const detail = needsPurchaseDate
+      ? 'Controleer de aankoopdatum. Je kunt de voorgestelde datum wijzigen voordat je opslaat.'
+      : 'Deze naam wordt bij de kassabon opgeslagen en helpt bij latere ondersteuning van deze winkel.'
+
+    showFeedback({
+      variant: 'warning',
+      title,
+      message,
+      detail,
+      inputFields,
+      primaryActionLabel: 'Opslaan',
+      dismissMode: 'blocked',
+      key: `kassa-import-confirmation-${receiptId}`,
+      dedupeMs: 0,
+      testId: 'kassa-import-confirmation',
+      onPrimaryAction: async (values) => {
+        const payload = {}
+
+        if (needsStore) {
+          payload.store_name = String(values?.store_name || '').trim()
+          if (!payload.store_name) {
+            throw new Error('Vul de naam van de winkel of winkelketen in.')
+          }
+        }
+
+        if (needsPurchaseDate) {
+          payload.purchase_at = normalizeReceiptCorrectionDate(values?.purchase_at)
+          if (!payload.purchase_at) {
+            throw new Error('Vul een geldige aankoopdatum in.')
+          }
+        }
+
+        const updated = await fetchJson(
+          `/api/receipts/${encodeURIComponent(receiptId)}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          },
+        )
+
+        applyReceiptUpdate(updated)
+
+        showKassaFeedback(
+          'success',
+          needsStore && needsPurchaseDate
+            ? 'Winkel en aankoopdatum zijn opgeslagen.'
+            : needsStore
+              ? 'Winkel is opgeslagen.'
+              : 'Aankoopdatum is opgeslagen.',
+          {
+            key: `kassa-import-confirmation-saved-${receiptId}`,
+            dedupeMs: 0,
+          },
+        )
+
+        return true
+      },
+    })
+  }
+
   async function openReceiptDetail(receiptTableId, sourceItems = receipts, prefetchedDetail = null) {
     setError('')
     try {
       const detail = prefetchedDetail || await fetchJson(`/api/receipts/${encodeURIComponent(receiptTableId)}`)
       const sourceItem = sourceItems.find((item) => String(item.receipt_table_id) === String(receiptTableId)) || null
+      const mergedDetail = sourceItem ? { ...sourceItem, ...detail } : detail
       setOpenedReceiptId(receiptTableId)
-      setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
+      setOpenedReceipt(mergedDetail)
+      return mergedDetail
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
+      return null
     }
   }
 
@@ -2652,7 +2781,8 @@ export default function KassaPage() {
 
         if (uploadedReceiptId && receiptExistsInInbox) {
           setSelectedReceiptIds([uploadedReceiptId])
-          await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          const importedDetail = await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          openReceiptImportConfirmation(importedDetail)
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
@@ -2751,7 +2881,8 @@ export default function KassaPage() {
 
         if (uploadedReceiptId && receiptExistsInInbox) {
           setSelectedReceiptIds([uploadedReceiptId])
-          await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          const importedDetail = await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          openReceiptImportConfirmation(importedDetail)
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
@@ -3186,19 +3317,7 @@ export default function KassaPage() {
             </div>
           </ScreenCard>
 
-          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => {
-                setOpenedReceipt(updated)
-                setReceipts((current) => current.map((item) => {
-                  const itemId = String(item?.receipt_table_id || item?.id || '')
-                  const updatedId = String(updated?.receipt_table_id || updated?.id || '')
-                  if (!itemId || itemId !== updatedId) return item
-                  return {
-                    ...item,
-                    ...updated,
-                    receipt_table_id: item.receipt_table_id || updated.receipt_table_id || updated.id,
-                  }
-                }))
-              }} onFeedback={showKassaFeedback} /> : null}
+          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={applyReceiptUpdate} onFeedback={showKassaFeedback} /> : null}
         </div>
       )}
 
