@@ -1,6 +1,6 @@
 const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:8001';
-const DEMO_HOUSEHOLD_ID = process.env.PLAYWRIGHT_HOUSEHOLD_ID || '1';
-const DEV_ADMIN_TOKEN = process.env.PLAYWRIGHT_ADMIN_TOKEN || 'rezzerv-dev-token::admin@rezzerv.local';
+const DEMO_HOUSEHOLD_ID = process.env.PLAYWRIGHT_HOUSEHOLD_ID || '0';
+const DEV_ADMIN_TOKEN = process.env.PLAYWRIGHT_ADMIN_TOKEN || 'rezzerv-dev-token::test-admin@rezzerv.local';
 
 async function parseJson(response) {
   const text = await response.text();
@@ -30,7 +30,21 @@ export async function apiFetch(request, path, options = {}) {
 
 export async function resolveAuthorizedHouseholdId(request) {
   const household = await apiFetch(request, '/api/household');
-  return String(household?.id || household?.household_id || DEMO_HOUSEHOLD_ID);
+  const resolvedHouseholdId = String(
+    household?.active_household_id
+      || household?.id
+      || household?.household_id
+      || DEMO_HOUSEHOLD_ID
+  );
+
+  if (resolvedHouseholdId !== DEMO_HOUSEHOLD_ID) {
+    throw new Error(
+      `Playwright moet huishouden ${DEMO_HOUSEHOLD_ID} gebruiken, `
+      + `maar de autorisatiecontext leverde ${resolvedHouseholdId}.`
+    );
+  }
+
+  return resolvedHouseholdId;
 }
 
 export async function cleanupRegressionFixtures(request) {
@@ -77,7 +91,7 @@ export async function resetAndSeedStoreImportFixture(request) {
 
 export async function loginThroughUi(page) {
   await page.goto('/login');
-  await page.getByLabel('E-mail').fill('admin@rezzerv.local');
+  await page.getByLabel('E-mail').fill('test-admin@rezzerv.local');
   await page.getByLabel('Wachtwoord').fill('Rezzerv123');
   await page.getByRole('button', { name: 'Inloggen' }).click();
   await page.waitForURL('**/home');

@@ -1900,7 +1900,7 @@ export default function KassaPage() {
   const location = useLocation()
   const { showFeedback } = useAppFeedback()
   const isAddReceiptRoute = location.pathname === '/kassa/nieuw'
-  const [householdId, setHouseholdId] = useState('1')
+  const [householdId, setHouseholdId] = useState('')
   const [currentUserDisplayRole, setCurrentUserDisplayRole] = useState('viewer')
   const [receipts, setReceipts] = useState([])
   const [filters, setFilters] = useState(DEFAULT_RECEIPT_FILTERS)
@@ -2184,7 +2184,7 @@ export default function KassaPage() {
   }
 
   useEffect(() => {
-    if (isAddReceiptRoute || isUploading) return undefined
+    if (!householdId || isAddReceiptRoute || isUploading) return undefined
     let cancelled = false
     const refreshKassaInbox = async () => {
       if (cancelled || receiptInboxRefreshInFlightRef.current) return
@@ -2214,7 +2214,17 @@ export default function KassaPage() {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         })
         if (cancelled) return
-        const resolvedHouseholdId = String(household?.id || '1')
+        const resolvedHouseholdId = String(
+          household?.active_household_id
+            || household?.id
+            || household?.household_id
+            || ''
+        )
+
+        if (!resolvedHouseholdId) {
+          throw new Error('Er kon geen actief huishouden worden vastgesteld.')
+        }
+
         setCurrentUserDisplayRole(String(household?.display_role || household?.current_user_display_role || 'viewer').toLowerCase())
         setHouseholdId(resolvedHouseholdId)
         const storedDeletedIds = loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY)
@@ -2630,6 +2640,7 @@ export default function KassaPage() {
   }
 
   async function ensureEmailRouteLoaded(forceReload = false) {
+    if (!householdId) return null
     if (emailRoute?.route_address && !forceReload) return emailRoute
     setIsEmailRouteLoading(true)
     setEmailRouteError('')

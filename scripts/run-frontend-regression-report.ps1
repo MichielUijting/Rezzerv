@@ -12,7 +12,7 @@ function Invoke-RegressionFixtureCleanup {
   )
 
   Write-Host "`n=== Regression fixture cleanup ===" -ForegroundColor Cyan
-  $headers = @{ Authorization = "Bearer rezzerv-dev-token::admin@rezzerv.local" }
+  $headers = @{ Authorization = "Bearer rezzerv-dev-token::test-admin@rezzerv.local" }
   $lastError = $null
 
   for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
@@ -84,6 +84,8 @@ try {
     --add-host=host.docker.internal:host-gateway `
     -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:5174 `
     -e PLAYWRIGHT_API_URL=http://host.docker.internal:8011 `
+    -e PLAYWRIGHT_HOUSEHOLD_ID=0 `
+    -e PLAYWRIGHT_ADMIN_TOKEN=rezzerv-dev-token::test-admin@rezzerv.local `
     -v "${frontendPath}:/work" `
     -v rezzerv_playwright_node_modules:/work/node_modules `
     -w /work `

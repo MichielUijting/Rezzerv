@@ -397,6 +397,13 @@ DEFAULT_AUTH_USERS = {
         "household_id": "1",
         "household_name": "Mijn huishouden",
     },
+    "test-admin@rezzerv.local": {
+        "password": "Rezzerv123",
+        "role": "admin",
+        "household_key": "regression-household-0",
+        "household_id": "0",
+        "household_name": "Regressietest huishouden 0",
+    },
 }
 households = {}
 users = {email: dict(profile) for email, profile in DEFAULT_AUTH_USERS.items()}
@@ -7004,16 +7011,27 @@ def bootstrap_auth_registry():
     with engine.begin() as conn:
         default_household_id = '1'
         default_household_name = DEFAULT_AUTH_USERS['admin@rezzerv.local'].get('household_name') or 'Mijn huishouden'
-        conn.execute(
-            text(
-                '''
-                INSERT INTO household_registry (id, naam, created_at)
-                VALUES (:id, :naam, CURRENT_TIMESTAMP)
-                ON CONFLICT(id) DO NOTHING
-                '''
-            ),
-            {'id': default_household_id, 'naam': default_household_name},
-        )
+
+        household_profiles = {
+            str(profile.get('household_id') or default_household_id): (
+                str(profile.get('household_name') or default_household_name)
+            )
+            for profile in DEFAULT_AUTH_USERS.values()
+        }
+
+        for household_id, household_name in household_profiles.items():
+            conn.execute(
+                text(
+                    '''
+                    INSERT INTO household_registry (id, naam, created_at)
+                    VALUES (:id, :naam, CURRENT_TIMESTAMP)
+                    ON CONFLICT(id) DO UPDATE SET
+                        naam = excluded.naam
+                    '''
+                ),
+                {'id': household_id, 'naam': household_name},
+            )
+
         for email, profile in DEFAULT_AUTH_USERS.items():
             normalized_email = str(email).strip().lower()
             conn.execute(
@@ -14285,7 +14303,7 @@ REGRESSION_ARTICLE_NAMES = [
     "Melk",
     "Tomaten",
 ]
-BROWSER_REGRESSION_HOUSEHOLD_ID = 'demo-household'
+BROWSER_REGRESSION_HOUSEHOLD_ID = '0'
 BROWSER_REGRESSION_SPACE_NAME = 'Voorraad test'
 BROWSER_REGRESSION_SUBLOCATION_NAME = 'Plank test'
 BROWSER_REGRESSION_WORKSPACE_NAME = 'Schuur'
@@ -18835,7 +18853,7 @@ def run_almost_out_backend_self_test_endpoint():
     return report
 
 def reset_regression_fixture_state():
-    household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
+    household_id = str(ensure_household("test-admin@rezzerv.local").get("id") or "0")
     cleanup = cleanup_regression_fixture_state(household_id)
     fixture = ensure_regression_inventory_fixture(household_id)
     version_path = Path(__file__).resolve().parents[2] / "VERSION.txt"
@@ -18854,7 +18872,7 @@ def reset_regression_fixture_state():
 
 @app.post("/api/testing/fixtures/inventory/ensure")
 def ensure_regression_inventory_fixture_endpoint():
-    household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
+    household_id = str(ensure_household("test-admin@rezzerv.local").get("id") or "0")
     fixture = ensure_regression_inventory_fixture(household_id)
     return {
         "status": "ok",
@@ -18866,7 +18884,7 @@ def ensure_regression_inventory_fixture_endpoint():
 @app.post("/api/testing/fixtures/cleanup")
 def cleanup_regression_fixture_state_endpoint(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
-    household_id = str(ensure_household("admin@rezzerv.local").get("id") or "1")
+    household_id = str(ensure_household("test-admin@rezzerv.local").get("id") or "0")
     cleanup = cleanup_regression_fixture_state(household_id)
     log_regression_action('fixture.cleanup_endpoint', cleanup=cleanup)
     return {
@@ -18912,8 +18930,8 @@ def get_regression_receipt_fixture_file(kind: str = Query('manual')):
 @app.post("/api/testing/fixtures/receipts/seed-kassa")
 def seed_regression_kassa_receipts(authorization: Optional[str] = Header(None)):
     require_platform_admin_user(authorization)
-    household = ensure_household("admin@rezzerv.local")
-    household_id = str(household.get('id') or '1')
+    household = ensure_household("test-admin@rezzerv.local")
+    household_id = str(household.get('id') or '0')
     ensure_default_receipt_sources(engine, RECEIPT_STORAGE_ROOT, household_id)
     fixtures_root = Path(__file__).resolve().parent / 'testing' / 'receipt_parsing' / 'raw'
     reviewed_storage = str((fixtures_root / 'Lidl2.eml').resolve())
