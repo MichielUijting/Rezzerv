@@ -12955,26 +12955,12 @@ def create_receipt_line(receipt_table_id: str, payload: ReceiptLineCreateRequest
             else None
         )
 
-        # Een universele barcode is leidend. De winkelartikelcode blijft hooguit
-        # als aanvullende of historische identiteit beschikbaar.
-        existing_product = find_global_product_match_for_receipt_line(
-            conn,
-            normalized_barcode,
-            payload.article_name,
-            external_article_code=normalized_external_article_code,
-            retailer_code=existing.get('store_name'),
-        )
-        matched_global_product_id = (
-            str(existing_product.get('id') or '').strip()
-            if existing_product
-            else None
-        )
-        article_match_status = 'product_matched' if matched_global_product_id else 'unmatched'
-        confidence_score = (
-            float(existing_product.get('confidence_score') or 1.0)
-            if existing_product
-            else None
-        )
+        # Kassa start zonder lokale of kandidaatgebaseerde productmatch.
+        # Na invoegen leest sync_receipt_table_line_product_links uitsluitend
+        # de actieve centrale koppeling uit external_article_product_links.
+        matched_global_product_id = None
+        article_match_status = 'unmatched'
+        confidence_score = None
 
         next_index = conn.execute(
             text(
