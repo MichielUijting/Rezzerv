@@ -72,8 +72,13 @@ def main() -> None:
         "aankoopdatum wordt via de centrale melding getoond",
     )
     require(
-        "openReceiptImportConfirmation(importedDetail)" in kassa_source,
-        "nieuwe bonimport opent de controle na het laden van de bon",
+        "setOpenedReceipt(mergedDetail)\n      openReceiptImportConfirmation(mergedDetail)"
+        in kassa_source,
+        "iedere centraal geopende bon controleert winkel- en datumherkomst",
+    )
+    require(
+        "openReceiptImportConfirmation(importedDetail)" not in kassa_source,
+        "importpaden bevatten geen losse of onvolledige controle-aansluitingen",
     )
     require(
         "onReceiptUpdated={applyReceiptUpdate}" in kassa_source,
