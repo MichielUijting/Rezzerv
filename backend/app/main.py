@@ -9416,7 +9416,16 @@ def apply_inventory_consumption(
     return {"applied_quantity": quantity_int, "affected_inventory_ids": [existing["id"]]}
 
 
-def create_auto_repurchase_event(conn, household_id: str, article_id: str, article_name: str, resolved_location: dict, quantity: float = 1):
+def create_auto_repurchase_event(
+    conn,
+    household_id: str,
+    article_id: str,
+    article_name: str,
+    resolved_location: dict,
+    quantity: float = 1,
+    *,
+    purchase_date: str | None = None,
+):
     quantity_int = int(quantity)
     if quantity_int <= 0:
         return None
@@ -9440,6 +9449,7 @@ def create_auto_repurchase_event(conn, household_id: str, article_id: str, artic
         new_quantity=new_total,
         source='auto_repurchase',
         note=f'Automatisch {quantity_label} afgeboekt bij herhaalaankoop.',
+        purchase_date=purchase_date,
     )
 
 
@@ -18089,7 +18099,12 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
             batch = conn.execute(
                 text(
                     """
-                    SELECT pib.id, pib.household_id, pib.import_status, sp.code AS store_provider_code
+                    SELECT
+                        pib.id,
+                        pib.household_id,
+                        pib.import_status,
+                        pib.raw_payload,
+                        sp.code AS store_provider_code
                     FROM purchase_import_batches pib
                     JOIN store_providers sp ON sp.id = pib.store_provider_id
                     WHERE pib.id = :id
@@ -18102,6 +18117,18 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
             context = require_household_context(authorization, str(batch["household_id"]))
             if str(context.get("display_role") or "").strip().lower() == "viewer":
                 raise HTTPException(status_code=403, detail="Kijkers mogen kassabonnen wel opvoeren, maar niet naar voorraad verwerken")
+
+            raw_payload = {}
+            try:
+                raw_payload = json.loads(batch.get("raw_payload") or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                raw_payload = {}
+
+            batch_metadata = raw_payload.get("batch_metadata")
+            if not isinstance(batch_metadata, dict):
+                batch_metadata = {}
+
+            purchase_date = str(batch_metadata.get("purchase_date") or "").strip() or None
 
             lines = conn.execute(
                 text(
@@ -18301,6 +18328,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                         supplier_name=batch.get("store_name") or batch.get("store_label") or batch.get("store_provider_name") or batch.get("store_provider_code"),
                         price=float(line.get("line_price_raw")) if line.get("line_price_raw") is not None else None,
                         currency=line.get("currency_code") or "EUR",
+                        purchase_date=purchase_date,
                         article_number=line.get("external_article_code"),
                         barcode=line.get("barcode") or None,
                     )
@@ -18313,7 +18341,15 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     applied_deduction_quantity = 0
                     if should_auto_consume:
                         current_stage = 'auto_consume_write'
-                        auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=requested_deduction_quantity)
+                        auto_event_id = create_auto_repurchase_event(
+                            conn,
+                            batch["household_id"],
+                            article_id,
+                            article_name,
+                            resolved_location,
+                            quantity=requested_deduction_quantity,
+                            purchase_date=purchase_date,
+                        )
                         consumption_result = apply_inventory_consumption(
                             conn,
                             batch["household_id"],
