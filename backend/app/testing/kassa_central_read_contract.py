@@ -1,8 +1,15 @@
 """Statisch contract voor Stap 6: Kassa leest productkoppelingen centraal."""
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[3]
-MAIN = ROOT / "backend/app/main.py"
+HERE = Path(__file__).resolve()
+MAIN_CANDIDATES = (
+    HERE.parents[1] / "main.py",              # Docker: /app/app/main.py
+    HERE.parents[3] / "backend/app/main.py", # Lokale repository
+)
+MAIN = next((path for path in MAIN_CANDIDATES if path.exists()), None)
+if MAIN is None:
+    checked = ", ".join(str(path) for path in MAIN_CANDIDATES)
+    raise FileNotFoundError(f"main.py niet gevonden; gecontroleerd: {checked}")
 
 
 def block(source: str, start: str, end: str) -> str:
@@ -58,6 +65,7 @@ assert_true(
     "Kassa mag bij synchronisatie geen huishoudartikel creëren",
 )
 
+print(f"PASS: main.py gevonden op {MAIN}")
 print("PASS: Kassa-synchronisatie leest de centrale koppeling")
 print("PASS: Kassa-synchronisatie bevat geen parallelle resolver")
 print("PASS: nieuwe Kassa-regels starten zonder lokale productmatch")
