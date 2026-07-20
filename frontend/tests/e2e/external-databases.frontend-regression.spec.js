@@ -67,7 +67,7 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(receiptTable).toBeVisible();
     await expect(receiptTable.locator('thead')).not.toContainText('Artikelnummer');
     await expect(receiptTable.locator('thead')).not.toContainText('Aantal');
-    await expect(receiptTable.locator('thead')).toContainText('Kand. GTIN/EAN');
+    await expect(receiptTable.locator('thead')).toContainText('(Kand.) GTIN/EAN');
 
     const rowWithCandidates = receiptTable.locator('tbody tr').filter({ hasText: /\b[1-9]\d*$/ }).first();
     await expect(rowWithCandidates).toBeVisible();
@@ -135,10 +135,12 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Dubbele kandidaat regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toContainText('8710000000001');
-    await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
-    await expect(receiptRow.locator('td').nth(8)).toContainText('Rezzerv Test Mosterd');
-    await expect(receiptRow.locator('td').nth(9)).toContainText('0,800');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('0,800');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('Rezzerv Test Mosterd');
+    await expect(receiptRow.locator('td').nth(6)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(7)).toHaveText('8710000000001');
+    await expect(receiptRow.locator('td').nth(8)).toHaveText('1 stuk');
+    await expect(receiptRow.locator('td').nth(9)).toHaveText('1,23');
 
     await receiptRow.dblclick();
     const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
@@ -163,10 +165,12 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Winkelspecifieke code regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
-    await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
-    await expect(receiptRow.locator('td').nth(8)).toContainText('Rezzerv Test Product');
-    await expect(receiptRow.locator('td').nth(9)).toContainText('0,900');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('0,900');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('Rezzerv Test Product');
+    await expect(receiptRow.locator('td').nth(6)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(7)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(8)).toHaveText('1 stuk');
+    await expect(receiptRow.locator('td').nth(9)).toHaveText('1,23');
     await expectNoConsoleErrors(consoleErrors);
   });
 
@@ -180,8 +184,9 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Pseudo artikelcode regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toContainText('000426660609');
-    await expect(receiptRow.locator('td').nth(8)).toContainText('Zoete aardappel');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('0,642');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('Zoete aardappel');
+    await expect(receiptRow.locator('td').nth(7)).toHaveText('000426660609');
     await expect(receiptRow).not.toContainText('lidl:groente.zoete-aardappel');
     await expect(receiptRow).not.toContainText('Lidl Zoete aardappel');
 
@@ -199,22 +204,29 @@ test.describe('Externe databases frontend-regressie', () => {
   test('Bovenste tabel gebruikt gekoppelde kandidaat boven hoogste score zonder kandidaatcode als bonartikelnummer te tonen', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     await routeReceiptItems(page, [
-      { receipt_item_id: 'purchase-import-line:purchase-line-linked-wins-regression', receipt_item_type: 'purchase_import_line', receipt_item_source_id: 'purchase-line-linked-wins-regression', context_key: 'ctx-linked-wins-regression', receipt_line_id: 'receipt-line-linked-wins-regression', purchase_import_line_id: 'purchase-line-linked-wins-regression', receipt_line_text: 'Gekoppelde kandidaat regressietest', retailer_code: 'lidl', retailer_article_number: '12345', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-highest-score-not-linked', candidate_name: 'Niet gekoppelde hoogste score', candidate_brand: 'Testmerk', external_source_name: 'Open Food Facts', external_source_product_code: 'LIDL-HIGH', variant: 'Standaard', score: 0.99, candidate_status: 'candidate', is_linked_to_catalog: false, is_linkable_to_catalog: true },
-      { receipt_item_id: 'purchase-import-line:purchase-line-linked-wins-regression', receipt_item_type: 'purchase_import_line', receipt_item_source_id: 'purchase-line-linked-wins-regression', context_key: 'ctx-linked-wins-regression', receipt_line_id: 'receipt-line-linked-wins-regression', purchase_import_line_id: 'purchase-line-linked-wins-regression', receipt_line_text: 'Gekoppelde kandidaat regressietest', retailer_code: 'lidl', retailer_article_number: '12345', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-linked-lower-score', candidate_name: 'Gekoppelde lagere score', candidate_brand: 'Testmerk', external_source_name: 'Open Food Facts', external_source_product_code: 'LIDL-LINKED', variant: 'Standaard', score: 0.50, candidate_status: 'linked_to_catalog', is_linked_to_catalog: true, is_linkable_to_catalog: false },
+      { receipt_item_id: 'purchase-import-line:purchase-line-linked-wins-regression', receipt_item_type: 'purchase_import_line', receipt_item_source_id: 'purchase-line-linked-wins-regression', context_key: 'ctx-linked-wins-regression', receipt_line_id: 'receipt-line-linked-wins-regression', purchase_import_line_id: 'purchase-line-linked-wins-regression', receipt_line_text: 'Gekoppelde kandidaat regressietest', retailer_code: 'lidl', retailer_article_number: '12345', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-highest-score-not-linked', candidate_name: 'Niet gekoppelde hoogste score', candidate_brand: 'Testmerk', external_source_name: 'Open Food Facts', external_source_product_code: 'LIDL-HIGH', variant: 'Standaard', score: 0.99, candidate_status: 'candidate', is_linked_to_catalog: false, is_linkable_to_catalog: true, central_link_active: true, global_product_id: 'gp-linked-wins', linked_candidate_name: 'Gekoppelde lagere score', linked_score: 0.50, linked_gtin: '8710000000003', linked_product_type_id: 'gpc:test-linked', linked_product_type: 'Test Producttype' },
+      { receipt_item_id: 'purchase-import-line:purchase-line-linked-wins-regression', receipt_item_type: 'purchase_import_line', receipt_item_source_id: 'purchase-line-linked-wins-regression', context_key: 'ctx-linked-wins-regression', receipt_line_id: 'receipt-line-linked-wins-regression', purchase_import_line_id: 'purchase-line-linked-wins-regression', receipt_line_text: 'Gekoppelde kandidaat regressietest', retailer_code: 'lidl', retailer_article_number: '12345', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-linked-lower-score', candidate_name: 'Gekoppelde lagere score', candidate_brand: 'Testmerk', external_source_name: 'Open Food Facts', external_source_product_code: 'LIDL-LINKED', variant: 'Standaard', score: 0.50, candidate_status: 'linked_to_catalog', is_linked_to_catalog: true, is_linkable_to_catalog: false, central_link_active: true, global_product_id: 'gp-linked-wins', linked_candidate_name: 'Gekoppelde lagere score', linked_score: 0.50, linked_gtin: '8710000000003', linked_product_type_id: 'gpc:test-linked', linked_product_type: 'Test Producttype' },
     ]);
 
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Gekoppelde kandidaat regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
-    await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(3).locator('input')).toBeChecked();
-    await expect(receiptRow.locator('td').nth(8)).toContainText('Gekoppelde lagere score');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('0,500');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('Gekoppelde lagere score');
+    await expect(receiptRow.locator('td').nth(6)).toHaveText('Test Producttype');
+    await expect(receiptRow.locator('td').nth(7)).toHaveText('8710000000003');
     await receiptRow.dblclick();
     const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
     await expect(candidateTable).toBeVisible();
-    await expect(candidateTable).toContainText('Geen universele kandidaten met score 0,500 of hoger voor dit bonartikel.');
-    await expect(candidateTable.getByText('Gekoppelde lagere score')).toHaveCount(0);
+    const linkedCandidateRow = candidateTable.locator('tbody tr', { hasText: 'Gekoppelde lagere score' });
+    await expect(linkedCandidateRow).toBeVisible();
+    await expect(linkedCandidateRow.locator('td').nth(1)).toHaveText('Gekoppelde lagere score');
+    await expect(linkedCandidateRow.locator('td').nth(3)).toHaveText('Artikelcatalogus');
+    await expect(linkedCandidateRow.locator('td').nth(4)).toHaveText('8710000000003');
+    await expect(linkedCandidateRow.locator('td').nth(5)).toHaveText('0,500');
+    await expect(linkedCandidateRow.locator('td').nth(6)).toHaveText('Gekoppeld');
+    await expect(linkedCandidateRow.getByRole('radio')).toBeChecked();
     await expect(page.getByRole('button', { name: 'Ontkoppel artikel', exact: true })).toBeDisabled();
     await expectNoConsoleErrors(consoleErrors);
   });
@@ -231,8 +243,12 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Fallback kandidaat regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(8)).toHaveText('-');
-    await expect(receiptRow.locator('td').nth(9)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(6)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(7)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(8)).toHaveText('1 stuk');
+    await expect(receiptRow.locator('td').nth(9)).toHaveText('1,23');
     await expect(receiptRow.locator('td').nth(10)).toHaveText('0');
     await receiptRow.dblclick();
     const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
@@ -247,7 +263,7 @@ test.describe('Externe databases frontend-regressie', () => {
   test('Catalogusfilter reset detailselectie als geselecteerde rij verdwijnt', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     await routeReceiptItems(page, [
-      { receipt_item_id: 'purchase-import-line:purchase-filter-linked', receipt_item_type: 'purchase_import_line', receipt_item_source_id: 'purchase-filter-linked', context_key: 'ctx-filter-linked', receipt_line_id: 'line-filter-linked', purchase_import_line_id: 'purchase-filter-linked', receipt_line_text: 'Gekoppeld filter product', retailer_code: 'lidl', retailer_article_number: 'LIDL-LINKED', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-filter-linked', candidate_name: 'Gekoppeld filter kandidaat', candidate_brand: '-', external_source_name: 'Open Food Facts', external_source_product_code: '8710000000001', variant: 'Standaard', score: 0.9, candidate_status: 'linked_to_catalog', is_linked_to_catalog: true, is_linkable_to_catalog: false, global_product_id: 'gp-filter-linked' },
+      { receipt_item_id: 'purchase-import-line:purchase-filter-linked', receipt_item_type: 'purchase_import_line', receipt_item_source_id: 'purchase-filter-linked', context_key: 'ctx-filter-linked', receipt_line_id: 'line-filter-linked', purchase_import_line_id: 'purchase-filter-linked', receipt_line_text: 'Gekoppeld filter product', retailer_code: 'lidl', retailer_article_number: 'LIDL-LINKED', gtin: '', quantity_label: '1 stuk', price: 1.23, candidate_id: 'candidate-filter-linked', candidate_name: 'Gekoppeld filter kandidaat', candidate_brand: '-', external_source_name: 'Open Food Facts', external_source_product_code: '8710000000001', variant: 'Standaard', score: 0.9, candidate_status: 'linked_to_catalog', is_linked_to_catalog: true, is_linkable_to_catalog: false, central_link_active: true, global_product_id: 'gp-filter-linked', linked_candidate_name: 'Gekoppeld filter kandidaat', linked_score: 0.9, linked_gtin: '8710000000001', linked_product_type_id: 'gpc:filter-linked', linked_product_type: 'Filter Producttype' },
       { receipt_item_id: 'purchase-import-line:purchase-filter-unlinked', receipt_item_type: 'purchase_import_line', receipt_item_source_id: 'purchase-filter-unlinked', context_key: 'ctx-filter-unlinked', receipt_line_id: 'line-filter-unlinked', purchase_import_line_id: 'purchase-filter-unlinked', receipt_line_text: 'Niet gekoppeld filter product', retailer_code: 'lidl', retailer_article_number: 'LIDL-UNLINKED', gtin: '', quantity_label: '1 stuk', price: 1.45, candidate_id: 'candidate-filter-unlinked', candidate_name: 'Niet gekoppeld filter kandidaat', candidate_brand: '-', external_source_name: 'Open Food Facts', external_source_product_code: '8710000000002', variant: 'Standaard', score: 0.8, candidate_status: 'candidate', is_linked_to_catalog: false, is_linkable_to_catalog: true },
     ]);
 
