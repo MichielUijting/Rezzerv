@@ -743,7 +743,7 @@ export default function Voorraad() {
     setRows(rowsWithArticleGroups)
     setArticleGroupOptions(loadedArticleGroups)
     setLocationOptions(mergedLocationOptions)
-    setLoadError(rowsWithArticleGroups.length ? '' : 'Nog geen live voorraad beschikbaar.')
+    setLoadError('')
     return rowsWithArticleGroups
   }
   const [filters, setFilters] = useState({
@@ -831,7 +831,7 @@ export default function Voorraad() {
           setRows(rowsWithArticleGroups);
           setArticleGroupOptions(loadedArticleGroups);
           setLocationOptions(mergedLocationOptions);
-          setLoadError(rowsWithArticleGroups.length ? "" : "Nog geen live voorraad beschikbaar.");
+          setLoadError("");
         }
       })
       .catch(() => {
