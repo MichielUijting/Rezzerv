@@ -284,7 +284,7 @@ function AppFeedbackDialog({
                   display: 'grid',
                   gap: '6px',
                   color: '#1A1A1A',
-                  fontSize: '14px',
+                  fontSize: 'inherit',
                   fontWeight: 500,
                 }}
               >
@@ -302,6 +302,10 @@ function AppFeedbackDialog({
                   disabled={isActionPending}
                   onChange={(event) => onFieldChange?.(field.name, event.target.value)}
                   data-testid={`${testId}-field-${field.name}`}
+                  style={{
+                    fontSize: 'inherit',
+                    fontWeight: 400,
+                  }}
                 />
               </label>
             ))}

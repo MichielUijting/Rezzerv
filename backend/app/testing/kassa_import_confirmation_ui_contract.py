@@ -47,6 +47,18 @@ def main() -> None:
         "centrale opslagactie ontvangt de ingevoerde waarden",
     )
     require(
+        feedback_source.count("fontSize: 'inherit'") >= 2,
+        "labels en invoerwaarden gebruiken de lettergrootte van de melding",
+    )
+    require(
+        "data-testid={`${testId}-field-${field.name}`}\n"
+        "                  style={{\n"
+        "                    fontSize: 'inherit',\n"
+        "                    fontWeight: 400,"
+        in feedback_source,
+        "tekst in centrale invoervelden is even groot en niet vet",
+    )
+    require(
         "field.required && !String(fieldValues[field.name] || '').trim()"
         in feedback_source,
         "verplichte centrale invoervelden worden gevalideerd",
