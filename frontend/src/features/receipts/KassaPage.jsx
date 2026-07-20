@@ -1141,9 +1141,15 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     saveLine(lineId, { [fieldName]: value })
   }
 
+  function normalizePurchaseDateInput(value) {
+    const rawValue = String(value || '').trim()
+    if (!rawValue) return ''
+    return rawValue.slice(0, 10)
+  }
+
   async function persistHeaderDraft({ suppressSuccessFeedback = false } = {}) {
     const normalizedStoreName = String(headerDraft.store_name || '').trim()
-    const normalizedPurchaseAt = String(headerDraft.purchase_at || '').trim()
+    const normalizedPurchaseAt = normalizePurchaseDateInput(headerDraft.purchase_at)
     const payload = {
       store_name: normalizedStoreName,
       purchase_at: normalizedPurchaseAt,
@@ -1158,6 +1164,44 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     onReceiptUpdated?.(updated)
     if (!suppressSuccessFeedback) onFeedback?.('success', 'Bonkop opgeslagen.')
     return updated
+  }
+
+  async function saveHeaderFieldOnBlur(fieldName) {
+    if (!canEdit || isSavingHeader) return
+
+    const currentValue = fieldName === 'purchase_at'
+      ? normalizePurchaseDateInput(receipt?.purchase_at)
+      : String(receipt?.[fieldName] || '').trim()
+
+    const nextValue = fieldName === 'purchase_at'
+      ? normalizePurchaseDateInput(headerDraft.purchase_at)
+      : String(headerDraft[fieldName] || '').trim()
+
+    if (currentValue === nextValue) return
+
+    setIsSavingHeader(true)
+
+    try {
+      await persistHeaderDraft({ suppressSuccessFeedback: true })
+
+      const fieldLabel = fieldName === 'purchase_at'
+        ? 'Aankoopdatum'
+        : 'Winkel'
+
+      onFeedback?.(
+        'success',
+        `${fieldLabel} is opgeslagen en bijgewerkt in de hoofdtabel.`,
+        { key: `receipt-header-${fieldName}-saved-${String(receipt?.id || '')}` },
+      )
+    } catch (err) {
+      onFeedback?.(
+        'error',
+        normalizeErrorMessage(err?.message)
+          || `${fieldName === 'purchase_at' ? 'Aankoopdatum' : 'Winkel'} kon niet worden opgeslagen.`,
+      )
+    } finally {
+      setIsSavingHeader(false)
+    }
   }
 
 async function saveLine(lineId, overrides = null) {
@@ -1366,8 +1410,21 @@ async function saveLine(lineId, overrides = null) {
                 <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                   {canEdit ? (
                     <>
-                      <Input label="Winkel" value={headerDraft.store_name} onChange={(event) => setHeaderDraft((current) => ({ ...current, store_name: event.target.value }))} />
-                      <Input label="Aankoopmoment" value={headerDraft.purchase_at} onChange={(event) => setHeaderDraft((current) => ({ ...current, purchase_at: event.target.value }))} />
+                      <Input
+                        label="Winkel"
+                        value={headerDraft.store_name}
+                        disabled={isSavingHeader}
+                        onChange={(event) => setHeaderDraft((current) => ({ ...current, store_name: event.target.value }))}
+                        onBlur={() => saveHeaderFieldOnBlur('store_name')}
+                      />
+                      <Input
+                        label="Aankoopdatum"
+                        type="date"
+                        value={normalizePurchaseDateInput(headerDraft.purchase_at)}
+                        disabled={isSavingHeader}
+                        onChange={(event) => setHeaderDraft((current) => ({ ...current, purchase_at: event.target.value }))}
+                        onBlur={() => saveHeaderFieldOnBlur('purchase_at')}
+                      />
                       <Input label="Totaalbedrag" type="number" step="0.01" value={headerDraft.total_amount} onChange={(event) => setHeaderDraft((current) => ({ ...current, total_amount: event.target.value }))} />
                       <Input label="Referentie / bonnummer" value={headerDraft.reference} onChange={(event) => setHeaderDraft((current) => ({ ...current, reference: event.target.value }))} />
                       <Input label="Notitie" value={headerDraft.notes} onChange={(event) => setHeaderDraft((current) => ({ ...current, notes: event.target.value }))} />
@@ -1375,7 +1432,7 @@ async function saveLine(lineId, overrides = null) {
                   ) : (
                     <>
                       <DetailInfoRow label="Winkel" value={receipt?.store_name} />
-                      <DetailInfoRow label="Aankoopmoment" value={formatDateTime(receipt?.purchase_at)} />
+                      <DetailInfoRow label="Aankoopdatum" value={formatDateTime(receipt?.purchase_at)} />
                       <DetailInfoRow label="Totaal" value={formatMoney(receipt?.total_amount, receipt?.currency)} />
                       <DetailInfoRow label="Referentie / bonnummer" value={receipt?.reference} />
                       <DetailInfoRow label="Notitie" value={receipt?.notes} />
