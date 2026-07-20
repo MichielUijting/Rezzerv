@@ -8,8 +8,8 @@ from typing import Any
 from sqlalchemy import text
 
 from app.db import engine
-from app.services.external_article_product_link_service import (
-    save_external_article_product_link,
+from app.services.external_article_confirmation_service import (
+    confirm_external_article_for_receipt_item,
 )
 from app.services.product_inventory_group_store import (
     create_or_get_product_type_with_connection,
@@ -354,20 +354,10 @@ def _link_receipt_item(conn, receipt_item_id: str, global_product_id: str) -> di
             global_product_id,
         )
 
-        confirmed_link = save_external_article_product_link(
-            conn,
-            retailer_code=row.get("retailer_code"),
-            receipt_text=row.get("receipt_text"),
-            external_article_code=row.get("external_article_code"),
-            global_product_id=global_product_id,
-            confirmed_by="external_databases_off_link",
-        )
-
         return {
             "receipt_item_type": "receipt_table_line",
             "source_id": source_id,
             "household_article_id": article_id,
-            "external_article_product_link": confirmed_link,
         }
 
     if prefix == "receipt-line" and _table_exists(conn, "receipt_lines"):
@@ -420,6 +410,13 @@ def link_off_product_with_product_type(
             raise ValueError(str(membership.get("error") or "Producttype kon niet worden gekoppeld"))
 
         receipt_link = _link_receipt_item(conn, receipt_item_id, global_product_id)
+        confirmed_external_link = confirm_external_article_for_receipt_item(
+            conn,
+            receipt_item_id=receipt_item_id,
+            global_product_id=global_product_id,
+            confirmed_by="external_databases_off_link",
+        )
+        receipt_link["external_article_product_link"] = confirmed_external_link
         if force_failure_after_link:
             raise RuntimeError("Geforceerde rollbackcontrole na OFF-koppeling")
 
