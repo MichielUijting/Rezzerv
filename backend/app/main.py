@@ -8477,6 +8477,8 @@ def ensure_release_941_receipt_edit_schema():
             'totals_overridden': 'INTEGER NOT NULL DEFAULT 0',
             'totals_override_by_user_email': 'TEXT',
             'totals_override_at': 'DATETIME',
+            'store_name_source': "TEXT NOT NULL DEFAULT 'detected'",
+            'purchase_at_source': "TEXT NOT NULL DEFAULT 'detected'",
         }
         for column_name, column_type in receipt_additions.items():
             if column_name not in receipt_columns:
@@ -11134,55 +11136,116 @@ def _extract_supported_receipts_from_zip(filename: str, file_bytes: bytes) -> li
 
 
 def _normalized_purchase_at_or_fallback(receipt_table_id: str, result: dict[str, Any]) -> dict[str, Any]:
-    """Store an explicit Kassa purchase timestamp without overwriting parser output.
+    """Normalize Kassa confirmation fields and preserve their origin.
 
-    A detected timestamp remains untouched. A detected date-only value receives 00:00.
-    When parsing did not produce a valid receipt date, store today's Dutch date at 00:00.
+    A reliable parser value is marked as ``detected``. When no reliable
+    purchase date exists, the Dutch import date at 00:00 is stored and marked
+    as ``import_default``. An absent or placeholder store name is marked as
+    ``user_required`` so Kassa can require user confirmation.
     """
     if not receipt_table_id or result.get('duplicate'):
         return result
 
     with engine.begin() as conn:
         row = conn.execute(
-            text('SELECT purchase_at FROM receipt_tables WHERE id = :id LIMIT 1'),
+            text(
+                '''
+                SELECT store_name, purchase_at
+                FROM receipt_tables
+                WHERE id = :id
+                LIMIT 1
+                '''
+            ),
             {'id': str(receipt_table_id)},
         ).mappings().first()
         if not row:
             return result
 
-        raw_text = str(row.get('purchase_at') or '').strip()
-        normalized_value = raw_text
+        raw_store_name = ' '.join(str(row.get('store_name') or '').strip().split())
+        normalized_store_key = raw_store_name.lower()
+        unreliable_store_names = {
+            '',
+            'onbekend',
+            'onbekende winkel',
+            'unknown',
+            'unknown store',
+            'manual upload',
+            'handmatige upload',
+        }
+        store_name_source = (
+            'user_required'
+            if normalized_store_key in unreliable_store_names
+            else 'detected'
+        )
+
+        raw_purchase_at = str(row.get('purchase_at') or '').strip()
+        normalized_purchase_at = raw_purchase_at
         valid_receipt_date = False
 
-        if raw_text:
+        if raw_purchase_at:
             try:
-                if re.fullmatch(r'\d{4}-\d{2}-\d{2}', raw_text):
-                    normalized_value = datetime.combine(date.fromisoformat(raw_text), time.min).isoformat(timespec='seconds')
+                if re.fullmatch(r'\d{4}-\d{2}-\d{2}', raw_purchase_at):
+                    normalized_purchase_at = datetime.combine(
+                        date.fromisoformat(raw_purchase_at),
+                        time.min,
+                    ).isoformat(timespec='seconds')
                     valid_receipt_date = True
                 else:
-                    datetime.fromisoformat(raw_text.replace('Z', '+00:00'))
+                    datetime.fromisoformat(raw_purchase_at.replace('Z', '+00:00'))
                     valid_receipt_date = True
             except (TypeError, ValueError):
-                normalized_value = ''
+                normalized_purchase_at = ''
+
+        purchase_at_source = 'detected'
 
         if not valid_receipt_date:
             try:
                 dutch_now = datetime.now(ZoneInfo('Europe/Amsterdam'))
             except Exception:
                 dutch_now = datetime.now()
-            normalized_value = dutch_now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None).isoformat(timespec='seconds')
 
-        if normalized_value != raw_text:
-            conn.execute(
-                text('UPDATE receipt_tables SET purchase_at = :purchase_at, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
-                {'id': str(receipt_table_id), 'purchase_at': normalized_value},
-            )
+            normalized_purchase_at = dutch_now.replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+                tzinfo=None,
+            ).isoformat(timespec='seconds')
+            purchase_at_source = 'import_default'
 
-    result['purchase_at'] = normalized_value
+        conn.execute(
+            text(
+                '''
+                UPDATE receipt_tables
+                SET purchase_at = :purchase_at,
+                    store_name_source = :store_name_source,
+                    purchase_at_source = :purchase_at_source,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                '''
+            ),
+            {
+                'id': str(receipt_table_id),
+                'purchase_at': normalized_purchase_at,
+                'store_name_source': store_name_source,
+                'purchase_at_source': purchase_at_source,
+            },
+        )
+
+    result['purchase_at'] = normalized_purchase_at
+    result['store_name_source'] = store_name_source
+    result['purchase_at_source'] = purchase_at_source
+
     if isinstance(result.get('receipt'), dict):
-        result['receipt']['purchase_at'] = normalized_value
+        result['receipt']['purchase_at'] = normalized_purchase_at
+        result['receipt']['store_name_source'] = store_name_source
+        result['receipt']['purchase_at_source'] = purchase_at_source
+
     if isinstance(result.get('parsed'), dict):
-        result['parsed']['purchase_at'] = normalized_value
+        result['parsed']['purchase_at'] = normalized_purchase_at
+        result['parsed']['store_name_source'] = store_name_source
+        result['parsed']['purchase_at_source'] = purchase_at_source
+
     return result
 
 
@@ -12329,6 +12392,8 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                     rt.store_name,
                     rt.store_branch,
                     rt.purchase_at,
+                    rt.store_name_source,
+                    rt.purchase_at_source,
                     rt.total_amount,
                     rt.discount_total,
                     rt.reference,
@@ -12442,6 +12507,8 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
                     rt.store_name,
                     rt.store_branch,
                     rt.purchase_at,
+                    rt.store_name_source,
+                    rt.purchase_at_source,
                     rt.total_amount,
                     rt.discount_total,
                     rt.reference,
@@ -12824,7 +12891,7 @@ def update_receipt_header(receipt_table_id: str, payload: ReceiptHeaderUpdateReq
     with engine.begin() as conn:
         context = require_receipt_write_context(conn, receipt_table_id, authorization)
         current = conn.execute(
-            text("SELECT id, store_name, purchase_at, total_amount, reference, notes, currency FROM receipt_tables WHERE id = :id LIMIT 1"),
+            text("SELECT id, store_name, purchase_at, store_name_source, purchase_at_source, total_amount, reference, notes, currency FROM receipt_tables WHERE id = :id LIMIT 1"),
             {'id': receipt_table_id},
         ).mappings().first()
         if not current:
@@ -12832,14 +12899,18 @@ def update_receipt_header(receipt_table_id: str, payload: ReceiptHeaderUpdateReq
         values = {
             'store_name': current.get('store_name'),
             'purchase_at': current.get('purchase_at'),
+            'store_name_source': current.get('store_name_source') or 'detected',
+            'purchase_at_source': current.get('purchase_at_source') or 'detected',
             'total_amount': current.get('total_amount'),
             'reference': current.get('reference'),
             'notes': current.get('notes'),
         }
         if payload.store_name is not None:
             values['store_name'] = ' '.join(str(payload.store_name or '').strip().split()) or None
+            values['store_name_source'] = 'user'
         if payload.purchase_at is not None:
             values['purchase_at'] = str(payload.purchase_at or '').strip() or None
+            values['purchase_at_source'] = 'user'
         if payload.total_amount is not None:
             values['total_amount'] = float(payload.total_amount)
         if payload.reference is not None:
@@ -12851,6 +12922,8 @@ def update_receipt_header(receipt_table_id: str, payload: ReceiptHeaderUpdateReq
             UPDATE receipt_tables
             SET store_name = :store_name,
                 purchase_at = :purchase_at,
+                store_name_source = :store_name_source,
+                purchase_at_source = :purchase_at_source,
                 total_amount = :total_amount,
                 reference = :reference,
                 notes = :notes,
