@@ -12488,6 +12488,7 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
                 LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
                 WHERE rt.household_id = :household_id
+                  AND rt.approved_at IS NULL
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
                 ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
