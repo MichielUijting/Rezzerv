@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 
 def require(condition: bool, message: str) -> None:
@@ -110,11 +110,11 @@ def main() -> None:
             "            refreshedItems,\n"
             "            null,\n"
             "            true,"
-        ) == 2,
-        "beide nieuwe-bonimportpaden activeren de eenmalige controle",
+        ) == 3,
+        "alle drie nieuwe-bonimportpaden activeren de eenmalige controle",
     )
     require(
-        kassa_source.count("if (uploadedReceiptId) {") == 2,
+        kassa_source.count("if (uploadedReceiptId) {") == 3,
         "de importmelding wacht niet op opname in de ververste hoofdtabel",
     )
     require(
@@ -129,4 +129,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

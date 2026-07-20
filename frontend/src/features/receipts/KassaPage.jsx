@@ -1,4 +1,4 @@
-﻿import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
@@ -2987,7 +2987,12 @@ export default function KassaPage() {
 
         if (uploadedReceiptId) {
           setSelectedReceiptIds([uploadedReceiptId])
-          await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          await openReceiptDetail(
+            uploadedReceiptId,
+            refreshedItems,
+            null,
+            true,
+          )
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
@@ -3354,6 +3359,3 @@ export default function KassaPage() {
     </AppShell>
   )
 }
-
-
-
