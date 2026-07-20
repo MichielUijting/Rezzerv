@@ -100,18 +100,10 @@ function candidateStatusLabel(candidate, linked, fallback, universal) {
   return text(candidate?.status_label || candidate?.candidate_status || candidate?.status || 'Kandidaat')
 }
 function candidateKey(candidate) { return text(candidate?.candidate_id || candidate?.id || `${candidate?.candidate_name}-${candidate?.candidate_source_product_code || candidate?.external_source_product_code}-${candidate?.variant}`, 'candidate') }
-function hasCatalogLink(candidate) { return Boolean(candidate?.is_linked_to_catalog === true || text(candidate?.global_product_id, '') || text(candidate?.product_identity_id, '') || text(candidate?.matched_global_product_id, '') || text(candidate?.matched_global_article_id, '')) }
+function hasCatalogLink(candidate) { return candidate?.central_link_active === true }
 function receiptItemHasCatalogLink(rawItem) {
-  const status = text(rawItem?.candidate_status || rawItem?.status || rawItem?.match_status, '').toLowerCase()
-  return Boolean(
-    rawItem?.is_linked_to_catalog === true
-    || rawItem?.is_existing_link_for_receipt_item === true
-    || text(rawItem?.global_product_id, '')
-    || text(rawItem?.canonical_catalog_product_id, '')
-    || text(rawItem?.matched_global_product_id, '')
-    || status === 'linked_to_catalog'
-    || status === 'matched'
-  )
+  // Alleen een actieve centrale koppeling betekent Gekoppeld.
+  return rawItem?.central_link_active === true
 }
 function candidateArticleNumber(candidate) { return externalCodeText(candidate?.external_source_product_code, candidate?.candidate_source_product_code, candidate?.source_product_code, candidate?.retailer_article_number, candidate?.external_article_code) }
 function candidateHasUniversalCode(candidate, externalCode) {

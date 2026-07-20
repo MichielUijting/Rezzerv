@@ -61,6 +61,10 @@ import tempfile
 import cv2
 
 from app.db import engine, get_runtime_datastore_info
+from app.services.external_article_product_link_service import (
+    ensure_external_article_product_link_schema,
+    get_confirmed_external_article_product_link,
+)
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
 from app.api.receipt_diagnosis_routes import router as receipt_diagnosis_router
@@ -122,6 +126,10 @@ import logging
 from sqlalchemy import text, bindparam
 
 app = FastAPI()
+# Externe-databases-koppelingen: idempotente schema-initialisatie.
+with engine.begin() as schema_conn:
+    ensure_external_article_product_link_schema(schema_conn)
+
 logger = logging.getLogger('rezzerv.api')
 RECEIPT_UPLOAD_ERROR_PATHS = {
     '/api/receipts/import',
@@ -5610,18 +5618,26 @@ def sync_receipt_table_line_product_links(conn, receipt_table_id: str, line_id: 
     ).mappings().first()
     if not line:
         return None
-    resolved = resolve_receipt_line_product_links(
+    confirmed_link = get_confirmed_external_article_product_link(
         conn,
-        receipt_header.get('household_id'),
-        line.get('article_name'),
-        barcode=line.get('barcode'),
-        brand=receipt_header.get('store_name'),
-        matched_article_id=line.get('matched_article_id'),
-        create_global_product=create_global_product,
-        create_household_article=create_household_article,
-        external_article_code=line.get('external_article_code'),
         retailer_code=receipt_header.get('store_name'),
+        receipt_text=line.get('article_name'),
+        external_article_code=line.get('external_article_code'),
     )
+
+    resolved = {
+        'matched_global_product_id': (
+            confirmed_link.get('global_product_id')
+            if confirmed_link
+            else None
+        ),
+        'matched_household_article_id': None,
+        'match_method': (
+            'external_databases:confirmed'
+            if confirmed_link
+            else None
+        ),
+    }
     conn.execute(
         text(
             """
@@ -8461,6 +8477,8 @@ def ensure_release_941_receipt_edit_schema():
             'totals_overridden': 'INTEGER NOT NULL DEFAULT 0',
             'totals_override_by_user_email': 'TEXT',
             'totals_override_at': 'DATETIME',
+            'store_name_source': "TEXT NOT NULL DEFAULT 'detected'",
+            'purchase_at_source': "TEXT NOT NULL DEFAULT 'detected'",
         }
         for column_name, column_type in receipt_additions.items():
             if column_name not in receipt_columns:
@@ -9398,7 +9416,16 @@ def apply_inventory_consumption(
     return {"applied_quantity": quantity_int, "affected_inventory_ids": [existing["id"]]}
 
 
-def create_auto_repurchase_event(conn, household_id: str, article_id: str, article_name: str, resolved_location: dict, quantity: float = 1):
+def create_auto_repurchase_event(
+    conn,
+    household_id: str,
+    article_id: str,
+    article_name: str,
+    resolved_location: dict,
+    quantity: float = 1,
+    *,
+    purchase_date: str | None = None,
+):
     quantity_int = int(quantity)
     if quantity_int <= 0:
         return None
@@ -9422,6 +9449,7 @@ def create_auto_repurchase_event(conn, household_id: str, article_id: str, artic
         new_quantity=new_total,
         source='auto_repurchase',
         note=f'Automatisch {quantity_label} afgeboekt bij herhaalaankoop.',
+        purchase_date=purchase_date,
     )
 
 
@@ -9724,7 +9752,8 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                COALESCE(corrected_unit, unit) AS unit,
                COALESCE(corrected_line_total, line_total) AS line_total,
                barcode,
-               external_article_code
+               external_article_code,
+               matched_global_product_id
         FROM receipt_table_lines
         WHERE receipt_table_id = :receipt_table_id
           AND COALESCE(is_deleted, 0) = 0
@@ -9749,18 +9778,12 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
         except Exception:
             line_price_value = None
 
-        resolved_links = resolve_receipt_line_product_links(
-            conn,
-            household_id,
-            raw_label,
-            barcode=line.get('barcode'),
-            brand=(receipt or {}).get('store_name'),
-            create_global_product=False,
-            create_household_article=False,  # Alleen bestaande standaardartikelen matchen
-            external_article_code=line.get('external_article_code'),
-            retailer_code=(receipt or {}).get('store_name'),
+        # Uitpakken bepaalt geen productkoppeling.
+        # De door Kassa vastgelegde koppeling wordt letterlijk overgenomen.
+        matched_global_product_id = (
+            str(line.get('matched_global_product_id') or '').strip()
+            or None
         )
-        matched_global_product_id = str((resolved_links or {}).get('matched_global_product_id') or '').strip() or None
         # M2A: bij eerste import blijft 'Mijn artikel' leeg.
         # Een global_product/catalogusmatch mag alleen product- en categoriesuggestie zijn.
         # Een household_article wordt pas gevuld door expliciete geheugenmapping of gebruikerskeuze.
@@ -9808,16 +9831,6 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                     'matched_household_article_id': matched_household_article_id,
                 },
             )
-            conn.execute(
-                text("""
-                UPDATE receipt_table_lines
-                SET matched_global_product_id = :matched_global_product_id,
-                    article_match_status = CASE WHEN :matched_global_product_id IS NOT NULL THEN 'product_matched' ELSE 'unmatched' END,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :line_id
-                """),
-                {'line_id': line.get('id'), 'matched_global_product_id': matched_global_product_id},
-            )
             continue
 
         conn.execute(
@@ -9852,16 +9865,6 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
                 'suggested_household_article_id': matched_household_article_id,
             },
         )
-        conn.execute(
-            text("""
-            UPDATE receipt_table_lines
-            SET matched_global_product_id = :matched_global_product_id,
-                article_match_status = CASE WHEN :matched_global_product_id IS NOT NULL THEN 'product_matched' ELSE 'unmatched' END,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :line_id
-            """),
-            {'line_id': line.get('id'), 'matched_global_product_id': matched_global_product_id},
-        )
         existing_refs.add(external_line_ref)
         inserted += 1
 
@@ -9874,6 +9877,38 @@ def sync_unpack_batch_lines_for_receipt(conn, batch_id: str, receipt, *, refresh
 
 
 def ensure_unpack_batch_for_receipt(conn, receipt):
+    # Kassa-goedkeuringspoort: alleen goedgekeurde bonnen mogen naar Uitpakken.
+    receipt_table_id = str(
+        (receipt or {}).get('receipt_table_id')
+        or (receipt or {}).get('id')
+        or ''
+    ).strip()
+    if not receipt_table_id:
+        return None
+
+    approval_row = conn.execute(
+        text(
+            """
+            SELECT approved_at, parse_status
+            FROM receipt_tables
+            WHERE id = :receipt_table_id
+            LIMIT 1
+            """
+        ),
+        {'receipt_table_id': receipt_table_id},
+    ).mappings().first()
+
+    approval_status = str(
+        (approval_row or {}).get('parse_status') or ''
+    ).strip().lower()
+
+    if (
+        not approval_row
+        or not approval_row.get('approved_at')
+        or approval_status not in {'approved', 'approved_override'}
+    ):
+        return None
+
     receipt_table_id = str(receipt.get('receipt_table_id') or receipt.get('id') or '').strip()
     household_id = str(receipt.get('household_id') or '').strip()
     if not receipt_table_id or not household_id:
@@ -11111,55 +11146,116 @@ def _extract_supported_receipts_from_zip(filename: str, file_bytes: bytes) -> li
 
 
 def _normalized_purchase_at_or_fallback(receipt_table_id: str, result: dict[str, Any]) -> dict[str, Any]:
-    """Store an explicit Kassa purchase timestamp without overwriting parser output.
+    """Normalize Kassa confirmation fields and preserve their origin.
 
-    A detected timestamp remains untouched. A detected date-only value receives 00:00.
-    When parsing did not produce a valid receipt date, store today's Dutch date at 00:00.
+    A reliable parser value is marked as ``detected``. When no reliable
+    purchase date exists, the Dutch import date at 00:00 is stored and marked
+    as ``import_default``. An absent or placeholder store name is marked as
+    ``user_required`` so Kassa can require user confirmation.
     """
     if not receipt_table_id or result.get('duplicate'):
         return result
 
     with engine.begin() as conn:
         row = conn.execute(
-            text('SELECT purchase_at FROM receipt_tables WHERE id = :id LIMIT 1'),
+            text(
+                '''
+                SELECT store_name, purchase_at
+                FROM receipt_tables
+                WHERE id = :id
+                LIMIT 1
+                '''
+            ),
             {'id': str(receipt_table_id)},
         ).mappings().first()
         if not row:
             return result
 
-        raw_text = str(row.get('purchase_at') or '').strip()
-        normalized_value = raw_text
+        raw_store_name = ' '.join(str(row.get('store_name') or '').strip().split())
+        normalized_store_key = raw_store_name.lower()
+        unreliable_store_names = {
+            '',
+            'onbekend',
+            'onbekende winkel',
+            'unknown',
+            'unknown store',
+            'manual upload',
+            'handmatige upload',
+        }
+        store_name_source = (
+            'user_required'
+            if normalized_store_key in unreliable_store_names
+            else 'detected'
+        )
+
+        raw_purchase_at = str(row.get('purchase_at') or '').strip()
+        normalized_purchase_at = raw_purchase_at
         valid_receipt_date = False
 
-        if raw_text:
+        if raw_purchase_at:
             try:
-                if re.fullmatch(r'\d{4}-\d{2}-\d{2}', raw_text):
-                    normalized_value = datetime.combine(date.fromisoformat(raw_text), time.min).isoformat(timespec='seconds')
+                if re.fullmatch(r'\d{4}-\d{2}-\d{2}', raw_purchase_at):
+                    normalized_purchase_at = datetime.combine(
+                        date.fromisoformat(raw_purchase_at),
+                        time.min,
+                    ).isoformat(timespec='seconds')
                     valid_receipt_date = True
                 else:
-                    datetime.fromisoformat(raw_text.replace('Z', '+00:00'))
+                    datetime.fromisoformat(raw_purchase_at.replace('Z', '+00:00'))
                     valid_receipt_date = True
             except (TypeError, ValueError):
-                normalized_value = ''
+                normalized_purchase_at = ''
+
+        purchase_at_source = 'detected'
 
         if not valid_receipt_date:
             try:
                 dutch_now = datetime.now(ZoneInfo('Europe/Amsterdam'))
             except Exception:
                 dutch_now = datetime.now()
-            normalized_value = dutch_now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None).isoformat(timespec='seconds')
 
-        if normalized_value != raw_text:
-            conn.execute(
-                text('UPDATE receipt_tables SET purchase_at = :purchase_at, updated_at = CURRENT_TIMESTAMP WHERE id = :id'),
-                {'id': str(receipt_table_id), 'purchase_at': normalized_value},
-            )
+            normalized_purchase_at = dutch_now.replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+                tzinfo=None,
+            ).isoformat(timespec='seconds')
+            purchase_at_source = 'import_default'
 
-    result['purchase_at'] = normalized_value
+        conn.execute(
+            text(
+                '''
+                UPDATE receipt_tables
+                SET purchase_at = :purchase_at,
+                    store_name_source = :store_name_source,
+                    purchase_at_source = :purchase_at_source,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                '''
+            ),
+            {
+                'id': str(receipt_table_id),
+                'purchase_at': normalized_purchase_at,
+                'store_name_source': store_name_source,
+                'purchase_at_source': purchase_at_source,
+            },
+        )
+
+    result['purchase_at'] = normalized_purchase_at
+    result['store_name_source'] = store_name_source
+    result['purchase_at_source'] = purchase_at_source
+
     if isinstance(result.get('receipt'), dict):
-        result['receipt']['purchase_at'] = normalized_value
+        result['receipt']['purchase_at'] = normalized_purchase_at
+        result['receipt']['store_name_source'] = store_name_source
+        result['receipt']['purchase_at_source'] = purchase_at_source
+
     if isinstance(result.get('parsed'), dict):
-        result['parsed']['purchase_at'] = normalized_value
+        result['parsed']['purchase_at'] = normalized_purchase_at
+        result['parsed']['store_name_source'] = store_name_source
+        result['parsed']['purchase_at_source'] = purchase_at_source
+
     return result
 
 
@@ -12306,6 +12402,8 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                     rt.store_name,
                     rt.store_branch,
                     rt.purchase_at,
+                    rt.store_name_source,
+                    rt.purchase_at_source,
                     rt.total_amount,
                     rt.discount_total,
                     rt.reference,
@@ -12349,6 +12447,8 @@ def list_unpack_start_batches(householdId: str = Query(...), authorization: Opti
                 JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
                 WHERE rt.household_id = :household_id
+                  AND rt.approved_at IS NOT NULL
+                  AND lower(trim(COALESCE(rt.parse_status, ''))) IN ('approved', 'approved_override')
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
                 ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
@@ -12417,6 +12517,8 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
                     rt.store_name,
                     rt.store_branch,
                     rt.purchase_at,
+                    rt.store_name_source,
+                    rt.purchase_at_source,
                     rt.total_amount,
                     rt.discount_total,
                     rt.reference,
@@ -12463,6 +12565,7 @@ def list_receipts(householdId: str = Query(...), authorization: Optional[str] = 
                 LEFT JOIN receipt_sources rs ON rs.id = rr.source_id
                 LEFT JOIN receipt_email_messages rem ON rem.raw_receipt_id = rr.id
                 WHERE rt.household_id = :household_id
+                  AND rt.approved_at IS NULL
                   AND rt.deleted_at IS NULL
                   AND rr.deleted_at IS NULL
                 ORDER BY COALESCE(rt.purchase_at, rt.created_at) DESC, rt.created_at DESC, rt.id DESC
@@ -12798,7 +12901,7 @@ def update_receipt_header(receipt_table_id: str, payload: ReceiptHeaderUpdateReq
     with engine.begin() as conn:
         context = require_receipt_write_context(conn, receipt_table_id, authorization)
         current = conn.execute(
-            text("SELECT id, store_name, purchase_at, total_amount, reference, notes, currency FROM receipt_tables WHERE id = :id LIMIT 1"),
+            text("SELECT id, store_name, purchase_at, store_name_source, purchase_at_source, total_amount, reference, notes, currency FROM receipt_tables WHERE id = :id LIMIT 1"),
             {'id': receipt_table_id},
         ).mappings().first()
         if not current:
@@ -12806,14 +12909,18 @@ def update_receipt_header(receipt_table_id: str, payload: ReceiptHeaderUpdateReq
         values = {
             'store_name': current.get('store_name'),
             'purchase_at': current.get('purchase_at'),
+            'store_name_source': current.get('store_name_source') or 'detected',
+            'purchase_at_source': current.get('purchase_at_source') or 'detected',
             'total_amount': current.get('total_amount'),
             'reference': current.get('reference'),
             'notes': current.get('notes'),
         }
         if payload.store_name is not None:
             values['store_name'] = ' '.join(str(payload.store_name or '').strip().split()) or None
+            values['store_name_source'] = 'user'
         if payload.purchase_at is not None:
             values['purchase_at'] = str(payload.purchase_at or '').strip() or None
+            values['purchase_at_source'] = 'user'
         if payload.total_amount is not None:
             values['total_amount'] = float(payload.total_amount)
         if payload.reference is not None:
@@ -12825,6 +12932,8 @@ def update_receipt_header(receipt_table_id: str, payload: ReceiptHeaderUpdateReq
             UPDATE receipt_tables
             SET store_name = :store_name,
                 purchase_at = :purchase_at,
+                store_name_source = :store_name_source,
+                purchase_at_source = :purchase_at_source,
                 total_amount = :total_amount,
                 reference = :reference,
                 notes = :notes,
@@ -12930,26 +13039,12 @@ def create_receipt_line(receipt_table_id: str, payload: ReceiptLineCreateRequest
             else None
         )
 
-        # Een universele barcode is leidend. De winkelartikelcode blijft hooguit
-        # als aanvullende of historische identiteit beschikbaar.
-        existing_product = find_global_product_match_for_receipt_line(
-            conn,
-            normalized_barcode,
-            payload.article_name,
-            external_article_code=normalized_external_article_code,
-            retailer_code=existing.get('store_name'),
-        )
-        matched_global_product_id = (
-            str(existing_product.get('id') or '').strip()
-            if existing_product
-            else None
-        )
-        article_match_status = 'product_matched' if matched_global_product_id else 'unmatched'
-        confidence_score = (
-            float(existing_product.get('confidence_score') or 1.0)
-            if existing_product
-            else None
-        )
+        # Kassa start zonder lokale of kandidaatgebaseerde productmatch.
+        # Na invoegen leest sync_receipt_table_line_product_links uitsluitend
+        # de actieve centrale koppeling uit external_article_product_links.
+        matched_global_product_id = None
+        article_match_status = 'unmatched'
+        confidence_score = None
 
         next_index = conn.execute(
             text(
@@ -17581,7 +17676,7 @@ def get_purchase_import_line_external_product_candidates(line_id: str):
 def map_purchase_import_line(line_id: str, payload: MapLineRequest):
     with engine.begin() as conn:
         line = conn.execute(
-            text("SELECT id, batch_id, target_location_id, location_override_mode FROM purchase_import_lines WHERE id = :id"),
+            text("SELECT id, batch_id, external_line_ref, target_location_id, location_override_mode FROM purchase_import_lines WHERE id = :id"),
             {"id": line_id},
         ).mappings().first()
         if not line:
@@ -17634,7 +17729,8 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
                 "id": line_id,
             },
         )
-        sync_purchase_import_line_product_links(conn, line_id, household_id)
+        if not str(line.get("external_line_ref") or "").strip().startswith("receipt-line:"):
+            sync_purchase_import_line_product_links(conn, line_id, household_id)
         status = update_batch_status(conn, line["batch_id"])
         updated = conn.execute(
             text(
@@ -17656,7 +17752,7 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
         line = conn.execute(
             text(
                 """
-                SELECT pil.id, pil.batch_id, pib.household_id
+                SELECT pil.id, pil.batch_id, pil.external_line_ref, pib.household_id
                 FROM purchase_import_lines pil
                 JOIN purchase_import_batches pib ON pib.id = pil.batch_id
                 WHERE pil.id = :id
@@ -17681,7 +17777,8 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
             ),
             {"article_id": article_option_id, "id": line_id},
         )
-        sync_purchase_import_line_product_links(conn, line_id, str(line["household_id"]))
+        if not str(line.get("external_line_ref") or "").strip().startswith("receipt-line:"):
+            sync_purchase_import_line_product_links(conn, line_id, str(line["household_id"]))
         status = update_batch_status(conn, line["batch_id"])
         article = resolve_review_article_option(conn, article_option_id, str(line["household_id"]))
 
@@ -18002,7 +18099,12 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
             batch = conn.execute(
                 text(
                     """
-                    SELECT pib.id, pib.household_id, pib.import_status, sp.code AS store_provider_code
+                    SELECT
+                        pib.id,
+                        pib.household_id,
+                        pib.import_status,
+                        pib.raw_payload,
+                        sp.code AS store_provider_code
                     FROM purchase_import_batches pib
                     JOIN store_providers sp ON sp.id = pib.store_provider_id
                     WHERE pib.id = :id
@@ -18016,10 +18118,22 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
             if str(context.get("display_role") or "").strip().lower() == "viewer":
                 raise HTTPException(status_code=403, detail="Kijkers mogen kassabonnen wel opvoeren, maar niet naar voorraad verwerken")
 
+            raw_payload = {}
+            try:
+                raw_payload = json.loads(batch.get("raw_payload") or "{}")
+            except (TypeError, ValueError, json.JSONDecodeError):
+                raw_payload = {}
+
+            batch_metadata = raw_payload.get("batch_metadata")
+            if not isinstance(batch_metadata, dict):
+                batch_metadata = {}
+
+            purchase_date = str(batch_metadata.get("purchase_date") or "").strip() or None
+
             lines = conn.execute(
                 text(
                     """
-                    SELECT id, article_name_raw, brand_raw, external_article_code, quantity_raw, unit_raw, review_decision, matched_household_article_id,
+                    SELECT id, external_line_ref, article_name_raw, brand_raw, external_article_code, quantity_raw, unit_raw, review_decision, matched_household_article_id,
                            matched_global_product_id, target_location_id, processing_status, processed_event_id
                     FROM purchase_import_lines
                     WHERE batch_id = :batch_id
@@ -18108,10 +18222,11 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                             ),
                             {'id': line_id, 'matched_household_article_id': article_id},
                         )
-                synced_links = sync_purchase_import_line_product_links(conn, line_id, str(batch["household_id"]))
-                if synced_links:
-                    article_id = synced_links.get('matched_household_article_id') or article_id
-                    matched_global_product_id = synced_links.get('matched_global_product_id') or matched_global_product_id
+                if not str(line.get("external_line_ref") or "").strip().startswith("receipt-line:"):
+                    synced_links = sync_purchase_import_line_product_links(conn, line_id, str(batch["household_id"]))
+                    if synced_links:
+                        article_id = synced_links.get('matched_household_article_id') or article_id
+                        matched_global_product_id = synced_links.get('matched_global_product_id') or matched_global_product_id
                 selected_article_input = str(article_id or matched_global_product_id or '')
                 original_article = resolve_review_article_option(conn, article_id, str(batch["household_id"])) if article_id else None
                 article = resolve_processing_article(conn, str(batch["household_id"]), original_article)
@@ -18213,6 +18328,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                         supplier_name=batch.get("store_name") or batch.get("store_label") or batch.get("store_provider_name") or batch.get("store_provider_code"),
                         price=float(line.get("line_price_raw")) if line.get("line_price_raw") is not None else None,
                         currency=line.get("currency_code") or "EUR",
+                        purchase_date=purchase_date,
                         article_number=line.get("external_article_code"),
                         barcode=line.get("barcode") or None,
                     )
@@ -18225,7 +18341,15 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     applied_deduction_quantity = 0
                     if should_auto_consume:
                         current_stage = 'auto_consume_write'
-                        auto_event_id = create_auto_repurchase_event(conn, batch["household_id"], article_id, article_name, resolved_location, quantity=requested_deduction_quantity)
+                        auto_event_id = create_auto_repurchase_event(
+                            conn,
+                            batch["household_id"],
+                            article_id,
+                            article_name,
+                            resolved_location,
+                            quantity=requested_deduction_quantity,
+                            purchase_date=purchase_date,
+                        )
                         consumption_result = apply_inventory_consumption(
                             conn,
                             batch["household_id"],

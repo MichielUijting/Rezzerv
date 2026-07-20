@@ -8,6 +8,9 @@ from typing import Any
 from sqlalchemy import text
 
 from app.db import engine
+from app.services.external_article_confirmation_service import (
+    confirm_external_article_for_receipt_item,
+)
 from app.services.product_inventory_group_store import (
     create_or_get_product_type_with_connection,
     ensure_product_inventory_group_schema,
@@ -302,7 +305,30 @@ def _link_receipt_item(conn, receipt_item_id: str, global_product_id: str) -> di
 
     if prefix == "receipt-table-line":
         row = conn.execute(
-            text("SELECT id, matched_article_id FROM receipt_table_lines WHERE id = :id LIMIT 1"),
+            text(
+                """
+                SELECT
+                    rtl.id,
+                    rtl.matched_article_id,
+                    rtl.external_article_code,
+                    COALESCE(
+                        rtl.corrected_raw_label,
+                        rtl.raw_label,
+                        rtl.normalized_label,
+                        ''
+                    ) AS receipt_text,
+                    COALESCE(
+                        rt.store_chain,
+                        rt.store_name,
+                        ''
+                    ) AS retailer_code
+                FROM receipt_table_lines rtl
+                JOIN receipt_tables rt
+                  ON rt.id = rtl.receipt_table_id
+                WHERE rtl.id = :id
+                LIMIT 1
+                """
+            ),
             {"id": source_id},
         ).mappings().first()
         if not row:
@@ -322,8 +348,17 @@ def _link_receipt_item(conn, receipt_item_id: str, global_product_id: str) -> di
             ),
             {"id": source_id, "global_product_id": global_product_id},
         )
-        article_id = _link_household_article(conn, row.get("matched_article_id"), global_product_id)
-        return {"receipt_item_type": "receipt_table_line", "source_id": source_id, "household_article_id": article_id}
+        article_id = _link_household_article(
+            conn,
+            row.get("matched_article_id"),
+            global_product_id,
+        )
+
+        return {
+            "receipt_item_type": "receipt_table_line",
+            "source_id": source_id,
+            "household_article_id": article_id,
+        }
 
     if prefix == "receipt-line" and _table_exists(conn, "receipt_lines"):
         columns = _table_columns(conn, "receipt_lines")
@@ -375,6 +410,13 @@ def link_off_product_with_product_type(
             raise ValueError(str(membership.get("error") or "Producttype kon niet worden gekoppeld"))
 
         receipt_link = _link_receipt_item(conn, receipt_item_id, global_product_id)
+        confirmed_external_link = confirm_external_article_for_receipt_item(
+            conn,
+            receipt_item_id=receipt_item_id,
+            global_product_id=global_product_id,
+            confirmed_by="external_databases_off_link",
+        )
+        receipt_link["external_article_product_link"] = confirmed_external_link
         if force_failure_after_link:
             raise RuntimeError("Geforceerde rollbackcontrole na OFF-koppeling")
 

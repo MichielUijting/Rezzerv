@@ -4,6 +4,7 @@ import { useBlocker, useNavigate } from "react-router-dom";
 import Header from "../ui/Header";
 import Table from "../ui/Table";
 import Button from "../ui/Button";
+import { useAppFeedback } from "../ui/AppFeedbackProvider.jsx";
 import { nextSortState, sortItems, sortStringOptions } from "../ui/sorting";
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from "../ui/resizableTable.jsx";
 import useDismissOnComponentClick from "../lib/useDismissOnComponentClick.js";
@@ -721,6 +722,7 @@ function getColumnLockMessage(row, key) {
 
 export default function Voorraad() {
   const navigate = useNavigate();
+  const { showFeedback } = useAppFeedback();
   const [rows, setRows] = useState(initialData);
   const [localZeroRows, setLocalZeroRows] = useState([]);
   const rowsRef = useRef(initialData)
@@ -743,7 +745,6 @@ export default function Voorraad() {
     setRows(rowsWithArticleGroups)
     setArticleGroupOptions(loadedArticleGroups)
     setLocationOptions(mergedLocationOptions)
-    setLoadError(rowsWithArticleGroups.length ? '' : 'Nog geen live voorraad beschikbaar.')
     return rowsWithArticleGroups
   }
   const [filters, setFilters] = useState({
@@ -765,7 +766,6 @@ export default function Voorraad() {
   const inventoryColumnDefaults = useMemo(() => Object.fromEntries(inventoryTableColumns.map(({ key, width }) => [key, width])), [inventoryTableColumns]);
   const { widths: inventoryColumnWidths, startResize: startInventoryResize } = useResizableColumnWidths(inventoryColumnDefaults);
   const [editingCell, setEditingCell] = useState(null);
-  const [loadError, setLoadError] = useState("");
   const [saveState, setSaveState] = useState({});
   const [articleGroupOptions, setArticleGroupOptions] = useState([]);
   const [articleGroupCreateTarget, setArticleGroupCreateTarget] = useState(null);
@@ -814,7 +814,7 @@ export default function Voorraad() {
   const shouldWarnBeforeLeaving = hasDirtyEditor || hasPendingSave || purchaseFormDirty || hasPendingPurchaseSave;
   const blocker = useBlocker(shouldWarnBeforeLeaving);
 
-  useDismissOnComponentClick([() => setLoadError(''), () => setSaveState((prev) => Object.fromEntries(Object.entries(prev).filter(([, value]) => value?.status === 'saving')))], Boolean(loadError || Object.keys(saveState).length));
+  useDismissOnComponentClick([() => setSaveState((prev) => Object.fromEntries(Object.entries(prev).filter(([, value]) => value?.status === 'saving')))], Boolean(Object.keys(saveState).length));
 
   useEffect(() => {
     purchaseFormRef.current = purchaseForm;
@@ -831,14 +831,19 @@ export default function Voorraad() {
           setRows(rowsWithArticleGroups);
           setArticleGroupOptions(loadedArticleGroups);
           setLocationOptions(mergedLocationOptions);
-          setLoadError(rowsWithArticleGroups.length ? "" : "Nog geen live voorraad beschikbaar.");
         }
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
           setLocalZeroRows([]);
           setRows([]);
-          setLoadError("Live voorraad kon niet worden geladen.");
+          showFeedback({
+            variant: "error",
+            message: "Live voorraad kon niet worden geladen.",
+            technicalDetail: error?.message || String(error || ""),
+            showTechnicalToggle: true,
+            key: "inventory-load-error",
+          });
         }
       });
     return () => {
@@ -1390,7 +1395,6 @@ export default function Voorraad() {
       <div className="rz-content">
         <div className="rz-content-inner">
           <div className="rz-card">
-            {loadError && <div style={{ marginBottom: "12px", color: "#b42318", fontWeight: 700 }}>{loadError}</div>}
             <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" dataTestId="inventory-table" tableStyle={{ tableLayout: 'fixed', width: buildTableWidth(inventoryColumnWidths), minWidth: buildTableWidth(inventoryColumnWidths) }}>
                 <colgroup>
                   <col style={{ width: `${inventoryColumnWidths.select}px` }} />
@@ -1507,7 +1511,7 @@ export default function Voorraad() {
 
                   {filteredRows.length === 0 && (
                     <tr>
-                      <td colSpan={7}>{loadError || "Nog geen live voorraad beschikbaar."}</td>
+                      <td colSpan={7}>Nog geen live voorraad beschikbaar.</td>
                     </tr>
                   )}
                 </tbody>

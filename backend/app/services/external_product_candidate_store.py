@@ -6,6 +6,9 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
+from app.services.external_article_ui_projection import (
+    project_central_link_truth_rows,
+)
 
 from app.db import engine
 from app.services.external_database_matchers import match_retailer_receipt_line
@@ -1736,15 +1739,19 @@ def list_external_receipt_items(limit: int = 500):
             dict(row) if hasattr(row, "items") else row
             for row in rows
         ])
-        next_payload["items"] = _m2c2i_fix7b_dedupe_top_receipt_items(enriched_rows)
+        with engine.connect() as conn:
+            centrally_projected_rows = project_central_link_truth_rows(conn, enriched_rows)
+        next_payload["items"] = _m2c2i_fix7b_dedupe_top_receipt_items(centrally_projected_rows)
         next_payload["total"] = len(next_payload["items"])
         return next_payload
 
     rows = payload or []
-    return _m2c2i_fix2_apply_status_fields([
+    enriched_rows = _m2c2i_fix2_apply_status_fields([
         dict(row) if hasattr(row, "items") else row
         for row in rows
     ])
+    with engine.connect() as conn:
+        return project_central_link_truth_rows(conn, enriched_rows)
 
 
 # M2C2i-2a-fix4 promote selected external candidate

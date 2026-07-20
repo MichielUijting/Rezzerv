@@ -756,7 +756,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
               <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start', gap: '8px' }}>
                 {previewState.status === 'ready' && previewState.isImage ? (
                   <div className="rz-kassa-preview-zoom-controls" aria-label="Zoom kassabonfoto">
-                    <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(-RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom <= RECEIPT_PREVIEW_ZOOM_MIN} data-testid="receipt-preview-zoom-out">−</Button>
+                    <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(-RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom <= RECEIPT_PREVIEW_ZOOM_MIN} data-testid="receipt-preview-zoom-out">âˆ’</Button>
                     <span className="rz-kassa-preview-zoom-label" data-testid="receipt-preview-zoom-level">{imageZoomPercent}%</span>
                     <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom >= RECEIPT_PREVIEW_ZOOM_MAX} data-testid="receipt-preview-zoom-in">+</Button>
                   </div>
@@ -914,7 +914,7 @@ function ReceiptUploadProgressOverlay({ uploadProgress }) {
                     fontWeight: 800,
                   }}
                 >
-                  {isComplete ? '✓' : index + 1}
+                  {isComplete ? 'âœ“' : index + 1}
                 </span>
                 <span>{step.label}</span>
                 {isCurrent ? <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#166534' }}>Bezig</span> : null}
@@ -1141,9 +1141,15 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     saveLine(lineId, { [fieldName]: value })
   }
 
+  function normalizePurchaseDateInput(value) {
+    const rawValue = String(value || '').trim()
+    if (!rawValue) return ''
+    return rawValue.slice(0, 10)
+  }
+
   async function persistHeaderDraft({ suppressSuccessFeedback = false } = {}) {
     const normalizedStoreName = String(headerDraft.store_name || '').trim()
-    const normalizedPurchaseAt = String(headerDraft.purchase_at || '').trim()
+    const normalizedPurchaseAt = normalizePurchaseDateInput(headerDraft.purchase_at)
     const payload = {
       store_name: normalizedStoreName,
       purchase_at: normalizedPurchaseAt,
@@ -1158,6 +1164,44 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     onReceiptUpdated?.(updated)
     if (!suppressSuccessFeedback) onFeedback?.('success', 'Bonkop opgeslagen.')
     return updated
+  }
+
+  async function saveHeaderFieldOnBlur(fieldName) {
+    if (!canEdit || isSavingHeader) return
+
+    const currentValue = fieldName === 'purchase_at'
+      ? normalizePurchaseDateInput(receipt?.purchase_at)
+      : String(receipt?.[fieldName] || '').trim()
+
+    const nextValue = fieldName === 'purchase_at'
+      ? normalizePurchaseDateInput(headerDraft.purchase_at)
+      : String(headerDraft[fieldName] || '').trim()
+
+    if (currentValue === nextValue) return
+
+    setIsSavingHeader(true)
+
+    try {
+      await persistHeaderDraft({ suppressSuccessFeedback: true })
+
+      const fieldLabel = fieldName === 'purchase_at'
+        ? 'Aankoopdatum'
+        : 'Winkel'
+
+      onFeedback?.(
+        'success',
+        `${fieldLabel} is opgeslagen en bijgewerkt in de hoofdtabel.`,
+        { key: `receipt-header-${fieldName}-saved-${String(receipt?.id || '')}` },
+      )
+    } catch (err) {
+      onFeedback?.(
+        'error',
+        normalizeErrorMessage(err?.message)
+          || `${fieldName === 'purchase_at' ? 'Aankoopdatum' : 'Winkel'} kon niet worden opgeslagen.`,
+      )
+    } finally {
+      setIsSavingHeader(false)
+    }
   }
 
 async function saveLine(lineId, overrides = null) {
@@ -1366,8 +1410,21 @@ async function saveLine(lineId, overrides = null) {
                 <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                   {canEdit ? (
                     <>
-                      <Input label="Winkel" value={headerDraft.store_name} onChange={(event) => setHeaderDraft((current) => ({ ...current, store_name: event.target.value }))} />
-                      <Input label="Aankoopmoment" value={headerDraft.purchase_at} onChange={(event) => setHeaderDraft((current) => ({ ...current, purchase_at: event.target.value }))} />
+                      <Input
+                        label="Winkel"
+                        value={headerDraft.store_name}
+                        disabled={isSavingHeader}
+                        onChange={(event) => setHeaderDraft((current) => ({ ...current, store_name: event.target.value }))}
+                        onBlur={() => saveHeaderFieldOnBlur('store_name')}
+                      />
+                      <Input
+                        label="Aankoopdatum"
+                        type="date"
+                        value={normalizePurchaseDateInput(headerDraft.purchase_at)}
+                        disabled={isSavingHeader}
+                        onChange={(event) => setHeaderDraft((current) => ({ ...current, purchase_at: event.target.value }))}
+                        onBlur={() => saveHeaderFieldOnBlur('purchase_at')}
+                      />
                       <Input label="Totaalbedrag" type="number" step="0.01" value={headerDraft.total_amount} onChange={(event) => setHeaderDraft((current) => ({ ...current, total_amount: event.target.value }))} />
                       <Input label="Referentie / bonnummer" value={headerDraft.reference} onChange={(event) => setHeaderDraft((current) => ({ ...current, reference: event.target.value }))} />
                       <Input label="Notitie" value={headerDraft.notes} onChange={(event) => setHeaderDraft((current) => ({ ...current, notes: event.target.value }))} />
@@ -1375,7 +1432,7 @@ async function saveLine(lineId, overrides = null) {
                   ) : (
                     <>
                       <DetailInfoRow label="Winkel" value={receipt?.store_name} />
-                      <DetailInfoRow label="Aankoopmoment" value={formatDateTime(receipt?.purchase_at)} />
+                      <DetailInfoRow label="Aankoopdatum" value={formatDateTime(receipt?.purchase_at)} />
                       <DetailInfoRow label="Totaal" value={formatMoney(receipt?.total_amount, receipt?.currency)} />
                       <DetailInfoRow label="Referentie / bonnummer" value={receipt?.reference} />
                       <DetailInfoRow label="Notitie" value={receipt?.notes} />
@@ -1400,12 +1457,12 @@ async function saveLine(lineId, overrides = null) {
                   <DetailInfoRow label="Plaats" value={branchParts.city} />
                   <DetailInfoRow label="Oorspronkelijk bestand" value={receipt?.original_filename || 'Niet beschikbaar in deze release'} />
                   <DetailInfoRow label="Bestandstype" value={receipt?.mime_type || 'Niet beschikbaar in deze release'} />
-                  <DetailInfoRow label="Geïmporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
+                  <DetailInfoRow label="GeÃ¯mporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
                   <DetailInfoRow label="Aangemaakt op" value={formatDateTime(receipt?.created_at)} />
                   <DetailInfoRow label="Bijgewerkt op" value={formatDateTime(receipt?.updated_at)} />
                   <DetailInfoRow label="Goedgekeurd op" value={formatDateTime(receipt?.approved_at)} />
                   <DetailInfoRow label="Goedgekeurd door" value={receipt?.approved_by_user_email} />
-                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` · ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` · ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
+                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` Â· ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` Â· ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
                 </div>
               )
             }
@@ -1707,11 +1764,11 @@ function ReceiptSourceHubContent({
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ fontSize: '18px', fontWeight: 700 }}>Importuitleg</div>
-              <div style={{ color: '#667085' }}>De schermopbouw is nu gericht op één centrale actie. De extra uitleg blijft zichtbaar, maar staat bewust lager op het scherm.</div>
+              <div style={{ color: '#667085' }}>De schermopbouw is nu gericht op Ã©Ã©n centrale actie. De extra uitleg blijft zichtbaar, maar staat bewust lager op het scherm.</div>
               <div style={{ color: '#344054', fontSize: '14px', display: 'grid', gap: '6px' }}>
                 <div><strong>.eml</strong> blijft via de bestaande e-mailimport lopen.</div>
                 <div><strong>.pdf</strong>, <strong>.zip</strong> en ondersteunde afbeeldingsbestanden lopen via de bestaande bonbestand-import.</div>
-                <div><strong>Slepen, plakken en kiezen via Verkenner</strong> komen hiermee samen in één centrale landingsroute.</div>
+                <div><strong>Slepen, plakken en kiezen via Verkenner</strong> komen hiermee samen in Ã©Ã©n centrale landingsroute.</div>
               </div>
             </div>
           </ScreenCard>
@@ -1743,10 +1800,10 @@ function ReceiptSourceHubContent({
                 onClick={onCopyEmailRoute}
                 disabled
                 aria-disabled="true"
-                title="Adres kopiÃ«ren wordt later weer geactiveerd."
+                title="Adres kopiÃƒÂ«ren wordt later weer geactiveerd."
                 style={{ width: 'fit-content', minWidth: '180px', opacity: 0.55, cursor: 'not-allowed' }}
               >
-                Adres kopiÃ«ren
+                Adres kopiÃƒÂ«ren
               </Button>
             </div>
           </ScreenCard>
@@ -2349,7 +2406,7 @@ export default function KassaPage() {
         0,
       )
 
-      // Eén pixel marge voorkomt dat de elfde rij deels zichtbaar wordt door afronding of tabelranden.
+      // EÃ©n pixel marge voorkomt dat de elfde rij deels zichtbaar wordt door afronding of tabelranden.
       const nextHeight = Math.max(
         1,
         Math.floor(headerHeight + rowsHeight) - 1,
@@ -2389,15 +2446,154 @@ export default function KassaPage() {
     inboxTableFilters.items,
   ])
 
-  async function openReceiptDetail(receiptTableId, sourceItems = receipts, prefetchedDetail = null) {
+  function applyReceiptUpdate(updated) {
+    if (!updated) return
+    setOpenedReceipt(updated)
+    setReceipts((current) => current.map((item) => {
+      const itemId = String(item?.receipt_table_id || item?.id || '')
+      const updatedId = String(updated?.receipt_table_id || updated?.id || '')
+      if (!itemId || itemId !== updatedId) return item
+      return {
+        ...item,
+        ...updated,
+        receipt_table_id: item.receipt_table_id || updated.receipt_table_id || updated.id,
+      }
+    }))
+  }
+
+  function normalizeReceiptCorrectionDate(value) {
+    const rawValue = String(value || '').trim()
+    return rawValue ? rawValue.slice(0, 10) : ''
+  }
+
+  function openReceiptImportConfirmation(receipt) {
+    const receiptId = String(receipt?.receipt_table_id || receipt?.id || '')
+    if (!receiptId) return
+
+    const needsStore = String(receipt?.store_name_source || '') === 'user_required'
+    const needsPurchaseDate = String(receipt?.purchase_at_source || '') === 'import_default'
+
+    if (!needsStore && !needsPurchaseDate) return
+
+    const inputFields = []
+
+    if (needsStore) {
+      inputFields.push({
+        name: 'store_name',
+        label: 'Winkel(keten)',
+        type: 'text',
+        value: '',
+        placeholder: 'Vul de naam van de winkel of winkelketen in',
+        required: true,
+        autoFocus: true,
+      })
+    }
+
+    if (needsPurchaseDate) {
+      inputFields.push({
+        name: 'purchase_at',
+        label: 'Aankoopdatum',
+        type: 'date',
+        value: normalizeReceiptCorrectionDate(receipt?.purchase_at),
+        required: true,
+        autoFocus: !needsStore,
+      })
+    }
+
+    const title = needsStore && needsPurchaseDate
+      ? 'Controleer winkel en aankoopdatum'
+      : needsStore
+        ? 'Winkel niet herkend'
+        : 'Aankoopdatum niet herkend'
+
+    const message = needsStore && needsPurchaseDate
+      ? 'De winkel kon niet worden gelezen en voor de aankoopdatum is de inleesdatum ingevuld.'
+      : needsStore
+        ? 'Vul de naam van de winkel of winkelketen in.'
+        : 'Als aankoopdatum is de datum van inlezen ingevuld.'
+
+    const detail = needsPurchaseDate
+      ? 'Controleer de aankoopdatum. Je kunt de voorgestelde datum wijzigen voordat je opslaat.'
+      : 'Deze naam wordt bij de kassabon opgeslagen en helpt bij latere ondersteuning van deze winkel.'
+
+    showFeedback({
+      variant: 'warning',
+      title,
+      message,
+      detail,
+      inputFields,
+      primaryActionLabel: 'Opslaan',
+      dismissMode: 'blocked',
+      key: `kassa-import-confirmation-${receiptId}`,
+      dedupeMs: 0,
+      testId: 'kassa-import-confirmation',
+      onPrimaryAction: async (values) => {
+        const payload = {}
+
+        if (needsStore) {
+          payload.store_name = String(values?.store_name || '').trim()
+          if (!payload.store_name) {
+            throw new Error('Vul de naam van de winkel of winkelketen in.')
+          }
+        }
+
+        if (needsPurchaseDate) {
+          payload.purchase_at = normalizeReceiptCorrectionDate(values?.purchase_at)
+          if (!payload.purchase_at) {
+            throw new Error('Vul een geldige aankoopdatum in.')
+          }
+        }
+
+        const updated = await fetchJson(
+          `/api/receipts/${encodeURIComponent(receiptId)}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          },
+        )
+
+        applyReceiptUpdate(updated)
+
+        showKassaFeedback(
+          'success',
+          needsStore && needsPurchaseDate
+            ? 'Winkel en aankoopdatum zijn opgeslagen.'
+            : needsStore
+              ? 'Winkel is opgeslagen.'
+              : 'Aankoopdatum is opgeslagen.',
+          {
+            key: `kassa-import-confirmation-saved-${receiptId}`,
+            dedupeMs: 0,
+          },
+        )
+
+        return true
+      },
+    })
+  }
+
+  async function openReceiptDetail(
+    receiptTableId,
+    sourceItems = receipts,
+    prefetchedDetail = null,
+    showImportConfirmation = false,
+  ) {
     setError('')
     try {
       const detail = prefetchedDetail || await fetchJson(`/api/receipts/${encodeURIComponent(receiptTableId)}`)
       const sourceItem = sourceItems.find((item) => String(item.receipt_table_id) === String(receiptTableId)) || null
+      const mergedDetail = sourceItem ? { ...sourceItem, ...detail } : detail
       setOpenedReceiptId(receiptTableId)
-      setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
+      setOpenedReceipt(mergedDetail)
+
+      if (showImportConfirmation) {
+        openReceiptImportConfirmation(mergedDetail)
+      }
+
+      return mergedDetail
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
+      return null
     }
   }
 
@@ -2593,9 +2789,14 @@ export default function KassaPage() {
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
           : false
 
-        if (uploadedReceiptId && receiptExistsInInbox) {
+        if (uploadedReceiptId) {
           setSelectedReceiptIds([uploadedReceiptId])
-          await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          await openReceiptDetail(
+            uploadedReceiptId,
+            refreshedItems,
+            null,
+            true,
+          )
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
@@ -2692,9 +2893,14 @@ export default function KassaPage() {
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
           : false
 
-        if (uploadedReceiptId && receiptExistsInInbox) {
+        if (uploadedReceiptId) {
           setSelectedReceiptIds([uploadedReceiptId])
-          await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          await openReceiptDetail(
+            uploadedReceiptId,
+            refreshedItems,
+            null,
+            true,
+          )
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
@@ -2779,9 +2985,14 @@ export default function KassaPage() {
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
           : false
 
-        if (uploadedReceiptId && receiptExistsInInbox) {
+        if (uploadedReceiptId) {
           setSelectedReceiptIds([uploadedReceiptId])
-          await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          await openReceiptDetail(
+            uploadedReceiptId,
+            refreshedItems,
+            null,
+            true,
+          )
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
@@ -3129,19 +3340,7 @@ export default function KassaPage() {
             </div>
           </ScreenCard>
 
-          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => {
-                setOpenedReceipt(updated)
-                setReceipts((current) => current.map((item) => {
-                  const itemId = String(item?.receipt_table_id || item?.id || '')
-                  const updatedId = String(updated?.receipt_table_id || updated?.id || '')
-                  if (!itemId || itemId !== updatedId) return item
-                  return {
-                    ...item,
-                    ...updated,
-                    receipt_table_id: item.receipt_table_id || updated.receipt_table_id || updated.id,
-                  }
-                }))
-              }} onFeedback={showKassaFeedback} /> : null}
+          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={applyReceiptUpdate} onFeedback={showKassaFeedback} /> : null}
         </div>
       )}
 
@@ -3160,5 +3359,3 @@ export default function KassaPage() {
     </AppShell>
   )
 }
-
-
