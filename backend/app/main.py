@@ -17592,7 +17592,7 @@ def get_purchase_import_line_external_product_candidates(line_id: str):
 def map_purchase_import_line(line_id: str, payload: MapLineRequest):
     with engine.begin() as conn:
         line = conn.execute(
-            text("SELECT id, batch_id, target_location_id, location_override_mode FROM purchase_import_lines WHERE id = :id"),
+            text("SELECT id, batch_id, external_line_ref, target_location_id, location_override_mode FROM purchase_import_lines WHERE id = :id"),
             {"id": line_id},
         ).mappings().first()
         if not line:
@@ -17645,7 +17645,8 @@ def map_purchase_import_line(line_id: str, payload: MapLineRequest):
                 "id": line_id,
             },
         )
-        sync_purchase_import_line_product_links(conn, line_id, household_id)
+        if not str(line.get("external_line_ref") or "").strip().startswith("receipt-line:"):
+            sync_purchase_import_line_product_links(conn, line_id, household_id)
         status = update_batch_status(conn, line["batch_id"])
         updated = conn.execute(
             text(
@@ -17667,7 +17668,7 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
         line = conn.execute(
             text(
                 """
-                SELECT pil.id, pil.batch_id, pib.household_id
+                SELECT pil.id, pil.batch_id, pil.external_line_ref, pib.household_id
                 FROM purchase_import_lines pil
                 JOIN purchase_import_batches pib ON pib.id = pil.batch_id
                 WHERE pil.id = :id
@@ -17692,7 +17693,8 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
             ),
             {"article_id": article_option_id, "id": line_id},
         )
-        sync_purchase_import_line_product_links(conn, line_id, str(line["household_id"]))
+        if not str(line.get("external_line_ref") or "").strip().startswith("receipt-line:"):
+            sync_purchase_import_line_product_links(conn, line_id, str(line["household_id"]))
         status = update_batch_status(conn, line["batch_id"])
         article = resolve_review_article_option(conn, article_option_id, str(line["household_id"]))
 
@@ -18030,7 +18032,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
             lines = conn.execute(
                 text(
                     """
-                    SELECT id, article_name_raw, brand_raw, external_article_code, quantity_raw, unit_raw, review_decision, matched_household_article_id,
+                    SELECT id, external_line_ref, article_name_raw, brand_raw, external_article_code, quantity_raw, unit_raw, review_decision, matched_household_article_id,
                            matched_global_product_id, target_location_id, processing_status, processed_event_id
                     FROM purchase_import_lines
                     WHERE batch_id = :batch_id
@@ -18119,10 +18121,11 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                             ),
                             {'id': line_id, 'matched_household_article_id': article_id},
                         )
-                synced_links = sync_purchase_import_line_product_links(conn, line_id, str(batch["household_id"]))
-                if synced_links:
-                    article_id = synced_links.get('matched_household_article_id') or article_id
-                    matched_global_product_id = synced_links.get('matched_global_product_id') or matched_global_product_id
+                if not str(line.get("external_line_ref") or "").strip().startswith("receipt-line:"):
+                    synced_links = sync_purchase_import_line_product_links(conn, line_id, str(batch["household_id"]))
+                    if synced_links:
+                        article_id = synced_links.get('matched_household_article_id') or article_id
+                        matched_global_product_id = synced_links.get('matched_global_product_id') or matched_global_product_id
                 selected_article_input = str(article_id or matched_global_product_id or '')
                 original_article = resolve_review_article_option(conn, article_id, str(batch["household_id"])) if article_id else None
                 article = resolve_processing_article(conn, str(batch["household_id"]), original_article)
