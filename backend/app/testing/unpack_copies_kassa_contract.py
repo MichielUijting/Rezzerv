@@ -12,9 +12,19 @@ if MAIN is None:
 source = MAIN.read_text(encoding="utf-8")
 
 
-def block(start: str, end: str) -> str:
-    start_index = source.index(start)
-    end_index = source.index(end, start_index)
+def function_block(signature: str) -> str:
+    start_index = source.index(signature)
+    next_def = source.find("\ndef ", start_index + len(signature))
+    next_route = source.find("\n@app.", start_index + len(signature))
+    candidates = [index for index in (next_def, next_route) if index >= 0]
+    end_index = min(candidates) if candidates else len(source)
+    return source[start_index:end_index]
+
+
+def route_block(route: str) -> str:
+    start_index = source.index(route)
+    next_route = source.find("\n@app.", start_index + len(route))
+    end_index = next_route if next_route >= 0 else len(source)
     return source[start_index:end_index]
 
 
@@ -23,22 +33,10 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-sync_block = block(
-    "def sync_unpack_batch_lines_for_receipt(",
-    "\ndef ensure_receipt_ready_for_unpack(",
-)
-map_block = block(
-    '@app.post("/api/purchase-import-lines/{line_id}/map")',
-    '\n@app.post("/api/purchase-import-lines/{line_id}/create-article")',
-)
-create_block = block(
-    '@app.post("/api/purchase-import-lines/{line_id}/create-article")',
-    '\n@app.post("/api/purchase-import-lines/{line_id}/target-location")',
-)
-process_block = block(
-    '            lines = conn.execute(',
-    '                resolved_location = resolve_store_storage_target_location',
-)
+sync_block = function_block("def sync_unpack_batch_lines_for_receipt(")
+map_block = route_block('@app.post("/api/purchase-import-lines/{line_id}/map")')
+create_block = route_block('@app.post("/api/purchase-import-lines/{line_id}/create-article")')
+process_block = function_block("def process_purchase_import_batch(")
 
 require(
     "matched_global_product_id = (" in sync_block
