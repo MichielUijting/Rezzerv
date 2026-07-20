@@ -114,6 +114,14 @@ def main() -> None:
         "beide nieuwe-bonimportpaden activeren de eenmalige controle",
     )
     require(
+        kassa_source.count("if (uploadedReceiptId) {") == 2,
+        "de importmelding wacht niet op opname in de ververste hoofdtabel",
+    )
+    require(
+        "if (uploadedReceiptId && receiptExistsInInbox) {" not in kassa_source,
+        "geen importpad blokkeert de melding op een vertraagde lijstverversing",
+    )
+    require(
         "onReceiptUpdated={applyReceiptUpdate}" in kassa_source,
         "detail en hoofdtabel gebruiken dezelfde updatefunctie",
     )
@@ -121,3 +129,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
