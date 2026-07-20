@@ -47,14 +47,27 @@ def main() -> None:
         "centrale opslagactie ontvangt de ingevoerde waarden",
     )
     require(
-        feedback_source.count("fontSize: 'inherit'") >= 2,
-        "labels en invoerwaarden gebruiken de lettergrootte van de melding",
+        feedback_source.count("fontSize: '18px'") >= 4,
+        "melding, toelichting, labels en invoertekst gebruiken minimaal 18px",
+    )
+    require(
+        "fontSize: '22px'" in feedback_source,
+        "titel van de centrale melding gebruikt 22px",
+    )
+    require(
+        "minHeight: '48px'" in feedback_source,
+        "centrale invoervelden hebben voldoende hoogte",
+    )
+    require(
+        "fontSize: '16px'" in feedback_source,
+        "primaire knop heeft grotere knoptekst",
     )
     require(
         "data-testid={`${testId}-field-${field.name}`}\n"
         "                  style={{\n"
-        "                    fontSize: 'inherit',\n"
-        "                    fontWeight: 400,"
+        "                    minHeight: '48px',\n"
+        "                    padding: '10px 12px',\n"
+        "                    fontSize: '18px',"
         in feedback_source,
         "tekst in centrale invoervelden is even groot en niet vet",
     )

@@ -266,13 +266,47 @@ function AppFeedbackDialog({
           display: 'grid',
           gap: '14px',
           boxShadow: '0 24px 64px rgba(16, 24, 40, 0.28)',
+          fontSize: '18px',
+          lineHeight: 1.45,
           fontWeight: 700,
         }}
       >
         <div style={{ display: 'grid', gap: '8px' }}>
-          {title ? <div id={`${testId}-title`} style={{ fontSize: '18px', fontWeight: 800 }}>{title}</div> : null}
-          {message ? <div style={{ fontWeight: 600 }}>{message}</div> : null}
-          {detail ? <div style={{ color: '#344054', fontSize: '13px', fontWeight: 500 }}>{detail}</div> : null}
+          {title ? (
+            <div
+              id={`${testId}-title`}
+              style={{
+                fontSize: '22px',
+                lineHeight: 1.3,
+                fontWeight: 800,
+              }}
+            >
+              {title}
+            </div>
+          ) : null}
+          {message ? (
+            <div
+              style={{
+                fontSize: '18px',
+                lineHeight: 1.45,
+                fontWeight: 600,
+              }}
+            >
+              {message}
+            </div>
+          ) : null}
+          {detail ? (
+            <div
+              style={{
+                color: '#344054',
+                fontSize: '18px',
+                lineHeight: 1.45,
+                fontWeight: 500,
+              }}
+            >
+              {detail}
+            </div>
+          ) : null}
         </div>
 
         {inputFields?.length ? (
@@ -284,7 +318,8 @@ function AppFeedbackDialog({
                   display: 'grid',
                   gap: '6px',
                   color: '#1A1A1A',
-                  fontSize: 'inherit',
+                  fontSize: '18px',
+                  lineHeight: 1.4,
                   fontWeight: 500,
                 }}
               >
@@ -303,7 +338,10 @@ function AppFeedbackDialog({
                   onChange={(event) => onFieldChange?.(field.name, event.target.value)}
                   data-testid={`${testId}-field-${field.name}`}
                   style={{
-                    fontSize: 'inherit',
+                    minHeight: '48px',
+                    padding: '10px 12px',
+                    fontSize: '18px',
+                    lineHeight: 1.4,
                     fontWeight: 400,
                   }}
                 />
@@ -401,6 +439,12 @@ function AppFeedbackDialog({
               onClick={onPrimaryAction}
               disabled={isActionPending}
               data-testid={`${testId}-primary-button`}
+              style={{
+                minHeight: '44px',
+                padding: '10px 18px',
+                fontSize: '16px',
+                lineHeight: 1.3,
+              }}
             >
               {isActionPending ? 'Opslaan...' : primaryActionLabel}
             </Button>
