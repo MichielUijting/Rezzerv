@@ -62,26 +62,29 @@ def patch_frontend() -> None:
     text = FRONTEND.read_text(encoding="utf-8")
     old_candidate = "function hasCatalogLink(candidate) { return Boolean(candidate?.is_linked_to_catalog === true || text(candidate?.global_product_id, '') || text(candidate?.product_identity_id, '') || text(candidate?.matched_global_product_id, '') || text(candidate?.matched_global_article_id, '')) }"
     new_candidate = "function hasCatalogLink(candidate) { return candidate?.central_link_active === true }"
-    text = replace_once(text, old_candidate, new_candidate, "frontend kandidaatstatus")
+    if new_candidate not in text:
+        text = replace_once(text, old_candidate, new_candidate, "frontend kandidaatstatus")
 
-    old_item_start = '''function receiptItemHasCatalogLink(rawItem) {
-  const status = text(rawItem?.status || rawItem?.candidate_status, '').toLowerCase()
+    old_item = '''function receiptItemHasCatalogLink(rawItem) {
+  const status = text(rawItem?.candidate_status || rawItem?.status || rawItem?.match_status, '').toLowerCase()
   return Boolean(
     rawItem?.is_linked_to_catalog === true
+    || rawItem?.is_existing_link_for_receipt_item === true
+    || text(rawItem?.global_product_id, '')
+    || text(rawItem?.canonical_catalog_product_id, '')
+    || text(rawItem?.matched_global_product_id, '')
+    || status === 'linked_to_catalog'
+    || status === 'matched'
+  )
+}
 '''
-    new_item_start = '''function receiptItemHasCatalogLink(rawItem) {
+    new_item = '''function receiptItemHasCatalogLink(rawItem) {
+  // Alleen een actieve centrale koppeling betekent Gekoppeld.
   return rawItem?.central_link_active === true
-  /* Centrale waarheid: kandidaatstatussen en losse product-id's zijn geen koppeling. */
-  return Boolean(
-    rawItem?.is_linked_to_catalog === true
+}
 '''
-    text = replace_once(text, old_item_start, new_item_start, "frontend itemstatus")
-
-    # Verwijder de onbereikbare oude retourlogica netjes tot en met de functie-afsluiting.
-    marker_start = text.index("  /* Centrale waarheid: kandidaatstatussen")
-    marker_end = text.index("\n}\n", marker_start) + 3
-    replacement = "  /* Centrale waarheid: kandidaatstatussen en losse product-id's zijn geen koppeling. */\n}\n"
-    text = text[:marker_start] + replacement + text[marker_end:]
+    if new_item not in text:
+        text = replace_once(text, old_item, new_item, "frontend itemstatus")
 
     FRONTEND.write_text(text, encoding="utf-8", newline="\n")
 
