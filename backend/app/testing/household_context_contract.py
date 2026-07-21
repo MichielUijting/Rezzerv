@@ -4,11 +4,16 @@ Run from the backend container or repository root with PYTHONPATH=backend:
     python -m app.testing.household_context_contract
 """
 
+from app.services.household_context_adapter import resolve_legacy_household_context
 from app.services.household_context_service import (
     HouseholdAccessDenied,
     HouseholdAuthenticationRequired,
     HouseholdMembershipRequired,
     resolve_household_context,
+)
+from app.services.household_object_guard import (
+    assert_row_in_household,
+    household_where_parameters,
 )
 
 
@@ -87,6 +92,42 @@ def run_contract() -> None:
     assert context_b.active_household_id == "household-b"
     assert context_b.role == "viewer"
     assert context_b.display_role == "kijker"
+
+    # De legacy authadapter vertaalt alleen server-side profieldata en blijft
+    # onderworpen aan dezelfde lidmaatschapscontrole.
+    legacy_profile = {
+        "role": "admin",
+        "household_key": "alpha",
+        "household_id": "household-a",
+        "household_name": "Huishouden A",
+    }
+    legacy_context = resolve_legacy_household_context(
+        email="a@rezzerv.test",
+        profile=legacy_profile,
+    )
+    assert legacy_context.active_household_id == "household-a"
+    _expect_error(
+        HouseholdAccessDenied,
+        lambda: resolve_legacy_household_context(
+            email="a@rezzerv.test",
+            profile=legacy_profile,
+            requested_household_id="household-b",
+        ),
+    )
+
+    # Objectmutaties hebben naast de queryfilter een tweede huishoudguard.
+    assert assert_row_in_household(
+        context,
+        {"id": "inventory-a", "household_id": "household-a"},
+    )["id"] == "inventory-a"
+    _expect_error(
+        HouseholdAccessDenied,
+        lambda: assert_row_in_household(
+            context,
+            {"id": "inventory-b", "household_id": "household-b"},
+        ),
+    )
+    assert household_where_parameters(context) == {"household_id": "household-a"}
 
     # De compatibiliteitsrepresentatie bevat geen ongeverifieerde payloaddata.
     payload = context.as_dict()
