@@ -32,6 +32,11 @@ def _initialize_production_schema(main) -> None:
     ]
     for _, function in sorted(schema_functions, key=lambda item: item[0]):
         function()
+
+    from app.services.article_group_store import ensure_article_group_schema
+
+    ensure_article_group_schema()
+
     if hasattr(main, "seed_store_providers"):
         main.seed_store_providers()
 
@@ -91,7 +96,7 @@ def run_production_chain() -> dict:
 
         required_tables = {
             "store_providers", "household_store_connections", "global_products",
-            "household_articles", "spaces", "sublocations", "purchase_import_batches",
+            "article_groups", "household_articles", "spaces", "sublocations", "purchase_import_batches",
             "purchase_import_lines", "inventory", "inventory_events",
         }
         actual_tables = set(inspect(main.engine).get_table_names())
@@ -103,6 +108,7 @@ def run_production_chain() -> dict:
             "connection_id": "chain-connection",
             "global_product_id": "chain-global-product",
             "product_type_id": "chain-product-type",
+            "article_group_id": "chain-article-group",
             "household_article_id": "chain-household-article",
             "space_id": "chain-space",
             "sublocation_id": "chain-sublocation",
@@ -129,10 +135,19 @@ def run_production_chain() -> dict:
                     "global_product_id": ids["global_product_id"],
                     "product_inventory_group_id": ids["product_type_id"], "is_primary": 1,
                 })
+            _insert_row(conn, "article_groups", {
+                "id": ids["article_group_id"],
+                "household_id": "0",
+                "name": "Fruit",
+                "normalized_name": "fruit",
+                "status": "active",
+                "sort_order": 1,
+            })
             _insert_row(conn, "household_articles", {
                 "id": ids["household_article_id"], "household_id": "0",
                 "global_product_id": ids["global_product_id"], "naam": "AH BANANEN",
-                "name": "AH BANANEN", "custom_name": "AH BANANEN", "status": "active",
+                "name": "AH BANANEN", "custom_name": "AH BANANEN",
+                "article_group_id": ids["article_group_id"], "status": "active",
                 "active": 1, "consumable": 0,
             })
             _insert_row(conn, "spaces", {
