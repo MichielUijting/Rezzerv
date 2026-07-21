@@ -74,9 +74,11 @@ test.describe('Externe databases bekende GTIN regressie', () => {
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Bekende GTIN regressietest' });
     await expect(receiptRow).toBeVisible();
     await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
-    await expect(receiptRow.locator('td').nth(5)).toHaveText('8710000001234');
-    await expect(receiptRow.locator('td').nth(8)).toHaveText('-');
-    await expect(receiptRow.locator('td').nth(9)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(6)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(7)).toHaveText('8710000001234');
+    await expect(receiptRow.locator('td').nth(8)).toHaveText('1 stuk');
+    await expect(receiptRow.locator('td').nth(9)).toHaveText('1,23');
     await expect(receiptRow.locator('td').nth(10)).toHaveText('0');
 
     await receiptRow.dblclick();

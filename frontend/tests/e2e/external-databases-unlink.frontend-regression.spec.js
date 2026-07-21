@@ -43,6 +43,7 @@ test.describe('Externe databases ontkoppelen regressie', () => {
               score: 0.8,
               candidate_status: 'linked_to_catalog',
               is_linked_to_catalog: true,
+              central_link_active: true,
               is_linkable_to_catalog: false,
             },
           ],
@@ -95,8 +96,15 @@ test.describe('Externe databases ontkoppelen regressie', () => {
 
     const candidateTable = page.getByTestId('external-receipt-item-candidates-table');
     await expect(candidateTable).toBeVisible();
-    await expect(candidateTable).toContainText('Geen universele kandidaten met score 0,500 of hoger voor dit bonartikel.');
-    await expect(candidateTable.getByText('Gekoppelde ontkoppel kandidaat')).toHaveCount(0);
+    const linkedCandidateRow = candidateTable.locator('tbody tr', { hasText: 'Gekoppelde ontkoppel kandidaat' });
+    await expect(linkedCandidateRow).toBeVisible();
+    await expect(linkedCandidateRow.locator('td').nth(1)).toHaveText('Gekoppelde ontkoppel kandidaat');
+    await expect(linkedCandidateRow.locator('td').nth(3)).toHaveText('Artikelcatalogus');
+    await expect(linkedCandidateRow.locator('td').nth(4)).toHaveText('-');
+    await expect(linkedCandidateRow.locator('td').nth(5)).toHaveText('0,800');
+    await expect(linkedCandidateRow.locator('td').nth(6)).toHaveText('Gekoppeld');
+    await expect(linkedCandidateRow.getByRole('radio')).not.toBeChecked();
+    await expect(candidateTable.locator('tbody tr')).toHaveCount(1);
     await expect(page.getByTestId('external-off-preview-meta')).toContainText('OFF-status: Geen resultaten');
     await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Ontkoppel artikel', exact: true })).toBeDisabled();
