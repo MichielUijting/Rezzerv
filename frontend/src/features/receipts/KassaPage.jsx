@@ -2450,10 +2450,9 @@ export default function KassaPage() {
     if (!updated) return
 
     const updatedId = String(updated?.receipt_table_id || updated?.id || '')
-    const normalizedParseStatus = String(updated?.parse_status || '').trim().toLowerCase()
+    const normalizedPoStatusLabel = String(updated?.po_norm_status_label || '').trim()
     const isApprovedForUnpacking = Boolean(updated?.approved_at)
-      || normalizedParseStatus === 'approved'
-      || normalizedParseStatus === 'approved_override'
+      || normalizedPoStatusLabel === 'Gecontroleerd'
 
     if (isApprovedForUnpacking && updatedId) {
       setReceipts((current) => current.filter((item) => {
