@@ -2448,10 +2448,29 @@ export default function KassaPage() {
 
   function applyReceiptUpdate(updated) {
     if (!updated) return
+
+    const updatedId = String(updated?.receipt_table_id || updated?.id || '')
+    const normalizedParseStatus = String(updated?.parse_status || '').trim().toLowerCase()
+    const isApprovedForUnpacking = Boolean(updated?.approved_at)
+      || normalizedParseStatus === 'approved'
+      || normalizedParseStatus === 'approved_override'
+
+    if (isApprovedForUnpacking && updatedId) {
+      setReceipts((current) => current.filter((item) => {
+        const itemId = String(item?.receipt_table_id || item?.id || '')
+        return itemId !== updatedId
+      }))
+      setSelectedReceiptIds((current) => current.filter((id) => String(id) !== updatedId))
+      setOpenedReceiptId('')
+      openedReceiptIdRef.current = ''
+      setOpenedReceipt(null)
+      setReceiptInboxFocusId('')
+      return
+    }
+
     setOpenedReceipt(updated)
     setReceipts((current) => current.map((item) => {
       const itemId = String(item?.receipt_table_id || item?.id || '')
-      const updatedId = String(updated?.receipt_table_id || updated?.id || '')
       if (!itemId || itemId !== updatedId) return item
       return {
         ...item,
