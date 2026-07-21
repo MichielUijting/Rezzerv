@@ -54,6 +54,7 @@ from app.schemas.receipts import (
     ProductIdentityLookupRequest,
 )
 from app.services.testing_service import testing_service
+from app.services.household_context_adapter import household_context_from_runtime_context
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, parse_receipt_content, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
@@ -182,7 +183,9 @@ def _dev_inventory_preview_row(row):
 
 @app.get("/api/dev/inventory-preview")
 def dev_inventory_preview(authorization: Optional[str] = Header(None)):
-    effective_household_id = get_request_household_id(authorization)
+    runtime_context = require_household_context(authorization)
+    household_context = household_context_from_runtime_context(runtime_context)
+    effective_household_id = household_context.active_household_id
     with engine.begin() as conn:
         rows = conn.execute(text(
             """
@@ -214,8 +217,11 @@ def _dev_resolve_space_id(conn, household_id: str | None, space_id: str | None, 
 
     if normalized_space_id:
         existing = conn.execute(
-            text("SELECT id FROM spaces WHERE id = :id LIMIT 1"),
-            {"id": normalized_space_id},
+            text(
+                "SELECT id FROM spaces "
+                "WHERE id = :id AND household_id = :household_id LIMIT 1"
+            ),
+            {"id": normalized_space_id, "household_id": household_id},
         ).mappings().first()
         if existing:
             return str(existing.get("id"))
@@ -253,15 +259,24 @@ def _dev_resolve_space_id(conn, household_id: str | None, space_id: str | None, 
     return new_space_id
 
 
-def _dev_resolve_sublocation_id(conn, space_id: str | None, sublocation_id: str | None, sublocation_name: str | None):
+def _dev_resolve_sublocation_id(conn, household_id: str, space_id: str | None, sublocation_id: str | None, sublocation_name: str | None):
     normalized_sublocation_id = str(sublocation_id or "").strip()
     normalized_sublocation_name = " ".join(str(sublocation_name or "").strip().split())
     normalized_space_id = str(space_id or "").strip()
 
     if normalized_sublocation_id:
         existing = conn.execute(
-            text("SELECT id FROM sublocations WHERE id = :id LIMIT 1"),
-            {"id": normalized_sublocation_id},
+            text(
+                """
+                SELECT sl.id
+                FROM sublocations sl
+                JOIN spaces s ON s.id = sl.space_id
+                WHERE sl.id = :id
+                  AND s.household_id = :household_id
+                LIMIT 1
+                """
+            ),
+            {"id": normalized_sublocation_id, "household_id": household_id},
         ).mappings().first()
         if existing:
             return str(existing.get("id"))
@@ -299,7 +314,15 @@ def _dev_resolve_sublocation_id(conn, space_id: str | None, sublocation_id: str 
 
 
 @app.put("/api/dev/inventory/{inventory_id}")
-def dev_update_inventory(inventory_id: str, payload: InventoryUpdate):
+def dev_update_inventory(
+    inventory_id: str,
+    payload: InventoryUpdate,
+    authorization: Optional[str] = Header(None),
+):
+    runtime_context = require_inventory_write_context(authorization)
+    household_context = household_context_from_runtime_context(runtime_context)
+    effective_household_id = household_context.active_household_id
+
     normalized_inventory_id = str(inventory_id or "").strip()
     if not normalized_inventory_id:
         raise HTTPException(status_code=400, detail="Voorraadregel-id ontbreekt")
@@ -311,18 +334,26 @@ def dev_update_inventory(inventory_id: str, payload: InventoryUpdate):
                 SELECT id, household_id
                 FROM inventory
                 WHERE id = :id
+                  AND household_id = :household_id
                 LIMIT 1
                 """
             ),
-            {"id": normalized_inventory_id},
+            {
+                "id": normalized_inventory_id,
+                "household_id": effective_household_id,
+            },
         ).mappings().first()
 
         if not existing:
             raise HTTPException(status_code=404, detail="Voorraadregel niet gevonden")
 
-        household_id = str(existing.get("household_id") or "").strip() or None
-        space_id = _dev_resolve_space_id(conn, household_id, payload.space_id, payload.space_name)
-        sublocation_id = _dev_resolve_sublocation_id(conn, space_id, payload.sublocation_id, payload.sublocation_name)
+        household_id = effective_household_id
+        space_id = _dev_resolve_space_id(
+            conn, household_id, payload.space_id, payload.space_name
+        )
+        sublocation_id = _dev_resolve_sublocation_id(
+            conn, household_id, space_id, payload.sublocation_id, payload.sublocation_name
+        )
 
         conn.execute(
             text(
@@ -334,10 +365,12 @@ def dev_update_inventory(inventory_id: str, payload: InventoryUpdate):
                     sublocation_id = :sublocation_id,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
+                  AND household_id = :household_id
                 """
             ),
             {
                 "id": normalized_inventory_id,
+                "household_id": effective_household_id,
                 "naam": str(payload.naam or "").strip(),
                 "aantal": int(payload.aantal or 0),
                 "space_id": space_id,
@@ -361,13 +394,20 @@ def dev_update_inventory(inventory_id: str, payload: InventoryUpdate):
                 LEFT JOIN spaces s ON s.id = i.space_id
                 LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
                 WHERE i.id = :id
+                  AND i.household_id = :household_id
                 LIMIT 1
                 """
             ),
-            {"id": normalized_inventory_id},
+            {
+                "id": normalized_inventory_id,
+                "household_id": effective_household_id,
+            },
         ).mappings().first()
 
-    return {"ok": True, "row": _dev_inventory_preview_row(row or {})}
+    if not row:
+        raise HTTPException(status_code=404, detail="Voorraadregel niet gevonden")
+
+    return {"ok": True, "row": _dev_inventory_preview_row(row)}
 
 @app.exception_handler(Exception)
 async def unhandled_api_exception_handler(request: Request, exc: Exception):
@@ -785,6 +825,18 @@ class MapLineRequest(BaseModel):
         return str(value)
 
 
+class ArticleGroupSelectionRequest(BaseModel):
+    article_group_id: Optional[str] = None
+
+    @field_validator("article_group_id", mode="before")
+    @classmethod
+    def normalize_article_group_id(cls, value):
+        if value is None:
+            return None
+        normalized = str(value).strip()
+        return normalized or None
+
+
 class TargetLocationRequest(BaseModel):
     target_location_id: Optional[str] = None
 
@@ -1042,15 +1094,33 @@ USER_PRIVACY_SETTINGS_DEFAULT = {
 }
 PERMISSION_ARTICLE_CREATE = "article.create"
 PERMISSION_ARTICLE_UPDATE = "article.update"
-SUPPORTED_HOUSEHOLD_PERMISSION_KEYS = {PERMISSION_ARTICLE_CREATE, PERMISSION_ARTICLE_UPDATE}
+PERMISSION_ARTICLE_GROUP_CREATE = "article_group.create"
+SUPPORTED_HOUSEHOLD_PERMISSION_KEYS = {
+    PERMISSION_ARTICLE_CREATE,
+    PERMISSION_ARTICLE_UPDATE,
+    PERMISSION_ARTICLE_GROUP_CREATE,
+}
 ROLE_PERMISSION_DEFAULTS = {
-    "admin": {PERMISSION_ARTICLE_CREATE: True, PERMISSION_ARTICLE_UPDATE: True},
-    "lid": {PERMISSION_ARTICLE_CREATE: False, PERMISSION_ARTICLE_UPDATE: False},
-    "viewer": {PERMISSION_ARTICLE_CREATE: False, PERMISSION_ARTICLE_UPDATE: False},
+    "admin": {
+        PERMISSION_ARTICLE_CREATE: True,
+        PERMISSION_ARTICLE_UPDATE: True,
+        PERMISSION_ARTICLE_GROUP_CREATE: True,
+    },
+    "lid": {
+        PERMISSION_ARTICLE_CREATE: False,
+        PERMISSION_ARTICLE_UPDATE: False,
+        PERMISSION_ARTICLE_GROUP_CREATE: False,
+    },
+    "viewer": {
+        PERMISSION_ARTICLE_CREATE: False,
+        PERMISSION_ARTICLE_UPDATE: False,
+        PERMISSION_ARTICLE_GROUP_CREATE: False,
+    },
 }
 HOUSEHOLD_MEMBER_PERMISSION_DEFAULTS = {
     PERMISSION_ARTICLE_CREATE: False,
     PERMISSION_ARTICLE_UPDATE: False,
+    PERMISSION_ARTICLE_GROUP_CREATE: False,
 }
 
 
@@ -8210,6 +8280,8 @@ def ensure_release_813_schema():
             conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN article_override_mode TEXT DEFAULT 'auto'"))
         if "location_override_mode" not in line_columns:
             conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN location_override_mode TEXT DEFAULT 'auto'"))
+        if "selected_article_group_id" not in line_columns:
+            conn.execute(text("ALTER TABLE purchase_import_lines ADD COLUMN selected_article_group_id TEXT"))
         conn.execute(text("UPDATE purchase_import_lines SET article_override_mode = COALESCE(article_override_mode, 'auto')"))
         conn.execute(text("UPDATE purchase_import_lines SET location_override_mode = COALESCE(location_override_mode, 'auto')"))
 
@@ -16684,6 +16756,8 @@ def get_purchase_import_batch(batch_id: str):
                     pil.review_decision,
                     pil.matched_household_article_id,
                     pil.matched_global_product_id,
+                    COALESCE(pil.selected_article_group_id, ha.article_group_id) AS selected_article_group_id,
+                    ag.name AS selected_article_group_name,
                     gp.name AS matched_global_product_name,
                     gp.brand AS matched_global_product_brand,
                     gp.category AS matched_global_product_category,
@@ -16704,11 +16778,17 @@ def get_purchase_import_batch(batch_id: str):
                     pil.final_location_id
                 FROM purchase_import_lines pil
                 LEFT JOIN global_products gp ON gp.id = pil.matched_global_product_id
+                LEFT JOIN household_articles ha
+                  ON ha.id = pil.matched_household_article_id
+                 AND ha.household_id = :household_id
+                LEFT JOIN article_groups ag
+                  ON ag.id = COALESCE(pil.selected_article_group_id, ha.article_group_id)
+                 AND ag.household_id = :household_id
                 WHERE pil.batch_id = :batch_id
                 ORDER BY COALESCE(pil.ui_sort_order, 999999), pil.created_at ASC, pil.id ASC
                 """
             ),
-            {"batch_id": batch_id},
+            {"batch_id": batch_id, "household_id": str(batch["household_id"])},
         ).mappings().all()
 
     batch_result = dict(batch)
@@ -17795,6 +17875,83 @@ def create_article_from_purchase_import_line(line_id: str, payload: CreateArticl
     }
 
 
+@app.post("/api/purchase-import-lines/{line_id}/article-group")
+def set_purchase_import_line_article_group(
+    line_id: str,
+    payload: ArticleGroupSelectionRequest,
+    authorization: Optional[str] = Header(None),
+):
+    with engine.begin() as conn:
+        line = conn.execute(
+            text(
+                """
+                SELECT pil.id, pil.batch_id, pib.household_id
+                FROM purchase_import_lines pil
+                JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+                WHERE pil.id = :line_id
+                LIMIT 1
+                """
+            ),
+            {"line_id": line_id},
+        ).mappings().first()
+        if not line:
+            raise HTTPException(status_code=404, detail="Onbekende importregel")
+
+        context = require_household_context(authorization, str(line["household_id"]))
+        if str(context.get("display_role") or "").strip().lower() == "viewer":
+            raise HTTPException(status_code=403, detail="Kijkers mogen de artikelgroep niet wijzigen")
+
+        article_group_id = payload.article_group_id
+        if article_group_id:
+            article_group = conn.execute(
+                text(
+                    """
+                    SELECT id
+                    FROM article_groups
+                    WHERE id = :article_group_id
+                      AND household_id = :household_id
+                      AND COALESCE(status, 'active') = 'active'
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "article_group_id": article_group_id,
+                    "household_id": str(line["household_id"]),
+                },
+            ).mappings().first()
+            if not article_group:
+                raise HTTPException(status_code=404, detail="Artikelgroep niet gevonden binnen het actieve huishouden")
+
+        conn.execute(
+            text(
+                """
+                UPDATE purchase_import_lines
+                SET selected_article_group_id = :article_group_id,
+                    review_decision = CASE WHEN :article_group_id IS NULL THEN 'pending' ELSE review_decision END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :line_id
+                """
+            ),
+            {"article_group_id": article_group_id, "line_id": line_id},
+        )
+        status = update_batch_status(conn, str(line["batch_id"]))
+        updated = conn.execute(
+            text(
+                """
+                SELECT id, batch_id, selected_article_group_id, review_decision
+                FROM purchase_import_lines
+                WHERE id = :line_id
+                LIMIT 1
+                """
+            ),
+            {"line_id": line_id},
+        ).mappings().first()
+
+    result = dict(updated)
+    result["batch_status"] = status
+    return result
+
+
 @app.post("/api/purchase-import-lines/{line_id}/target-location")
 def set_purchase_import_line_target_location(line_id: str, payload: TargetLocationRequest):
     with engine.begin() as conn:
@@ -18134,13 +18291,27 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                 text(
                     """
                     SELECT id, external_line_ref, article_name_raw, brand_raw, external_article_code, quantity_raw, unit_raw, review_decision, matched_household_article_id,
-                           matched_global_product_id, target_location_id, processing_status, processed_event_id
+                           matched_global_product_id,
+                           COALESCE(
+                               selected_article_group_id,
+                               (
+                                   SELECT ha.article_group_id
+                                   FROM household_articles ha
+                                   WHERE ha.id = purchase_import_lines.matched_household_article_id
+                                     AND ha.household_id = :household_id
+                                   LIMIT 1
+                               )
+                           ) AS selected_article_group_id,
+                           target_location_id, processing_status, processed_event_id
                     FROM purchase_import_lines
                     WHERE batch_id = :batch_id
                     ORDER BY COALESCE(ui_sort_order, 999999), created_at ASC, id ASC
                     """
                 ),
-                {"batch_id": batch_id},
+                {
+                    "batch_id": batch_id,
+                    "household_id": str(batch["household_id"]),
+                },
             ).mappings().all()
 
             selected_lines = [line for line in lines if (line["review_decision"] or "pending") == "selected"]
@@ -18157,6 +18328,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     article_id = line.get("matched_household_article_id")
                     matched_global_product_id = str(line.get("matched_global_product_id") or '').strip()
                     location_id = line.get("target_location_id")
+                    article_group_id = line.get("selected_article_group_id")
                     if not article_id and not matched_global_product_id:
                         results.append({
                             "line_id": line_id,
@@ -18164,6 +18336,16 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                             "status": "skipped",
                             "reason": "Nog geen artikel of product gekoppeld",
                             "failure_stage": "article_resolution",
+                        })
+                        skipped_count += 1
+                        continue
+                    if not article_group_id:
+                        results.append({
+                            "line_id": line_id,
+                            "line_reference": line_reference,
+                            "status": "skipped",
+                            "reason": "Nog geen artikelgroep gekozen",
+                            "failure_stage": "article_group_resolution",
                         })
                         skipped_count += 1
                         continue
@@ -18288,6 +18470,43 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     store_purchase_import_line_diagnostic(conn, line_id, diagnostic)
                     conn.execute(text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"), {"error": error, "id": line_id})
                     results.append({"line_id": line_id, "line_reference": line_reference, "status": "failed", "error": error, "diagnostic": diagnostic})
+                    failed_count += 1
+                    continue
+
+                article_group_id = str(line.get("selected_article_group_id") or "").strip()
+                if not article_group_id:
+                    error = "Geen geldige artikelgroep gekozen"
+                    conn.execute(
+                        text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"),
+                        {"error": error, "id": line_id},
+                    )
+                    results.append({"line_id": line_id, "line_reference": line_reference, "status": "failed", "error": error})
+                    failed_count += 1
+                    continue
+
+                valid_article_group = conn.execute(
+                    text(
+                        """
+                        SELECT id
+                        FROM article_groups
+                        WHERE id = :article_group_id
+                          AND household_id = :household_id
+                          AND COALESCE(status, 'active') = 'active'
+                        LIMIT 1
+                        """
+                    ),
+                    {
+                        "article_group_id": article_group_id,
+                        "household_id": str(batch["household_id"]),
+                    },
+                ).mappings().first()
+                if not valid_article_group:
+                    error = "De gekozen artikelgroep bestaat niet binnen het actieve huishouden"
+                    conn.execute(
+                        text("UPDATE purchase_import_lines SET processing_status = 'failed', processing_error = :error, updated_at = CURRENT_TIMESTAMP WHERE id = :id"),
+                        {"error": error, "id": line_id},
+                    )
+                    results.append({"line_id": line_id, "line_reference": line_reference, "status": "failed", "error": error})
                     failed_count += 1
                     continue
 
@@ -18417,6 +18636,22 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                         """
                     ),
                     {"event_id": event_id, "final_location_id": resolved_location["location_id"], "id": line_id},
+                )
+                conn.execute(
+                    text(
+                        """
+                        UPDATE household_articles
+                        SET article_group_id = :article_group_id,
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE id = :article_id
+                          AND household_id = :household_id
+                        """
+                    ),
+                    {
+                        "article_group_id": article_group_id,
+                        "article_id": str(article_id),
+                        "household_id": str(batch["household_id"]),
+                    },
                 )
                 remember_store_import_choice(
                     conn,
@@ -19171,6 +19406,31 @@ def generate_article_testdata(authorization: Optional[str] = Header(None)):
     return {"status":"ok","inventory":count_table("inventory")}
 
 
+
+def require_article_group_create_context(
+    authorization: str | None,
+    requested_household_id: str | None = None,
+) -> dict:
+    context = require_household_context(
+        authorization,
+        requested_household_id=requested_household_id,
+    )
+    with engine.begin() as conn:
+        require_household_permission(
+            conn,
+            context,
+            PERMISSION_ARTICLE_GROUP_CREATE,
+        )
+    return context
+
+
+from app.api.article_group_routes import configure_article_group_routes
+
+configure_article_group_routes(
+    require_household_context=require_household_context,
+    require_household_admin_context=require_household_admin_context,
+    require_article_group_create_context=require_article_group_create_context,
+)
 
 from app.api.router import api_router
 app.include_router(api_router)

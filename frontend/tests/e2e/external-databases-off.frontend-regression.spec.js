@@ -252,6 +252,7 @@ test.describe('Externe databases OFF candidate flow', () => {
               canonical_catalog_product_id: 'e9cc7c77-c201-4295-b125-c88a23c88ca2',
               is_receipt_item_placeholder: true,
               is_linked_to_catalog: true,
+              central_link_active: true,
               is_existing_link_for_receipt_item: true,
               is_linkable_to_catalog: false,
               linked_candidate_name: 'Bananen',
@@ -306,7 +307,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expect(linkedCandidateRow.locator('td').nth(6)).toHaveText('Gekoppeld');
     await expect(linkedCandidateRow.getByRole('radio')).toBeChecked();
 
-    await expect(page.getByLabel('Producttype')).toHaveValue('gpc:10005897');
+    await expect(page.getByLabel('Producttype', { exact: true })).toHaveValue('gpc:10005897');
 
     await expectNoConsoleErrors(consoleErrors);
   });

@@ -168,16 +168,33 @@ function sublocationOptionsForSpace(locationOptions, spaceId) {
   )
 }
 
-function deriveLineSelectionState({ draft, validLocationIds, processingStatus }) {
+function deriveLineSelectionState({ line, draft, validLocationIds, processingStatus }) {
   const effectiveArticleId = String(draft?.articleId || '')
+  const effectiveGlobalProductId = String(line?.matched_global_product_id || '')
+  const effectiveRawArticleName = String(line?.article_name_raw || '').trim()
+  const effectiveArticleGroupId = String(draft?.articleGroupId || '')
   const effectiveLocationId = String(draft?.locationId || '')
+
   const hasValidArticle = Boolean(effectiveArticleId)
+  const hasValidProductOrArticle = Boolean(effectiveArticleId || effectiveGlobalProductId)
+  const hasProcessSource = Boolean(effectiveArticleId || effectiveGlobalProductId || effectiveRawArticleName)
+  const hasArticleGroup = Boolean(effectiveArticleGroupId)
   const hasValidLocation = Boolean(effectiveLocationId) && validLocationIds.has(effectiveLocationId)
-  const isProcessable = hasValidArticle && hasValidLocation && processingStatus !== 'processed'
+  const isProcessable = hasProcessSource
+    && hasArticleGroup
+    && hasValidLocation
+    && processingStatus !== 'processed'
+
   return {
     effectiveArticleId,
+    effectiveGlobalProductId,
+    effectiveRawArticleName,
+    effectiveArticleGroupId,
     effectiveLocationId,
     hasValidArticle,
+    hasValidProductOrArticle,
+    hasProcessSource,
+    hasArticleGroup,
     hasValidLocation,
     isProcessable,
   }
@@ -191,6 +208,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [providers, setProviders] = useState([])
   const [batch, setBatch] = useState(null)
   const [articleOptions, setArticleOptions] = useState(articleFallbackOptions)
+  const [articleGroupOptions, setArticleGroupOptions] = useState([])
+  const [newArticleGroupLineId, setNewArticleGroupLineId] = useState('')
+  const [newArticleGroupName, setNewArticleGroupName] = useState('')
+  const [isCreatingArticleGroup, setIsCreatingArticleGroup] = useState(false)
   const [locationOptions, setLocationOptions] = useState([])
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
@@ -226,6 +247,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     { key: 'locatie', width: 260 },
     { key: 'aantal', width: 100 },
     { key: 'gekoppeld', width: 280 },
+    { key: 'artikelgroep', width: 240 },
     { key: 'standaardartikel', width: 260 },
   ]), [])
   const lineColumnDefaults = useMemo(() => Object.fromEntries(storeBatchTableColumns.map(({ key, width }) => [key, width])), [storeBatchTableColumns])
@@ -264,15 +286,26 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     })
   }
 
+  const householdRole = String(
+    household?.display_role
+      || household?.role
+      || household?.membership_role
+      || ''
+  ).trim().toLowerCase()
+  const canCreateArticleGroup = householdRole === 'admin'
+    || Boolean(household?.permissions?.['article_group.create'])
+
   function getDraftValues(line) {
     const draft = Object.prototype.hasOwnProperty.call(lineDrafts, line.id)
       ? lineDrafts[line.id]
       : {
           articleId: line.matched_household_article_id || '',
+          articleGroupId: line.selected_article_group_id || '',
           locationId: line.target_location_id || '',
         }
     return {
       articleId: String((draft?.articleId ?? line.matched_household_article_id) ?? ''),
+      articleGroupId: String((draft?.articleGroupId ?? line.selected_article_group_id) ?? ''),
       locationId: String((draft?.locationId ?? line.target_location_id) ?? ''),
     }
   }
@@ -285,6 +318,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       if ((line.processing_status || 'pending') !== 'processed') nextLineIds.push(line.id)
       nextDrafts[line.id] = {
         articleId: line.matched_household_article_id || '',
+        articleGroupId: line.selected_article_group_id || '',
         locationId: line.target_location_id || '',
       }
       const existing = lineSaveState[line.id] || {}
@@ -293,6 +327,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         dirty: false,
         status: existing.status === 'error' ? 'error' : existing.status === 'saved' ? 'saved' : 'idle',
         currentArticleId: String(line.matched_household_article_id || ''),
+        currentArticleGroupId: String(line.selected_article_group_id || ''),
         currentLocationId: String(line.target_location_id || ''),
       }
     })
@@ -305,14 +340,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setLineDrafts((current) => ({
       ...current,
       [lineId]: {
-        ...(current[lineId] || { articleId: '', locationId: '' }),
+        ...(current[lineId] || { articleId: '', articleGroupId: '', locationId: '' }),
         ...patch,
       },
     }))
   }
 
   async function refreshBatch(nextBatchId = batchId) {
-    const nextBatch = await fetchJson(`/api/purchase-import-batches/${nextBatchId}`)
+    const nextBatch = await fetchJson(`/api/purchase-import-batches/${nextBatchId}?_ts=${Date.now()}`)
     setBatch(nextBatch)
     return nextBatch
   }
@@ -489,15 +524,18 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     if (!batch) return
     const draftValues = getDraftValues(line)
     const nextArticleId = String(patch.articleId !== undefined ? (patch.articleId ?? '') : draftValues.articleId)
+    const nextArticleGroupId = String(patch.articleGroupId !== undefined ? (patch.articleGroupId ?? '') : draftValues.articleGroupId)
     const nextLocationId = String(patch.locationId !== undefined ? (patch.locationId ?? '') : draftValues.locationId)
     const originalArticleId = String(line.matched_household_article_id || '')
+    const originalArticleGroupId = String(line.selected_article_group_id || '')
     const originalLocationId = String(line.target_location_id || '')
     const articleChanged = nextArticleId !== originalArticleId
+    const articleGroupChanged = nextArticleGroupId !== originalArticleGroupId
     const locationChanged = nextLocationId !== originalLocationId
 
-    setLineDraftValue(line.id, { articleId: nextArticleId, locationId: nextLocationId })
+    setLineDraftValue(line.id, { articleId: nextArticleId, articleGroupId: nextArticleGroupId, locationId: nextLocationId })
 
-    if (!articleChanged && !locationChanged) {
+    if (!articleChanged && !articleGroupChanged && !locationChanged) {
       setLineSaveState((current) => ({
         ...current,
         [line.id]: {
@@ -507,6 +545,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           message: '',
           error: '',
           currentArticleId: originalArticleId,
+          currentArticleGroupId: originalArticleGroupId,
           currentLocationId: originalLocationId,
         },
       }))
@@ -533,6 +572,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           body: JSON.stringify({ household_article_id: nextArticleId || null }),
         })
       }
+      if (articleGroupChanged) {
+        await fetchJson(`/api/purchase-import-lines/${line.id}/article-group`, {
+          method: 'POST',
+          body: JSON.stringify({ article_group_id: nextArticleGroupId || null }),
+        })
+      }
       if (locationChanged) {
         await fetchJson(`/api/purchase-import-lines/${line.id}/target-location`, {
           method: 'POST',
@@ -554,17 +599,26 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           savedAt: new Date().toISOString(),
           error: '',
           currentArticleId: nextArticleId,
+          currentArticleGroupId: nextArticleGroupId,
           currentLocationId: nextLocationId,
         },
       }))
       if (!options.suppressSuccessFeedback) {
         showUitpakkenFeedback(
           'success',
-          articleChanged && locationChanged
-            ? 'Artikel en locatie bijgewerkt.'
-            : articleChanged
-              ? 'Artikelkoppeling bijgewerkt.'
-              : 'Locatie bijgewerkt.',
+          articleChanged && articleGroupChanged && locationChanged
+            ? 'Artikel, artikelgroep en locatie bijgewerkt.'
+            : articleChanged && articleGroupChanged
+              ? 'Artikel en artikelgroep bijgewerkt.'
+              : articleChanged && locationChanged
+                ? 'Artikel en locatie bijgewerkt.'
+                : articleGroupChanged && locationChanged
+                  ? 'Artikelgroep en locatie bijgewerkt.'
+                  : articleChanged
+                    ? 'Artikelkoppeling bijgewerkt.'
+                    : articleGroupChanged
+                      ? 'Artikelgroep gekoppeld.'
+                      : 'Locatie bijgewerkt.',
           { key: `uitpakken-line-saved-${String(line.id)}-${Date.now()}` }
         )
       }
@@ -599,6 +653,76 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     processFeedbackTimer.current = window.setTimeout(() => setProcessFeedback(''), 2200)
   }
 
+  function openCreateArticleGroup(lineId) {
+    if (!canCreateArticleGroup) return
+    setNewArticleGroupLineId(String(lineId || ''))
+    setNewArticleGroupName('')
+    setError('')
+    setStatus('')
+  }
+
+  function closeCreateArticleGroup() {
+    if (isCreatingArticleGroup) return
+    setNewArticleGroupLineId('')
+    setNewArticleGroupName('')
+  }
+
+  async function createAndSelectArticleGroup() {
+    const name = String(newArticleGroupName || '').trim()
+    if (!name) {
+      setError('Artikelgroepnaam is verplicht.')
+      return
+    }
+
+    const targetLine = batch?.lines?.find((line) => String(line.id) === String(newArticleGroupLineId))
+    if (!targetLine) {
+      setError('De kassabonregel voor de nieuwe artikelgroep is niet gevonden.')
+      return
+    }
+
+    const householdId = String(batch?.household_id || household?.active_household_id || household?.id || '').trim()
+    if (!householdId) {
+      setError('Het actieve huishouden kon niet worden vastgesteld.')
+      return
+    }
+
+    setIsCreatingArticleGroup(true)
+    setError('')
+    setStatus('')
+    try {
+      const created = await fetchJson('/api/article-groups', {
+        method: 'POST',
+        body: JSON.stringify({ household_id: householdId, name }),
+      })
+      const createdId = String(created?.id || created?.item?.id || '').trim()
+      if (!createdId) {
+        throw new Error('De nieuwe artikelgroep is aangemaakt, maar de artikelgroep-id ontbreekt in het antwoord.')
+      }
+
+      const articleGroupsData = await fetchJson(`/api/article-groups?household_id=${encodeURIComponent(householdId)}`)
+      const nextGroups = sortOptionObjects(
+        Array.isArray(articleGroupsData?.items)
+          ? articleGroupsData.items.filter((group) => String(group?.status || 'active') === 'active')
+          : [],
+        (group) => group?.name || ''
+      )
+      setArticleGroupOptions(nextGroups)
+
+      await persistLineDraft(targetLine, { articleGroupId: createdId }, { suppressSuccessFeedback: true })
+      setNewArticleGroupLineId('')
+      setNewArticleGroupName('')
+      showUitpakkenFeedback(
+        'success',
+        `Artikelgroep ${name} aangemaakt en gekoppeld.`,
+        { key: `uitpakken-article-group-created-${createdId}-${Date.now()}` }
+      )
+    } catch (err) {
+      setError(normalizeErrorMessage(err?.message) || 'Artikelgroep aanmaken mislukt.')
+    } finally {
+      setIsCreatingArticleGroup(false)
+    }
+  }
+
   async function loadPageData() {
     setIsLoading(true)
     setError('')
@@ -609,9 +733,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       })
       setHousehold(householdData)
 
-      const [providerData, backendArticles, spacesData, sublocationsData, loadedBatch] = await Promise.all([
+      const [providerData, backendArticles, articleGroupsData, spacesData, sublocationsData, loadedBatch] = await Promise.all([
         fetchJson('/api/store-providers'),
         fetchJson('/api/store-review-articles').catch(() => articleFallbackOptions),
+        fetchJson(`/api/article-groups?household_id=${encodeURIComponent(householdData.id || householdData.active_household_id || '')}`).catch(() => ({ items: [] })),
         fetchJson('/api/spaces?_ts=' + Date.now()).catch(() => ({ items: [] })),
         fetchJson('/api/sublocations?_ts=' + Date.now()).catch(() => ({ items: [] })),
         fetchJson(`/api/purchase-import-batches/${batchId}`),
@@ -619,6 +744,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
       setProviders(providerData)
       setArticleOptions(Array.isArray(backendArticles) && backendArticles.length ? sortOptionObjects(backendArticles, (article) => articleLabel(article)) : articleFallbackOptions)
+      setArticleGroupOptions(sortOptionObjects(Array.isArray(articleGroupsData?.items) ? articleGroupsData.items.filter((group) => String(group?.status || 'active') === 'active') : [], (group) => group?.name || ''))
       setLocationOptions(buildActiveLocationOptions(spacesData, sublocationsData))
       setBatch(loadedBatch)
       setBatchDiagnostics(null)
@@ -765,15 +891,78 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setLastProcessResult(null)
     try {
       const lineNameById = Object.fromEntries((batch.lines || []).map((line) => [line.id, line.article_name_raw]))
+
+      const selectedIdSet = new Set(selectedLineIds.map((id) => String(id)))
+      const linesNeedingArticleLink = (batch.lines || []).filter((line) => {
+        if (!selectedIdSet.has(String(line.id))) return false
+        if (String(line.processing_status || 'pending') === 'processed') return false
+        const draft = getDraftValues(line)
+        const hasArticle = Boolean(String(line.matched_household_article_id || '').trim())
+        const hasGlobalProduct = Boolean(String(line.matched_global_product_id || '').trim())
+        const hasRawArticleName = Boolean(String(line.article_name_raw || '').trim())
+        const hasArticleGroup = Boolean(String(draft.articleGroupId || '').trim())
+        const hasValidLocation = validLocationIds.has(String(draft.locationId || ''))
+        return !hasArticle
+          && !hasGlobalProduct
+          && hasRawArticleName
+          && hasArticleGroup
+          && hasValidLocation
+      })
+
+      for (const line of linesNeedingArticleLink) {
+        await fetchJson(`/api/purchase-import-lines/${line.id}/create-article`, {
+          method: 'POST',
+          body: JSON.stringify({
+            article_name: String(line.article_name_raw || '').trim(),
+          }),
+        })
+      }
+
       const result = await fetchJson(`/api/purchase-import-batches/${batch.batch_id}/process`, {
         method: 'POST',
         body: JSON.stringify({ processed_by: 'ui', mode }),
       })
+
+      const processedLineIds = new Set(
+        (result.results || [])
+          .filter((item) => item.status === 'processed')
+          .map((item) => String(item.line_id || ''))
+          .filter(Boolean)
+      )
+
+      if (processedLineIds.size > 0) {
+        setBatch((current) => current ? {
+          ...current,
+          lines: (current.lines || []).filter((line) => !processedLineIds.has(String(line.id))),
+        } : current)
+        setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
+      }
+
       await refreshBatch(batch.batch_id)
       await refreshLocationOptions()
       setLastProcessResult(result)
       setBatchDiagnostics(result?.diagnostics || null)
-      showProcessFeedback('Verwerkt!')
+
+      const processedCount = Number(result?.processed_count || 0)
+      const failedCount = Number(result?.failed_count || 0)
+      const skippedCount = Number(result?.skipped_count || 0)
+
+      if (processedCount > 0) {
+        showProcessFeedback('Verwerkt!')
+      } else if (failedCount > 0) {
+        showUitpakkenFeedback(
+          'error',
+          'Overzetten naar Voorraad is mislukt.',
+          { key: `uitpakken-process-failed-${batch.batch_id}-${Date.now()}` }
+        )
+      } else if (skippedCount > 0) {
+        showUitpakkenFeedback(
+          'warning',
+          'Er zijn geen regels overgezet naar Voorraad.',
+          { key: `uitpakken-process-skipped-${batch.batch_id}-${Date.now()}` }
+        )
+      }
+
       const processed = (result.results || []).filter((item) => item.status === 'processed').map((item) => lineNameById[item.line_id]).filter(Boolean)
       const skipped = (result.results || []).filter((item) => item.status === 'skipped').map((item) => lineNameById[item.line_id]).filter(Boolean)
       const failed = (result.results || []).filter((item) => item.status === 'failed').map((item) => lineNameById[item.line_id]).filter(Boolean)
@@ -782,18 +971,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       if (skipped.length) parts.push(`Overgeslagen: ${skipped.join(', ')}`)
       if (failed.length) parts.push(`Mislukt: ${failed.join(', ')}`)
       if (!parts.length) {
-        const processedCount = result.processed_count || 0
-        const skippedCount = result.skipped_count || 0
-        const failedCount = result.failed_count || 0
         parts.push(`Verwerkt: ${processedCount}`)
         parts.push(`Overgeslagen: ${skippedCount}`)
         parts.push(`Mislukt: ${failedCount}`)
       }
       setProcessResultOverlay(parts.join(' · '))
-      setSelectedLineIds((current) => current.filter((id) => {
-        const outcome = (result.results || []).find((item) => item.line_id === id)
-        return !(outcome && outcome.status === 'processed')
-      }))
+      setSelectedLineIds((current) => current.filter((id) => !processedLineIds.has(String(id))))
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De batch kon niet naar voorraad worden verwerkt.')
     } finally {
@@ -816,8 +999,16 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const processingStatus = line.processing_status || 'pending'
       const reviewDecision = line.review_decision || 'pending'
       const isSelected = selectedSet.has(line.id)
-      const selectionState = deriveLineSelectionState({ draft, validLocationIds, processingStatus })
-      const { effectiveArticleId, hasValidArticle, hasValidLocation, isProcessable } = selectionState
+      const selectionState = deriveLineSelectionState({ line, draft, validLocationIds, processingStatus })
+      const {
+        effectiveArticleId,
+        hasValidArticle,
+        hasValidProductOrArticle,
+        hasProcessSource,
+        hasArticleGroup,
+        hasValidLocation,
+        isProcessable,
+      } = selectionState
 
       let statusKey = 'new'
       let statusLabel = 'Nieuw'
@@ -840,14 +1031,18 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           statusKey = 'action_needed'
           statusLabel = 'Actie nodig'
           statusReason = 'Wijzigingen zijn nog niet opgeslagen.'
-        } else if (!hasValidArticle) {
+        } else if (!hasProcessSource) {
           statusKey = 'action_needed'
           statusLabel = 'Actie nodig'
-          statusReason = 'Artikel onbekend of nog niet gekoppeld.'
+          statusReason = 'Bonartikel ontbreekt.'
         } else if (!hasValidLocation) {
           statusKey = 'action_needed'
           statusLabel = 'Actie nodig'
           statusReason = 'Locatie ontbreekt.'
+        } else if (!hasArticleGroup) {
+          statusKey = 'action_needed'
+          statusLabel = 'Actie nodig'
+          statusReason = 'Artikelgroep ontbreekt.'
         } else {
           statusKey = 'ready'
           statusLabel = 'Klaar'
@@ -870,6 +1065,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         processingStatus,
         isSelected,
         hasValidArticle,
+        hasValidProductOrArticle,
+        hasProcessSource,
+        hasArticleGroup,
         hasValidLocation,
         statusKey,
         statusLabel,
@@ -924,9 +1122,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       aantal: (entry) => Number(entry.line.quantity_raw ?? 0),
       standaardartikel: (entry) => standardProductLabel(entry.line),
       gekoppeld: (entry) => entry.line.resolved_household_article_name || '',
+      artikelgroep: (entry) => (
+        articleGroupOptions.find((group) => String(group.id) === String(entry.draft.articleGroupId || ''))?.name || ''
+      ),
       locatie: (entry) => (locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''),
     })
-  }, [filteredLineUiStates, tableSort, locationOptions])
+  }, [filteredLineUiStates, tableSort, locationOptions, articleGroupOptions])
 
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
 
@@ -996,6 +1197,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 <col style={{ width: `${lineColumnWidths.locatie}px` }} />
                 <col style={{ width: `${lineColumnWidths.aantal}px` }} />
                 <col style={{ width: `${lineColumnWidths.gekoppeld}px` }} />
+                <col style={{ width: `${lineColumnWidths.artikelgroep}px` }} />
                 <col style={{ width: `${lineColumnWidths.standaardartikel}px` }} />
               </colgroup>
               <thead>
@@ -1003,11 +1205,12 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <ResizableHeaderCell columnKey="select" widths={lineColumnWidths} onStartResize={startLineResize} style={{ width: '44px' }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
                   </ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Bonartikel</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Locatie / sublocatie</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Aantal</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Artikelgroep</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="standaardartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-standard" sortable isSorted={tableSort.key === 'standaardartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', standaardartikel: 'asc' }))}>Universeel artikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Bonartikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Locatie / sublocatie</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Aantal</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Gekoppeld artikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="artikelgroep" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-article-group" sortable isSorted={tableSort.key === 'artikelgroep'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Artikelgroep</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="standaardartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-standard" sortable isSorted={tableSort.key === 'standaardartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Universeel artikel</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
@@ -1026,12 +1229,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     </select>
                   </th>
                   <th />
+                  <th />
                 </tr>
               </thead>
               <tbody>
                 {visibleLineUiStates.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>Geen open bonregels in deze selectie.</td>
+                    <td colSpan={7}>Geen open bonregels in deze selectie.</td>
                   </tr>
                 ) : visibleLineUiStates.map((entry) => {
                   const { line, draft, statusLabel: currentStatusLabel } = entry
@@ -1065,17 +1269,44 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       </td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td className="rz-store-batch-col-linked">
-                        <div data-testid={`receipt-line-article-select-${line.id}`}><StoreArticleSelector
-                          lineId={line.id}
-                          lineName={line.article_name_raw}
-                          selectedArticleId={draft.articleId || ''}
-                          articleOptions={articleOptions}
-                          disabled={lineBusy}
-                          onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
-                          onClearArticle={() => persistLineDraft(line, { articleId: '' })}
-                          onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
-                          canCreateArticle={Boolean(household?.permissions?.['article.create'])}
-                        /></div>
+                        <div data-testid={`receipt-line-article-select-${line.id}`}>
+                          <StoreArticleSelector
+                            lineId={line.id}
+                            lineName={line.article_name_raw}
+                            selectedArticleId={draft.articleId || ''}
+                            articleOptions={articleOptions}
+                            disabled={lineBusy}
+                            onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
+                            onClearArticle={() => persistLineDraft(line, { articleId: '' })}
+                            onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
+                            canCreateArticle={Boolean(household?.permissions?.['article.create'])}
+                          />
+                        </div>
+                      </td>
+                      <td className="rz-store-batch-col-article-group">
+                        <select
+                          className="rz-input rz-inline-input"
+                          data-testid={`receipt-line-article-group-select-${line.id}`}
+                          value={draft.articleGroupId || ''}
+                          disabled={lineBusy || isViewer}
+                          onChange={(event) => {
+                            const nextValue = event.target.value
+                            if (nextValue === '__add_article_group__') {
+                              openCreateArticleGroup(line.id)
+                              return
+                            }
+                            persistLineDraft(line, { articleGroupId: nextValue })
+                          }}
+                          aria-label={`Artikelgroep voor ${line.article_name_raw}`}
+                        >
+                          <option value="">Kies artikelgroep</option>
+                          {articleGroupOptions.map((group) => (
+                            <option key={group.id} value={group.id}>{group.name}</option>
+                          ))}
+                          {canCreateArticleGroup ? (
+                            <option value="__add_article_group__">Artikelgroep toevoegen...</option>
+                          ) : null}
+                        </select>
                       </td>
                       <td className="rz-store-batch-col-standard" title={standardProductDetail(line) || standardProductLabel(line)}>
                          <div className="rz-store-primary" data-testid={`receipt-line-standard-product-${line.id}`}>{standardProductLabel(line)}</div>
@@ -1085,6 +1316,46 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 })}
               </tbody>
             </Table>
+
+          {newArticleGroupLineId ? (
+            <div
+              className="rz-modal-backdrop"
+              role="presentation"
+              onClick={closeCreateArticleGroup}
+            >
+              <div
+                className="rz-modal-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="new-article-group-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <h3 id="new-article-group-title" className="rz-modal-title">Nieuwe artikelgroep</h3>
+                <label className="rz-input-field">
+                  <div className="rz-label">Artikelgroepnaam</div>
+                  <input
+                    className="rz-input"
+                    autoFocus
+                    value={newArticleGroupName}
+                    onChange={(event) => setNewArticleGroupName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') createAndSelectArticleGroup()
+                    }}
+                    placeholder="Bijvoorbeeld: Groente"
+                    disabled={isCreatingArticleGroup}
+                  />
+                </label>
+                <div className="rz-modal-actions">
+                  <Button type="button" variant="secondary" onClick={closeCreateArticleGroup} disabled={isCreatingArticleGroup}>
+                    Annuleren
+                  </Button>
+                  <Button type="button" onClick={createAndSelectArticleGroup} disabled={isCreatingArticleGroup}>
+                    {isCreatingArticleGroup ? 'Opslaan?' : 'Opslaan en koppelen'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {pendingDefaultLocationChoice ? (
             <div
@@ -1310,7 +1581,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             <div className="rz-modal-backdrop" role="presentation">
               <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="process-selected-title">
                 <h3 id="process-selected-title" className="rz-modal-title">Niet alle geselecteerde regels zijn compleet</h3>
-                <p className="rz-modal-text">{processConfirm.readyCount} geselecteerde regel(s) zijn klaar voor verwerking en {processConfirm.incompleteCount} regel(s) missen nog artikel of locatie.</p>
+                <p className="rz-modal-text">{processConfirm.readyCount} geselecteerde regel(s) zijn klaar voor verwerking en {processConfirm.incompleteCount} regel(s) missen nog artikel/product, locatie of artikelgroep.</p>
                 <div className="rz-modal-actions">
                   <Button variant="secondary" type="button" onClick={() => setProcessConfirm(null)} disabled={isProcessingBatch}>Annuleren</Button>
                   <Button variant="primary" type="button" onClick={() => handleProcessSelected('ready_only')} disabled={isProcessingBatch || processConfirm.readyCount === 0}>Verwerk alleen complete regels</Button>
