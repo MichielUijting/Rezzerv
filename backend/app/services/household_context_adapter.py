@@ -98,3 +98,48 @@ def resolve_legacy_household_context(
         memberships=verified_memberships,
         requested_household_id=requested_household_id,
     )
+
+
+def household_context_from_runtime_context(
+    runtime_context: Mapping[str, Any] | None,
+) -> HouseholdContext:
+    """Map the already verified runtime context to the central value object.
+
+    The input must come from ``require_household_context`` or
+    ``require_inventory_write_context``. This adapter performs no authentication
+    and grants no additional household access.
+    """
+
+    if not runtime_context:
+        return resolve_household_context(
+            principal=None,
+            memberships=[],
+            requested_household_id=None,
+        )
+
+    household_id = str(
+        runtime_context.get("active_household_id")
+        or runtime_context.get("household_id")
+        or ""
+    ).strip()
+
+    principal = {
+        "user_id": runtime_context.get("user_id") or runtime_context.get("email"),
+        "email": runtime_context.get("email"),
+        "active_household_id": household_id,
+    }
+    membership = {
+        "household_id": household_id,
+        "household_key": runtime_context.get("household_key"),
+        "household_name": (
+            runtime_context.get("active_household_name")
+            or runtime_context.get("household_name")
+        ),
+        "role": runtime_context.get("role") or runtime_context.get("display_role"),
+    }
+
+    return resolve_household_context(
+        principal=principal,
+        memberships=[membership],
+        requested_household_id=household_id,
+    )

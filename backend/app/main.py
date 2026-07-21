@@ -54,6 +54,7 @@ from app.schemas.receipts import (
     ProductIdentityLookupRequest,
 )
 from app.services.testing_service import testing_service
+from app.services.household_context_adapter import household_context_from_runtime_context
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, parse_receipt_content, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
@@ -182,7 +183,9 @@ def _dev_inventory_preview_row(row):
 
 @app.get("/api/dev/inventory-preview")
 def dev_inventory_preview(authorization: Optional[str] = Header(None)):
-    effective_household_id = get_request_household_id(authorization)
+    runtime_context = require_household_context(authorization)
+    household_context = household_context_from_runtime_context(runtime_context)
+    effective_household_id = household_context.active_household_id
     with engine.begin() as conn:
         rows = conn.execute(text(
             """
@@ -214,8 +217,11 @@ def _dev_resolve_space_id(conn, household_id: str | None, space_id: str | None, 
 
     if normalized_space_id:
         existing = conn.execute(
-            text("SELECT id FROM spaces WHERE id = :id LIMIT 1"),
-            {"id": normalized_space_id},
+            text(
+                "SELECT id FROM spaces "
+                "WHERE id = :id AND household_id = :household_id LIMIT 1"
+            ),
+            {"id": normalized_space_id, "household_id": household_id},
         ).mappings().first()
         if existing:
             return str(existing.get("id"))
@@ -253,15 +259,24 @@ def _dev_resolve_space_id(conn, household_id: str | None, space_id: str | None, 
     return new_space_id
 
 
-def _dev_resolve_sublocation_id(conn, space_id: str | None, sublocation_id: str | None, sublocation_name: str | None):
+def _dev_resolve_sublocation_id(conn, household_id: str, space_id: str | None, sublocation_id: str | None, sublocation_name: str | None):
     normalized_sublocation_id = str(sublocation_id or "").strip()
     normalized_sublocation_name = " ".join(str(sublocation_name or "").strip().split())
     normalized_space_id = str(space_id or "").strip()
 
     if normalized_sublocation_id:
         existing = conn.execute(
-            text("SELECT id FROM sublocations WHERE id = :id LIMIT 1"),
-            {"id": normalized_sublocation_id},
+            text(
+                """
+                SELECT sl.id
+                FROM sublocations sl
+                JOIN spaces s ON s.id = sl.space_id
+                WHERE sl.id = :id
+                  AND s.household_id = :household_id
+                LIMIT 1
+                """
+            ),
+            {"id": normalized_sublocation_id, "household_id": household_id},
         ).mappings().first()
         if existing:
             return str(existing.get("id"))
@@ -299,7 +314,15 @@ def _dev_resolve_sublocation_id(conn, space_id: str | None, sublocation_id: str 
 
 
 @app.put("/api/dev/inventory/{inventory_id}")
-def dev_update_inventory(inventory_id: str, payload: InventoryUpdate):
+def dev_update_inventory(
+    inventory_id: str,
+    payload: InventoryUpdate,
+    authorization: Optional[str] = Header(None),
+):
+    runtime_context = require_inventory_write_context(authorization)
+    household_context = household_context_from_runtime_context(runtime_context)
+    effective_household_id = household_context.active_household_id
+
     normalized_inventory_id = str(inventory_id or "").strip()
     if not normalized_inventory_id:
         raise HTTPException(status_code=400, detail="Voorraadregel-id ontbreekt")
@@ -311,18 +334,26 @@ def dev_update_inventory(inventory_id: str, payload: InventoryUpdate):
                 SELECT id, household_id
                 FROM inventory
                 WHERE id = :id
+                  AND household_id = :household_id
                 LIMIT 1
                 """
             ),
-            {"id": normalized_inventory_id},
+            {
+                "id": normalized_inventory_id,
+                "household_id": effective_household_id,
+            },
         ).mappings().first()
 
         if not existing:
             raise HTTPException(status_code=404, detail="Voorraadregel niet gevonden")
 
-        household_id = str(existing.get("household_id") or "").strip() or None
-        space_id = _dev_resolve_space_id(conn, household_id, payload.space_id, payload.space_name)
-        sublocation_id = _dev_resolve_sublocation_id(conn, space_id, payload.sublocation_id, payload.sublocation_name)
+        household_id = effective_household_id
+        space_id = _dev_resolve_space_id(
+            conn, household_id, payload.space_id, payload.space_name
+        )
+        sublocation_id = _dev_resolve_sublocation_id(
+            conn, household_id, space_id, payload.sublocation_id, payload.sublocation_name
+        )
 
         conn.execute(
             text(
@@ -334,10 +365,12 @@ def dev_update_inventory(inventory_id: str, payload: InventoryUpdate):
                     sublocation_id = :sublocation_id,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
+                  AND household_id = :household_id
                 """
             ),
             {
                 "id": normalized_inventory_id,
+                "household_id": effective_household_id,
                 "naam": str(payload.naam or "").strip(),
                 "aantal": int(payload.aantal or 0),
                 "space_id": space_id,
@@ -361,13 +394,20 @@ def dev_update_inventory(inventory_id: str, payload: InventoryUpdate):
                 LEFT JOIN spaces s ON s.id = i.space_id
                 LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
                 WHERE i.id = :id
+                  AND i.household_id = :household_id
                 LIMIT 1
                 """
             ),
-            {"id": normalized_inventory_id},
+            {
+                "id": normalized_inventory_id,
+                "household_id": effective_household_id,
+            },
         ).mappings().first()
 
-    return {"ok": True, "row": _dev_inventory_preview_row(row or {})}
+    if not row:
+        raise HTTPException(status_code=404, detail="Voorraadregel niet gevonden")
+
+    return {"ok": True, "row": _dev_inventory_preview_row(row)}
 
 @app.exception_handler(Exception)
 async def unhandled_api_exception_handler(request: Request, exc: Exception):
