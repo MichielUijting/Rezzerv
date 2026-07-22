@@ -10,7 +10,14 @@ from typing import Any
 from app.main import app
 
 MUTATION_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
-TARGET_TERMS = ("notification", "notifications", "melding", "meldingen")
+TARGET_TERMS = (
+    "notification",
+    "notifications",
+    "melding",
+    "meldingen",
+    "alert",
+    "alerts",
+)
 AUTH_MARKERS = (
     "require_household_context",
     "require_household_admin_context",
@@ -68,10 +75,10 @@ def endpoint_source(endpoint: Any) -> tuple[str, str | None, int | None]:
     return source, source_file, first_line
 
 
-def is_target_route(path: str, endpoint: Any) -> bool:
+def is_target_route(path: str, endpoint: Any, source: str) -> bool:
     endpoint_name = str(getattr(endpoint, "__qualname__", "") or "").lower()
     module_name = str(getattr(endpoint, "__module__", "") or "").lower()
-    haystack = " ".join((path.lower(), endpoint_name, module_name))
+    haystack = " ".join((path.lower(), endpoint_name, module_name, source.lower()))
     return any(term in haystack for term in TARGET_TERMS)
 
 
@@ -81,9 +88,9 @@ def audit_routes() -> dict[str, Any]:
     for route in app.routes:
         path = str(getattr(route, "path", "") or "")
         endpoint = getattr(route, "endpoint", None)
-        if not is_target_route(path, endpoint):
-            continue
         source, source_file, first_line = endpoint_source(endpoint)
+        if not is_target_route(path, endpoint, source):
+            continue
         lowered = source.lower()
         signature = str(inspect.signature(endpoint)) if endpoint is not None else ""
         for method in sorted(str(item) for item in (getattr(route, "methods", None) or [])):
@@ -102,6 +109,7 @@ def audit_routes() -> dict[str, Any]:
                     "authorization_parameter": "authorization" in signature.lower(),
                     "auth_markers": [marker for marker in AUTH_MARKERS if marker.lower() in lowered],
                     "household_markers": [marker for marker in HOUSEHOLD_MARKERS if marker.lower() in lowered],
+                    "matched_terms": [term for term in TARGET_TERMS if term in " ".join((path.lower(), str(getattr(endpoint, "__qualname__", "") or "").lower(), str(getattr(endpoint, "__module__", "") or "").lower(), lowered))],
                     "source": source,
                 }
             )
@@ -114,7 +122,7 @@ def audit_routes() -> dict[str, Any]:
         if not item["authorization_parameter"] and not item["auth_markers"]
     ]
     return {
-        "audit_version": 1,
+        "audit_version": 2,
         "summary": {
             "route_registrations": len(rows),
             "reads": len(reads),
