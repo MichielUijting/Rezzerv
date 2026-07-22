@@ -9,6 +9,7 @@ from sqlalchemy import text
 
 _LINE_PATH = re.compile(r"^/api/purchase-import-lines/([^/]+)(?:/|$)")
 _BATCH_PATH = re.compile(r"^/api/purchase-import-batches/([^/]+)(?:/|$)")
+_WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 def resolve_purchase_import_household(conn, request_path: str) -> str | None:
@@ -63,15 +64,21 @@ def resolve_purchase_import_household(conn, request_path: str) -> str | None:
 
 def authorize_purchase_import_request(
     conn,
+    request_method: str,
     request_path: str,
     authorization: str | None,
     require_household_context: Callable[[str | None, str | None], dict[str, Any]],
+    require_inventory_write_context: Callable[[str | None, str | None], dict[str, Any]],
 ) -> dict[str, Any] | None:
-    """Authorize a protected request against the server-side owning household."""
+    """Authorize a production Uitpakken request against its server-side household."""
 
     household_id = resolve_purchase_import_household(conn, request_path)
     if household_id is None:
         return None
+
+    normalized_method = str(request_method or "").strip().upper()
+    if normalized_method in _WRITE_METHODS:
+        return require_inventory_write_context(authorization, household_id)
     return require_household_context(authorization, household_id)
 
 
@@ -88,9 +95,11 @@ def install_unpacking_household_object_guard(main_module) -> None:
             with main_module.engine.begin() as conn:
                 authorize_purchase_import_request(
                     conn,
+                    request.method,
                     request.url.path,
                     request.headers.get("authorization"),
                     main_module.require_household_context,
+                    main_module.require_inventory_write_context,
                 )
         except HTTPException as exc:
             return JSONResponse(

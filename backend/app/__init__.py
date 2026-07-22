@@ -98,6 +98,7 @@ def _install_unpacking_object_guard_when_ready() -> None:
             and hasattr(module, 'app')
             and hasattr(module, 'engine')
             and hasattr(module, 'require_household_context')
+            and hasattr(module, 'require_inventory_write_context')
         ):
             try:
                 from .services.unpacking_household_object_guard import (
