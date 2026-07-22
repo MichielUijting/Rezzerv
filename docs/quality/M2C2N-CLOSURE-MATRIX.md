@@ -1,7 +1,7 @@
 # M2C2n afsluitmatrix
 
 Statusdatum: 2026-07-22  
-Basiscommit: `01fce498339b100cdca075c24b96422b1bc81af3`
+Basiscommit: `b430e9cb47d4a1d4e1226992e432ce3a78722b93`
 
 ## Doel
 
@@ -81,6 +81,13 @@ M2C2n bestaat vanaf dit document nog uit maximaal de volgende werkpakketten, in 
    Werk alle matrixrijen bij naar GEREED of DEFERRED, voeg bewijskoppelingen toe en voer de volledige releasekwaliteitketen uit.
 
 Er worden geen nieuwe losse beveiligings-PR’s buiten deze werkpakketten gestart.
+
+## Werkpakketstatus
+
+| Werkpakket | Status | Bewijs/uitvoer |
+|---|---|---|
+| WP-1 — Routecatalogus genereren | IN UITVOERING | Runtimegenerator en Docker-CI worden voorbereid in de WP-1-PR |
+| WP-2 t/m WP-7 | NIET GESTART | Wachten op gecontroleerde WP-1-uitvoer |
 
 ## PR-regels vanaf nu
 
