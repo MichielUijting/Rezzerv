@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 _PROTECTED_METHOD = "POST"
 _PROTECTED_PATHS = {
+    "/api/admin/backfill-purchase-import-live-aliases",
     "/api/admin/recompute-receipt-statuses",
     "/api/admin/validate-receipt-status-baseline",
     "/api/admin/diagnose-receipt-status-baseline",
