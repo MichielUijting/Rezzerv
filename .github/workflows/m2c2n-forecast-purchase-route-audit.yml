@@ -31,6 +31,14 @@ jobs:
           grep -F 'M2C2N_FORECAST_PURCHASE_ROUTE_AUDIT_GREEN' forecast-purchase-route-audit.log
           test -s forecast-purchase-route-audit-output/M2C2N-FORECAST-PURCHASE-ROUTE-AUDIT.json
 
+      - name: Controleer volledige WP-4-routedekking
+        run: |
+          docker compose run --rm --no-deps \
+            backend \
+            python -m app.testing.forecast_purchase_route_contract \
+            | tee forecast-purchase-route-contract.log
+          grep -F 'M2C2N_FORECAST_PURCHASE_ROUTE_CONTRACT_GREEN' forecast-purchase-route-contract.log
+
       - name: Publiceer forecast- en purchaseroute-audit
         if: always()
         uses: actions/upload-artifact@v4
@@ -39,5 +47,6 @@ jobs:
           path: |
             forecast-purchase-route-audit-output/M2C2N-FORECAST-PURCHASE-ROUTE-AUDIT.json
             forecast-purchase-route-audit.log
+            forecast-purchase-route-contract.log
           if-no-files-found: error
           retention-days: 30
