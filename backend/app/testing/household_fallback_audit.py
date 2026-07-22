@@ -32,6 +32,7 @@ INTERNAL_HELPERS = {
     'resolve_authorized_household_id', '_normalize_household_id',
     'build_household_email_address',
 }
+NON_HOUSEHOLD_ONE_FUNCTIONS = {'normalize_household_auto_consume_mode'}
 
 
 def classify_path(path: Path) -> str:
@@ -99,12 +100,22 @@ def fallback_category(row: dict[str, Any]) -> str:
     decorators = ' '.join(function.get('decorators') or [])
     lowered_path = path.lower()
     lowered_name = name.lower()
+    source = str(row.get('source') or '')
+    line = int(row.get('line') or 0)
 
+    if name in NON_HOUSEHOLD_ONE_FUNCTIONS:
+        return 'non-household-boolean-or-value'
     if name == 'import_share_target_receipt':
         return 'deferred-share-target'
     if classification == 'frontend-runtime':
         return 'frontend-server-authority'
     if classification in {'test', 'fixture'}:
+        return 'test-dev-fixture'
+    if path == 'backend/app/main.py' and name == '' and line < 1000 and 'household_id' in source:
+        return 'auth-bootstrap'
+    if path == 'backend/app/main.py' and name == '' and (
+        'REGRESSION' in source or 'admin_household' in source or line >= 13900
+    ):
         return 'test-dev-fixture'
     if (
         'testing_receipt_parser_diagnosis' in lowered_path
@@ -167,7 +178,7 @@ def audit(root: Path) -> dict[str, Any]:
         by_category[category] = by_category.get(category, 0) + 1
     unclassified = [row for row in runtime_rows if row['fallback_category'] == 'unclassified']
     return {
-        'audit_version': 4,
+        'audit_version': 5,
         'targets': list(DEMO_TARGETS + ONE_TARGETS),
         'summary': {
             'household_occurrences': len(rows),
