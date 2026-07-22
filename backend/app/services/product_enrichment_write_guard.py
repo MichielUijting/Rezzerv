@@ -67,3 +67,7 @@ def install_product_enrichment_write_guard(main_module) -> None:
         return await call_next(request)
 
     app.state.product_enrichment_write_guard_installed = True
+
+    from .article_detail_write_guard import install_article_detail_write_guard
+
+    install_article_detail_write_guard(main_module)
