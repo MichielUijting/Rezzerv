@@ -36,24 +36,24 @@ Een domein krijgt pas status **GEREED** wanneer:
 | M2C2N-04 | Uitpakken: target-location | Batch- en regelhuishouden server-side afgeleid | Schrijfrecht voor mutaties | PR #164 | GEREED | Geen |
 | M2C2N-05 | Uitpakken: batch/regelobjecten | Objectguard voor batch- en regelroutes | Muterende methoden vereisen schrijfrecht | PR #165 en #174 | GEREED | Geen |
 | M2C2N-06 | Receipt share import | Geauthenticeerde import aan actieve huishoudcontext gebonden | Schrijfrecht afgedwongen | PR #166 | GEREED | Geen |
-| M2C2N-07 | Receipt admin- en onderhoudsroutes | Geen vrije huishoudkeuze voor beheeracties | Platform-admin vereist | PR #167 en latere guarduitbreidingen | CONTROLE | Guard consolideren en volledige beschermde-routelijst valideren |
+| M2C2N-07 | Receipt admin- en onderhoudsroutes | Geen vrije huishoudkeuze voor beheeracties | Platform-admin vereist | PR #167 en latere guarduitbreidingen; WP-1-routebaseline | CONTROLE | WP-2: alle 10 adminmutaties valideren en guard consolideren |
 | M2C2N-08 | Gmail OAuth receiptbron | State en bron aan één huishouden gebonden | Geautoriseerde huishoudbeheerder | PR #168 | GEREED | Geen |
 | M2C2N-09 | Resend inbound webhook en bron | Inbound bron server-side aan huishouden gebonden | Webhookcontract en broncontrole | PR #169–#171 | GEREED | Geen |
 | M2C2N-10 | Purchase-import live alias backfill | Platformbeheeractie; geen vrije gebruikersscope | Platform-admin vereist | PR #172 | GEREED | Geen |
 | M2C2N-11 | Receipt-exportfixtures | Vaste regressiescope | Platform-admin vereist | PR #173 | GEREED | Geen |
 | M2C2N-12 | Product enrichment | Actief huishouden uit gevalideerde context | Inventory-schrijfrecht | PR #175 | GEREED | Geen |
 | M2C2N-13 | Artikel-ID-verrijking en detailmutaties | Artikel binnen actieve huishoudcontext opgelost | Inventory-schrijfrecht | PR #176 | GEREED | Geen |
-| M2C2N-14 | Externe productkoppeling via inventory/artikel | Inventory en household article worden binnen actief huishouden gezocht | Admin/lid, kijker geblokkeerd | Codecontrole op `update_inventory_external_product_link` | CONTROLE | Gericht HTTP-contract toevoegen of bestaand bewijs aanwijzen |
+| M2C2N-14 | Externe productkoppeling via inventory/artikel | Inventory en household article worden binnen actief huishouden gezocht | Admin/lid, kijker geblokkeerd | Codecontrole; WP-1-routebaseline | CONTROLE | WP-3: gericht HTTP-contract toevoegen of bestaand bewijs aanwijzen |
 | M2C2N-15 | Testing: store-locationdiagnostiek | Vrij `household_id` niet meer zonder beheerrecht uitvoerbaar | Platform-admin vereist | PR #177 | GEREED | Geen |
 | M2C2N-16 | Testing: almost-out en inventoryfixtures | Vaste regressiescope | Platform-admin vereist | PR #178 | GEREED | Geen |
-| M2C2N-17 | Overige `/api/testing/*`-routes | Nog niet volledig gecatalogiseerd | Nog niet volledig gecatalogiseerd | Alleen deelroutes bewezen | OPEN | Complete methode-padlijst maken; muterende routes classificeren en testen |
-| M2C2N-18 | Product- en artikelroutes buiten reeds beschermde ingangen | Deels bewezen | Deels bewezen | PR #175/#176 plus codecontrole | CONTROLE | Volledige routecatalogus en restcontract |
-| M2C2N-19 | Prognoses en AlmostOut-productieroutes | Onbekend tot complete routecontrole | Onbekend | Geen afsluitend domeincontract | OPEN | Alle lees-, instelling- en mutatieroutes inventariseren |
-| M2C2N-20 | Inkoop, handmatige aankopen en importinstellingen | Deels via actieve context; nog niet volledig bewezen | Deels schrijfrecht | Purchase-importguards aanwezig | OPEN | Productieroutes buiten batch/regelguard volledig controleren |
-| M2C2N-21 | Meldingen en notificatieconfiguratie | Nog niet volledig geïnventariseerd | Nog niet volledig geïnventariseerd | Geen afsluitend domeincontract | OPEN | Routecatalogus, huishoudscope en mutatierechten bewijzen |
-| M2C2N-22 | Stille fallbacks `"1"` en `"demo-household"` | Enkele fallbacks volgen na geldige context; volledige set onbekend | Niet van toepassing | Gedeeltelijke codecontrole | OPEN | Alle productievoorkomens classificeren: bootstrap, test, onbereikbaar of verwijderen |
+| M2C2N-17 | Overige `/api/testing/*`-routes | 40 registraties reproduceerbaar gecatalogiseerd | 17 mutaties; rolgrens nog niet volledig gevalideerd | WP-1-routebaseline | OPEN | WP-2: alle 17 testingmutaties classificeren en testen; 2 dubbele GET-registraties oplossen |
+| M2C2N-18 | Product- en artikelroutes buiten reeds beschermde ingangen | Volledige routescope nu reproduceerbaar beschikbaar | Deels bewezen | PR #175/#176 en WP-1-routebaseline | CONTROLE | WP-3: domeinfilter en restcontract uitvoeren |
+| M2C2N-19 | Prognoses en AlmostOut-productieroutes | Volledige routescope nu reproduceerbaar beschikbaar | Nog niet domeinbreed gevalideerd | WP-1-routebaseline | OPEN | WP-4: relevante routes uit baseline selecteren en controleren |
+| M2C2N-20 | Inkoop, handmatige aankopen en importinstellingen | Volledige routescope nu reproduceerbaar beschikbaar | Deels schrijfrecht bewezen | Purchase-importguards en WP-1-routebaseline | OPEN | WP-4: productieroutes buiten batch/regelguard controleren |
+| M2C2N-21 | Meldingen en notificatieconfiguratie | Volledige routescope nu reproduceerbaar beschikbaar | Nog niet domeinbreed gevalideerd | WP-1-routebaseline | OPEN | WP-5: relevante routes uit baseline selecteren en controleren |
+| M2C2N-22 | Stille fallbacks `"1"` en `"demo-household"` | Routecatalogus beschikbaar; codevoorkomens nog niet geclassificeerd | Niet van toepassing | Gedeeltelijke codecontrole en WP-1-routebaseline | OPEN | WP-6: alle productievoorkomens classificeren of verwijderen |
 | M2C2N-23 | `/api/receipts/share-target` | Huidige vrije `household_id` is niet eindontwerp | Toekomstig signed-tokencontract | Ontwerpbesluit vastgelegd, geen implementatie | DEFERRED | Later: kortlevend signed token, aan exact één huishouden gebonden |
-| M2C2N-24 | Platform-admin-routeguard | Functioneel actief | Platform-admin | Contracttest aanwezig | CONTROLE | Hernoemen van receipt-specifieke guard naar algemene guard en registratie centraliseren |
+| M2C2N-24 | Platform-admin-routeguard | Functioneel actief | Platform-admin | Contracttest en WP-1-routebaseline | CONTROLE | WP-2: hernoemen naar algemene guard en registratie centraliseren |
 
 ## Eindige restlijst
 
@@ -82,12 +82,34 @@ M2C2n bestaat vanaf dit document nog uit maximaal de volgende werkpakketten, in 
 
 Er worden geen nieuwe losse beveiligings-PR’s buiten deze werkpakketten gestart.
 
+## WP-1-uitvoer
+
+De runtimegenerator leest de werkelijk geregistreerde `app.routes` nadat de asynchrone route-installatie stabiel is. De vaste baseline staat in `docs/quality/M2C2N-ROUTE-CATALOG-BASELINE.json` en wordt bij iedere PR opnieuw gecontroleerd.
+
+| Kengetal | Waarde |
+|---|---:|
+| Routeregistraties | 196 |
+| Unieke methode-padcombinaties | 194 |
+| Leesregistraties | 87 |
+| Mutatieregistraties | 109 |
+| Production | 140 totaal / 81 muterend |
+| Testing | 40 totaal / 17 muterend |
+| Admin | 14 totaal / 10 muterend |
+| Dev | 2 totaal / 1 muterend |
+| Dubbele methode-padregistraties | 2 |
+
+De twee dubbele registraties zijn:
+
+- `GET /api/testing/receipt-parser-diagnosis`;
+- `GET /api/testing/receipt-parser-diagnosis/download`.
+
 ## Werkpakketstatus
 
 | Werkpakket | Status | Bewijs/uitvoer |
 |---|---|---|
-| WP-1 — Routecatalogus genereren | IN UITVOERING | Runtimegenerator en Docker-CI worden voorbereid in de WP-1-PR |
-| WP-2 t/m WP-7 | NIET GESTART | Wachten op gecontroleerde WP-1-uitvoer |
+| WP-1 — Routecatalogus genereren | GEREED | Runtimegenerator, Docker-CI, artifact en vaste fingerprintbaseline |
+| WP-2 — Testing en platform-admin consolideren | VOLGENDE | Scope: 17 testingmutaties, 10 adminmutaties en 2 dubbele GET-registraties |
+| WP-3 t/m WP-7 | NIET GESTART | Wachten op afronding WP-2 |
 
 ## PR-regels vanaf nu
 
