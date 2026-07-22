@@ -166,9 +166,21 @@ def install_product_route_household_guard(main_module) -> None:
                         request.query_params.get("q", ""),
                     )
                 )
-            with main_module.engine.begin() as conn:
+            if _INVENTORY_GROUP_ASSIGNMENT.match(request.url.path):
+                with main_module.engine.begin() as conn:
+                    authorize_product_route_request(
+                        conn,
+                        request.method,
+                        request.url.path,
+                        request.headers.get("authorization"),
+                        request.query_params.get("household_id"),
+                        main_module.require_household_context,
+                        main_module.require_inventory_write_context,
+                        main_module.require_platform_admin_user,
+                    )
+            else:
                 authorize_product_route_request(
-                    conn,
+                    None,
                     request.method,
                     request.url.path,
                     request.headers.get("authorization"),
