@@ -10,6 +10,10 @@ from typing import Any
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
+from app.services.receipt_resend_inbound_source_household_guard import (
+    install_receipt_resend_inbound_source_household_guard,
+)
+
 INBOUND_PATH = "/api/receipts/inbound"
 MAX_TIMESTAMP_SKEW_SECONDS = 300
 
@@ -131,6 +135,7 @@ def install_receipt_resend_webhook_guard(module: Any) -> None:
     if getattr(module.app.state, "receipt_resend_webhook_guard_installed", False):
         return
     ensure_delivery_table(module)
+    install_receipt_resend_inbound_source_household_guard(module)
 
     @module.app.middleware("http")
     async def receipt_resend_webhook_guard(request: Request, call_next):
