@@ -1,4 +1,4 @@
-name: Receipt admin household guard
+name: Platform admin route guard
 
 on:
   pull_request:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  validate-receipt-admin-household-guard:
+  validate-platform-admin-route-guard:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -24,16 +24,16 @@ jobs:
             fastapi==0.115.0 \
             httpx==0.27.2
 
-      - name: Compileer gewijzigde modules
+      - name: Compileer platform-adminguard en contract
         run: |
           python -m py_compile \
-            backend/app/__init__.py \
+            backend/app/services/platform_admin_route_guard.py \
             backend/app/services/receipt_admin_household_guard.py \
             backend/app/testing/receipt_admin_household_guard_contract.py
 
-      - name: Voer HTTP-receiptbeheercontract uit
+      - name: Voer volledig platform-admincontract uit
         env:
           PYTHONPATH: backend
         run: |
-          python -m app.testing.receipt_admin_household_guard_contract | tee receipt-admin-household-guard.log
-          grep -F 'RECEIPT_ADMIN_HOUSEHOLD_GUARD_GREEN' receipt-admin-household-guard.log
+          python -m app.testing.receipt_admin_household_guard_contract | tee platform-admin-route-guard.log
+          grep -F 'PLATFORM_ADMIN_ROUTE_GUARD_GREEN' platform-admin-route-guard.log
