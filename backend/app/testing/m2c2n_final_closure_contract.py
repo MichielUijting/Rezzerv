@@ -19,7 +19,7 @@ REQUIRED_FILES = {
     ".github/workflows/m2c2n-notification-route-audit.yml",
     ".github/workflows/m2c2n-household-fallback-audit.yml",
     "backend/app/testing/route_catalog.py",
-    "backend/app/testing/platform_admin_route_guard_contract.py",
+    "backend/app/testing/receipt_admin_household_guard_contract.py",
     "backend/app/testing/product_route_household_guard_contract.py",
     "backend/app/testing/forecast_purchase_route_contract.py",
     "backend/app/testing/notification_route_contract.py",
