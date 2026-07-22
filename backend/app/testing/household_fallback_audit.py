@@ -16,9 +16,25 @@ AUTH_MARKERS = (
     'require_inventory_write_context', 'require_platform_admin_user',
     'require_household_permission', 'require_entity_household_access',
 )
+AUTH_BOOTSTRAP_FUNCTIONS = {
+    'bootstrap_auth_registry', 'refresh_runtime_users_from_db',
+    'resolve_user_household_memberships', 'login',
+}
+SIGNED_SOURCE_FUNCTIONS = {
+    'upsert_receipt_gmail_account', 'build_receipt_gmail_account_response',
+    'get_receipt_gmail_account', 'build_gmail_connect_url', 'sync_gmail_receipts',
+    'handle_receipt_gmail_callback', 'import_resend_inbound_event',
+}
+INTERNAL_HELPERS = {
+    'find_generic_existing_article_match', 'resolve_processing_article',
+    'resolve_review_article_option', 'resolve_space_and_sublocation_ids',
+    'create_receipt_source', 'import_shared_receipt', 'get_request_household_id',
+    'resolve_authorized_household_id', '_normalize_household_id',
+    'build_household_email_address',
+}
 
 
-def classify(path: Path) -> str:
+def classify_path(path: Path) -> str:
     posix = path.as_posix()
     if '/testing/' in f'/{posix}' or posix.startswith('tests/') or '/tests/' in f'/{posix}':
         return 'test'
@@ -75,6 +91,41 @@ def enclosing_function(functions: list[dict[str, Any]], line: int) -> dict[str, 
     return min(matches, key=lambda item: item['end'] - item['start']) if matches else None
 
 
+def fallback_category(row: dict[str, Any]) -> str:
+    path = row['path']
+    classification = row['classification']
+    function = row.get('function') or {}
+    name = str(function.get('name') or '')
+    decorators = ' '.join(function.get('decorators') or [])
+    lowered_path = path.lower()
+    lowered_name = name.lower()
+
+    if name == 'import_share_target_receipt':
+        return 'deferred-share-target'
+    if classification == 'frontend-runtime':
+        return 'frontend-server-authority'
+    if classification in {'test', 'fixture'}:
+        return 'test-dev-fixture'
+    if (
+        'testing_receipt_parser_diagnosis' in lowered_path
+        or 'receipt_diagnosis' in lowered_path
+        or 'receipt_diagnostics' in lowered_path
+        or 'receipt_po_status_delta' in lowered_path
+        or any(term in lowered_name for term in ('dev_', 'regression', 'fixture', 'seed_', 'diagnos'))
+        or any(prefix in decorators for prefix in ('/api/testing/', '/api/admin/', '/api/dev/'))
+    ):
+        return 'platform-admin-diagnostic-or-test'
+    if name in AUTH_BOOTSTRAP_FUNCTIONS:
+        return 'auth-bootstrap'
+    if name in SIGNED_SOURCE_FUNCTIONS:
+        return 'signed-state-or-server-source'
+    if function.get('auth_markers'):
+        return 'authenticated-route-or-helper'
+    if name in INTERNAL_HELPERS:
+        return 'authenticated-internal-helper'
+    return 'unclassified'
+
+
 def audit(root: Path) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for path in sorted(root.rglob('*')):
@@ -94,37 +145,38 @@ def audit(root: Path) -> dict[str, Any]:
             if not matched:
                 continue
             function = enclosing_function(functions, index + 1)
-            rows.append({
+            row = {
                 'path': rel.as_posix(),
                 'line': index + 1,
-                'classification': classify(rel),
+                'classification': classify_path(rel),
                 'targets': matched,
                 'source': line.strip(),
                 'previous': lines[index - 1].strip() if index > 0 else '',
                 'next': lines[index + 1].strip() if index + 1 < len(lines) else '',
                 'function': function,
-            })
-    summary: dict[str, int] = {}
-    for row in rows:
-        summary[row['classification']] = summary.get(row['classification'], 0) + 1
+            }
+            row['fallback_category'] = fallback_category(row)
+            rows.append(row)
     runtime_rows = [row for row in rows if row['classification'] in {'backend-runtime', 'frontend-runtime'}]
-    backend_unscoped = [
-        row for row in runtime_rows
-        if row['classification'] == 'backend-runtime'
-        and row.get('function')
-        and not row['function']['auth_markers']
-        and not any('/api/testing/' in decorator or '/api/admin/' in decorator or '/api/dev/' in decorator for decorator in row['function']['decorators'])
-    ]
+    by_classification: dict[str, int] = {}
+    by_category: dict[str, int] = {}
+    for row in rows:
+        by_classification[row['classification']] = by_classification.get(row['classification'], 0) + 1
+    for row in runtime_rows:
+        category = row['fallback_category']
+        by_category[category] = by_category.get(category, 0) + 1
+    unclassified = [row for row in runtime_rows if row['fallback_category'] == 'unclassified']
     return {
-        'audit_version': 3,
+        'audit_version': 4,
         'targets': list(DEMO_TARGETS + ONE_TARGETS),
         'summary': {
             'household_occurrences': len(rows),
             'runtime_occurrences': len(runtime_rows),
-            'backend_unscoped_occurrences': len(backend_unscoped),
-            'by_classification': summary,
+            'unclassified_runtime_occurrences': len(unclassified),
+            'by_classification': by_classification,
+            'by_category': by_category,
         },
-        'backend_unscoped_occurrences': backend_unscoped,
+        'unclassified_runtime_occurrences': unclassified,
         'runtime_occurrences': runtime_rows,
         'all_occurrences': rows,
     }
