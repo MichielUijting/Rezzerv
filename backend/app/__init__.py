@@ -111,6 +111,25 @@ def _install_unpacking_object_guard_when_ready() -> None:
         time.sleep(0.1)
 
 
+def _install_product_enrichment_write_guard_when_ready() -> None:
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, 'app')
+            and hasattr(module, 'require_inventory_write_context')
+        ):
+            try:
+                from .services.product_enrichment_write_guard import (
+                    install_product_enrichment_write_guard,
+                )
+                install_product_enrichment_write_guard(module)
+            except Exception:
+                pass
+            return
+        time.sleep(0.1)
+
+
 def _install_receipt_share_import_guard_when_ready() -> None:
     for _ in range(200):
         module = sys.modules.get('app.main')
@@ -200,6 +219,10 @@ threading.Thread(
 ).start()
 threading.Thread(
     target=_install_unpacking_object_guard_when_ready,
+    daemon=True,
+).start()
+threading.Thread(
+    target=_install_product_enrichment_write_guard_when_ready,
     daemon=True,
 ).start()
 threading.Thread(
