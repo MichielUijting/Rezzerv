@@ -28,6 +28,11 @@ def run_contract() -> None:
     )
     install_receipt_admin_household_guard(module)
 
+    @app.post("/api/admin/backfill-purchase-import-live-aliases")
+    def backfill_purchase_import_live_aliases():
+        calls.append("live-alias-backfill")
+        return {"status": "ok"}
+
     @app.post("/api/admin/recompute-receipt-statuses")
     def recompute_receipt_statuses(authorization: str | None = Header(None)):
         calls.append("recompute")
@@ -50,31 +55,49 @@ def run_contract() -> None:
 
     client = TestClient(app)
 
-    response = client.post("/api/admin/recompute-receipt-statuses")
+    response = client.post("/api/admin/backfill-purchase-import-live-aliases")
     assert response.status_code == 401, response.text
     assert calls == []
 
     response = client.post(
-        "/api/admin/validate-receipt-status-baseline",
+        "/api/admin/backfill-purchase-import-live-aliases",
         headers={"Authorization": "Bearer household-user"},
     )
     assert response.status_code == 403, response.text
     assert calls == []
 
     response = client.post(
+        "/api/admin/backfill-purchase-import-live-aliases",
+        headers={"Authorization": "Bearer platform-admin"},
+    )
+    assert response.status_code == 200, response.text
+    assert calls == ["live-alias-backfill"]
+
+    response = client.post("/api/admin/recompute-receipt-statuses")
+    assert response.status_code == 401, response.text
+    assert calls == ["live-alias-backfill"]
+
+    response = client.post(
+        "/api/admin/validate-receipt-status-baseline",
+        headers={"Authorization": "Bearer household-user"},
+    )
+    assert response.status_code == 403, response.text
+    assert calls == ["live-alias-backfill"]
+
+    response = client.post(
         "/api/admin/diagnose-receipt-status-baseline",
         headers={"Authorization": "Bearer platform-admin"},
     )
     assert response.status_code == 200, response.text
-    assert calls == ["diagnose"]
+    assert calls == ["live-alias-backfill", "diagnose"]
 
     response = client.post("/api/admin/unrelated")
     assert response.status_code == 200, response.text
-    assert calls == ["diagnose", "unrelated"]
+    assert calls == ["live-alias-backfill", "diagnose", "unrelated"]
 
     assert authorize_receipt_admin_request(
         "GET",
-        "/api/admin/recompute-receipt-statuses",
+        "/api/admin/backfill-purchase-import-live-aliases",
         None,
         require_platform_admin_user,
     ) is None
