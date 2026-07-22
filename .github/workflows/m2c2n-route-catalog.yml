@@ -1,0 +1,98 @@
+name: M2C2n route catalog
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  generate-route-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Controleer Docker-versie
+        run: docker --version
+
+      - name: Controleer Docker Compose-versie
+        run: docker compose version
+
+      - name: Bouw backend-image
+        run: docker compose build backend
+
+      - name: Genereer runtime-routecatalogus
+        run: |
+          mkdir -p route-catalog-output
+          docker compose run --rm --no-deps \
+            -v "$PWD/route-catalog-output:/tmp/m2c2n-route-catalog" \
+            backend \
+            python -m app.testing.route_catalog \
+              --output-dir /tmp/m2c2n-route-catalog \
+            | tee route-catalog.log
+          grep -F 'M2C2N_ROUTE_CATALOG_GREEN' route-catalog.log
+
+      - name: Controleer catalogus en vastgelegde baseline
+        run: |
+          test -s route-catalog-output/M2C2N-ROUTE-CATALOG.json
+          test -s route-catalog-output/M2C2N-ROUTE-CATALOG.md
+          test -s docs/quality/M2C2N-ROUTE-CATALOG-BASELINE.json
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          payload = json.loads(Path('route-catalog-output/M2C2N-ROUTE-CATALOG.json').read_text(encoding='utf-8'))
+          baseline = json.loads(Path('docs/quality/M2C2N-ROUTE-CATALOG-BASELINE.json').read_text(encoding='utf-8'))
+          summary = payload['summary']
+
+          assert summary['route_registrations'] > 0
+          assert summary['unique_method_paths'] > 0
+          assert summary['by_access'].get('mutation', 0) > 0
+          assert all(item['method'] and item['path'] and item['endpoint'] and item['module'] for item in payload['routes'])
+
+          identity = [
+              {key: item[key] for key in ('method', 'path', 'endpoint', 'module', 'surface', 'access')}
+              for item in payload['routes']
+          ]
+          fingerprint = hashlib.sha256(
+              json.dumps(identity, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode('utf-8')
+          ).hexdigest()
+
+          testing_mutations = [
+              f"{item['method']} {item['path']} :: {item['module']}.{item['endpoint']}"
+              for item in payload['routes']
+              if item['surface'] == 'testing' and item['access'] == 'mutation'
+          ]
+          admin_mutations = [
+              f"{item['method']} {item['path']} :: {item['module']}.{item['endpoint']}"
+              for item in payload['routes']
+              if item['surface'] == 'admin' and item['access'] == 'mutation'
+          ]
+          dev_routes = [
+              f"{item['method']} {item['path']} :: {item['module']}.{item['endpoint']}"
+              for item in payload['routes']
+              if item['surface'] == 'dev'
+          ]
+
+          assert summary == baseline['summary'], (summary, baseline['summary'])
+          assert fingerprint == baseline['route_fingerprint_sha256'], (fingerprint, baseline['route_fingerprint_sha256'])
+          assert testing_mutations == baseline['testing_mutations']
+          assert admin_mutations == baseline['admin_mutations']
+          assert dev_routes == baseline['dev_routes']
+
+          print(json.dumps({'summary': summary, 'route_fingerprint_sha256': fingerprint}, ensure_ascii=False, sort_keys=True))
+          PY
+
+      - name: Publiceer routecatalogus
+        uses: actions/upload-artifact@v4
+        with:
+          name: m2c2n-route-catalog
+          path: |
+            route-catalog-output/M2C2N-ROUTE-CATALOG.json
+            route-catalog-output/M2C2N-ROUTE-CATALOG.md
+            route-catalog.log
+            docs/quality/M2C2N-ROUTE-CATALOG-BASELINE.json
+          if-no-files-found: error
+          retention-days: 30

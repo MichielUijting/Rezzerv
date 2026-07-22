@@ -1,0 +1,78 @@
+{
+  "catalog_version": 1,
+  "route_fingerprint_sha256": "71fd519a694963ecf99ce867aed032ff126db55256be19e8a181430f765cb464",
+  "summary": {
+    "route_registrations": 196,
+    "unique_method_paths": 194,
+    "duplicates": 2,
+    "by_surface": {
+      "admin": 14,
+      "dev": 2,
+      "production": 140,
+      "testing": 40
+    },
+    "by_access": {
+      "mutation": 109,
+      "read": 87
+    },
+    "mutation_by_surface": {
+      "admin": 10,
+      "dev": 1,
+      "production": 81,
+      "testing": 17
+    }
+  },
+  "duplicates": [
+    {
+      "method": "GET",
+      "path": "/api/testing/receipt-parser-diagnosis",
+      "registrations": [
+        "app.api.receipt_diagnosis_routes.receipt_parser_diagnosis",
+        "app.api.routes.receipt_parser_diagnosis.get_receipt_parser_diagnosis"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/testing/receipt-parser-diagnosis/download",
+      "registrations": [
+        "app.api.receipt_diagnosis_routes.receipt_parser_diagnosis_download",
+        "app.api.routes.receipt_parser_diagnosis.download_receipt_parser_diagnosis"
+      ]
+    }
+  ],
+  "testing_mutations": [
+    "POST /api/testing/diagnostics/store-location-options :: app.main.run_store_location_diagnostic",
+    "POST /api/testing/fixtures/browser-regression/reset :: app.main.reset_browser_regression_fixture",
+    "POST /api/testing/fixtures/cleanup :: app.main.cleanup_regression_fixture_state_endpoint",
+    "POST /api/testing/fixtures/inventory/ensure :: app.main.ensure_regression_inventory_fixture_endpoint",
+    "POST /api/testing/fixtures/receipt-export/generate :: app.main.generate_receipt_export_fixture",
+    "POST /api/testing/fixtures/receipt-layer1/generate :: app.main.generate_layer1_receipt_fixture",
+    "POST /api/testing/fixtures/receipts/seed-kassa :: app.main.seed_regression_kassa_receipts",
+    "POST /api/testing/regression/all/run :: app.api.dev_test_routes.create_dev_test_router.<locals>.run_regression_tests",
+    "POST /api/testing/regression/almost-out-prediction :: app.main.run_almost_out_prediction_regression_endpoint",
+    "POST /api/testing/regression/almost-out-self-test :: app.main.run_almost_out_backend_self_test_endpoint",
+    "POST /api/testing/regression/layer1/run :: app.api.dev_test_routes.create_dev_test_router.<locals>.run_layer1_tests",
+    "POST /api/testing/regression/layer2/run :: app.api.dev_test_routes.create_dev_test_router.<locals>.run_layer2_tests",
+    "POST /api/testing/regression/layer3/run :: app.api.dev_test_routes.create_dev_test_router.<locals>.run_layer3_tests",
+    "POST /api/testing/regression/parsing-fixtures/run :: app.api.dev_test_routes.create_dev_test_router.<locals>.run_parsing_fixture_tests",
+    "POST /api/testing/regression/parsing-raw/run :: app.api.dev_test_routes.create_dev_test_router.<locals>.run_parsing_raw_tests",
+    "POST /api/testing/regression/smoke/run :: app.api.dev_test_routes.create_dev_test_router.<locals>.run_smoke_tests",
+    "POST /api/testing/reports/complete :: app.api.dev_test_routes.create_dev_test_router.<locals>.complete_test_report"
+  ],
+  "admin_mutations": [
+    "POST /api/admin/backfill-purchase-import-live-aliases :: app.main.run_purchase_import_live_alias_backfill",
+    "POST /api/admin/diagnose-receipt-status-baseline :: app.main.run_receipt_status_baseline_diagnosis",
+    "POST /api/admin/external-relations/batch/decision :: app.api.system_routes.admin_external_relation_batch_decision",
+    "POST /api/admin/inventory/groups/ensure-schema :: app.api.product_inventory_group_routes.inventory_groups_ensure_schema",
+    "POST /api/admin/kassa-regression/run :: app.api.routes.kassa_regression_routes.start_kassa_receipt_regression",
+    "POST /api/admin/kassa-smoke/run :: app.api.routes.kassa_smoke_routes.start_kassa_smoke_check",
+    "POST /api/admin/product-groups/import-gpc-nl :: app.api.product_inventory_group_routes.admin_product_groups_import_gpc_nl",
+    "POST /api/admin/receipts/purge-archived :: app.main.purge_archived_receipts",
+    "POST /api/admin/recompute-receipt-statuses :: app.main.run_receipt_status_backfill",
+    "POST /api/admin/validate-receipt-status-baseline :: app.main.run_receipt_status_baseline_validation"
+  ],
+  "dev_routes": [
+    "GET /api/dev/inventory-preview :: app.main.dev_inventory_preview",
+    "PUT /api/dev/inventory/{inventory_id} :: app.main.dev_update_inventory"
+  ]
+}
