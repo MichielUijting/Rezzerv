@@ -69,5 +69,7 @@ def install_product_enrichment_write_guard(main_module) -> None:
     app.state.product_enrichment_write_guard_installed = True
 
     from .article_detail_write_guard import install_article_detail_write_guard
+    from .product_route_household_guard import install_product_route_household_guard
 
     install_article_detail_write_guard(main_module)
+    install_product_route_household_guard(main_module)
