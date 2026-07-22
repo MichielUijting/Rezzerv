@@ -5,9 +5,11 @@ import json
 from pathlib import Path
 from typing import Any
 
-TARGETS = ('"demo-household"', "'demo-household'", '"1"', "'1'")
+DEMO_TARGETS = ('"demo-household"', "'demo-household'")
+ONE_TARGETS = ('"1"', "'1'")
 TEXT_SUFFIXES = {'.py', '.js', '.jsx', '.ts', '.tsx', '.json', '.yml', '.yaml', '.md', '.sql', '.txt'}
 EXCLUDED_PARTS = {'.git', 'node_modules', 'dist', 'build', '__pycache__', '.venv', 'venv'}
+HOUSEHOLD_TERMS = ('household', 'huishoud', 'active_household', 'householdid')
 
 
 def classify(path: Path) -> str:
@@ -25,6 +27,24 @@ def classify(path: Path) -> str:
     return 'other'
 
 
+def household_context(lines: list[str], index: int) -> str:
+    start = max(0, index - 2)
+    end = min(len(lines), index + 3)
+    return ' '.join(lines[start:end]).lower()
+
+
+def matching_targets(lines: list[str], index: int) -> list[str]:
+    line = lines[index]
+    matched_demo = [target for target in DEMO_TARGETS if target in line]
+    matched_one = [target for target in ONE_TARGETS if target in line]
+    if matched_demo:
+        return matched_demo
+    context = household_context(lines, index)
+    if matched_one and any(term in context for term in HOUSEHOLD_TERMS):
+        return matched_one
+    return []
+
+
 def audit(root: Path) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     for path in sorted(root.rglob('*')):
@@ -37,27 +57,33 @@ def audit(root: Path) -> dict[str, Any]:
             lines = path.read_text(encoding='utf-8').splitlines()
         except UnicodeDecodeError:
             continue
-        for number, line in enumerate(lines, 1):
-            matched = [target for target in TARGETS if target in line]
+        for index, line in enumerate(lines):
+            matched = matching_targets(lines, index)
             if not matched:
                 continue
             rows.append({
                 'path': rel.as_posix(),
-                'line': number,
+                'line': index + 1,
                 'classification': classify(rel),
                 'targets': matched,
                 'source': line.strip(),
-                'previous': lines[number - 2].strip() if number > 1 else '',
-                'next': lines[number].strip() if number < len(lines) else '',
+                'previous': lines[index - 1].strip() if index > 0 else '',
+                'next': lines[index + 1].strip() if index + 1 < len(lines) else '',
             })
     summary: dict[str, int] = {}
     for row in rows:
         summary[row['classification']] = summary.get(row['classification'], 0) + 1
+    runtime_rows = [row for row in rows if row['classification'] in {'backend-runtime', 'frontend-runtime'}]
     return {
-        'audit_version': 1,
-        'targets': list(TARGETS),
-        'summary': {'occurrences': len(rows), 'by_classification': summary},
-        'occurrences': rows,
+        'audit_version': 2,
+        'targets': list(DEMO_TARGETS + ONE_TARGETS),
+        'summary': {
+            'household_occurrences': len(rows),
+            'runtime_occurrences': len(runtime_rows),
+            'by_classification': summary,
+        },
+        'runtime_occurrences': runtime_rows,
+        'all_occurrences': rows,
     }
 
 
