@@ -13,6 +13,9 @@ _PROTECTED_REQUESTS = {
     ("POST", "/api/testing/fixtures/receipt-export/generate"),
     ("GET", "/api/testing/fixtures/receipt-export/download"),
     ("POST", "/api/testing/diagnostics/store-location-options"),
+    ("POST", "/api/testing/regression/almost-out-prediction"),
+    ("POST", "/api/testing/regression/almost-out-self-test"),
+    ("POST", "/api/testing/fixtures/inventory/ensure"),
 }
 
 
