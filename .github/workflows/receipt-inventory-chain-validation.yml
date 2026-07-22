@@ -152,7 +152,7 @@ jobs:
         if: always()
         run: |
           set +e
-          image_id=$(docker compose images -q frontend | head -n 1)
+          image_id=$(docker image ls --format '{{.ID}} {{.Repository}}' | awk '$2 ~ /-frontend$/ {print $1; exit}')
           test -n "$image_id"
           image_exit=$?
           if [ "$image_exit" -eq 0 ]; then
