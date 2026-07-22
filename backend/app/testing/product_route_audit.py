@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import app.main as main_module
 from app.main import app
 
 
@@ -23,6 +24,8 @@ TARGET_PREFIXES = (
 TARGET_EXACT_PATHS = {
     "/api/inventory/{inventory_id}/article-detail",
     "/api/inventory/{inventory_id}/external-product-link",
+    "/api/inventory/items/{inventory_id}/group",
+    "/api/external-databases/catalog/promote-candidate-with-product-type",
     "/api/store-review-articles",
 }
 EXCLUDED_PATH_PARTS = {
@@ -47,6 +50,10 @@ HOUSEHOLD_MARKERS = (
     "global_product_id",
 )
 MUTATION_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+DEPENDENCY_NAMES = (
+    "get_store_review_article_options",
+    "get_household_article_row_by_id",
+)
 
 
 def wait_for_stable_routes() -> None:
@@ -97,6 +104,19 @@ def endpoint_source(endpoint: Any) -> tuple[str, str | None, int | None]:
     return source, file_name, first_line
 
 
+def dependency_sources() -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for name in DEPENDENCY_NAMES:
+        value = getattr(main_module, name, None)
+        source, source_file, first_line = endpoint_source(value)
+        result[name] = {
+            "source_file": source_file,
+            "first_line": first_line,
+            "source": source,
+        }
+    return result
+
+
 def audit_routes() -> dict[str, Any]:
     wait_for_stable_routes()
     rows: list[dict[str, Any]] = []
@@ -136,7 +156,7 @@ def audit_routes() -> dict[str, Any]:
         if not item["authorization_parameter"] and not item["auth_markers"]
     ]
     return {
-        "audit_version": 1,
+        "audit_version": 2,
         "summary": {
             "route_registrations": len(rows),
             "reads": len(reads),
@@ -145,6 +165,7 @@ def audit_routes() -> dict[str, Any]:
         },
         "mutation_without_auth_marker": mutation_without_auth_marker,
         "routes": rows,
+        "dependency_sources": dependency_sources(),
     }
 
 
