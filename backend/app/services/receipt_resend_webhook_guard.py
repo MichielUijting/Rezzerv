@@ -8,6 +8,7 @@ import time
 from typing import Any
 
 from fastapi import HTTPException, Request
+from fastapi.responses import JSONResponse
 
 INBOUND_PATH = "/api/receipts/inbound"
 MAX_TIMESTAMP_SKEW_SECONDS = 300
@@ -122,6 +123,10 @@ def release_delivery(module: Any, *, svix_id: str) -> None:
         )
 
 
+def _error_response(exc: HTTPException) -> JSONResponse:
+    return JSONResponse(status_code=int(exc.status_code), content={"detail": exc.detail})
+
+
 def install_receipt_resend_webhook_guard(module: Any) -> None:
     if getattr(module.app.state, "receipt_resend_webhook_guard_installed", False):
         return
@@ -136,18 +141,22 @@ def install_receipt_resend_webhook_guard(module: Any) -> None:
         svix_id = str(request.headers.get("svix-id") or "").strip()
         svix_timestamp = str(request.headers.get("svix-timestamp") or "").strip()
         svix_signature = str(request.headers.get("svix-signature") or "").strip()
-        verify_resend_webhook(
-            body=body,
-            svix_id=svix_id,
-            svix_timestamp=svix_timestamp,
-            svix_signature=svix_signature,
-        )
-        reserve_delivery(
-            module,
-            svix_id=svix_id,
-            svix_timestamp=svix_timestamp,
-            body=body,
-        )
+        try:
+            verify_resend_webhook(
+                body=body,
+                svix_id=svix_id,
+                svix_timestamp=svix_timestamp,
+                svix_signature=svix_signature,
+            )
+            reserve_delivery(
+                module,
+                svix_id=svix_id,
+                svix_timestamp=svix_timestamp,
+                body=body,
+            )
+        except HTTPException as exc:
+            return _error_response(exc)
+
         try:
             response = await call_next(request)
         except Exception:
