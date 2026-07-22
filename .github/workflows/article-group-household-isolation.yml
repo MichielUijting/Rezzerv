@@ -1,0 +1,41 @@
+name: Article group household isolation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'backend/app/api/article_group_routes.py'
+      - 'backend/app/services/article_group_store.py'
+      - 'backend/app/services/article_group_secure_store.py'
+      - 'backend/app/testing/article_group_household_isolation_contract.py'
+      - '.github/workflows/article-group-household-isolation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-article-group-household-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer minimale backend-afhankelijkheid
+        run: python -m pip install --quiet sqlalchemy==2.0.36
+
+      - name: Compileer gewijzigde modules
+        run: |
+          python -m py_compile \
+            backend/app/services/article_group_store.py \
+            backend/app/services/article_group_secure_store.py \
+            backend/app/testing/article_group_household_isolation_contract.py
+
+      - name: Voer A-B-isolatiecontract uit
+        env:
+          PYTHONPATH: backend
+          DATABASE_URL: sqlite:///${{ runner.temp }}/rezzerv-unused-runtime.db
+        run: python -m app.testing.article_group_household_isolation_contract
