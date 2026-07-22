@@ -1,19 +1,19 @@
 {
   "catalog_version": 1,
-  "route_fingerprint_sha256": "71fd519a694963ecf99ce867aed032ff126db55256be19e8a181430f765cb464",
+  "route_fingerprint_sha256": "ba098c6fea4cb969d9dd21d0316099f5672aca453cffe55cdc285e137a27c04a",
   "summary": {
-    "route_registrations": 196,
+    "route_registrations": 194,
     "unique_method_paths": 194,
-    "duplicates": 2,
+    "duplicates": 0,
     "by_surface": {
       "admin": 14,
       "dev": 2,
       "production": 140,
-      "testing": 40
+      "testing": 38
     },
     "by_access": {
       "mutation": 109,
-      "read": 87
+      "read": 85
     },
     "mutation_by_surface": {
       "admin": 10,
@@ -22,24 +22,7 @@
       "testing": 17
     }
   },
-  "duplicates": [
-    {
-      "method": "GET",
-      "path": "/api/testing/receipt-parser-diagnosis",
-      "registrations": [
-        "app.api.receipt_diagnosis_routes.receipt_parser_diagnosis",
-        "app.api.routes.receipt_parser_diagnosis.get_receipt_parser_diagnosis"
-      ]
-    },
-    {
-      "method": "GET",
-      "path": "/api/testing/receipt-parser-diagnosis/download",
-      "registrations": [
-        "app.api.receipt_diagnosis_routes.receipt_parser_diagnosis_download",
-        "app.api.routes.receipt_parser_diagnosis.download_receipt_parser_diagnosis"
-      ]
-    }
-  ],
+  "duplicates": [],
   "testing_mutations": [
     "POST /api/testing/diagnostics/store-location-options :: app.main.run_store_location_diagnostic",
     "POST /api/testing/fixtures/browser-regression/reset :: app.main.reset_browser_regression_fixture",
