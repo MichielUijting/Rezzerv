@@ -58,6 +58,16 @@ def run_contract() -> None:
         calls.append("fixture-download")
         return {"status": "ok"}
 
+    @app.post("/api/testing/diagnostics/store-location-options")
+    def store_location_options_diagnostic():
+        calls.append("store-location-diagnostic")
+        return {"status": "ok"}
+
+    @app.get("/api/testing/diagnostics/store-process-validation")
+    def unrelated_testing_diagnostic():
+        calls.append("unrelated-testing")
+        return {"status": "ok"}
+
     @app.post("/api/admin/unrelated")
     def unrelated_admin_route():
         calls.append("unrelated")
@@ -83,41 +93,59 @@ def run_contract() -> None:
     assert response.status_code == 200, response.text
     assert calls == ["live-alias-backfill"]
 
-    response = client.post("/api/testing/fixtures/receipt-export/generate")
+    response = client.post("/api/testing/diagnostics/store-location-options")
     assert response.status_code == 401, response.text
     assert calls == ["live-alias-backfill"]
+
+    response = client.post(
+        "/api/testing/diagnostics/store-location-options",
+        headers={"Authorization": "Bearer household-user"},
+    )
+    assert response.status_code == 403, response.text
+    assert calls == ["live-alias-backfill"]
+
+    response = client.post(
+        "/api/testing/diagnostics/store-location-options",
+        headers={"Authorization": "Bearer platform-admin"},
+    )
+    assert response.status_code == 200, response.text
+    assert calls == ["live-alias-backfill", "store-location-diagnostic"]
+
+    response = client.post("/api/testing/fixtures/receipt-export/generate")
+    assert response.status_code == 401, response.text
+    assert calls == ["live-alias-backfill", "store-location-diagnostic"]
 
     response = client.post(
         "/api/testing/fixtures/receipt-export/generate",
         headers={"Authorization": "Bearer household-user"},
     )
     assert response.status_code == 403, response.text
-    assert calls == ["live-alias-backfill"]
+    assert calls == ["live-alias-backfill", "store-location-diagnostic"]
 
     response = client.get("/api/testing/fixtures/receipt-export/download")
     assert response.status_code == 401, response.text
-    assert calls == ["live-alias-backfill"]
+    assert calls == ["live-alias-backfill", "store-location-diagnostic"]
 
     response = client.get(
         "/api/testing/fixtures/receipt-export/download",
         headers={"Authorization": "Bearer household-user"},
     )
     assert response.status_code == 403, response.text
-    assert calls == ["live-alias-backfill"]
+    assert calls == ["live-alias-backfill", "store-location-diagnostic"]
 
     response = client.post(
         "/api/testing/fixtures/receipt-export/generate",
         headers={"Authorization": "Bearer platform-admin"},
     )
     assert response.status_code == 200, response.text
-    assert calls == ["live-alias-backfill", "fixture-generate"]
+    assert calls[-1] == "fixture-generate"
 
     response = client.get(
         "/api/testing/fixtures/receipt-export/download",
         headers={"Authorization": "Bearer platform-admin"},
     )
     assert response.status_code == 200, response.text
-    assert calls == ["live-alias-backfill", "fixture-generate", "fixture-download"]
+    assert calls[-1] == "fixture-download"
 
     response = client.post("/api/admin/recompute-receipt-statuses")
     assert response.status_code == 401, response.text
@@ -135,6 +163,10 @@ def run_contract() -> None:
     assert response.status_code == 200, response.text
     assert calls[-1] == "diagnose"
 
+    response = client.get("/api/testing/diagnostics/store-process-validation")
+    assert response.status_code == 200, response.text
+    assert calls[-1] == "unrelated-testing"
+
     response = client.post("/api/admin/unrelated")
     assert response.status_code == 200, response.text
     assert calls[-1] == "unrelated"
@@ -148,6 +180,12 @@ def run_contract() -> None:
     assert authorize_receipt_admin_request(
         "POST",
         "/api/testing/fixtures/receipt-export/download",
+        None,
+        require_platform_admin_user,
+    ) is None
+    assert authorize_receipt_admin_request(
+        "GET",
+        "/api/testing/diagnostics/store-location-options",
         None,
         require_platform_admin_user,
     ) is None
