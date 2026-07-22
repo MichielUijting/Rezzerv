@@ -4,7 +4,7 @@ from typing import Any, Callable, Optional
 
 from fastapi import APIRouter, Body, Header, HTTPException, Query
 
-from app.services.article_group_store import (
+from app.services.article_group_secure_store import (
     assign_household_article_group,
     create_article_group,
     delete_article_group,
