@@ -1,56 +1,39 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+"""Compatibility shim for the former receipt-specific admin guard.
 
-from fastapi import HTTPException
-from fastapi.responses import JSONResponse
+New code must import :mod:`app.services.platform_admin_route_guard` directly.
+"""
 
-_PROTECTED_REQUESTS = {
-    ("POST", "/api/admin/backfill-purchase-import-live-aliases"),
-    ("POST", "/api/admin/recompute-receipt-statuses"),
-    ("POST", "/api/admin/validate-receipt-status-baseline"),
-    ("POST", "/api/admin/diagnose-receipt-status-baseline"),
-    ("POST", "/api/testing/fixtures/receipt-export/generate"),
-    ("GET", "/api/testing/fixtures/receipt-export/download"),
-    ("POST", "/api/testing/diagnostics/store-location-options"),
-    ("POST", "/api/testing/regression/almost-out-prediction"),
-    ("POST", "/api/testing/regression/almost-out-self-test"),
-    ("POST", "/api/testing/fixtures/inventory/ensure"),
-}
+from app.services.platform_admin_route_guard import (
+    PROTECTED_MUTATIONS,
+    authorize_platform_admin_request,
+    deduplicate_receipt_parser_diagnosis_routes,
+    install_platform_admin_route_guard,
+)
+
+_PROTECTED_REQUESTS = PROTECTED_MUTATIONS
 
 
-def authorize_receipt_admin_request(
-    method: str,
-    path: str,
-    authorization: str | None,
-    require_platform_admin_user: Callable[[str | None], object],
-) -> object | None:
-    request_key = (str(method or "").upper(), str(path or ""))
-    if request_key not in _PROTECTED_REQUESTS:
-        return None
-    return require_platform_admin_user(authorization)
+def authorize_receipt_admin_request(method, path, authorization, require_platform_admin_user):
+    return authorize_platform_admin_request(
+        method,
+        path,
+        authorization,
+        require_platform_admin_user,
+    )
 
 
 def install_receipt_admin_household_guard(main_module) -> None:
-    app = main_module.app
-    if getattr(app.state, "receipt_admin_household_guard_installed", False):
-        return
+    install_platform_admin_route_guard(main_module)
 
-    @app.middleware("http")
-    async def receipt_admin_household_guard(request, call_next):
-        try:
-            authorize_receipt_admin_request(
-                request.method,
-                request.url.path,
-                request.headers.get("authorization"),
-                main_module.require_platform_admin_user,
-            )
-        except HTTPException as exc:
-            return JSONResponse(
-                status_code=exc.status_code,
-                content={"detail": exc.detail},
-                headers=exc.headers or None,
-            )
-        return await call_next(request)
 
-    app.state.receipt_admin_household_guard_installed = True
+__all__ = [
+    "PROTECTED_MUTATIONS",
+    "_PROTECTED_REQUESTS",
+    "authorize_platform_admin_request",
+    "authorize_receipt_admin_request",
+    "deduplicate_receipt_parser_diagnosis_routes",
+    "install_platform_admin_route_guard",
+    "install_receipt_admin_household_guard",
+]
