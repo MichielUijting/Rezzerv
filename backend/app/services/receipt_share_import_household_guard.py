@@ -21,6 +21,9 @@ async def authorize_receipt_share_import_request(
         return None
 
     try:
+        # Cache the complete multipart body before parsing the form. Starlette can
+        # then replay the same request body to the original FastAPI endpoint.
+        await request.body()
         form = await request.form()
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Ongeldige share-import aanvraag") from exc
