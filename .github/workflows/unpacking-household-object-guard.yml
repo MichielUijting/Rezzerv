@@ -1,0 +1,39 @@
+name: Unpacking household object guard
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate-unpacking-household-object-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer minimale backend-afhankelijkheden
+        run: |
+          python -m pip install --quiet \
+            fastapi==0.115.0 \
+            sqlalchemy==2.0.36
+
+      - name: Compileer gewijzigde modules
+        run: |
+          python -m py_compile \
+            backend/app/__init__.py \
+            backend/app/services/unpacking_household_object_guard.py \
+            backend/app/testing/unpacking_household_object_guard_contract.py
+
+      - name: Voer A-B-Uitpakken-objectguardcontract uit
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m app.testing.unpacking_household_object_guard_contract | tee unpacking-household-object-guard.log
+          grep -F 'UNPACKING_HOUSEHOLD_OBJECT_GUARD_GREEN' unpacking-household-object-guard.log
