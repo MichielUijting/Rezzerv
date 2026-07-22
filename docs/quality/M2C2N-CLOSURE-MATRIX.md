@@ -1,7 +1,7 @@
 # M2C2n afsluitmatrix
 
 Statusdatum: 2026-07-22  
-Basiscommit: `846b0e42c2c7b58e37de9017be4942dbc6300c41`
+Basiscommit: `e1f67f8606b71a2d18a3fb32b25e9516ef2a07d6`
 
 ## Doel en eindcriteria
 
@@ -24,13 +24,13 @@ Statuswaarden: **GEREED**, **CONTROLE**, **OPEN** en **DEFERRED**. Onbekend bete
 | M2C2N-09 | Resend inbound | Bron server-side huishoudgebonden | Webhookcontract | PR #169–#171 | GEREED | Geen |
 | M2C2N-10 | Live-aliasbackfill | Platformbeheeractie | Platform-admin | PR #172 | GEREED | Geen |
 | M2C2N-11 | Receipt-exportfixtures | Vaste regressiescope | Platform-admin | PR #173 | GEREED | Geen |
-| M2C2N-12 | Product enrichment | Actieve context | Inventory-schrijfrecht | PR #175 | GEREED | Geen |
-| M2C2N-13 | Artikel-ID-mutaties | Actieve context | Inventory-schrijfrecht | PR #176 | GEREED | Geen |
-| M2C2N-14 | Externe productkoppeling | Objecten binnen actief huishouden | Kijker geblokkeerd | WP-1-baseline | CONTROLE | WP-3-contract |
+| M2C2N-12 | Product enrichment | Actieve context | Inventory-schrijfrecht | PR #175 + WP-3 regressie | GEREED | Geen |
+| M2C2N-13 | Artikel-ID-mutaties | Actieve context | Inventory-schrijfrecht | PR #176 + WP-3 regressie | GEREED | Geen |
+| M2C2N-14 | Externe productkoppeling | Actieve huishoudcontext of server-side inventory-eigenaar; globale productcatalogus zonder vrije huishoudscope | Kijker geblokkeerd; globale catalogusmutaties platform-admin | WP-3 audit en productroutecontract | GEREED | Geen |
 | M2C2N-15 | Store-locationdiagnostiek | Vrij huishouden geblokkeerd | Platform-admin | PR #177/WP-2 | GEREED | Geen |
 | M2C2N-16 | Almost-out en inventoryfixtures | Vaste regressiescope | Platform-admin | PR #178/WP-2 | GEREED | Geen |
 | M2C2N-17 | Overige `/api/testing/*` | 38 registraties, 17 mutaties gecatalogiseerd | Alle 17 mutaties centraal platform-admin | WP-2 volledig routecontract; geen dubbelen | GEREED | Geen |
-| M2C2N-18 | Overige product- en artikelroutes | Volledige routescope beschikbaar | Deels bewezen | WP-1 | CONTROLE | WP-3 |
+| M2C2N-18 | Overige product- en artikelroutes | 38 routes beoordeeld: 14 reads en 24 mutaties; huishoudreads gefilterd; purchase-importmutaties via bestaande objectguard | Login voor catalogusreads; inventory-schrijfrecht voor huishoudobject; platform-admin voor globale catalogusmutaties | WP-3 Docker-audit, gericht HTTP-contract en groene regressiegates | GEREED | Geen |
 | M2C2N-19 | Prognoses en AlmostOut-productie | Routescope beschikbaar | Nog niet domeinbreed | WP-1 | OPEN | WP-4 |
 | M2C2N-20 | Inkoop en importinstellingen | Routescope beschikbaar | Deels bewezen | WP-1 | OPEN | WP-4 |
 | M2C2N-21 | Meldingen | Routescope beschikbaar | Nog niet domeinbreed | WP-1 | OPEN | WP-5 |
@@ -54,14 +54,30 @@ Statuswaarden: **GEREED**, **CONTROLE**, **OPEN** en **DEFERRED**. Onbekend bete
 
 De baseline staat in `docs/quality/M2C2N-ROUTE-CATALOG-BASELINE.json`. Iedere routewijziging moet deze baseline en matrix bewust bijwerken.
 
+## WP-3 routescope en bevindingen
+
+De reproduceerbare Docker-audit van WP-3 omvat 38 productie-registraties: 14 leesroutes en 24 mutaties.
+
+Bewezen en hersteld:
+
+- `GET /api/store-review-articles` vereist actieve huishoudcontext en retourneert alleen huishoudartikelen en voorraadnamen van dat actieve huishouden;
+- `GET /api/inventory/groups` valideert membership van het gevraagde huishouden;
+- `POST /api/inventory/items/{inventory_id}/group` bepaalt het owning household server-side en eist inventory-schrijfrecht;
+- zes globale productcatalogusmutaties vereisen platform-admin;
+- globale productcatalogusreads vereisen login;
+- vier purchase-import-line-mutaties blijven afgedekt door de bestaande server-side Uitpakken-objectguard en zijn niet dubbel beveiligd.
+
+Gericht bewijs: `backend/app/testing/product_route_household_guard_contract.py`, de Docker-auditworkflow en alle groene regressie- en releaseworkflows op de WP-3-head.
+
 ## Werkpakketstatus
 
 | Werkpakket | Status | Bewijs/uitvoer |
 |---|---|---|
 | WP-1 — Routecatalogus | GEREED | Generator, Docker-CI en fingerprintbaseline |
-| WP-2 — Testing en platform-admin | IN REVIEW | Algemene guard, 27 mutaties, volledig contract, diagnose-ontdubbeling |
-| WP-3 — Producten en externe productlinks | VOLGENDE | M2C2N-14 en M2C2N-18 |
-| WP-4 t/m WP-7 | NIET GESTART | Volgen in vastgelegde volgorde |
+| WP-2 — Testing en platform-admin | GEREED | Algemene guard, 27 mutaties, volledig contract, diagnose-ontdubbeling; PR #181 gemerged |
+| WP-3 — Producten en externe productlinks | GEREED | 38 routes, Docker-audit, productrouteguard, gericht contract en groene regressiegates |
+| WP-4 — Prognoses en inkoop | VOLGENDE | M2C2N-19 en M2C2N-20 |
+| WP-5 t/m WP-7 | NIET GESTART | Volgen in vastgelegde volgorde |
 
 ## PR-regels
 
