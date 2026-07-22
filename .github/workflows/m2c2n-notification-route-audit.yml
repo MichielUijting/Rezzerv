@@ -1,0 +1,43 @@
+name: M2C2n notification route audit
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  audit-notification-routes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Controleer Docker Compose
+        run: docker compose version
+
+      - name: Bouw backend-image
+        run: docker compose build backend
+
+      - name: Genereer notification-routeaudit
+        run: |
+          mkdir -p notification-route-audit-output
+          docker compose run --rm --no-deps \
+            -v "$PWD/notification-route-audit-output:/tmp/m2c2n-notification-route-audit" \
+            backend \
+            python -m app.testing.notification_route_audit \
+              --output /tmp/m2c2n-notification-route-audit/M2C2N-NOTIFICATION-ROUTE-AUDIT.json \
+            | tee notification-route-audit.log
+          grep -F 'M2C2N_NOTIFICATION_ROUTE_AUDIT_GREEN' notification-route-audit.log
+          test -s notification-route-audit-output/M2C2N-NOTIFICATION-ROUTE-AUDIT.json
+
+      - name: Publiceer notification-routeaudit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m2c2n-notification-route-audit
+          path: |
+            notification-route-audit-output/M2C2N-NOTIFICATION-ROUTE-AUDIT.json
+            notification-route-audit.log
+          if-no-files-found: error
+          retention-days: 30
