@@ -12,6 +12,7 @@ _PROTECTED_REQUESTS = {
     ("POST", "/api/admin/diagnose-receipt-status-baseline"),
     ("POST", "/api/testing/fixtures/receipt-export/generate"),
     ("GET", "/api/testing/fixtures/receipt-export/download"),
+    ("POST", "/api/testing/diagnostics/store-location-options"),
 }
 
 
