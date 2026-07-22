@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+import time
 from collections.abc import Callable
 
 from fastapi import HTTPException
@@ -74,12 +76,42 @@ def deduplicate_receipt_parser_diagnosis_routes(app) -> int:
     return removed
 
 
+def _deduplicate_late_route_registrations(app) -> None:
+    stable_rounds = 0
+    previous_signature: tuple[tuple[str, str], ...] | None = None
+    for _ in range(100):
+        deduplicate_receipt_parser_diagnosis_routes(app)
+        signature = tuple(
+            sorted(
+                (
+                    str(getattr(route, "path", "") or ""),
+                    str(getattr(getattr(route, "endpoint", None), "__module__", "") or ""),
+                )
+                for route in app.router.routes
+                if str(getattr(route, "path", "") or "") in _DIAGNOSIS_DUPLICATE_PATHS
+            )
+        )
+        if signature == previous_signature and len(signature) == len(_DIAGNOSIS_DUPLICATE_PATHS):
+            stable_rounds += 1
+            if stable_rounds >= 10:
+                return
+        else:
+            previous_signature = signature
+            stable_rounds = 0
+        time.sleep(0.1)
+
+
 def install_platform_admin_route_guard(main_module) -> None:
     app = main_module.app
     if getattr(app.state, "platform_admin_route_guard_installed", False):
         return
 
     deduplicate_receipt_parser_diagnosis_routes(app)
+    threading.Thread(
+        target=_deduplicate_late_route_registrations,
+        args=(app,),
+        daemon=True,
+    ).start()
 
     @app.middleware("http")
     async def platform_admin_route_guard(request, call_next):
