@@ -1,0 +1,52 @@
+name: M2C2n forecast and purchase route audit
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  audit-forecast-purchase-routes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Controleer Docker Compose
+        run: docker compose version
+
+      - name: Bouw backend-image
+        run: docker compose build backend
+
+      - name: Genereer forecast- en purchaseroute-audit
+        run: |
+          mkdir -p forecast-purchase-route-audit-output
+          docker compose run --rm --no-deps \
+            -v "$PWD/forecast-purchase-route-audit-output:/tmp/m2c2n-forecast-purchase-route-audit" \
+            backend \
+            python -m app.testing.forecast_purchase_route_audit \
+              --output /tmp/m2c2n-forecast-purchase-route-audit/M2C2N-FORECAST-PURCHASE-ROUTE-AUDIT.json \
+            | tee forecast-purchase-route-audit.log
+          grep -F 'M2C2N_FORECAST_PURCHASE_ROUTE_AUDIT_GREEN' forecast-purchase-route-audit.log
+          test -s forecast-purchase-route-audit-output/M2C2N-FORECAST-PURCHASE-ROUTE-AUDIT.json
+
+      - name: Controleer volledige WP-4-routedekking
+        run: |
+          docker compose run --rm --no-deps \
+            backend \
+            python -m app.testing.forecast_purchase_route_contract \
+            | tee forecast-purchase-route-contract.log
+          grep -F 'M2C2N_FORECAST_PURCHASE_ROUTE_CONTRACT_GREEN' forecast-purchase-route-contract.log
+
+      - name: Publiceer forecast- en purchaseroute-audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m2c2n-forecast-purchase-route-audit
+          path: |
+            forecast-purchase-route-audit-output/M2C2N-FORECAST-PURCHASE-ROUTE-AUDIT.json
+            forecast-purchase-route-audit.log
+            forecast-purchase-route-contract.log
+          if-no-files-found: error
+          retention-days: 30
