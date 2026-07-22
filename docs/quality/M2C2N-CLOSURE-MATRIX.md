@@ -64,7 +64,7 @@ Bewezen en hersteld:
 - `GET /api/inventory/groups` valideert membership van het gevraagde huishouden;
 - `POST /api/inventory/items/{inventory_id}/group` bepaalt het owning household server-side en eist inventory-schrijfrecht;
 - zes globale productcatalogusmutaties vereisen platform-admin;
-- globale productcatalogusreads vereisen login;
+- drie globale productcatalogusreads vereisen login;
 - vier purchase-import-line-mutaties blijven afgedekt door de bestaande server-side Uitpakken-objectguard en zijn niet dubbel beveiligd.
 
 Gericht bewijs: `backend/app/testing/product_route_household_guard_contract.py`, de Docker-auditworkflow en alle groene regressie- en releaseworkflows op de WP-3-head.
