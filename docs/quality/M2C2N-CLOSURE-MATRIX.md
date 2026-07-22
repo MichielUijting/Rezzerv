@@ -1,7 +1,7 @@
 # M2C2n afsluitmatrix
 
 Statusdatum: 2026-07-22  
-Basiscommit: `6f6993166676d9c75be3d83452ffe95b9ba785e3`
+Basiscommit: `9fc9da6da6b327a76f7e6eea3da61698aca93491`
 
 ## Doel en eindcriteria
 
@@ -33,7 +33,7 @@ Statuswaarden: **GEREED**, **CONTROLE**, **OPEN** en **DEFERRED**. Onbekend bete
 | M2C2N-18 | Overige product- en artikelroutes | 38 routes beoordeeld: 14 reads en 24 mutaties; huishoudreads gefilterd; purchase-importmutaties via bestaande objectguard | Login voor catalogusreads; inventory-schrijfrecht voor huishoudobject; platform-admin voor globale catalogusmutaties | WP-3 Docker-audit, gericht HTTP-contract en groene regressiegates | GEREED | Geen |
 | M2C2N-19 | Prognoses en AlmostOut-productie | 5 huishoudroutes gebruiken actieve of expliciet gevalideerde huishoudcontext; testingmutaties hebben geen huishoudscope | Reads vereisen membership; instellingenmutatie vereist huishoudadmin; testingmutaties platform-admin | WP-4 Docker-audit en volledig 23-routecontract | GEREED | Geen |
 | M2C2N-20 | Inkoop en importinstellingen | 11 batch-/regelroutes bepalen owning household server-side; aankopen gebruiken actieve huishoudcontext; winkelimportkoppeling is huishoudadmin | Reads membership; batch-/regelmutaties inventory-schrijfrecht; importinstellingen en winkelpull huishoudadmin; adminbackfill platform-admin | WP-4 Docker-audit, bestaande Uitpakken-objectguard en volledig 23-routecontract | GEREED | Geen |
-| M2C2N-21 | Meldingen | Routescope beschikbaar | Nog niet domeinbreed | WP-1 | OPEN | WP-5 |
+| M2C2N-21 | Meldingen | Actuele runtime bevat geen notification-, melding- of alertroutes; er bestaat dus geen huishoudgebonden meldingsobject | Geen lees-, markeer-, verwijder- of beheerroute aanwezig | WP-5 Docker-audit doorzoekt pad, endpoint, module en endpointbron; nul routes contractueel afgedwongen | GEREED | Bij toekomstige implementatie nieuwe matrixcontrole verplicht |
 | M2C2N-22 | Fallbacks `"1"` en `"demo-household"` | Nog te classificeren | n.v.t. | WP-1 | OPEN | WP-6 |
 | M2C2N-23 | `/api/receipts/share-target` | Vrij `household_id` is niet eindontwerp | Toekomstig signed token | Ontwerpbesluit | DEFERRED | Later apart ontwerp |
 | M2C2N-24 | Platform-admin-routeguard | Centrale expliciete routescope | Platform-admin voor 27 mutaties | Algemene guard en volledig contract | GEREED | Legacy importshim later regulier opruimen |
@@ -83,6 +83,16 @@ Er is geen nieuw onbeveiligd productiepad bewezen. WP-4 voegt daarom geen extra 
 
 Gericht bewijs: `backend/app/testing/forecast_purchase_route_contract.py` en `.github/workflows/m2c2n-forecast-purchase-route-audit.yml`.
 
+## WP-5 routescope en bevindingen
+
+De reproduceerbare Docker-audit doorzoekt alle actieve FastAPI-routes op notification-, melding- en alerttermen in pad, endpointnaam, module en volledige endpointbron.
+
+Uitkomst: nul leesroutes en nul mutaties. Ook het actuele Startscherm bevat geen meldingentabel of meldingen-API-aanroep. Er is daarom geen bestaand meldingsobject waarop huishoudisolatie of rolgrenzen kunnen worden toegepast.
+
+Het contract faalt zodra later wel een meldingsroute wordt toegevoegd. Die toekomstige implementatie moet dan eerst opnieuw worden geïnventariseerd en beveiligd voordat de matrix kan worden bijgewerkt.
+
+Gericht bewijs: `backend/app/testing/notification_route_contract.py` en `.github/workflows/m2c2n-notification-route-audit.yml`.
+
 ## Werkpakketstatus
 
 | Werkpakket | Status | Bewijs/uitvoer |
@@ -90,9 +100,10 @@ Gericht bewijs: `backend/app/testing/forecast_purchase_route_contract.py` en `.g
 | WP-1 — Routecatalogus | GEREED | Generator, Docker-CI en fingerprintbaseline |
 | WP-2 — Testing en platform-admin | GEREED | Algemene guard, 27 mutaties, volledig contract, diagnose-ontdubbeling; PR #181 gemerged |
 | WP-3 — Producten en externe productlinks | GEREED | 38 routes, Docker-audit, productrouteguard, gericht contract en groene regressiegates; PR #182 gemerged |
-| WP-4 — Prognoses en inkoop | GEREED | 23 routes, Docker-audit, drie bewezen beschermingslagen en volledig dekkingscontract |
-| WP-5 — Meldingen | VOLGENDE | M2C2N-21 |
-| WP-6 en WP-7 | NIET GESTART | Volgen in vastgelegde volgorde |
+| WP-4 — Prognoses en inkoop | GEREED | 23 routes, Docker-audit, drie bewezen beschermingslagen en volledig dekkingscontract; PR #183 gemerged |
+| WP-5 — Meldingen | GEREED | Nul actuele meldingsroutes, brede Docker-audit en afwezigheidscontract |
+| WP-6 — Fallbacks | VOLGENDE | M2C2N-22 |
+| WP-7 — Eindrapport | NIET GESTART | Volgt na WP-6 |
 
 ## PR-regels
 
