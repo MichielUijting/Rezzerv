@@ -22,46 +22,32 @@ def run_contract() -> None:
             raise HTTPException(status_code=403, detail="Platformbeheerder vereist")
         return {"email": "platform@example.test", "role": "platform_admin"}
 
-    module = SimpleNamespace(
-        app=app,
-        require_platform_admin_user=require_platform_admin_user,
+    install_receipt_admin_household_guard(
+        SimpleNamespace(app=app, require_platform_admin_user=require_platform_admin_user)
     )
-    install_receipt_admin_household_guard(module)
 
-    @app.post("/api/admin/backfill-purchase-import-live-aliases")
-    def backfill_purchase_import_live_aliases():
-        calls.append("live-alias-backfill")
-        return {"status": "ok"}
+    protected_routes = [
+        ("post", "/api/admin/backfill-purchase-import-live-aliases", "live-alias-backfill"),
+        ("post", "/api/admin/recompute-receipt-statuses", "recompute"),
+        ("post", "/api/admin/validate-receipt-status-baseline", "validate"),
+        ("post", "/api/admin/diagnose-receipt-status-baseline", "diagnose"),
+        ("post", "/api/testing/fixtures/receipt-export/generate", "fixture-generate"),
+        ("get", "/api/testing/fixtures/receipt-export/download", "fixture-download"),
+        ("post", "/api/testing/diagnostics/store-location-options", "store-location-diagnostic"),
+        ("post", "/api/testing/regression/almost-out-prediction", "almost-out-prediction"),
+        ("post", "/api/testing/regression/almost-out-self-test", "almost-out-self-test"),
+        ("post", "/api/testing/fixtures/inventory/ensure", "inventory-fixture-ensure"),
+    ]
 
-    @app.post("/api/admin/recompute-receipt-statuses")
-    def recompute_receipt_statuses(authorization: str | None = Header(None)):
-        calls.append("recompute")
-        return {"status": "ok", "authorization": authorization}
+    def register(method: str, path: str, marker: str) -> None:
+        def endpoint():
+            calls.append(marker)
+            return {"status": "ok", "marker": marker}
 
-    @app.post("/api/admin/validate-receipt-status-baseline")
-    def validate_receipt_status_baseline():
-        calls.append("validate")
-        return {"status": "ok"}
+        app.add_api_route(path, endpoint, methods=[method.upper()])
 
-    @app.post("/api/admin/diagnose-receipt-status-baseline")
-    def diagnose_receipt_status_baseline():
-        calls.append("diagnose")
-        return {"status": "ok"}
-
-    @app.post("/api/testing/fixtures/receipt-export/generate")
-    def generate_receipt_export_fixture():
-        calls.append("fixture-generate")
-        return {"status": "ok"}
-
-    @app.get("/api/testing/fixtures/receipt-export/download")
-    def download_receipt_export_fixture():
-        calls.append("fixture-download")
-        return {"status": "ok"}
-
-    @app.post("/api/testing/diagnostics/store-location-options")
-    def store_location_options_diagnostic():
-        calls.append("store-location-diagnostic")
-        return {"status": "ok"}
+    for method, path, marker in protected_routes:
+        register(method, path, marker)
 
     @app.get("/api/testing/diagnostics/store-process-validation")
     def unrelated_testing_diagnostic():
@@ -69,123 +55,50 @@ def run_contract() -> None:
         return {"status": "ok"}
 
     @app.post("/api/admin/unrelated")
-    def unrelated_admin_route():
+    def unrelated_admin_route(authorization: str | None = Header(None)):
         calls.append("unrelated")
-        return {"status": "ok"}
+        return {"status": "ok", "authorization": authorization}
 
-    client = TestClient(app)
+    with TestClient(app) as client:
+        for method, path, marker in protected_routes:
+            before = list(calls)
+            response = client.request(method.upper(), path)
+            assert response.status_code == 401, (path, response.text)
+            assert calls == before, f"{marker} werd ondanks 401 uitgevoerd"
 
-    response = client.post("/api/admin/backfill-purchase-import-live-aliases")
-    assert response.status_code == 401, response.text
-    assert calls == []
+            response = client.request(
+                method.upper(),
+                path,
+                headers={"Authorization": "Bearer household-user"},
+            )
+            assert response.status_code == 403, (path, response.text)
+            assert calls == before, f"{marker} werd ondanks 403 uitgevoerd"
 
-    response = client.post(
-        "/api/admin/backfill-purchase-import-live-aliases",
-        headers={"Authorization": "Bearer household-user"},
-    )
-    assert response.status_code == 403, response.text
-    assert calls == []
+            response = client.request(
+                method.upper(),
+                path,
+                headers={"Authorization": "Bearer platform-admin"},
+            )
+            assert response.status_code == 200, (path, response.text)
+            assert calls[-1] == marker
 
-    response = client.post(
-        "/api/admin/backfill-purchase-import-live-aliases",
-        headers={"Authorization": "Bearer platform-admin"},
-    )
-    assert response.status_code == 200, response.text
-    assert calls == ["live-alias-backfill"]
+        response = client.get("/api/testing/diagnostics/store-process-validation")
+        assert response.status_code == 200, response.text
+        assert calls[-1] == "unrelated-testing"
 
-    response = client.post("/api/testing/diagnostics/store-location-options")
-    assert response.status_code == 401, response.text
-    assert calls == ["live-alias-backfill"]
-
-    response = client.post(
-        "/api/testing/diagnostics/store-location-options",
-        headers={"Authorization": "Bearer household-user"},
-    )
-    assert response.status_code == 403, response.text
-    assert calls == ["live-alias-backfill"]
-
-    response = client.post(
-        "/api/testing/diagnostics/store-location-options",
-        headers={"Authorization": "Bearer platform-admin"},
-    )
-    assert response.status_code == 200, response.text
-    assert calls == ["live-alias-backfill", "store-location-diagnostic"]
-
-    response = client.post("/api/testing/fixtures/receipt-export/generate")
-    assert response.status_code == 401, response.text
-    assert calls == ["live-alias-backfill", "store-location-diagnostic"]
-
-    response = client.post(
-        "/api/testing/fixtures/receipt-export/generate",
-        headers={"Authorization": "Bearer household-user"},
-    )
-    assert response.status_code == 403, response.text
-    assert calls == ["live-alias-backfill", "store-location-diagnostic"]
-
-    response = client.get("/api/testing/fixtures/receipt-export/download")
-    assert response.status_code == 401, response.text
-    assert calls == ["live-alias-backfill", "store-location-diagnostic"]
-
-    response = client.get(
-        "/api/testing/fixtures/receipt-export/download",
-        headers={"Authorization": "Bearer household-user"},
-    )
-    assert response.status_code == 403, response.text
-    assert calls == ["live-alias-backfill", "store-location-diagnostic"]
-
-    response = client.post(
-        "/api/testing/fixtures/receipt-export/generate",
-        headers={"Authorization": "Bearer platform-admin"},
-    )
-    assert response.status_code == 200, response.text
-    assert calls[-1] == "fixture-generate"
-
-    response = client.get(
-        "/api/testing/fixtures/receipt-export/download",
-        headers={"Authorization": "Bearer platform-admin"},
-    )
-    assert response.status_code == 200, response.text
-    assert calls[-1] == "fixture-download"
-
-    response = client.post("/api/admin/recompute-receipt-statuses")
-    assert response.status_code == 401, response.text
-
-    response = client.post(
-        "/api/admin/validate-receipt-status-baseline",
-        headers={"Authorization": "Bearer household-user"},
-    )
-    assert response.status_code == 403, response.text
-
-    response = client.post(
-        "/api/admin/diagnose-receipt-status-baseline",
-        headers={"Authorization": "Bearer platform-admin"},
-    )
-    assert response.status_code == 200, response.text
-    assert calls[-1] == "diagnose"
-
-    response = client.get("/api/testing/diagnostics/store-process-validation")
-    assert response.status_code == 200, response.text
-    assert calls[-1] == "unrelated-testing"
-
-    response = client.post("/api/admin/unrelated")
-    assert response.status_code == 200, response.text
-    assert calls[-1] == "unrelated"
+        response = client.post("/api/admin/unrelated")
+        assert response.status_code == 200, response.text
+        assert calls[-1] == "unrelated"
 
     assert authorize_receipt_admin_request(
         "GET",
-        "/api/admin/backfill-purchase-import-live-aliases",
-        None,
-        require_platform_admin_user,
-    ) is None
-    assert authorize_receipt_admin_request(
-        "POST",
-        "/api/testing/fixtures/receipt-export/download",
+        "/api/testing/regression/almost-out-prediction",
         None,
         require_platform_admin_user,
     ) is None
     assert authorize_receipt_admin_request(
         "GET",
-        "/api/testing/diagnostics/store-location-options",
+        "/api/testing/fixtures/inventory/ensure",
         None,
         require_platform_admin_user,
     ) is None
