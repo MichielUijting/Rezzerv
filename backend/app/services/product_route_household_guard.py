@@ -36,6 +36,17 @@ def canonical_route_key(method: str, path: str) -> tuple[str, str]:
     return normalized_method, normalized_path
 
 
+def is_guarded_product_route(method: str, path: str) -> bool:
+    route_key = canonical_route_key(method, path)
+    return bool(
+        route_key in PLATFORM_ADMIN_MUTATIONS
+        or route_key in AUTHENTICATED_ROUTES
+        or route_key == ("GET", "/api/inventory/groups")
+        or (str(method or "").upper() == "GET" and str(path or "") == "/api/store-review-articles")
+        or _INVENTORY_GROUP_ASSIGNMENT.match(str(path or ""))
+    )
+
+
 def resolve_inventory_household(conn, path: str) -> str | None:
     match = _INVENTORY_GROUP_ASSIGNMENT.match(str(path or ""))
     if not match:
@@ -152,6 +163,8 @@ def install_product_route_household_guard(main_module) -> None:
 
     @app.middleware("http")
     async def product_route_household_guard(request, call_next):
+        if not is_guarded_product_route(request.method, request.url.path):
+            return await call_next(request)
         try:
             if request.method.upper() == "GET" and request.url.path == "/api/store-review-articles":
                 context = main_module.require_household_context(
