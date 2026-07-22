@@ -31,6 +31,11 @@ jobs:
           grep -F 'M2C2N_NOTIFICATION_ROUTE_AUDIT_GREEN' notification-route-audit.log
           test -s notification-route-audit-output/M2C2N-NOTIFICATION-ROUTE-AUDIT.json
 
+      - name: Controleer actuele afwezigheid meldingsroutes
+        run: |
+          docker compose run --rm --no-deps backend \
+            python -m app.testing.notification_route_contract
+
       - name: Publiceer notification-routeaudit
         if: always()
         uses: actions/upload-artifact@v4
