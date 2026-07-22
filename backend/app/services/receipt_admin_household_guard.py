@@ -5,12 +5,13 @@ from collections.abc import Callable
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-_PROTECTED_METHOD = "POST"
-_PROTECTED_PATHS = {
-    "/api/admin/backfill-purchase-import-live-aliases",
-    "/api/admin/recompute-receipt-statuses",
-    "/api/admin/validate-receipt-status-baseline",
-    "/api/admin/diagnose-receipt-status-baseline",
+_PROTECTED_REQUESTS = {
+    ("POST", "/api/admin/backfill-purchase-import-live-aliases"),
+    ("POST", "/api/admin/recompute-receipt-statuses"),
+    ("POST", "/api/admin/validate-receipt-status-baseline"),
+    ("POST", "/api/admin/diagnose-receipt-status-baseline"),
+    ("POST", "/api/testing/fixtures/receipt-export/generate"),
+    ("GET", "/api/testing/fixtures/receipt-export/download"),
 }
 
 
@@ -20,9 +21,8 @@ def authorize_receipt_admin_request(
     authorization: str | None,
     require_platform_admin_user: Callable[[str | None], object],
 ) -> object | None:
-    if str(method or "").upper() != _PROTECTED_METHOD:
-        return None
-    if str(path or "") not in _PROTECTED_PATHS:
+    request_key = (str(method or "").upper(), str(path or ""))
+    if request_key not in _PROTECTED_REQUESTS:
         return None
     return require_platform_admin_user(authorization)
 
