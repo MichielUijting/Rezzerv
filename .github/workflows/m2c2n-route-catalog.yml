@@ -86,6 +86,7 @@ jobs:
           PY
 
       - name: Publiceer routecatalogus
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: m2c2n-route-catalog
