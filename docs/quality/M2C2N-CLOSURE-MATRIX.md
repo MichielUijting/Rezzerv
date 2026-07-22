@@ -1,7 +1,7 @@
 # M2C2n afsluitmatrix
 
 Statusdatum: 2026-07-22  
-Basiscommit: `9fc9da6da6b327a76f7e6eea3da61698aca93491`
+Basiscommit: `377e9e91595f144384c819f369d2ccc43cdf5bde`
 
 ## Doel en eindcriteria
 
@@ -34,7 +34,7 @@ Statuswaarden: **GEREED**, **CONTROLE**, **OPEN** en **DEFERRED**. Onbekend bete
 | M2C2N-19 | Prognoses en AlmostOut-productie | 5 huishoudroutes gebruiken actieve of expliciet gevalideerde huishoudcontext; testingmutaties hebben geen huishoudscope | Reads vereisen membership; instellingenmutatie vereist huishoudadmin; testingmutaties platform-admin | WP-4 Docker-audit en volledig 23-routecontract | GEREED | Geen |
 | M2C2N-20 | Inkoop en importinstellingen | 11 batch-/regelroutes bepalen owning household server-side; aankopen gebruiken actieve huishoudcontext; winkelimportkoppeling is huishoudadmin | Reads membership; batch-/regelmutaties inventory-schrijfrecht; importinstellingen en winkelpull huishoudadmin; adminbackfill platform-admin | WP-4 Docker-audit, bestaande Uitpakken-objectguard en volledig 23-routecontract | GEREED | Geen |
 | M2C2N-21 | Meldingen | Actuele runtime bevat geen notification-, melding- of alertroutes; er bestaat dus geen huishoudgebonden meldingsobject | Geen lees-, markeer-, verwijder- of beheerroute aanwezig | WP-5 Docker-audit doorzoekt pad, endpoint, module en endpointbron; nul routes contractueel afgedwongen | GEREED | Bij toekomstige implementatie nieuwe matrixcontrole verplicht |
-| M2C2N-22 | Fallbacks `"1"` en `"demo-household"` | Nog te classificeren | n.v.t. | WP-1 | OPEN | WP-6 |
+| M2C2N-22 | Fallbacks `"1"` en `"demo-household"` | 94 runtimeverwijzingen volledig geclassificeerd; nul ongeclassificeerde huishoudfallbacks | Productieroutes blijven onder bestaande household-, write- of platform-admingrenzen; frontendwaarden geven geen server-authoriteit | WP-6 repository-audit en exact classificatiecontract | GEREED | Contract bij iedere nieuwe of gewijzigde fallback bijwerken |
 | M2C2N-23 | `/api/receipts/share-target` | Vrij `household_id` is niet eindontwerp | Toekomstig signed token | Ontwerpbesluit | DEFERRED | Later apart ontwerp |
 | M2C2N-24 | Platform-admin-routeguard | Centrale expliciete routescope | Platform-admin voor 27 mutaties | Algemene guard en volledig contract | GEREED | Legacy importshim later regulier opruimen |
 
@@ -93,6 +93,26 @@ Het contract faalt zodra later wel een meldingsroute wordt toegevoegd. Die toeko
 
 Gericht bewijs: `backend/app/testing/notification_route_contract.py` en `.github/workflows/m2c2n-notification-route-audit.yml`.
 
+## WP-6 fallbacks en bevindingen
+
+De repository-audit beoordeelt exacte huishoud-ID-verwijzingen naar `"1"` en `"demo-household"` in backend, frontend, tests, fixtures en documentatie. Generieke numerieke waarden, booleanflags en hoeveelheden worden niet als huishoudfallback meegeteld.
+
+De actuele runtime bevat 94 relevante verwijzingen, volledig verdeeld over:
+
+- 35 platform-admin-, diagnose-, test- of devverwijzingen;
+- 20 functies met expliciete household-, write- of platform-admincontrole;
+- 12 interne helpers waarvan de caller de huishoudcontext bepaalt;
+- 8 signed-state- of server-sourceverwijzingen voor Gmail/Resend;
+- 8 lokale authbootstrapverwijzingen;
+- 6 frontendwaarden zonder server-side autoriteit;
+- 2 test/dev-fixtureverwijzingen;
+- 1 booleanwaarde die geen huishoud-ID is;
+- 2 verwijzingen in `/api/receipts/share-target`, uitsluitend geclassificeerd als de reeds vastgelegde `DEFERRED` uitzondering.
+
+Er blijven nul ongeclassificeerde runtimeverwijzingen over. Het contract legt de exacte aantallen per categorie vast en faalt bij iedere nieuwe, verwijderde of anders geclassificeerde fallback.
+
+Gericht bewijs: `backend/app/testing/household_fallback_contract.py` en `.github/workflows/m2c2n-household-fallback-audit.yml`.
+
 ## Werkpakketstatus
 
 | Werkpakket | Status | Bewijs/uitvoer |
@@ -101,9 +121,9 @@ Gericht bewijs: `backend/app/testing/notification_route_contract.py` en `.github
 | WP-2 — Testing en platform-admin | GEREED | Algemene guard, 27 mutaties, volledig contract, diagnose-ontdubbeling; PR #181 gemerged |
 | WP-3 — Producten en externe productlinks | GEREED | 38 routes, Docker-audit, productrouteguard, gericht contract en groene regressiegates; PR #182 gemerged |
 | WP-4 — Prognoses en inkoop | GEREED | 23 routes, Docker-audit, drie bewezen beschermingslagen en volledig dekkingscontract; PR #183 gemerged |
-| WP-5 — Meldingen | GEREED | Nul actuele meldingsroutes, brede Docker-audit en afwezigheidscontract |
-| WP-6 — Fallbacks | VOLGENDE | M2C2N-22 |
-| WP-7 — Eindrapport | NIET GESTART | Volgt na WP-6 |
+| WP-5 — Meldingen | GEREED | Nul actuele meldingsroutes, brede Docker-audit en afwezigheidscontract; PR #184 gemerged |
+| WP-6 — Fallbacks | GEREED | 94 runtimeverwijzingen geclassificeerd, nul ongeclassificeerd, exact contract |
+| WP-7 — Eindrapport | VOLGENDE | Eindcontrole en formeel M2C2n-afsluitrapport |
 
 ## PR-regels
 
