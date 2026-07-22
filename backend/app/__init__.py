@@ -168,6 +168,26 @@ def _install_receipt_gmail_oauth_guard_when_ready() -> None:
         time.sleep(0.1)
 
 
+def _install_receipt_resend_webhook_guard_when_ready() -> None:
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, 'app')
+            and hasattr(module, 'engine')
+            and hasattr(module, 'text')
+        ):
+            try:
+                from .services.receipt_resend_webhook_guard import (
+                    install_receipt_resend_webhook_guard,
+                )
+                install_receipt_resend_webhook_guard(module)
+            except Exception:
+                pass
+            return
+        time.sleep(0.1)
+
+
 threading.Thread(target=_install_when_ready, daemon=True).start()
 threading.Thread(
     target=_install_inventory_location_patch_when_ready,
@@ -191,5 +211,9 @@ threading.Thread(
 ).start()
 threading.Thread(
     target=_install_receipt_gmail_oauth_guard_when_ready,
+    daemon=True,
+).start()
+threading.Thread(
+    target=_install_receipt_resend_webhook_guard_when_ready,
     daemon=True,
 ).start()
