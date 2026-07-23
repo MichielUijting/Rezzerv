@@ -1,6 +1,16 @@
 ﻿.rz-catalog-page {
   display: grid;
   gap: 16px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rz-catalog-page > [data-testid="screen-card"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .rz-catalog-header h2,
@@ -15,6 +25,9 @@
 }
 
 .rz-catalog-table-frame {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-top: 16px;
   overflow-x: auto;
 }
@@ -84,4 +97,33 @@
 
 .rz-catalog-definition-list dd {
   margin: 4px 0 0;
+}
+
+.rz-catalog-table {
+  table-layout: fixed;
+  width: 1160px;
+  min-width: 1160px;
+}
+
+.rz-catalog-col-name { width: 230px; }
+.rz-catalog-col-brand { width: 150px; }
+.rz-catalog-col-gtin { width: 170px; }
+.rz-catalog-col-product-type { width: 190px; }
+.rz-catalog-col-source { width: 170px; }
+.rz-catalog-col-household-count { width: 130px; }
+.rz-catalog-col-status { width: 120px; }
+
+.rz-catalog-table th,
+.rz-catalog-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rz-catalog-table .rz-table-filters th {
+  background: #ffffff;
+}
+
+.rz-catalog-pagination .rz-button {
+  min-width: 88px;
 }

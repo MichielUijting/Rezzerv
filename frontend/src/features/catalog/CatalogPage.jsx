@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
+import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './catalog.css'
 
@@ -97,16 +98,16 @@ export default function CatalogPage() {
 
           <div className="rz-catalog-table-frame">
             <Table dataTestId="catalog-table" tableClassName="rz-catalog-table" resizableColumns>
+              <colgroup>
+                <col className="rz-catalog-col-name" />
+                <col className="rz-catalog-col-brand" />
+                <col className="rz-catalog-col-gtin" />
+                <col className="rz-catalog-col-product-type" />
+                <col className="rz-catalog-col-source" />
+                <col className="rz-catalog-col-household-count" />
+                <col className="rz-catalog-col-status" />
+              </colgroup>
               <thead>
-                <tr className="rz-table-header">
-                  <th onClick={() => updateSort('name')}>Universeel artikel</th>
-                  <th onClick={() => updateSort('brand')}>Merk</th>
-                  <th onClick={() => updateSort('primary_gtin')}>Primaire GTIN</th>
-                  <th onClick={() => updateSort('product_type')}>Producttype</th>
-                  <th onClick={() => updateSort('source')}>Bron</th>
-                  <th className="rz-num" onClick={() => updateSort('household_article_count')}>Huishoudartikelen</th>
-                  <th onClick={() => updateSort('quality_status')}>Status</th>
-                </tr>
                 <tr className="rz-table-filters">
                   <th><input className="rz-input rz-inline-input" placeholder="Zoek" value={filters.search} onChange={(event) => updateFilter('search', event.target.value)} /></th>
                   <th />
@@ -122,6 +123,15 @@ export default function CatalogPage() {
                       <option value="conflict">Conflict</option>
                     </select>
                   </th>
+                </tr>
+                <tr className="rz-table-header">
+                  <th onClick={() => updateSort('name')}>Universeel artikel</th>
+                  <th onClick={() => updateSort('brand')}>Merk</th>
+                  <th onClick={() => updateSort('primary_gtin')}>Primaire GTIN</th>
+                  <th onClick={() => updateSort('product_type')}>Producttype</th>
+                  <th onClick={() => updateSort('source')}>Bron</th>
+                  <th className="rz-num" onClick={() => updateSort('household_article_count')}>Huishoudartikelen</th>
+                  <th onClick={() => updateSort('quality_status')}>Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -145,9 +155,9 @@ export default function CatalogPage() {
           </div>
 
           <div className="rz-catalog-pagination">
-            <button type="button" className="rz-button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Vorige</button>
-            <span>Pagina {currentPage} van {pageCount} Â· {filteredItems.length} artikelen</span>
-            <button type="button" className="rz-button" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)}>Volgende</button>
+            <Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Vorige</Button>
+            <span>Pagina {currentPage} van {pageCount} - {filteredItems.length} artikelen</span>
+            <Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => setPage(currentPage + 1)}>Volgende</Button>
           </div>
         </ScreenCard>
       </div>
