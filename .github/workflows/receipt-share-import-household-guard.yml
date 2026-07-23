@@ -89,7 +89,21 @@ jobs:
 
       - name: Bouw productiefrontend
         working-directory: frontend
-        run: npm run build
+        shell: bash
+        run: |
+          set +e
+          npm run build > frontend-build.log 2>&1
+          status=$?
+          tail -n 80 frontend-build.log
+          exit $status
+
+      - name: Publiceer frontend-buildlog
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loyalty-stamps-frontend-buildlog
+          path: frontend/frontend-build.log
+          if-no-files-found: ignore
 
       - name: Controleer Spaartegoeden-contract
         run: |
