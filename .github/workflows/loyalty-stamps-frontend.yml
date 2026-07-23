@@ -31,11 +31,33 @@ jobs:
 
       - name: Installeer frontend-afhankelijkheden
         working-directory: frontend
-        run: npm ci
+        shell: bash
+        run: |
+          set +e
+          npm ci --legacy-peer-deps --no-audit --no-fund > frontend-install.log 2>&1
+          status=$?
+          tail -n 80 frontend-install.log
+          exit $status
 
       - name: Bouw productiefrontend
         working-directory: frontend
-        run: npm run build
+        shell: bash
+        run: |
+          set +e
+          npm run build > frontend-build.log 2>&1
+          status=$?
+          tail -n 80 frontend-build.log
+          exit $status
+
+      - name: Publiceer frontend-diagnostiek
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loyalty-stamps-frontend-diagnostics
+          path: |
+            frontend/frontend-install.log
+            frontend/frontend-build.log
+          if-no-files-found: ignore
 
       - name: Controleer Spaartegoeden-contract
         run: |
