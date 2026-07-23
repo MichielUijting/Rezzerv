@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
-import Table from '../../ui/Table'
+import DataTable from '../../ui/DataTable'
+import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
-import { nextSortState, sortItems } from '../../ui/sorting'
 
 function normalizeText(value) {
-  return String(value || '').trim().toLowerCase()
+  return String(value ?? '').trim().toLowerCase()
 }
 
 function formatNumber(value) {
@@ -45,7 +45,6 @@ export default function LoyaltyStampsPage() {
     paidAmount: '',
   })
   const [selectedIds, setSelectedIds] = useState([])
-  const [sort, setSort] = useState({ key: 'storeName', direction: 'asc' })
 
   useEffect(() => {
     let cancelled = false
@@ -81,30 +80,13 @@ export default function LoyaltyStampsPage() {
     paidAmount: Number(item?.paid_amount || 0),
   })), [programs])
 
-  const programOptions = useMemo(() => (
-    [...new Set(rows.map((row) => row.programName))].sort((left, right) => left.localeCompare(right, 'nl-NL'))
-  ), [rows])
-
-  const visibleRows = useMemo(() => {
-    const storeNeedle = normalizeText(filters.storeName)
-    const quantityNeedle = normalizeText(filters.purchasedQuantity)
-    const amountNeedle = normalizeText(filters.paidAmount)
-
-    const filtered = rows.filter((row) => {
-      if (storeNeedle && !normalizeText(row.storeName).includes(storeNeedle)) return false
-      if (filters.programName && row.programName !== filters.programName) return false
-      if (quantityNeedle && !normalizeText(formatNumber(row.purchasedQuantity)).includes(quantityNeedle)) return false
-      if (amountNeedle && !normalizeText(formatMoney(row.paidAmount)).includes(amountNeedle)) return false
-      return true
-    })
-
-    return sortItems(filtered, sort, {
-      storeName: (row) => row.storeName,
-      programName: (row) => row.programName,
-      purchasedQuantity: (row) => row.purchasedQuantity,
-      paidAmount: (row) => row.paidAmount,
-    })
-  }, [filters, rows, sort])
+  const visibleRows = useMemo(() => rows.filter((row) => {
+    if (filters.storeName && !normalizeText(row.storeName).includes(normalizeText(filters.storeName))) return false
+    if (filters.programName && !normalizeText(row.programName).includes(normalizeText(filters.programName))) return false
+    if (filters.purchasedQuantity && !normalizeText(formatNumber(row.purchasedQuantity)).includes(normalizeText(filters.purchasedQuantity))) return false
+    if (filters.paidAmount && !normalizeText(formatMoney(row.paidAmount)).includes(normalizeText(filters.paidAmount))) return false
+    return true
+  }), [filters, rows])
 
   const selectedRows = useMemo(() => {
     const selectedSet = new Set(selectedIds)
@@ -157,115 +139,108 @@ export default function LoyaltyStampsPage() {
     URL.revokeObjectURL(url)
   }
 
+  const columns = useMemo(() => ([
+    {
+      key: 'select',
+      width: 44,
+      header: (
+        <input
+          type="checkbox"
+          aria-label="Selecteer alle zichtbare spaartegoeden"
+          checked={allVisibleSelected}
+          onChange={toggleAllVisible}
+        />
+      ),
+      renderCell: (row) => (
+        <input
+          type="checkbox"
+          aria-label={`Selecteer ${row.storeName} ${row.programName}`}
+          checked={selectedIds.includes(row.id)}
+          onChange={() => toggleRow(row.id)}
+        />
+      ),
+    },
+    {
+      key: 'storeName',
+      label: 'Winkelketen',
+      width: 260,
+      sortable: true,
+      filterable: true,
+      filterPlaceholder: 'Zoek',
+    },
+    {
+      key: 'programName',
+      label: 'Spaarprogramma',
+      width: 220,
+      sortable: true,
+      filterable: true,
+      filterPlaceholder: 'Filter',
+    },
+    {
+      key: 'purchasedQuantity',
+      label: 'Aantal zegels',
+      width: 140,
+      align: 'right',
+      sortable: true,
+      filterable: true,
+      filterPlaceholder: 'Filter',
+      getFilterValue: (row) => formatNumber(row.purchasedQuantity),
+      getSortValue: (row) => row.purchasedQuantity,
+      renderCell: (row) => formatNumber(row.purchasedQuantity),
+    },
+    {
+      key: 'paidAmount',
+      label: 'Betaald bedrag',
+      width: 160,
+      align: 'right',
+      sortable: true,
+      filterable: true,
+      filterPlaceholder: 'Filter',
+      getFilterValue: (row) => formatMoney(row.paidAmount),
+      getSortValue: (row) => row.paidAmount,
+      renderCell: (row) => formatMoney(row.paidAmount),
+    },
+  ]), [allVisibleSelected, selectedIds, visibleRows])
+
+  const emptyMessage = isLoading
+    ? 'Spaartegoeden laden…'
+    : error || 'Er zijn nog geen aangekochte spaar- of koopzegels gevonden.'
+
   return (
     <AppShell title="Spaartegoeden" showExit={false}>
       <div data-testid="loyalty-stamps-page">
         <ScreenCard>
-          <div style={{ marginBottom: '12px' }}>
-            <h2 style={{ margin: 0 }}>Spaar- en koopzegels</h2>
-            <p style={{ margin: '4px 0 0' }}>Read-only overzicht van aantoonbaar aangekochte spaartegoeden.</p>
-          </div>
+          <DataTable
+            columns={columns}
+            data={rows}
+            getRowKey={(row) => row.id}
+            defaultSort={{ key: 'storeName', direction: 'asc' }}
+            emptyMessage={emptyMessage}
+            dataTestId="loyalty-stamps-table"
+            tableClassName="rz-stock-table"
+            filterState={filters}
+            onFilterChange={updateFilter}
+            renderRow={(row) => (
+              <tr key={row.id} className={selectedIds.includes(row.id) ? 'rz-row-selected' : ''}>
+                {columns.map((column) => (
+                  <td key={column.key} className={column.align === 'right' ? 'rz-num' : column.cellClassName || ''}>
+                    {typeof column.renderCell === 'function' ? column.renderCell(row) : row[column.key]}
+                  </td>
+                ))}
+              </tr>
+            )}
+          />
 
-          <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-            <button
+          <div className="rz-stock-table-actions">
+            <Button
               type="button"
-              className="rz-button"
+              variant="secondary"
               disabled={selectedRows.length === 0}
               onClick={exportSelected}
             >
               Exporteren
-            </button>
+            </Button>
           </div>
-
-          {error ? <div className="rz-inline-feedback rz-inline-feedback--error" style={{ marginBottom: '12px' }}>{error}</div> : null}
-          {isLoading ? <div className="rz-inline-feedback">Spaartegoeden laden…</div> : null}
-
-          {!isLoading && !error && rows.length === 0 ? (
-            <div className="rz-empty-state" data-testid="loyalty-stamps-empty">Er zijn nog geen aangekochte spaar- of koopzegels gevonden.</div>
-          ) : null}
-
-          {!isLoading && !error && rows.length > 0 ? (
-            <Table dataTestId="loyalty-stamps-table" tableClassName="rz-stock-table">
-              <thead>
-                <tr className="rz-table-filter-row">
-                  <th aria-label="Selectiefilter" />
-                  <th>
-                    <input
-                      aria-label="Zoek winkelketen"
-                      placeholder="Zoek"
-                      value={filters.storeName}
-                      onChange={(event) => updateFilter('storeName', event.target.value)}
-                    />
-                  </th>
-                  <th>
-                    <select
-                      aria-label="Filter spaarprogramma"
-                      value={filters.programName}
-                      onChange={(event) => updateFilter('programName', event.target.value)}
-                    >
-                      <option value="">Filter</option>
-                      {programOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                    </select>
-                  </th>
-                  <th>
-                    <input
-                      aria-label="Filter aantal zegels"
-                      placeholder="Filter"
-                      inputMode="decimal"
-                      value={filters.purchasedQuantity}
-                      onChange={(event) => updateFilter('purchasedQuantity', event.target.value)}
-                    />
-                  </th>
-                  <th>
-                    <input
-                      aria-label="Filter betaald bedrag"
-                      placeholder="Filter"
-                      inputMode="decimal"
-                      value={filters.paidAmount}
-                      onChange={(event) => updateFilter('paidAmount', event.target.value)}
-                    />
-                  </th>
-                </tr>
-                <tr className="rz-table-header">
-                  <th className="rz-checkbox-cell">
-                    <input
-                      type="checkbox"
-                      aria-label="Selecteer alle zichtbare spaartegoeden"
-                      checked={allVisibleSelected}
-                      onChange={toggleAllVisible}
-                    />
-                  </th>
-                  <th onClick={() => setSort((current) => nextSortState(current, 'storeName', { storeName: 'asc' }))}>Winkelketen</th>
-                  <th onClick={() => setSort((current) => nextSortState(current, 'programName', { programName: 'asc' }))}>Spaarprogramma</th>
-                  <th className="rz-num" onClick={() => setSort((current) => nextSortState(current, 'purchasedQuantity', { purchasedQuantity: 'desc' }))}>Aantal zegels</th>
-                  <th className="rz-num" onClick={() => setSort((current) => nextSortState(current, 'paidAmount', { paidAmount: 'desc' }))}>Betaald bedrag</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleRows.map((row) => (
-                  <tr key={row.id}>
-                    <td className="rz-checkbox-cell">
-                      <input
-                        type="checkbox"
-                        aria-label={`Selecteer ${row.storeName} ${row.programName}`}
-                        checked={selectedIds.includes(row.id)}
-                        onChange={() => toggleRow(row.id)}
-                      />
-                    </td>
-                    <td>{row.storeName}</td>
-                    <td>{row.programName}</td>
-                    <td className="rz-num">{formatNumber(row.purchasedQuantity)}</td>
-                    <td className="rz-num">{formatMoney(row.paidAmount)}</td>
-                  </tr>
-                ))}
-                {visibleRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="rz-empty-cell">Geen regels gevonden met deze filters.</td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </Table>
-          ) : null}
         </ScreenCard>
       </div>
     </AppShell>
