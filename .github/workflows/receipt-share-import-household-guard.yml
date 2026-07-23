@@ -85,7 +85,7 @@ jobs:
 
       - name: Installeer frontend-afhankelijkheden
         working-directory: frontend
-        run: npm ci
+        run: npm ci --no-audit --no-fund --prefer-offline
 
       - name: Bouw productiefrontend
         working-directory: frontend
