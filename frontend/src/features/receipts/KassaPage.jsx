@@ -198,7 +198,10 @@ const RECEIPT_PREVIEW_ZOOM_STEP = 0.25
 const RECEIPT_IMPORT_STEPS = [
   { key: 'preparing', label: 'Bestand voorbereiden' },
   { key: 'uploading', label: 'Bon versturen' },
-  { key: 'processing', label: 'Bon verwerken' },
+  { key: 'optimizing', label: 'Afbeelding of document optimaliseren' },
+  { key: 'recognizing', label: 'Tekst en bedragen herkennen' },
+  { key: 'reading_header', label: 'Winkel en bonkop bepalen' },
+  { key: 'structuring_lines', label: 'Artikelregels structureren' },
   { key: 'refreshing', label: 'Kassa bijwerken' },
   { key: 'ready', label: 'Gereed' },
 ]
@@ -2010,7 +2013,7 @@ export default function KassaPage() {
       label: 'Zip-batch verwerken...',
       detail: `${processed} van ${total} kassabonnen verwerkt (${percentage}%).`,
       percent: Math.max(10, percentage),
-      stepKey: percentage >= 100 ? 'ready' : processed > 0 ? 'processing' : 'uploading',
+      stepKey: percentage >= 100 ? 'ready' : processed > 0 ? 'structuring_lines' : 'recognizing',
     }
   }
 
@@ -2678,6 +2681,10 @@ export default function KassaPage() {
     const timerId = window.setTimeout(() => {
       setUploadProgress((current) => {
         if (!current?.active) return current
+        const currentIndex = RECEIPT_IMPORT_STEPS.findIndex((step) => step.key === current.stepKey)
+        const nextIndex = RECEIPT_IMPORT_STEPS.findIndex((step) => step.key === stepKey)
+        if (currentIndex >= 0 && nextIndex >= 0 && nextIndex < currentIndex) return current
+        if (currentIndex === nextIndex && Number(current.percent || 0) >= Number(percent || 0)) return current
         return { active: true, label, detail, percent, stepKey }
       })
     }, delayMs)
@@ -2687,8 +2694,11 @@ export default function KassaPage() {
   function beginUploadProgress(kindLabel = 'de kassabon') {
     clearUploadProgressTimers()
     setUploadProgressState(true, 'Bestand voorbereiden...', `Rezzerv bereidt ${kindLabel} voor.`, 10, 'preparing')
-    scheduleUploadProgressStep(180, 'Bon versturen...', 'Het bestand wordt veilig naar Rezzerv verstuurd.', 25, 'uploading')
-    scheduleUploadProgressStep(700, 'Bon verwerken...', 'Rezzerv leest winkel, aankoopmoment, bedragen en bonregels uit.', 50, 'processing')
+    scheduleUploadProgressStep(180, 'Bon versturen...', 'Het bestand wordt veilig naar Rezzerv verstuurd.', 24, 'uploading')
+    scheduleUploadProgressStep(650, 'Afbeelding optimaliseren...', 'Rezzerv maakt de bon geschikt voor betrouwbare herkenning.', 36, 'optimizing')
+    scheduleUploadProgressStep(1550, 'Tekst en bedragen herkennen...', 'Rezzerv herkent tekst, aantallen en bedragen op de kassabon.', 49, 'recognizing')
+    scheduleUploadProgressStep(2850, 'Winkel en bonkop bepalen...', 'Rezzerv bepaalt de winkel, aankoopdatum en het totaalbedrag.', 61, 'reading_header')
+    scheduleUploadProgressStep(4300, 'Artikelregels structureren...', 'Rezzerv zet de herkende bonregels om naar controleerbare artikelen.', 72, 'structuring_lines')
   }
 
   async function completeUploadProgress(kindLabel = 'De kassabon') {
@@ -2788,7 +2798,7 @@ export default function KassaPage() {
     setDuplicateNotice('')
     try {
       const preparedFile = await prepareCameraUploadFile(cameraDraft.file)
-      setUploadProgressState(true, 'Bon verwerken...', 'Rezzerv analyseert de gefotografeerde kassabon.', 55, 'processing')
+      setUploadProgressState(true, 'Tekst en bedragen herkennen...', 'Rezzerv analyseert de gefotografeerde kassabon.', 49, 'recognizing')
       const result = await uploadSharedReceiptFile(householdId, preparedFile, 'camera_capture', 'Foto gemaakt in Rezzerv')
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
