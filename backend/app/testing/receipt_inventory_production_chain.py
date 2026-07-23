@@ -1,7 +1,9 @@
-"""Integration test voor de echte Rezzerv Uitpakken-verwerking.
+"""Integratietest voor de echte Rezzerv-keten Uitpakken -> Voorraad -> Bijna op.
 
-De test gebruikt een tijdelijke SQLite-runtime, initialiseert het bestaande
-productieschema en roept rechtstreeks process_purchase_import_batch aan.
+De test gebruikt huishouden 0 in een tijdelijke SQLite-runtime, initialiseert het
+bestaande productieschema en roept rechtstreeks de productie-verwerking aan.
+Naast voorraad en idempotentie worden ook productkoppeling, producttype,
+spaartegoedclassificatie en de Bijna-op-drempel gecontroleerd.
 """
 from __future__ import annotations
 
@@ -9,6 +11,7 @@ import importlib
 import os
 import sys
 import tempfile
+import uuid
 from pathlib import Path
 
 from sqlalchemy import inspect, text
@@ -88,6 +91,54 @@ def _seed_batch(main, *, batch_id: str, line_id: str, receipt_ref: str, quantity
         })
 
 
+def _almost_out_state(main, household_article_id: str) -> dict:
+    with main.engine.begin() as conn:
+        article_row = main.get_household_article_row_by_id(conn, "0", household_article_id)
+        assert article_row is not None, "Huishoudartikel ontbreekt voor Bijna-op-evaluatie"
+        evaluation = main.evaluate_household_article_almost_out(conn, "0", article_row)
+        items = main.build_almost_out_items(conn, "0")
+    item_ids = {str(item.get("household_article_id") or "") for item in items}
+    included = bool(evaluation.get("include_in_almost_out")) and household_article_id in item_ids
+    return {
+        "included": included,
+        "quantity": float(evaluation.get("current_quantity") or 0),
+        "data_state": str(evaluation.get("data_state") or ""),
+    }
+
+
+def _apply_consume_event(main, ids: dict[str, str], *, quantity_before: int, quantity_after: int) -> None:
+    delta = quantity_after - quantity_before
+    with main.engine.begin() as conn:
+        inventory_row = conn.execute(
+            text(
+                "SELECT id FROM inventory WHERE household_id = '0' "
+                "AND household_article_id = :article_id LIMIT 1"
+            ),
+            {"article_id": ids["household_article_id"]},
+        ).mappings().first()
+        assert inventory_row and inventory_row.get("id"), "Voorraadregel ontbreekt voor consume-event"
+        conn.execute(
+            text("UPDATE inventory SET aantal = :quantity, updated_at = CURRENT_TIMESTAMP WHERE id = :id"),
+            {"quantity": quantity_after, "id": inventory_row["id"]},
+        )
+        _insert_row(conn, "inventory_events", {
+            "id": f"chain-consume-{uuid.uuid4().hex}",
+            "household_id": "0",
+            "inventory_id": str(inventory_row["id"]),
+            "article_id": ids["household_article_id"],
+            "household_article_id": ids["household_article_id"],
+            "article_name": "AH BANANEN",
+            "location_id": ids["sublocation_id"],
+            "location_label": "Keuken / Fruitschaal",
+            "event_type": "consume",
+            "quantity": delta,
+            "old_quantity": quantity_before,
+            "new_quantity": quantity_after,
+            "source": "chain_test",
+            "note": "[receipt-inventory-chain] Bijna-op-drempel",
+        })
+
+
 def run_production_chain() -> dict:
     with tempfile.TemporaryDirectory(prefix="rezzerv_production_chain_") as tmp_dir:
         database_path = Path(tmp_dir) / "rezzerv-chain.sqlite"
@@ -148,7 +199,7 @@ def run_production_chain() -> dict:
                 "global_product_id": ids["global_product_id"], "naam": "AH BANANEN",
                 "name": "AH BANANEN", "custom_name": "AH BANANEN",
                 "article_group_id": ids["article_group_id"], "status": "active",
-                "active": 1, "consumable": 0,
+                "active": 1, "consumable": 1, "min_stock": 2, "ideal_stock": 3,
             })
             _insert_row(conn, "spaces", {
                 "id": ids["space_id"], "household_id": "0", "naam": "Keuken", "active": 1,
@@ -173,10 +224,28 @@ def run_production_chain() -> dict:
         with main.engine.begin() as conn:
             quantity_after_second = int(conn.execute(text("SELECT COALESCE(SUM(aantal), 0) FROM inventory WHERE household_id = '0'")).scalar() or 0)
             event_count_after_second = int(conn.execute(text("SELECT COUNT(*) FROM inventory_events WHERE household_id = '0' AND event_type = 'purchase'")).scalar() or 0)
+            household_link_count = int(conn.execute(text("SELECT COUNT(*) FROM household_articles WHERE household_id = '0' AND global_product_id = :global_product_id"), {"global_product_id": ids["global_product_id"]}).scalar() or 0)
+            product_type_count = 0
+            if "product_group_memberships" in actual_tables:
+                product_type_count = int(conn.execute(text("SELECT COUNT(*) FROM product_group_memberships WHERE global_product_id = :global_product_id"), {"global_product_id": ids["global_product_id"]}).scalar() or 0)
         repeated = main.process_purchase_import_batch("chain-batch-2", payload, authorization="Bearer test")
         with main.engine.begin() as conn:
             quantity_after_repeat = int(conn.execute(text("SELECT COALESCE(SUM(aantal), 0) FROM inventory WHERE household_id = '0'")).scalar() or 0)
             event_count_after_repeat = int(conn.execute(text("SELECT COUNT(*) FROM inventory_events WHERE household_id = '0' AND event_type = 'purchase'")).scalar() or 0)
+
+        from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
+
+        physical_line_is_excluded = is_spaarzegels_flow_excluded({
+            "receipt_line_text": "AH BANANEN", "quantity": 3, "unit_price": "1.00", "line_total": "3.00"
+        })
+        loyalty_line_is_excluded = is_spaarzegels_flow_excluded({
+            "receipt_line_text": "KOOPZEGELS", "raw_label": "KOOPZEGELS", "quantity": 2,
+            "unit_price": "0.10", "line_total": "0.20", "price": "0.20"
+        })
+
+        almost_out_after_purchase = _almost_out_state(main, ids["household_article_id"])
+        _apply_consume_event(main, ids, quantity_before=5, quantity_after=1)
+        almost_out_after_consume = _almost_out_state(main, ids["household_article_id"])
 
         assert first["processed_count"] == 1
         assert quantity_after_first == 2
@@ -186,17 +255,33 @@ def run_production_chain() -> dict:
         assert repeated["processed_count"] == 1
         assert quantity_after_repeat == 5
         assert event_count_after_repeat == 2
+        assert household_link_count == 1
+        if "product_group_memberships" in actual_tables:
+            assert product_type_count == 1
+        assert physical_line_is_excluded is False
+        assert loyalty_line_is_excluded is True
+        assert almost_out_after_purchase["quantity"] == 5
+        assert almost_out_after_purchase["included"] is False
+        assert almost_out_after_consume["quantity"] == 1
+        assert almost_out_after_consume["included"] is True
 
         return {
-            "status": "passed", "inventory_path": [0, 2, 5, 5],
-            "purchase_event_path": [0, 1, 2, 2], "production_endpoint": True,
+            "status": "passed",
+            "household_id": "0",
+            "inventory_path": [0, 2, 5, 5, 1],
+            "purchase_event_path": [0, 1, 2, 2],
+            "household_product_link_count": household_link_count,
+            "product_type_link_count": product_type_count,
+            "loyalty_excluded_from_physical_stock": loyalty_line_is_excluded,
+            "almost_out_path": [False, True],
+            "production_endpoint": True,
         }
 
 
 if __name__ == "__main__":
     try:
         print(run_production_chain())
-        print("RECEIPT_INVENTORY_PRODUCTION_CHAIN_GREEN")
+        print("RECEIPT_INVENTORY_ALMOST_OUT_CHAIN_GREEN")
     except Exception as exc:
         print(f"PRODUCTION_CHAIN_FAILURE|{exc.__class__.__name__}|{exc}")
         raise SystemExit(1)
