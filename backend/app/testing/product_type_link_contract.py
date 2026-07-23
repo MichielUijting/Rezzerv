@@ -34,9 +34,9 @@ def run_contract() -> dict:
                 text(
                     """
                     INSERT INTO global_products (
-                        id, name, primary_gtin, barcode, brand, source, status
+                        id, name, primary_gtin, brand, source, status
                     ) VALUES (
-                        :id, :name, :gtin, :gtin, :brand, :source, :status
+                        :id, :name, :gtin, :brand, :source, :status
                     )
                     """
                 ),
