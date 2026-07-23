@@ -86,7 +86,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          npm install --no-save --no-audit --no-fund \
+          npm install --legacy-peer-deps --no-save --no-audit --no-fund \
             react@18.2.0 \
             react-dom@18.2.0 \
             react-router-dom@6.23.0 \
