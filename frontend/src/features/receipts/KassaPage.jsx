@@ -44,6 +44,27 @@ function formatMoney(value, currency = 'EUR') {
   }
 }
 
+
+function getDuplicateReceiptTableId(result) {
+  return String(result?.existing_receipt?.receipt_table_id || result?.receipt_table_id || result?.receiptTableId || '')
+}
+
+function formatDuplicateImportMessageV2(result) {
+  const existing = result?.existing_receipt || {}
+  if (result?.duplicate_message) return String(result.duplicate_message)
+  const filename = String(existing.original_filename || '').trim()
+  const purchaseAt = existing.purchase_at ? formatDateTime(existing.purchase_at) : ''
+  const total = existing.total_amount !== undefined && existing.total_amount !== null ? formatMoney(existing.total_amount, existing.currency || 'EUR') : ''
+  const statusLabel = String(existing.po_norm_status_label || '').trim()
+  const parts = ['Deze bon is al ingelezen']
+  if (filename) parts.push(`als ${filename}`)
+  if (purchaseAt) parts.push(`op ${purchaseAt}`)
+  if (total && total !== '-') parts.push(`totaal ${total}`)
+  if (statusLabel) parts.push(`status ${statusLabel}`)
+  return `${parts.join(' ')}.`
+}
+
+
 function emailPartLabel(value) {
   if (value === 'attachment') return 'Bijlage uit e-mail'
   if (value === 'html_body') return 'HTML-body van e-mail'
@@ -177,7 +198,10 @@ const RECEIPT_PREVIEW_ZOOM_STEP = 0.25
 const RECEIPT_IMPORT_STEPS = [
   { key: 'preparing', label: 'Bestand voorbereiden' },
   { key: 'uploading', label: 'Bon versturen' },
-  { key: 'processing', label: 'Bon verwerken' },
+  { key: 'optimizing', label: 'Afbeelding of document optimaliseren' },
+  { key: 'recognizing', label: 'Tekst en bedragen herkennen' },
+  { key: 'reading_header', label: 'Winkel en bonkop bepalen' },
+  { key: 'structuring_lines', label: 'Artikelregels structureren' },
   { key: 'refreshing', label: 'Kassa bijwerken' },
   { key: 'ready', label: 'Gereed' },
 ]
@@ -735,7 +759,7 @@ function ReceiptPreviewCard({ receipt, transientPreview = null, isCollapsed, onT
               <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-start', gap: '8px' }}>
                 {previewState.status === 'ready' && previewState.isImage ? (
                   <div className="rz-kassa-preview-zoom-controls" aria-label="Zoom kassabonfoto">
-                    <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(-RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom <= RECEIPT_PREVIEW_ZOOM_MIN} data-testid="receipt-preview-zoom-out">−</Button>
+                    <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(-RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom <= RECEIPT_PREVIEW_ZOOM_MIN} data-testid="receipt-preview-zoom-out">âˆ’</Button>
                     <span className="rz-kassa-preview-zoom-label" data-testid="receipt-preview-zoom-level">{imageZoomPercent}%</span>
                     <Button type="button" variant="secondary" onClick={() => zoomReceiptImage(RECEIPT_PREVIEW_ZOOM_STEP)} disabled={imageZoom >= RECEIPT_PREVIEW_ZOOM_MAX} data-testid="receipt-preview-zoom-in">+</Button>
                   </div>
@@ -893,7 +917,7 @@ function ReceiptUploadProgressOverlay({ uploadProgress }) {
                     fontWeight: 800,
                   }}
                 >
-                  {isComplete ? '✓' : index + 1}
+                  {isComplete ? 'âœ“' : index + 1}
                 </span>
                 <span>{step.label}</span>
                 {isCurrent ? <span style={{ marginLeft: 'auto', fontSize: '13px', color: '#166534' }}>Bezig</span> : null}
@@ -958,7 +982,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     const nextDrafts = {}
     ;(receipt?.lines || []).forEach((line) => {
       nextDrafts[line.id] = {
-        article_name: line?.display_label ?? line?.corrected_raw_label ?? line?.raw_label ?? '',
+        article_name: line?.normalized_label ?? line?.display_label ?? line?.corrected_raw_label ?? line?.raw_label ?? '',
         quantity: line?.display_quantity ?? line?.corrected_quantity ?? line?.quantity ?? '',
         unit: line?.display_unit ?? line?.corrected_unit ?? line?.unit ?? '',
         unit_price: line?.display_unit_price ?? line?.corrected_unit_price ?? line?.unit_price ?? '',
@@ -976,7 +1000,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
   const lines = baseLines.filter((line) => !Boolean(lineDrafts[line.id]?.is_deleted ?? line?.is_deleted))
   const sortedLines = useMemo(() => sortItems(lines, lineSort, {
     lineIndex: (line) => Number(line?.line_index ?? 0),
-    article: (line) => lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || '',
+    article: (line) => lineDrafts[line.id]?.article_name || line?.normalized_label || line?.display_label || line?.raw_label || '',
     quantity: (line) => Number(lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? 0),
     unit: (line) => lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || '',
     unitPrice: (line) => Number(lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? 0),
@@ -1038,7 +1062,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
       filterable: true,
       filterLabel: filterLabels[column.key],
       getSortValue: (line) => {
-        if (column.key === 'article') return lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || ''
+        if (column.key === 'article') return lineDrafts[line.id]?.article_name || line?.normalized_label || line?.display_label || line?.raw_label || ''
         if (column.key === 'quantity') return Number(lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? 0)
         if (column.key === 'unit') return lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || ''
         if (column.key === 'unitPrice') return Number(lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? 0)
@@ -1047,7 +1071,7 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
         return ''
       },
       getFilterValue: (line) => {
-        if (column.key === 'article') return lineDrafts[line.id]?.article_name || line?.display_label || line?.raw_label || ''
+        if (column.key === 'article') return lineDrafts[line.id]?.article_name || line?.normalized_label || line?.display_label || line?.raw_label || ''
         if (column.key === 'quantity') return lineDrafts[line.id]?.quantity ?? line?.display_quantity ?? line?.quantity ?? ''
         if (column.key === 'unit') return lineDrafts[line.id]?.unit || line?.display_unit || line?.unit || ''
         if (column.key === 'unitPrice') return lineDrafts[line.id]?.unit_price ?? line?.display_unit_price ?? line?.unit_price ?? ''
@@ -1120,9 +1144,15 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     saveLine(lineId, { [fieldName]: value })
   }
 
+  function normalizePurchaseDateInput(value) {
+    const rawValue = String(value || '').trim()
+    if (!rawValue) return ''
+    return rawValue.slice(0, 10)
+  }
+
   async function persistHeaderDraft({ suppressSuccessFeedback = false } = {}) {
     const normalizedStoreName = String(headerDraft.store_name || '').trim()
-    const normalizedPurchaseAt = String(headerDraft.purchase_at || '').trim()
+    const normalizedPurchaseAt = normalizePurchaseDateInput(headerDraft.purchase_at)
     const payload = {
       store_name: normalizedStoreName,
       purchase_at: normalizedPurchaseAt,
@@ -1137,6 +1167,44 @@ function ReceiptDetailInfoCard({ receipt, canEdit = false, onReceiptUpdated, onF
     onReceiptUpdated?.(updated)
     if (!suppressSuccessFeedback) onFeedback?.('success', 'Bonkop opgeslagen.')
     return updated
+  }
+
+  async function saveHeaderFieldOnBlur(fieldName) {
+    if (!canEdit || isSavingHeader) return
+
+    const currentValue = fieldName === 'purchase_at'
+      ? normalizePurchaseDateInput(receipt?.purchase_at)
+      : String(receipt?.[fieldName] || '').trim()
+
+    const nextValue = fieldName === 'purchase_at'
+      ? normalizePurchaseDateInput(headerDraft.purchase_at)
+      : String(headerDraft[fieldName] || '').trim()
+
+    if (currentValue === nextValue) return
+
+    setIsSavingHeader(true)
+
+    try {
+      await persistHeaderDraft({ suppressSuccessFeedback: true })
+
+      const fieldLabel = fieldName === 'purchase_at'
+        ? 'Aankoopdatum'
+        : 'Winkel'
+
+      onFeedback?.(
+        'success',
+        `${fieldLabel} is opgeslagen en bijgewerkt in de hoofdtabel.`,
+        { key: `receipt-header-${fieldName}-saved-${String(receipt?.id || '')}` },
+      )
+    } catch (err) {
+      onFeedback?.(
+        'error',
+        normalizeErrorMessage(err?.message)
+          || `${fieldName === 'purchase_at' ? 'Aankoopdatum' : 'Winkel'} kon niet worden opgeslagen.`,
+      )
+    } finally {
+      setIsSavingHeader(false)
+    }
   }
 
 async function saveLine(lineId, overrides = null) {
@@ -1261,7 +1329,7 @@ async function saveLine(lineId, overrides = null) {
     const exportLines = lines.filter((line) => selectedSet.has(line.id))
     const rows = exportLines.map((line) => {
       const draft = lineDrafts[line.id] || {}
-      return [draft.article_name || line.display_label || line.raw_label || '', draft.quantity ?? '', draft.unit || '', draft.unit_price ?? '', draft.line_total ?? '', line.discount_amount ?? '', line.barcode || '']
+      return [draft.article_name || line.normalized_label || line.display_label || line.raw_label || '', draft.quantity ?? '', draft.unit || '', draft.unit_price ?? '', draft.line_total ?? '', line.discount_amount ?? '', line.barcode || '']
     })
     const csv = [['Artikel in bon', 'Aantal', 'Eenheid', 'Stukprijs', 'Regelbedrag', 'Korting', 'Barcode'], ...rows].map((row) => row.map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`).join(';')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
@@ -1345,8 +1413,21 @@ async function saveLine(lineId, overrides = null) {
                 <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
                   {canEdit ? (
                     <>
-                      <Input label="Winkel" value={headerDraft.store_name} onChange={(event) => setHeaderDraft((current) => ({ ...current, store_name: event.target.value }))} />
-                      <Input label="Aankoopmoment" value={headerDraft.purchase_at} onChange={(event) => setHeaderDraft((current) => ({ ...current, purchase_at: event.target.value }))} />
+                      <Input
+                        label="Winkel"
+                        value={headerDraft.store_name}
+                        disabled={isSavingHeader}
+                        onChange={(event) => setHeaderDraft((current) => ({ ...current, store_name: event.target.value }))}
+                        onBlur={() => saveHeaderFieldOnBlur('store_name')}
+                      />
+                      <Input
+                        label="Aankoopdatum"
+                        type="date"
+                        value={normalizePurchaseDateInput(headerDraft.purchase_at)}
+                        disabled={isSavingHeader}
+                        onChange={(event) => setHeaderDraft((current) => ({ ...current, purchase_at: event.target.value }))}
+                        onBlur={() => saveHeaderFieldOnBlur('purchase_at')}
+                      />
                       <Input label="Totaalbedrag" type="number" step="0.01" value={headerDraft.total_amount} onChange={(event) => setHeaderDraft((current) => ({ ...current, total_amount: event.target.value }))} />
                       <Input label="Referentie / bonnummer" value={headerDraft.reference} onChange={(event) => setHeaderDraft((current) => ({ ...current, reference: event.target.value }))} />
                       <Input label="Notitie" value={headerDraft.notes} onChange={(event) => setHeaderDraft((current) => ({ ...current, notes: event.target.value }))} />
@@ -1354,7 +1435,7 @@ async function saveLine(lineId, overrides = null) {
                   ) : (
                     <>
                       <DetailInfoRow label="Winkel" value={receipt?.store_name} />
-                      <DetailInfoRow label="Aankoopmoment" value={formatDateTime(receipt?.purchase_at)} />
+                      <DetailInfoRow label="Aankoopdatum" value={formatDateTime(receipt?.purchase_at)} />
                       <DetailInfoRow label="Totaal" value={formatMoney(receipt?.total_amount, receipt?.currency)} />
                       <DetailInfoRow label="Referentie / bonnummer" value={receipt?.reference} />
                       <DetailInfoRow label="Notitie" value={receipt?.notes} />
@@ -1379,12 +1460,12 @@ async function saveLine(lineId, overrides = null) {
                   <DetailInfoRow label="Plaats" value={branchParts.city} />
                   <DetailInfoRow label="Oorspronkelijk bestand" value={receipt?.original_filename || 'Niet beschikbaar in deze release'} />
                   <DetailInfoRow label="Bestandstype" value={receipt?.mime_type || 'Niet beschikbaar in deze release'} />
-                  <DetailInfoRow label="Geïmporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
+                  <DetailInfoRow label="GeÃ¯mporteerd op" value={formatDateTime(receipt?.imported_at || receipt?.created_at)} />
                   <DetailInfoRow label="Aangemaakt op" value={formatDateTime(receipt?.created_at)} />
                   <DetailInfoRow label="Bijgewerkt op" value={formatDateTime(receipt?.updated_at)} />
                   <DetailInfoRow label="Goedgekeurd op" value={formatDateTime(receipt?.approved_at)} />
                   <DetailInfoRow label="Goedgekeurd door" value={receipt?.approved_by_user_email} />
-                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` · ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` · ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
+                  {receipt?.totals_overridden ? <DetailInfoRow label="Override totaalafwijking" value={`Ja${receipt?.totals_override_by_user_email ? ` Â· ${receipt.totals_override_by_user_email}` : ''}${receipt?.totals_override_at ? ` Â· ${formatDateTime(receipt.totals_override_at)}` : ''}`} /> : null}
                 </div>
               )
             }
@@ -1408,8 +1489,8 @@ async function saveLine(lineId, overrides = null) {
                     const draft = lineDrafts[line.id] || {}
                     return (
                       <tr key={line.id} data-testid={`receipt-line-row-${line.id}`} className={selected ? 'rz-row-selected' : ''}>
-                        <td><input type="checkbox" data-testid={`receipt-line-select-${line.id}`} checked={selected} onChange={() => toggleLine(line.id)} aria-label={`Selecteer regel ${draft.article_name || line.display_label || line.id}`} /></td>
-                        <td>{canEdit ? <input className="rz-input" value={draft.article_name ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'article_name', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'article_name', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'article_name', event.target.value)} /> : <span data-testid={`receipt-line-status-${line.id}`}>{draft.article_name || line.display_label || '-'}</span>}</td>
+                        <td><input type="checkbox" data-testid={`receipt-line-select-${line.id}`} checked={selected} onChange={() => toggleLine(line.id)} aria-label={`Selecteer regel ${draft.article_name || line.normalized_label || line.display_label || line.id}`} /></td>
+                        <td>{canEdit ? <input className="rz-input" value={draft.article_name ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'article_name', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'article_name', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'article_name', event.target.value)} /> : <span data-testid={`receipt-line-status-${line.id}`}>{draft.article_name || line.normalized_label || line.display_label || '-'}</span>}</td>
                         <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.001" value={draft.quantity ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'quantity', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'quantity', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'quantity', event.target.value)} /> : formatQuantity(draft.quantity ?? line.display_quantity ?? line.quantity)}</td>
                         <td>{canEdit ? <input className="rz-input" value={draft.unit ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'unit', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'unit', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'unit', event.target.value)} /> : (draft.unit || line.display_unit || '-')}</td>
                         <td className="rz-num">{canEdit ? <input className="rz-input" type="number" step="0.01" value={draft.unit_price ?? ''} onFocus={(event) => rememberLineFieldValue(line.id, 'unit_price', event.target.value)} onChange={(event) => updateLineDraft(line.id, 'unit_price', event.target.value)} onBlur={(event) => saveLineFieldOnBlur(line.id, 'unit_price', event.target.value)} /> : formatMoney(draft.unit_price ?? line.display_unit_price ?? line.unit_price, receipt?.currency)}</td>
@@ -1686,11 +1767,11 @@ function ReceiptSourceHubContent({
           <ScreenCard fullWidth>
             <div style={{ display: 'grid', gap: '12px' }}>
               <div style={{ fontSize: '18px', fontWeight: 700 }}>Importuitleg</div>
-              <div style={{ color: '#667085' }}>De schermopbouw is nu gericht op één centrale actie. De extra uitleg blijft zichtbaar, maar staat bewust lager op het scherm.</div>
+              <div style={{ color: '#667085' }}>De schermopbouw is nu gericht op Ã©Ã©n centrale actie. De extra uitleg blijft zichtbaar, maar staat bewust lager op het scherm.</div>
               <div style={{ color: '#344054', fontSize: '14px', display: 'grid', gap: '6px' }}>
                 <div><strong>.eml</strong> blijft via de bestaande e-mailimport lopen.</div>
                 <div><strong>.pdf</strong>, <strong>.zip</strong> en ondersteunde afbeeldingsbestanden lopen via de bestaande bonbestand-import.</div>
-                <div><strong>Slepen, plakken en kiezen via Verkenner</strong> komen hiermee samen in één centrale landingsroute.</div>
+                <div><strong>Slepen, plakken en kiezen via Verkenner</strong> komen hiermee samen in Ã©Ã©n centrale landingsroute.</div>
               </div>
             </div>
           </ScreenCard>
@@ -1722,10 +1803,10 @@ function ReceiptSourceHubContent({
                 onClick={onCopyEmailRoute}
                 disabled
                 aria-disabled="true"
-                title="Adres kopiÃ«ren wordt later weer geactiveerd."
+                title="Adres kopiÃƒÂ«ren wordt later weer geactiveerd."
                 style={{ width: 'fit-content', minWidth: '180px', opacity: 0.55, cursor: 'not-allowed' }}
               >
-                Adres kopiÃ«ren
+                Adres kopiÃƒÂ«ren
               </Button>
             </div>
           </ScreenCard>
@@ -1932,7 +2013,7 @@ export default function KassaPage() {
       label: 'Zip-batch verwerken...',
       detail: `${processed} van ${total} kassabonnen verwerkt (${percentage}%).`,
       percent: Math.max(10, percentage),
-      stepKey: percentage >= 100 ? 'ready' : processed > 0 ? 'processing' : 'uploading',
+      stepKey: percentage >= 100 ? 'ready' : processed > 0 ? 'structuring_lines' : 'recognizing',
     }
   }
 
@@ -2162,7 +2243,7 @@ export default function KassaPage() {
         }
         if (sharedResult?.shareStatus === 'success') {
           if (sharedResult.duplicate) {
-            announceDuplicate(sharedResult)
+            await announceDuplicate(sharedResult, items)
           } else {
             setDuplicateNotice('')
             setStatus('Gedeelde bon ontvangen. De bon staat nu in de Kassa.')
@@ -2198,22 +2279,40 @@ export default function KassaPage() {
     return () => window.clearTimeout(timeoutId)
   }, [receiptInboxFocusId])
 
-  function announceDuplicate(result) {
-    const message = formatDuplicateImportMessage(result)
+  async function announceDuplicate(result, sourceItems = receipts) {
+    const message = formatDuplicateImportMessageV2(result)
+    const existingReceiptId = getDuplicateReceiptTableId(result)
     setError('')
     setStatus('')
     setDuplicateNotice(message)
     showKassaFeedback('warning', message, {
       title: 'Bon al ingelezen',
-      detail: 'Deze upload is niet opnieuw toegevoegd. De bestaande kassabon blijft ongewijzigd in Kassa.',
-      key: 'kassa-duplicate-receipt',
+      detail: existingReceiptId ? 'De bestaande kassabon is geopend in Kassa.' : 'Deze upload is niet opnieuw toegevoegd. De bestaande kassabon blijft ongewijzigd in Kassa.',
+      key: `kassa-duplicate-receipt-${existingReceiptId || 'unknown'}`,
       dedupeMs: 0,
       testId: 'kassa-duplicate-overlay',
     })
+
+    if (existingReceiptId) {
+      setFilters(DEFAULT_RECEIPT_FILTERS)
+      setReceiptInboxFocusId(existingReceiptId)
+      setSelectedReceiptIds([existingReceiptId])
+      const refreshedItems = await loadReceipts(householdId, {
+        preserveDuplicateNotice: true,
+        openReceiptId: existingReceiptId,
+      })
+      const itemsForOpen = Array.isArray(refreshedItems) && refreshedItems.length ? refreshedItems : sourceItems
+      await openReceiptDetail(existingReceiptId, itemsForOpen)
+      if (isAddReceiptRoute) navigate('/kassa')
+    }
+
     try {
       window.requestAnimationFrame(() => {
+        const targetRow = existingReceiptId
+          ? document.querySelector(`[data-testid="kassa-row-${existingReceiptId}"]`)
+          : null
         const feedback = document.querySelector('[data-testid="receipt-duplicate-feedback"]')
-        feedback?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        ;(targetRow || feedback)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       })
     } catch {
       // ignore scroll issues
@@ -2221,9 +2320,9 @@ export default function KassaPage() {
   }
 
   useEffect(() => {
-    const visibleIds = new Set(receipts.map((receipt) => receipt.receipt_table_id))
-    setSelectedReceiptIds((current) => current.filter((id) => visibleIds.has(id)))
-    if (openedReceiptId && !visibleIds.has(openedReceiptId)) {
+    const visibleIds = new Set(receipts.map((receipt) => String(receipt?.receipt_table_id || '')).filter(Boolean))
+    setSelectedReceiptIds((current) => current.filter((id) => visibleIds.has(String(id))))
+    if (openedReceiptId && !visibleIds.has(String(openedReceiptId))) {
       setOpenedReceiptId('')
       setOpenedReceipt(null)
     }
@@ -2271,53 +2370,7 @@ export default function KassaPage() {
     })
   }, [inboxItems, filters, inboxSort])
 
-  const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedReceiptIds.includes(item.receipt_table_id))
-
-  const inboxDataTableColumns = useMemo(() => inboxTableColumns.map((column) => {
-    if (column.key === 'select') {
-      return {
-        ...column,
-        header: <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare bonnen" />,
-      }
-    }
-
-    const labels = {
-      store: 'Winkel',
-      date: 'Datum',
-      total: 'Totaal',
-      items: 'Artikelen',
-    }
-
-    const filterLabels = {
-      store: 'Filter op winkel',
-      date: 'Filter op datum',
-      total: 'Filter op totaal',
-      items: 'Filter op artikelen',
-    }
-
-    return {
-      ...column,
-      label: labels[column.key] || column.label || column.key,
-      align: ['total', 'items'].includes(column.key) ? 'right' : undefined,
-      sortable: true,
-      filterable: true,
-      filterLabel: filterLabels[column.key],
-      getSortValue: (item) => {
-        if (column.key === 'store') return item.store_name || ''
-        if (column.key === 'date') return item.purchase_at || ''
-        if (column.key === 'total') return Number(item.total_amount ?? 0)
-        if (column.key === 'items') return Number(item.line_count ?? 0)
-        return ''
-      },
-      getFilterValue: (item) => {
-        if (column.key === 'store') return item.store_name || ''
-        if (column.key === 'date') return formatDateTime(item.purchase_at)
-        if (column.key === 'total') return formatMoney(item.total_amount, item.currency)
-        if (column.key === 'items') return String(item.line_count ?? 0)
-        return ''
-      },
-    }
-  }), [allVisibleSelected])
+  const allVisibleSelected = listItems.length > 0 && listItems.every((item) => selectedReceiptIds.includes(String(item.receipt_table_id || '')))
 
   const inboxTableFilters = useMemo(() => ({
     store: filters.winkel,
@@ -2325,6 +2378,12 @@ export default function KassaPage() {
     total: filters.totaal,
     items: filters.artikelen,
   }), [filters.winkel, filters.datum, filters.totaal, filters.artikelen])
+
+  const inboxColumnDefaults = useMemo(
+    () => Object.fromEntries(inboxTableColumns.map(({ key, width }) => [key, width])),
+    [],
+  )
+  const { widths: inboxTableWidths, startResize: startInboxTableResize } = useResizableColumnWidths(inboxColumnDefaults)
 
   useLayoutEffect(() => {
     const frame = inboxScrollFrameRef.current
@@ -2350,7 +2409,7 @@ export default function KassaPage() {
         0,
       )
 
-      // Eén pixel marge voorkomt dat de elfde rij deels zichtbaar wordt door afronding of tabelranden.
+      // EÃ©n pixel marge voorkomt dat de elfde rij deels zichtbaar wordt door afronding of tabelranden.
       const nextHeight = Math.max(
         1,
         Math.floor(headerHeight + rowsHeight) - 1,
@@ -2390,29 +2449,190 @@ export default function KassaPage() {
     inboxTableFilters.items,
   ])
 
-  async function openReceiptDetail(receiptTableId, sourceItems = receipts, prefetchedDetail = null) {
+  function applyReceiptUpdate(updated) {
+    if (!updated) return
+
+    const updatedId = String(updated?.receipt_table_id || updated?.id || '')
+    const normalizedPoStatusLabel = String(updated?.po_norm_status_label || '').trim()
+    const isApprovedForUnpacking = Boolean(updated?.approved_at)
+      || normalizedPoStatusLabel === 'Gecontroleerd'
+
+    if (isApprovedForUnpacking && updatedId) {
+      setReceipts((current) => current.filter((item) => {
+        const itemId = String(item?.receipt_table_id || item?.id || '')
+        return itemId !== updatedId
+      }))
+      setSelectedReceiptIds((current) => current.filter((id) => String(id) !== updatedId))
+      setOpenedReceiptId('')
+      openedReceiptIdRef.current = ''
+      setOpenedReceipt(null)
+      setReceiptInboxFocusId('')
+      return
+    }
+
+    setOpenedReceipt(updated)
+    setReceipts((current) => current.map((item) => {
+      const itemId = String(item?.receipt_table_id || item?.id || '')
+      if (!itemId || itemId !== updatedId) return item
+      return {
+        ...item,
+        ...updated,
+        receipt_table_id: item.receipt_table_id || updated.receipt_table_id || updated.id,
+      }
+    }))
+  }
+
+  function normalizeReceiptCorrectionDate(value) {
+    const rawValue = String(value || '').trim()
+    return rawValue ? rawValue.slice(0, 10) : ''
+  }
+
+  function openReceiptImportConfirmation(receipt) {
+    const receiptId = String(receipt?.receipt_table_id || receipt?.id || '')
+    if (!receiptId) return
+
+    const needsStore = String(receipt?.store_name_source || '') === 'user_required'
+    const needsPurchaseDate = String(receipt?.purchase_at_source || '') === 'import_default'
+
+    if (!needsStore && !needsPurchaseDate) return
+
+    const inputFields = []
+
+    if (needsStore) {
+      inputFields.push({
+        name: 'store_name',
+        label: 'Winkel(keten)',
+        type: 'text',
+        value: '',
+        placeholder: 'Vul de naam van de winkel of winkelketen in',
+        required: true,
+        autoFocus: true,
+      })
+    }
+
+    if (needsPurchaseDate) {
+      inputFields.push({
+        name: 'purchase_at',
+        label: 'Aankoopdatum',
+        type: 'date',
+        value: normalizeReceiptCorrectionDate(receipt?.purchase_at),
+        required: true,
+        autoFocus: !needsStore,
+      })
+    }
+
+    const title = needsStore && needsPurchaseDate
+      ? 'Controleer winkel en aankoopdatum'
+      : needsStore
+        ? 'Winkel niet herkend'
+        : 'Aankoopdatum niet herkend'
+
+    const message = needsStore && needsPurchaseDate
+      ? 'De winkel kon niet worden gelezen en voor de aankoopdatum is de inleesdatum ingevuld.'
+      : needsStore
+        ? 'Vul de naam van de winkel of winkelketen in.'
+        : 'Als aankoopdatum is de datum van inlezen ingevuld.'
+
+    const detail = needsPurchaseDate
+      ? 'Controleer de aankoopdatum. Je kunt de voorgestelde datum wijzigen voordat je opslaat.'
+      : 'Deze naam wordt bij de kassabon opgeslagen en helpt bij latere ondersteuning van deze winkel.'
+
+    showFeedback({
+      variant: 'warning',
+      title,
+      message,
+      detail,
+      inputFields,
+      primaryActionLabel: 'Opslaan',
+      dismissMode: 'blocked',
+      key: `kassa-import-confirmation-${receiptId}`,
+      dedupeMs: 0,
+      testId: 'kassa-import-confirmation',
+      onPrimaryAction: async (values) => {
+        const payload = {}
+
+        if (needsStore) {
+          payload.store_name = String(values?.store_name || '').trim()
+          if (!payload.store_name) {
+            throw new Error('Vul de naam van de winkel of winkelketen in.')
+          }
+        }
+
+        if (needsPurchaseDate) {
+          payload.purchase_at = normalizeReceiptCorrectionDate(values?.purchase_at)
+          if (!payload.purchase_at) {
+            throw new Error('Vul een geldige aankoopdatum in.')
+          }
+        }
+
+        const updated = await fetchJson(
+          `/api/receipts/${encodeURIComponent(receiptId)}`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify(payload),
+          },
+        )
+
+        applyReceiptUpdate(updated)
+
+        showKassaFeedback(
+          'success',
+          needsStore && needsPurchaseDate
+            ? 'Winkel en aankoopdatum zijn opgeslagen.'
+            : needsStore
+              ? 'Winkel is opgeslagen.'
+              : 'Aankoopdatum is opgeslagen.',
+          {
+            key: `kassa-import-confirmation-saved-${receiptId}`,
+            dedupeMs: 0,
+          },
+        )
+
+        return true
+      },
+    })
+  }
+
+  async function openReceiptDetail(
+    receiptTableId,
+    sourceItems = receipts,
+    prefetchedDetail = null,
+    showImportConfirmation = false,
+  ) {
     setError('')
     try {
       const detail = prefetchedDetail || await fetchJson(`/api/receipts/${encodeURIComponent(receiptTableId)}`)
       const sourceItem = sourceItems.find((item) => String(item.receipt_table_id) === String(receiptTableId)) || null
+      const mergedDetail = sourceItem ? { ...sourceItem, ...detail } : detail
       setOpenedReceiptId(receiptTableId)
-      setOpenedReceipt(sourceItem ? { ...sourceItem, ...detail } : detail)
+      setOpenedReceipt(mergedDetail)
+
+      if (showImportConfirmation) {
+        openReceiptImportConfirmation(mergedDetail)
+      }
+
+      return mergedDetail
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
+      return null
     }
   }
 
   function toggleSelectedReceipt(receiptTableId) {
+    const receiptId = String(receiptTableId || '')
+    if (!receiptId) return
     setSelectedReceiptIds((current) => (
-      current.includes(receiptTableId)
-        ? current.filter((id) => id !== receiptTableId)
-        : [...current, receiptTableId]
+      current.includes(receiptId)
+        ? current.filter((id) => id !== receiptId)
+        : [...current, receiptId]
     ))
   }
 
   function toggleSelectAllVisible() {
-    const visibleIds = listItems.map((item) => item.receipt_table_id)
-    setSelectedReceiptIds(allVisibleSelected ? [] : visibleIds)
+    const visibleIds = listItems.map((item) => String(item.receipt_table_id || '')).filter(Boolean)
+    if (!visibleIds.length) return
+    const allSelected = visibleIds.every((id) => selectedReceiptIds.includes(id))
+    setSelectedReceiptIds(allSelected ? [] : visibleIds)
   }
 
   function handleFilterChange(key, value) {
@@ -2461,6 +2681,10 @@ export default function KassaPage() {
     const timerId = window.setTimeout(() => {
       setUploadProgress((current) => {
         if (!current?.active) return current
+        const currentIndex = RECEIPT_IMPORT_STEPS.findIndex((step) => step.key === current.stepKey)
+        const nextIndex = RECEIPT_IMPORT_STEPS.findIndex((step) => step.key === stepKey)
+        if (currentIndex >= 0 && nextIndex >= 0 && nextIndex < currentIndex) return current
+        if (currentIndex === nextIndex && Number(current.percent || 0) >= Number(percent || 0)) return current
         return { active: true, label, detail, percent, stepKey }
       })
     }, delayMs)
@@ -2470,8 +2694,11 @@ export default function KassaPage() {
   function beginUploadProgress(kindLabel = 'de kassabon') {
     clearUploadProgressTimers()
     setUploadProgressState(true, 'Bestand voorbereiden...', `Rezzerv bereidt ${kindLabel} voor.`, 10, 'preparing')
-    scheduleUploadProgressStep(180, 'Bon versturen...', 'Het bestand wordt veilig naar Rezzerv verstuurd.', 25, 'uploading')
-    scheduleUploadProgressStep(700, 'Bon verwerken...', 'Rezzerv leest winkel, aankoopmoment, bedragen en bonregels uit.', 50, 'processing')
+    scheduleUploadProgressStep(180, 'Bon versturen...', 'Het bestand wordt veilig naar Rezzerv verstuurd.', 24, 'uploading')
+    scheduleUploadProgressStep(650, 'Afbeelding optimaliseren...', 'Rezzerv maakt de bon geschikt voor betrouwbare herkenning.', 36, 'optimizing')
+    scheduleUploadProgressStep(1550, 'Tekst en bedragen herkennen...', 'Rezzerv herkent tekst, aantallen en bedragen op de kassabon.', 49, 'recognizing')
+    scheduleUploadProgressStep(2850, 'Winkel en bonkop bepalen...', 'Rezzerv bepaalt de winkel, aankoopdatum en het totaalbedrag.', 61, 'reading_header')
+    scheduleUploadProgressStep(4300, 'Artikelregels structureren...', 'Rezzerv zet de herkende bonregels om naar controleerbare artikelen.', 72, 'structuring_lines')
   }
 
   async function completeUploadProgress(kindLabel = 'De kassabon') {
@@ -2571,12 +2798,12 @@ export default function KassaPage() {
     setDuplicateNotice('')
     try {
       const preparedFile = await prepareCameraUploadFile(cameraDraft.file)
-      setUploadProgressState(true, 'Bon verwerken...', 'Rezzerv analyseert de gefotografeerde kassabon.', 55, 'processing')
+      setUploadProgressState(true, 'Tekst en bedragen herkennen...', 'Rezzerv analyseert de gefotografeerde kassabon.', 49, 'recognizing')
       const result = await uploadSharedReceiptFile(householdId, preparedFile, 'camera_capture', 'Foto gemaakt in Rezzerv')
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
       if (result?.duplicate) {
-        announceDuplicate(result)
+        await announceDuplicate(result)
       } else {
         clearCameraDraft()
             setOpenedReceiptId('')
@@ -2590,9 +2817,14 @@ export default function KassaPage() {
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
           : false
 
-        if (uploadedReceiptId && receiptExistsInInbox) {
+        if (uploadedReceiptId) {
           setSelectedReceiptIds([uploadedReceiptId])
-          await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          await openReceiptDetail(
+            uploadedReceiptId,
+            refreshedItems,
+            null,
+            true,
+          )
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
@@ -2676,7 +2908,7 @@ export default function KassaPage() {
       const uploadedReceiptId = String(result?.receipt_table_id || '')
 
       if (result?.duplicate) {
-        announceDuplicate(result)
+        await announceDuplicate(result)
       } else {
         setOpenedReceiptId('')
         setOpenedReceipt(null)
@@ -2689,9 +2921,14 @@ export default function KassaPage() {
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
           : false
 
-        if (uploadedReceiptId && receiptExistsInInbox) {
+        if (uploadedReceiptId) {
           setSelectedReceiptIds([uploadedReceiptId])
-          await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          await openReceiptDetail(
+            uploadedReceiptId,
+            refreshedItems,
+            null,
+            true,
+          )
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
@@ -2755,7 +2992,7 @@ export default function KassaPage() {
       const isBatchImport = Boolean(result?.batch)
       let keepUploading = false
       if (result?.duplicate && !isBatchImport) {
-        announceDuplicate(result)
+        await announceDuplicate(result)
       } else if (isBatchImport && result?.async && result?.batch_id) {
         setOpenedReceiptId('')
         setOpenedReceipt(null)
@@ -2776,9 +3013,14 @@ export default function KassaPage() {
           ? refreshedItems.some((item) => String(item?.receipt_table_id || '') === uploadedReceiptId)
           : false
 
-        if (uploadedReceiptId && receiptExistsInInbox) {
+        if (uploadedReceiptId) {
           setSelectedReceiptIds([uploadedReceiptId])
-          await openReceiptDetail(uploadedReceiptId, refreshedItems)
+          await openReceiptDetail(
+            uploadedReceiptId,
+            refreshedItems,
+            null,
+            true,
+          )
           clearTransientReceiptPreview()
         } else {
           setSelectedReceiptIds([])
@@ -3001,78 +3243,132 @@ export default function KassaPage() {
                 aria-label="Kassaboninbox met maximaal tien zichtbare bonnen"
                 data-testid="kassa-inbox-scroll-container"
               >
-              <DataTable
-                columns={inboxDataTableColumns}
-                data={isLoading ? [] : listItems}
-                getRowKey={(item) => item.receipt_table_id}
+              <Table
                 wrapperClassName="rz-kassa-inbox-table-wrapper"
                 tableClassName="rz-kassa-inbox-table rz-table--compact"
                 dataTestId="kassa-table"
-                defaultSort={{ key: 'date', direction: 'desc' }}
-                sortState={inboxSort}
-                onSortChange={setInboxSort}
-                filterState={inboxTableFilters}
-                onFilterChange={handleFilterChange}
-                emptyMessage={isLoading ? 'Bonnen laden...' : 'Er zijn nog geen bonnen in de inbox beschikbaar.'}
-                renderRow={(item) => {
-                  const selected = selectedReceiptIds.includes(item.receipt_table_id)
-                  return (
-                    <tr
-                      key={item.receipt_table_id}
-                      className={selected ? 'rz-row-selected' : ''}
-                      onClick={() => toggleSelectedReceipt(item.receipt_table_id)}
-                      onDoubleClick={() => openReceiptDetail(item.receipt_table_id)}
-                      data-testid={`kassa-row-${item.receipt_table_id}`}
-                      style={{
-                        cursor: 'pointer',
-                        boxShadow: `inset 4px 0 0 ${item.inbox_status === 'Gecontroleerd' ? '#12B76A' : item.inbox_status === 'Controle nodig' ? '#F79009' : '#B54708'}`,
-                        background: String(item.receipt_table_id) === receiptInboxFocusId ? '#ECFDF3' : undefined,
-                        outline: String(item.receipt_table_id) === receiptInboxFocusId ? '2px solid #12B76A' : undefined,
-                        outlineOffset: String(item.receipt_table_id) === receiptInboxFocusId ? '-2px' : undefined,
-                      }}
-                    >
-                      <td onClick={(event) => event.stopPropagation()}>
-                        <button
-                          type="button"
-                          data-testid={`kassa-open-${item.receipt_table_id}`}
-                          onClick={(event) => { event.stopPropagation(); openReceiptDetail(item.receipt_table_id) }}
-                          style={{ display: 'none' }}
-                          aria-hidden="true"
-                          tabIndex={-1}
-                        />
-                        <input
-                          type="checkbox"
-                          checked={selected}
-                          onChange={() => toggleSelectedReceipt(item.receipt_table_id)}
-                          aria-label={`Selecteer bon ${item.store_name || 'onbekend'} van ${formatDateTime(item.purchase_at)}`}
-                        />
-                      </td>
-                      <td>{item.store_name || 'Onbekende winkel'}</td>
-                      <td>{formatDateTime(item.purchase_at)}</td>
-                      <td className="rz-num">{formatMoney(item.total_amount, item.currency)}</td>
-                      <td className="rz-num">{item.line_count ?? 0}</td>
-                    </tr>
-                  )
+                tableStyle={{
+                  tableLayout: 'fixed',
+                  width: buildTableWidth(inboxTableWidths),
+                  minWidth: buildTableWidth(inboxTableWidths),
                 }}
-              />
+              >
+                <colgroup>
+                  <col style={{ width: `${inboxTableWidths.select}px` }} />
+                  <col style={{ width: `${inboxTableWidths.store}px` }} />
+                  <col style={{ width: `${inboxTableWidths.date}px` }} />
+                  <col style={{ width: `${inboxTableWidths.total}px` }} />
+                  <col style={{ width: `${inboxTableWidths.items}px` }} />
+                </colgroup>
+                <thead>
+                  <tr className="rz-table-header">
+                    <ResizableHeaderCell columnKey="select" widths={inboxTableWidths} onStartResize={startInboxTableResize} style={{ width: '44px' }}>
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={toggleSelectAllVisible}
+                        aria-label="Selecteer alle zichtbare bonnen"
+                      />
+                    </ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="store" widths={inboxTableWidths} onStartResize={startInboxTableResize} sortable isSorted={inboxSort.key === 'store'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Winkel</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="date" widths={inboxTableWidths} onStartResize={startInboxTableResize} sortable isSorted={inboxSort.key === 'date'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Datum</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="total" widths={inboxTableWidths} onStartResize={startInboxTableResize} className="rz-num" sortable isSorted={inboxSort.key === 'total'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Totaal</ResizableHeaderCell>
+                    <ResizableHeaderCell columnKey="items" widths={inboxTableWidths} onStartResize={startInboxTableResize} className="rz-num" sortable isSorted={inboxSort.key === 'items'} sortDirection={inboxSort.direction} onSort={(key) => setInboxSort((current) => nextSortState(current, key, { store: 'asc', date: 'desc', total: 'desc', items: 'desc' }))}>Artikelen</ResizableHeaderCell>
+                  </tr>
+                  <tr className="rz-table-filters">
+                    <th />
+                    <th>
+                      <input
+                        className="rz-input rz-inline-input"
+                        value={inboxTableFilters.store}
+                        onChange={(event) => handleFilterChange('store', event.target.value)}
+                        placeholder="Filter"
+                        aria-label="Filter op winkel"
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="rz-input rz-inline-input"
+                        value={inboxTableFilters.date}
+                        onChange={(event) => handleFilterChange('date', event.target.value)}
+                        placeholder="Filter"
+                        aria-label="Filter op datum"
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="rz-input rz-inline-input"
+                        value={inboxTableFilters.total}
+                        onChange={(event) => handleFilterChange('total', event.target.value)}
+                        placeholder="Filter"
+                        aria-label="Filter op totaal"
+                      />
+                    </th>
+                    <th>
+                      <input
+                        className="rz-input rz-inline-input"
+                        value={inboxTableFilters.items}
+                        onChange={(event) => handleFilterChange('items', event.target.value)}
+                        placeholder="Filter"
+                        aria-label="Filter op artikelen"
+                      />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {isLoading ? (
+                    <tr><td colSpan={5}>Bonnen laden...</td></tr>
+                  ) : listItems.length === 0 ? (
+                    <tr><td colSpan={5}>Er zijn nog geen bonnen in de inbox beschikbaar.</td></tr>
+                  ) : listItems.map((item) => {
+                    const receiptId = String(item.receipt_table_id || '')
+                    const selected = selectedReceiptIds.includes(receiptId)
+                    return (
+                      <tr
+                        key={receiptId}
+                        className={selected ? 'rz-row-selected' : ''}
+                        onClick={() => toggleSelectedReceipt(receiptId)}
+                        onDoubleClick={() => openReceiptDetail(receiptId)}
+                        data-testid={`kassa-row-${receiptId}`}
+                        style={{
+                          cursor: 'pointer',
+                          boxShadow: `inset 4px 0 0 ${item.inbox_status === 'Gecontroleerd' ? '#12B76A' : item.inbox_status === 'Controle nodig' ? '#F79009' : '#B54708'}`,
+                          background: receiptId === receiptInboxFocusId ? '#ECFDF3' : undefined,
+                          outline: receiptId === receiptInboxFocusId ? '2px solid #12B76A' : undefined,
+                          outlineOffset: receiptId === receiptInboxFocusId ? '-2px' : undefined,
+                        }}
+                      >
+                        <td onClick={(event) => event.stopPropagation()}>
+                          <button
+                            type="button"
+                            data-testid={`kassa-open-${receiptId}`}
+                            onClick={(event) => { event.stopPropagation(); openReceiptDetail(receiptId) }}
+                            style={{ display: 'none' }}
+                            aria-hidden="true"
+                            tabIndex={-1}
+                          />
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => toggleSelectedReceipt(receiptId)}
+                            aria-label={`Selecteer bon ${item.store_name || 'onbekend'} van ${formatDateTime(item.purchase_at)}`}
+                          />
+                        </td>
+                        <td>{item.store_name || 'Onbekende winkel'}</td>
+                        <td>{formatDateTime(item.purchase_at)}</td>
+                        <td className="rz-num">{formatMoney(item.total_amount, item.currency)}</td>
+                        <td className="rz-num">{item.line_count ?? 0}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </Table>
               </div>
 
             </div>
           </ScreenCard>
 
-          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={(updated) => {
-                setOpenedReceipt(updated)
-                setReceipts((current) => current.map((item) => {
-                  const itemId = String(item?.receipt_table_id || item?.id || '')
-                  const updatedId = String(updated?.receipt_table_id || updated?.id || '')
-                  if (!itemId || itemId !== updatedId) return item
-                  return {
-                    ...item,
-                    ...updated,
-                    receipt_table_id: item.receipt_table_id || updated.receipt_table_id || updated.id,
-                  }
-                }))
-              }} onFeedback={showKassaFeedback} /> : null}
+          {(openedReceipt || transientReceiptPreview) ? <ReceiptDetailView receipt={openedReceipt} transientPreview={openedReceipt ? null : transientReceiptPreview} canEdit={['admin','lid'].includes(currentUserDisplayRole)} onReceiptUpdated={applyReceiptUpdate} onFeedback={showKassaFeedback} /> : null}
         </div>
       )}
 
@@ -3091,5 +3387,3 @@ export default function KassaPage() {
     </AppShell>
   )
 }
-
-

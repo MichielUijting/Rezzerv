@@ -1,0 +1,39 @@
+name: Unpacking household location isolation
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate-unpacking-household-location-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer minimale backend-afhankelijkheden
+        run: |
+          python -m pip install --quiet \
+            fastapi==0.115.0 \
+            sqlalchemy==2.0.36
+
+      - name: Compileer gewijzigde modules
+        run: |
+          python -m py_compile \
+            backend/app/__init__.py \
+            backend/app/services/unpacking_household_location_patch.py \
+            backend/app/testing/unpacking_household_location_isolation_contract.py
+
+      - name: Voer A-B-Uitpakken-locatiecontract uit
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m app.testing.unpacking_household_location_isolation_contract | tee unpacking-household-location-isolation.log
+          grep -F 'UNPACKING_HOUSEHOLD_LOCATION_ISOLATION_GREEN' unpacking-household-location-isolation.log

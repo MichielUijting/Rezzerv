@@ -6,8 +6,12 @@ from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import text
+from app.services.external_article_ui_projection import (
+    project_central_link_truth_rows,
+)
 
 from app.db import engine
+from app.services.global_product_service import get_or_create_global_product
 from app.services.external_database_matchers import match_retailer_receipt_line
 
 PROTECTED_CANDIDATE_STATUSES = {
@@ -463,8 +467,12 @@ def _build_receipt_line_placeholder(row: dict[str, Any]) -> dict[str, Any]:
         receipt_line_id=receipt_line_id or None,
     )
 
+    receipt_item_id = f"receipt-line:{receipt_line_id}" if receipt_line_id else ""
     return {
-        "id": f"{context_key}:receipt-item",
+        "id": receipt_item_id,
+        "receipt_item_id": receipt_item_id,
+        "receipt_item_type": "receipt_line",
+        "receipt_item_source_id": receipt_line_id or None,
         "receipt_line_id": receipt_line_id or None,
         "purchase_import_line_id": str(row.get("purchase_import_line_id") or "").strip() or None,
         "context_key": context_key,
@@ -761,8 +769,12 @@ def _m2c2h5_purchase_import_placeholder(row: dict[str, Any]) -> dict[str, Any]:
     )
     global_product_id = str(row.get("global_product_id") or "").strip()
 
+    receipt_item_id = f"purchase-import-line:{purchase_import_line_id}" if purchase_import_line_id else ""
     return {
-        "id": f"{context_key}:receipt-item",
+        "id": receipt_item_id,
+        "receipt_item_id": receipt_item_id,
+        "receipt_item_type": "purchase_import_line",
+        "receipt_item_source_id": purchase_import_line_id or None,
         "receipt_line_id": None,
         "purchase_import_line_id": purchase_import_line_id or None,
         "context_key": context_key,
@@ -856,6 +868,64 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
     return placeholders
 
 
+def _m2c2l_enrich_linked_receipt_items(
+    conn,
+    placeholders: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    global_product_ids = sorted({
+        str(item.get("global_product_id") or "").strip()
+        for item in placeholders
+        if str(item.get("global_product_id") or "").strip()
+    })
+    if not global_product_ids:
+        return placeholders
+
+    params: dict[str, Any] = {}
+    bind_names: list[str] = []
+    for index, global_product_id in enumerate(global_product_ids):
+        key = f"global_product_id_{index}"
+        params[key] = global_product_id
+        bind_names.append(f":{key}")
+
+    rows = conn.execute(
+        text(
+            f"SELECT gp.id AS global_product_id, gp.name AS linked_candidate_name, "
+            f"gp.primary_gtin AS linked_gtin, pgm.confidence AS linked_score, "
+            f"pig.inventory_group_key AS linked_product_type_id, pig.display_name AS linked_product_type, pgm.confirmed_by_user AS confirmed_by_user, "
+            f"pgm.updated_at AS membership_updated_at "
+            f"FROM global_products gp "
+            f"LEFT JOIN product_group_memberships pgm ON pgm.global_product_id = gp.id "
+            f"AND COALESCE(pgm.active, 1) = 1 "
+            f"LEFT JOIN product_inventory_groups pig ON pig.inventory_group_key = pgm.inventory_group_key "
+            f"WHERE gp.id IN ({', '.join(bind_names)}) "
+            f"ORDER BY gp.id, COALESCE(pgm.confirmed_by_user, 0) DESC, "
+            f"COALESCE(pgm.updated_at, '') DESC"
+        ),
+        params,
+    ).mappings().all()
+
+    linked_by_product: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        global_product_id = str(row.get("global_product_id") or "").strip()
+        if global_product_id and global_product_id not in linked_by_product:
+            linked_by_product[global_product_id] = dict(row)
+
+    enriched: list[dict[str, Any]] = []
+    for placeholder in placeholders:
+        next_placeholder = dict(placeholder)
+        global_product_id = str(next_placeholder.get("global_product_id") or "").strip()
+        linked = linked_by_product.get(global_product_id)
+        if linked:
+            next_placeholder["linked_candidate_name"] = str(linked.get("linked_candidate_name") or "").strip()
+            next_placeholder["linked_gtin"] = str(linked.get("linked_gtin") or "").strip()
+            next_placeholder["linked_product_type_id"] = str(linked.get("linked_product_type_id") or "").strip()
+            next_placeholder["linked_product_type"] = str(linked.get("linked_product_type") or "").strip()
+            next_placeholder["linked_score"] = linked.get("linked_score")
+        enriched.append(next_placeholder)
+
+    return enriched
+
+
 def list_external_receipt_items(limit: int = 500) -> dict[str, Any]:
     ensure_external_product_candidates_schema()
     normalized_limit = max(1, min(int(limit or 500), 500))
@@ -882,6 +952,7 @@ def list_external_receipt_items(limit: int = 500) -> dict[str, Any]:
         }
         placeholders = _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys, normalized_limit)
         placeholders = _m2c2i_fix7a3_apply_catalog_status_to_placeholders(placeholders, candidates)
+        placeholders = _m2c2l_enrich_linked_receipt_items(conn, placeholders)
 
     # Bovenste tabel is bonartikelgedreven: purchase_import_lines-placeholders zijn leidend.
     # Candidates blijven detailregels onder dezelfde bonartikelcontext.
@@ -1026,28 +1097,17 @@ def _m2c2i_fix7b_create_or_reuse_catalog_product_for_candidate(conn, candidate: 
             global_product_id = str(existing.get("global_product_id") or "").strip()
 
     if not global_product_id:
-        global_product_id = str(uuid.uuid4())
-        conn.execute(
-            text(
-                """
-                INSERT INTO global_products (
-                    id, primary_gtin, name, brand, variant, category,
-                    size_value, size_unit, source, status, created_at, updated_at
-                )
-                VALUES (
-                    :id, NULL, :name, :brand, :variant, :category,
-                    NULL, NULL, :source, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                )
-                """
-            ),
-            {
-                "id": global_product_id,
-                "name": _m2c2i_fix7b_best_candidate_name(candidate),
-                "brand": _m2c2i_fix7b_best_candidate_brand(candidate),
-                "variant": str(candidate.get("variant") or "").strip() or None,
-                "category": str(candidate.get("candidate_category") or candidate.get("variant") or "").strip() or None,
-                "source": str(candidate.get("candidate_source_name") or candidate.get("source_name") or "external_product_candidate").strip(),
-            },
+        global_product_id = get_or_create_global_product(
+            conn,
+            gtin=None,
+            name=_m2c2i_fix7b_best_candidate_name(candidate),
+            brand=_m2c2i_fix7b_best_candidate_brand(candidate),
+            variant=str(candidate.get("variant") or "").strip() or None,
+            category=str(candidate.get("candidate_category") or "").strip() or None,
+            size_value=None,
+            size_unit=None,
+            source=str(candidate.get("candidate_source_name") or candidate.get("source_name") or "external_product_candidate").strip(),
+            status="active",
         )
 
     primary_identity = _m2c2i_fix7b_identity_value(candidate)
@@ -1669,15 +1729,19 @@ def list_external_receipt_items(limit: int = 500):
             dict(row) if hasattr(row, "items") else row
             for row in rows
         ])
-        next_payload["items"] = _m2c2i_fix7b_dedupe_top_receipt_items(enriched_rows)
+        with engine.connect() as conn:
+            centrally_projected_rows = project_central_link_truth_rows(conn, enriched_rows)
+        next_payload["items"] = _m2c2i_fix7b_dedupe_top_receipt_items(centrally_projected_rows)
         next_payload["total"] = len(next_payload["items"])
         return next_payload
 
     rows = payload or []
-    return _m2c2i_fix2_apply_status_fields([
+    enriched_rows = _m2c2i_fix2_apply_status_fields([
         dict(row) if hasattr(row, "items") else row
         for row in rows
     ])
+    with engine.connect() as conn:
+        return project_central_link_truth_rows(conn, enriched_rows)
 
 
 # M2C2i-2a-fix4 promote selected external candidate
@@ -1781,4 +1845,130 @@ def promote_external_product_candidate(candidate_id: str, force_overwrite: bool 
         "requires_overwrite": False,
         "candidate_id": normalized_candidate_id,
         "context_key": context_key,
+    }
+
+
+
+def promote_external_product_candidate_with_product_type(
+    candidate_id: str,
+    *,
+    product_type_assignment: dict[str, Any],
+    force_overwrite: bool = False,
+) -> dict[str, Any]:
+    """Koppel kandidaat en Producttype atomair, zonder voorraadmutatie."""
+    from app.services.product_inventory_group_store import (
+        create_or_get_product_type_with_connection,
+        ensure_product_inventory_group_schema,
+        link_global_product_to_inventory_group_with_connection,
+    )
+
+    normalized_candidate_id = str(candidate_id or "").strip()
+    if not normalized_candidate_id:
+        return {"ok": False, "promoted": False, "reason": "missing_candidate_id"}
+    if not isinstance(product_type_assignment, dict):
+        return {"ok": False, "promoted": False, "reason": "product_type_assignment_required"}
+
+    ensure_product_inventory_group_schema()
+    with engine.begin() as conn:
+        candidate = conn.execute(text("""
+            SELECT * FROM external_product_candidates
+            WHERE id = :candidate_id
+            LIMIT 1
+        """), {"candidate_id": normalized_candidate_id}).mappings().first()
+        if not candidate:
+            return {"ok": False, "promoted": False, "reason": "candidate_not_found"}
+
+        candidate_dict = dict(candidate)
+        context_key = str(candidate_dict.get("context_key") or "").strip()
+        if not context_key:
+            return {"ok": False, "promoted": False, "reason": "missing_context_key"}
+
+        linked_rows = conn.execute(text("""
+            SELECT id
+            FROM external_product_candidates
+            WHERE context_key = :context_key
+              AND id <> :candidate_id
+              AND (
+                candidate_status IN ('linked_to_catalog', 'user_confirmed')
+                OR status IN ('linked_to_catalog', 'user_confirmed')
+                OR is_user_confirmed = 1
+                OR is_external_database_override = 1
+              )
+        """), {
+            "context_key": context_key,
+            "candidate_id": normalized_candidate_id,
+        }).mappings().all()
+        if linked_rows and not force_overwrite:
+            return {
+                "ok": True,
+                "promoted": False,
+                "requires_overwrite": True,
+                "existing_link_count": len(linked_rows),
+                "candidate_id": normalized_candidate_id,
+                "context_key": context_key,
+            }
+
+        create_payload = product_type_assignment.get("create")
+        product_type_id = str(product_type_assignment.get("product_type_id") or "").strip()
+        if isinstance(create_payload, dict):
+            type_result = create_or_get_product_type_with_connection(
+                conn,
+                inventory_group_key=str(create_payload.get("inventory_group_key") or "").strip() or None,
+                display_name=str(create_payload.get("canonical_name") or create_payload.get("display_name") or "").strip(),
+                default_base_unit=str(create_payload.get("base_unit") or create_payload.get("default_base_unit") or "stuk").strip(),
+                aggregation_mode=str(create_payload.get("aggregation_mode") or "count").strip(),
+                source=str(product_type_assignment.get("mapping_source") or "user_created_during_link").strip(),
+            )
+            if not type_result.get("ok"):
+                return {"ok": False, "promoted": False, "reason": "invalid_product_type", "error": type_result.get("error")}
+            product_type_id = str((type_result.get("product_type") or {}).get("inventory_group_key") or "").strip()
+        if not product_type_id:
+            return {"ok": False, "promoted": False, "reason": "product_type_required"}
+
+        global_product_id = _m2c2i_fix7b_create_or_reuse_catalog_product_for_candidate(conn, candidate_dict)
+        if not global_product_id:
+            raise RuntimeError("Universeel artikel kon niet worden aangemaakt of hergebruikt")
+
+        membership = link_global_product_to_inventory_group_with_connection(
+            conn,
+            global_product_id=global_product_id,
+            inventory_group_key=product_type_id,
+            comparison_group_key=product_type_id,
+            confidence=float(product_type_assignment.get("confidence_score") or 1.0),
+            source=str(product_type_assignment.get("mapping_source") or "user_confirmed_external_suggestion").strip(),
+            confirmed_by_user=True,
+        )
+        if not membership.get("ok"):
+            raise ValueError(str(membership.get("error") or "Producttype kon niet worden gekoppeld"))
+
+        conn.execute(text("""
+            UPDATE external_product_candidates
+            SET candidate_status = 'candidate', status = 'candidate',
+                is_user_confirmed = 0, is_external_database_override = 0,
+                global_product_id = NULL, updated_at = CURRENT_TIMESTAMP
+            WHERE context_key = :context_key AND id <> :candidate_id
+        """), {"context_key": context_key, "candidate_id": normalized_candidate_id})
+        conn.execute(text("""
+            UPDATE external_product_candidates
+            SET candidate_status = 'linked_to_catalog', status = 'linked_to_catalog',
+                global_product_id = :global_product_id,
+                is_user_confirmed = 1, is_external_database_override = 0,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :candidate_id
+        """), {"candidate_id": normalized_candidate_id, "global_product_id": global_product_id})
+
+    return {
+        "ok": True,
+        "promoted": True,
+        "requires_overwrite": False,
+        "candidate_id": normalized_candidate_id,
+        "context_key": context_key,
+        "global_product_id": global_product_id,
+        "product_type": {
+            "inventory_group_key": product_type_id,
+            "confirmed_by_user": True,
+        },
+        "membership_id": membership.get("membership_id"),
+        "creates_inventory_event": False,
+        "mutates_inventory": False,
     }

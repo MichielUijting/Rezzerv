@@ -9,6 +9,7 @@ import KassaPage from '../../features/kassa/KassaPage.jsx'
 import StoreBatchDetailPage from '../../features/purchaseImport/StoreBatchDetailPage'
 import SettingsPage from '../../features/settings/SettingsPage'
 import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFieldsPage'
+import SettingsArticleGroupsPage from '../../features/settings/SettingsArticleGroupsPage'
 import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHouseholdAutomationPage'
 import SettingsAlmostOutPage from '../../features/settings/SettingsAlmostOutPage'
 import SettingsStoreImportPage from '../../features/settings/SettingsStoreImportPage'
@@ -21,6 +22,10 @@ import ReceiptReviewPreviewPage from '../../pages/ReceiptReviewPreviewPage.jsx'
 import IncidentalPurchasePage from '../../features/purchaseImport/IncidentalPurchasePage.jsx'
 import AlmostOutPage from '../../features/almostOut/AlmostOutPage.jsx'
 import ExternalDatabasesPage from '../../features/externalDatabases/ExternalDatabasesPage.jsx'
+import ProductGroupsPage from '../../features/productGroups/ProductGroupsPage.jsx'
+import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.jsx'
+import CatalogPage from '../../features/catalog/CatalogPage.jsx'
+import CatalogDetailPage from '../../features/catalog/CatalogDetailPage.jsx'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import SettingsGuard from './SettingsGuard'
@@ -67,6 +72,8 @@ const router = createBrowserRouter([
   { path: '/home', element: <Protected><HomePage /></Protected> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
+  { path: '/spaartegoeden', element: <Protected><LoyaltyStampsPage /></Protected> },
+  { path: '/productgroepen', element: <Protected><ProductGroupsPage /></Protected> },
   { path: '/voorraad/incidentele-aankoop', element: <Protected><IncidentalPurchasePage /></Protected> },
   { path: '/dev/scanner-lab', element: <Protected><ScannerLabPage /></Protected> },
   { path: '/dev/receipt-review-preview', element: <Protected><ReceiptReviewPreviewPage /></Protected> },
@@ -74,12 +81,15 @@ const router = createBrowserRouter([
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
+  { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
+  { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPage /></ProtectedAdmin> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><StoreBatchDetailPage /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <ProtectedSettings allowViewer={true}><SettingsPage /></ProtectedSettings> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettings allowViewer={true}><SettingsArticleFieldsPage /></ProtectedSettings> },
+  { path: '/instellingen/artikelgroepen', element: <ProtectedSettings allowViewer={false}><SettingsArticleGroupsPage /></ProtectedSettings> },
   { path: '/instellingen/privacy-datadeling', element: <ProtectedSettings allowViewer={true}><SettingsPrivacyDataSharingPage /></ProtectedSettings> },
   { path: '/instellingen/huishoudautomatisering', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdAutomationPage /></ProtectedSettings> },
   { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettings allowViewer={false}><SettingsAlmostOutPage /></ProtectedSettings> },

@@ -1,0 +1,43 @@
+name: M2C2n product route audit
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  audit-product-routes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Controleer Docker Compose
+        run: docker compose version
+
+      - name: Bouw backend-image
+        run: docker compose build backend
+
+      - name: Genereer productroute-audit
+        run: |
+          mkdir -p product-route-audit-output
+          docker compose run --rm --no-deps \
+            -v "$PWD/product-route-audit-output:/tmp/m2c2n-product-route-audit" \
+            backend \
+            python -m app.testing.product_route_audit \
+              --output /tmp/m2c2n-product-route-audit/M2C2N-PRODUCT-ROUTE-AUDIT.json \
+            | tee product-route-audit.log
+          grep -F 'M2C2N_PRODUCT_ROUTE_AUDIT_GREEN' product-route-audit.log
+          test -s product-route-audit-output/M2C2N-PRODUCT-ROUTE-AUDIT.json
+
+      - name: Publiceer productroute-audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m2c2n-product-route-audit
+          path: |
+            product-route-audit-output/M2C2N-PRODUCT-ROUTE-AUDIT.json
+            product-route-audit.log
+          if-no-files-found: error
+          retention-days: 30

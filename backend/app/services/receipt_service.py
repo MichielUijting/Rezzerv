@@ -17,6 +17,9 @@ from app.receipt_ingestion.profiles.ah.corrections import (
     _ah_remove_duplicate_receipt_discount,
     _ah_fix_total_from_net_sum,
     _ah_filter_ocr_conflict_footer_noise_lines,
+    _ah_filter_savings_discount_block_lines,
+    _ah_apply_visible_savings_total_discount,
+    _ah_repair_image_balance_from_reliable_lines,
 )
 from app.receipt_ingestion.profiles.ah.reconstruction import (
     _r9_38e2_should_use_ah_paddle_reconstruction,
@@ -86,6 +89,7 @@ from app.receipt_ingestion.service_parts.source_detection import (
     sanitize_filename,
     sha256_hex,
 )
+from app.receipt_ingestion.service_parts.plus_bbox_structured_result import build_plus_bbox_structured_result
 from app.receipt_ingestion.service_parts.receipt_result_helpers import (
     ReceiptParseResult,
     _choose_better_receipt_result,
@@ -101,8 +105,10 @@ from app.receipt_ingestion.service_parts.text_extraction import (
     _ocr_pdf_text_with_ocrmypdf,
     _preprocess_pdf_text,
 )
+from app.services.receipt_status_baseline_service import STATUS_LABELS
 from app.receipt_ingestion.service_parts.image_ocr_flow import (
     _ocr_image_text_with_paddle,
+    get_last_paddle_bbox_payload,
     _ocr_image_text_with_tesseract,
     warm_receipt_ocr_runtime,
 )
@@ -196,9 +202,30 @@ IGNORED_LINE_MARKERS = {
     'kassa', 'kassabon', 'ticket', 'bonnr', 'filiaal', 'adres', 'datum', 'tijd', 'transactie'
 }
 
+
 LOGGER = logging.getLogger(__name__)
 _PADDLE_OCR_INSTANCE = None
 
+
+def _looks_like_fuzzy_total_label(value: str | None) -> bool:
+    """Recognize OCR variants of receipt total labels.
+
+    Generic across store profiles. This must not depend on filenames, receipt ids,
+    hashes, article names, or store-specific receipt examples.
+    """
+    candidate = re.sub(r'\s+', ' ', str(value or '')).strip(' .:-')
+    if not candidate:
+        return False
+    first_token = candidate.split()[0].lower()
+    normalized = (
+        first_token
+        .replace('0', 'o')
+        .replace('1', 'l')
+        .replace('i', 'l')
+        .replace('|', 'l')
+        .replace('!', 'l')
+    )
+    return normalized in {'totaal', 'totall', 'totaai'}
 
 
 def _column_exists(conn, table_name: str, column_name: str) -> bool:
@@ -243,10 +270,14 @@ def find_existing_receipt_by_fingerprint(conn, household_id: str, fingerprint: s
             SELECT
                 rt.id AS receipt_table_id,
                 rr.id AS raw_receipt_id,
+                rr.original_filename,
+                rr.sha256_hash,
                 rt.store_name,
+                rt.store_branch,
                 rt.purchase_at,
                 rt.total_amount,
-                rt.parse_status
+                rt.parse_status,
+                rt.line_count
             FROM receipt_tables rt
             JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
             WHERE {' AND '.join(where_parts)}
@@ -379,6 +410,10 @@ def _extract_savings_action_lines(lines: list[str], store_name: str | None = Non
         r'^(?P<prefix>[^\d-]*)?(?P<qty>\d+(?:[\.,]\d+)?)\s+(?P<label>.+?)\s+(?P<amount>-?\d{1,6}(?:[\.,]\d{2}))(?:\s+(?:EUR|[A-Z]{1,3}))?$',
         re.IGNORECASE,
     )
+    amount_only_re = re.compile(
+        r'^(?P<label>.*?(?:koopzegels?|pluspunten|spaarzegels?|espaarzegels?|spaaracties?).*?)\s+(?P<amount>-?\d{1,6}(?:[\.,]\d{2}))(?:\s+(?:EUR|[A-Z]{1,3}))?$',
+        re.IGNORECASE,
+    )
     trigger_tokens = (
         'koopzegel', 'koopzegels', 'pluspunten',
         'spaarzegel', 'spaarzegels',
@@ -397,13 +432,22 @@ def _extract_savings_action_lines(lines: list[str], store_name: str | None = Non
         if any(token in lowered for token in skip_tokens):
             continue
         match = qty_first_re.match(normalized)
-        if not match:
-            continue
-        quantity = _parse_quantity(match.group('qty'))
-        line_total = _parse_decimal(match.group('amount'))
+        if match:
+            qty_raw = match.group('qty')
+            amount_raw = match.group('amount')
+            label_value = _clean_receipt_label(match.group('label'))
+            quantity = _parse_quantity(qty_raw)
+        else:
+            amount_match = amount_only_re.match(normalized)
+            if not amount_match:
+                continue
+            qty_raw = '1'
+            amount_raw = amount_match.group('amount')
+            label_value = _clean_receipt_label(amount_match.group('label'))
+            quantity = _parse_quantity(qty_raw)
+        line_total = _parse_decimal(amount_raw)
         if quantity is None or line_total is None or quantity <= 0 or line_total <= 0:
             continue
-        label_value = _clean_receipt_label(match.group('label'))
         if not label_value:
             continue
 
@@ -411,9 +455,9 @@ def _extract_savings_action_lines(lines: list[str], store_name: str | None = Non
         append_product_candidate(
             extracted,
             label=label_value,
-            qty_raw=match.group('qty'),
+            qty_raw=qty_raw,
             amount1_raw=str(unit_price),
-            amount2_raw=match.group('amount'),
+            amount2_raw=amount_raw,
             source_index=source_index,
             raw_line=raw_line,
             normalized_line=normalized,
@@ -532,7 +576,7 @@ def _should_skip_receipt_line(line: str, *, store_name: str | None = None, filen
         return True
     if lowered.startswith(('bonus ', 'bbox ', 'korting ', 'retour ', 'refund ')):
         return True
-    if 'totaal' in lowered:
+    if 'totaal' in lowered or _looks_like_fuzzy_total_label(lowered):
         return True
     if re.match(r'^(?:\d+%|%)\b', lowered):
         return True
@@ -656,8 +700,68 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
         r'(?:\s+(?P<amount2>-?\d{1,6}(?:[\.,]\d{2})))?(?:\s+(?:EUR|[A-Z]{1,3}))?$',
         re.IGNORECASE,
     )
+    amount_first_tail_re = re.compile(
+        r'^(?P<amount>-?(?:\d{1,6}|[QOqOo])[\.,]\s?\d{2})\s*(?P<vat>[A-Z8]{1,3})?\s+(?P<tail>(?=.*[A-Za-z]).+)$',
+        re.IGNORECASE,
+    )
+    amount_first_weight_re = re.compile(
+        r'^(?P<amount>-?(?:\d{1,6}|[QOqOo])[\.,]\s?[\dZSs]{2})\s*(?P<vat>[A-Z8]{1,3})?\s*'
+        r'(?P<qty>\d+(?:[\.,]\d+)?)\s*kg\s*x\s*(?P<unit_price>\d{1,6}(?:[\.,]\d{2}))',
+        re.IGNORECASE,
+    )
+
+    loose_weight_detail_re = re.compile(
+        r'^(?P<qty>\d+(?:[\.,]\d+)?)\s*kg\s*x\s*(?P<unit_price>\d{1,6}(?:[\.,]\d{2}))',
+        re.IGNORECASE,
+    )
+
     pending_label: str | None = None
     pending_line_index: int | None = None
+
+    def clean_tail_label(value: str | None) -> str | None:
+        tail = re.sub(r'\s+', ' ', str(value or '')).strip(' .:-')
+        tail = re.sub(r'^(?:[A-Z]{1,3}|8)\s+', '', tail, flags=re.IGNORECASE).strip(' .:-')
+        tail = re.sub(r'\s+(?:[A-Z]{1,3}|8)$', '', tail, flags=re.IGNORECASE).strip(' .:-')
+        if not tail or not _contains_letter(tail):
+            return None
+        if _looks_like_non_product_receipt_label(tail):
+            return None
+        return tail
+
+    def clean_ocr_amount(value: str | None) -> str | None:
+        token = re.sub(r'\s+', '', str(value or '').strip())
+        if not token:
+            return None
+        token = token.replace('−', '-')
+        token = re.sub(r'^[QOqOo](?=[\.,])', '0', token)
+        token = token.replace('Z', '7').replace('z', '7')
+        token = token.replace('S', '5').replace('s', '5')
+        token = re.sub(r'[^0-9,\.\-]', '', token)
+        return token
+
+
+    def split_pending_label_amount(value: str | None) -> tuple[str | None, str | None]:
+        candidate = re.sub(r'\s+', ' ', str(value or '')).strip()
+        if not candidate:
+            return None, None
+
+        # Generic OCR case:
+        # "<label> Q,5ZBL..." / "<label> 0,57B..." where the amount belongs
+        # to the previous line total and trailing VAT/noise got glued to label.
+        match = re.match(
+            r'^(?P<label>.*?[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9 .&''’/-]*?)\s+'
+            r'(?P<amount>[QOqOo0-9][\.,]\s?[0-9ZSsz]{2})(?P<tail>[A-Za-z8]{1,8}.*)?$',
+            candidate,
+            flags=re.IGNORECASE,
+        )
+        if not match:
+            return candidate, None
+
+        label = clean_tail_label(match.group('label')) or match.group('label').strip(' .:-')
+        amount = clean_ocr_amount(match.group('amount'))
+        if not label or not amount:
+            return candidate, None
+        return label, amount
 
     def append_line(label: str, qty_raw: str | None, amount1_raw: str | None, amount2_raw: str | None, *, source_index: int) -> int | None:
         return append_product_candidate(
@@ -712,6 +816,73 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
         normalized = re.sub(r'(?<=\d)/(?!/)(?=\d{2}\b)', ',', normalized)
         normalized = re.sub(r'^[^A-Za-z0-9]+', '', normalized).strip()
         normalized = re.sub(r'[^A-Za-z0-9]+$', '', normalized).strip()
+        normalized = re.sub(r'(?P<prefix>-?(?:\d{1,6}|[QOqOo])[\.,])\s+(?=\d{2}\b)', r'\g<prefix>', normalized)
+        normalized = re.sub(r'(?<=\d[\.,]\d{2})(?=[A-Z]{1,3}\b)', ' ', normalized)
+
+        label_qty_x_price_total_match = re.match(
+            r'^(?P<label>\D.*?\S)\s+'
+            r'(?P<qty>\d+(?:[\.,]\d+)?)\s*x\s*'
+            r'(?P<amount1>\d{1,6}(?:[\.,]\d{2}))\s+'
+            r'(?P<amount2>\d{1,6}(?:[\.,]\d{2}))\s*(?:[A-Z]{1,3})?$',
+            normalized,
+            flags=re.IGNORECASE,
+        )
+        if label_qty_x_price_total_match:
+            append_line(
+                label_qty_x_price_total_match.group('label'),
+                label_qty_x_price_total_match.group('qty'),
+                label_qty_x_price_total_match.group('amount1'),
+                label_qty_x_price_total_match.group('amount2'),
+                source_index=source_index,
+            )
+            pending_label = None
+            pending_line_index = None
+            continue
+
+        loose_weight_detail_match = loose_weight_detail_re.match(normalized)
+        if pending_label and loose_weight_detail_match:
+            pending_clean_label, pending_amount = split_pending_label_amount(pending_label)
+            if pending_amount:
+                append_line(
+                    pending_clean_label or pending_label,
+                    f"{loose_weight_detail_match.group('qty')} kg",
+                    loose_weight_detail_match.group('unit_price'),
+                    pending_amount,
+                    source_index=source_index,
+                )
+                pending_label = None
+                pending_line_index = None
+                continue
+
+        amount_first_weight_match = amount_first_weight_re.match(normalized)
+        if pending_label and amount_first_weight_match:
+            append_line(
+                pending_label,
+                f"{amount_first_weight_match.group('qty')} kg",
+                amount_first_weight_match.group('unit_price'),
+                clean_ocr_amount(amount_first_weight_match.group('amount')),
+                source_index=source_index,
+            )
+            pending_label = None
+            pending_line_index = None
+            continue
+
+        amount_first_tail_match = amount_first_tail_re.match(normalized)
+        if amount_first_tail_match:
+            amount_raw = clean_ocr_amount(amount_first_tail_match.group('amount'))
+            tail_label = clean_tail_label(amount_first_tail_match.group('tail'))
+            if pending_label and amount_raw:
+                append_line(
+                    pending_label,
+                    None,
+                    amount_raw,
+                    None,
+                    source_index=source_index,
+                )
+            pending_label = tail_label
+            pending_line_index = None
+            continue
+
         classification = _classify_receipt_text_line(
             normalized,
             store_name=store_name,
@@ -732,7 +903,14 @@ def _extract_receipt_lines(lines: list[str], *, store_name: str | None = None, f
             pending_label = None
             continue
         if classification == 'amount_detail' and detail_match and pending_label:
-            append_line(pending_label, detail_match.group('qty'), detail_match.group('amount1'), detail_match.group('amount2'), source_index=source_index)
+            pending_clean_label, pending_amount = split_pending_label_amount(pending_label)
+            append_line(
+                pending_clean_label or pending_label,
+                detail_match.group('qty'),
+                detail_match.group('amount1'),
+                pending_amount or detail_match.group('amount2'),
+                source_index=source_index,
+            )
             pending_label = None
             pending_line_index = None
             continue
@@ -1091,8 +1269,20 @@ def _parse_result_from_text_lines(
     totals_match = _totals_match_receipt_lines(total_amount, lines, discount_total)
     zero_discount_case = _discount_or_free_total_zero_case(total_amount, lines, discount_total)
 
+    is_plus_store = str(store_name or '').strip().lower() == 'plus'
+    balanced_plus_receipt = (
+        is_plus_store
+        and total_amount is not None
+        and bool(lines)
+        and totals_match
+        and bool(store_name)
+    )
+
     if lines:
-        if total_amount is not None and totals_match and len(lines) >= 2 and (store_name or purchase_at):
+        if balanced_plus_receipt:
+            confidence = rich_confidence if explicit_total_found else partial_confidence
+            parse_status = 'parsed' if explicit_total_found else 'partial'
+        elif total_amount is not None and totals_match and len(lines) >= 2 and (store_name or purchase_at):
             confidence = rich_confidence if (explicit_total_found and store_name) else partial_confidence
             parse_status = 'parsed' if explicit_total_found and (store_name or purchase_at) else 'partial'
         elif total_amount is not None and zero_discount_case and (store_name or purchase_at):
@@ -1108,7 +1298,7 @@ def _parse_result_from_text_lines(
         confidence = review_confidence
         parse_status = 'review_needed'
 
-    if suspicious_single_line or suspicious_filename_signal or not purchase_at:
+    if suspicious_filename_signal or ((suspicious_single_line or not purchase_at) and not balanced_plus_receipt):
         confidence = min(confidence, review_confidence)
         parse_status = 'review_needed'
 
@@ -1252,6 +1442,23 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
             ocr_filename = filename
 
         paddle_lines, paddle_confidence = _ocr_image_text_with_paddle(ocr_file_bytes, ocr_filename)
+        # PLUS-01L-c guarded structured result injection:
+        # If PLUS bbox readiness is exact, bypass weak text-line parsing and return
+        # a structured ReceiptParseResult. Non-ready receipts remain on the existing path.
+        plus_bbox_payload = get_last_paddle_bbox_payload(ocr_filename) or {}
+        plus_structured_result = build_plus_bbox_structured_result(
+            filename=ocr_filename,
+            runtime_lines=paddle_lines or [],
+            texts=plus_bbox_payload.get('texts') or [],
+            boxes=plus_bbox_payload.get('boxes') or [],
+            confidence_score=paddle_confidence,
+            current_receipt_only=True,
+            excludes_deleted=True,
+            excludes_archived=True,
+        )
+        if plus_structured_result is not None:
+            return plus_structured_result
+
         tesseract_lines, tesseract_confidence = _ocr_image_text_with_tesseract(ocr_file_bytes, ocr_filename)
 
         paddle_result = _parse_result_from_text_lines(
@@ -1437,6 +1644,10 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
         )
 
         image_result = _choose_better_receipt_result(paddle_result, tesseract_result)
+        ah_ocr_context = bool(
+            ah_ocr_context
+            or str(getattr(image_result, 'store_name', '') or '').strip().lower() == 'albert heijn'
+        )
         if ah_paddle_merged_product_line and tesseract_result.is_receipt:
             image_result = tesseract_result
         if plus_safe_rotation_fallback_lines:
@@ -1448,6 +1659,23 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
 
         if ocr_file_bytes != file_bytes:
             original_paddle_lines, original_paddle_confidence = _ocr_image_text_with_paddle(file_bytes, filename)
+            # PLUS-01L-c2 guarded structured result injection on active image branch:
+            # The primary image path uses original_paddle_lines. If PLUS bbox readiness
+            # is exact, return the structured result before generic text parsing.
+            plus_bbox_payload = get_last_paddle_bbox_payload(filename) or {}
+            plus_structured_result = build_plus_bbox_structured_result(
+                filename=filename,
+                runtime_lines=original_paddle_lines or [],
+                texts=plus_bbox_payload.get('texts') or [],
+                boxes=plus_bbox_payload.get('boxes') or [],
+                confidence_score=original_paddle_confidence,
+                current_receipt_only=True,
+                excludes_deleted=True,
+                excludes_archived=True,
+            )
+            if plus_structured_result is not None:
+                return plus_structured_result
+
             original_tesseract_lines, original_tesseract_confidence = _ocr_image_text_with_tesseract(file_bytes, filename)
             original_paddle_result = _parse_result_from_text_lines(
                 original_paddle_lines,
@@ -1503,6 +1731,8 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                 ah_paddle_refinement_diagnostics = None
                 ah_paddle_refinement_b_diagnostics = None
                 ah_paddle_refinement_c_diagnostics = None
+                ah_savings_discount_block_diagnostics = None
+                ah_visible_savings_discount_diagnostics = None
                 if _r9_38e2_should_use_ah_paddle_reconstruction(
                     store_name=image_result.store_name,
                     paddle_lines=paddle_lines or [],
@@ -1537,6 +1767,33 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                     store_name=image_result.store_name,
                 )
 
+                image_result.lines, ah_savings_discount_block_diagnostics = _ah_filter_savings_discount_block_lines(
+                    text_lines=chosen_lines or paddle_lines or tesseract_lines or [],
+                    lines=image_result.lines or [],
+                    store_name=image_result.store_name,
+                )
+                if ah_savings_discount_block_diagnostics:
+                    diagnostics.update(ah_savings_discount_block_diagnostics)
+
+                image_result.discount_total, ah_visible_savings_discount_diagnostics = _ah_apply_visible_savings_total_discount(
+                    text_lines=chosen_lines or paddle_lines or tesseract_lines or [],
+                    lines=image_result.lines or [],
+                    discount_total=image_result.discount_total,
+                    store_name=image_result.store_name,
+                )
+                if ah_visible_savings_discount_diagnostics:
+                    diagnostics.update(ah_visible_savings_discount_diagnostics)
+
+                image_result.lines, image_result.discount_total, ah_balance_repair_diagnostics = _ah_repair_image_balance_from_reliable_lines(
+                    reliable_lines=paddle_lines or [],
+                    lines=image_result.lines or [],
+                    store_name=image_result.store_name,
+                    total_amount=image_result.total_amount,
+                    discount_total=image_result.discount_total,
+                )
+                if ah_balance_repair_diagnostics:
+                    diagnostics.update(ah_balance_repair_diagnostics)
+
                 image_result.total_amount = _ah_fix_total_from_net_sum(
                     text_lines=ah_source_lines_for_total,
                     lines=image_result.lines or [],
@@ -1553,6 +1810,9 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                     total_amount=image_result.total_amount,
                 )
 
+                # Final guard after AH/image-specific repairs: supporting detail rows
+                # such as 'Prijs per kg' must not re-enter persisted product lines.
+                image_result.lines = _filter_non_product_receipt_lines(image_result.lines or [])
                 image_result.parse_status = determine_final_parse_status(image_result)
 
                 diagnostics['ah_ocr_arbitrage'] = {
@@ -1568,6 +1828,8 @@ def parse_receipt_content(file_bytes: bytes, filename: str, mime_type: str) -> R
                     'ah_total_before_final_repair': float(ah_total_before) if ah_total_before is not None else None,
                     'ah_total_after_final_repair': float(image_result.total_amount) if image_result.total_amount is not None else None,
                     **(ah_footer_noise_diagnostics or {}),
+                    **(ah_savings_discount_block_diagnostics or {}),
+                    **(ah_visible_savings_discount_diagnostics or {}),
                     **(ah_paddle_reconstruction_diagnostics or {}),
                     **(ah_paddle_refinement_diagnostics or {}),
                     **(ah_paddle_refinement_b_diagnostics or {}),
@@ -1656,6 +1918,54 @@ def ensure_default_receipt_sources(engine, receipt_root: Path, household_id: str
     return defaults
 
 
+
+def _format_duplicate_amount(value: Any) -> str:
+    if value is None or value == '':
+        return 'onbekend bedrag'
+    try:
+        amount = Decimal(str(value)).quantize(Decimal('0.01'))
+        return f"€ {str(amount).replace('.', ',')}"
+    except Exception:
+        return str(value)
+
+
+def _po_norm_status_label_for_duplicate(parse_status: Any) -> str:
+    normalized = str(parse_status or '').strip()
+    return STATUS_LABELS.get(normalized, 'Controle nodig')
+
+
+def _build_duplicate_receipt_response(row: Any) -> dict[str, Any]:
+    data = dict(row or {})
+    raw_receipt_id = data.get('raw_receipt_id') or data.get('id')
+    receipt_table_id = data.get('receipt_table_id')
+    parse_status = data.get('parse_status') or data.get('raw_status')
+    filename = str(data.get('original_filename') or 'bestaande bon').strip() or 'bestaande bon'
+    purchase_at = data.get('purchase_at') or 'onbekende datum'
+    total_amount = data.get('total_amount')
+    status_label = _po_norm_status_label_for_duplicate(parse_status)
+    existing_receipt = {
+        'raw_receipt_id': raw_receipt_id,
+        'receipt_table_id': receipt_table_id,
+        'original_filename': filename,
+        'store_name': data.get('store_name'),
+        'store_branch': data.get('store_branch'),
+        'purchase_at': data.get('purchase_at'),
+        'total_amount': total_amount,
+        'parse_status': parse_status,
+        'line_count': data.get('line_count'),
+        'po_norm_status_label': status_label,
+    }
+    return {
+        'raw_receipt_id': raw_receipt_id,
+        'receipt_table_id': receipt_table_id,
+        'duplicate': True,
+        'duplicate_message': f"Deze bon is al ingelezen als {filename} op {purchase_at} totaal {_format_duplicate_amount(total_amount)}.",
+        'parse_status': parse_status,
+        'po_norm_status_label': status_label,
+        'existing_receipt': existing_receipt,
+    }
+
+
 def _store_raw_file(storage_root: Path, household_id: str, raw_receipt_id: str, filename: str, file_bytes: bytes) -> str:
     now = datetime.utcnow()
     target_dir = storage_root / str(household_id) / now.strftime('%Y') / now.strftime('%m')
@@ -1674,7 +1984,18 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
         duplicate = conn.execute(
             text(
                 '''
-                SELECT rr.id, rr.raw_status
+                SELECT
+                    rr.id AS raw_receipt_id,
+                    rr.raw_status,
+                    rr.original_filename,
+                    rr.sha256_hash,
+                    rt.id AS receipt_table_id,
+                    rt.store_name,
+                    rt.store_branch,
+                    rt.purchase_at,
+                    rt.total_amount,
+                    rt.parse_status,
+                    rt.line_count
                 FROM raw_receipts rr
                 LEFT JOIN receipt_tables rt ON rt.raw_receipt_id = rr.id
                 WHERE rr.household_id = :household_id
@@ -1687,17 +2008,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
             {'household_id': household_id, 'sha256_hash': digest},
         ).mappings().first()
         if duplicate:
-            existing_table = conn.execute(
-                text('SELECT id, parse_status FROM receipt_tables WHERE raw_receipt_id = :raw_receipt_id LIMIT 1'),
-                {'raw_receipt_id': duplicate['id']},
-            ).mappings().first()
-            return {
-                'raw_receipt_id': duplicate['id'],
-                'receipt_table_id': existing_table['id'] if existing_table else None,
-                'duplicate': True,
-                'duplicate_message': 'Deze kassabon is al eerder toegevoegd en is niet opnieuw geladen.',
-                'parse_status': existing_table['parse_status'] if existing_table else duplicate['raw_status'],
-            }
+            return _build_duplicate_receipt_response(duplicate)
 
     parse_result = parse_receipt_content(file_bytes, filename, detected_mime)
     if reject_non_receipt and not parse_result.is_receipt:
@@ -1707,13 +2018,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
         with engine.begin() as conn:
             existing_by_fingerprint = find_existing_receipt_by_fingerprint(conn, household_id, parse_fingerprint)
             if existing_by_fingerprint:
-                return {
-                    'raw_receipt_id': existing_by_fingerprint['raw_receipt_id'],
-                    'receipt_table_id': existing_by_fingerprint['receipt_table_id'],
-                    'duplicate': True,
-                    'duplicate_message': 'Deze kassabon is al eerder toegevoegd en is niet opnieuw geladen.',
-                    'parse_status': existing_by_fingerprint['parse_status'],
-                }
+                return _build_duplicate_receipt_response(existing_by_fingerprint)
     raw_receipt_id = uuid.uuid4().hex
     storage_path = _store_raw_file(receipt_storage_root, household_id, raw_receipt_id, filename, file_bytes)
 
@@ -1885,6 +2190,12 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                 SELECT
                     rt.id AS receipt_table_id,
                     rt.raw_receipt_id,
+                    rt.store_name AS existing_store_name,
+                    rt.store_branch AS existing_store_branch,
+                    rt.purchase_at AS existing_purchase_at,
+                    rt.total_amount AS existing_total_amount,
+                    rt.discount_total AS existing_discount_total,
+                    rt.currency AS existing_currency,
                     rr.household_id,
                     rr.original_filename,
                     rr.mime_type,
@@ -1907,8 +2218,43 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
     if not file_path.exists():
         raise FileNotFoundError(f'Ruwe bon ontbreekt op {file_path}')
     file_bytes = file_path.read_bytes()
+    # PLUS-01L-c current-receipt-only safety:
+    # Reparse may never modify soft-deleted / archived receipts.
+    with engine.begin() as conn:
+        active_state = conn.execute(
+            text(
+                '''
+                SELECT rt.deleted_at AS receipt_deleted_at,
+                       rr.deleted_at AS raw_deleted_at
+                FROM receipt_tables rt
+                JOIN raw_receipts rr ON rr.id = rt.raw_receipt_id
+                WHERE rt.id = :receipt_table_id
+                LIMIT 1
+                '''
+            ),
+            {'receipt_table_id': receipt_table_id},
+        ).mappings().first()
+    if active_state and (active_state.get('receipt_deleted_at') or active_state.get('raw_deleted_at')):
+        return {
+            'receipt_table_id': receipt_table_id,
+            'parse_status': 'skipped_deleted_or_archived',
+            'line_count': 0,
+            'deleted': True,
+            'plus_bbox_structured_result': {
+                'applied': False,
+                'reason': 'deleted_or_archived_receipt',
+            },
+        }
+
     parse_bytes, parse_filename, parse_mime_type = _resolve_reparse_source_payload(dict(record), file_bytes)
     parse_result = parse_receipt_content(parse_bytes, parse_filename, parse_mime_type)
+    existing_header = dict(record)
+    preserved_store_name = parse_result.store_name or existing_header.get('existing_store_name')
+    preserved_store_branch = parse_result.store_branch if parse_result.store_branch not in (None, '') else existing_header.get('existing_store_branch')
+    preserved_purchase_at = parse_result.purchase_at if parse_result.purchase_at not in (None, '') else existing_header.get('existing_purchase_at')
+    preserved_total_amount = _amount_to_float(parse_result.total_amount) if parse_result.total_amount is not None else existing_header.get('existing_total_amount')
+    preserved_discount_total = _amount_to_float(parse_result.discount_total) if parse_result.discount_total is not None else existing_header.get('existing_discount_total')
+    preserved_currency = parse_result.currency or existing_header.get('existing_currency') or 'EUR'
     with engine.begin() as conn:
         conn.execute(text('DELETE FROM receipt_table_lines WHERE receipt_table_id = :receipt_table_id'), {'receipt_table_id': receipt_table_id})
         conn.execute(
@@ -1941,12 +2287,12 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
                 ),
                 {
                     'id': receipt_table_id,
-                    'store_name': parse_result.store_name,
-                    'store_branch': parse_result.store_branch,
-                    'purchase_at': parse_result.purchase_at,
-                    'total_amount': _amount_to_float(parse_result.total_amount),
-                    'discount_total': _amount_to_float(parse_result.discount_total),
-                    'currency': parse_result.currency,
+                    'store_name': preserved_store_name,
+                    'store_branch': preserved_store_branch,
+                    'purchase_at': preserved_purchase_at,
+                    'total_amount': preserved_total_amount,
+                    'discount_total': preserved_discount_total,
+                    'currency': preserved_currency,
                     'parse_status': determine_final_parse_status(parse_result),
                     'confidence_score': parse_result.confidence_score,
                     'line_count': len(parse_result.lines),

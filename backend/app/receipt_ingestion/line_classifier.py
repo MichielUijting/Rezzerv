@@ -6,7 +6,7 @@ Technical Design Reference:
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
 - Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -18,6 +18,12 @@ from collections.abc import Callable
 from typing import Any
 
 from app.receipt_ingestion.profiles.aldi import is_aldi_context, is_aldi_non_product_line
+from app.receipt_ingestion.spaarzegels_terms import (
+    contains_spaarzegels_metadata_token,
+    contains_spaarzegels_priced_token,
+    matches_spaarzegels_value_label,
+    spaarzegels_metadata_tokens,
+)
 
 BLOCKING_CLASSIFICATIONS = {'ignore', 'metadata', 'footer_payment_tax'}
 FOOTER_TOKENS = ('btw', 'vat', 'totaal', 'subtotaal', 'betaal', 'bankpas', 'pin', 'terminal', 'transactie')
@@ -30,8 +36,9 @@ LegacyLineCheck = Callable[[str], bool]
 GENERIC_PAYMENT_TOKENS = (
     'te betalen', 'totaal te betalen', 'betaald', 'betaling', 'kaartbetaling',
     'pin', 'pinnen', 'bankpas', 'maestro', 'visa', 'mastercard', 'v pay', 'v-pay',
-    'contactloos', 'contant', 'wisselgeld', 'terminal', 'transactie', 'transactienr',
-    'autorisatie', 'akkoord', 'merchant', 'kopie kaarthouder', 'klantticket',
+    'contactloos', 'contactless', 'contactiess', 'tontactless', 'contant', 'wisselgeld',
+    'terminal', 'transactie', 'transactienr', 'autorisatie', 'akkoord', 'merchant',
+    'kopie kaarthouder', 'klantticket',
 )
 GENERIC_TOTAL_TOKENS = (
     'totaal', 'subtotaal', 'sub totaal', 'bedrag euro', 'bedrag = euro',
@@ -45,11 +52,6 @@ GENERIC_DISCOUNT_TOKENS = (
     'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
     'lidl plus korting', 'totaal korting', 'coupon', 'voucher', 'gratis',
 )
-GENERIC_LOYALTY_TOKENS = (
-    'zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'pluspunt',
-    'spaar', 'spaarkaart', 'loyalty', 'bonuskaart', 'klantnummer', 'klant:',
-    'digitale zegels', 'digitale spaarkaart', 'campagne', 'punten saldo', 'saldo punten',
-)
 GENERIC_METADATA_TOKENS = (
     'openingstijd', 'openingstijden', 'ma-vr', 'ma tm', 'ma t/m', 'periode',
     'filiaal', 'kassa', 'kassabon', 'bonnr', 'bon nr', 'bonnummer', 'referentie',
@@ -59,12 +61,15 @@ GENERIC_METADATA_TOKENS = (
 GENERIC_DEPOSIT_RETURN_TOKENS = (
     'statiegeld retour', 'retour statiegeld', 'emballage retour', 'fust retour',
 )
+GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKENS = (
+    'prijs per kg',
+    'prijs/kg',
+    'prijs per stuk',
+)
 PRICED_DISCOUNT_ARTICLE_TOKENS = (
     'korting', 'bonus', 'actie', 'prijsvoordeel', 'jouw voordeel', 'uw voordeel',
     'lidl plus korting', 'totaal korting',
 )
-PRICED_LOYALTY_ARTICLE_TOKENS = ('zegel', 'zegels', 'koopzegel', 'koopzegels', 'pluspunten', 'pluspunt')
-VALUE_LINE_LABEL_PATTERNS = (r'koopzegels?(?:\s+premium)?', r'pluspunten?')
 
 
 def _default_false(_: str) -> bool:
@@ -79,14 +84,48 @@ def _has_amount(value: str) -> bool:
     return bool(re.search(r'(?<!\d)-?\d+[\.,]\d{2}(?!\d)', value))
 
 
+def _normalize_ocr_total_token(value: str | None) -> str:
+    token = str(value or '').strip().lower().strip(' .:-;')
+    token = (
+        token
+        .replace('0', 'o')
+        .replace('1', 'l')
+        .replace('i', 'l')
+        .replace('|', 'l')
+        .replace('!', 'l')
+    )
+    return re.sub(r'[^a-z0-9]+', '', token)
+
+
+def _looks_like_fuzzy_total_label(value: str | None) -> bool:
+    candidate = re.sub(r'\s+', ' ', str(value or '')).strip(' .:-;')
+    if not candidate:
+        return False
+    normalized = _normalize_ocr_total_token(candidate.split()[0])
+    if normalized in {'totaal', 'totall', 'totaai', 'lotaal', 'lotall', 'lotaai'}:
+        return True
+    return bool(re.fullmatch(r'(?:t|l)otaal[a-z0-9]{1,20}', normalized))
+
+
+def _is_summary_discount_line(lowered: str) -> bool:
+    compact = re.sub(r'[^a-z0-9]+', '', str(lowered or '').lower())
+    return 'totalekortingis' in compact or 'detotalekortingis' in compact
+
+
 def _is_value_line_label_without_amount(lowered: str) -> bool:
-    normalized = re.sub(r'\s+', ' ', str(lowered or '').strip().lower())
-    return any(re.fullmatch(pattern, normalized) for pattern in VALUE_LINE_LABEL_PATTERNS)
+    return matches_spaarzegels_value_label(lowered)
 
 
 def _token_match(lowered: str, tokens: tuple[str, ...]) -> str | None:
     for token in tokens:
-        if token in lowered:
+        token_value = str(token or '').strip().lower()
+        if not token_value:
+            continue
+        if re.fullmatch(r'[a-z0-9]+', token_value):
+            if re.search(rf'(?<![a-z0-9]){re.escape(token_value)}(?![a-z0-9])', lowered):
+                return token
+            continue
+        if token_value in lowered:
             return token
     return None
 
@@ -94,17 +133,21 @@ def _token_match(lowered: str, tokens: tuple[str, ...]) -> str | None:
 def _priced_article_value_token(lowered: str) -> str | None:
     if not _has_amount(lowered):
         return None
+    if _is_summary_discount_line(lowered):
+        return None
+    if _looks_like_fuzzy_total_label(lowered):
+        return None
     if _token_match(lowered, GENERIC_PAYMENT_TOKENS):
         return None
     if _token_match(lowered, GENERIC_TAX_TOKENS):
         return None
     if _token_match(lowered, GENERIC_DEPOSIT_RETURN_TOKENS):
         return None
-    return _token_match(lowered, PRICED_LOYALTY_ARTICLE_TOKENS) or _token_match(lowered, PRICED_DISCOUNT_ARTICLE_TOKENS)
+    return contains_spaarzegels_priced_token(lowered) or _token_match(lowered, PRICED_DISCOUNT_ARTICLE_TOKENS)
 
 
 def _footer_or_metadata(lowered: str) -> str:
-    if any(token in lowered for token in FOOTER_TOKENS):
+    if any(token in lowered for token in FOOTER_TOKENS) or _looks_like_fuzzy_total_label(lowered):
         return 'footer_payment_tax'
     return 'metadata'
 
@@ -119,6 +162,11 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
         return _decision('ignore', 'EMPTY_OR_WHITESPACE_LINE')
     lowered = normalized.lower()
     upper = normalized.upper().replace(',', '.')
+    supporting_amount_token = _token_match(lowered, GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKENS)
+    if supporting_amount_token:
+        suffix = lowered.split(supporting_amount_token, 1)[1].strip(" :-\t")
+        if not suffix or not any(ch.isalpha() for ch in suffix):
+            return _decision('amount_detail', 'GENERIC_SUPPORTING_AMOUNT_DETAIL_TOKEN', supporting_amount_token)
     if _is_value_line_label_without_amount(lowered):
         return _decision('product_candidate', 'GENERIC_VALUE_LINE_LABEL_FROM_SAVINGS_ACTION', normalized)
     if re.fullmatch(r'(?:ZA|ZO|ZON)\s+\d{1,2}\.\d{2}', upper):
@@ -137,6 +185,10 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
         return _decision('footer_payment_tax', 'GENERIC_REGEX_PERCENT_LINE', normalized)
     if re.fullmatch(r'\d{1,4}[.]\d{2}', normalized) or re.fullmatch(r'\d{1,4},\d{2}', normalized):
         return _decision('footer_payment_tax', 'GENERIC_REGEX_STANDALONE_AMOUNT', normalized)
+    if _looks_like_fuzzy_total_label(normalized):
+        return _decision('footer_payment_tax', 'GENERIC_FUZZY_TOTAL_LABEL', normalized)
+    if _is_summary_discount_line(lowered):
+        return _decision('footer_payment_tax', 'GENERIC_SUMMARY_DISCOUNT_LINE', normalized)
     for tokens, classification, rule in (
         (GENERIC_PAYMENT_TOKENS, 'footer_payment_tax', 'GENERIC_PAYMENT_TOKENS'),
         (GENERIC_TAX_TOKENS, 'footer_payment_tax', 'GENERIC_TAX_TOKENS'),
@@ -147,11 +199,11 @@ def _generic_non_article_trace(line: str) -> dict[str, Any] | None:
             return _decision(classification, rule, token)
     token = _priced_article_value_token(lowered)
     if token:
-        return _decision('product_candidate', 'GENERIC_PRICED_DISCOUNT_OR_LOYALTY_LINE', token)
+        return _decision('product_candidate', 'GENERIC_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE', token)
     for tokens, classification, rule in (
         (GENERIC_TOTAL_TOKENS, 'footer_payment_tax', 'GENERIC_TOTAL_TOKENS'),
         (GENERIC_DISCOUNT_TOKENS, 'footer_payment_tax', 'GENERIC_DISCOUNT_TOKENS'),
-        (GENERIC_LOYALTY_TOKENS, 'metadata', 'GENERIC_LOYALTY_TOKENS'),
+        (spaarzegels_metadata_tokens(), 'metadata', 'GENERIC_SPAARZEGELS_TERMS'),
     ):
         token = _token_match(lowered, tokens)
         if token:
@@ -178,12 +230,17 @@ def _store_specific_non_article_trace(line: str, store_name: str | None = None, 
     common_payment_footer_tokens = (
         'te betalen', 'totaal', 'subtotaal', 'totaal incl', 'btw', 'vat',
         'pin', 'bankpas', 'maestro', 'visa', 'mastercard', 'contactloos',
-        'terminal', 'transactie', 'transactienr', 'betaling', 'betaald',
-        'wisselgeld', 'kasbon', 'bonnr', 'bon nr', 'bonnummer', 'referentie',
+        'contactless', 'contactiess', 'tontactless', 'terminal', 'transactie',
+        'transactienr', 'betaling', 'betaald', 'wisselgeld', 'kasbon', 'bonnr',
+        'bon nr', 'bonnummer', 'referentie',
     )
     token = _token_match(lowered, common_payment_footer_tokens)
     if token:
         return _decision(_footer_or_metadata(lowered), 'STORE_COMMON_PAYMENT_FOOTER_TOKENS', token, stage='store_specific')
+    if _looks_like_fuzzy_total_label(normalized):
+        return _decision('footer_payment_tax', 'STORE_FUZZY_TOTAL_LABEL', normalized, stage='store_specific')
+    if _is_summary_discount_line(lowered):
+        return _decision('footer_payment_tax', 'STORE_SUMMARY_DISCOUNT_LINE', normalized, stage='store_specific')
     if re.fullmatch(r'(?:[a-z]\s*)?\d{1,2}[,.]\d{2}\s*%.*', lowered):
         return _decision('footer_payment_tax', 'STORE_REGEX_PERCENT_LINE', normalized, stage='store_specific')
     if re.fullmatch(r'\d{1,2}:\d{2}(?::\d{2})?', lowered):
@@ -200,12 +257,16 @@ def _store_specific_non_article_trace(line: str, store_name: str | None = None, 
         if token:
             return _decision('metadata', 'ALDI_METADATA_TOKENS', token, stage='store_specific')
     if 'plus' in store_key:
+        if _is_summary_discount_line(lowered):
+            return _decision('footer_payment_tax', 'PLUS_SUMMARY_DISCOUNT_LINE', normalized, stage='store_specific')
+        if _looks_like_fuzzy_total_label(normalized):
+            return _decision('footer_payment_tax', 'PLUS_FUZZY_TOTAL_LABEL', normalized, stage='store_specific')
         token = _priced_article_value_token(lowered)
         if token:
-            return _decision('product_candidate', 'PLUS_PRICED_DISCOUNT_OR_LOYALTY_LINE', token, stage='store_specific')
-        token = _token_match(lowered, ('pluspunten', 'plus punten', 'digitale spaarkaart', 'spaarkaart', 'klant:', 'klantnummer', 'koopzegels', 'zegels', 'zegel', 'punten saldo', 'saldo punten', 'persoonlijke bonus'))
+            return _decision('product_candidate', 'PLUS_PRICED_DISCOUNT_OR_SPAARZEGELS_LINE', token, stage='store_specific')
+        token = contains_spaarzegels_metadata_token(lowered)
         if token:
-            return _decision('metadata', 'PLUS_LOYALTY_TOKENS', token, stage='store_specific')
+            return _decision('metadata', 'PLUS_SPAARZEGELS_TERMS', token, stage='store_specific')
         token = _token_match(lowered, ('plus', 'bedankt', 'welkom', 'filiaal', 'kassabon', 'www.', 'kvk', 'iban', 'tel', 'servicebalie', 'klantenservice'))
         if token and not re.search(r'\d+[,.]\d{2}', lowered):
             return _decision('metadata', 'PLUS_METADATA_TOKENS_NO_AMOUNT', token, stage='store_specific')
@@ -221,15 +282,15 @@ def _non_article_reason(classification: str | None, line: str) -> str:
     normalized = re.sub(r'\s+', ' ', str(line or '')).strip()
     lowered = normalized.lower()
     if classification == 'footer_payment_tax':
-        if any(token in lowered for token in ('totaal', 'subtotaal')):
+        if _looks_like_fuzzy_total_label(normalized) or any(token in lowered for token in ('totaal', 'subtotaal')):
             return 'total_or_subtotal_line'
         if any(token in lowered for token in ('btw', 'vat', 'biw', 'netto', 'bruto')):
             return 'vat_line'
-        if any(token in lowered for token in ('betaal', 'bankpas', 'pin', 'terminal', 'transactie', 'maestro', 'visa', 'mastercard')):
+        if any(token in lowered for token in ('betaal', 'bankpas', 'pin', 'terminal', 'transactie', 'maestro', 'visa', 'mastercard', 'contactless', 'contactloos')):
             return 'payment_line'
         if any(token in lowered for token in ('statiegeld retour', 'retour statiegeld', 'emballage retour')):
             return 'deposit_return_or_refund_line'
-        if any(token in lowered for token in ('korting', 'bonus', 'actie', 'prijsvoordeel', 'voordeel', 'coupon')):
+        if _is_summary_discount_line(lowered) or any(token in lowered for token in ('korting', 'bonus', 'actie', 'prijsvoordeel', 'voordeel', 'coupon')):
             return 'discount_or_promotion_line'
         if re.fullmatch(r'\d{1,4}[.,]\d{2}', normalized):
             return 'standalone_amount_line'
@@ -239,8 +300,8 @@ def _non_article_reason(classification: str | None, line: str) -> str:
             return 'date_or_time_metadata'
         if any(day in lowered for day in DUTCH_DAY_TOKENS):
             return 'date_or_period_metadata'
-        if any(token in lowered for token in ('pluspunten', 'spaarkaart', 'koopzegel', 'klantnummer', 'zegels', 'bonuskaart')):
-            return 'loyalty_or_savings_metadata'
+        if contains_spaarzegels_metadata_token(lowered):
+            return 'spaarzegels_metadata'
         return 'receipt_metadata'
     if classification == 'ignore':
         return 'noise_or_unclassified_line'
@@ -373,4 +434,4 @@ def diagnose_article_line_classification(
 
 
 def classification_allows_append(classification: str | None) -> bool:
-    return classification not in BLOCKING_CLASSIFICATIONS
+    return str(classification or '') in (ARTICLE_CLASSIFICATIONS | {'continuation'})

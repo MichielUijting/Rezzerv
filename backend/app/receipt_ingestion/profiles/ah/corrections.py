@@ -343,3 +343,433 @@ def _ah_rebalance_after_footer_noise_filter(
         return correction if correction != Decimal("0.00") else None
 
     return discount_total
+
+def _ah_label_key(value: str | None) -> str:
+    return re.sub(r"[^A-Z0-9]+", " ", str(value or "").upper()).strip()
+
+
+def _ah_existing_label_keys(lines: list[dict[str, Any]] | None) -> set[str]:
+    keys: set[str] = set()
+    for line in lines or []:
+        if not isinstance(line, dict):
+            continue
+        label = (
+            line.get("raw_label")
+            or line.get("normalized_label")
+            or line.get("display_label")
+            or ""
+        )
+        key = _ah_label_key(str(label))
+        if key:
+            keys.add(key)
+    return keys
+
+
+def _ah_sum_lines_net(lines: list[dict[str, Any]] | None, discount_total: Decimal | None = None) -> Decimal:
+    line_sum = sum(
+        (_r9_38e1_decimal(line.get("line_total")) for line in (lines or []) if isinstance(line, dict)),
+        Decimal("0.00"),
+    )
+    line_discount_sum = sum(
+        (_r9_38e1_decimal(line.get("discount_amount")) for line in (lines or []) if isinstance(line, dict)),
+        Decimal("0.00"),
+    )
+    receipt_discount = _r9_38e1_decimal(discount_total)
+    return (line_sum + line_discount_sum + receipt_discount).quantize(Decimal("0.01"))
+
+
+def _ah_extract_weight_product_candidates_from_reliable_lines(reliable_lines: list[str] | None) -> list[dict[str, Any]]:
+    """Extract AH weighted article rows from a reliable OCR stream.
+
+    Example:
+    0,587K CONFERENCE 1,11
+    """
+    candidates: list[dict[str, Any]] = []
+
+    blocked_tokens = (
+        "subtotaal",
+        "totaal",
+        "bonus",
+        "voordeel",
+        "koopzegel",
+        "koopzegels",
+        "prijs per kg",
+        "pinnen",
+        "betaald",
+        "btw",
+    )
+
+    for index, raw in enumerate(reliable_lines or []):
+        line = re.sub(r"\s+", " ", str(raw or "")).strip()
+        low = line.lower()
+        if not line:
+            continue
+        if any(token in low for token in blocked_tokens):
+            continue
+
+        # AH OCR variants commonly read weight as 0,587K / 0,587k / 0,587 KG.
+        match = re.search(
+            r"(?<!\d)(\d+[,.]\d{3})\s*(?:k|kg)?\s+([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9 '\-]{2,}?)\s+(\d{1,5}[,.]\d{2})(?!\d)",
+            line,
+            re.I,
+        )
+        if not match:
+            continue
+
+        try:
+            quantity = Decimal(match.group(1).replace(",", ".")).quantize(Decimal("0.001"))
+        except Exception:
+            quantity = None
+        label = re.sub(r"\s+", " ", match.group(2)).strip(" .:-")
+        total = _parse_decimal(match.group(3))
+
+        if quantity is None or quantity <= Decimal("0.000"):
+            continue
+        if total is None or total <= Decimal("0.00"):
+            continue
+        if not re.search(r"[A-Za-zÀ-ÖØ-öø-ÿ]", label):
+            continue
+
+        unit = (total / quantity).quantize(Decimal("0.01"))
+
+        candidates.append({
+            "raw_label": label,
+            "normalized_label": label.upper(),
+            "quantity": float(quantity),
+            "unit_price": float(unit),
+            "line_total": float(total),
+            "discount_amount": None,
+            "include_in_receipt_total": True,
+            "exclude_from_inventory": False,
+            "source_index": index,
+            "producer_trace": {
+                "parser_path": "ah_image_balance_repair.weight_product_from_reliable_ocr",
+                "function_name": "_ah_repair_image_balance_from_reliable_lines",
+                "raw_line": line,
+                "source_index": index,
+                "classification": "product_candidate",
+                "append_allowed": True,
+            },
+        })
+
+    return candidates
+
+
+def _ah_extract_bonus_discount_from_reliable_lines(reliable_lines: list[str] | None) -> Decimal | None:
+    total = Decimal("0.00")
+
+    for raw in reliable_lines or []:
+        line = re.sub(r"\s+", " ", str(raw or "")).strip()
+        low = line.lower()
+        if "bonuskaart" in low or "bonus box premium" in low:
+            continue
+        if "bonus" not in low:
+            continue
+
+        for token in re.findall(r"(?<!\d)(-\s*\d{1,5}[,.]\d{2}|[=−]\s*\d{1,5}[,.]\d{2})(?!\d)", line):
+            normalized = token.replace(" ", "").replace("−", "-").replace("=", "-")
+            amount = _parse_decimal(normalized)
+            if amount is not None and amount < Decimal("0.00"):
+                total += amount
+
+    return total.quantize(Decimal("0.01")) if total != Decimal("0.00") else None
+
+
+def _ah_apply_discount_to_best_bonus_target(lines: list[dict[str, Any]], discount: Decimal) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    if not lines or discount == Decimal("0.00"):
+        return lines, None
+
+    refined = [dict(line) if isinstance(line, dict) else line for line in lines]
+
+    candidate_indices: list[int] = []
+    for index, line in enumerate(refined):
+        if not isinstance(line, dict):
+            continue
+        trace = line.get("producer_trace") or {}
+        raw = str(trace.get("raw_line") or line.get("raw_label") or "")
+        label = str(line.get("raw_label") or line.get("normalized_label") or "")
+
+        if "koopzegel" in label.lower():
+            continue
+        if re.search(r"\sB\s*$", raw, re.I):
+            candidate_indices.append(index)
+
+    if not candidate_indices:
+        for index, line in enumerate(refined):
+            if not isinstance(line, dict):
+                continue
+            label = str(line.get("raw_label") or line.get("normalized_label") or "")
+            if "koopzegel" in label.lower():
+                continue
+            if _r9_38e1_decimal(line.get("line_total")) > Decimal("0.00"):
+                candidate_indices.append(index)
+
+    if not candidate_indices:
+        return lines, None
+
+    target_index = max(
+        candidate_indices,
+        key=lambda idx: _r9_38e1_decimal(refined[idx].get("line_total")) if isinstance(refined[idx], dict) else Decimal("0.00"),
+    )
+
+    current = _r9_38e1_decimal(refined[target_index].get("discount_amount"))
+    refined[target_index]["discount_amount"] = float((current + discount).quantize(Decimal("0.01")))
+
+    return refined, {
+        "target_index": int(target_index),
+        "target_label": refined[target_index].get("raw_label"),
+        "discount_amount": float(discount),
+    }
+
+
+
+def _ah_filter_savings_discount_block_lines(
+    *,
+    text_lines: list[str],
+    lines: list[dict[str, Any]],
+    store_name: str | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
+    """Remove AH savings-block discount rows that OCR exposed as product lines.
+
+    AH image receipts can contain an explicit savings block between the product
+    subtotal and "JOUW VOORDEEL". Rows with KRAS/BBOX/BONUS prefixes in that
+    block are discount evidence, not article rows. Koopzegels remain protected
+    value lines after the final subtotal.
+    """
+    if not _is_ah_store_context(store_name, text_lines):
+        return lines, None
+
+    normalized_lines = [
+        re.sub(r"\s+", " ", str(line or "")).strip()
+        for line in (text_lines or [])
+    ]
+
+    first_subtotal_index: int | None = None
+    savings_total_index: int | None = None
+
+    for index, line in enumerate(normalized_lines):
+        lowered = line.lower()
+        if first_subtotal_index is None and "subtotaal" in lowered:
+            first_subtotal_index = index
+            continue
+        if first_subtotal_index is not None and (
+            "jouw voordeel" in lowered or "je voordeel" in lowered
+        ):
+            savings_total_index = index
+            break
+
+    if first_subtotal_index is None or savings_total_index is None:
+        return lines, None
+    if savings_total_index <= first_subtotal_index:
+        return lines, None
+
+    discount_prefix_re = re.compile(r"^\s*(kras|bbox|bonus)\b", re.I)
+
+    kept: list[dict[str, Any]] = []
+    removed: list[dict[str, Any]] = []
+
+    for line in lines or []:
+        if not isinstance(line, dict):
+            kept.append(line)
+            continue
+
+        trace = line.get("producer_trace") or {}
+        source_index_raw = line.get("source_index", trace.get("source_index"))
+        try:
+            source_index = int(source_index_raw)
+        except Exception:
+            kept.append(line)
+            continue
+
+        label = str(
+            line.get("raw_label")
+            or line.get("normalized_label")
+            or line.get("display_label")
+            or ""
+        ).strip()
+
+        if (
+            first_subtotal_index < source_index < savings_total_index
+            and discount_prefix_re.search(label)
+        ):
+            removed.append(dict(line))
+            continue
+
+        kept.append(line)
+
+    if not removed:
+        return lines, None
+
+    return kept, {
+        "m2c2i129b_ah_savings_discount_block_filter": {
+            "applied": True,
+            "removed_count": len(removed),
+            "removed_labels": [
+                str(
+                    line.get("raw_label")
+                    or line.get("normalized_label")
+                    or line.get("display_label")
+                    or ""
+                )
+                for line in removed
+            ],
+            "first_subtotal_index": int(first_subtotal_index),
+            "savings_total_index": int(savings_total_index),
+            "reason": "AH KRAS/BBOX/BONUS savings-block rows between product subtotal and JOUW VOORDEEL are not article rows",
+        }
+    }
+
+
+
+def _ah_apply_visible_savings_total_discount(
+    *,
+    text_lines: list[str],
+    lines: list[dict[str, Any]],
+    discount_total: Decimal | None,
+    store_name: str | None,
+) -> tuple[Decimal | None, dict[str, Any] | None]:
+    """Apply visible AH 'JOUW VOORDEEL' as receipt-level discount remainder.
+
+    The visible AH savings total includes line-level discounts already attached
+    to product rows. To avoid double counting, only the remainder is stored as
+    receipt-level discount_total.
+    """
+    if not _is_ah_store_context(store_name, text_lines):
+        return discount_total, None
+
+    visible_savings: Decimal | None = None
+    for raw in text_lines or []:
+        line = re.sub(r"\s+", " ", str(raw or "")).strip()
+        lowered = line.lower()
+        if "jouw voordeel" not in lowered and "je voordeel" not in lowered:
+            continue
+        matches = re.findall(r"(?<!\d)(\d{1,5}[\.,]\d{2})(?!\d)", line)
+        if not matches:
+            continue
+        candidate = _parse_decimal(matches[-1])
+        if candidate is not None and candidate > Decimal("0.00"):
+            visible_savings = candidate.quantize(Decimal("0.01"))
+            break
+
+    if visible_savings is None:
+        return discount_total, None
+
+    line_discount_sum = sum(
+        (
+            _r9_38e1_decimal(line.get("discount_amount"))
+            for line in (lines or [])
+            if isinstance(line, dict)
+        ),
+        Decimal("0.00"),
+    ).quantize(Decimal("0.01"))
+
+    current_receipt_discount = _r9_38e1_decimal(discount_total)
+
+    target_total_discount = (-visible_savings).quantize(Decimal("0.01"))
+    remainder = (target_total_discount - line_discount_sum).quantize(Decimal("0.01"))
+
+    if remainder == current_receipt_discount:
+        return discount_total, None
+
+    return (remainder if remainder != Decimal("0.00") else None), {
+        "m2c2i129b_ah_visible_savings_total_discount": {
+            "applied": True,
+            "visible_savings_total": float(visible_savings),
+            "line_discount_sum": float(line_discount_sum),
+            "previous_discount_total": float(current_receipt_discount),
+            "new_discount_total": float(remainder),
+            "reason": "AH visible JOUW VOORDEEL total is applied as discount remainder after existing line discounts",
+        }
+    }
+
+
+def _ah_repair_image_balance_from_reliable_lines(
+    *,
+    reliable_lines: list[str],
+    lines: list[dict[str, Any]],
+    store_name: str | None,
+    total_amount: Decimal | None,
+    discount_total: Decimal | None,
+) -> tuple[list[dict[str, Any]], Decimal | None, dict[str, Any] | None]:
+    """AH image OCR balance repair using reliable OCR financial/product evidence.
+
+    This is deliberately total-guarded:
+    no line, discount, or status is changed unless the resulting net sum exactly
+    matches the visible receipt total.
+    """
+    if not lines or total_amount is None:
+        return lines, discount_total, None
+    if not _is_ah_store_context(store_name, reliable_lines):
+        return lines, discount_total, None
+
+    total = _r9_38e1_decimal(total_amount)
+    before_net = _ah_sum_lines_net(lines, discount_total)
+    if before_net == total:
+        return lines, discount_total, None
+
+    existing_keys = _ah_existing_label_keys(lines)
+    weight_candidates = []
+    for candidate in _ah_extract_weight_product_candidates_from_reliable_lines(reliable_lines):
+        key = _ah_label_key(candidate.get("raw_label"))
+        if not key:
+            continue
+        if key in existing_keys:
+            continue
+        if any(key in existing or existing in key for existing in existing_keys if len(existing) >= 4 and len(key) >= 4):
+            continue
+        weight_candidates.append(candidate)
+
+    bonus_discount = _ah_extract_bonus_discount_from_reliable_lines(reliable_lines)
+
+    attempts: list[tuple[list[dict[str, Any]], Decimal | None, str]] = [
+        ([], None, "none"),
+    ]
+
+    for candidate in weight_candidates:
+        attempts.append(([candidate], None, "weight_only"))
+
+    if bonus_discount is not None:
+        attempts.append(([], bonus_discount, "bonus_only"))
+        for candidate in weight_candidates:
+            attempts.append(([candidate], bonus_discount, "weight_plus_bonus"))
+
+    for add_lines, discount, mode in attempts:
+        if mode == "none":
+            continue
+
+        candidate_lines = [dict(line) if isinstance(line, dict) else line for line in lines]
+        candidate_lines.extend(dict(line) for line in add_lines)
+
+        discount_application = None
+        candidate_discount_total = discount_total
+
+        if discount is not None:
+            candidate_lines, discount_application = _ah_apply_discount_to_best_bonus_target(candidate_lines, discount)
+
+        candidate_net = _ah_sum_lines_net(candidate_lines, candidate_discount_total)
+
+        if candidate_net == total:
+            return candidate_lines, candidate_discount_total, {
+                "r9_m2c2i128_ah_image_balance_repair": {
+                    "applied": True,
+                    "mode": mode,
+                    "before_net": float(before_net),
+                    "after_net": float(candidate_net),
+                    "total_amount": float(total),
+                    "added_lines": [
+                        {
+                            "raw_label": line.get("raw_label"),
+                            "quantity": line.get("quantity"),
+                            "line_total": line.get("line_total"),
+                            "source_index": line.get("source_index"),
+                        }
+                        for line in add_lines
+                    ],
+                    "bonus_discount": float(discount) if discount is not None else None,
+                    "discount_application": discount_application,
+                    "reason": "AH reliable OCR evidence closes receipt total exactly",
+                }
+            }
+
+    return lines, discount_total, None
+
