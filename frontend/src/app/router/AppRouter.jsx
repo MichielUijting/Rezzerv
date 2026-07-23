@@ -23,6 +23,7 @@ import IncidentalPurchasePage from '../../features/purchaseImport/IncidentalPurc
 import AlmostOutPage from '../../features/almostOut/AlmostOutPage.jsx'
 import ExternalDatabasesPage from '../../features/externalDatabases/ExternalDatabasesPage.jsx'
 import ProductGroupsPage from '../../features/productGroups/ProductGroupsPage.jsx'
+import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.jsx'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import SettingsGuard from './SettingsGuard'
@@ -69,6 +70,7 @@ const router = createBrowserRouter([
   { path: '/home', element: <Protected><HomePage /></Protected> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
+  { path: '/spaartegoeden', element: <Protected><LoyaltyStampsPage /></Protected> },
   { path: '/productgroepen', element: <Protected><ProductGroupsPage /></Protected> },
   { path: '/voorraad/incidentele-aankoop', element: <Protected><IncidentalPurchasePage /></Protected> },
   { path: '/dev/scanner-lab', element: <Protected><ScannerLabPage /></Protected> },
