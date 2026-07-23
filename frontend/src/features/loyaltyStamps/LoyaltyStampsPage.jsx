@@ -139,6 +139,11 @@ export default function LoyaltyStampsPage() {
     URL.revokeObjectURL(url)
   }
 
+  function requestDeleteSelected() {
+    if (selectedRows.length === 0) return
+    window.alert('Verwijderen wordt beschikbaar zodra de veilige permanente verwijderactie in de backend is gerealiseerd.')
+  }
+
   const columns = useMemo(() => ([
     {
       key: 'select',
@@ -239,6 +244,14 @@ export default function LoyaltyStampsPage() {
               onClick={exportSelected}
             >
               Exporteren
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={selectedRows.length === 0}
+              onClick={requestDeleteSelected}
+            >
+              Verwijderen
             </Button>
           </div>
         </ScreenCard>
