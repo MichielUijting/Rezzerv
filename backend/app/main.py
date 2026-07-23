@@ -68,6 +68,7 @@ from app.services.external_article_product_link_service import (
 )
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
+from app.api.catalog_routes import router as catalog_router
 from app.api.receipt_diagnosis_routes import router as receipt_diagnosis_router
 from app.api.receipt_kpi_routes import router as receipt_kpi_router
 from app.api.receipt_import_diagnosis_routes import router as receipt_import_diagnosis_router
@@ -444,6 +445,7 @@ users = {email: dict(profile) for email, profile in DEFAULT_AUTH_USERS.items()}
 
 app.include_router(system_router)
 app.include_router(product_inventory_group_router)
+app.include_router(catalog_router)
 app.include_router(receipt_diagnosis_router)
 app.include_router(receipt_kpi_router)
 app.include_router(receipt_import_diagnosis_router)

@@ -15,6 +15,7 @@ const tiles = [
   { key: 'kassa', label: 'Kassa', icon: '🧾' },
   { key: 'spaartegoeden', label: 'Spaartegoeden', icon: '🪙' },
   { key: 'externe-databases', label: 'Externe databases', icon: '🗄️' },
+  { key: 'catalogus', label: 'Catalogus', icon: 'CAT' },
   { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳' },
   { key: 'recepten', label: 'Recepten', icon: '🍳' },
   { key: 'bestellen', label: 'Bestellen', icon: '📋' },
@@ -56,6 +57,7 @@ export default function HomePage() {
     if (key === 'kassa') navigate('/kassa')
     if (key === 'spaartegoeden') navigate('/spaartegoeden')
     if (key === 'externe-databases') navigate('/externe-databases')
+    if (key === 'catalogus') navigate('/catalogus')
     if (key === 'instellingen') navigate('/instellingen')
     if (key === 'admin') navigate('/admin')
   }
@@ -67,8 +69,8 @@ export default function HomePage() {
         <div className="rz-content-inner">
           <Card className="rz-card-home">
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
-              {tiles.filter((tile) => tile.key !== 'admin' || isHouseholdAdmin).map((t) => {
-                const clickable = ['bijna-op', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin'].includes(t.key)
+              {tiles.filter((tile) => !['admin', 'catalogus'].includes(tile.key) || isHouseholdAdmin).map((t) => {
+                const clickable = ['bijna-op', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus'].includes(t.key)
                 return (
                   <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
                     <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>

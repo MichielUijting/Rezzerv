@@ -24,6 +24,8 @@ import AlmostOutPage from '../../features/almostOut/AlmostOutPage.jsx'
 import ExternalDatabasesPage from '../../features/externalDatabases/ExternalDatabasesPage.jsx'
 import ProductGroupsPage from '../../features/productGroups/ProductGroupsPage.jsx'
 import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.jsx'
+import CatalogPage from '../../features/catalog/CatalogPage.jsx'
+import CatalogDetailPage from '../../features/catalog/CatalogDetailPage.jsx'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import SettingsGuard from './SettingsGuard'
@@ -79,6 +81,8 @@ const router = createBrowserRouter([
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
+  { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
+  { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPage /></ProtectedAdmin> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><StoreBatchDetailPage /></Protected> },
