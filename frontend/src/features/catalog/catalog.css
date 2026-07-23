@@ -1,0 +1,111 @@
+.rz-catalog-page {
+  display: grid;
+  gap: var(--space-md);
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rz-catalog-page > [data-testid="screen-card"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.rz-catalog-card {
+  display: grid;
+  gap: 18px;
+}
+
+.rz-catalog-header h2,
+.rz-catalog-detail-grid h2,
+.rz-catalog-detail-grid h3 {
+  margin: 0;
+  color: var(--color-brand-primary);
+}
+
+.rz-catalog-header p {
+  margin: 6px 0 0;
+  color: #5f7a68;
+}
+
+.rz-catalog-table {
+  table-layout: fixed;
+  width: 100%;
+  min-width: 1100px;
+}
+
+.rz-catalog-col-select { width: 44px; }
+.rz-catalog-col-name { width: 220px; }
+.rz-catalog-col-brand { width: 130px; }
+.rz-catalog-col-gtin { width: 145px; }
+.rz-catalog-col-product-type { width: 170px; }
+.rz-catalog-col-source { width: 145px; }
+.rz-catalog-col-household-count { width: 135px; }
+.rz-catalog-col-status { width: 110px; }
+
+.rz-catalog-table th,
+.rz-catalog-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rz-catalog-status {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.rz-catalog-status--complete {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.rz-catalog-status--review {
+  background: #fffaeb;
+  color: #b54708;
+}
+
+.rz-catalog-status--conflict {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.rz-catalog-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.rz-catalog-detail-grid {
+  display: grid;
+  gap: 22px;
+}
+
+.rz-catalog-definition-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.rz-catalog-definition-list div {
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.rz-catalog-definition-list dt {
+  color: #667085;
+  font-size: 13px;
+}
+
+.rz-catalog-definition-list dd {
+  margin: 4px 0 0;
+}

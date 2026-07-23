@@ -11,6 +11,7 @@ from app.services.external_article_ui_projection import (
 )
 
 from app.db import engine
+from app.services.global_product_service import get_or_create_global_product
 from app.services.external_database_matchers import match_retailer_receipt_line
 
 PROTECTED_CANDIDATE_STATUSES = {
@@ -1096,28 +1097,17 @@ def _m2c2i_fix7b_create_or_reuse_catalog_product_for_candidate(conn, candidate: 
             global_product_id = str(existing.get("global_product_id") or "").strip()
 
     if not global_product_id:
-        global_product_id = str(uuid.uuid4())
-        conn.execute(
-            text(
-                """
-                INSERT INTO global_products (
-                    id, primary_gtin, name, brand, variant, category,
-                    size_value, size_unit, source, status, created_at, updated_at
-                )
-                VALUES (
-                    :id, NULL, :name, :brand, :variant, :category,
-                    NULL, NULL, :source, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                )
-                """
-            ),
-            {
-                "id": global_product_id,
-                "name": _m2c2i_fix7b_best_candidate_name(candidate),
-                "brand": _m2c2i_fix7b_best_candidate_brand(candidate),
-                "variant": str(candidate.get("variant") or "").strip() or None,
-                "category": str(candidate.get("candidate_category") or candidate.get("variant") or "").strip() or None,
-                "source": str(candidate.get("candidate_source_name") or candidate.get("source_name") or "external_product_candidate").strip(),
-            },
+        global_product_id = get_or_create_global_product(
+            conn,
+            gtin=None,
+            name=_m2c2i_fix7b_best_candidate_name(candidate),
+            brand=_m2c2i_fix7b_best_candidate_brand(candidate),
+            variant=str(candidate.get("variant") or "").strip() or None,
+            category=str(candidate.get("candidate_category") or "").strip() or None,
+            size_value=None,
+            size_unit=None,
+            source=str(candidate.get("candidate_source_name") or candidate.get("source_name") or "external_product_candidate").strip(),
+            status="active",
         )
 
     primary_identity = _m2c2i_fix7b_identity_value(candidate)

@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import text
 
 from app.db import engine
+from app.services.global_product_service import get_or_create_global_product
 from app.services.external_article_confirmation_service import (
     confirm_external_article_for_receipt_item,
 )
@@ -112,63 +113,19 @@ def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str,
     )
     size_value, size_unit = _parse_quantity_label(quantity_label)
 
-    existing = conn.execute(
-        text("SELECT id FROM global_products WHERE primary_gtin = :gtin LIMIT 1"),
-        {"gtin": gtin},
-    ).mappings().first()
-
-    if existing:
-        global_product_id = str(existing.get("id"))
-        conn.execute(
-            text(
-                """
-                UPDATE global_products
-                SET name = :name,
-                    brand = COALESCE(:brand, brand),
-                    category = COALESCE(:category, category),
-                    size_value = COALESCE(:size_value, size_value),
-                    size_unit = COALESCE(:size_unit, size_unit),
-                    source = 'open_food_facts',
-                    status = 'active',
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :id
-                """
-            ),
-            {
-                "id": global_product_id,
-                "name": product_name,
-                "brand": brand,
-                "category": category,
-                "size_value": size_value,
-                "size_unit": size_unit,
-            },
-        )
-    else:
-        global_product_id = str(uuid.uuid4())
-        conn.execute(
-            text(
-                """
-                INSERT INTO global_products (
-                    id, primary_gtin, name, brand, variant, category,
-                    size_value, size_unit, source, status, created_at, updated_at
-                ) VALUES (
-                    :id, :gtin, :name, :brand, :variant, :category,
-                    :size_value, :size_unit, 'open_food_facts', 'active',
-                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                )
-                """
-            ),
-            {
-                "id": global_product_id,
-                "gtin": gtin,
-                "name": product_name,
-                "brand": brand,
-                "variant": _clean_text(off_product.get("variant")) or None,
-                "category": category,
-                "size_value": size_value,
-                "size_unit": size_unit,
-            },
-        )
+    global_product_id = get_or_create_global_product(
+        conn,
+        gtin=gtin,
+        name=product_name,
+        brand=brand,
+        variant=_clean_text(off_product.get("variant")) or None,
+        category=category,
+        size_value=size_value,
+        size_unit=size_unit,
+        source="open_food_facts",
+        status="active",
+        normalize_gtin=lambda value: _normalize_gtin(value),
+    )
 
     identity = conn.execute(
         text(

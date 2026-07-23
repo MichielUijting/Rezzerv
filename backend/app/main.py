@@ -62,12 +62,17 @@ import tempfile
 import cv2
 
 from app.db import engine, get_runtime_datastore_info
+from app.services.global_product_service import (
+    build_global_product_fingerprint,
+    get_or_create_global_product,
+)
 from app.services.external_article_product_link_service import (
     ensure_external_article_product_link_schema,
     get_confirmed_external_article_product_link,
 )
 from app.api.system_routes import router as system_router
 from app.api.product_inventory_group_routes import router as product_inventory_group_router
+from app.api.catalog_routes import router as catalog_router
 from app.api.receipt_diagnosis_routes import router as receipt_diagnosis_router
 from app.api.receipt_kpi_routes import router as receipt_kpi_router
 from app.api.receipt_import_diagnosis_routes import router as receipt_import_diagnosis_router
@@ -444,6 +449,7 @@ users = {email: dict(profile) for email, profile in DEFAULT_AUTH_USERS.items()}
 
 app.include_router(system_router)
 app.include_router(product_inventory_group_router)
+app.include_router(catalog_router)
 app.include_router(receipt_diagnosis_router)
 app.include_router(receipt_kpi_router)
 app.include_router(receipt_import_diagnosis_router)
@@ -1616,6 +1622,7 @@ def ensure_global_product_catalog_schema():
                 category TEXT,
                 size_value NUMERIC,
                 size_unit TEXT,
+                product_fingerprint TEXT,
                 source TEXT NOT NULL DEFAULT 'user',
                 status TEXT NOT NULL DEFAULT 'active',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1624,6 +1631,44 @@ def ensure_global_product_catalog_schema():
             """
         ))
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_global_products_primary_gtin ON global_products (primary_gtin) WHERE primary_gtin IS NOT NULL AND trim(primary_gtin) <> ''"))
+        ensure_table_column(conn, 'global_products', 'product_fingerprint', 'TEXT')
+        product_rows_for_fingerprint = conn.execute(text(
+            """
+            SELECT id, name, brand, variant, size_value, size_unit
+            FROM global_products
+            WHERE status = 'active'
+              AND COALESCE(trim(primary_gtin), '') = ''
+            ORDER BY datetime(created_at) ASC, id ASC
+            """
+        )).mappings().all()
+        seen_fingerprints: dict[str, str] = {}
+        for product_row in product_rows_for_fingerprint:
+            fingerprint = build_global_product_fingerprint(
+                product_row.get('name'), product_row.get('brand'), product_row.get('variant'),
+                product_row.get('size_value'), product_row.get('size_unit'),
+            )
+            if not fingerprint:
+                continue
+            existing_product_id = seen_fingerprints.get(fingerprint)
+            if existing_product_id and existing_product_id != str(product_row.get('id')):
+                raise RuntimeError(
+                    'Catalogus bevat nog inhoudelijke doublures zonder GTIN; '
+                    f"fingerprint={fingerprint}, ids={existing_product_id},{product_row.get('id')}"
+                )
+            seen_fingerprints[fingerprint] = str(product_row.get('id'))
+            conn.execute(
+                text("UPDATE global_products SET product_fingerprint = :product_fingerprint WHERE id = :id"),
+                {'id': str(product_row.get('id')), 'product_fingerprint': fingerprint},
+            )
+        conn.execute(text(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_global_products_active_fingerprint
+            ON global_products (product_fingerprint)
+            WHERE status = 'active'
+              AND COALESCE(trim(primary_gtin), '') = ''
+              AND COALESCE(trim(product_fingerprint), '') <> ''
+            """
+        ))
         product_identity_columns = ensure_table_column(conn, 'product_identities', 'global_product_id', 'TEXT')
         enrichment_columns = ensure_table_column(conn, 'product_enrichments', 'global_product_id', 'TEXT')
         if 'updated_at' not in enrichment_columns:
@@ -1801,53 +1846,24 @@ def normalize_global_product_status(value: str | None) -> str:
     return normalized if normalized in {'active', 'merged', 'archived'} else 'active'
 
 
-def ensure_global_product_record(conn, gtin: str | None, article_name: str | None, source: str = 'user', brand: str | None = None, category: str | None = None, size_value = None, size_unit: str | None = None) -> str | None:
+def ensure_global_product_record(conn, gtin: str | None, article_name: str | None, source: str = 'user', brand: str | None = None, category: str | None = None, size_value = None, size_unit: str | None = None, variant: str | None = None) -> str | None:
     normalized_gtin = normalize_barcode_value(gtin) if gtin else None
     normalized_name = normalize_household_article_name(article_name) or (f'Product {normalized_gtin}' if normalized_gtin else '')
     if not normalized_name:
         return None
-    existing = None
-    if normalized_gtin:
-        existing = conn.execute(text(
-            """
-            SELECT id, name, brand, category, size_value, size_unit
-            FROM global_products
-            WHERE primary_gtin = :primary_gtin
-            LIMIT 1
-            """
-        ), {'primary_gtin': normalized_gtin}).mappings().first()
-    if existing:
-        conn.execute(text(
-            """
-            UPDATE global_products
-            SET name = CASE WHEN COALESCE(trim(name), '') = '' THEN :name ELSE name END,
-                brand = COALESCE(brand, :brand),
-                category = COALESCE(category, :category),
-                size_value = COALESCE(size_value, :size_value),
-                size_unit = COALESCE(size_unit, :size_unit),
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = :id
-            """
-        ), {'id': existing.get('id'), 'name': normalized_name, 'brand': brand, 'category': category, 'size_value': size_value, 'size_unit': size_unit})
-        return str(existing.get('id'))
-    product_id = str(uuid.uuid4())
-    conn.execute(text(
-        """
-        INSERT INTO global_products (id, primary_gtin, name, brand, category, size_value, size_unit, source, status, created_at, updated_at)
-        VALUES (:id, :primary_gtin, :name, :brand, :category, :size_value, :size_unit, :source, :status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        """
-    ), {
-        'id': product_id,
-        'primary_gtin': normalized_gtin,
-        'name': normalized_name,
-        'brand': brand,
-        'category': category,
-        'size_value': size_value,
-        'size_unit': size_unit,
-        'source': normalize_global_product_source(source),
-        'status': normalize_global_product_status('active'),
-    })
-    return product_id
+    return get_or_create_global_product(
+        conn,
+        gtin=normalized_gtin,
+        name=normalized_name,
+        brand=normalize_optional_text_field(brand),
+        variant=normalize_optional_text_field(variant),
+        category=normalize_optional_text_field(category),
+        size_value=size_value,
+        size_unit=normalize_optional_text_field(size_unit),
+        source=normalize_global_product_source(source),
+        status=normalize_global_product_status('active'),
+        normalize_gtin=normalize_barcode_value,
+    )
 
 
 def resolve_global_product_id_for_article(conn, household_article_id: str, barcode: str | None = None) -> str | None:
