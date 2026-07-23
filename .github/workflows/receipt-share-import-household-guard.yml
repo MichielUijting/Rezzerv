@@ -80,19 +80,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-      - name: Installeer minimale frontend-afhankelijkheden
+      - name: Installeer frontend-afhankelijkheden
         working-directory: frontend
         shell: bash
         run: |
           set +e
-          npm install --legacy-peer-deps --no-save --no-audit --no-fund \
-            react@18.2.0 \
-            react-dom@18.2.0 \
-            react-router-dom@6.23.0 \
-            vite@5.0.0 \
-            @vitejs/plugin-react@4.0.0 \
-            @zxing/browser@0.1.5 > frontend-install.log 2>&1
+          npm ci --legacy-peer-deps --no-audit --no-fund > frontend-install.log 2>&1
           status=$?
           tail -n 80 frontend-install.log
           exit $status
