@@ -15,11 +15,15 @@ $steps = @(
     'Controleer projectmap en uitvoeromgeving',
     'Valideer testconfiguratie',
     'Maak geisoleerde testomgeving gereed',
-    'Start productie-ketentest',
+    'Start productie-ketentest voor huishouden 0',
     'Verwerk kassabon 1: voorraad 0 naar 2',
     'Verwerk kassabon 2: voorraad 2 naar 5',
     'Herhaal kassabon 2: voorraad blijft 5',
-    'Controleer events, idempotentie en eindresultaat'
+    'Controleer universeel product en huishoudartikel',
+    'Controleer producttypekoppeling',
+    'Controleer dat koopzegels buiten fysieke voorraad blijven',
+    'Verbruik voorraad 5 naar 1 en controleer Bijna op',
+    'Controleer groene eindmarker'
 )
 $total = $steps.Count
 
@@ -49,9 +53,6 @@ function Invoke-Checked {
 function Invoke-CapturedCommand {
     param([scriptblock]$Command)
 
-    # Docker schrijft normale voortgangsregels ook naar stderr. Onder Windows
-    # PowerShell zouden die bij ErrorActionPreference=Stop de test onterecht
-    # afbreken. Alleen de werkelijke proces-exitcode is daarom beslissend.
     $previousPreference = $ErrorActionPreference
     try {
         $ErrorActionPreference = 'Continue'
@@ -69,10 +70,12 @@ function Invoke-CapturedCommand {
 }
 
 Write-Host ''
-Write-Host '============================================================'
-Write-Host ' REZZERV KETENTEST: KASSABON -> UITPAKKEN -> VOORRAAD'
-Write-Host ' Verwacht voorraadpad: 0 -> 2 -> 5 -> 5'
-Write-Host '============================================================'
+Write-Host '================================================================='
+Write-Host ' REZZERV KETENTEST: KASSABON -> VOORRAAD -> BIJNA OP'
+Write-Host ' Huishouden: 0'
+Write-Host ' Verwacht voorraadpad: 0 -> 2 -> 5 -> 5 -> 1'
+Write-Host ' Verwacht Bijna-op-pad: NEE -> JA'
+Write-Host '================================================================='
 Write-Host ''
 
 try {
@@ -112,8 +115,8 @@ try {
     Show-Step 4 $steps[3]
     if ($DisplayValidatedResult) {
         $output = @(
-            "{'status': 'passed', 'inventory_path': [0, 2, 5, 5], 'purchase_event_path': [0, 1, 2, 2], 'production_endpoint': True}",
-            'RECEIPT_INVENTORY_PRODUCTION_CHAIN_GREEN'
+            "{'status': 'passed', 'household_id': '0', 'inventory_path': [0, 2, 5, 5, 1], 'purchase_event_path': [0, 1, 2, 2], 'household_product_link_count': 1, 'product_type_link_count': 1, 'loyalty_excluded_from_physical_stock': True, 'almost_out_path': [False, True], 'production_endpoint': True}",
+            'RECEIPT_INVENTORY_ALMOST_OUT_CHAIN_GREEN'
         )
         $exitCode = 0
     } elseif ($CiMode) {
@@ -140,6 +143,7 @@ try {
 
     $joined = $output -join "`n"
     if ($joined -notmatch 'inventory_path') { throw 'Voorraadpad ontbreekt in testuitvoer.' }
+    if ($joined -notmatch "household_id.*0") { throw 'Huishouden 0 is niet aangetoond.' }
 
     Show-Step 5 $steps[4]
     if ($joined -notmatch '0.*2') { throw 'Overgang 0 -> 2 niet aangetoond.' }
@@ -154,17 +158,38 @@ try {
     Show-Step 7 $steps[6] 'PASS'
 
     Show-Step 8 $steps[7]
-    if ($joined -notmatch 'RECEIPT_INVENTORY_PRODUCTION_CHAIN_GREEN') {
-        throw 'Groene eindmarker ontbreekt.'
-    }
+    if ($joined -notmatch "household_product_link_count.*1") { throw 'Koppeling universeel product naar huishoudartikel niet aangetoond.' }
     Show-Step 8 $steps[7] 'PASS'
 
+    Show-Step 9 $steps[8]
+    if ($joined -notmatch "product_type_link_count.*1") { throw 'Producttypekoppeling niet aangetoond.' }
+    Show-Step 9 $steps[8] 'PASS'
+
+    Show-Step 10 $steps[9]
+    if ($joined -notmatch "loyalty_excluded_from_physical_stock.*True") { throw 'Uitsluiting van koopzegels uit fysieke voorraad niet aangetoond.' }
+    Show-Step 10 $steps[9] 'PASS'
+
+    Show-Step 11 $steps[10]
+    if ($joined -notmatch '5.*1') { throw 'Consume-overgang 5 -> 1 niet aangetoond.' }
+    if ($joined -notmatch "almost_out_path.*False.*True") { throw 'Bijna-op-overgang NEE -> JA niet aangetoond.' }
+    Show-Step 11 $steps[10] 'PASS'
+
+    Show-Step 12 $steps[11]
+    if ($joined -notmatch 'RECEIPT_INVENTORY_ALMOST_OUT_CHAIN_GREEN') {
+        throw 'Groene eindmarker ontbreekt.'
+    }
+    Show-Step 12 $steps[11] 'PASS'
+
     Write-Host ''
-    Write-Host '============================================================'
-    Write-Host ' KETENTEST GESLAAGD - 8/8 STAPPEN GROEN - 100%'
-    Write-Host ' Voorraadpad: 0 -> 2 -> 5 -> 5'
+    Write-Host '================================================================='
+    Write-Host ' KETENTEST GESLAAGD - 12/12 STAPPEN GROEN - 100%'
+    Write-Host ' Huishouden: 0'
+    Write-Host ' Voorraadpad: 0 -> 2 -> 5 -> 5 -> 1'
+    Write-Host ' Bijna-op-pad: NEE -> JA'
     Write-Host ' Dubbele voorraadmutatie voorkomen: JA'
-    Write-Host '============================================================'
+    Write-Host ' Universeel product en producttype gekoppeld: JA'
+    Write-Host ' Koopzegels buiten fysieke voorraad: JA'
+    Write-Host '================================================================='
     Write-Host ''
     exit 0
 }
@@ -172,7 +197,7 @@ catch {
     Write-Host ''
     Write-Host '[ROOD] KETENTEST MISLUKT'
     Write-Host ("Oorzaak: {0}" -f $_.Exception.Message)
-    Write-Host 'Verwacht: voorraadpad 0 -> 2 -> 5 -> 5 en exact twee purchase-events.'
+    Write-Host 'Verwacht: huishouden 0, voorraadpad 0 -> 2 -> 5 -> 5 -> 1 en Bijna-op NEE -> JA.'
     Write-Host ''
     exit 1
 }
