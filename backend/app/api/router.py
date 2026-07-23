@@ -14,6 +14,7 @@ Technical Design Reference:
 from fastapi import APIRouter
 
 from app.api.article_group_routes import router as article_group_router
+from app.api.loyalty_stamp_routes import router as loyalty_stamp_router
 from app.api.routes.debug import router as debug_router
 from app.api.routes.receipt_db_snapshot import router as receipt_db_snapshot_router
 from app.api.routes.kassa_regression_routes import router as kassa_regression_router
@@ -24,6 +25,7 @@ from app.services import receipt_g1_merge
 
 api_router = APIRouter()
 api_router.include_router(article_group_router)
+api_router.include_router(loyalty_stamp_router)
 api_router.include_router(debug_router)
 api_router.include_router(receipt_db_snapshot_router)
 api_router.include_router(kassa_regression_router)
