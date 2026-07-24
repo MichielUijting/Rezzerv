@@ -172,12 +172,14 @@ function buildReceiptItems(rawItems) {
       return Number(right.score || 0) - Number(left.score || 0)
     })
     const linked = candidates.find((candidate) => candidate.isLinkedToCatalog)
-    const displayBest = linked || candidates.find((candidate) => !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate)) || null
     const selectableBest = candidates.find((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate)) || null
+    // Functioneel PO-besluit: de hoofdtabel toont uitsluitend een definitieve
+    // Cataloguskoppeling of een kandidaat met een universele GTIN/EAN.
+    // Retailer- en leverancierscodes blijven alleen interne zoekhulp.
+    const displayBest = linked || selectableBest
     const hasSelectableCandidate = candidates.some((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate))
-    const hasVisibleCandidate = candidates.some((candidate) => !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate))
     const hasFallback = candidates.some((candidate) => candidate.isFallbackCandidate)
-    return { ...item, candidates, status: item.catalogLinked ? 'Gekoppeld' : (item.hasKnownGtin ? 'GTIN / EAN bekend' : (hasSelectableCandidate ? 'Universele kandidaten gevonden' : (hasVisibleCandidate ? 'Kandidaten gevonden' : (hasFallback ? 'Geen externe match' : item.status)))), candidateCount: candidates.filter((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate)).length, bestCandidateName: item.catalogLinked && item.linkedCandidateName ? item.linkedCandidateName : (item.hasKnownGtin ? '' : text(displayBest?.candidateName, '')), productType: item.linkedProductType || '', bestCandidateCode: item.catalogLinked && item.gtin !== '-' ? item.gtin : (item.hasKnownGtin ? item.gtin : text(selectableBest?.externalCode, '')), bestCandidateScore: item.catalogLinked && item.linkedScore !== null ? item.linkedScore : (item.hasKnownGtin ? null : displayBest?.score ?? null), gtin: item.gtin, bestSelectableCandidateName: item.hasKnownGtin ? '' : text(selectableBest?.candidateName, '') }
+    return { ...item, candidates, status: item.catalogLinked ? 'Gekoppeld' : (item.hasKnownGtin ? 'GTIN / EAN bekend' : (hasSelectableCandidate ? 'Universele kandidaten gevonden' : (hasFallback ? 'Geen externe match' : 'Geen universele kandidaat'))), candidateCount: candidates.filter((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate)).length, bestCandidateName: item.catalogLinked && item.linkedCandidateName ? item.linkedCandidateName : (item.hasKnownGtin ? '' : text(displayBest?.candidateName, '')), productType: item.linkedProductType || '', bestCandidateCode: item.catalogLinked && item.gtin !== '-' ? item.gtin : (item.hasKnownGtin ? item.gtin : text(selectableBest?.externalCode, '')), bestCandidateScore: item.catalogLinked && item.linkedScore !== null ? item.linkedScore : (item.hasKnownGtin ? null : displayBest?.score ?? null), gtin: item.gtin, bestSelectableCandidateName: item.hasKnownGtin ? '' : text(selectableBest?.candidateName, '') }
   })
 }
 function offStatusLabel(preview) {

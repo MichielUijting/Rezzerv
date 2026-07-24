@@ -153,7 +153,7 @@ test.describe('Externe databases frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
-  test('Bovenste tabel toont geen winkelspecifieke artikelcode als GTIN EAN', async ({ page }) => {
+  test('Bovenste tabel toont geen winkelspecifieke kandidaat zonder universele GTIN EAN', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     await routeReceiptItems(page, [{
       receipt_item_id: 'purchase-import-line:purchase-line-invalid-gtin-regression',
@@ -165,8 +165,8 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Winkelspecifieke code regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('0,900');
-    await expect(receiptRow.locator('td').nth(5)).toHaveText('Rezzerv Test Product');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(6)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(7)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(8)).toHaveText('1 stuk');
