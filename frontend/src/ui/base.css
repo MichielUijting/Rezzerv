@@ -1798,3 +1798,236 @@ body,
   z-index: 4;
   background: var(--rz-surface, #fff);
 }
+
+/* Shared barcode identity controls */
+.rz-barcode-field {
+  display: grid;
+  gap: 8px;
+}
+
+.rz-barcode-field__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rz-barcode-field__actions .rz-button-primary,
+.rz-barcode-field__actions .rz-button-secondary {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 14px;
+  line-height: 1;
+}
+
+.rz-receipt-line-detail__readonly-value {
+  width: 100%;
+  min-height: 40px;
+  background: #f8fafc;
+  color: #344054;
+}
+
+.rz-barcode-field__hint {
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.rz-barcode-scanner-preview {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d0d5dd;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.rz-barcode-scanner-preview video {
+  display: block;
+  width: 100%;
+  max-height: 340px;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #101828;
+}
+
+/* Uitpakken master-detail for receipt lines */
+.rz-store-workbench-row {
+  cursor: pointer;
+}
+
+.rz-store-workbench-row.is-detail-active > td {
+  background: #eaf5ed;
+}
+
+.rz-receipt-line-detail {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border: 2px solid var(--rz-green-dark);
+  border-radius: 16px;
+  background: var(--rz-surface);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.rz-receipt-line-detail__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.rz-receipt-line-detail__header h3,
+.rz-receipt-line-detail__header p {
+  margin: 0;
+}
+
+.rz-receipt-line-detail__header p {
+  margin-top: 4px;
+  color: #475467;
+}
+
+.rz-receipt-line-detail__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  margin: 0;
+  border: 1px solid #b8d7c0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.rz-receipt-line-detail__grid > div {
+  display: grid;
+  grid-template-columns: minmax(130px, 0.42fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  min-height: 48px;
+  padding: 12px 14px;
+  border-right: 1px solid #d7e8db;
+  border-bottom: 1px solid #d7e8db;
+}
+
+.rz-receipt-line-detail__grid > div:nth-child(2n) {
+  border-right: 0;
+}
+
+.rz-receipt-line-detail__grid > div:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.rz-receipt-line-detail__grid > .rz-receipt-line-detail__wide {
+  grid-column: 1 / -1;
+  border-right: 0;
+}
+
+.rz-receipt-line-detail__grid dt {
+  color: #344054;
+  font-weight: 600;
+}
+
+.rz-receipt-line-detail__grid dd {
+  min-width: 0;
+  margin: 0;
+}
+
+.rz-receipt-line-detail__notice {
+  margin: 0;
+  color: #667085;
+  font-size: 12px;
+}
+
+.rz-detail-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef2f6;
+  color: #344054;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.rz-detail-status--ready {
+  background: #e6f4ea;
+  color: #176b35;
+}
+
+.rz-detail-status--action_needed,
+.rz-detail-status--new_mapping {
+  background: #fff4e5;
+  color: #8a4b08;
+}
+
+.rz-detail-status--ignored {
+  background: #f2f4f7;
+  color: #667085;
+}
+
+@media (max-width: 820px) {
+  .rz-receipt-line-detail__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .rz-receipt-line-detail__grid > div,
+  .rz-receipt-line-detail__grid > div:nth-child(2n),
+  .rz-receipt-line-detail__grid > div:nth-last-child(-n + 2) {
+    grid-template-columns: 1fr;
+    border-right: 0;
+    border-bottom: 1px solid #d7e8db;
+  }
+
+  .rz-receipt-line-detail__grid > div:last-child {
+    border-bottom: 0;
+  }
+}
+
+
+.rz-store-workbench-row[title*="Dubbelklik"] {
+  cursor: pointer;
+}
+
+
+/* Uitpakken: bonartikeldetails blijven als overlay boven het geopende kassabonscherm. */
+.rz-receipt-line-detail-backdrop {
+  z-index: 1400;
+  padding: 24px;
+}
+
+.rz-receipt-line-detail-modal {
+  width: min(880px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.rz-receipt-line-detail__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.rz-modal-close {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--rz-green-dark);
+  border-radius: 8px;
+  background: var(--rz-surface);
+  color: var(--rz-green-dark);
+  font: inherit;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.rz-modal-close:hover,
+.rz-modal-close:focus-visible {
+  background: var(--rz-green-light);
+}

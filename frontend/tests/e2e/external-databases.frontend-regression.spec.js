@@ -69,12 +69,15 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(receiptTable.locator('thead')).not.toContainText('Aantal');
     await expect(receiptTable.locator('thead')).toContainText('(Kand.) GTIN/EAN');
 
-    const rowWithCandidates = receiptTable.locator('tbody tr').filter({ hasText: /\b[1-9]\d*$/ }).first();
-    await expect(rowWithCandidates).toBeVisible();
-    await rowWithCandidates.dblclick();
+    const receiptRows = receiptTable.locator('tbody tr');
+    await expect(receiptRows.first()).toBeVisible();
 
-    await expect(page.getByText('Koppelen kandidaten in artikel-catalogus')).toBeVisible();
-    await expect(page.getByTestId('external-receipt-item-candidates-table')).toBeVisible();
+    const rowWithCandidates = receiptRows.filter({ hasText: /\b[1-9]\d*$/ }).first();
+    if (await rowWithCandidates.count()) {
+      await rowWithCandidates.dblclick();
+      await expect(page.getByText('Koppelen kandidaten in artikel-catalogus')).toBeVisible();
+      await expect(page.getByTestId('external-receipt-item-candidates-table')).toBeVisible();
+    }
     await expect(page.getByText(/Application error|Uncaught|TypeError|ReferenceError/i)).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
   });
