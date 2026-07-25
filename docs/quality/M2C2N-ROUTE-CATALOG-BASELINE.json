@@ -1,24 +1,24 @@
 {
   "catalog_version": 1,
-  "route_fingerprint_sha256": "ba098c6fea4cb969d9dd21d0316099f5672aca453cffe55cdc285e137a27c04a",
+  "route_fingerprint_sha256": "f5da8a2b24e8c5ee86527faa1d3bc4c0423697de5d20720d3279077377fbac6b",
   "summary": {
-    "route_registrations": 194,
-    "unique_method_paths": 194,
+    "route_registrations": 202,
+    "unique_method_paths": 202,
     "duplicates": 0,
     "by_surface": {
-      "admin": 14,
+      "admin": 15,
       "dev": 2,
-      "production": 140,
+      "production": 147,
       "testing": 38
     },
     "by_access": {
-      "mutation": 109,
-      "read": 85
+      "mutation": 112,
+      "read": 90
     },
     "mutation_by_surface": {
-      "admin": 10,
+      "admin": 11,
       "dev": 1,
-      "production": 81,
+      "production": 83,
       "testing": 17
     }
   },
@@ -49,6 +49,7 @@
     "POST /api/admin/inventory/groups/ensure-schema :: app.api.product_inventory_group_routes.inventory_groups_ensure_schema",
     "POST /api/admin/kassa-regression/run :: app.api.routes.kassa_regression_routes.start_kassa_receipt_regression",
     "POST /api/admin/kassa-smoke/run :: app.api.routes.kassa_smoke_routes.start_kassa_smoke_check",
+    "POST /api/admin/product-groups/import-gpc-en-bundled :: app.api.product_inventory_group_routes.admin_product_groups_import_gpc_en_bundled",
     "POST /api/admin/product-groups/import-gpc-nl :: app.api.product_inventory_group_routes.admin_product_groups_import_gpc_nl",
     "POST /api/admin/receipts/purge-archived :: app.main.purge_archived_receipts",
     "POST /api/admin/recompute-receipt-statuses :: app.main.run_receipt_status_backfill",
