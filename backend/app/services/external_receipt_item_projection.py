@@ -9,6 +9,7 @@ from sqlalchemy import text
 from app.db import engine
 from app.services import external_product_candidate_store as candidate_store
 from app.services.external_product_candidate_store import list_external_receipt_items as _base_list_external_receipt_items
+from app.services.external_article_ui_projection import project_central_link_truth_rows
 
 
 def _text(value: Any) -> str:
@@ -360,6 +361,19 @@ def _enrich_receipt_table_items(result: dict[str, Any], limit: int) -> dict[str,
     next_result["creates_global_product"] = False
     next_result["creates_household_article"] = False
     next_result["creates_inventory_event"] = False
+
+    # Receipt-table-line-placeholders worden pas in deze wrapper toegevoegd.
+    # Projecteer daarom de centrale winkelartikelkoppeling als allerlaatste stap.
+    with engine.connect() as conn:
+        next_result["items"] = project_central_link_truth_rows(
+            conn,
+            [
+                dict(item) if isinstance(item, dict) else item
+                for item in list(next_result.get("items") or [])
+            ],
+        )
+
+    next_result["total"] = len(next_result["items"])
     return next_result
 
 

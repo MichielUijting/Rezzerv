@@ -37,8 +37,12 @@ def _initialize_production_schema(main) -> None:
         function()
 
     from app.services.article_group_store import ensure_article_group_schema
+    from app.services.product_inventory_group_store import (
+        ensure_product_inventory_group_schema,
+    )
 
     ensure_article_group_schema()
+    ensure_product_inventory_group_schema()
 
     if hasattr(main, "seed_store_providers"):
         main.seed_store_providers()
@@ -74,7 +78,7 @@ def _seed_batch(main, *, batch_id: str, line_id: str, receipt_ref: str, quantity
             "id": line_id,
             "batch_id": batch_id,
             "external_line_ref": f"{receipt_ref}:1",
-            "external_article_code": "8710000091001",
+            "external_article_code": "8718265184886",
             "article_name_raw": "AH BANANEN",
             "brand_raw": "Albert Heijn",
             "quantity_raw": quantity,
@@ -146,9 +150,19 @@ def run_production_chain() -> dict:
         _initialize_production_schema(main)
 
         required_tables = {
-            "store_providers", "household_store_connections", "global_products",
-            "article_groups", "household_articles", "spaces", "sublocations", "purchase_import_batches",
-            "purchase_import_lines", "inventory", "inventory_events",
+            "store_providers",
+            "household_store_connections",
+            "global_products",
+            "product_inventory_groups",
+            "product_group_memberships",
+            "article_groups",
+            "household_articles",
+            "spaces",
+            "sublocations",
+            "purchase_import_batches",
+            "purchase_import_lines",
+            "inventory",
+            "inventory_events",
         }
         actual_tables = set(inspect(main.engine).get_table_names())
         missing = required_tables - actual_tables
@@ -158,7 +172,7 @@ def run_production_chain() -> dict:
             "provider_id": "chain-provider",
             "connection_id": "chain-connection",
             "global_product_id": "chain-global-product",
-            "product_type_id": "chain-product-type",
+            "product_type_id": "gpc:10005897",
             "article_group_id": "chain-article-group",
             "household_article_id": "chain-household-article",
             "space_id": "chain-space",
@@ -173,18 +187,34 @@ def run_production_chain() -> dict:
                 "store_provider_id": ids["provider_id"], "connection_status": "active",
             })
             _insert_row(conn, "global_products", {
-                "id": ids["global_product_id"], "name": "AH BANANEN",
-                "primary_gtin": "8710000091001", "barcode": "8710000091001",
-                "brand": "Albert Heijn", "source": "test", "status": "active",
+                "id": ids["global_product_id"],
+                "name": "AH BANANEN",
+                "primary_gtin": "8718265184886",
+                "barcode": "8718265184886",
+                "brand": "Albert Heijn",
+                "source": "test",
+                "status": "active",
             })
             if "product_inventory_groups" in actual_tables:
                 _insert_row(conn, "product_inventory_groups", {
-                    "id": ids["product_type_id"], "name": "Fruit", "active": 1,
+                    "inventory_group_key": ids["product_type_id"],
+                    "display_name": "Bananen (Cavendish)",
+                    "default_base_unit": "stuk",
+                    "aggregation_mode": "sum_quantity",
+                    "active": 1,
+                    "gpc_brick_code": "10005897",
+                    "source": "gs1_gpc_2026_05_en",
                 })
             if "product_group_memberships" in actual_tables:
                 _insert_row(conn, "product_group_memberships", {
+                    "id": "chain-product-type-membership",
                     "global_product_id": ids["global_product_id"],
-                    "product_inventory_group_id": ids["product_type_id"], "is_primary": 1,
+                    "inventory_group_key": ids["product_type_id"],
+                    "comparison_group_key": ids["product_type_id"],
+                    "confidence": 1.0,
+                    "source": "receipt-inventory-production-chain",
+                    "confirmed_by_user": 1,
+                    "active": 1,
                 })
             _insert_row(conn, "article_groups", {
                 "id": ids["article_group_id"],
@@ -201,6 +231,16 @@ def run_production_chain() -> dict:
                 "article_group_id": ids["article_group_id"], "status": "active",
                 "active": 1, "consumable": 1, "min_stock": 2, "ideal_stock": 3,
             })
+            if "product_identities" in actual_tables:
+                _insert_row(conn, "product_identities", {
+                    "id": "chain-product-gtin-identity",
+                    "household_article_id": ids["household_article_id"],
+                    "global_product_id": ids["global_product_id"],
+                    "identity_type": "gtin",
+                    "identity_value": "8718265184886",
+                    "is_primary": 1,
+                    "source": "receipt-inventory-production-chain",
+                })
             _insert_row(conn, "spaces", {
                 "id": ids["space_id"], "household_id": "0", "naam": "Keuken", "active": 1,
             })

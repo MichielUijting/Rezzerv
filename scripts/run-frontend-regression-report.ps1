@@ -87,8 +87,8 @@ try {
     -v "${frontendPath}:/work" `
     -v rezzerv_playwright_node_modules:/work/node_modules `
     -w /work `
-    mcr.microsoft.com/playwright:v1.61.0-noble `
-    bash -lc "npm install --package-lock=false && ./node_modules/.bin/playwright test --workers=3 $testFiles"
+    mcr.microsoft.com/playwright:v1.58.2-noble `
+    bash -lc "npm ci && ./node_modules/.bin/playwright test --workers=3 $testFiles"
 
   if ($LASTEXITCODE -ne 0) {
     throw "Playwright frontend regressie is gefaald met exitcode $LASTEXITCODE."
