@@ -47,14 +47,14 @@ def main() -> None:
 
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     summary = baseline["summary"]
-    assert summary["route_registrations"] == 194
-    assert summary["unique_method_paths"] == 194
+    assert summary["route_registrations"] == 202
+    assert summary["unique_method_paths"] == 202
     assert summary["duplicates"] == 0
-    assert summary["by_access"] == {"mutation": 109, "read": 85}
+    assert summary["by_access"] == {"mutation": 112, "read": 90}
     assert summary["mutation_by_surface"] == {
-        "admin": 10,
+        "admin": 11,
         "dev": 1,
-        "production": 81,
+        "production": 83,
         "testing": 17,
     }
 
@@ -64,7 +64,7 @@ def main() -> None:
     report = REPORT_PATH.read_text(encoding="utf-8")
     assert "M2C2n eindadvies: GO" in report
     assert "M2C2N-23" in report and "DEFERRED" in report
-    assert "194" in report and "nul dubbele" in report.lower()
+    assert "202" in report and "nul dubbele" in report.lower()
     assert "PR #160" in report and "PR #185" in report
     assert "geen functionele schermacceptatie" in report.lower()
 

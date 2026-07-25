@@ -21,6 +21,9 @@ import {
 } from './storeImportShared'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider'
+import useBarcodeScanner from '../../lib/useBarcodeScanner.js'
+import BarcodeIdentityField from '../barcodes/BarcodeIdentityField.jsx'
+import BarcodeScannerModal from '../barcodes/BarcodeScannerModal.jsx'
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'Alles' },
@@ -200,10 +203,20 @@ function deriveLineSelectionState({ line, draft, validLocationIds, processingSta
   }
 }
 
+function buildReceiptLineDetailPath(batchId, lineId) {
+  return `/kassabonnen/batch/${encodeURIComponent(batchId)}/regel/${encodeURIComponent(lineId)}`
+}
+
+function buildBatchDetailPath(batchId) {
+  return `/kassabonnen/batch/${encodeURIComponent(batchId)}`
+}
+
 export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false }) {
   const navigate = useNavigate()
   const params = useParams()
   const batchId = batchIdOverride || params.batchId || ''
+  const receiptLineId = String(params.receiptLineId || '').trim()
+  const isReceiptLineDetail = Boolean(receiptLineId)
   const [household, setHousehold] = useState(null)
   const [providers, setProviders] = useState([])
   const [batch, setBatch] = useState(null)
@@ -224,6 +237,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [batchDiagnostics, setBatchDiagnostics] = useState(null)
   const [lineDrafts, setLineDrafts] = useState({})
   const [lineSaveState, setLineSaveState] = useState({})
+  const [barcodeDrafts, setBarcodeDrafts] = useState({})
+  const [barcodeStates, setBarcodeStates] = useState({})
+  const [activeBarcodeLineId, setActiveBarcodeLineId] = useState('')
+  const [activeDetailLineId, setActiveDetailLineId] = useState(receiptLineId)
   const [selectedLineIds, setSelectedLineIds] = useState([])
   const [activeSummaryFilter, setActiveSummaryFilter] = useState('all')
   const [searchValue, setSearchValue] = useState('')
@@ -233,6 +250,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [activeLocationSpaceId, setActiveLocationSpaceId] = useState('')
   const [pendingDefaultLocationChoice, setPendingDefaultLocationChoice] = useState(null)
   const locationHoverTimerRef = useRef(null)
+  const previousReceiptLineIdRef = useRef(receiptLineId || '')
 
   useDismissOnComponentClick([() => setStatus(''), () => setError(''), () => setProcessFeedback('')], Boolean(status || error || processFeedback))
   const [statusFilter, setStatusFilter] = useState('all')
@@ -243,12 +261,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const processFeedbackTimer = useRef(null)
   const storeBatchTableColumns = useMemo(() => ([
     { key: 'select', width: 44 },
-    { key: 'bonartikel', width: 240 },
+    { key: 'bonartikel', width: 360 },
+    { key: 'aantal', width: 110 },
     { key: 'locatie', width: 260 },
-    { key: 'aantal', width: 100 },
-    { key: 'gekoppeld', width: 280 },
-    { key: 'artikelgroep', width: 240 },
-    { key: 'standaardartikel', width: 260 },
+    { key: 'gekoppeld', width: 320 },
   ]), [])
   const lineColumnDefaults = useMemo(() => Object.fromEntries(storeBatchTableColumns.map(({ key, width }) => [key, width])), [storeBatchTableColumns])
   const { widths: lineColumnWidths, startResize: startLineResize } = useResizableColumnWidths(lineColumnDefaults)
@@ -265,6 +281,87 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
 
   const { showFeedback } = useAppFeedback()
+
+
+  const {
+    videoRef: barcodeVideoRef,
+    isOpen: barcodeCameraOpen,
+    cameraState: barcodeCameraState,
+    cameraMeta: barcodeCameraMeta,
+    availableCameras: barcodeAvailableCameras,
+    startScanner: startBarcodeScanner,
+    stopScanner: stopBarcodeScanner,
+    switchCamera: switchBarcodeCamera,
+  } = useBarcodeScanner({
+    screenContext: 'Uitpakken',
+    onDetected: async (detectedBarcode) => {
+      const lineId = activeBarcodeLineId
+      const normalized = String(detectedBarcode || '').trim()
+      if (!lineId || !normalized) return
+      setBarcodeDrafts((current) => ({ ...current, [lineId]: normalized }))
+      await validateReceiptLineBarcode(lineId, normalized)
+    },
+  })
+
+  function barcodeInitialValue(line) {
+    return firstTextValue(line?.barcode, line?.gtin, line?.primary_gtin, line?.matched_global_product_gtin)
+  }
+
+  function updateBarcodeDraft(lineId, value) {
+    setBarcodeDrafts((current) => ({ ...current, [lineId]: value }))
+    setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'idle', message: '' } }))
+  }
+
+  async function validateReceiptLineBarcode(lineId, overrideValue = null) {
+    const value = String(overrideValue ?? barcodeDrafts[lineId] ?? '').trim()
+    if (!value) {
+      setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'warning', message: 'Vul eerst een GTIN in.' } }))
+      showUitpakkenFeedback('warning', 'Vul eerst een GTIN in.', { key: `barcode-empty-${lineId}-${Date.now()}` })
+      return
+    }
+    setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'loading', message: 'GTIN controleren…' } }))
+    try {
+      const validation = await fetchJson('/api/barcodes/validate', {
+        method: 'POST',
+        body: JSON.stringify({ value, declared_type: 'gtin' }),
+      })
+      if (!validation?.valid) {
+        const message = validation?.message || validation?.reason || 'Dit is geen geldige GTIN-8, 12, 13 of 14.'
+        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'error', message } }))
+        showUitpakkenFeedback('error', message, { key: `barcode-invalid-${lineId}-${Date.now()}` })
+        return
+      }
+      const lookup = await fetchJson(`/api/barcodes/${encodeURIComponent(validation.normalized_value || value)}`)
+      const matchStatus = String(lookup?.match_status || '')
+      if (matchStatus === 'matched') {
+        const productName = firstTextValue(lookup?.product?.name, 'bekend universeel artikel')
+        const message = `Geldige GTIN. Gevonden: ${productName}.`
+        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'success', message, productName } }))
+        showUitpakkenFeedback('success', message, { key: `barcode-matched-${lineId}-${Date.now()}` })
+      } else if (matchStatus === 'conflict') {
+        const message = 'Conflict: deze GTIN verwijst naar meerdere universele artikelen. Er is niets gewijzigd.'
+        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'error', message } }))
+        showUitpakkenFeedback('error', message, { key: `barcode-conflict-${lineId}-${Date.now()}` })
+      } else if (matchStatus === 'incomplete') {
+        const message = 'GTIN gevonden, maar de productkoppeling is nog niet compleet. Er is niets gewijzigd.'
+        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'warning', message } }))
+        showUitpakkenFeedback('warning', message, { key: `barcode-incomplete-${lineId}-${Date.now()}` })
+      } else {
+        const message = 'Geldige GTIN, maar nog niet bekend in de catalogus. Er is niets gewijzigd.'
+        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'warning', message } }))
+        showUitpakkenFeedback('warning', message, { key: `barcode-unknown-${lineId}-${Date.now()}` })
+      }
+    } catch (lookupError) {
+      const message = normalizeErrorMessage(lookupError?.message || lookupError)
+      setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'error', message } }))
+      showUitpakkenFeedback('error', message, { key: `barcode-error-${lineId}-${Date.now()}` })
+    }
+  }
+
+  async function openReceiptLineBarcodeScanner(lineId) {
+    setActiveBarcodeLineId(String(lineId))
+    await startBarcodeScanner(barcodeCameraMeta.deviceId || '')
+  }
 
   function showUitpakkenFeedback(variant, message, options = {}) {
     const normalizedVariant = String(variant || 'info').trim().toLowerCase() || 'info'
@@ -313,9 +410,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   useEffect(() => {
     const nextDrafts = {}
     const nextSaveState = {}
+    const nextBarcodeDrafts = {}
+    const nextBarcodeStates = {}
     const nextLineIds = []
     ;(batch?.lines || []).forEach((line) => {
       if ((line.processing_status || 'pending') !== 'processed') nextLineIds.push(line.id)
+      nextBarcodeDrafts[line.id] = barcodeInitialValue(line)
+      nextBarcodeStates[line.id] = barcodeStates[line.id] || { status: 'idle', message: '' }
       nextDrafts[line.id] = {
         articleId: line.matched_household_article_id || '',
         articleGroupId: line.selected_article_group_id || '',
@@ -333,6 +434,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     })
     setLineDrafts(nextDrafts)
     setLineSaveState(nextSaveState)
+    setBarcodeDrafts(nextBarcodeDrafts)
+    setBarcodeStates(nextBarcodeStates)
     setSelectedLineIds((current) => current.filter((id) => nextLineIds.includes(id)))
   }, [batch?.batch_id, batch?.lines])
 
@@ -625,6 +728,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     } catch (err) {
       const message = normalizeErrorMessage(err?.message) || 'Opslaan mislukt'
       setError(message)
+      showUitpakkenFeedback('error', message, { key: `uitpakken-save-error-${String(line.id)}-${Date.now()}` })
       setLineSaveState((current) => ({
         ...current,
         [line.id]: {
@@ -1126,10 +1230,56 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         articleGroupOptions.find((group) => String(group.id) === String(entry.draft.articleGroupId || ''))?.name || ''
       ),
       locatie: (entry) => (locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''),
+      status: (entry) => entry.statusLabel || '',
     })
   }, [filteredLineUiStates, tableSort, locationOptions, articleGroupOptions])
 
+  const activeDetailEntry = useMemo(() => (
+    lineUiStates.find((entry) => String(entry.line.id) === String(receiptLineId || activeDetailLineId))
+      || null
+  ), [lineUiStates, receiptLineId, activeDetailLineId])
+
+  useEffect(() => {
+    if (receiptLineId) setActiveDetailLineId(receiptLineId)
+  }, [receiptLineId])
+
+  useEffect(() => {
+    if (!activeDetailLineId) return undefined
+    function handleEscape(event) {
+      if (event.key === 'Escape') closeReceiptLineDetail()
+    }
+    window.addEventListener('keydown', handleEscape)
+    return () => window.removeEventListener('keydown', handleEscape)
+  }, [activeDetailLineId, batch?.batch_id])
+
+  useEffect(() => {
+    const previousReceiptLineId = previousReceiptLineIdRef.current
+    previousReceiptLineIdRef.current = receiptLineId || ''
+    if (previousReceiptLineId && !receiptLineId && batch?.batch_id) {
+      refreshBatch(batch.batch_id).catch((refreshError) => {
+        showUitpakkenFeedback('error', normalizeErrorMessage(refreshError?.message || refreshError) || 'De kassabontabel kon niet worden ververst.')
+      })
+    }
+  }, [receiptLineId, batch?.batch_id])
+
   const simplificationLevelLabel = getStoreImportSimplificationLabel(household?.store_import_simplification_level || 'gebalanceerd')
+
+  function openReceiptLineDetail(lineId) {
+    setActiveDetailLineId(String(lineId || ''))
+  }
+
+  async function closeReceiptLineDetail() {
+    setActiveDetailLineId('')
+    setActiveBarcodeLineId('')
+    stopBarcodeScanner()
+    if (batch?.batch_id) {
+      try {
+        await refreshBatch(batch.batch_id)
+      } catch (refreshError) {
+        showUitpakkenFeedback('error', normalizeErrorMessage(refreshError?.message || refreshError) || 'De kassabontabel kon niet worden ververst.')
+      }
+    }
+  }
 
   function handleSummaryTileClick(nextKey) {
     setActiveSummaryFilter(nextKey)
@@ -1176,6 +1326,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     Bonregels: (
       <>
         <div style={{ display: 'grid', gap: '16px' }} data-testid="receipt-detail-page">
+          {!isReceiptLineDetail ? (<>
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', alignItems: 'start' }}>
             <div style={{ display: 'grid', gap: '4px' }}>
                             <div style={{ color: '#2e7d4d' }}>{batch?.purchase_date || 'Onbekende datum'} · {batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</div>
@@ -1194,128 +1345,127 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               <colgroup>
                 <col style={{ width: `${lineColumnWidths.select}px` }} />
                 <col style={{ width: `${lineColumnWidths.bonartikel}px` }} />
-                <col style={{ width: `${lineColumnWidths.locatie}px` }} />
                 <col style={{ width: `${lineColumnWidths.aantal}px` }} />
+                <col style={{ width: `${lineColumnWidths.locatie}px` }} />
                 <col style={{ width: `${lineColumnWidths.gekoppeld}px` }} />
-                <col style={{ width: `${lineColumnWidths.artikelgroep}px` }} />
-                <col style={{ width: `${lineColumnWidths.standaardartikel}px` }} />
               </colgroup>
               <thead>
                 <tr className="rz-table-header">
                   <ResizableHeaderCell columnKey="select" widths={lineColumnWidths} onStartResize={startLineResize} style={{ width: '44px' }}>
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
                   </ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Bonartikel</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-location" sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Locatie / sublocatie</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Aantal</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-linked" sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Gekoppeld artikel</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="artikelgroep" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-article-group" sortable isSorted={tableSort.key === 'artikelgroep'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Artikelgroep</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="standaardartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-standard" sortable isSorted={tableSort.key === 'standaardartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', locatie: 'asc', aantal: 'desc', gekoppeld: 'asc', artikelgroep: 'asc', standaardartikel: 'asc' }))}>Universeel artikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', status: 'asc' }))}>Bonartikel</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Aantal</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Locatie</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Mijn artikel</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
-                  <th>
-                    <input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of artikelgroep" />
-                  </th>
-                  <th>
-                    <select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)}>
-                      {LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
-                    </select>
-                  </th>
+                  <th><input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of artikelgroep" /></th>
                   <th />
-                  <th>
-                    <select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)}>
-                      {MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}
-                    </select>
-                  </th>
-                  <th />
-                  <th />
+                  <th><select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Filter op locatie">{LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}</select></th>
+                  <th><select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)} aria-label="Filter op Mijn artikel">{MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}</select></th>
                 </tr>
               </thead>
               <tbody>
                 {visibleLineUiStates.length === 0 ? (
-                  <tr>
-                    <td colSpan={7}>Geen open bonregels in deze selectie.</td>
-                  </tr>
+                  <tr><td colSpan={5}>Geen open bonregels in deze selectie.</td></tr>
                 ) : visibleLineUiStates.map((entry) => {
-                  const { line, draft, statusLabel: currentStatusLabel } = entry
-                  const lineBusy = busyLineId === line.id || isProcessingBatch
+                  const { line } = entry
                   const selected = entry.isSelected
-                  const selectedLocationLabel = locationLabelForDraft(draft)
-                  const rowClassName = [
-                    'rz-store-workbench-row',
-                    entry.statusKey === 'ready' && !selected ? 'is-ready' : '',
-                    entry.statusKey === 'ignored' && !selected ? 'is-ignored' : '',
-                    selected && entry.isReadyForProcessing ? 'rz-row-selected' : '',
-                    entry.isSelectionIncomplete ? 'is-selected-incomplete' : '',
-                  ].filter(Boolean).join(' ')
+                  const rowClassName = ['rz-store-workbench-row', selected ? 'rz-row-selected' : ''].filter(Boolean).join(' ')
                   return (
-                    <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`}>
-                      <td>
-                        <input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} />
-                      </td>
+                    <tr key={line.id} className={rowClassName} data-testid={`receipt-line-${line.id}`} title="Dubbelklik om bonartikeldetails te openen" onDoubleClick={() => openReceiptLineDetail(line.id)}>
+                      <td onClick={(event) => event.stopPropagation()}><input type="checkbox" checked={selected} onChange={() => toggleLineSelection(line.id)} aria-label={`Selecteer ${line.article_name_raw}`} data-testid={`receipt-line-select-${line.id}`} /></td>
                       <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
-                      <td className="rz-store-batch-col-location">
-                        <button
-                          type="button"
-                          className="rz-input rz-store-select"
-                          data-testid={`receipt-line-location-select-${line.id}`}
-                          disabled={lineBusy}
-                          onClick={() => openLocationPicker(line.id)}
-                          style={{ width: '100%', textAlign: 'left', cursor: lineBusy ? 'not-allowed' : 'pointer' }}
-                        >
-                          {selectedLocationLabel || 'Kies locatie'}
-                        </button>
-                      </td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
-                      <td className="rz-store-batch-col-linked">
-                        <div data-testid={`receipt-line-article-select-${line.id}`}>
-                          <StoreArticleSelector
-                            lineId={line.id}
-                            lineName={line.article_name_raw}
-                            selectedArticleId={draft.articleId || ''}
-                            articleOptions={articleOptions}
-                            disabled={lineBusy}
-                            onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
-                            onClearArticle={() => persistLineDraft(line, { articleId: '' })}
-                            onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
-                            canCreateArticle={Boolean(household?.permissions?.['article.create'])}
-                          />
-                        </div>
-                      </td>
-                      <td className="rz-store-batch-col-article-group">
+                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
                         <select
                           className="rz-input rz-inline-input"
-                          data-testid={`receipt-line-article-group-select-${line.id}`}
-                          value={draft.articleGroupId || ''}
-                          disabled={lineBusy || isViewer}
+                          value={entry.draft.locationId || ''}
+                          disabled={busyLineId === line.id || isProcessingBatch || isViewer}
+                          aria-label={`Locatie voor ${line.article_name_raw}`}
+                          data-testid={`receipt-line-location-select-${line.id}`}
                           onChange={(event) => {
-                            const nextValue = event.target.value
-                            if (nextValue === '__add_article_group__') {
-                              openCreateArticleGroup(line.id)
+                            const nextLocationId = event.target.value
+                            const hasArticle = Boolean(String(entry.draft.articleId || line.matched_household_article_id || '').trim())
+                            if (hasArticle && nextLocationId) {
+                              setPendingDefaultLocationChoice({ lineId: line.id, locationId: nextLocationId })
                               return
                             }
-                            persistLineDraft(line, { articleGroupId: nextValue })
+                            persistLineDraft(line, { locationId: nextLocationId }, { defaultLocationPolicy: 'line_only' })
                           }}
-                          aria-label={`Artikelgroep voor ${line.article_name_raw}`}
                         >
-                          <option value="">Kies artikelgroep</option>
-                          {articleGroupOptions.map((group) => (
-                            <option key={group.id} value={group.id}>{group.name}</option>
-                          ))}
-                          {canCreateArticleGroup ? (
-                            <option value="__add_article_group__">Artikelgroep toevoegen...</option>
-                          ) : null}
+                          <option value="">Kies locatie</option>
+                          {locationOptions.map((location) => <option key={location.id} value={location.id}>{location.label}</option>)}
                         </select>
                       </td>
-                      <td className="rz-store-batch-col-standard" title={standardProductDetail(line) || standardProductLabel(line)}>
-                         <div className="rz-store-primary" data-testid={`receipt-line-standard-product-${line.id}`}>{standardProductLabel(line)}</div>
-                       </td>
+                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+                        <StoreArticleSelector
+                          lineId={line.id}
+                          lineName={line.article_name_raw}
+                          selectedArticleId={entry.draft.articleId || ''}
+                          articleOptions={articleOptions}
+                          disabled={busyLineId === line.id || isProcessingBatch}
+                          onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })}
+                          onClearArticle={() => persistLineDraft(line, { articleId: '' })}
+                          onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)}
+                          canCreateArticle={Boolean(household?.permissions?.['article.create'])}
+                        />
+                      </td>
                     </tr>
                   )
                 })}
               </tbody>
             </Table>
+
+          </>) : null}
+
+          {activeDetailEntry ? (() => {
+            const { line, draft } = activeDetailEntry
+            const lineBusy = busyLineId === line.id || isProcessingBatch
+            const selectedLocationLabel = locationLabelForDraft(draft)
+            const universalProductValue = firstTextValue(
+              barcodeStates[line.id]?.productName,
+              standardProductLabel(line)
+            )
+            return (
+              <div className="rz-modal-backdrop rz-receipt-line-detail-backdrop" role="presentation" onMouseDown={closeReceiptLineDetail} data-testid="receipt-line-detail-overlay">
+                <div className="rz-modal-card rz-receipt-line-detail-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-line-detail-title" onMouseDown={(event) => event.stopPropagation()}>
+                  <section className="rz-receipt-line-detail" data-testid="receipt-line-detail-panel">
+                    <div className="rz-receipt-line-detail__header">
+                      <h3 id="receipt-line-detail-title">Bonartikel details</h3>
+                      <button type="button" className="rz-modal-close" aria-label="Sluit bonartikeldetails" onClick={closeReceiptLineDetail}>×</button>
+                    </div>
+                <dl className="rz-receipt-line-detail__grid">
+                  <div><dt>Bonartikel</dt><dd>{formatReceiptLineLabel(line.article_name_raw)}</dd></div>
+                  <div><dt>Winkel</dt><dd>{batch?.store_label || batch?.store_name || providerLabel(activeProvider)}</dd></div>
+                  <div><dt>Aankoopdatum</dt><dd>{batch?.purchase_date || 'Onbekend'}</dd></div>
+                  <div><dt>Aantal</dt><dd>{formatQuantity(line.quantity_raw, line.unit_raw)}</dd></div>
+                  <div className="rz-receipt-line-detail__wide"><dt>Locatie / sublocatie</dt><dd><button type="button" className="rz-input rz-store-select" data-testid={`receipt-line-location-select-${line.id}`} disabled={lineBusy} onClick={() => openLocationPicker(line.id)}>{selectedLocationLabel || 'Kies locatie'}</button></dd></div>
+                  <div className="rz-receipt-line-detail__wide"><dt>Mijn artikel</dt><dd data-testid={`receipt-line-article-select-${line.id}`}><StoreArticleSelector lineId={line.id} lineName={line.article_name_raw} selectedArticleId={draft.articleId || ''} articleOptions={articleOptions} disabled={lineBusy} onChange={(nextArticleId) => persistLineDraft(line, { articleId: nextArticleId ?? '' })} onClearArticle={() => persistLineDraft(line, { articleId: '' })} onCreateArticle={(articleName) => handleCreateArticleFromLine(line.id, articleName)} canCreateArticle={Boolean(household?.permissions?.['article.create'])} /></dd></div>
+                  <div className="rz-receipt-line-detail__wide"><dt>Artikelgroep</dt><dd><select className="rz-input rz-inline-input" data-testid={`receipt-line-article-group-select-${line.id}`} value={draft.articleGroupId || ''} disabled={lineBusy || isViewer} onChange={(event) => { const nextValue = event.target.value; if (nextValue === '__add_article_group__') { openCreateArticleGroup(line.id); return } persistLineDraft(line, { articleGroupId: nextValue }) }}><option value="">Kies artikelgroep</option>{articleGroupOptions.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}{canCreateArticleGroup ? <option value="__add_article_group__">Artikelgroep toevoegen...</option> : null}</select></dd></div>
+                  <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd><BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} onScan={() => openReceiptLineBarcodeScanner(line.id)} /></dd></div>
+                  <div className="rz-receipt-line-detail__wide">
+                    <dt>Universeel artikel</dt>
+                    <dd>
+                      <input
+                        className="rz-input rz-inline-input rz-receipt-line-detail__readonly-value"
+                        value={universalProductValue}
+                        placeholder="Niet gekoppeld"
+                        readOnly
+                        aria-label={`Universeel artikel voor bonregel ${line.id}`}
+                        data-testid={`receipt-line-standard-product-${line.id}`}
+                      />
+                    </dd>
+                  </div>
+                    </dl>
+                  </section>
+                </div>
+              </div>
+            )
+          })() : null}
+
 
           {newArticleGroupLineId ? (
             <div
@@ -1402,6 +1552,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               </div>
             </div>
           ) : null}
+          <BarcodeScannerModal
+            open={barcodeCameraOpen}
+            title="Barcode voor bonregel scannen"
+            videoRef={barcodeVideoRef}
+            cameraState={barcodeCameraState}
+            cameraMeta={barcodeCameraMeta}
+            availableCameras={barcodeAvailableCameras}
+            onSwitchCamera={switchBarcodeCamera}
+            onClose={() => {
+              stopBarcodeScanner(true, 'uitpakken-overlay-close')
+              setActiveBarcodeLineId('')
+            }}
+          />
           {processResultOverlay ? (
             <div className="rz-modal-backdrop" role="presentation" onClick={() => setProcessResultOverlay('')}>
               <div

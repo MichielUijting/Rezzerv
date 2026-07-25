@@ -1,12 +1,11 @@
 import React from 'react'
-import { Navigate, RouterProvider, createBrowserRouter, useNavigate } from 'react-router-dom'
+import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
 import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
 import KassaPage from '../../features/kassa/KassaPage.jsx'
-import StoreBatchDetailPage from '../../features/purchaseImport/StoreBatchDetailPage'
 import SettingsPage from '../../features/settings/SettingsPage'
 import SettingsArticleFieldsPage from '../../features/settings/SettingsArticleFieldsPage'
 import SettingsArticleGroupsPage from '../../features/settings/SettingsArticleGroupsPage'
@@ -53,6 +52,24 @@ function ResetSessionRoute() {
   return null
 }
 
+
+function LegacyReceiptBatchRouteRedirect() {
+  const { batchId = '' } = useParams()
+  const target = batchId
+    ? `/kassabonnen?batch=${encodeURIComponent(batchId)}`
+    : '/kassabonnen'
+  return <Navigate to={target} replace />
+}
+
+
+function LegacyReceiptLineRouteRedirect() {
+  const { batchId = '' } = useParams()
+  const target = batchId
+    ? `/kassabonnen?batch=${encodeURIComponent(batchId)}`
+    : '/kassabonnen'
+  return <Navigate to={target} replace />
+}
+
 function Protected({ children }) {
   return <AuthGuard>{children}</AuthGuard>
 }
@@ -85,7 +102,8 @@ const router = createBrowserRouter([
   { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPage /></ProtectedAdmin> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
-  { path: '/kassabonnen/batch/:batchId', element: <Protected><StoreBatchDetailPage /></Protected> },
+  { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
+  { path: '/kassabonnen/batch/:batchId/regel/:receiptLineId', element: <Protected><LegacyReceiptLineRouteRedirect /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <ProtectedSettings allowViewer={true}><SettingsPage /></ProtectedSettings> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettings allowViewer={true}><SettingsArticleFieldsPage /></ProtectedSettings> },

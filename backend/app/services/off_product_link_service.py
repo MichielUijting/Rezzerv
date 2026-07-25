@@ -175,28 +175,39 @@ def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str,
 
 def _resolve_product_type(conn, assignment: dict[str, Any]) -> str:
     if not isinstance(assignment, dict):
-        raise ValueError("Producttypebeslissing is verplicht")
-    create_payload = assignment.get("create")
+        raise ValueError("GS1 GPC-classificatie is verplicht")
+    if isinstance(assignment.get("create"), dict):
+        raise ValueError("Lokale Producttypen mogen niet vanuit Externe databases worden aangemaakt")
+
     product_type_id = _clean_text(assignment.get("product_type_id"))
-    if isinstance(create_payload, dict):
-        result = create_or_get_product_type_with_connection(
-            conn,
-            inventory_group_key=_clean_text(create_payload.get("inventory_group_key")) or None,
-            display_name=_clean_text(
-                create_payload.get("canonical_name") or create_payload.get("display_name")
-            ),
-            default_base_unit=_clean_text(
-                create_payload.get("base_unit") or create_payload.get("default_base_unit") or "stuk"
-            ),
-            aggregation_mode=_clean_text(create_payload.get("aggregation_mode") or "count"),
-            source=_clean_text(assignment.get("mapping_source") or "user_created_during_off_link"),
+    match = re.fullmatch(r"gpc:(\d{8})", product_type_id)
+    if not match:
+        raise ValueError("Producttype moet een officiële GS1 GPC Brickcode zijn")
+
+    brick_code = match.group(1)
+    product_type = conn.execute(
+        text(
+            """
+            SELECT inventory_group_key, display_name, gpc_brick_code, source
+            FROM product_inventory_groups
+            WHERE inventory_group_key = :inventory_group_key
+              AND gpc_brick_code = :gpc_brick_code
+              AND source LIKE 'gs1_gpc_%'
+              AND COALESCE(active, 1) = 1
+            LIMIT 1
+            """
+        ),
+        {
+            "inventory_group_key": product_type_id,
+            "gpc_brick_code": brick_code,
+        },
+    ).mappings().first()
+    if not product_type:
+        raise ValueError(
+            "GS1 GPC Brickcode is niet aanwezig in de officiële Nederlandse GPC-publicatie"
         )
-        if not result.get("ok"):
-            raise ValueError(str(result.get("error") or "Producttype kon niet worden aangemaakt"))
-        product_type_id = _clean_text((result.get("product_type") or {}).get("inventory_group_key"))
-    if not product_type_id:
-        raise ValueError("Producttype is verplicht")
     return product_type_id
+
 
 
 def _link_household_article(conn, household_article_id: Any, global_product_id: str) -> str | None:

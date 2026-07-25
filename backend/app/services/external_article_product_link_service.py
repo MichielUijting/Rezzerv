@@ -48,6 +48,143 @@ def normalize_external_link_receipt_text(value: Any) -> str:
     return " ".join(normalized.split())
 
 
+def _complete_global_product_link_data(
+    conn,
+    global_product_id: str,
+) -> dict[str, Any]:
+    product_id = str(global_product_id or "").strip()
+    if not product_id:
+        return {
+            "complete": False,
+            "reason": "global_product_id ontbreekt",
+        }
+
+    row = conn.execute(
+        text(
+            """
+            SELECT
+                gp.id,
+                gp.name,
+                COALESCE(gp.primary_gtin, '') AS primary_gtin,
+                EXISTS (
+                    SELECT 1
+                    FROM product_identities pi
+                    WHERE pi.global_product_id = gp.id
+                      AND pi.identity_type = 'gtin'
+                      AND pi.identity_value = gp.primary_gtin
+                ) AS has_matching_gtin_identity,
+                EXISTS (
+                    SELECT 1
+                    FROM product_group_memberships pgm
+                    JOIN product_inventory_groups pig
+                      ON pig.inventory_group_key =
+                         pgm.inventory_group_key
+                    WHERE pgm.global_product_id = gp.id
+                      AND pgm.active = 1
+                      AND pgm.inventory_group_key
+                          GLOB 'gpc:[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+                      AND pig.gpc_brick_code =
+                          substr(pgm.inventory_group_key, 5)
+                      AND pig.source LIKE 'gs1_gpc_%'
+                      AND COALESCE(pig.active, 1) = 1
+                ) AS has_active_official_gpc
+            FROM global_products gp
+            WHERE gp.id = :global_product_id
+            LIMIT 1
+            """
+        ),
+        {"global_product_id": product_id},
+    ).mappings().first()
+
+    if not row:
+        return {
+            "complete": False,
+            "reason": "Het universele artikel bestaat niet",
+        }
+
+    primary_gtin = str(row.get("primary_gtin") or "").strip()
+    has_valid_primary_gtin = bool(
+        re.fullmatch(r"[0-9]{8,14}", primary_gtin)
+    )
+    has_matching_gtin_identity = bool(
+        row.get("has_matching_gtin_identity")
+    )
+    has_active_official_gpc = bool(
+        row.get("has_active_official_gpc")
+    )
+
+    reasons = []
+    if not has_valid_primary_gtin:
+        reasons.append("geldige GTIN/EAN ontbreekt")
+    if not has_matching_gtin_identity:
+        reasons.append("bijpassende GTIN-identiteit ontbreekt")
+    if not has_active_official_gpc:
+        reasons.append("officieel GS1 GPC-Producttype ontbreekt")
+
+    return {
+        "complete": not reasons,
+        "reason": "; ".join(reasons),
+        "primary_gtin": primary_gtin,
+        "has_valid_primary_gtin": has_valid_primary_gtin,
+        "has_matching_gtin_identity": has_matching_gtin_identity,
+        "has_active_official_gpc": has_active_official_gpc,
+    }
+
+
+def _require_complete_global_product_link(
+    conn,
+    global_product_id: str,
+) -> dict[str, Any]:
+    result = _complete_global_product_link_data(
+        conn,
+        global_product_id,
+    )
+    if not result.get("complete"):
+        raise ValueError(
+            "Kassabonartikel kan niet worden gekoppeld: "
+            + str(result.get("reason") or "artikelgegevens incompleet")
+        )
+    return result
+
+
+def deactivate_incomplete_confirmed_external_links(conn) -> int:
+    rows = conn.execute(
+        text(
+            """
+            SELECT id, global_product_id
+            FROM external_article_product_links
+            WHERE status = 'confirmed'
+            ORDER BY id
+            """
+        )
+    ).mappings().all()
+
+    invalid_ids = [
+        str(row.get("id") or "")
+        for row in rows
+        if not _complete_global_product_link_data(
+            conn,
+            str(row.get("global_product_id") or ""),
+        ).get("complete")
+    ]
+
+    for link_id in invalid_ids:
+        conn.execute(
+            text(
+                """
+                UPDATE external_article_product_links
+                SET status = 'inactive',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = :id
+                  AND status = 'confirmed'
+                """
+            ),
+            {"id": link_id},
+        )
+
+    return len(invalid_ids)
+
+
 def ensure_external_article_product_link_schema(conn) -> None:
     """Maak de koppeltabel en indexen idempotent aan."""
     conn.execute(
@@ -226,6 +363,11 @@ def save_external_article_product_link(
 
     if str(product.get("status") or "active").strip().lower() != "active":
         raise ValueError("Het universele artikel is niet actief")
+
+    _require_complete_global_product_link(
+        conn,
+        normalized_product_id,
+    )
 
     conflict_conditions = []
 

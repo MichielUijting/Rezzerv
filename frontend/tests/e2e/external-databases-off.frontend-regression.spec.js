@@ -101,6 +101,10 @@ test.describe('Externe databases OFF candidate flow', () => {
       });
     });
 
+    await page.route('**/api/external-products/gpc/classify', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'not_classified', reason: 'insufficient_confidence' }) });
+    });
+
     await page.route('**/api/external-products/off/search', async (route) => {
       const body = route.request().postDataJSON();
       offRequestBodies.push(body);
@@ -165,9 +169,33 @@ test.describe('Externe databases OFF candidate flow', () => {
     });
 
     await expect(page.getByTestId('external-producttype-link-panel')).toBeVisible();
+    await expect(page.getByLabel('Producttype')).toBeDisabled();
+    await expect(page.getByLabel('Producttype')).toHaveValue('');
+    await expect(page.getByLabel('Producttype').locator('option:checked')).toHaveText('GPC-classificatie ontbreekt');
     await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Ontkoppel artikel', exact: true })).toBeDisabled();
     await expectNoConsoleErrors(consoleErrors);
+  });
+
+  test('Bananen worden automatisch geclassificeerd als officiële GPC Brick', async ({ page }) => {
+    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(receiptItemsPayload()) });
+    });
+    await page.route('**/api/external-products/off/search', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...automaticSearchResponse(), results: [{ gtin: '8718265184886', product_name: 'Bananen', brand: 'De Groot', score: 0.99 }] }) });
+    });
+    await page.route('**/api/external-products/gpc/classify', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'classified', classification_source: 'gpc_taxonomy_name_match', confidence: 1, product_type_id: 'gpc:10005897', gpc_brick_code: '10005897', gpc_brick_name: 'Bananen', gpc_brick_name_en: 'Bananas', source: 'gs1_gpc_2026_05_en', source_version: '2026-05-20' }) });
+    });
+    await page.goto('/externe-databases');
+    const receiptRow = page.getByTestId('external-receipt-items-table').locator('tbody tr', { hasText: 'halfvolle melk' });
+    await receiptRow.dblclick();
+    const candidateRow = page.getByTestId('external-receipt-item-candidates-table').locator('tbody tr', { hasText: '8718265184886' });
+    await candidateRow.getByRole('radio').check();
+    await expect(page.getByLabel('Producttype')).toHaveValue('gpc:10005897');
+    await expect(page.getByLabel('Producttype').locator('option:checked')).toContainText('Bananen — GPC 10005897');
+    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('1,000');
+    await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeEnabled();
   });
 
   test('Langdurige OFF-zoekactie toont na één seconde de blokkerende R en verwijdert die direct na een fout', async ({ page }) => {
@@ -183,6 +211,10 @@ test.describe('Externe databases OFF candidate flow', () => {
         contentType: 'application/json',
         body: JSON.stringify(receiptItemsPayload()),
       });
+    });
+
+    await page.route('**/api/external-products/gpc/classify', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, status: 'not_classified', reason: 'insufficient_confidence' }) });
     });
 
     await page.route('**/api/external-products/off/search', async (route) => {
@@ -271,7 +303,7 @@ test.describe('Externe databases OFF candidate flow', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ group_options: [{ inventory_group_key: 'gpc:10005897', display_name: 'Bananen (Cavendish)', default_base_unit: 'stuk' }] }),
+        body: JSON.stringify({ group_options: [{ inventory_group_key: 'gpc:10005897', display_name: 'Bananen (Cavendish)', default_base_unit: 'stuk', gpc_brick_code: '10005897', source: 'gs1_gpc_nl' }] }),
       });
     });
 

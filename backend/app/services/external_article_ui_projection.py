@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from sqlalchemy import text
+
 from app.services.external_article_product_link_service import (
     get_confirmed_external_article_product_link,
 )
@@ -14,6 +16,54 @@ from app.services.external_article_product_link_service import (
 
 def _text(value: Any) -> str:
     return " ".join(str(value or "").strip().split())
+
+
+def _central_product_details(
+    conn,
+    global_product_id: str,
+) -> dict[str, Any]:
+    product_id = _text(global_product_id)
+    if not product_id:
+        return {}
+
+    row = conn.execute(
+        text(
+            """
+            SELECT
+                gp.name AS global_product_name,
+                COALESCE(gp.brand, '') AS global_product_brand,
+                COALESCE(gp.primary_gtin, '') AS primary_gtin,
+                COALESCE(pgm.inventory_group_key, '') AS product_type_id,
+                COALESCE(gpc.gpc_brick_code, '') AS gpc_brick_code,
+                COALESCE(gpc.gpc_brick_name, '') AS gpc_brick_name,
+                COALESCE(gpc.gpc_brick_name_en, '') AS gpc_brick_name_en,
+                COALESCE(gpc.source_version, '') AS gpc_source_version
+            FROM global_products gp
+            LEFT JOIN product_group_memberships pgm
+              ON pgm.global_product_id = gp.id
+             AND pgm.active = 1
+            LEFT JOIN gpc_product_groups gpc
+              ON CAST(gpc.gpc_brick_code AS TEXT) =
+                 CASE
+                     WHEN pgm.inventory_group_key LIKE 'gpc:%'
+                     THEN substr(pgm.inventory_group_key, 5)
+                     ELSE ''
+                 END
+            WHERE gp.id = :global_product_id
+            ORDER BY
+                CASE
+                    WHEN pgm.inventory_group_key LIKE 'gpc:%' THEN 0
+                    ELSE 1
+                END,
+                pgm.updated_at DESC,
+                pgm.created_at DESC
+            LIMIT 1
+            """
+        ),
+        {"global_product_id": product_id},
+    ).mappings().first()
+
+    return dict(row) if row else {}
 
 
 def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
@@ -44,14 +94,101 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
     next_row["is_existing_link_for_receipt_item"] = active
 
     if active:
+        details = _central_product_details(conn, central_product_id)
+
+        central_product_name = (
+            _text(details.get("global_product_name"))
+            or central_product_name
+        )
+        central_product_brand = _text(
+            details.get("global_product_brand")
+        )
+        central_gtin = _text(details.get("primary_gtin"))
+        product_type_id = _text(details.get("product_type_id"))
+        gpc_brick_code = _text(details.get("gpc_brick_code"))
+        gpc_brick_name = _text(details.get("gpc_brick_name"))
+        gpc_brick_name_en = _text(
+            details.get("gpc_brick_name_en")
+        )
+        gpc_source_version = _text(
+            details.get("gpc_source_version")
+        )
+
+        enriched_link = dict(central_link or {})
+        enriched_link.update(
+            {
+                "global_product_name": central_product_name,
+                "global_product_brand": central_product_brand,
+                "primary_gtin": central_gtin,
+                "gtin": central_gtin,
+                "product_type_id": product_type_id,
+                "inventory_group_key": product_type_id,
+                "gpc_brick_code": gpc_brick_code,
+                "gpc_brick_name": gpc_brick_name,
+                "gpc_brick_name_en": gpc_brick_name_en,
+                "product_type_label": gpc_brick_name,
+                "gpc_source_version": gpc_source_version,
+            }
+        )
+
+        next_row["central_external_article_product_link"] = (
+            enriched_link
+        )
+        next_row["central_global_product_name"] = (
+            central_product_name
+        )
         next_row["linked_candidate_name"] = central_product_name
         next_row["global_product_id"] = central_product_id
         next_row["matched_global_product_id"] = central_product_id
+        next_row["canonical_catalog_product_id"] = (
+            central_product_id
+        )
+
+        next_row["gtin"] = central_gtin
+        next_row["primary_gtin"] = central_gtin
+        next_row["product_type_id"] = product_type_id
+        next_row["inventory_group_key"] = product_type_id
+        next_row["gpc_brick_code"] = gpc_brick_code
+        next_row["gpc_brick_name"] = gpc_brick_name
+        next_row["gpc_brick_name_en"] = gpc_brick_name_en
+        next_row["product_type_label"] = gpc_brick_name
+        next_row["gpc_source_version"] = gpc_source_version
+
+        next_row["status"] = "linked_to_catalog"
+        next_row["candidate_status"] = "linked_to_catalog"
     elif str(next_row.get("status") or "").strip().lower() == "linked_to_catalog":
         next_row["status"] = "candidate"
         next_row["candidate_status"] = "candidate"
 
     candidates = []
+
+    if active:
+        candidates.append(
+            {
+                "candidate_name": central_product_name,
+                "candidate_brand": central_product_brand,
+                "candidate_source_name": "Artikelcatalogus",
+                "source_name": "Artikelcatalogus",
+                "gtin": central_gtin,
+                "ean": central_gtin,
+                "global_product_id": central_product_id,
+                "matched_global_product_id": central_product_id,
+                "canonical_catalog_product_id": central_product_id,
+                "product_type_id": product_type_id,
+                "inventory_group_key": product_type_id,
+                "gpc_brick_code": gpc_brick_code,
+                "gpc_brick_name": gpc_brick_name,
+                "gpc_brick_name_en": gpc_brick_name_en,
+                "product_type_label": gpc_brick_name,
+                "gpc_source_version": gpc_source_version,
+                "central_link_active": True,
+                "is_linked_to_catalog": True,
+                "is_existing_link_for_receipt_item": True,
+                "status": "linked_to_catalog",
+                "candidate_status": "linked_to_catalog",
+            }
+        )
+
     for raw_candidate in next_row.get("candidates") or []:
         if not isinstance(raw_candidate, dict):
             continue

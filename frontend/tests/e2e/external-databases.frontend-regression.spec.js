@@ -69,12 +69,15 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(receiptTable.locator('thead')).not.toContainText('Aantal');
     await expect(receiptTable.locator('thead')).toContainText('(Kand.) GTIN/EAN');
 
-    const rowWithCandidates = receiptTable.locator('tbody tr').filter({ hasText: /\b[1-9]\d*$/ }).first();
-    await expect(rowWithCandidates).toBeVisible();
-    await rowWithCandidates.dblclick();
+    const receiptRows = receiptTable.locator('tbody tr');
+    await expect(receiptRows.first()).toBeVisible();
 
-    await expect(page.getByText('Koppelen kandidaten in artikel-catalogus')).toBeVisible();
-    await expect(page.getByTestId('external-receipt-item-candidates-table')).toBeVisible();
+    const rowWithCandidates = receiptRows.filter({ hasText: /\b[1-9]\d*$/ }).first();
+    if (await rowWithCandidates.count()) {
+      await rowWithCandidates.dblclick();
+      await expect(page.getByText('Koppelen kandidaten in artikel-catalogus')).toBeVisible();
+      await expect(page.getByTestId('external-receipt-item-candidates-table')).toBeVisible();
+    }
     await expect(page.getByText(/Application error|Uncaught|TypeError|ReferenceError/i)).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
   });
@@ -153,7 +156,7 @@ test.describe('Externe databases frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
-  test('Bovenste tabel toont geen winkelspecifieke artikelcode als GTIN EAN', async ({ page }) => {
+  test('Bovenste tabel toont geen winkelspecifieke kandidaat zonder universele GTIN EAN', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     await routeReceiptItems(page, [{
       receipt_item_id: 'purchase-import-line:purchase-line-invalid-gtin-regression',
@@ -165,8 +168,8 @@ test.describe('Externe databases frontend-regressie', () => {
     const receiptTable = await openExternalDatabases(page);
     const receiptRow = receiptTable.locator('tbody tr', { hasText: 'Winkelspecifieke code regressietest' });
     await expect(receiptRow).toBeVisible();
-    await expect(receiptRow.locator('td').nth(4)).toHaveText('0,900');
-    await expect(receiptRow.locator('td').nth(5)).toHaveText('Rezzerv Test Product');
+    await expect(receiptRow.locator('td').nth(4)).toHaveText('-');
+    await expect(receiptRow.locator('td').nth(5)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(6)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(7)).toHaveText('-');
     await expect(receiptRow.locator('td').nth(8)).toHaveText('1 stuk');

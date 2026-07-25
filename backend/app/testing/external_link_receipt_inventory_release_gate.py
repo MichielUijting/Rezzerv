@@ -37,8 +37,33 @@ def init_schema(conn) -> None:
     conn.execute(text("""
         CREATE TABLE global_products (
             id TEXT PRIMARY KEY,
+            primary_gtin TEXT,
             name TEXT NOT NULL,
             status TEXT NOT NULL DEFAULT 'active'
+        )
+    """))
+    conn.execute(text("""
+        CREATE TABLE product_identities (
+            id TEXT PRIMARY KEY,
+            global_product_id TEXT NOT NULL,
+            identity_type TEXT NOT NULL,
+            identity_value TEXT NOT NULL
+        )
+    """))
+    conn.execute(text("""
+        CREATE TABLE product_inventory_groups (
+            inventory_group_key TEXT PRIMARY KEY,
+            gpc_brick_code TEXT,
+            source TEXT,
+            active INTEGER NOT NULL DEFAULT 1
+        )
+    """))
+    conn.execute(text("""
+        CREATE TABLE product_group_memberships (
+            id TEXT PRIMARY KEY,
+            global_product_id TEXT NOT NULL,
+            inventory_group_key TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1
         )
     """))
     conn.execute(text("""
@@ -93,14 +118,91 @@ def init_schema(conn) -> None:
 
 
 def seed_products(conn) -> None:
+    products = [
+        {
+            "id": PRODUCT_A,
+            "name": "Volledig testartikel A",
+            "gtin": "8710000000101",
+        },
+        {
+            "id": PRODUCT_B,
+            "name": "Volledig testartikel B",
+            "gtin": "8710000000102",
+        },
+    ]
+
     conn.execute(
-        text("INSERT INTO global_products (id, name, status) VALUES (:id, :name, 'active')"),
-        {"id": PRODUCT_A, "name": "7 Granen Ontbijt A"},
+        text("""
+            INSERT INTO product_inventory_groups (
+                inventory_group_key,
+                gpc_brick_code,
+                source,
+                active
+            ) VALUES (
+                'gpc:10000001',
+                '10000001',
+                'gs1_gpc_release_gate',
+                1
+            )
+        """)
     )
-    conn.execute(
-        text("INSERT INTO global_products (id, name, status) VALUES (:id, :name, 'active')"),
-        {"id": PRODUCT_B, "name": "7 Granen Ontbijt B"},
-    )
+
+    for product in products:
+        conn.execute(
+            text("""
+                INSERT INTO global_products (
+                    id,
+                    primary_gtin,
+                    name,
+                    status
+                ) VALUES (
+                    :id,
+                    :gtin,
+                    :name,
+                    'active'
+                )
+            """),
+            product,
+        )
+        conn.execute(
+            text("""
+                INSERT INTO product_identities (
+                    id,
+                    global_product_id,
+                    identity_type,
+                    identity_value
+                ) VALUES (
+                    :identity_id,
+                    :product_id,
+                    'gtin',
+                    :gtin
+                )
+            """),
+            {
+                "identity_id": f"identity-{product['id']}",
+                "product_id": product["id"],
+                "gtin": product["gtin"],
+            },
+        )
+        conn.execute(
+            text("""
+                INSERT INTO product_group_memberships (
+                    id,
+                    global_product_id,
+                    inventory_group_key,
+                    active
+                ) VALUES (
+                    :membership_id,
+                    :product_id,
+                    'gpc:10000001',
+                    1
+                )
+            """),
+            {
+                "membership_id": f"membership-{product['id']}",
+                "product_id": product["id"],
+            },
+        )
 
 
 def create_receipt_line(conn, suffix: str, label: str = ARTICLE_TEXT, code: str | None = ARTICLE_CODE) -> tuple[str, str]:

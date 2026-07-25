@@ -67,6 +67,7 @@ from app.services.global_product_service import (
     get_or_create_global_product,
 )
 from app.services.external_article_product_link_service import (
+    deactivate_incomplete_confirmed_external_links,
     ensure_external_article_product_link_schema,
     get_confirmed_external_article_product_link,
 )
@@ -14148,6 +14149,19 @@ ensure_release_1031_schema()
 ensure_release_1041_schema()
 ensure_release_1046_schema()
 ensure_release_1113_schema()
+
+with engine.begin() as external_link_cleanup_conn:
+    external_link_cleanup_count = (
+        deactivate_incomplete_confirmed_external_links(
+            external_link_cleanup_conn
+        )
+    )
+
+logger.info(
+    "Incomplete kassabonartikelkoppelingen gedeactiveerd: %s",
+    external_link_cleanup_count,
+)
+
 bootstrap_auth_registry()
 refresh_runtime_users_from_db()
 ensure_receipt_storage_root()
@@ -19441,6 +19455,9 @@ def require_article_group_create_context(
 
 
 from app.api.article_group_routes import configure_article_group_routes
+from app.api.barcode_routes import configure_barcode_routes
+
+configure_barcode_routes(require_authenticated_context=require_household_context)
 
 configure_article_group_routes(
     require_household_context=require_household_context,
