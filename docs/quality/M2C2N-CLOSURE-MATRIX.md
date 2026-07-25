@@ -19,7 +19,7 @@ Statuswaarden: **GEREED**, **CONTROLE**, **OPEN** en **DEFERRED**. Onbekend bete
 | M2C2N-04 | Uitpakken target-location | Server-side batchscope | Schrijfrecht | PR #164 | GEREED | Geen |
 | M2C2N-05 | Uitpakken batch/regel | Objectguard | Schrijfrecht | PR #165/#174 | GEREED | Geen |
 | M2C2N-06 | Receipt share import | Actieve context | Schrijfrecht | PR #166 | GEREED | Geen |
-| M2C2N-07 | Admin- en onderhoudsmutaties | Geen vrije gebruikersscope | Alle 10 adminmutaties centraal platform-admin | WP-2-contract | GEREED | Geen |
+| M2C2N-07 | Admin- en onderhoudsmutaties | Geen vrije gebruikersscope | Alle 11 adminmutaties centraal platform-admin | WP-2-contract | GEREED | Geen |
 | M2C2N-08 | Gmail OAuth receiptbron | State en bron huishoudgebonden | Huishoudadmin | PR #168 | GEREED | Geen |
 | M2C2N-09 | Resend inbound | Bron server-side huishoudgebonden | Webhookcontract | PR #169–#171 | GEREED | Geen |
 | M2C2N-10 | Live-aliasbackfill | Platformbeheeractie | Platform-admin | PR #172 | GEREED | Geen |
@@ -42,14 +42,14 @@ Statuswaarden: **GEREED**, **CONTROLE**, **OPEN** en **DEFERRED**. Onbekend bete
 
 | Kengetal | Waarde |
 |---|---:|
-| Routeregistraties | 194 |
-| Unieke methode-padcombinaties | 194 |
+| Routeregistraties | 202 |
+| Unieke methode-padcombinaties | 202 |
 | Dubbele registraties | 0 |
-| Leesregistraties | 85 |
-| Mutatieregistraties | 109 |
-| Production | 140 totaal / 81 muterend |
+| Leesregistraties | 90 |
+| Mutatieregistraties | 112 |
+| Production | 147 totaal / 83 muterend |
 | Testing | 38 totaal / 17 muterend |
-| Admin | 14 totaal / 10 muterend |
+| Admin | 15 totaal / 11 muterend |
 | Dev | 2 totaal / 1 muterend |
 
 De fingerprintbaseline staat in `docs/quality/M2C2N-ROUTE-CATALOG-BASELINE.json`. Iedere routewijziging moet baseline en matrix bewust bijwerken.
