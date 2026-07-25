@@ -309,7 +309,17 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   function updateBarcodeDraft(lineId, value) {
     setBarcodeDrafts((current) => ({ ...current, [lineId]: value }))
-    setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'idle', message: '' } }))
+    setBarcodeStates((current) => ({
+      ...current,
+      [lineId]: {
+        status: 'idle',
+        message: '',
+        gtin: '',
+        matchStatus: '',
+        productName: '',
+        globalProductId: '',
+      },
+    }))
   }
 
   async function validateReceiptLineBarcode(lineId, overrideValue = null) {
@@ -334,10 +344,34 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const lookup = await fetchJson(`/api/barcodes/${encodeURIComponent(validation.normalized_value || value)}`)
       const matchStatus = String(lookup?.match_status || '')
       if (matchStatus === 'matched') {
-        const productName = firstTextValue(lookup?.product?.name, 'bekend universeel artikel')
+        const productName = firstTextValue(
+          lookup?.product?.name,
+          'bekend universeel artikel'
+        )
+        const globalProductId = String(
+          lookup?.product?.global_product_id || ''
+        ).trim()
+        const normalizedGtin = String(
+          lookup?.gtin || validation.normalized_value || value
+        ).trim()
         const message = `Geldige GTIN. Gevonden: ${productName}.`
-        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'success', message, productName } }))
-        showUitpakkenFeedback('success', message, { key: `barcode-matched-${lineId}-${Date.now()}` })
+        setBarcodeStates((current) => ({
+          ...current,
+          [lineId]: {
+            status: 'success',
+            message,
+            productName,
+            gtin: normalizedGtin,
+            matchStatus,
+            globalProductId,
+            product: lookup?.product || null,
+          },
+        }))
+        showUitpakkenFeedback(
+          'success',
+          message,
+          { key: `barcode-matched-${lineId}-${Date.now()}` }
+        )
       } else if (matchStatus === 'conflict') {
         const message = 'Conflict: deze GTIN verwijst naar meerdere universele artikelen. Er is niets gewijzigd.'
         setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'error', message } }))
@@ -355,6 +389,103 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const message = normalizeErrorMessage(lookupError?.message || lookupError)
       setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'error', message } }))
       showUitpakkenFeedback('error', message, { key: `barcode-error-${lineId}-${Date.now()}` })
+    }
+  }
+
+  async function linkReceiptLineBarcode(line, draft) {
+    const lineId = String(line?.id || '')
+    const state = barcodeStates[lineId] || {}
+    const householdArticleId = String(
+      draft?.articleId || ''
+    ).trim()
+    const gtin = String(state.gtin || '').trim()
+    const globalProductId = String(
+      state.globalProductId || ''
+    ).trim()
+
+    if (!householdArticleId) {
+      showUitpakkenFeedback(
+        'warning',
+        'Kies eerst Mijn artikel.',
+        { key: `barcode-link-no-article-${lineId}` }
+      )
+      return
+    }
+
+    if (
+      state.matchStatus !== 'matched'
+      || !gtin
+      || !globalProductId
+    ) {
+      showUitpakkenFeedback(
+        'warning',
+        'Controleer eerst een bekende, complete GTIN.',
+        { key: `barcode-link-no-match-${lineId}` }
+      )
+      return
+    }
+
+    setBusyLineId(lineId)
+
+    try {
+      const result = await fetchJson(
+        `/api/barcodes/${encodeURIComponent(gtin)}/household-article-link`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            purchase_import_line_id: lineId,
+            household_article_id: householdArticleId,
+            global_product_id: globalProductId,
+          }),
+        }
+      )
+
+      await refreshBatch(batch.batch_id)
+
+      const message = result?.idempotent
+        ? 'Mijn artikel was al aan dit universele artikel gekoppeld.'
+        : 'Mijn artikel is aan het universele artikel gekoppeld.'
+
+      setBarcodeStates((current) => ({
+        ...current,
+        [lineId]: {
+          ...(current[lineId] || {}),
+          status: 'success',
+          message,
+          linkedHouseholdArticleId: householdArticleId,
+        },
+      }))
+
+      showUitpakkenFeedback(
+        'success',
+        message,
+        {
+          key: `barcode-link-success-${lineId}-${Date.now()}`,
+        }
+      )
+    } catch (linkError) {
+      const message = normalizeErrorMessage(
+        linkError?.message || linkError
+      )
+
+      setBarcodeStates((current) => ({
+        ...current,
+        [lineId]: {
+          ...(current[lineId] || {}),
+          status: 'error',
+          message,
+        },
+      }))
+
+      showUitpakkenFeedback(
+        'error',
+        message,
+        {
+          key: `barcode-link-error-${lineId}-${Date.now()}`,
+        }
+      )
+    } finally {
+      setBusyLineId('')
     }
   }
 
@@ -1425,10 +1556,27 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             const { line, draft } = activeDetailEntry
             const lineBusy = busyLineId === line.id || isProcessingBatch
             const selectedLocationLabel = locationLabelForDraft(draft)
+            const barcodeState = barcodeStates[line.id] || {}
             const universalProductValue = firstTextValue(
-              barcodeStates[line.id]?.productName,
+              barcodeState.productName,
               standardProductLabel(line)
             )
+            const selectedHouseholdArticleId = String(
+              draft.articleId || ''
+            ).trim()
+            const alreadyLinked = Boolean(
+              selectedHouseholdArticleId
+              && String(
+                barcodeState.linkedHouseholdArticleId || ''
+              ) === selectedHouseholdArticleId
+            )
+            const canLinkBarcode = !lineBusy
+              && !isViewer
+              && barcodeState.matchStatus === 'matched'
+              && Boolean(barcodeState.gtin)
+              && Boolean(barcodeState.globalProductId)
+              && Boolean(selectedHouseholdArticleId)
+              && !alreadyLinked
             return (
               <div className="rz-modal-backdrop rz-receipt-line-detail-backdrop" role="presentation" onMouseDown={closeReceiptLineDetail} data-testid="receipt-line-detail-overlay">
                 <div className="rz-modal-card rz-receipt-line-detail-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-line-detail-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -1448,7 +1596,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd><BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} onScan={() => openReceiptLineBarcodeScanner(line.id)} /></dd></div>
                   <div className="rz-receipt-line-detail__wide">
                     <dt>Universeel artikel</dt>
-                    <dd>
+                    <dd style={{ display: 'grid', gap: '10px' }}>
                       <input
                         className="rz-input rz-inline-input rz-receipt-line-detail__readonly-value"
                         value={universalProductValue}
@@ -1457,6 +1605,33 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         aria-label={`Universeel artikel voor bonregel ${line.id}`}
                         data-testid={`receipt-line-standard-product-${line.id}`}
                       />
+                      {barcodeState.matchStatus === 'matched' ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <Button
+                            type="button"
+                            variant="primary"
+                            disabled={!canLinkBarcode}
+                            onClick={() => linkReceiptLineBarcode(line, draft)}
+                            data-testid={`receipt-line-barcode-link-${line.id}`}
+                          >
+                            {lineBusy
+                              ? 'Koppelen…'
+                              : alreadyLinked
+                                ? 'Al gekoppeld'
+                                : 'Koppelen aan Mijn artikel'}
+                          </Button>
+                          {!selectedHouseholdArticleId ? (
+                            <span>Kies eerst Mijn artikel.</span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </dd>
                   </div>
                     </dl>

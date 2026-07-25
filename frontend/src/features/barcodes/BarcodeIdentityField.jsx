@@ -46,6 +46,16 @@ export default function BarcodeIdentityField({
           {busy ? 'Controleren…' : 'Controleren'}
         </Button>
       </div>
+      {state.message ? (
+        <div
+          className={`rz-barcode-field__status rz-barcode-field__status--${state.status || 'idle'}`}
+          role={state.status === 'error' ? 'alert' : 'status'}
+          aria-live="polite"
+          data-testid={`receipt-line-barcode-status-${lineId}`}
+        >
+          {state.message}
+        </div>
+      ) : null}
     </div>
   )
 }

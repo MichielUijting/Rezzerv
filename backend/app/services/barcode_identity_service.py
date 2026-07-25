@@ -262,3 +262,295 @@ def lookup_gtin(conn, value: Any) -> dict[str, Any]:
         },
         "mutated": False,
     }
+
+
+
+class BarcodeHouseholdArticleLinkError(ValueError):
+    def __init__(self, status_code: int, detail: str):
+        super().__init__(detail)
+        self.status_code = int(status_code)
+        self.detail = str(detail)
+
+
+def _column_names(conn, table_name: str) -> set[str]:
+    return {
+        str(column["name"])
+        for column in inspect(conn).get_columns(table_name)
+    }
+
+
+def _first_existing_column(
+    columns: set[str],
+    *candidates: str,
+) -> str | None:
+    for candidate in candidates:
+        if candidate in columns:
+            return candidate
+    return None
+
+
+def link_household_article_to_matched_product(
+    conn,
+    *,
+    household_id: str,
+    purchase_import_line_id: str,
+    household_article_id: str,
+    gtin: str,
+    global_product_id: str,
+) -> dict[str, Any]:
+    """Maak één expliciete productkoppeling zonder voorraadmutatie."""
+
+    household_id = str(household_id or "").strip()
+    line_id = str(purchase_import_line_id or "").strip()
+    article_id = str(household_article_id or "").strip()
+    requested_product_id = str(global_product_id or "").strip()
+
+    if not household_id:
+        raise BarcodeHouseholdArticleLinkError(
+            400,
+            "Het actieve huishouden ontbreekt.",
+        )
+
+    if not line_id or not article_id or not requested_product_id:
+        raise BarcodeHouseholdArticleLinkError(
+            400,
+            "Bonregel, Mijn artikel en universeel artikel zijn verplicht.",
+        )
+
+    lookup = lookup_gtin(conn, gtin)
+
+    if lookup.get("match_status") != "matched":
+        raise BarcodeHouseholdArticleLinkError(
+            409,
+            "Alleen een volledig en eenduidig herkende GTIN kan worden gekoppeld.",
+        )
+
+    matched_product_id = str(
+        (lookup.get("product") or {}).get("global_product_id") or ""
+    ).strip()
+
+    normalized_gtin = str(lookup.get("gtin") or "").strip()
+
+    if matched_product_id != requested_product_id:
+        raise BarcodeHouseholdArticleLinkError(
+            409,
+            "Het universele artikel hoort niet bij de gecontroleerde GTIN.",
+        )
+
+    tables = _table_names(conn)
+    required_tables = {
+        "purchase_import_lines",
+        "purchase_import_batches",
+        "household_articles",
+    }
+
+    missing_tables = sorted(required_tables - tables)
+    if missing_tables:
+        raise BarcodeHouseholdArticleLinkError(
+            500,
+            "Benodigde tabel ontbreekt: " + ", ".join(missing_tables),
+        )
+
+    line_columns = _column_names(conn, "purchase_import_lines")
+    batch_columns = _column_names(conn, "purchase_import_batches")
+    article_columns = _column_names(conn, "household_articles")
+
+    line_id_column = _first_existing_column(
+        line_columns,
+        "id",
+        "line_id",
+    )
+    line_batch_column = _first_existing_column(
+        line_columns,
+        "batch_id",
+        "purchase_import_batch_id",
+        "import_batch_id",
+    )
+    batch_id_column = _first_existing_column(
+        batch_columns,
+        "batch_id",
+        "id",
+    )
+
+    if (
+        not line_id_column
+        or not line_batch_column
+        or not batch_id_column
+        or "household_id" not in batch_columns
+    ):
+        raise BarcodeHouseholdArticleLinkError(
+            500,
+            "De bonimporttabellen hebben niet de verwachte sleutelkolommen.",
+        )
+
+    line = conn.execute(
+        text(
+            f"""
+            SELECT
+                {line_id_column} AS line_id,
+                {line_batch_column} AS batch_id
+            FROM purchase_import_lines
+            WHERE {line_id_column} = :line_id
+            LIMIT 1
+            """
+        ),
+        {"line_id": line_id},
+    ).mappings().first()
+
+    if not line:
+        raise BarcodeHouseholdArticleLinkError(
+            404,
+            "Bonregel niet gevonden.",
+        )
+
+    batch = conn.execute(
+        text(
+            f"""
+            SELECT
+                {batch_id_column} AS batch_id,
+                household_id
+            FROM purchase_import_batches
+            WHERE {batch_id_column} = :batch_id
+              AND household_id = :household_id
+            LIMIT 1
+            """
+        ),
+        {
+            "batch_id": str(line.get("batch_id") or ""),
+            "household_id": household_id,
+        },
+    ).mappings().first()
+
+    if not batch:
+        raise BarcodeHouseholdArticleLinkError(
+            404,
+            "Bonregel niet gevonden binnen het actieve huishouden.",
+        )
+
+    required_article_columns = {
+        "id",
+        "household_id",
+        "global_product_id",
+    }
+
+    if not required_article_columns.issubset(article_columns):
+        raise BarcodeHouseholdArticleLinkError(
+            500,
+            "Mijn-artikeltabel mist verplichte koppelkolommen.",
+        )
+
+    article = conn.execute(
+        text(
+            """
+            SELECT
+                id,
+                household_id,
+                global_product_id
+            FROM household_articles
+            WHERE id = :article_id
+              AND household_id = :household_id
+            LIMIT 1
+            """
+        ),
+        {
+            "article_id": article_id,
+            "household_id": household_id,
+        },
+    ).mappings().first()
+
+    if not article:
+        raise BarcodeHouseholdArticleLinkError(
+            404,
+            "Mijn artikel niet gevonden binnen het actieve huishouden.",
+        )
+
+    existing_product_id = str(
+        article.get("global_product_id") or ""
+    ).strip()
+
+    if (
+        existing_product_id
+        and existing_product_id != requested_product_id
+    ):
+        raise BarcodeHouseholdArticleLinkError(
+            409,
+            "Mijn artikel is al aan een ander universeel artikel gekoppeld.",
+        )
+
+    inventory_before = None
+
+    if "inventory_events" in tables:
+        inventory_before = conn.execute(
+            text("SELECT COUNT(*) FROM inventory_events")
+        ).scalar_one()
+
+    changed = existing_product_id != requested_product_id
+
+    if changed:
+        updated_at_fragment = (
+            ", updated_at = CURRENT_TIMESTAMP"
+            if "updated_at" in article_columns
+            else ""
+        )
+
+        conn.execute(
+            text(
+                f"""
+                UPDATE household_articles
+                SET global_product_id = :global_product_id
+                    {updated_at_fragment}
+                WHERE id = :article_id
+                  AND household_id = :household_id
+                """
+            ),
+            {
+                "global_product_id": requested_product_id,
+                "article_id": article_id,
+                "household_id": household_id,
+            },
+        )
+
+    mapped_article_column = _first_existing_column(
+        line_columns,
+        "matched_household_article_id",
+        "household_article_id",
+        "selected_household_article_id",
+    )
+
+    if mapped_article_column:
+        conn.execute(
+            text(
+                f"""
+                UPDATE purchase_import_lines
+                SET {mapped_article_column} = :article_id
+                WHERE {line_id_column} = :line_id
+                """
+            ),
+            {
+                "article_id": article_id,
+                "line_id": line_id,
+            },
+        )
+
+    if "inventory_events" in tables:
+        inventory_after = conn.execute(
+            text("SELECT COUNT(*) FROM inventory_events")
+        ).scalar_one()
+
+        if inventory_after != inventory_before:
+            raise BarcodeHouseholdArticleLinkError(
+                500,
+                "De barcodekoppeling heeft onverwacht de voorraad gewijzigd.",
+            )
+
+    return {
+        "ok": True,
+        "changed": changed,
+        "idempotent": not changed,
+        "purchase_import_line_id": line_id,
+        "household_article_id": article_id,
+        "global_product_id": requested_product_id,
+        "gtin": normalized_gtin,
+        "inventory_mutated": False,
+        "product": lookup.get("product"),
+    }
