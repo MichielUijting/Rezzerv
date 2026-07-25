@@ -19455,6 +19455,9 @@ def require_article_group_create_context(
 
 
 from app.api.article_group_routes import configure_article_group_routes
+from app.api.barcode_routes import configure_barcode_routes
+
+configure_barcode_routes(require_authenticated_context=require_household_context)
 
 configure_article_group_routes(
     require_household_context=require_household_context,
