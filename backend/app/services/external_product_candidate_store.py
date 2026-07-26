@@ -884,7 +884,15 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
             FROM purchase_import_lines pil
             {batch_join_sql}
             {household_article_join_sql}
-            ORDER BY pil.ui_sort_order ASC, pil.created_at DESC, pil.id DESC
+            ORDER BY
+                CASE
+                    WHEN COALESCE({global_product_expr}, '') <> '' THEN 0
+                    ELSE 1
+                END ASC,
+                COALESCE({updated_expr}, {created_expr}, '') DESC,
+                COALESCE({created_expr}, '') DESC,
+                pil.ui_sort_order ASC,
+                pil.id DESC
             LIMIT :limit
             """
         ),
