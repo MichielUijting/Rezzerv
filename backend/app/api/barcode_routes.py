@@ -1,4 +1,5 @@
 from __future__ import annotations
+from app.services.off_product_link_service import save_barcode_receipt_item
 
 from typing import Any, Callable, Optional
 
@@ -105,6 +106,48 @@ def barcode_household_article_link(
             detail="Barcodekoppeling kon niet worden opgeslagen",
         ) from exc
 
+
+
+@router.post("/{gtin}/save-receipt-item")
+def save_barcode_for_receipt_item(
+    gtin: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    authorization: Optional[str] = Header(None),
+):
+    runtime_context = _require_auth(authorization)
+    household_context = household_context_from_runtime_context(
+        runtime_context
+    )
+
+    if household_context.role == "viewer":
+        raise HTTPException(
+            status_code=403,
+            detail="Alleen een lid of beheerder mag barcodes opslaan.",
+        )
+
+    try:
+        return save_barcode_receipt_item(
+            household_id=household_context.active_household_id,
+            receipt_item_id=str(
+                payload.get("receipt_item_id") or ""
+            ),
+            gtin=gtin,
+            article_name=str(
+                payload.get("article_name") or ""
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=500,
+            detail="De barcode kon niet aan het kassabonartikel worden gekoppeld.",
+        ) from exc
 
 
 @router.post("/{gtin}/save-household-article")

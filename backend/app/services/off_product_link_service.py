@@ -85,7 +85,12 @@ def _table_exists(conn, table_name: str) -> bool:
     )
 
 
-def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str, float | None, str | None]:
+def _upsert_global_product(
+    conn,
+    off_product: dict[str, Any],
+    *,
+    source_name: str = "open_food_facts",
+) -> tuple[str, str, float | None, str | None]:
     gtin = _normalize_gtin(
         off_product.get("gtin")
         or off_product.get("code")
@@ -122,7 +127,7 @@ def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str,
         category=category,
         size_value=size_value,
         size_unit=size_unit,
-        source="open_food_facts",
+        source=source_name,
         status="active",
         normalize_gtin=lambda value: _normalize_gtin(value),
     )
@@ -146,12 +151,16 @@ def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str,
                 """
                 UPDATE product_identities
                 SET global_product_id = :global_product_id,
-                    source = 'open_food_facts', confidence_score = 1.0,
+                    source = :source_name, confidence_score = 1.0,
                     is_primary = 1, updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                 """
             ),
-            {"id": identity.get("id"), "global_product_id": global_product_id},
+            {
+                "id": identity.get("id"),
+                "global_product_id": global_product_id,
+                "source_name": source_name,
+            },
         )
     else:
         conn.execute(
@@ -163,12 +172,17 @@ def _upsert_global_product(conn, off_product: dict[str, Any]) -> tuple[str, str,
                     confidence_score, is_primary, created_at, updated_at
                 ) VALUES (
                     :id, '', :global_product_id,
-                    'gtin', :gtin, 'open_food_facts',
+                    'gtin', :gtin, :source_name,
                     1.0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """
             ),
-            {"id": str(uuid.uuid4()), "global_product_id": global_product_id, "gtin": gtin},
+            {
+                "id": str(uuid.uuid4()),
+                "global_product_id": global_product_id,
+                "gtin": gtin,
+                "source_name": source_name,
+            },
         )
     return global_product_id, gtin, size_value, size_unit
 
@@ -236,7 +250,13 @@ def _link_household_article(conn, household_article_id: Any, global_product_id: 
     return article_id
 
 
-def _link_receipt_item(conn, receipt_item_id: str, global_product_id: str) -> dict[str, Any]:
+def _link_receipt_item(
+    conn,
+    receipt_item_id: str,
+    global_product_id: str,
+    *,
+    link_household_article: bool = True,
+) -> dict[str, Any]:
     normalized = _clean_text(receipt_item_id)
     if ":" not in normalized:
         raise ValueError("receipt_item_id heeft geen geldige canonieke prefix")
@@ -268,8 +288,23 @@ def _link_receipt_item(conn, receipt_item_id: str, global_product_id: str) -> di
             ),
             {"id": source_id, "global_product_id": global_product_id},
         )
-        article_id = _link_household_article(conn, row.get("matched_household_article_id"), global_product_id)
-        return {"receipt_item_type": "purchase_import_line", "source_id": source_id, "household_article_id": article_id}
+        household_article_id = _clean_text(
+            row.get("matched_household_article_id")
+        ) or None
+        article_id = (
+            _link_household_article(
+                conn,
+                household_article_id,
+                global_product_id,
+            )
+            if link_household_article
+            else household_article_id
+        )
+        return {
+            "receipt_item_type": "purchase_import_line",
+            "source_id": source_id,
+            "household_article_id": article_id,
+        }
 
     if prefix == "receipt-table-line":
         row = conn.execute(
@@ -316,10 +351,17 @@ def _link_receipt_item(conn, receipt_item_id: str, global_product_id: str) -> di
             ),
             {"id": source_id, "global_product_id": global_product_id},
         )
-        article_id = _link_household_article(
-            conn,
-            row.get("matched_article_id"),
-            global_product_id,
+        household_article_id = _clean_text(
+            row.get("matched_article_id")
+        ) or None
+        article_id = (
+            _link_household_article(
+                conn,
+                household_article_id,
+                global_product_id,
+            )
+            if link_household_article
+            else household_article_id
         )
 
         return {
@@ -339,10 +381,196 @@ def _link_receipt_item(conn, receipt_item_id: str, global_product_id: str) -> di
             text("UPDATE receipt_lines SET matched_global_product_id = :global_product_id WHERE id = :id"),
             {"id": source_id, "global_product_id": global_product_id},
         )
-        article_id = _link_household_article(conn, row.get("matched_article_id"), global_product_id)
-        return {"receipt_item_type": "receipt_line", "source_id": source_id, "household_article_id": article_id}
+        household_article_id = _clean_text(
+            row.get("matched_article_id")
+        ) or None
+        article_id = (
+            _link_household_article(
+                conn,
+                household_article_id,
+                global_product_id,
+            )
+            if link_household_article
+            else household_article_id
+        )
+        return {
+            "receipt_item_type": "receipt_line",
+            "source_id": source_id,
+            "household_article_id": article_id,
+        }
 
     raise ValueError(f"Niet-ondersteund receipt_item_id-type: {prefix}")
+
+
+def _assert_receipt_item_household(
+    conn,
+    *,
+    receipt_item_id: str,
+    household_id: str,
+) -> None:
+    normalized = _clean_text(receipt_item_id)
+    normalized_household_id = _clean_text(household_id)
+
+    if ":" not in normalized:
+        raise ValueError("receipt_item_id heeft geen geldige canonieke prefix")
+
+    prefix, source_id = normalized.split(":", 1)
+    source_id = _clean_text(source_id)
+
+    if not source_id or not normalized_household_id:
+        raise ValueError("Kassabonartikel en actief huishouden zijn verplicht")
+
+    if prefix == "purchase-import-line":
+        found = conn.execute(
+            text(
+                """
+                SELECT pil.id
+                FROM purchase_import_lines pil
+                JOIN purchase_import_batches pib
+                  ON pib.id = pil.batch_id
+                WHERE pil.id = :source_id
+                  AND pib.household_id = :household_id
+                LIMIT 1
+                """
+            ),
+            {
+                "source_id": source_id,
+                "household_id": normalized_household_id,
+            },
+        ).scalar()
+    elif prefix == "receipt-table-line":
+        found = conn.execute(
+            text(
+                """
+                SELECT rtl.id
+                FROM receipt_table_lines rtl
+                JOIN receipt_tables rt
+                  ON rt.id = rtl.receipt_table_id
+                WHERE rtl.id = :source_id
+                  AND rt.household_id = :household_id
+                LIMIT 1
+                """
+            ),
+            {
+                "source_id": source_id,
+                "household_id": normalized_household_id,
+            },
+        ).scalar()
+    elif prefix == "receipt-line" and _table_exists(conn, "receipt_lines"):
+        found = conn.execute(
+            text(
+                """
+                SELECT rl.id
+                FROM receipt_lines rl
+                JOIN receipts r
+                  ON r.id = rl.receipt_id
+                WHERE rl.id = :source_id
+                  AND r.household_id = :household_id
+                LIMIT 1
+                """
+            ),
+            {
+                "source_id": source_id,
+                "household_id": normalized_household_id,
+            },
+        ).scalar()
+    else:
+        raise ValueError(f"Niet-ondersteund receipt_item_id-type: {prefix}")
+
+    if not found:
+        raise ValueError(
+            "Kassabonartikel niet gevonden binnen het actieve huishouden"
+        )
+
+
+def save_barcode_receipt_item(
+    *,
+    household_id: str,
+    receipt_item_id: str,
+    gtin: str,
+    article_name: str,
+) -> dict[str, Any]:
+    """Sla een barcode centraal op en koppel alleen het kassabonartikel."""
+
+    normalized_gtin = _normalize_gtin(gtin)
+    normalized_article_name = (
+        _clean_text(article_name) or f"Product {normalized_gtin}"
+    )
+    normalized_receipt_item_id = _clean_text(receipt_item_id)
+
+    with engine.begin() as conn:
+        _assert_receipt_item_household(
+            conn,
+            receipt_item_id=normalized_receipt_item_id,
+            household_id=household_id,
+        )
+
+        inventory_event_count = None
+        if _table_exists(conn, "inventory_events"):
+            inventory_event_count = conn.execute(
+                text("SELECT COUNT(*) FROM inventory_events")
+            ).scalar_one()
+
+        global_product_id, stored_gtin, _, _ = _upsert_global_product(
+            conn,
+            {
+                "gtin": normalized_gtin,
+                "product_name": normalized_article_name,
+            },
+            source_name="barcode_scan",
+        )
+
+        receipt_link = _link_receipt_item(
+            conn,
+            normalized_receipt_item_id,
+            global_product_id,
+            link_household_article=False,
+        )
+
+        product = conn.execute(
+            text(
+                """
+                SELECT id, name, brand, status, primary_gtin
+                FROM global_products
+                WHERE id = :global_product_id
+                LIMIT 1
+                """
+            ),
+            {"global_product_id": global_product_id},
+        ).mappings().first()
+
+        if _table_exists(conn, "inventory_events"):
+            inventory_event_count_after = conn.execute(
+                text("SELECT COUNT(*) FROM inventory_events")
+            ).scalar_one()
+
+            if inventory_event_count_after != inventory_event_count:
+                raise ValueError(
+                    "De barcodeopslag heeft onverwacht de voorraad gewijzigd"
+                )
+
+        return {
+            "ok": True,
+            "gtin": stored_gtin,
+            "product": {
+                "global_product_id": global_product_id,
+                "name": (
+                    product.get("name")
+                    if product
+                    else normalized_article_name
+                ),
+                "brand": product.get("brand") if product else None,
+                "status": product.get("status") if product else "active",
+                "primary_gtin": (
+                    product.get("primary_gtin")
+                    if product
+                    else stored_gtin
+                ),
+            },
+            "receipt_item": receipt_link,
+            "inventory_mutated": False,
+            "creates_inventory_event": False,
+        }
 
 
 def link_off_product_with_product_type(
