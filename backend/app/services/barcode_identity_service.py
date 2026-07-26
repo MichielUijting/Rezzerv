@@ -596,6 +596,7 @@ def _resolve_catalog_product_for_save(
     *,
     gtin: str,
     article_name: str,
+    household_article_id: str,
 ) -> dict[str, Any]:
     tables = _table_names(conn)
 
@@ -752,10 +753,12 @@ def _resolve_catalog_product_for_save(
         else:
             identity_values = {
                 "id": str(uuid.uuid4()),
+                "household_article_id": household_article_id,
                 "global_product_id": product_id,
                 "identity_type": "gtin",
                 "identity_value": gtin,
                 "source": "receipt_user_confirmed",
+                "confidence_score": 1.0,
                 "is_primary": 1,
             }
 
@@ -1082,6 +1085,7 @@ def save_gtin_catalog_and_household_link(
         conn,
         gtin=normalized_gtin,
         article_name=normalized_article_name,
+        household_article_id=normalized_article_id,
     )
 
     product = catalog_result["product"]

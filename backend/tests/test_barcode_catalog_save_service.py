@@ -35,8 +35,13 @@ def build_database():
         conn.execute(text(
             "CREATE TABLE product_identities ("
             "id TEXT PRIMARY KEY, "
-            "global_product_id TEXT, identity_type TEXT, "
-            "identity_value TEXT, source TEXT, is_primary INTEGER)"
+            "household_article_id TEXT NOT NULL, "
+            "global_product_id TEXT, "
+            "identity_type TEXT NOT NULL, "
+            "identity_value TEXT NOT NULL, "
+            "source TEXT NOT NULL, "
+            "confidence_score NUMERIC NOT NULL DEFAULT 1.0, "
+            "is_primary INTEGER NOT NULL DEFAULT 0)"
         ))
         conn.execute(text(
             "CREATE TABLE purchase_import_batches ("
@@ -96,6 +101,13 @@ def check_unknown_gtin_is_created_and_linked() -> None:
             "AND identity_value = :gtin"
         ), {"gtin": gtin}).scalar_one()
 
+        identity_household_article = conn.execute(text(
+            "SELECT household_article_id "
+            "FROM product_identities "
+            "WHERE identity_type = 'gtin' "
+            "AND identity_value = :gtin"
+        ), {"gtin": gtin}).scalar_one()
+
         article_product = conn.execute(text(
             "SELECT global_product_id "
             "FROM household_articles "
@@ -118,6 +130,10 @@ def check_unknown_gtin_is_created_and_linked() -> None:
     )
     assert_true(product_count == 1, "Onjuist aantal producten")
     assert_true(identity_count == 1, "GTIN-identiteit ontbreekt")
+    assert_true(
+        identity_household_article == "article-1",
+        "GTIN-identiteit mist het huishoudartikel",
+    )
     assert_true(
         article_product == result["product"]["global_product_id"],
         "Huishoudartikel is niet gekoppeld",

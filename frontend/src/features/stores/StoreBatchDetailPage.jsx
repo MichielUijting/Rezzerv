@@ -2077,11 +2077,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   Barcode opslaan
                 </h3>
                 <p className="rz-modal-text">
-                  De barcode is geldig.
-                </p>
-                <p className="rz-modal-text">
-                  Het product wordt bijgewerkt in Uitpakken en centraal
-                  opgenomen of bijgewerkt in de catalogus.
+                  Dit is een geldige barcode.
                 </p>
                 <div className="rz-modal-actions">
                   <Button
