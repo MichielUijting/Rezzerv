@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectNoConsoleErrors,
@@ -177,7 +177,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
-  test('Bananen worden automatisch geclassificeerd als officiële GPC Brick', async ({ page }) => {
+  test('Bananen worden automatisch geclassificeerd als officiÃ«le GPC Brick', async ({ page }) => {
     await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(receiptItemsPayload()) });
     });
@@ -193,12 +193,12 @@ test.describe('Externe databases OFF candidate flow', () => {
     const candidateRow = page.getByTestId('external-receipt-item-candidates-table').locator('tbody tr', { hasText: '8718265184886' });
     await candidateRow.getByRole('radio').check();
     await expect(page.getByLabel('Producttype')).toHaveValue('gpc:10005897');
-    await expect(page.getByLabel('Producttype').locator('option:checked')).toContainText('Bananen (Cavendish) — GPC 10005897');
-    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('1,000');
+    await expect(page.getByLabel('Producttype').locator('option:checked')).toContainText('Bananen (Cavendish) â€” GPC 10005897');
+    await expect(page.getByTestId('external-producttype-classification-status')).toContainText('Producttype bepaald via expliciete GPC Brickcode.');
     await expect(page.getByRole('button', { name: 'Koppel artikel en Producttype', exact: true })).toBeEnabled();
   });
 
-  test('Langdurige OFF-zoekactie toont na één seconde de blokkerende R en verwijdert die direct na een fout', async ({ page }) => {
+  test('Langdurige OFF-zoekactie toont na Ã©Ã©n seconde de blokkerende R en verwijdert die direct na een fout', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let releaseSearch;
     const searchGate = new Promise((resolve) => {
