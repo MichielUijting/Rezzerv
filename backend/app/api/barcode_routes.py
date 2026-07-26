@@ -9,6 +9,7 @@ from app.services.barcode_identity_service import (
     BarcodeHouseholdArticleLinkError,
     link_household_article_to_matched_product,
     lookup_gtin,
+    save_gtin_catalog_and_household_link,
     validate_barcode,
 )
 from app.services.household_context_adapter import (
@@ -102,4 +103,52 @@ def barcode_household_article_link(
         raise HTTPException(
             status_code=500,
             detail="Barcodekoppeling kon niet worden opgeslagen",
+        ) from exc
+
+
+
+@router.post("/{gtin}/save-household-article")
+def save_barcode_for_household_article(
+    gtin: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    authorization: Optional[str] = Header(None),
+):
+    runtime_context = _require_auth(authorization)
+    household_context = household_context_from_runtime_context(
+        runtime_context
+    )
+
+    if household_context.role == "viewer":
+        raise HTTPException(
+            status_code=403,
+            detail="Alleen een lid of beheerder mag barcodes opslaan.",
+        )
+
+    try:
+        with engine.begin() as conn:
+            return save_gtin_catalog_and_household_link(
+                conn,
+                household_id=household_context.active_household_id,
+                purchase_import_line_id=str(
+                    payload.get("purchase_import_line_id") or ""
+                ),
+                household_article_id=str(
+                    payload.get("household_article_id") or ""
+                ),
+                gtin=gtin,
+                article_name=str(
+                    payload.get("article_name") or ""
+                ),
+            )
+    except BarcodeHouseholdArticleLinkError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.detail,
+        ) from exc
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=500,
+            detail="De barcode kon niet worden opgeslagen.",
         ) from exc

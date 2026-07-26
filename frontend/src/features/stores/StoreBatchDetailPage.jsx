@@ -239,6 +239,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [lineSaveState, setLineSaveState] = useState({})
   const [barcodeDrafts, setBarcodeDrafts] = useState({})
   const [barcodeStates, setBarcodeStates] = useState({})
+  const [barcodeSaveConfirm, setBarcodeSaveConfirm] = useState(null)
   const [activeBarcodeLineId, setActiveBarcodeLineId] = useState('')
   const [activeDetailLineId, setActiveDetailLineId] = useState(receiptLineId)
   const [selectedLineIds, setSelectedLineIds] = useState([])
@@ -367,23 +368,63 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             product: lookup?.product || null,
           },
         }))
-        showUitpakkenFeedback(
-          'success',
-          message,
-          { key: `barcode-matched-${lineId}-${Date.now()}` }
+        const line = (batch?.lines || []).find(
+          (item) => String(item.id) === String(lineId)
         )
+        setBarcodeSaveConfirm({
+          lineId: String(lineId),
+          gtin: normalizedGtin,
+          articleName: String(line?.article_name_raw || '').trim(),
+          globalProductId,
+          productName,
+          matchStatus,
+        })
       } else if (matchStatus === 'conflict') {
         const message = 'Conflict: deze GTIN verwijst naar meerdere universele artikelen. Er is niets gewijzigd.'
         setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'error', message } }))
         showUitpakkenFeedback('error', message, { key: `barcode-conflict-${lineId}-${Date.now()}` })
-      } else if (matchStatus === 'incomplete') {
-        const message = 'GTIN gevonden, maar de productkoppeling is nog niet compleet. Er is niets gewijzigd.'
-        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'warning', message } }))
-        showUitpakkenFeedback('warning', message, { key: `barcode-incomplete-${lineId}-${Date.now()}` })
-      } else {
-        const message = 'Geldige GTIN, maar nog niet bekend in de catalogus. Er is niets gewijzigd.'
-        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'warning', message } }))
-        showUitpakkenFeedback('warning', message, { key: `barcode-unknown-${lineId}-${Date.now()}` })
+      } else if (
+        matchStatus === 'incomplete'
+        || matchStatus === 'not_found'
+      ) {
+        const line = (batch?.lines || []).find(
+          (item) => String(item.id) === String(lineId)
+        )
+        const articleName = String(
+          line?.article_name_raw || ''
+        ).trim()
+        const normalizedGtin = String(
+          lookup?.gtin || validation.normalized_value || value
+        ).trim()
+        const productName = firstTextValue(
+          lookup?.product?.name,
+          articleName,
+          'Nieuw catalogusproduct'
+        )
+        const globalProductId = String(
+          lookup?.product?.global_product_id || ''
+        ).trim()
+        const message = 'De barcode is geldig.'
+        setBarcodeStates((current) => ({
+          ...current,
+          [lineId]: {
+            status: 'success',
+            message,
+            productName,
+            gtin: normalizedGtin,
+            matchStatus,
+            globalProductId,
+            product: lookup?.product || null,
+          },
+        }))
+        setBarcodeSaveConfirm({
+          lineId: String(lineId),
+          gtin: normalizedGtin,
+          articleName,
+          globalProductId,
+          productName,
+          matchStatus,
+        })
       }
     } catch (lookupError) {
       const message = normalizeErrorMessage(lookupError?.message || lookupError)
@@ -482,6 +523,108 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         message,
         {
           key: `barcode-link-error-${lineId}-${Date.now()}`,
+        }
+      )
+    } finally {
+      setBusyLineId('')
+    }
+  }
+
+  async function saveConfirmedReceiptLineBarcode() {
+    const confirmation = barcodeSaveConfirm
+    if (!confirmation) return
+
+    const line = (batch?.lines || []).find(
+      (item) => String(item.id) === String(confirmation.lineId)
+    )
+    if (!line) {
+      setBarcodeSaveConfirm(null)
+      showUitpakkenFeedback(
+        'error',
+        'De bonregel is niet meer beschikbaar.',
+        { key: 'barcode-save-line-missing' }
+      )
+      return
+    }
+
+    const draft = getDraftValues(line)
+    const householdArticleId = String(
+      draft.articleId || ''
+    ).trim()
+
+    if (!householdArticleId) {
+      showUitpakkenFeedback(
+        'warning',
+        'Kies eerst Mijn artikel.',
+        { key: `barcode-save-no-article-${confirmation.lineId}` }
+      )
+      return
+    }
+
+    setBusyLineId(String(confirmation.lineId))
+
+    try {
+      const result = await fetchJson(
+        `/api/barcodes/${encodeURIComponent(confirmation.gtin)}/save-household-article`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            purchase_import_line_id: String(confirmation.lineId),
+            household_article_id: householdArticleId,
+            article_name: confirmation.articleName,
+          }),
+        }
+      )
+
+      const product = result?.product || {}
+      const productName = firstTextValue(
+        product?.name,
+        confirmation.articleName,
+        'Catalogusproduct'
+      )
+      const globalProductId = String(
+        product?.global_product_id || ''
+      ).trim()
+
+      await refreshBatch(batch.batch_id)
+
+      setBarcodeStates((current) => ({
+        ...current,
+        [confirmation.lineId]: {
+          ...(current[confirmation.lineId] || {}),
+          status: 'success',
+          message: result?.catalog_product_created
+            ? 'De barcode is opgeslagen en het product is opgenomen in de catalogus.'
+            : 'De barcode en productkoppeling zijn opgeslagen.',
+          productName,
+          gtin: result?.gtin || confirmation.gtin,
+          matchStatus: 'matched',
+          globalProductId,
+          product,
+          linkedHouseholdArticleId: householdArticleId,
+        },
+      }))
+
+      setBarcodeSaveConfirm(null)
+
+      showUitpakkenFeedback(
+        'success',
+        result?.catalog_product_created
+          ? 'Product opgenomen in de catalogus en bijgewerkt in Uitpakken.'
+          : 'Product bijgewerkt in Uitpakken.',
+        {
+          key: `barcode-save-success-${confirmation.lineId}-${Date.now()}`,
+        }
+      )
+    } catch (saveError) {
+      const message = normalizeErrorMessage(
+        saveError?.message || saveError
+      )
+      showUitpakkenFeedback(
+        'error',
+        message,
+        {
+          key: `barcode-save-error-${confirmation.lineId}-${Date.now()}`,
         }
       )
     } finally {
@@ -1914,6 +2057,55 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               </div>
             )
           })() : null}
+
+          {barcodeSaveConfirm ? (
+            <div
+              className="rz-modal-backdrop"
+              role="presentation"
+              data-testid="receipt-line-barcode-save-confirm"
+            >
+              <div
+                className="rz-modal-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="barcode-save-confirm-title"
+              >
+                <h3
+                  id="barcode-save-confirm-title"
+                  className="rz-modal-title"
+                >
+                  Barcode opslaan
+                </h3>
+                <p className="rz-modal-text">
+                  De barcode is geldig.
+                </p>
+                <p className="rz-modal-text">
+                  Het product wordt bijgewerkt in Uitpakken en centraal
+                  opgenomen of bijgewerkt in de catalogus.
+                </p>
+                <div className="rz-modal-actions">
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    disabled={Boolean(busyLineId)}
+                    onClick={() => setBarcodeSaveConfirm(null)}
+                    data-testid="receipt-line-barcode-save-cancel"
+                  >
+                    Annuleren
+                  </Button>
+                  <Button
+                    variant="primary"
+                    type="button"
+                    disabled={Boolean(busyLineId)}
+                    onClick={saveConfirmedReceiptLineBarcode}
+                    data-testid="receipt-line-barcode-save-confirm-button"
+                  >
+                    {busyLineId ? 'Opslaan…' : 'Opslaan'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {processConfirm ? (
             <div className="rz-modal-backdrop" role="presentation">
