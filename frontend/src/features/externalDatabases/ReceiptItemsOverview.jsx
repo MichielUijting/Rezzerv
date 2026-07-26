@@ -246,6 +246,67 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     if (!response.ok) throw new Error(data?.detail || 'Bonartikelen konden niet worden geladen')
     return buildReceiptItems(Array.isArray(data?.items) ? data.items : [])
   }
+
+  async function findCatalogProductByGtin(gtin) {
+    const normalizedGtin = gtinText(gtin)
+
+    if (normalizedGtin === '-') return null
+
+    const response = await fetchJsonWithAuth(
+      `/api/catalog?query=${encodeURIComponent(normalizedGtin)}&limit=20`,
+      { method: 'GET' },
+    )
+
+    const data = await response.json().catch(() => ({}))
+
+    if (!response.ok) {
+      throw new Error(
+        data?.detail
+        || 'De Catalogus kon niet op GTIN worden gecontroleerd',
+      )
+    }
+
+    const items = Array.isArray(data?.items) ? data.items : []
+
+    return items.find(
+      (product) =>
+        gtinText(product?.primary_gtin) === normalizedGtin,
+    ) || null
+  }
+
+  async function enrichOffResultsWithCatalog(results) {
+    const sourceResults = Array.isArray(results) ? results : []
+    const catalogProducts = new Map()
+
+    await Promise.all(
+      sourceResults.map(async (result) => {
+        const gtin = gtinText(
+          result?.gtin
+          || result?.ean
+          || result?.code,
+        )
+
+        if (gtin === '-' || catalogProducts.has(gtin)) return
+
+        const product = await findCatalogProductByGtin(gtin)
+        catalogProducts.set(gtin, product)
+      }),
+    )
+
+    return sourceResults.map((result) => {
+      const gtin = gtinText(
+        result?.gtin
+        || result?.ean
+        || result?.code,
+      )
+      const product = catalogProducts.get(gtin) || null
+
+      return {
+        ...result,
+        existing_catalog_product: product,
+      }
+    })
+  }
   async function loadItems() {
     try {
       const nextItems = await fetchItems()
@@ -307,21 +368,41 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       linked_product_type_id: selectedItem.linkedProductTypeId,
     },
   } : null
-  const selectedCandidates = linkedSelectedCandidate ? [linkedSelectedCandidate] : offSearchResults.map((result) => ({
-    id: `off:${result.gtin}`,
-    candidateName: text(result.product_name),
-    brand: text(result.brand),
-    source: 'Open Food Facts',
-    externalCode: text(result.gtin),
-    score: result.automatic_rank_score ?? result.score,
-    status: 'OFF-kandidaat',
-    hasUniversalCode: true,
-    isLinkedToCatalog: false,
-    isLinkableToCatalog: true,
-    automaticRankScore: result.automatic_rank_score ?? null,
-    automaticEvidence: result.automatic_evidence ?? null,
-    raw: result,
-  }))
+  const selectedCandidates = linkedSelectedCandidate ? [linkedSelectedCandidate] : offSearchResults.map((result) => {
+    const catalogProduct = result?.existing_catalog_product || null
+    const catalogLinked = Boolean(catalogProduct)
+    const gtin = gtinText(result?.gtin || result?.ean || result?.code)
+
+    return {
+      id: catalogLinked
+        ? `linked:${catalogProduct.id || gtin}`
+        : `off:${gtin}`,
+      candidateName: catalogLinked
+        ? text(catalogProduct.name)
+        : text(result.product_name),
+      brand: catalogLinked
+        ? text(catalogProduct.brand)
+        : text(result.brand),
+      source: catalogLinked
+        ? 'Artikelcatalogus'
+        : 'Open Food Facts',
+      externalCode: gtin,
+      score: result.automatic_rank_score ?? result.score,
+      status: catalogLinked ? 'Gekoppeld' : 'OFF-kandidaat',
+      hasUniversalCode: true,
+      isLinkedToCatalog: catalogLinked,
+      catalogLinked,
+      isLinkableToCatalog: !catalogLinked,
+      automaticRankScore: result.automatic_rank_score ?? null,
+      automaticEvidence: result.automatic_evidence ?? null,
+      raw: {
+        ...result,
+        global_product_id: catalogProduct?.id || '',
+        matched_global_product_id: catalogProduct?.id || '',
+        primary_gtin: catalogProduct?.primary_gtin || gtin,
+      },
+    }
+  })
   const selectedCandidate = selectedCandidates.find((candidate) => candidate.id === selectedCandidateId) || null
   const hasValidProductTypeDecision = /^gpc:\d{8}$/.test(String(selectedProductTypeId || ''))
   const selectedCandidateCanBeLinked = Boolean(selectedItem && selectedCandidate && hasValidProductTypeDecision && !isLinkingProductType && !isClassifyingProductType)
@@ -497,8 +578,67 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
         throw new Error(data?.detail || 'Open Food Facts kon niet worden geraadpleegd')
       }
 
-      setOffSearchResults(Array.isArray(data?.results) ? data.results : [])
+      const enrichedResults = await enrichOffResultsWithCatalog(
+        Array.isArray(data?.results) ? data.results : [],
+      )
+
+      setOffSearchResults(enrichedResults)
       setOffPreview({ ...data, search_mode: mode })
+
+      const linkedResult = enrichedResults.find(
+        (result) => result?.existing_catalog_product,
+      )
+
+      if (linkedResult) {
+        const catalogProduct = linkedResult.existing_catalog_product
+        const linkedGtin = gtinText(
+          catalogProduct?.primary_gtin
+          || linkedResult?.gtin
+          || linkedResult?.ean
+          || linkedResult?.code,
+        )
+
+        const linkedFields = {
+          catalogLinked: true,
+          status: 'Gekoppeld',
+          linkedCandidateName: text(catalogProduct?.name),
+          globalProductId: text(catalogProduct?.id, ''),
+          gtin: linkedGtin,
+          hasKnownGtin: linkedGtin !== '-',
+          linkedProductTypeId: text(
+            catalogProduct?.product_type_id,
+            '',
+          ),
+          linkedProductType: text(
+            catalogProduct?.product_type,
+            '',
+          ),
+          productType: text(
+            catalogProduct?.product_type,
+            'Nog niet geclassificeerd',
+          ),
+          bestCandidateName: text(catalogProduct?.name),
+          bestCandidateCode: linkedGtin,
+        }
+
+        setItems((current) =>
+          current.map((currentItem) =>
+            currentItem.id === item.id
+              ? { ...currentItem, ...linkedFields }
+              : currentItem
+          )
+        )
+
+        setSelectedItem((current) =>
+          current?.id === item.id
+            ? { ...current, ...linkedFields }
+            : current
+        )
+
+        setSelectedCandidateId(
+          `linked:${catalogProduct?.id || linkedGtin}`,
+        )
+      }
     } catch (err) {
       setOffSearchResults([])
       setOffError(err?.message || 'Open Food Facts kon niet worden geraadpleegd')
