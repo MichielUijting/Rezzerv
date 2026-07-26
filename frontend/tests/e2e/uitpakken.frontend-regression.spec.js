@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectAnyVisible,
@@ -435,4 +435,3 @@ test.describe('Uitpakken frontend-regressie', () => {
   });
 
 });
-
