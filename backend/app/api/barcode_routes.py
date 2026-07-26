@@ -1,5 +1,5 @@
 from __future__ import annotations
-from app.services.off_product_link_service import save_barcode_receipt_item
+from app.services.barcode_receipt_item_service import save_barcode_receipt_item
 
 from typing import Any, Callable, Optional
 
