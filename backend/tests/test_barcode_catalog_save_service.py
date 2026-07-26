@@ -56,7 +56,8 @@ def build_database():
         conn.execute(text(
             "CREATE TABLE household_articles ("
             "id TEXT PRIMARY KEY, household_id TEXT, "
-            "global_product_id TEXT, updated_at TEXT)"
+            "global_product_id TEXT, barcode TEXT, "
+            "updated_at TEXT)"
         ))
         conn.execute(text(
             "CREATE TABLE inventory_events (id TEXT PRIMARY KEY)"
@@ -72,7 +73,7 @@ def build_database():
         ))
         conn.execute(text(
             "INSERT INTO household_articles "
-            "VALUES ('article-1', 'household-1', NULL, NULL)"
+            "VALUES ('article-1', 'household-1', NULL, NULL, NULL)"
         ))
 
     return engine, gtin
@@ -108,11 +109,14 @@ def check_unknown_gtin_is_created_and_linked() -> None:
             "AND identity_value = :gtin"
         ), {"gtin": gtin}).scalar_one()
 
-        article_product = conn.execute(text(
-            "SELECT global_product_id "
+        article_row = conn.execute(text(
+            "SELECT global_product_id, barcode "
             "FROM household_articles "
             "WHERE id = 'article-1'"
-        )).scalar_one()
+        )).mappings().one()
+
+        article_product = article_row["global_product_id"]
+        article_barcode = article_row["barcode"]
 
         line_product = conn.execute(text(
             "SELECT matched_global_product_id "
@@ -137,6 +141,10 @@ def check_unknown_gtin_is_created_and_linked() -> None:
     assert_true(
         article_product == result["product"]["global_product_id"],
         "Huishoudartikel is niet gekoppeld",
+    )
+    assert_true(
+        article_barcode == gtin,
+        "Barcode is niet bij Mijn artikel opgeslagen",
     )
     assert_true(
         line_product == result["product"]["global_product_id"],

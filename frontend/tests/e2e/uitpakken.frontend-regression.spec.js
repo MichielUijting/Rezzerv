@@ -322,6 +322,8 @@ test.describe('Uitpakken frontend-regressie', () => {
           matched_household_article_id: householdArticleId,
           matched_global_product_id: saved ? 'gp-mosterd' : null,
           matched_global_product_name: saved ? 'Mosterd Dijon' : null,
+          matched_global_product_gtin: saved ? gtin : null,
+          barcode: saved ? gtin : null,
         }],
       }),
     }));
@@ -420,8 +422,29 @@ test.describe('Uitpakken frontend-regressie', () => {
       page.getByTestId(`receipt-line-standard-product-${lineId}`)
     ).toHaveValue('Mosterd Dijon');
     await expect(
+      page.getByTestId(`receipt-line-barcode-input-${lineId}`)
+    ).toHaveValue(gtin);
+    await expect(
       page.getByTestId(`receipt-line-barcode-status-${lineId}`)
     ).toHaveCount(0);
+
+    await page.getByRole(
+      'button',
+      { name: 'Sluit bonartikeldetails' }
+    ).click();
+
+    await expect(
+      page.getByTestId('receipt-line-detail-overlay')
+    ).toHaveCount(0);
+
+    await page.getByTestId(`receipt-line-${lineId}`)
+      .locator('td')
+      .nth(1)
+      .dblclick();
+
+    await expect(
+      page.getByTestId(`receipt-line-barcode-input-${lineId}`)
+    ).toHaveValue(gtin);
 
     expect(
       mutationRequests.some(

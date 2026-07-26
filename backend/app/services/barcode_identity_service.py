@@ -823,6 +823,7 @@ def _link_saved_product_to_household(
     purchase_import_line_id: str,
     household_article_id: str,
     global_product_id: str,
+    gtin: str,
 ) -> None:
     tables = _table_names(conn)
 
@@ -964,21 +965,35 @@ def _link_saved_product_to_household(
         else ""
     )
 
+    article_assignments = [
+        "global_product_id = :global_product_id",
+    ]
+
+    article_parameters = {
+        "global_product_id": global_product_id,
+        "article_id": household_article_id,
+        "household_id": household_id,
+        "gtin": gtin,
+    }
+
+    if "barcode" in article_columns:
+        article_assignments.append("barcode = :gtin")
+
+    if "updated_at" in article_columns:
+        article_assignments.append(
+            "updated_at = CURRENT_TIMESTAMP"
+        )
+
     conn.execute(
         text(
             f"""
             UPDATE household_articles
-            SET global_product_id = :global_product_id
-                {article_updated_fragment}
+            SET {", ".join(article_assignments)}
             WHERE id = :article_id
               AND household_id = :household_id
             """
         ),
-        {
-            "global_product_id": global_product_id,
-            "article_id": household_article_id,
-            "household_id": household_id,
-        },
+        article_parameters,
     )
 
     mapped_article_column = _first_existing_column(
@@ -1099,6 +1114,7 @@ def save_gtin_catalog_and_household_link(
         purchase_import_line_id=normalized_line_id,
         household_article_id=normalized_article_id,
         global_product_id=product_id,
+        gtin=normalized_gtin,
     )
 
     if "inventory_events" in tables:
