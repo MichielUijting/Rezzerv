@@ -254,7 +254,7 @@ export default function CatalogPage() {
                         <option value="">Alle</option>
                         <option value="compleet">Compleet</option>
                         <option value="door gebruiker bevestigd">Door gebruiker bevestigd</option>
-                        <option value="gtin bevestigd — producttype ontbreekt">GTIN bevestigd — producttype ontbreekt</option>
+                        <option value="gtin bevestigd — producttype nog te bepalen">GTIN bevestigd — producttype nog te bepalen</option>
                         <option value="controle nodig">Controle nodig</option>
                         <option value="conflict">Conflict</option>
                       </select>

@@ -32,12 +32,9 @@ def _quality_status(row: dict[str, Any]) -> str:
     if not has_gtin:
         return "Controle nodig"
 
-    if source == "receipt_user_confirmed":
-        if not has_product_type:
-            return "GTIN bevestigd — producttype ontbreekt"
-        return "Door gebruiker bevestigd"
-
     if not has_product_type:
+        if source == "receipt_user_confirmed":
+            return "GTIN bevestigd — producttype nog te bepalen"
         return "Controle nodig"
 
     return "Compleet"

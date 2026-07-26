@@ -15,6 +15,12 @@ from typing import Any
 
 from sqlalchemy import inspect, text
 
+from app.services.gpc_local_catalog_service import classify_gpc_product
+from app.services.off_search_service import lookup_off_product_by_gtin
+from app.services.product_inventory_group_store import (
+    link_global_product_to_inventory_group_with_connection,
+)
+
 GTIN_LENGTH_TO_FORMAT = {
     8: "GTIN-8",
     12: "GTIN-12",
@@ -1079,6 +1085,84 @@ def _link_saved_product_to_household(
             )
 
 
+
+def classify_gtin_product_type(
+    *,
+    gtin: str,
+    fallback_product_name: str,
+) -> dict[str, Any]:
+    """Bepaal generiek een officieel GPC-producttype voor een GTIN."""
+    external_result = lookup_off_product_by_gtin(gtin)
+    external_product = external_result.get("product")
+
+    product_name = " ".join(
+        str(
+            (external_product or {}).get("product_name")
+            or fallback_product_name
+            or ""
+        ).strip().split()
+    )
+    category = " ".join(
+        str(
+            (external_product or {}).get("category")
+            or (external_product or {}).get("categories")
+            or ""
+        ).strip().split()
+    )
+    explicit_gpc_brick_code = str(
+        (external_product or {}).get("explicit_gpc_brick_code")
+        or ""
+    ).strip()
+
+    classification = classify_gpc_product(
+        product_name=product_name,
+        category=category,
+        explicit_gpc_brick_code=explicit_gpc_brick_code,
+    )
+
+    if classification.get("status") != "classified":
+        return {
+            "ok": True,
+            "status": "review_required",
+            "reason": classification.get("reason")
+            or external_result.get("status")
+            or "not_classified",
+            "gtin": gtin,
+            "external_source_status": external_result.get("status"),
+            "product_type": None,
+            "mutates_inventory": False,
+            "creates_inventory_event": False,
+        }
+
+    product_type_id = str(
+        classification.get("product_type_id") or ""
+    ).strip()
+
+    if not product_type_id.startswith("gpc:"):
+        return {
+            "ok": True,
+            "status": "review_required",
+            "reason": "classification_is_not_official_gpc",
+            "gtin": gtin,
+            "external_source_status": external_result.get("status"),
+            "product_type": None,
+            "mutates_inventory": False,
+            "creates_inventory_event": False,
+        }
+
+    return {
+        "ok": True,
+        "status": "classified",
+        "gtin": gtin,
+        "external_source_status": external_result.get("status"),
+        "product_name": product_name,
+        "category": category,
+        "product_type": classification,
+        "mutates_inventory": False,
+        "creates_inventory_event": False,
+    }
+
+
 def save_gtin_catalog_and_household_link(
     conn,
     *,
@@ -1127,6 +1211,11 @@ def save_gtin_catalog_and_household_link(
             "Bonregel en Mijn artikel zijn verplicht.",
         )
 
+    product_type_classification = classify_gtin_product_type(
+        gtin=normalized_gtin,
+        fallback_product_name=normalized_article_name,
+    )
+
     tables = _table_names(conn)
     inventory_event_count = None
 
@@ -1156,6 +1245,41 @@ def save_gtin_catalog_and_household_link(
         gtin=normalized_gtin,
     )
 
+    classified_product_type = (
+        product_type_classification.get("product_type") or {}
+    )
+    product_type_id = str(
+        classified_product_type.get("product_type_id") or ""
+    ).strip()
+
+    if (
+        product_type_classification.get("status") == "classified"
+        and product_type_id
+    ):
+        membership = link_global_product_to_inventory_group_with_connection(
+            conn,
+            global_product_id=product_id,
+            inventory_group_key=product_type_id,
+            comparison_group_key=product_type_id,
+            confidence=float(
+                classified_product_type.get("confidence") or 1.0
+            ),
+            source=str(
+                classified_product_type.get("classification_source")
+                or "automatic_gtin_gpc"
+            ),
+            confirmed_by_user=False,
+        )
+
+        if not membership.get("ok"):
+            raise BarcodeHouseholdArticleLinkError(
+                500,
+                str(
+                    membership.get("error")
+                    or "Het Producttype kon niet centraal worden gekoppeld."
+                ),
+            )
+
     if "inventory_events" in tables:
         inventory_event_count_after = conn.execute(
             text("SELECT COUNT(*) FROM inventory_events")
@@ -1176,5 +1300,6 @@ def save_gtin_catalog_and_household_link(
         "product": product,
         "purchase_import_line_id": normalized_line_id,
         "household_article_id": normalized_article_id,
+        "product_type_classification": product_type_classification,
         "inventory_mutated": False,
     }

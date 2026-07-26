@@ -831,6 +831,38 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
     unit_expr = _m2c2h5_col("pil", columns, ["unit_raw"])
     price_expr = _m2c2h5_col("pil", columns, ["line_price_raw"])
     global_product_expr = _m2c2h5_col("pil", columns, ["matched_global_product_id", "matched_global_article_id"])
+
+    household_article_join_sql = ""
+    household_article_column = next(
+        (
+            candidate
+            for candidate in (
+                "matched_household_article_id",
+                "household_article_id",
+                "selected_household_article_id",
+            )
+            if candidate in columns
+        ),
+        None,
+    )
+
+    if (
+        household_article_column
+        and _m2c2h5_table_exists(conn, "household_articles")
+    ):
+        household_columns = _m2c2h5_table_columns(
+            conn,
+            "household_articles",
+        )
+        if {"id", "global_product_id"}.issubset(household_columns):
+            household_article_join_sql = (
+                "LEFT JOIN household_articles ha "
+                f"ON ha.id = pil.{household_article_column}"
+            )
+            global_product_expr = (
+                f"COALESCE({global_product_expr}, ha.global_product_id)"
+            )
+
     created_expr = _m2c2h5_col("pil", columns, ["created_at"])
     updated_expr = _m2c2h5_col("pil", columns, ["updated_at"])
 
@@ -851,6 +883,7 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
                 {updated_expr} AS updated_at
             FROM purchase_import_lines pil
             {batch_join_sql}
+            {household_article_join_sql}
             ORDER BY pil.ui_sort_order ASC, pil.created_at DESC, pil.id DESC
             LIMIT :limit
             """
