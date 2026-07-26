@@ -428,6 +428,27 @@ test.describe('Uitpakken frontend-regressie', () => {
       page.getByTestId(`receipt-line-barcode-status-${lineId}`)
     ).toHaveCount(0);
 
+    const successOverlay = page.getByTestId(
+      'app-feedback-success-overlay'
+    );
+
+    if (await successOverlay.count()) {
+      const feedbackButton = successOverlay.getByRole(
+        'button',
+        { name: /ok|sluiten/i }
+      );
+
+      if (await feedbackButton.count()) {
+        await feedbackButton.click();
+      } else {
+        await successOverlay.click({
+          position: { x: 5, y: 5 },
+        });
+      }
+
+      await expect(successOverlay).toHaveCount(0);
+    }
+
     await page.getByRole(
       'button',
       { name: 'Sluit bonartikeldetails' }
