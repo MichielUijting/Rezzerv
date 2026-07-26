@@ -120,6 +120,24 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
     ) if retailer_code and (receipt_text or external_article_code) else None
 
     if not central_link:
+        candidate_gtin_values = []
+
+        for candidate in next_row.get("candidates") or []:
+            if not isinstance(candidate, dict):
+                continue
+
+            candidate_gtin_values.extend(
+                [
+                    candidate.get("gtin"),
+                    candidate.get("ean"),
+                    candidate.get("barcode"),
+                    candidate.get("code"),
+                    candidate.get("external_source_product_code"),
+                    candidate.get("candidate_source_product_code"),
+                    candidate.get("source_product_code"),
+                ]
+            )
+
         catalog_product = _catalog_product_by_gtin(
             conn,
             next_row.get("gtin"),
@@ -127,6 +145,7 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
             next_row.get("linked_gtin"),
             next_row.get("barcode"),
             external_article_code,
+            *candidate_gtin_values,
         )
 
         if catalog_product:

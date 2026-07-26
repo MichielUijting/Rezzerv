@@ -179,7 +179,11 @@ function buildReceiptItems(rawItems) {
     const displayBest = linked || selectableBest
     const hasSelectableCandidate = candidates.some((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate))
     const hasFallback = candidates.some((candidate) => candidate.isFallbackCandidate)
-    return { ...item, candidates, status: item.catalogLinked ? 'Gekoppeld' : (item.hasKnownGtin ? 'GTIN / EAN bekend' : (hasSelectableCandidate ? 'Universele kandidaten gevonden' : (hasFallback ? 'Geen externe match' : 'Geen universele kandidaat'))), candidateCount: candidates.filter((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate)).length, bestCandidateName: item.catalogLinked && item.linkedCandidateName ? item.linkedCandidateName : (item.hasKnownGtin ? '' : text(displayBest?.candidateName, '')), productType: item.linkedProductType || '', bestCandidateCode: item.catalogLinked && item.gtin !== '-' ? item.gtin : (item.hasKnownGtin ? item.gtin : text(selectableBest?.externalCode, '')), bestCandidateScore: item.catalogLinked && item.linkedScore !== null ? item.linkedScore : (item.hasKnownGtin ? null : displayBest?.score ?? null), gtin: item.gtin, bestSelectableCandidateName: item.hasKnownGtin ? '' : text(selectableBest?.candidateName, '') }
+    return { ...item, candidates, status: item.catalogLinked ? 'Gekoppeld' : (item.hasKnownGtin ? 'GTIN / EAN bekend' : (hasSelectableCandidate ? 'Universele kandidaten gevonden' : (hasFallback ? 'Geen externe match' : 'Geen universele kandidaat'))), candidateCount: candidates.filter((candidate) => candidate.hasUniversalCode && !candidate.isFallbackCandidate && candidateMeetsScoreThreshold(candidate)).length, bestCandidateName: item.catalogLinked && item.linkedCandidateName ? item.linkedCandidateName : (item.hasKnownGtin ? '' : text(displayBest?.candidateName, '')), productType: item.linkedProductType || (
+        item.catalogLinked
+          ? 'Nog niet geclassificeerd'
+          : ''
+      ), bestCandidateCode: item.catalogLinked && item.gtin !== '-' ? item.gtin : (item.hasKnownGtin ? item.gtin : text(selectableBest?.externalCode, '')), bestCandidateScore: item.catalogLinked && item.linkedScore !== null ? item.linkedScore : (item.hasKnownGtin ? null : displayBest?.score ?? null), gtin: item.gtin, bestSelectableCandidateName: item.hasKnownGtin ? '' : text(selectableBest?.candidateName, '') }
   })
 }
 function offStatusLabel(preview) {

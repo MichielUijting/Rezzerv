@@ -253,6 +253,8 @@ export default function CatalogPage() {
                       <select className="rz-table-filter" value={filters.qualityStatus} onChange={(event) => updateFilter('qualityStatus', event.target.value)} aria-label="Kwaliteitsstatus filter">
                         <option value="">Alle</option>
                         <option value="compleet">Compleet</option>
+                        <option value="door gebruiker bevestigd">Door gebruiker bevestigd</option>
+                        <option value="gtin bevestigd — producttype ontbreekt">GTIN bevestigd — producttype ontbreekt</option>
                         <option value="controle nodig">Controle nodig</option>
                         <option value="conflict">Conflict</option>
                       </select>

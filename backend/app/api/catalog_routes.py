@@ -22,14 +22,22 @@ def _columns(table_name: str) -> set[str]:
 
 def _quality_status(row: dict[str, Any]) -> str:
     source = str(row.get("source") or "").strip().lower()
+    has_gtin = bool(
+        str(row.get("primary_gtin") or "").strip()
+    )
+    has_product_type = bool(
+        str(row.get("product_type") or "").strip()
+    )
 
-    if source == "receipt_user_confirmed":
-        return "Door gebruiker bevestigd"
-
-    if not str(row.get("primary_gtin") or "").strip():
+    if not has_gtin:
         return "Controle nodig"
 
-    if not str(row.get("product_type") or "").strip():
+    if source == "receipt_user_confirmed":
+        if not has_product_type:
+            return "GTIN bevestigd — producttype ontbreekt"
+        return "Door gebruiker bevestigd"
+
+    if not has_product_type:
         return "Controle nodig"
 
     return "Compleet"
