@@ -400,6 +400,9 @@ test.describe('Uitpakken frontend-regressie', () => {
     const confirm = page.getByTestId('receipt-line-barcode-save-confirm');
     await expect(confirm).toBeVisible();
     await expect(confirm).toContainText('Dit is een geldige barcode.');
+    await expect(
+      page.getByTestId(`receipt-line-barcode-status-${lineId}`)
+    ).toHaveCount(0);
 
     await page.getByTestId('receipt-line-barcode-save-cancel').click();
     await expect(confirm).toHaveCount(0);
@@ -416,6 +419,9 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expect(
       page.getByTestId(`receipt-line-standard-product-${lineId}`)
     ).toHaveValue('Mosterd Dijon');
+    await expect(
+      page.getByTestId(`receipt-line-barcode-status-${lineId}`)
+    ).toHaveCount(0);
 
     expect(
       mutationRequests.some(
