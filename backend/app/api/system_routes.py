@@ -34,10 +34,13 @@ from app.services.external_database_matchflow_evidence import (
 )
 from app.services.external_product_candidate_store import (
     build_candidate_context_key,
-    list_external_receipt_items,
     list_saved_external_product_candidates,
     unlink_external_catalog_links,
     promote_external_product_candidate,
+)
+from app.services.external_receipt_item_read_service import (
+    list_external_receipt_items_read_only,
+    repair_confirmed_external_catalog_links,
 )
 from app.services.external_product_catalog_store import (
     list_catalog_products,
@@ -321,9 +324,16 @@ def external_databases_open_food_facts_save_candidates(payload: dict[str, Any] =
 
 @router.get('/api/external-databases/receipt-items')
 def external_databases_receipt_items(limit: int = Query(default=200)):
-    payload = list_external_receipt_items(limit=limit)
+    payload = list_external_receipt_items_read_only(limit=limit)
     payload = _without_taxonomy_seed_candidates(payload)
     return _without_spaarzegels_receipt_items(payload)
+
+
+@router.post('/api/admin/external-databases/receipt-items/repair-catalog-links')
+def admin_repair_external_receipt_catalog_links(payload: dict[str, Any] = Body(default_factory=dict)):
+    return repair_confirmed_external_catalog_links(
+        limit=int(payload.get('limit') or 500),
+    )
 
 
 @router.post('/api/external-databases/receipt-items/ensure-candidates')
