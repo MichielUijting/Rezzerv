@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any
 
@@ -21,10 +21,17 @@ def _columns(table_name: str) -> set[str]:
 
 
 def _quality_status(row: dict[str, Any]) -> str:
+    source = str(row.get("source") or "").strip().lower()
+
+    if source == "receipt_user_confirmed":
+        return "Door gebruiker bevestigd"
+
     if not str(row.get("primary_gtin") or "").strip():
         return "Controle nodig"
+
     if not str(row.get("product_type") or "").strip():
         return "Controle nodig"
+
     return "Compleet"
 
 
@@ -215,18 +222,50 @@ def get_catalog_product(global_product_id: str):
     household_table = _household_table()
     if household_table:
         table_columns = _columns(household_table)
-        requested = [
+        select_parts = [
             "id",
             "household_id",
-            "name",
-            "article_name",
-            "minimum_stock",
-            "ideal_stock",
-            "article_group_id",
-        ]
-        select_parts = [
-            column if column in table_columns else f"NULL AS {column}"
-            for column in requested
+            (
+                "COALESCE(custom_name, naam) AS name"
+                if {"custom_name", "naam"}.issubset(table_columns)
+                else (
+                    "naam AS name"
+                    if "naam" in table_columns
+                    else (
+                        "name"
+                        if "name" in table_columns
+                        else "NULL AS name"
+                    )
+                )
+            ),
+            (
+                "naam AS article_name"
+                if "naam" in table_columns
+                else (
+                    "article_name"
+                    if "article_name" in table_columns
+                    else "NULL AS article_name"
+                )
+            ),
+            (
+                "min_stock AS minimum_stock"
+                if "min_stock" in table_columns
+                else (
+                    "minimum_stock"
+                    if "minimum_stock" in table_columns
+                    else "NULL AS minimum_stock"
+                )
+            ),
+            (
+                "ideal_stock"
+                if "ideal_stock" in table_columns
+                else "NULL AS ideal_stock"
+            ),
+            (
+                "article_group_id"
+                if "article_group_id" in table_columns
+                else "NULL AS article_group_id"
+            ),
         ]
         with engine.begin() as conn:
             household_articles = [
@@ -244,8 +283,62 @@ def get_catalog_product(global_product_id: str):
                 ).mappings().all()
             ]
 
+    receipt_lines: list[dict[str, Any]] = []
+
+    if {
+        "purchase_import_lines",
+        "purchase_import_batches",
+    }.issubset(tables):
+        with engine.begin() as conn:
+            receipt_lines = [
+                dict(row)
+                for row in conn.execute(
+                    text(
+                        """
+                        SELECT
+                            pil.id,
+                            pil.batch_id,
+                            pil.article_name_raw,
+                            pil.matched_household_article_id,
+                            COALESCE(
+                                pil.matched_global_product_id,
+                                ha.global_product_id
+                            ) AS matched_global_product_id,
+                            COALESCE(
+                                ha.custom_name,
+                                ha.naam
+                            ) AS household_article_name,
+                            COALESCE(
+                                ha.barcode,
+                                gp.primary_gtin
+                            ) AS gtin,
+                            pib.created_at
+                        FROM purchase_import_lines pil
+                        JOIN purchase_import_batches pib
+                          ON pib.id = pil.batch_id
+                        LEFT JOIN household_articles ha
+                          ON ha.id = pil.matched_household_article_id
+                        LEFT JOIN global_products gp
+                          ON gp.id = COALESCE(
+                              pil.matched_global_product_id,
+                              ha.global_product_id
+                          )
+                        WHERE COALESCE(
+                            pil.matched_global_product_id,
+                            ha.global_product_id
+                        ) = :global_product_id
+                        ORDER BY
+                            datetime(pib.created_at) DESC,
+                            pil.id DESC
+                        """
+                    ),
+                    {"global_product_id": global_product_id},
+                ).mappings().all()
+            ]
+
     return {
         "product": product,
         "identities": identities,
         "household_articles": household_articles,
+        "receipt_lines": receipt_lines,
     }

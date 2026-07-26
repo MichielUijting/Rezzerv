@@ -1028,7 +1028,7 @@ def _link_saved_product_to_household(
         )
 
     if update_parts:
-        conn.execute(
+        update_result = conn.execute(
             text(
                 f"""
                 UPDATE purchase_import_lines
@@ -1038,6 +1038,45 @@ def _link_saved_product_to_household(
             ),
             parameters,
         )
+
+        if int(update_result.rowcount or 0) != 1:
+            raise BarcodeHouseholdArticleLinkError(
+                500,
+                "De kassabonregel kon niet worden gekoppeld.",
+            )
+
+        verification_columns = [
+            f"{mapped_article_column} AS household_article_id"
+            if mapped_article_column
+            else "NULL AS household_article_id",
+            f"{mapped_product_column} AS global_product_id"
+            if mapped_product_column
+            else "NULL AS global_product_id",
+        ]
+
+        verified = conn.execute(
+            text(
+                f"""
+                SELECT {", ".join(verification_columns)}
+                FROM purchase_import_lines
+                WHERE {line_id_column} = :line_id
+                LIMIT 1
+                """
+            ),
+            {"line_id": purchase_import_line_id},
+        ).mappings().first()
+
+        if (
+            not verified
+            or str(verified.get("household_article_id") or "")
+                != str(household_article_id)
+            or str(verified.get("global_product_id") or "")
+                != str(global_product_id)
+        ):
+            raise BarcodeHouseholdArticleLinkError(
+                500,
+                "De kassabon- en cataloguskoppeling is niet volledig opgeslagen.",
+            )
 
 
 def save_gtin_catalog_and_household_link(

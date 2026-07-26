@@ -66,6 +66,43 @@ def _central_product_details(
     return dict(row) if row else {}
 
 
+def _catalog_product_by_gtin(
+    conn,
+    *values: Any,
+) -> dict[str, Any] | None:
+    gtin = ""
+
+    for value in values:
+        candidate = "".join(
+            character
+            for character in _text(value)
+            if character.isdigit()
+        )
+        if len(candidate) in {8, 12, 13, 14}:
+            gtin = candidate
+            break
+
+    if not gtin:
+        return None
+
+    row = conn.execute(
+        text(
+            """
+            SELECT
+                id AS global_product_id,
+                name AS global_product_name,
+                primary_gtin
+            FROM global_products
+            WHERE primary_gtin = :gtin
+            LIMIT 1
+            """
+        ),
+        {"gtin": gtin},
+    ).mappings().first()
+
+    return dict(row) if row else None
+
+
 def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
     next_row = dict(row)
     retailer_code = _text(next_row.get("retailer_code"))
@@ -81,6 +118,29 @@ def project_central_link_truth(conn, row: dict[str, Any]) -> dict[str, Any]:
         receipt_text=receipt_text,
         external_article_code=external_article_code,
     ) if retailer_code and (receipt_text or external_article_code) else None
+
+    if not central_link:
+        catalog_product = _catalog_product_by_gtin(
+            conn,
+            next_row.get("gtin"),
+            next_row.get("primary_gtin"),
+            next_row.get("linked_gtin"),
+            next_row.get("barcode"),
+            external_article_code,
+        )
+
+        if catalog_product:
+            central_link = {
+                "global_product_id": catalog_product.get(
+                    "global_product_id"
+                ),
+                "global_product_name": catalog_product.get(
+                    "global_product_name"
+                ),
+                "primary_gtin": catalog_product.get("primary_gtin"),
+                "source": "catalog_gtin",
+                "link_status": "active",
+            }
 
     active = bool(central_link)
     central_product_id = _text((central_link or {}).get("global_product_id"))
