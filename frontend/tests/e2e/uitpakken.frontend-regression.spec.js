@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectAnyVisible,
@@ -241,7 +241,7 @@ test.describe('Uitpakken frontend-regressie', () => {
     page.on('request', (request) => {
       const url = request.url();
       if (
-        /inventory|purchase|external-product-links|household-articles/.test(url)
+        /inventory|purchase|external-product-links|household-articles|save-household-article/.test(url)
         && request.method() !== 'GET'
       ) {
         mutationRequests.push(`${request.method()} ${url}`);
@@ -435,3 +435,4 @@ test.describe('Uitpakken frontend-regressie', () => {
   });
 
 });
+
