@@ -239,6 +239,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [lineSaveState, setLineSaveState] = useState({})
   const [barcodeDrafts, setBarcodeDrafts] = useState({})
   const [barcodeStates, setBarcodeStates] = useState({})
+  const [barcodeSaveConfirm, setBarcodeSaveConfirm] = useState(null)
   const [activeBarcodeLineId, setActiveBarcodeLineId] = useState('')
   const [activeDetailLineId, setActiveDetailLineId] = useState(receiptLineId)
   const [selectedLineIds, setSelectedLineIds] = useState([])
@@ -309,7 +310,17 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
 
   function updateBarcodeDraft(lineId, value) {
     setBarcodeDrafts((current) => ({ ...current, [lineId]: value }))
-    setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'idle', message: '' } }))
+    setBarcodeStates((current) => ({
+      ...current,
+      [lineId]: {
+        status: 'idle',
+        message: '',
+        gtin: '',
+        matchStatus: '',
+        productName: '',
+        globalProductId: '',
+      },
+    }))
   }
 
   async function validateReceiptLineBarcode(lineId, overrideValue = null) {
@@ -334,27 +345,290 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const lookup = await fetchJson(`/api/barcodes/${encodeURIComponent(validation.normalized_value || value)}`)
       const matchStatus = String(lookup?.match_status || '')
       if (matchStatus === 'matched') {
-        const productName = firstTextValue(lookup?.product?.name, 'bekend universeel artikel')
+        const productName = firstTextValue(
+          lookup?.product?.name,
+          'bekend universeel artikel'
+        )
+        const globalProductId = String(
+          lookup?.product?.global_product_id || ''
+        ).trim()
+        const normalizedGtin = String(
+          lookup?.gtin || validation.normalized_value || value
+        ).trim()
         const message = `Geldige GTIN. Gevonden: ${productName}.`
-        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'success', message, productName } }))
-        showUitpakkenFeedback('success', message, { key: `barcode-matched-${lineId}-${Date.now()}` })
+        setBarcodeStates((current) => ({
+          ...current,
+          [lineId]: {
+            status: 'success',
+            message,
+            productName,
+            gtin: normalizedGtin,
+            matchStatus,
+            globalProductId,
+            product: lookup?.product || null,
+          },
+        }))
+        const line = (batch?.lines || []).find(
+          (item) => String(item.id) === String(lineId)
+        )
+        setBarcodeSaveConfirm({
+          lineId: String(lineId),
+          gtin: normalizedGtin,
+          articleName: String(line?.article_name_raw || '').trim(),
+          globalProductId,
+          productName,
+          matchStatus,
+        })
       } else if (matchStatus === 'conflict') {
         const message = 'Conflict: deze GTIN verwijst naar meerdere universele artikelen. Er is niets gewijzigd.'
         setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'error', message } }))
         showUitpakkenFeedback('error', message, { key: `barcode-conflict-${lineId}-${Date.now()}` })
-      } else if (matchStatus === 'incomplete') {
-        const message = 'GTIN gevonden, maar de productkoppeling is nog niet compleet. Er is niets gewijzigd.'
-        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'warning', message } }))
-        showUitpakkenFeedback('warning', message, { key: `barcode-incomplete-${lineId}-${Date.now()}` })
-      } else {
-        const message = 'Geldige GTIN, maar nog niet bekend in de catalogus. Er is niets gewijzigd.'
-        setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'warning', message } }))
-        showUitpakkenFeedback('warning', message, { key: `barcode-unknown-${lineId}-${Date.now()}` })
+      } else if (
+        matchStatus === 'incomplete'
+        || matchStatus === 'not_found'
+      ) {
+        const line = (batch?.lines || []).find(
+          (item) => String(item.id) === String(lineId)
+        )
+        const articleName = String(
+          line?.article_name_raw || ''
+        ).trim()
+        const normalizedGtin = String(
+          lookup?.gtin || validation.normalized_value || value
+        ).trim()
+        const productName = firstTextValue(
+          lookup?.product?.name,
+          articleName,
+          'Nieuw catalogusproduct'
+        )
+        const globalProductId = String(
+          lookup?.product?.global_product_id || ''
+        ).trim()
+        const message = 'De barcode is geldig.'
+        setBarcodeStates((current) => ({
+          ...current,
+          [lineId]: {
+            status: 'success',
+            message,
+            productName,
+            gtin: normalizedGtin,
+            matchStatus,
+            globalProductId,
+            product: lookup?.product || null,
+          },
+        }))
+        setBarcodeSaveConfirm({
+          lineId: String(lineId),
+          gtin: normalizedGtin,
+          articleName,
+          globalProductId,
+          productName,
+          matchStatus,
+        })
       }
     } catch (lookupError) {
       const message = normalizeErrorMessage(lookupError?.message || lookupError)
       setBarcodeStates((current) => ({ ...current, [lineId]: { status: 'error', message } }))
       showUitpakkenFeedback('error', message, { key: `barcode-error-${lineId}-${Date.now()}` })
+    }
+  }
+
+  async function linkReceiptLineBarcode(line, draft) {
+    const lineId = String(line?.id || '')
+    const state = barcodeStates[lineId] || {}
+    const householdArticleId = String(
+      draft?.articleId || ''
+    ).trim()
+    const gtin = String(state.gtin || '').trim()
+    const globalProductId = String(
+      state.globalProductId || ''
+    ).trim()
+
+    if (!householdArticleId) {
+      showUitpakkenFeedback(
+        'warning',
+        'Kies eerst Mijn artikel.',
+        { key: `barcode-link-no-article-${lineId}` }
+      )
+      return
+    }
+
+    if (
+      state.matchStatus !== 'matched'
+      || !gtin
+      || !globalProductId
+    ) {
+      showUitpakkenFeedback(
+        'warning',
+        'Controleer eerst een bekende, complete GTIN.',
+        { key: `barcode-link-no-match-${lineId}` }
+      )
+      return
+    }
+
+    setBusyLineId(lineId)
+
+    try {
+      const result = await fetchJson(
+        `/api/barcodes/${encodeURIComponent(gtin)}/household-article-link`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            purchase_import_line_id: lineId,
+            household_article_id: householdArticleId,
+            global_product_id: globalProductId,
+          }),
+        }
+      )
+
+      await refreshBatch(batch.batch_id)
+
+      const message = result?.idempotent
+        ? 'Mijn artikel was al aan dit universele artikel gekoppeld.'
+        : 'Mijn artikel is aan het universele artikel gekoppeld.'
+
+      setBarcodeStates((current) => ({
+        ...current,
+        [lineId]: {
+          ...(current[lineId] || {}),
+          status: 'success',
+          message,
+          linkedHouseholdArticleId: householdArticleId,
+        },
+      }))
+
+      showUitpakkenFeedback(
+        'success',
+        message,
+        {
+          key: `barcode-link-success-${lineId}-${Date.now()}`,
+        }
+      )
+    } catch (linkError) {
+      const message = normalizeErrorMessage(
+        linkError?.message || linkError
+      )
+
+      setBarcodeStates((current) => ({
+        ...current,
+        [lineId]: {
+          ...(current[lineId] || {}),
+          status: 'error',
+          message,
+        },
+      }))
+
+      showUitpakkenFeedback(
+        'error',
+        message,
+        {
+          key: `barcode-link-error-${lineId}-${Date.now()}`,
+        }
+      )
+    } finally {
+      setBusyLineId('')
+    }
+  }
+
+  async function saveConfirmedReceiptLineBarcode() {
+    const confirmation = barcodeSaveConfirm
+    if (!confirmation) return
+
+    const line = (batch?.lines || []).find(
+      (item) => String(item.id) === String(confirmation.lineId)
+    )
+    if (!line) {
+      setBarcodeSaveConfirm(null)
+      showUitpakkenFeedback(
+        'error',
+        'De bonregel is niet meer beschikbaar.',
+        { key: 'barcode-save-line-missing' }
+      )
+      return
+    }
+
+    const draft = getDraftValues(line)
+    const householdArticleId = String(
+      draft.articleId || ''
+    ).trim()
+
+    if (!householdArticleId) {
+      showUitpakkenFeedback(
+        'warning',
+        'Kies eerst Mijn artikel.',
+        { key: `barcode-save-no-article-${confirmation.lineId}` }
+      )
+      return
+    }
+
+    setBusyLineId(String(confirmation.lineId))
+
+    try {
+      const result = await fetchJson(
+        `/api/barcodes/${encodeURIComponent(confirmation.gtin)}/save-household-article`,
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            purchase_import_line_id: String(confirmation.lineId),
+            household_article_id: householdArticleId,
+            article_name: confirmation.articleName,
+          }),
+        }
+      )
+
+      const product = result?.product || {}
+      const productName = firstTextValue(
+        product?.name,
+        confirmation.articleName,
+        'Catalogusproduct'
+      )
+      const globalProductId = String(
+        product?.global_product_id || ''
+      ).trim()
+
+      await refreshBatch(batch.batch_id)
+
+      setBarcodeStates((current) => ({
+        ...current,
+        [confirmation.lineId]: {
+          ...(current[confirmation.lineId] || {}),
+          status: 'success',
+          message: result?.catalog_product_created
+            ? 'De barcode is opgeslagen en het product is opgenomen in de catalogus.'
+            : 'De barcode en productkoppeling zijn opgeslagen.',
+          productName,
+          gtin: result?.gtin || confirmation.gtin,
+          matchStatus: 'matched',
+          globalProductId,
+          product,
+          linkedHouseholdArticleId: householdArticleId,
+        },
+      }))
+
+      setBarcodeSaveConfirm(null)
+
+      showUitpakkenFeedback(
+        'success',
+        result?.catalog_product_created
+          ? 'Product opgenomen in de catalogus en bijgewerkt in Uitpakken.'
+          : 'Product bijgewerkt in Uitpakken.',
+        {
+          key: `barcode-save-success-${confirmation.lineId}-${Date.now()}`,
+        }
+      )
+    } catch (saveError) {
+      const message = normalizeErrorMessage(
+        saveError?.message || saveError
+      )
+      showUitpakkenFeedback(
+        'error',
+        message,
+        {
+          key: `barcode-save-error-${confirmation.lineId}-${Date.now()}`,
+        }
+      )
+    } finally {
+      setBusyLineId('')
     }
   }
 
@@ -1425,10 +1699,27 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
             const { line, draft } = activeDetailEntry
             const lineBusy = busyLineId === line.id || isProcessingBatch
             const selectedLocationLabel = locationLabelForDraft(draft)
+            const barcodeState = barcodeStates[line.id] || {}
             const universalProductValue = firstTextValue(
-              barcodeStates[line.id]?.productName,
+              barcodeState.productName,
               standardProductLabel(line)
             )
+            const selectedHouseholdArticleId = String(
+              draft.articleId || ''
+            ).trim()
+            const alreadyLinked = Boolean(
+              selectedHouseholdArticleId
+              && String(
+                barcodeState.linkedHouseholdArticleId || ''
+              ) === selectedHouseholdArticleId
+            )
+            const canLinkBarcode = !lineBusy
+              && !isViewer
+              && barcodeState.matchStatus === 'matched'
+              && Boolean(barcodeState.gtin)
+              && Boolean(barcodeState.globalProductId)
+              && Boolean(selectedHouseholdArticleId)
+              && !alreadyLinked
             return (
               <div className="rz-modal-backdrop rz-receipt-line-detail-backdrop" role="presentation" onMouseDown={closeReceiptLineDetail} data-testid="receipt-line-detail-overlay">
                 <div className="rz-modal-card rz-receipt-line-detail-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-line-detail-title" onMouseDown={(event) => event.stopPropagation()}>
@@ -1448,7 +1739,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <div className="rz-receipt-line-detail__wide"><dt>Barcode / GTIN</dt><dd><BarcodeIdentityField lineId={line.id} value={barcodeDrafts[line.id] || ''} disabled={lineBusy} state={barcodeStates[line.id] || { status: 'idle', message: '' }} onChange={(nextValue) => updateBarcodeDraft(line.id, nextValue)} onValidate={() => validateReceiptLineBarcode(line.id)} onScan={() => openReceiptLineBarcodeScanner(line.id)} /></dd></div>
                   <div className="rz-receipt-line-detail__wide">
                     <dt>Universeel artikel</dt>
-                    <dd>
+                    <dd style={{ display: 'grid', gap: '10px' }}>
                       <input
                         className="rz-input rz-inline-input rz-receipt-line-detail__readonly-value"
                         value={universalProductValue}
@@ -1457,6 +1748,33 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                         aria-label={`Universeel artikel voor bonregel ${line.id}`}
                         data-testid={`receipt-line-standard-product-${line.id}`}
                       />
+                      {barcodeState.matchStatus === 'matched' ? (
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            flexWrap: 'wrap',
+                          }}
+                        >
+                          <Button
+                            type="button"
+                            variant="primary"
+                            disabled={!canLinkBarcode}
+                            onClick={() => linkReceiptLineBarcode(line, draft)}
+                            data-testid={`receipt-line-barcode-link-${line.id}`}
+                          >
+                            {lineBusy
+                              ? 'Koppelen…'
+                              : alreadyLinked
+                                ? 'Al gekoppeld'
+                                : 'Koppelen aan Mijn artikel'}
+                          </Button>
+                          {!selectedHouseholdArticleId ? (
+                            <span>Kies eerst Mijn artikel.</span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </dd>
                   </div>
                     </dl>
@@ -1739,6 +2057,51 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
               </div>
             )
           })() : null}
+
+          {barcodeSaveConfirm ? (
+            <div
+              className="rz-modal-backdrop"
+              role="presentation"
+              data-testid="receipt-line-barcode-save-confirm"
+            >
+              <div
+                className="rz-modal-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="barcode-save-confirm-title"
+              >
+                <h3
+                  id="barcode-save-confirm-title"
+                  className="rz-modal-title"
+                >
+                  Barcode opslaan
+                </h3>
+                <p className="rz-modal-text">
+                  Dit is een geldige barcode.
+                </p>
+                <div className="rz-modal-actions">
+                  <Button
+                    variant="secondary"
+                    type="button"
+                    disabled={Boolean(busyLineId)}
+                    onClick={() => setBarcodeSaveConfirm(null)}
+                    data-testid="receipt-line-barcode-save-cancel"
+                  >
+                    Annuleren
+                  </Button>
+                  <Button
+                    variant="primary"
+                    type="button"
+                    disabled={Boolean(busyLineId)}
+                    onClick={saveConfirmedReceiptLineBarcode}
+                    data-testid="receipt-line-barcode-save-confirm-button"
+                  >
+                    {busyLineId ? 'Opslaan…' : 'Opslaan'}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {processConfirm ? (
             <div className="rz-modal-backdrop" role="presentation">

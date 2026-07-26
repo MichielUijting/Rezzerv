@@ -229,31 +229,80 @@ test.describe('Uitpakken frontend-regressie', () => {
     await expectNoConsoleErrors(consoleErrors);
   });
 
-  test('Barcodecontrole in Uitpakken is centraal en read-only', async ({ page }) => {
+  test('Geldige GTIN wordt na bevestiging centraal opgeslagen en lokaal gekoppeld', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
-    const batchId = 'barcode-readonly-regression';
+    const batchId = 'barcode-save-regression';
     const lineId = 'line-barcode-mosterd';
     const gtin = '8712345678906';
+    const householdArticleId = 'household-article-mosterd';
     const mutationRequests = [];
+    let saved = false;
 
     page.on('request', (request) => {
       const url = request.url();
-      if (/inventory|purchase|external-product-links|household-articles/.test(url) && request.method() !== 'GET') {
+      if (
+        /inventory|purchase|external-product-links|household-articles|save-household-article/.test(url)
+        && request.method() !== 'GET'
+      ) {
         mutationRequests.push(`${request.method()} ${url}`);
       }
     });
 
-    await page.route('**/api/household', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '1', is_viewer: false, permissions: { 'article.create': true }, store_import_simplification_level: 'gebalanceerd' }) }));
-    await page.route('**/api/store-providers', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ code: 'lidl', name: 'Lidl' }]) }));
-    await page.route('**/api/store-review-articles', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
-    await page.route('**/api/spaces*', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) }));
-    await page.route('**/api/sublocations*', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) }));
+    await page.route('**/api/household', async (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: '1',
+        is_viewer: false,
+        permissions: { 'article.create': true },
+        store_import_simplification_level: 'gebalanceerd',
+      }),
+    }));
+
+    await page.route('**/api/store-providers', async (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{ code: 'lidl', name: 'Lidl' }]),
+    }));
+
+    await page.route('**/api/store-review-articles', async (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{
+        id: householdArticleId,
+        naam: 'Mosterd',
+        custom_name: 'Mosterd',
+      }]),
+    }));
+
+    await page.route('**/api/spaces*', async (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [] }),
+    }));
+
+    await page.route('**/api/sublocations*', async (route) => route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [] }),
+    }));
+
     await page.route('**/api/unpack-start-batches*', async (route) => route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ items: [{ batch_id: batchId, store_provider_code: 'lidl', store_label: 'Lidl', purchase_date: '2026-07-25', inbox_status: 'Gecontroleerd', summary: { total: 1 } }] }),
+      body: JSON.stringify({
+        items: [{
+          batch_id: batchId,
+          store_provider_code: 'lidl',
+          store_label: 'Lidl',
+          purchase_date: '2026-07-25',
+          inbox_status: 'Gecontroleerd',
+          summary: { total: 1 },
+        }],
+      }),
     }));
-    await page.route(`**/api/purchase-import-batches/${batchId}`, async (route) => route.fulfill({
+
+    await page.route(`**/api/purchase-import-batches/${batchId}*`, async (route) => route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
@@ -262,32 +311,176 @@ test.describe('Uitpakken frontend-regressie', () => {
         store_label: 'Lidl',
         purchase_date: '2026-07-25',
         import_status: 'review',
-        lines: [{ id: lineId, article_name_raw: 'MOSTERD 250G', quantity_raw: 1, unit_raw: 'stuk', processing_status: 'pending', review_decision: 'pending', match_status: 'unmatched' }],
+        lines: [{
+          id: lineId,
+          article_name_raw: 'MOSTERD 250G',
+          quantity_raw: 1,
+          unit_raw: 'stuk',
+          processing_status: 'pending',
+          review_decision: 'pending',
+          match_status: saved ? 'matched' : 'unmatched',
+          matched_household_article_id: householdArticleId,
+          matched_global_product_id: saved ? 'gp-mosterd' : null,
+          matched_global_product_name: saved ? 'Mosterd Dijon' : null,
+          matched_global_product_gtin: saved ? gtin : null,
+          barcode: saved ? gtin : null,
+        }],
       }),
     }));
+
     await page.route('**/api/barcodes/validate', async (route) => {
       expect(route.request().method()).toBe('POST');
-      expect(await route.request().postDataJSON()).toEqual({ value: gtin, declared_type: 'gtin' });
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ valid: true, normalized_value: gtin, declared_type: 'gtin', mutated: false }) });
+      expect(await route.request().postDataJSON()).toEqual({
+        value: gtin,
+        declared_type: 'gtin',
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          valid: true,
+          normalized_value: gtin,
+          declared_type: 'gtin',
+          mutated: false,
+        }),
+      });
     });
+
     await page.route(`**/api/barcodes/${gtin}`, async (route) => route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ valid: true, gtin, match_status: 'matched', product: { global_product_id: 'gp-mosterd', name: 'Mosterd Dijon', primary_gtin: gtin }, identity: { identity_type: 'gtin', identity_value: gtin }, product_type: { official: true, active: true }, mutated: false }),
+      body: JSON.stringify({
+        valid: true,
+        gtin,
+        match_status: 'not_found',
+        product: null,
+        identity: null,
+        product_type: null,
+        mutated: false,
+      }),
     }));
+
+    await page.route(
+      `**/api/barcodes/${gtin}/save-household-article`,
+      async (route) => {
+        expect(route.request().method()).toBe('POST');
+        expect(await route.request().postDataJSON()).toEqual({
+          purchase_import_line_id: lineId,
+          household_article_id: householdArticleId,
+          article_name: 'MOSTERD 250G',
+        });
+
+        saved = true;
+
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            ok: true,
+            gtin,
+            catalog_product_created: true,
+            product: {
+              global_product_id: 'gp-mosterd',
+              name: 'Mosterd Dijon',
+              primary_gtin: gtin,
+              status: 'active',
+            },
+            purchase_import_line_id: lineId,
+            household_article_id: householdArticleId,
+            inventory_mutated: false,
+          }),
+        });
+      }
+    );
 
     await page.goto(`/kassabonnen?batch=${batchId}`);
     await page.getByTestId(`receipt-line-${lineId}`).locator('td').nth(1).dblclick();
-    await expect(page).toHaveURL(new RegExp(`/kassabonnen\\?batch=${batchId}$`));
-    await expect(page.getByTestId('receipt-line-detail-overlay')).toBeVisible();
-    await expect(page.getByTestId('receipt-line-detail-panel')).toContainText('Bonartikel details');
-    await expect(page.getByRole('button', { name: 'Terug naar Uitpakken' })).toHaveCount(0);
-    await expect(page.getByText('Barcodecontrole is alleen ter identificatie.')).toHaveCount(0);
+
     await page.getByTestId(`receipt-line-barcode-input-${lineId}`).fill(gtin);
     await page.getByTestId(`receipt-line-barcode-check-${lineId}`).click();
-    await expect(page.getByTestId('app-feedback-success')).toContainText('Geldige GTIN. Gevonden: Mosterd Dijon.');
-    await expect(page.getByTestId(`receipt-line-standard-product-${lineId}`)).toHaveValue('Mosterd Dijon');
+
+    const confirm = page.getByTestId('receipt-line-barcode-save-confirm');
+    await expect(confirm).toBeVisible();
+    await expect(confirm).toContainText('Dit is een geldige barcode.');
+    await expect(
+      page.getByTestId(`receipt-line-barcode-status-${lineId}`)
+    ).toHaveCount(0);
+
+    await page.getByTestId('receipt-line-barcode-save-cancel').click();
+    await expect(confirm).toHaveCount(0);
     expect(mutationRequests).toEqual([]);
+
+    await page.getByTestId(`receipt-line-barcode-check-${lineId}`).click();
+    await expect(confirm).toBeVisible();
+    await page.getByTestId('receipt-line-barcode-save-confirm-button').click();
+
+    await expect(confirm).toHaveCount(0);
+    await expect(page.getByTestId('app-feedback-success')).toContainText(
+      'Product opgenomen in de catalogus en bijgewerkt in Uitpakken.'
+    );
+    await expect(
+      page.getByTestId(`receipt-line-standard-product-${lineId}`)
+    ).toHaveValue('Mosterd Dijon');
+    await expect(
+      page.getByTestId(`receipt-line-barcode-input-${lineId}`)
+    ).toHaveValue(gtin);
+    await expect(
+      page.getByTestId(`receipt-line-barcode-status-${lineId}`)
+    ).toHaveCount(0);
+
+    const successOverlay = page.getByTestId(
+      'app-feedback-success-overlay'
+    );
+
+    if (await successOverlay.count()) {
+      const feedbackButton = successOverlay.getByRole(
+        'button',
+        { name: /ok|sluiten/i }
+      );
+
+      if (await feedbackButton.count()) {
+        await feedbackButton.click();
+      } else {
+        await successOverlay.click({
+          position: { x: 5, y: 5 },
+        });
+      }
+
+      await expect(successOverlay).toHaveCount(0);
+    }
+
+    await page.getByRole(
+      'button',
+      { name: 'Sluit bonartikeldetails' }
+    ).click();
+
+    await expect(
+      page.getByTestId('receipt-line-detail-overlay')
+    ).toHaveCount(0);
+
+    await page.getByTestId(`receipt-line-${lineId}`)
+      .locator('td')
+      .nth(1)
+      .dblclick();
+
+    await expect(
+      page.getByTestId(`receipt-line-barcode-input-${lineId}`)
+    ).toHaveValue(gtin);
+
+    expect(
+      mutationRequests.some(
+        (request) => request.includes(
+          `/api/barcodes/${gtin}/save-household-article`
+        )
+      )
+    ).toBe(true);
+
+    expect(
+      mutationRequests.some(
+        (request) => /inventory/.test(request)
+      )
+    ).toBe(false);
+
     await expectNoConsoleErrors(consoleErrors);
   });
 

@@ -15,6 +15,22 @@ function text(value, fallback = '-') {
   return normalized || fallback
 }
 
+function sourceLabel(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+  const labels = {
+    receipt_user_confirmed: 'Door gebruiker bevestigd',
+    receipt: 'Kassabon',
+    user: 'Gebruiker',
+    manual: 'Handmatig',
+    openfoodfacts: 'Open Food Facts',
+    open_food_facts: 'Open Food Facts',
+    gs1: 'GS1',
+    ai: 'AI',
+    public_reference: 'Openbare referentie',
+  }
+  return labels[normalized] || text(value)
+}
+
 function qualityClass(status) {
   if (status === 'Compleet') return 'rz-catalog-status rz-catalog-status--complete'
   if (status === 'Conflict') return 'rz-catalog-status rz-catalog-status--conflict'
@@ -178,7 +194,7 @@ export default function CatalogPage() {
             <div className="rz-catalog-header">
               <div>
                 <h2>Catalogus</h2>
-                <p>Read-only overzicht van universele artikelen, Producttypen en centrale productidentiteiten.</p>
+                <p>Alleen-lezenoverzicht van universele artikelen, producttypen en centrale productidentiteiten.</p>
               </div>
             </div>
 
@@ -237,6 +253,8 @@ export default function CatalogPage() {
                       <select className="rz-table-filter" value={filters.qualityStatus} onChange={(event) => updateFilter('qualityStatus', event.target.value)} aria-label="Kwaliteitsstatus filter">
                         <option value="">Alle</option>
                         <option value="compleet">Compleet</option>
+                        <option value="door gebruiker bevestigd">Door gebruiker bevestigd</option>
+                        <option value="gtin bevestigd — producttype nog te bepalen">GTIN bevestigd — producttype nog te bepalen</option>
                         <option value="controle nodig">Controle nodig</option>
                         <option value="conflict">Conflict</option>
                       </select>
@@ -260,7 +278,7 @@ export default function CatalogPage() {
                       <td>{text(item.brand)}</td>
                       <td>{text(item.primary_gtin)}</td>
                       <td>{text(item.product_type)}</td>
-                      <td>{text(item.source)}</td>
+                      <td>{sourceLabel(item.source)}</td>
                       <td className="rz-num">{Number(item.household_article_count || 0)}</td>
                       <td><span className={qualityClass(item.quality_status)}>{text(item.quality_status)}</span></td>
                     </tr>

@@ -831,6 +831,38 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
     unit_expr = _m2c2h5_col("pil", columns, ["unit_raw"])
     price_expr = _m2c2h5_col("pil", columns, ["line_price_raw"])
     global_product_expr = _m2c2h5_col("pil", columns, ["matched_global_product_id", "matched_global_article_id"])
+
+    household_article_join_sql = ""
+    household_article_column = next(
+        (
+            candidate
+            for candidate in (
+                "matched_household_article_id",
+                "household_article_id",
+                "selected_household_article_id",
+            )
+            if candidate in columns
+        ),
+        None,
+    )
+
+    if (
+        household_article_column
+        and _m2c2h5_table_exists(conn, "household_articles")
+    ):
+        household_columns = _m2c2h5_table_columns(
+            conn,
+            "household_articles",
+        )
+        if {"id", "global_product_id"}.issubset(household_columns):
+            household_article_join_sql = (
+                "LEFT JOIN household_articles ha "
+                f"ON ha.id = pil.{household_article_column}"
+            )
+            global_product_expr = (
+                f"COALESCE({global_product_expr}, ha.global_product_id)"
+            )
+
     created_expr = _m2c2h5_col("pil", columns, ["created_at"])
     updated_expr = _m2c2h5_col("pil", columns, ["updated_at"])
 
@@ -851,7 +883,16 @@ def _m2c2h5_list_purchase_import_placeholders(conn, existing_context_keys: set[s
                 {updated_expr} AS updated_at
             FROM purchase_import_lines pil
             {batch_join_sql}
-            ORDER BY pil.ui_sort_order ASC, pil.created_at DESC, pil.id DESC
+            {household_article_join_sql}
+            ORDER BY
+                CASE
+                    WHEN COALESCE({global_product_expr}, '') <> '' THEN 0
+                    ELSE 1
+                END ASC,
+                COALESCE({updated_expr}, {created_expr}, '') DESC,
+                COALESCE({created_expr}, '') DESC,
+                pil.ui_sort_order ASC,
+                pil.id DESC
             LIMIT :limit
             """
         ),
@@ -1184,9 +1225,22 @@ def _m2c2i_fix7b_ensure_catalog_products_for_article_codes(conn, candidates: lis
 
     return enriched
 
-def _m2c2i_fix7b_dedupe_top_receipt_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Toon één bovenste tabelrij per winkelketen + genormaliseerde bonartikelnaam."""
-    best_by_key: dict[str, dict[str, Any]] = {}
+def _m2c2i_fix7b_dedupe_top_receipt_items(
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Toon één bovenste tabelrij per winkelketen en bonartikelnaam.
+
+    Gegevens van een reeds gekoppelde duplicaatregel blijven leidend,
+    zodat de eerste schermlading de centrale Cataloguskoppeling toont.
+    """
+    grouped: dict[str, list[dict[str, Any]]] = {}
+
+    for item in items:
+        key = _m2c2i_fix7a3_normalized_receipt_key(
+            item.get("retailer_code"),
+            item.get("receipt_line_text"),
+        )
+        grouped.setdefault(key, []).append(dict(item))
 
     status_priority = {
         "linked_to_catalog": 5,
@@ -1196,37 +1250,120 @@ def _m2c2i_fix7b_dedupe_top_receipt_items(items: list[dict[str, Any]]) -> list[d
         "no_candidate": 1,
     }
 
-    for item in items:
-        key = _m2c2i_fix7a3_normalized_receipt_key(
-            item.get("retailer_code"),
-            item.get("receipt_line_text"),
-        )
+    def row_score(item: dict[str, Any]) -> tuple:
+        status = str(
+            item.get("status")
+            or item.get("candidate_status")
+            or ""
+        ).strip()
 
-        current = best_by_key.get(key)
-        item_status = str(item.get("status") or item.get("candidate_status") or "").strip()
-        item_score = (
-            status_priority.get(item_status, 0),
+        return (
+            status_priority.get(status, 0),
             1 if str(item.get("global_product_id") or "").strip() else 0,
-            1 if str(item.get("retailer_article_number") or "").strip() else 0,
+            1 if str(
+                item.get("matched_household_article_id") or ""
+            ).strip() else 0,
+            1 if str(
+                item.get("retailer_article_number") or ""
+            ).strip() else 0,
             str(item.get("updated_at") or item.get("created_at") or ""),
         )
 
-        if current is None:
-            best_by_key[key] = item
-            continue
+    linked_fields = (
+        "global_product_id",
+        "canonical_catalog_product_id",
+        "linked_candidate_name",
+        "linked_gtin",
+        "linked_product_type_id",
+        "linked_product_type",
+        "linked_score",
+        "is_linked_to_catalog",
+        "is_existing_link_for_receipt_item",
+        "status",
+        "candidate_status",
+    )
 
-        current_status = str(current.get("status") or current.get("candidate_status") or "").strip()
-        current_score = (
-            status_priority.get(current_status, 0),
-            1 if str(current.get("global_product_id") or "").strip() else 0,
-            1 if str(current.get("retailer_article_number") or "").strip() else 0,
-            str(current.get("updated_at") or current.get("created_at") or ""),
-        )
+    result: list[dict[str, Any]] = []
 
-        if item_score > current_score:
-            best_by_key[key] = item
+    for entries in grouped.values():
+        entries.sort(key=row_score, reverse=True)
+        representative = dict(entries[0])
 
-    return list(best_by_key.values())
+        linked_entries = [
+            entry
+            for entry in entries
+            if (
+                str(entry.get("global_product_id") or "").strip()
+                and str(
+                    entry.get("status")
+                    or entry.get("candidate_status")
+                    or ""
+                ).strip()
+                == "linked_to_catalog"
+            )
+        ]
+
+        if linked_entries:
+            linked_entries.sort(key=row_score, reverse=True)
+            linked = linked_entries[0]
+
+            for field in linked_fields:
+                value = linked.get(field)
+                if value not in (None, ""):
+                    representative[field] = value
+
+            representative["status"] = "linked_to_catalog"
+            representative["candidate_status"] = "linked_to_catalog"
+            representative["is_linked_to_catalog"] = True
+            representative["is_existing_link_for_receipt_item"] = True
+            representative["canonical_catalog_product_id"] = (
+                str(
+                    representative.get("canonical_catalog_product_id")
+                    or representative.get("global_product_id")
+                    or ""
+                ).strip()
+                or None
+            )
+
+        merged_candidates: list[dict[str, Any]] = []
+        seen_candidates: set[str] = set()
+
+        for entry in entries:
+            for candidate in entry.get("candidates") or []:
+                if not isinstance(candidate, dict):
+                    continue
+
+                identity = "|".join(
+                    [
+                        str(candidate.get("id") or ""),
+                        str(
+                            candidate.get("candidate_source_name")
+                            or candidate.get("source_name")
+                            or ""
+                        ),
+                        str(
+                            candidate.get("candidate_source_product_code")
+                            or candidate.get("source_product_code")
+                            or candidate.get("retailer_article_number")
+                            or ""
+                        ),
+                        str(candidate.get("candidate_name") or ""),
+                    ]
+                )
+
+                if identity in seen_candidates:
+                    continue
+
+                seen_candidates.add(identity)
+                merged_candidates.append(dict(candidate))
+
+        if merged_candidates:
+            representative["candidates"] = merged_candidates
+            representative["candidate_count"] = len(merged_candidates)
+
+        result.append(representative)
+
+    return result
 
 
 def _m2c2i_fix7c_same_retailer_for_projection(placeholder: dict[str, object], candidate: dict[str, object]) -> bool:

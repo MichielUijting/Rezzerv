@@ -31,6 +31,7 @@ OFF_FIELDS = [
     "quantity",
     "categories",
     "categories_tags",
+    "gpcCategoryCode",
     "countries",
     "countries_tags",
     "stores",
@@ -48,6 +49,110 @@ def _text(value: Any) -> str:
     if isinstance(value, list):
         return " ".join(_text(item) for item in value if _text(item))
     return str(value or "").strip()
+
+
+
+def lookup_off_product_by_gtin(gtin: Any) -> dict[str, Any]:
+    """Zoek één Open Food Facts-product exact op GTIN zonder lokale mutatie."""
+    normalized_gtin = "".join(
+        character
+        for character in _text(gtin)
+        if character.isdigit()
+    )
+
+    if len(normalized_gtin) not in {8, 12, 13, 14}:
+        return {
+            "ok": False,
+            "status": "invalid_gtin",
+            "gtin": normalized_gtin,
+            "product": None,
+            "mutated": False,
+        }
+
+    fields = ",".join(OFF_FIELDS)
+    url = (
+        "https://world.openfoodfacts.org/api/v2/product/"
+        f"{urllib.parse.quote(normalized_gtin)}.json"
+        f"?fields={urllib.parse.quote(fields)}"
+    )
+    request = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "Rezzerv/1.0 (product classification)",
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(
+            request,
+            timeout=TIMEOUT_SECONDS,
+        ) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except Exception as exc:  # pragma: no cover - netwerkafhankelijk
+        return {
+            "ok": True,
+            "status": "external_source_unavailable",
+            "gtin": normalized_gtin,
+            "product": None,
+            "error": str(exc),
+            "mutated": False,
+        }
+
+    product = payload.get("product")
+    if (
+        int(payload.get("status") or 0) != 1
+        or not isinstance(product, dict)
+    ):
+        return {
+            "ok": True,
+            "status": "not_found",
+            "gtin": normalized_gtin,
+            "product": None,
+            "mutated": False,
+        }
+
+    returned_gtin = _text(
+        product.get("code")
+        or product.get("id")
+        or product.get("_id")
+        or normalized_gtin
+    )
+    returned_gtin = "".join(
+        character
+        for character in returned_gtin
+        if character.isdigit()
+    )
+
+    if returned_gtin != normalized_gtin:
+        return {
+            "ok": True,
+            "status": "not_found",
+            "gtin": normalized_gtin,
+            "product": None,
+            "mutated": False,
+        }
+
+    return {
+        "ok": True,
+        "status": "found",
+        "gtin": normalized_gtin,
+        "product": {
+            "gtin": normalized_gtin,
+            "product_name": _text(
+                product.get("product_name_nl")
+                or product.get("product_name")
+            ),
+            "brand": _text(product.get("brands")),
+            "category": _text(product.get("categories")),
+            "categories": _text(product.get("categories")),
+            "explicit_gpc_brick_code": _text(
+                product.get("gpcCategoryCode")
+            ),
+            "source": "open_food_facts",
+        },
+        "mutated": False,
+    }
 
 
 def _normalize(value: Any) -> str:

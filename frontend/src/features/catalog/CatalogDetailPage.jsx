@@ -12,6 +12,41 @@ function text(value, fallback = '-') {
   return normalized || fallback
 }
 
+function sourceLabel(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+
+  const labels = {
+    receipt_user_confirmed: 'Door gebruiker bevestigd',
+    receipt: 'Kassabon',
+    user: 'Gebruiker',
+    manual: 'Handmatig',
+    catalog_gtin: 'Bestaande Catalogus-GTIN',
+    openfoodfacts: 'Open Food Facts',
+    open_food_facts: 'Open Food Facts',
+    public_reference: 'Openbare referentie',
+    gs1: 'GS1',
+    ai: 'AI',
+  }
+
+  return labels[normalized] || text(value)
+}
+
+function identityTypeLabel(value) {
+  const normalized = String(value ?? '').trim().toLowerCase()
+
+  const labels = {
+    gtin: 'GTIN',
+    ean: 'EAN',
+    upc: 'UPC',
+    retailer_article_number: 'Winkelartikelnummer',
+    external_article_number: 'Extern artikelnummer',
+    store_sku: 'Winkelcode',
+    text_match: 'Tekstherkenning',
+  }
+
+  return labels[normalized] || text(value)
+}
+
 export default function CatalogDetailPage() {
   const { globalProductId } = useParams()
   const navigate = useNavigate()
@@ -21,83 +56,237 @@ export default function CatalogDetailPage() {
 
   useEffect(() => {
     let cancelled = false
+
     async function loadDetail() {
       setIsLoading(true)
       setError('')
+
       try {
-        const response = await fetchJsonWithAuth(`/api/catalog/${encodeURIComponent(globalProductId)}`, { method: 'GET' })
+        const response = await fetchJsonWithAuth(
+          `/api/catalog/${encodeURIComponent(globalProductId)}`,
+          { method: 'GET' },
+        )
+
         const data = await response.json().catch(() => ({}))
-        if (!response.ok) throw new Error(data?.detail || 'Catalogusartikel kon niet worden geladen')
+
+        if (!response.ok) {
+          throw new Error(
+            data?.detail || 'Catalogusartikel kon niet worden geladen',
+          )
+        }
+
         if (!cancelled) setDetail(data)
       } catch (err) {
-        if (!cancelled) setError(err?.message || 'Catalogusartikel kon niet worden geladen')
+        if (!cancelled) {
+          setError(
+            err?.message || 'Catalogusartikel kon niet worden geladen',
+          )
+        }
       } finally {
         if (!cancelled) setIsLoading(false)
       }
     }
+
     loadDetail()
-    return () => { cancelled = true }
+
+    return () => {
+      cancelled = true
+    }
   }, [globalProductId])
 
   const product = detail?.product || {}
-  const identities = Array.isArray(detail?.identities) ? detail.identities : []
-  const householdArticles = Array.isArray(detail?.household_articles) ? detail.household_articles : []
+  const identities = Array.isArray(detail?.identities)
+    ? detail.identities
+    : []
+  const householdArticles = Array.isArray(detail?.household_articles)
+    ? detail.household_articles
+    : []
+  const receiptLines = Array.isArray(detail?.receipt_lines)
+    ? detail.receipt_lines
+    : []
 
   return (
     <AppShell title="Catalogusdetail" showExit={false}>
-      <div className="rz-catalog-page" data-testid="catalog-detail-page">
+      <div
+        className="rz-catalog-page"
+        data-testid="catalog-detail-page"
+      >
         <ScreenCard fullWidth>
           <div className="rz-catalog-detail-actions">
-            <Button type="button" variant="secondary" onClick={() => navigate('/catalogus')}>Terug naar Catalogus</Button>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => navigate('/catalogus')}
+            >
+              Terug naar Catalogus
+            </Button>
           </div>
 
           {isLoading ? <div>Catalogusartikel laden...</div> : null}
-          {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
+
+          {error ? (
+            <div className="rz-inline-feedback rz-inline-feedback--error">
+              {error}
+            </div>
+          ) : null}
 
           {!isLoading && !error ? (
             <div className="rz-catalog-detail-grid">
               <section>
                 <h2>{text(product.name, 'Universeel artikel')}</h2>
+
                 <dl className="rz-catalog-definition-list">
-                  <div><dt>ID</dt><dd>{text(product.id)}</dd></div>
-                  <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
-                  <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
-                  <div><dt>Producttype</dt><dd>{text(product.product_type)}</dd></div>
-                  <div><dt>Bron</dt><dd>{text(product.source)}</dd></div>
-                  <div><dt>Kwaliteitsstatus</dt><dd>{text(product.quality_status)}</dd></div>
+                  <div>
+                    <dt>ID</dt>
+                    <dd>{text(product.id)}</dd>
+                  </div>
+
+                  <div>
+                    <dt>Merk</dt>
+                    <dd>{text(product.brand)}</dd>
+                  </div>
+
+                  <div>
+                    <dt>Primaire GTIN</dt>
+                    <dd>{text(product.primary_gtin)}</dd>
+                  </div>
+
+                  <div>
+                    <dt>Producttype</dt>
+                    <dd>
+                      {text(
+                        product.product_type,
+                        'Nog niet geclassificeerd',
+                      )}
+                    </dd>
+                  </div>
+
+                  <div>
+                    <dt>Bron</dt>
+                    <dd>{sourceLabel(product.source)}</dd>
+                  </div>
+
+                  <div>
+                    <dt>Kwaliteitsstatus</dt>
+                    <dd>{text(product.quality_status)}</dd>
+                  </div>
                 </dl>
               </section>
 
               <section>
                 <h3>Identiteiten</h3>
+
                 <Table dataTestId="catalog-identities-table">
-                  <thead><tr className="rz-table-header"><th>Type</th><th>Waarde</th><th>Primair</th><th>Bron</th></tr></thead>
+                  <thead>
+                    <tr className="rz-table-header">
+                      <th>Type</th>
+                      <th>Waarde</th>
+                      <th>Primair</th>
+                      <th>Bron</th>
+                    </tr>
+                  </thead>
+
                   <tbody>
-                    {identities.length ? identities.map((identity, index) => (
-                      <tr key={identity.id || `${identity.identity_type}-${identity.identity_value}-${index}`}>
-                        <td>{text(identity.identity_type)}</td>
-                        <td>{text(identity.identity_value)}</td>
-                        <td>{identity.is_primary ? 'Ja' : 'Nee'}</td>
-                        <td>{text(identity.source)}</td>
+                    {identities.length ? (
+                      identities.map((identity, index) => (
+                        <tr
+                          key={
+                            identity.id
+                            || `${identity.identity_type}-${identity.identity_value}-${index}`
+                          }
+                        >
+                          <td>
+                            {identityTypeLabel(
+                              identity.identity_type,
+                            )}
+                          </td>
+                          <td>{text(identity.identity_value)}</td>
+                          <td>
+                            {identity.is_primary ? 'Ja' : 'Nee'}
+                          </td>
+                          <td>{sourceLabel(identity.source)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="4">
+                          Geen aanvullende identiteiten gevonden.
+                        </td>
                       </tr>
-                    )) : <tr><td colSpan="4">Geen aanvullende identiteiten gevonden.</td></tr>}
+                    )}
                   </tbody>
                 </Table>
               </section>
 
               <section>
                 <h3>Gekoppelde huishoudartikelen</h3>
+
                 <Table dataTestId="catalog-household-articles-table">
-                  <thead><tr className="rz-table-header"><th>Huishouden</th><th>Huishoudartikel</th><th>Minimum</th><th>Ideaal</th></tr></thead>
+                  <thead>
+                    <tr className="rz-table-header">
+                      <th>Huishouden</th>
+                      <th>Huishoudartikel</th>
+                      <th>Minimum</th>
+                      <th>Ideaal</th>
+                    </tr>
+                  </thead>
+
                   <tbody>
-                    {householdArticles.length ? householdArticles.map((article, index) => (
-                      <tr key={article.id || index}>
-                        <td>{text(article.household_id)}</td>
-                        <td>{text(article.name || article.article_name)}</td>
-                        <td>{text(article.minimum_stock)}</td>
-                        <td>{text(article.ideal_stock)}</td>
+                    {householdArticles.length ? (
+                      householdArticles.map((article, index) => (
+                        <tr key={article.id || index}>
+                          <td>{text(article.household_id)}</td>
+                          <td>
+                            {text(
+                              article.name
+                              || article.article_name,
+                            )}
+                          </td>
+                          <td>{text(article.minimum_stock)}</td>
+                          <td>{text(article.ideal_stock)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="4">
+                          Geen gekoppelde huishoudartikelen gevonden.
+                        </td>
                       </tr>
-                    )) : <tr><td colSpan="4">Geen gekoppelde huishoudartikelen gevonden.</td></tr>}
+                    )}
+                  </tbody>
+                </Table>
+              </section>
+
+              <section>
+                <h3>Gekoppelde kassabonregels</h3>
+
+                <Table dataTestId="catalog-receipt-lines-table">
+                  <thead>
+                    <tr className="rz-table-header">
+                      <th>Bonartikel</th>
+                      <th>Huishoudartikel</th>
+                      <th>GTIN</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {receiptLines.length ? (
+                      receiptLines.map((line, index) => (
+                        <tr key={line.id || index}>
+                          <td>{text(line.article_name_raw)}</td>
+                          <td>
+                            {text(line.household_article_name)}
+                          </td>
+                          <td>{text(line.gtin)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="3">
+                          Geen gekoppelde kassabonregels gevonden.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </Table>
               </section>

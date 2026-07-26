@@ -16785,14 +16785,25 @@ def get_purchase_import_batch(batch_id: str):
                     pil.match_status,
                     pil.review_decision,
                     pil.matched_household_article_id,
-                    pil.matched_global_product_id,
-                    COALESCE(pil.selected_article_group_id, ha.article_group_id) AS selected_article_group_id,
+                    COALESCE(
+                        pil.matched_global_product_id,
+                        ha.global_product_id
+                    ) AS matched_global_product_id,
+                    COALESCE(
+                        pil.selected_article_group_id,
+                        ha.article_group_id
+                    ) AS selected_article_group_id,
                     ag.name AS selected_article_group_name,
                     gp.name AS matched_global_product_name,
                     gp.brand AS matched_global_product_brand,
                     gp.category AS matched_global_product_category,
                     gp.source AS matched_global_product_source,
                     gp.status AS matched_global_product_status,
+                    gp.primary_gtin AS matched_global_product_gtin,
+                    COALESCE(
+                        ha.barcode,
+                        gp.primary_gtin
+                    ) AS barcode,
                     pil.target_location_id,
                     pil.suggested_household_article_id,
                     pil.suggested_location_id,
@@ -16807,10 +16818,14 @@ def get_purchase_import_batch(batch_id: str):
                     pil.processing_error,
                     pil.final_location_id
                 FROM purchase_import_lines pil
-                LEFT JOIN global_products gp ON gp.id = pil.matched_global_product_id
                 LEFT JOIN household_articles ha
                   ON ha.id = pil.matched_household_article_id
                  AND ha.household_id = :household_id
+                LEFT JOIN global_products gp
+                  ON gp.id = COALESCE(
+                      pil.matched_global_product_id,
+                      ha.global_product_id
+                  )
                 LEFT JOIN article_groups ag
                   ON ag.id = COALESCE(pil.selected_article_group_id, ha.article_group_id)
                  AND ag.household_id = :household_id
