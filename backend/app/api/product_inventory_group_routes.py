@@ -22,6 +22,7 @@ from app.services.product_type_almost_out_decision_service import (
 from app.services.product_type_almost_out_service import (
     ensure_household_product_type_settings_schema,
 )
+from app.services.product_type_forecast_service import build_product_type_forecast
 from app.services.product_type_household_settings_service import (
     analyze_household_article_settings_migration,
     ensure_extended_product_type_settings_schema,
@@ -101,6 +102,14 @@ def product_type_purchase_needs(household_id: str):
 def product_type_quantity_event_history(household_id: str):
     try:
         return aggregate_product_type_quantity_events(household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get('/api/households/{household_id}/product-type-forecast')
+def product_type_forecast(household_id: str):
+    try:
+        return build_product_type_forecast(household_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
