@@ -32,6 +32,7 @@ from app.services.product_type_household_settings_service import (
 from app.services.product_type_inventory_projection_service import (
     build_product_type_inventory_projection,
 )
+from app.services.product_type_manual_catalog_search_service import search_product_type_catalog
 from app.services.product_type_purchase_need_service import (
     build_product_type_purchase_needs,
 )
@@ -121,6 +122,24 @@ def product_type_forecast(household_id: str):
 def product_type_resolution_proposals(household_id: str):
     try:
         return build_product_type_resolution_proposals(household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get('/api/households/{household_id}/product-type-catalog-search')
+def product_type_catalog_search(
+    household_id: str,
+    household_article_id: str = Query(...),
+    q: str = Query(...),
+    limit: int = Query(default=25, ge=1, le=100),
+):
+    try:
+        return search_product_type_catalog(
+            household_id=household_id,
+            household_article_id=household_article_id,
+            query=q,
+            limit=limit,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
