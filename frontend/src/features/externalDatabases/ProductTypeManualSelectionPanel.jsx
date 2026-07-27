@@ -7,10 +7,8 @@ import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 function resolveHouseholdId(explicitHouseholdId) {
   const explicit = String(explicitHouseholdId || '').trim()
   if (explicit) return explicit
-
-  const contextHouseholdId = String(readStoredAuthContext()?.active_household_id || '').trim()
-  if (contextHouseholdId) return contextHouseholdId
-
+  const contextId = String(readStoredAuthContext()?.active_household_id || '').trim()
+  if (contextId) return contextId
   for (const key of ['rezzerv_active_household_id', 'rezzerv_household_id', 'active_household_id']) {
     const value = String(localStorage.getItem(key) || '').trim()
     if (value) return value
@@ -44,9 +42,9 @@ export default function ProductTypeManualSelectionPanel({ householdId, onError, 
       const data = await requestJson(`/api/households/${encodeURIComponent(effectiveHouseholdId)}/product-type-resolution-proposals`, { method: 'GET' })
       const items = Array.isArray(data?.items) ? data.items : []
       setProposals(items)
-      if (!selectedArticleId && items[0]?.household_article_id) {
-        setSelectedArticleId(String(items[0].household_article_id))
-        setQuery(String(items[0].inventory_name || ''))
+      if (selectedArticleId && !items.some((item) => String(item.household_article_id) === selectedArticleId)) {
+        setSelectedArticleId('')
+        setQuery('')
       }
     } catch (error) {
       onError?.(error?.message || 'Onopgeloste Producttypen konden niet worden geladen')
@@ -62,7 +60,7 @@ export default function ProductTypeManualSelectionPanel({ householdId, onError, 
   function chooseArticle(articleId) {
     const article = proposals.find((item) => String(item.household_article_id) === articleId)
     setSelectedArticleId(articleId)
-    setQuery(String(article?.inventory_name || ''))
+    setQuery(article ? String(article.inventory_name || '') : '')
     setResults([])
     setSelectedBrickCode('')
     setPreview(null)
@@ -85,7 +83,7 @@ export default function ProductTypeManualSelectionPanel({ householdId, onError, 
     }
   }
 
-  async function buildPreview(item) {
+  function buildPreview(item) {
     setSelectedBrickCode(String(item.gpc_brick_code || ''))
     setPreview({ selected_product_type: item, confirmation_status: 'pending' })
   }
@@ -104,6 +102,8 @@ export default function ProductTypeManualSelectionPanel({ householdId, onError, 
         }),
       })
       onMessage?.(`Producttype opgeslagen: ${data?.selected_product_type?.display_name || data?.product_type_name || selectedBrickCode}`)
+      setSelectedArticleId('')
+      setQuery('')
       setResults([])
       setSelectedBrickCode('')
       setPreview(null)
@@ -122,51 +122,59 @@ export default function ProductTypeManualSelectionPanel({ householdId, onError, 
   return (
     <section className="rz-product-type-manual-panel" data-testid="product-type-manual-selection-panel">
       <div className="rz-external-databases-section-header">
-        <h3>Producttype handmatig koppelen</h3>
-        <span className="rz-external-databases-muted">Zoek een officiële GS1-GPC Brick en bevestig de koppeling.</span>
+        <h3>Ontbrekend Producttype aanvullen</h3>
       </div>
+      <p className="rz-product-type-manual-explanation">
+        Sommige voorraadartikelen hebben nog geen officiële GS1-productindeling. Kies alleen zo’n artikel, zoek het passende Producttype en bevestig de koppeling. Dit verandert geen voorraadhoeveelheden.
+      </p>
 
-      {isLoading ? <div className="rz-external-databases-muted">Onopgeloste artikelen laden...</div> : null}
+      {isLoading ? <div className="rz-external-databases-muted">Artikelen zonder Producttype laden...</div> : null}
       {!isLoading && !proposals.length ? <div className="rz-inline-feedback rz-inline-feedback--success">Alle huidige artikelen hebben een Producttype.</div> : null}
 
       {proposals.length ? (
         <form onSubmit={searchCatalog} className="rz-external-databases-form">
           <div className="rz-external-databases-form-grid">
             <label className="rz-input-field">
-              <div className="rz-label">Artikel</div>
+              <div className="rz-label">Artikel zonder Producttype</div>
               <select className="rz-input" value={selectedArticleId} onChange={(event) => chooseArticle(event.target.value)}>
+                <option value="">Kies eerst een artikel</option>
                 {proposals.map((item) => <option key={item.household_article_id} value={item.household_article_id}>{item.inventory_name}</option>)}
               </select>
             </label>
-            <Input label="Zoekterm GPC-catalogus" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Bijvoorbeeld diepvriespizza" />
+            <Input label="Zoekterm in GS1-catalogus" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Bijvoorbeeld diepvriespizza" disabled={!selectedArticleId} />
           </div>
           <div className="rz-external-databases-actions">
-            <Button type="submit" disabled={isSearching || !selectedArticleId || !query.trim()}>{isSearching ? 'Zoeken...' : 'Zoeken'}</Button>
+            <Button type="submit" disabled={isSearching || !selectedArticleId || !query.trim()}>{isSearching ? 'Zoeken...' : 'Producttype zoeken'}</Button>
           </div>
         </form>
       ) : null}
 
+      {selectedArticleId && !isSearching && !results.length ? (
+        <div className="rz-external-databases-muted">Klik op ‘Producttype zoeken’ om passende officiële GS1-Producttypen te tonen.</div>
+      ) : null}
+
       {results.length ? (
-        <Table dataTestId="product-type-catalog-search-results" tableClassName="rz-external-databases-table" resizableColumns>
-          <thead><tr className="rz-table-header"><th>Producttype</th><th>Klasse</th><th>Familie</th><th>Brickcode</th><th>Actie</th></tr></thead>
-          <tbody>{results.map((item) => (
-            <tr key={item.gpc_brick_code}>
-              <td>{item.display_name || item.gpc_brick_name}</td>
-              <td>{item.gpc_class_name || '-'}</td>
-              <td>{item.gpc_family_name || '-'}</td>
-              <td>{item.gpc_brick_code}</td>
-              <td><Button type="button" variant="secondary" onClick={() => buildPreview(item)}>Selecteren</Button></td>
-            </tr>
-          ))}</tbody>
-        </Table>
+        <div className="rz-product-type-results-wrap">
+          <p className="rz-product-type-manual-explanation">Kies het resultaat dat inhoudelijk het beste bij <strong>{selectedArticle?.inventory_name}</strong> past.</p>
+          <Table dataTestId="product-type-catalog-search-results" tableClassName="rz-external-databases-table rz-product-type-results-table" resizableColumns={false}>
+            <thead><tr className="rz-table-header"><th>Producttype</th><th>Klasse</th><th>Familie</th><th>Brickcode</th><th>Actie</th></tr></thead>
+            <tbody>{results.map((item) => (
+              <tr key={item.gpc_brick_code}>
+                <td>{item.display_name || item.gpc_brick_name}</td>
+                <td>{item.gpc_class_name || '-'}</td>
+                <td>{item.gpc_family_name || '-'}</td>
+                <td>{item.gpc_brick_code}</td>
+                <td><Button type="button" variant="secondary" onClick={() => buildPreview(item)}>Kiezen</Button></td>
+              </tr>
+            ))}</tbody>
+          </Table>
+        </div>
       ) : null}
 
       {preview?.selected_product_type ? (
         <div className="rz-product-type-confirmation" role="dialog" aria-label="Producttype bevestigen">
-          <strong>{selectedArticle?.inventory_name || 'Artikel'}</strong>
-          <span> wordt gekoppeld aan </span>
-          <strong>{preview.selected_product_type.display_name || preview.selected_product_type.gpc_brick_name}</strong>
-          <span> ({preview.selected_product_type.gpc_brick_code}).</span>
+          <p><strong>Controleer de keuze:</strong></p>
+          <p><strong>{selectedArticle?.inventory_name || 'Artikel'}</strong> wordt gekoppeld aan <strong>{preview.selected_product_type.display_name || preview.selected_product_type.gpc_brick_name}</strong> ({preview.selected_product_type.gpc_brick_code}).</p>
           <div className="rz-external-databases-actions">
             <Button type="button" onClick={confirmSelection} disabled={isSaving}>{isSaving ? 'Opslaan...' : 'Bevestigen en opslaan'}</Button>
             <Button type="button" variant="secondary" onClick={() => { setPreview(null); setSelectedBrickCode('') }}>Annuleren</Button>
