@@ -33,6 +33,9 @@ from app.services.product_type_inventory_projection_service import (
     build_product_type_inventory_projection,
 )
 from app.services.product_type_manual_catalog_search_service import search_product_type_catalog
+from app.services.product_type_manual_selection_confirmation_service import (
+    confirm_product_type_manual_selection,
+)
 from app.services.product_type_purchase_need_service import (
     build_product_type_purchase_needs,
 )
@@ -139,6 +142,22 @@ def product_type_catalog_search(
             household_article_id=household_article_id,
             query=q,
             limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post('/api/households/{household_id}/product-type-selection/confirm')
+def product_type_selection_confirm(
+    household_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+):
+    try:
+        return confirm_product_type_manual_selection(
+            household_id=household_id,
+            household_article_id=str(payload.get('household_article_id') or '').strip(),
+            gpc_brick_code=str(payload.get('gpc_brick_code') or '').strip(),
+            confirmed=bool(payload.get('confirmed', False)),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
