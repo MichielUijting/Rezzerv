@@ -39,6 +39,7 @@ from app.services.external_product_candidate_store import (
     promote_external_product_candidate,
 )
 from app.services.external_receipt_item_read_service import (
+    list_external_receipt_items_page_read_only,
     list_external_receipt_items_read_only,
     repair_confirmed_external_catalog_links,
 )
@@ -323,8 +324,44 @@ def external_databases_open_food_facts_save_candidates(payload: dict[str, Any] =
 
 
 @router.get('/api/external-databases/receipt-items')
-def external_databases_receipt_items(limit: int = Query(default=200)):
-    payload = list_external_receipt_items_read_only(limit=limit)
+def external_databases_receipt_items(
+    limit: int = Query(default=200),
+    page: int | None = Query(default=None),
+    page_size: int = Query(default=10),
+    sort_key: str = Query(default='receiptLineText'),
+    sort_desc: bool = Query(default=False),
+    receiptLineText: str = Query(default=''),
+    retailerCode: str = Query(default=''),
+    catalogLinked: str = Query(default='all'),
+    quantity: str = Query(default=''),
+    price: str = Query(default=''),
+    bestCandidateName: str = Query(default=''),
+    productType: str = Query(default=''),
+    bestCandidateCode: str = Query(default=''),
+    bestCandidateScore: str = Query(default=''),
+    candidateCount: str = Query(default=''),
+):
+    if page is None:
+        payload = list_external_receipt_items_read_only(limit=limit)
+    else:
+        payload = list_external_receipt_items_page_read_only(
+            page=page,
+            page_size=page_size,
+            sort_key=sort_key,
+            sort_desc=sort_desc,
+            filters={
+                'receiptLineText': receiptLineText,
+                'retailerCode': retailerCode,
+                'catalogLinked': catalogLinked,
+                'quantity': quantity,
+                'price': price,
+                'bestCandidateName': bestCandidateName,
+                'productType': productType,
+                'bestCandidateCode': bestCandidateCode,
+                'bestCandidateScore': bestCandidateScore,
+                'candidateCount': candidateCount,
+            },
+        )
     payload = _without_taxonomy_seed_candidates(payload)
     return _without_spaarzegels_receipt_items(payload)
 
