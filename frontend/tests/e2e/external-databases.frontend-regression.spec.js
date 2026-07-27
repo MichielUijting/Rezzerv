@@ -8,10 +8,26 @@ import {
 
 async function routeReceiptItems(page, items) {
   await page.route('**/api/external-databases/receipt-items?*', async (route) => {
+    const url = new URL(route.request().url());
+    const catalogLinked = url.searchParams.get('catalogLinked') || 'all';
+    const filteredItems = items.filter((item) => {
+      const linked = item.central_link_active === true || item.is_linked_to_catalog === true;
+      if (catalogLinked === 'linked') return linked;
+      if (catalogLinked === 'unlinked') return !linked;
+      return true;
+    });
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ items }),
+      body: JSON.stringify({
+        items: filteredItems,
+        total: filteredItems.length,
+        page: Number(url.searchParams.get('page') || 1),
+        page_size: Number(url.searchParams.get('page_size') || 10),
+        page_count: 1,
+        read_only: true,
+        projection_mode: 'regression_mock',
+      }),
     });
   });
   await page.route('**/api/external-databases/receipt-items/ensure-candidates', async (route) => {

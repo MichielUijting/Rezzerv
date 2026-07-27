@@ -20,8 +20,29 @@ def main() -> int:
     batch_id = f"off-link-batch-{suffix}"
     line_id = f"off-link-line-{suffix}"
     gtin = f"98{numeric_suffix}"
+    identity_candidate_id = f"off-link-identity-{suffix}"
 
     with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT INTO external_product_candidates (
+                id, purchase_import_line_id, context_key,
+                retailer_code, receipt_line_text, candidate_name,
+                candidate_source_name, candidate_source_product_code,
+                score, candidate_status, is_user_confirmed,
+                created_by, created_at, updated_at
+            ) VALUES (
+                :id, :line_id, :context_key,
+                'contractwinkel', 'Contract Halfvolle melk', 'Contractidentiteit',
+                'contract_selftest', :gtin,
+                1.0, 'candidate', 0,
+                'contract_selftest', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+        """), {
+            'id': identity_candidate_id,
+            'line_id': line_id,
+            'context_key': f'purchase-import-line:{line_id}',
+            'gtin': gtin,
+        })
         before = {
             "candidates": _count(conn, "external_product_candidates"),
             "inventory": _count(conn, "inventory"),
@@ -189,6 +210,7 @@ def main() -> int:
         return 0
     finally:
         with engine.begin() as conn:
+            conn.execute(text("DELETE FROM external_product_candidates WHERE id = :id"), {"id": identity_candidate_id})
             conn.execute(text("DELETE FROM purchase_import_lines WHERE id = :id"), {"id": line_id})
             conn.execute(text("DELETE FROM purchase_import_batches WHERE id = :id"), {"id": batch_id})
             conn.execute(text("DELETE FROM product_group_memberships WHERE global_product_id = :id"), {"id": global_product_id})
