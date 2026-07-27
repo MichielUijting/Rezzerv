@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
@@ -253,6 +253,7 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   const [barcodeState, setBarcodeState] = useState(createIdleBarcodeState())
   const [barcodeConfirmation, setBarcodeConfirmation] = useState(null)
   const [isSavingBarcode, setIsSavingBarcode] = useState(false)
+  const loadItemsRequestId = useRef(0)
 
   const barcodeScanner = useBarcodeScanner({
     screenContext: 'Externe databases',
@@ -385,9 +386,22 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       sort_key: sortKey,
       sort_desc: String(sortDesc),
     })
+    const filterParamNames = {
+      receiptLineText: 'receipt_line_text',
+      retailerCode: 'retailer_code',
+      catalogLinked: 'catalog_linked',
+      quantity: 'quantity',
+      price: 'price',
+      bestCandidateName: 'best_candidate_name',
+      productType: 'product_type',
+      bestCandidateCode: 'best_candidate_code',
+      bestCandidateScore: 'best_candidate_score',
+      candidateCount: 'candidate_count',
+    }
     Object.entries(filters).forEach(([key, value]) => {
       const normalized = String(value ?? '').trim()
-      if (normalized || key === 'catalogLinked') params.set(key, normalized || 'all')
+      const parameterName = filterParamNames[key] || key
+      if (normalized || key === 'catalogLinked') params.set(parameterName, normalized || 'all')
     })
     const response = await fetchJsonWithAuth(`/api/external-databases/receipt-items?${params.toString()}`, { method: 'GET' })
     const data = await response.json().catch(() => ({}))
@@ -461,8 +475,10 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
     })
   }
   async function loadItems() {
+    const requestId = ++loadItemsRequestId.current
     try {
       const payload = await fetchItems()
+      if (requestId !== loadItemsRequestId.current) return
       const nextItems = payload.items
       setItems(nextItems)
       setTotalItems(payload.total)
@@ -470,7 +486,9 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       if (payload.page !== page) setPage(payload.page)
       setSelectedItem((current) => current ? nextItems.find((item) => item.id === current.id) || null : null)
       setSelectedItemIds((current) => current.filter((id) => nextItems.some((item) => item.id === id)))
-    } catch (err) { onError?.(err?.message || 'Bonartikelen konden niet worden geladen') }
+    } catch (err) {
+      if (requestId === loadItemsRequestId.current) onError?.(err?.message || 'Bonartikelen konden niet worden geladen')
+    }
   }
   async function loadProductTypeOptions() {
     const response = await fetchJsonWithAuth('/api/inventory/groups', { method: 'GET' })
