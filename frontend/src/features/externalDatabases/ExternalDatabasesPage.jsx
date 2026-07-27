@@ -5,7 +5,6 @@ import Table from '../../ui/Table'
 import Input from '../../ui/Input'
 import Button from '../../ui/Button'
 import ReceiptItemsOverview from './ReceiptItemsOverview'
-import ProductTypeManualSelectionPanel from './ProductTypeManualSelectionPanel.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './externalDatabases.css'
 
@@ -94,8 +93,6 @@ export default function ExternalDatabasesPage() {
     [retailers, selectedRetailer]
   )
 
-  const activeHouseholdId = summary?.household_id || summary?.active_household_id || summary?.household?.id || ''
-
   async function testCandidateMatch(event) {
     event.preventDefault()
     const normalizedLine = receiptLineText.trim()
@@ -156,7 +153,6 @@ export default function ExternalDatabasesPage() {
       return (
         <div className="rz-external-databases-overview">
           {message ? <div className="rz-inline-feedback rz-inline-feedback--success">{message}</div> : null}
-          <ProductTypeManualSelectionPanel householdId={activeHouseholdId} onError={setError} onMessage={setMessage} />
           <ReceiptItemsOverview onError={setError} onMessage={setMessage} />
         </div>
       )
