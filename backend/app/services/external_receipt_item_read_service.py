@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import text
 
 from app.db import engine
+from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
 from app.services.external_article_ui_projection import (
     project_central_link_truth_rows,
 )
@@ -44,6 +45,39 @@ def _clean(value: Any) -> str:
 def _contains(value: Any, expected: str) -> bool:
     needle = _clean(expected).lower()
     return not needle or needle in _clean(value).lower()
+
+
+def _receipt_item_text(item: dict[str, Any]) -> str:
+    return ' '.join(
+        _clean(value).lower()
+        for value in (
+            item.get('receipt_line_text'),
+            item.get('raw_label'),
+            item.get('normalized_label'),
+            item.get('candidate_name'),
+        )
+        if _clean(value)
+    )
+
+
+def _is_excluded_receipt_item(item: dict[str, Any]) -> bool:
+    if 'verzendkosten' in _receipt_item_text(item):
+        return True
+    if is_spaarzegels_flow_excluded(item):
+        return True
+    return is_spaarzegels_flow_excluded({
+        'line_type': item.get('line_type'),
+        'is_spaarzegels': item.get('is_spaarzegels'),
+        'exclude_from_inventory': item.get('exclude_from_inventory'),
+        'external_matching_allowed': item.get('external_matching_allowed'),
+        'receipt_line_text': item.get('receipt_line_text'),
+        'raw_label': item.get('raw_label') or item.get('candidate_name'),
+        'normalized_label': item.get('normalized_label') or item.get('candidate_name'),
+        'line_total': item.get('line_total') or item.get('price'),
+        'unit_price': item.get('unit_price'),
+        'price': item.get('price'),
+        'quantity_label': item.get('quantity_label'),
+    })
 
 
 def _is_linked(item: dict[str, Any]) -> bool:
@@ -276,7 +310,11 @@ def list_external_receipt_items_page_read_only(
 
     if requires_full_projection:
         payload = list_external_receipt_items_read_only(limit=_MAX_SCAN_LIMIT)
-        all_items = [dict(item) for item in payload.get("items") or []]
+        all_items = [
+            dict(item)
+            for item in payload.get("items") or []
+            if not _is_excluded_receipt_item(dict(item))
+        ]
         filtered = [item for item in all_items if _matches_filters(item, normalized_filters)]
         ordered = _sort_items(filtered, sort_key=sort_key, sort_desc=sort_desc)
         total = len(ordered)
@@ -298,7 +336,11 @@ def list_external_receipt_items_page_read_only(
             set(),
             _MAX_SCAN_LIMIT,
         )
-        lightweight_items = _m2c2i_fix7b_dedupe_top_receipt_items(placeholders)
+        lightweight_items = [
+            item
+            for item in _m2c2i_fix7b_dedupe_top_receipt_items(placeholders)
+            if not _is_excluded_receipt_item(item)
+        ]
         filtered = [
             item
             for item in lightweight_items
