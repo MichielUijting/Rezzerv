@@ -5,6 +5,7 @@ import Table from '../../ui/Table'
 import Input from '../../ui/Input'
 import Button from '../../ui/Button'
 import ReceiptItemsOverview from './ReceiptItemsOverview'
+import ProductTypeManualSelectionPanel from './ProductTypeManualSelectionPanel.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import './externalDatabases.css'
 
@@ -51,6 +52,7 @@ export default function ExternalDatabasesPage() {
   const [isTesting, setIsTesting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -91,6 +93,8 @@ export default function ExternalDatabasesPage() {
     () => retailers.find((retailer) => retailer.retailer_code === selectedRetailer) || retailers[0] || null,
     [retailers, selectedRetailer]
   )
+
+  const activeHouseholdId = summary?.household_id || summary?.active_household_id || summary?.household?.id || ''
 
   async function testCandidateMatch(event) {
     event.preventDefault()
@@ -151,7 +155,9 @@ export default function ExternalDatabasesPage() {
     if (tab === TAB_LABELS.overzicht) {
       return (
         <div className="rz-external-databases-overview">
-          <ReceiptItemsOverview onError={setError} onMessage={setError} />
+          {message ? <div className="rz-inline-feedback rz-inline-feedback--success">{message}</div> : null}
+          <ProductTypeManualSelectionPanel householdId={activeHouseholdId} onError={setError} onMessage={setMessage} />
+          <ReceiptItemsOverview onError={setError} onMessage={setMessage} />
         </div>
       )
     }
@@ -228,7 +234,7 @@ export default function ExternalDatabasesPage() {
             <div className="rz-external-databases-header">
               <div className="rz-external-databases-title-group">
                 <h2 className="rz-external-databases-title">Externe databases</h2>
-                <p className="rz-external-databases-subtitle">Eerste versie voor externe productkandidaten. Deze preview maakt geen artikelgroep, product of voorraadmutatie aan.</p>
+                <p className="rz-external-databases-subtitle">Externe productkandidaten en officiële GS1-GPC Producttypen beheren zonder voorraadmutatie.</p>
               </div>
             </div>
             {renderTabContent(TAB_LABELS.overzicht)}
