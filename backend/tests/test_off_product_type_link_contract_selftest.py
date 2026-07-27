@@ -19,7 +19,6 @@ def main() -> int:
     numeric_suffix = f"{uuid.uuid4().int % 10**11:011d}"
     batch_id = f"off-link-batch-{suffix}"
     line_id = f"off-link-line-{suffix}"
-    product_type_key = f"test.off.halfvolle.melk.{suffix}"
     gtin = f"98{numeric_suffix}"
 
     with engine.begin() as conn:
@@ -28,6 +27,18 @@ def main() -> int:
             "inventory": _count(conn, "inventory"),
             "events": _count(conn, "inventory_events"),
         }
+        product_type = conn.execute(text("""
+            SELECT inventory_group_key
+            FROM product_inventory_groups
+            WHERE inventory_group_key LIKE 'gpc:%'
+              AND source LIKE 'gs1_gpc_%'
+              AND COALESCE(active, 1) = 1
+            ORDER BY inventory_group_key
+            LIMIT 1
+        """)).mappings().first()
+        if not product_type:
+            raise RuntimeError("Geen actief officieel GS1 GPC Producttype beschikbaar voor contracttest")
+        product_type_key = str(product_type["inventory_group_key"])
         connection = conn.execute(text("""
             SELECT hsc.id AS connection_id, hsc.store_provider_id
             FROM household_store_connections hsc
@@ -109,12 +120,7 @@ def main() -> int:
         """), {"id": line_id, "batch_id": batch_id, "external_line_ref": f"line:{suffix}"})
 
     assignment = {
-        "create": {
-            "inventory_group_key": product_type_key,
-            "canonical_name": "Halfvolle koemelk contracttest",
-            "base_unit": "ml",
-            "aggregation_mode": "volume",
-        },
+        "product_type_id": product_type_key,
         "mapping_source": "contract_selftest",
         "confidence_score": 0.99,
     }
@@ -142,12 +148,7 @@ def main() -> int:
             receipt_item_id=f"purchase-import-line:{line_id}",
             off_product={**off_product, "gtin": rollback_gtin, "product_name": "Rollback melk"},
             product_type_assignment={
-                "create": {
-                    "inventory_group_key": f"test.rollback.{suffix}",
-                    "canonical_name": "Rollback producttype",
-                    "base_unit": "ml",
-                    "aggregation_mode": "volume",
-                },
+                "product_type_id": product_type_key,
                 "mapping_source": "contract_selftest_rollback",
             },
             force_failure_after_link=True,
@@ -193,7 +194,6 @@ def main() -> int:
             conn.execute(text("DELETE FROM product_group_memberships WHERE global_product_id = :id"), {"id": global_product_id})
             conn.execute(text("DELETE FROM product_identities WHERE global_product_id = :id OR identity_value = :gtin"), {"id": global_product_id, "gtin": gtin})
             conn.execute(text("DELETE FROM global_products WHERE id = :id"), {"id": global_product_id})
-            conn.execute(text("DELETE FROM product_inventory_groups WHERE inventory_group_key = :key"), {"key": product_type_key})
 
 
 if __name__ == "__main__":
