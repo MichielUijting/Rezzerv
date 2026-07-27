@@ -66,15 +66,23 @@ def synchronize_dutch_product_type_display_names() -> dict[str, Any]:
     _capture_language_snapshot("en")
 
     with engine.begin() as conn:
-        missing = int(conn.execute(text("""
+        missing_nl = int(conn.execute(text("""
             SELECT COUNT(*)
             FROM gpc_product_groups
             WHERE COALESCE(active, 1) = 1
               AND (gpc_brick_name_nl IS NULL OR trim(gpc_brick_name_nl) = '')
         """)).scalar() or 0)
-        if missing:
+        missing_en = int(conn.execute(text("""
+            SELECT COUNT(*)
+            FROM gpc_product_groups
+            WHERE COALESCE(active, 1) = 1
+              AND (gpc_brick_name_en IS NULL OR trim(gpc_brick_name_en) = '')
+        """)).scalar() or 0)
+        if missing_nl or missing_en:
             raise ValueError(
-                f"Nederlandse GPC-import is onvolledig: {missing} actieve Bricks hebben nog geen Nederlandse omschrijving"
+                "GPC-localisatie is onvolledig: "
+                f"{missing_nl} actieve Bricks missen Nederlands en "
+                f"{missing_en} actieve Bricks missen Engels"
             )
 
         result = conn.execute(text("""
@@ -112,12 +120,16 @@ def synchronize_dutch_product_type_display_names() -> dict[str, Any]:
             WHERE COALESCE(active, 1) = 1
               AND gpc_brick_name_nl IS NOT NULL
               AND trim(gpc_brick_name_nl) <> ''
+              AND gpc_brick_name_en IS NOT NULL
+              AND trim(gpc_brick_name_en) <> ''
         """)).scalar() or 0)
 
     return {
         "ok": True,
         "language": "nl",
         "localized_bricks": total,
+        "missing_dutch": 0,
+        "missing_english": 0,
         "product_types_updated": int(result.rowcount or 0),
         "display_policy": "dutch_required",
         "mutates_inventory": False,
@@ -125,10 +137,19 @@ def synchronize_dutch_product_type_display_names() -> dict[str, Any]:
 
 
 def import_gs1_gpc_nl_localized() -> dict[str, Any]:
-    result = import_gs1_gpc_nl()
-    captured = _capture_language_snapshot("nl")
+    english_result = import_bundled_gpc_catalog()
+    english_captured = _capture_language_snapshot("en")
+    dutch_result = import_gs1_gpc_nl()
+    dutch_captured = _capture_language_snapshot("nl")
     synchronized = synchronize_dutch_product_type_display_names()
-    return {**result, "dutch_rows_captured": captured, "localization": synchronized}
+    return {
+        **dutch_result,
+        "english_source": english_result.get("source"),
+        "english_version": english_result.get("version"),
+        "english_rows_captured": english_captured,
+        "dutch_rows_captured": dutch_captured,
+        "localization": synchronized,
+    }
 
 
 def import_bundled_gpc_catalog_localized() -> dict[str, Any]:
