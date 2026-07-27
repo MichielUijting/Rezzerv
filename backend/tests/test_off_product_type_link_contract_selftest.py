@@ -28,11 +28,13 @@ def main() -> int:
                 id, purchase_import_line_id, context_key,
                 retailer_code, receipt_line_text, candidate_name,
                 candidate_source_name, candidate_source_product_code,
+                source_name, source_product_code,
                 score, candidate_status, is_user_confirmed,
                 created_by, created_at, updated_at
             ) VALUES (
                 :id, :line_id, :context_key,
                 'contractwinkel', 'Contract Halfvolle melk', 'Contractidentiteit',
+                'contract_selftest', :gtin,
                 'contract_selftest', :gtin,
                 1.0, 'candidate', 0,
                 'contract_selftest', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
