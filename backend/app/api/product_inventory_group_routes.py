@@ -26,6 +26,9 @@ from app.services.product_type_household_settings_service import (
     list_extended_product_type_settings,
     upsert_extended_product_type_setting,
 )
+from app.services.receipt_article_product_type_audit_service import (
+    audit_linked_receipt_article_product_types,
+)
 
 router = APIRouter()
 
@@ -46,6 +49,11 @@ def inventory_groups(household_id: str | None = Query(default=None)):
 @router.get('/api/product-groups')
 def product_groups():
     return list_product_groups()
+
+
+@router.get('/api/external-databases/linked-receipt-articles/product-type-audit')
+def linked_receipt_articles_product_type_audit():
+    return audit_linked_receipt_article_product_types()
 
 
 @router.post('/api/product-groups')
