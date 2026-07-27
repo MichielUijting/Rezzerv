@@ -299,6 +299,7 @@ def analyze_household_article_settings_migration(household_id: str) -> dict[str,
 
     grouped: dict[str, dict[str, Any]] = {}
     unmapped: list[dict[str, Any]] = []
+    unmapped_article_ids: set[str] = set()
     for raw in rows:
         row = dict(raw)
         product_type_id = _clean(row.get("product_type_id"))
@@ -308,8 +309,12 @@ def analyze_household_article_settings_migration(household_id: str) -> dict[str,
             "global_product_id": row.get("global_product_id"),
             **{field: row.get(field) for field in MIGRATABLE_FIELDS},
         }
+        source_article_id = _clean(source.get("household_article_id"))
         if not product_type_id:
-            unmapped.append(source)
+            if not source_article_id or source_article_id not in unmapped_article_ids:
+                unmapped.append(source)
+                if source_article_id:
+                    unmapped_article_ids.add(source_article_id)
             continue
         bucket = grouped.setdefault(product_type_id, {
             "product_type_id": product_type_id,
@@ -317,7 +322,12 @@ def analyze_household_article_settings_migration(household_id: str) -> dict[str,
             "base_unit": row.get("base_unit"),
             "source_articles": [],
         })
-        bucket["source_articles"].append(source)
+        already_present = any(
+            _clean(existing.get("household_article_id")) == source_article_id
+            for existing in bucket["source_articles"]
+        ) if source_article_id else False
+        if not already_present:
+            bucket["source_articles"].append(source)
 
     items: list[dict[str, Any]] = []
     for bucket in grouped.values():
