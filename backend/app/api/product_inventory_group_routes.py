@@ -11,6 +11,12 @@ from app.services.off_product_link_service import link_off_product_with_product_
 from app.services.product_group_crud_store import create_product_group, delete_product_group, list_product_groups, update_product_group
 from app.services.product_inventory_group_projection_service import list_inventory_groups_with_hierarchy
 from app.services.product_inventory_group_store import assign_inventory_item_to_group, ensure_product_inventory_group_schema, link_global_product_to_inventory_group
+from app.services.product_type_almost_out_service import (
+    build_product_type_almost_out_preview,
+    ensure_household_product_type_settings_schema,
+    list_household_product_type_settings,
+    upsert_household_product_type_setting,
+)
 
 router = APIRouter()
 
@@ -73,6 +79,41 @@ def product_inventory_group_link(global_product_id: str, payload: dict[str, Any]
     return result
 
 
+@router.get('/api/households/{household_id}/product-type-almost-out/settings')
+def product_type_almost_out_settings_list(household_id: str):
+    try:
+        return list_household_product_type_settings(household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put('/api/households/{household_id}/product-type-almost-out/settings/{product_type_id}')
+def product_type_almost_out_setting_save(
+    household_id: str,
+    product_type_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+):
+    try:
+        return upsert_household_product_type_setting(
+            household_id=household_id,
+            product_type_id=product_type_id,
+            min_stock=payload.get('min_stock'),
+            ideal_stock=payload.get('ideal_stock'),
+            consumable=bool(payload.get('consumable', True)),
+            active=bool(payload.get('active', True)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get('/api/households/{household_id}/product-type-almost-out/preview')
+def product_type_almost_out_preview(household_id: str):
+    try:
+        return build_product_type_almost_out_preview(household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post('/api/external-databases/catalog/promote-candidate-with-product-type')
 def external_candidate_product_type_link(payload: dict[str, Any] = Body(default_factory=dict)):
     assignment = payload.get('product_type_assignment')
@@ -107,7 +148,8 @@ def external_off_product_type_link(payload: dict[str, Any] = Body(default_factor
 @router.post('/api/admin/inventory/groups/ensure-schema')
 def inventory_groups_ensure_schema():
     ensure_product_inventory_group_schema()
-    return {'ok': True, 'schema': 'product_inventory_groups', 'seed': 'm2c2i30a_seed', 'mutates_inventory': False}
+    ensure_household_product_type_settings_schema()
+    return {'ok': True, 'schema': 'product_inventory_groups,household_product_type_settings', 'seed': 'm2c2i30a_seed', 'mutates_inventory': False}
 
 
 @router.post('/api/admin/product-groups/import-gpc-en-bundled')
