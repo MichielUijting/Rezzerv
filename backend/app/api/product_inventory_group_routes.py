@@ -31,6 +31,9 @@ from app.services.product_type_household_settings_service import (
 from app.services.product_type_inventory_projection_service import (
     build_product_type_inventory_projection,
 )
+from app.services.product_type_purchase_need_service import (
+    build_product_type_purchase_needs,
+)
 from app.services.product_type_resolution_service import resolve_product_type
 from app.services.receipt_article_product_type_audit_service import (
     audit_linked_receipt_article_product_types,
@@ -79,6 +82,14 @@ def product_type_resolve(
 def product_type_inventory_projection(household_id: str):
     try:
         return build_product_type_inventory_projection(household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get('/api/households/{household_id}/product-type-purchase-needs')
+def product_type_purchase_needs(household_id: str):
+    try:
+        return build_product_type_purchase_needs(household_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
