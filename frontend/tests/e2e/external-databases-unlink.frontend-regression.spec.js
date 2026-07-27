@@ -11,7 +11,7 @@ test.describe('Externe databases ontkoppelen regressie', () => {
     const offRequestBodies = [];
     let unlinkCalled = false;
 
-    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+    await page.route('**/api/external-databases/receipt-items?*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import {
   attachConsoleErrorCollector,
   expectNoConsoleErrors,
@@ -93,7 +93,7 @@ test.describe('Externe databases OFF candidate flow', () => {
     const consoleErrors = attachConsoleErrorCollector(page);
     const offRequestBodies = [];
 
-    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+    await page.route('**/api/external-databases/receipt-items?*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -178,7 +178,7 @@ test.describe('Externe databases OFF candidate flow', () => {
   });
 
   test('Bananen worden automatisch geclassificeerd als officiële GPC Brick', async ({ page }) => {
-    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+    await page.route('**/api/external-databases/receipt-items?*', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(receiptItemsPayload()) });
     });
     await page.route('**/api/external-products/off/search', async (route) => {
@@ -205,7 +205,7 @@ test.describe('Externe databases OFF candidate flow', () => {
       releaseSearch = resolve;
     });
 
-    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+    await page.route('**/api/external-databases/receipt-items?*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -260,7 +260,7 @@ test.describe('Externe databases OFF candidate flow', () => {
   test('Gekoppelde bonartikelregel toont score, artikel, Producttype en definitieve GTIN', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
 
-    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+    await page.route('**/api/external-databases/receipt-items?*', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',

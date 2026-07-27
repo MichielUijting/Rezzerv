@@ -7,7 +7,7 @@ import {
 } from './helpers/rezzervAssertions.js';
 
 async function routeReceiptItems(page, items) {
-  await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+  await page.route('**/api/external-databases/receipt-items?*', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',

@@ -8,7 +8,7 @@ test.describe('Externe databases navigatieknoppen regressie', () => {
   test('Terug en Vernieuwen zijn niet aanwezig op Externe databases', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
 
-    await page.route('**/api/external-databases/receipt-items?limit=500', async (route) => {
+    await page.route('**/api/external-databases/receipt-items?*', async (route) => {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [] }) });
     });
 
