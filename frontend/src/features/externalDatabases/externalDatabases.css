@@ -267,7 +267,6 @@
 .rz-external-candidate-col-score { width: 90px; }
 .rz-external-candidate-col-status { width: 150px; }
 
-
 /* M2C2h-4 table cleanup */
 .rz-external-databases .rz-table th,
 .rz-external-databases .rz-table td {
@@ -303,7 +302,6 @@
 .rz-external-receipt-col-amount { width: 110px; }
 .rz-external-receipt-col-candidates { width: 170px; }
 .rz-external-receipt-col-status { width: 190px; }
-
 
 /* M2C2h-4b table style alignment */
 .rz-external-databases .rz-table-scroll,
@@ -393,105 +391,55 @@
 .rz-external-receipt-col-price { width: 90px; }
 .rz-external-receipt-col-amount { width: 90px; }
 .rz-external-receipt-col-candidates { width: 150px; }
-.rz-external-receipt-col-status { width: 155px; }
+.rz-external-receipt-col-status { width: 170px; }
 
-.rz-external-candidate-col-choice { width: 70px; }
-.rz-external-candidate-col-name { width: 230px; }
-.rz-external-candidate-col-brand { width: 140px; }
-.rz-external-candidate-col-source { width: 145px; }
-.rz-external-candidate-col-code { width: 145px; }
-.rz-external-candidate-col-variant { width: 120px; }
-.rz-external-candidate-col-score { width: 90px; }
-.rz-external-candidate-col-status { width: 130px; }
-
-.rz-external-receipt-detail {
+/* Handmatige Producttypeselectie */
+.rz-product-type-manual-panel {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   border: 1px solid var(--color-table-border, #6bbf7a);
-  border-radius: 8px;
-  padding: 14px 16px;
+  padding: 14px;
+  display: grid;
+  gap: 12px;
+  background: #fff;
 }
 
-
-/* M2C2h-5 selection export unlink */
-.rz-external-receipt-col-select { width: 58px; }
-
-.rz-external-databases .rz-table .rz-check {
-  text-align: center;
+.rz-product-type-manual-explanation {
+  margin: 0;
+  max-width: 78ch;
+  line-height: 1.45;
 }
 
-.rz-external-databases .rz-table .rz-check input[type='checkbox'],
-.rz-external-databases .rz-table .rz-check input[type='radio'] {
+.rz-product-type-results-wrap {
+  min-width: 0;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.rz-product-type-results-wrap .rz-table-scroll,
+.rz-product-type-results-wrap .rz-table-scroll--wide {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  resize: none;
+}
+
+.rz-product-type-results-table {
+  width: 100% !important;
+  min-width: 760px;
+  table-layout: fixed;
+  resize: none !important;
+}
+
+.rz-product-type-confirmation {
+  border: 1px solid var(--color-table-border, #6bbf7a);
+  background: #f3faf4;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.rz-product-type-confirmation p {
   margin: 0;
 }
-
-.rz-external-databases-actions .rz-external-databases-muted {
-  align-self: center;
-}
-
-
-/* M2C2h-5 paginated progress */
-.rz-external-progress {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 8px 0 12px;
-  padding: 10px 12px;
-  border: 1px solid #0B5D3B;
-  border-radius: 10px;
-  background: #F7FFF9;
-}
-
-.rz-external-progress-label,
-.rz-external-progress-count {
-  font-size: 13px;
-  color: #1A1A1A;
-}
-
-.rz-external-progress-track {
-  width: 100%;
-  height: 12px;
-  border: 1px solid #0B5D3B;
-  border-radius: 999px;
-  background: #FFFFFF;
-  overflow: hidden;
-}
-
-.rz-external-progress-bar {
-  height: 100%;
-  background: #0B5D3B;
-  transition: width 180ms ease-in-out;
-}
-
-
-/* M2C2i-2a candidate detail actions */
-.rz-external-detail-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-top: 14px;
-  flex-wrap: wrap;
-}
-
-
-.rz-external-databases-preview-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  border: 2px solid #dfe7e1;
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: #ffffff;
-}
-
-.rz-external-databases-preview-meta span {
-  color: var(--color-brand-primary);
-}
-
-.rz-external-databases-off-terms {
-  border: 2px solid #dfe7e1;
-  border-radius: 12px;
-  padding: 10px 12px;
-  background: #ffffff;
-  color: var(--color-text-primary);
-  line-height: 1.5;
-}
-
