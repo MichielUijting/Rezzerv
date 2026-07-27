@@ -2,11 +2,15 @@ import { useEffect, useMemo, useState } from 'react'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
 import Table from '../../ui/Table'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 
 function resolveHouseholdId(explicitHouseholdId) {
   const explicit = String(explicitHouseholdId || '').trim()
   if (explicit) return explicit
+
+  const contextHouseholdId = String(readStoredAuthContext()?.active_household_id || '').trim()
+  if (contextHouseholdId) return contextHouseholdId
+
   for (const key of ['rezzerv_active_household_id', 'rezzerv_household_id', 'active_household_id']) {
     const value = String(localStorage.getItem(key) || '').trim()
     if (value) return value
