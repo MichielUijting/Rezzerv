@@ -12,6 +12,10 @@ from app.services.barcode_identity_service import (
     save_gtin_catalog_and_household_link,
     validate_barcode,
 )
+from app.services.generic_product_link_replacement_service import (
+    GenericProductLinkReplacementError,
+    replace_generic_household_article_product_link,
+)
 from app.services.household_context_adapter import (
     household_context_from_runtime_context,
 )
@@ -56,7 +60,6 @@ def barcode_lookup(
         if isinstance(exc, HTTPException):
             raise
         raise HTTPException(status_code=500, detail="Barcode kon niet worden opgezocht") from exc
-
 
 
 @router.post("/{gtin}/household-article-link")
@@ -105,6 +108,55 @@ def barcode_household_article_link(
             detail="Barcodekoppeling kon niet worden opgeslagen",
         ) from exc
 
+
+@router.post("/{gtin}/replace-generic-household-article-link")
+def replace_generic_barcode_household_article_link(
+    gtin: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    authorization: Optional[str] = Header(None),
+):
+    runtime_context = _require_auth(authorization)
+    household_context = household_context_from_runtime_context(
+        runtime_context
+    )
+
+    if household_context.role == "viewer":
+        raise HTTPException(
+            status_code=403,
+            detail="Alleen een lid of beheerder mag artikelen koppelen.",
+        )
+
+    try:
+        with engine.begin() as conn:
+            return replace_generic_household_article_product_link(
+                conn,
+                household_id=household_context.active_household_id,
+                purchase_import_line_id=str(
+                    payload.get("purchase_import_line_id") or ""
+                ),
+                household_article_id=str(
+                    payload.get("household_article_id") or ""
+                ),
+                gtin=gtin,
+                global_product_id=str(
+                    payload.get("global_product_id") or ""
+                ),
+                confirm_replace_generic_link=(
+                    payload.get("confirm_replace_generic_link") is True
+                ),
+            )
+    except GenericProductLinkReplacementError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=exc.detail,
+        ) from exc
+    except Exception as exc:
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(
+            status_code=500,
+            detail="De generieke productkoppeling kon niet worden vervangen.",
+        ) from exc
 
 
 @router.post("/{gtin}/save-household-article")
