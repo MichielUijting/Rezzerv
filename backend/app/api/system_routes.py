@@ -126,7 +126,8 @@ def _without_taxonomy_seed_candidates(payload: Any) -> Any:
         next_items.append(next_item)
 
     next_payload['items'] = next_items
-    next_payload['total'] = len(next_items)
+    if 'page' not in next_payload:
+        next_payload['total'] = len(next_items)
     next_payload['taxonomy_seed_candidates_removed'] = removed_count
     return next_payload
 
@@ -205,7 +206,8 @@ def _without_spaarzegels_receipt_items(payload: Any) -> Any:
         next_items.append(next_item)
 
     next_payload['items'] = next_items
-    next_payload['total'] = len(next_items)
+    if 'page' not in next_payload:
+        next_payload['total'] = len(next_items)
     next_payload['spaarzegels_excluded_count'] = int(next_payload.get('spaarzegels_excluded_count') or 0) + removed_count
     return next_payload
 
