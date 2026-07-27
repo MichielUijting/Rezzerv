@@ -4,8 +4,13 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Header, HTTPException, Query
 
-from app.services.gpc_import_service import import_gs1_gpc_nl, require_admin_key
-from app.services.gpc_local_catalog_service import classify_gpc_product, import_bundled_gpc_catalog
+from app.services.gpc_import_service import require_admin_key
+from app.services.gpc_local_catalog_service import classify_gpc_product
+from app.services.gpc_localization_service import (
+    import_bundled_gpc_catalog_localized,
+    import_gs1_gpc_nl_localized,
+    synchronize_dutch_product_type_display_names,
+)
 from app.services.external_product_candidate_store import promote_external_product_candidate_with_product_type
 from app.services.off_product_link_service import link_off_product_with_product_type
 from app.services.product_group_crud_store import create_product_group, delete_product_group, list_product_groups, update_product_group
@@ -166,7 +171,7 @@ def inventory_groups_ensure_schema():
 def admin_product_groups_import_gpc_en_bundled(x_rezzerv_admin_key: str | None = Header(default=None)):
     try:
         require_admin_key(x_rezzerv_admin_key)
-        return import_bundled_gpc_catalog()
+        return import_bundled_gpc_catalog_localized()
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except Exception as exc:
@@ -177,8 +182,21 @@ def admin_product_groups_import_gpc_en_bundled(x_rezzerv_admin_key: str | None =
 def admin_product_groups_import_gpc_nl(x_rezzerv_admin_key: str | None = Header(default=None)):
     try:
         require_admin_key(x_rezzerv_admin_key)
-        return import_gs1_gpc_nl()
+        return import_gs1_gpc_nl_localized()
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f'GS1 GPC NL import is mislukt: {exc}') from exc
+
+
+@router.post('/api/admin/product-groups/synchronize-gpc-nl')
+def admin_product_groups_synchronize_gpc_nl(x_rezzerv_admin_key: str | None = Header(default=None)):
+    try:
+        require_admin_key(x_rezzerv_admin_key)
+        return synchronize_dutch_product_type_display_names()
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f'Nederlandse GPC-omschrijvingen konden niet worden geactiveerd: {exc}') from exc
