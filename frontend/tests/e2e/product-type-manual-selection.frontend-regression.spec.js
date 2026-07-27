@@ -47,7 +47,7 @@ test('handmatige Producttypeselectie zoekt, selecteert en bevestigt expliciet', 
 
   const panel = page.getByTestId('product-type-manual-selection-panel')
   await expect(panel).toBeVisible()
-  await expect(panel.getByText('Pizza')).toBeVisible()
+  await expect(panel.locator('select').first()).toHaveValue(ARTICLE_ID)
 
   await panel.getByRole('button', { name: 'Zoeken' }).click()
   await expect(page.getByTestId('product-type-catalog-search-results')).toBeVisible()
