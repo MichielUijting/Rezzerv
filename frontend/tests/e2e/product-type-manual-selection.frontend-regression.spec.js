@@ -11,8 +11,10 @@ test('handmatige Producttypeselectie zoekt, selecteert en bevestigt expliciet', 
     localStorage.setItem('rezzerv_active_household_id', '1')
   })
 
+  await page.route('**/api/**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }))
   await page.route('**/api/external-databases/summary', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ household_id: HOUSEHOLD_ID }) }))
   await page.route('**/api/external-databases/retailers', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ retailers: [] }) }))
+  await page.route('**/api/external-databases/linked-receipt-articles**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], total: 0, page_count: 1 }) }))
   await page.route(`**/api/households/${HOUSEHOLD_ID}/product-type-resolution-proposals`, async (route) => route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -40,8 +42,6 @@ test('handmatige Producttypeselectie zoekt, selecteert en bevestigt expliciet', 
       }),
     })
   })
-  await page.route('**/api/external-databases/linked-receipt-articles**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], total: 0, page_count: 1 }) }))
-  await page.route('**/api/**', async (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }))
 
   await page.goto('/externe-databases')
 
