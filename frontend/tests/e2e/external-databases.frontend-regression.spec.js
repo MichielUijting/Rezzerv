@@ -285,7 +285,7 @@ test.describe('Externe databases frontend-regressie', () => {
     await expect(page.getByText('Universele kandidaten voor: Niet gekoppeld filter product')).toBeVisible();
     await expect(page.getByTestId('external-receipt-item-candidates-table')).toContainText('Geen universele kandidaten met score 0,500 of hoger voor dit bonartikel.');
     await receiptTable.locator('select').first().selectOption('linked');
-    await expect(receiptTable.locator('tbody tr').filter({ hasText: /^Gekoppeld filter product(?:\s|$)/ })).toBeVisible();
+    await expect(receiptTable.getByRole('cell', { name: 'Gekoppeld filter product', exact: true })).toBeVisible();
     await expect(receiptTable.locator('tbody tr', { hasText: 'Niet gekoppeld filter product' })).toHaveCount(0);
     await expect(page.getByText('Niet gekoppeld filter kandidaat')).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
