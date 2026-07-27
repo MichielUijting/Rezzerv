@@ -16,8 +16,10 @@ from app.services.off_product_link_service import link_off_product_with_product_
 from app.services.product_group_crud_store import create_product_group, delete_product_group, list_product_groups, update_product_group
 from app.services.product_inventory_group_projection_service import list_inventory_groups_with_hierarchy
 from app.services.product_inventory_group_store import assign_inventory_item_to_group, ensure_product_inventory_group_schema, link_global_product_to_inventory_group
+from app.services.product_type_almost_out_decision_service import (
+    build_product_type_almost_out_decision,
+)
 from app.services.product_type_almost_out_service import (
-    build_product_type_almost_out_preview,
     ensure_household_product_type_settings_schema,
 )
 from app.services.product_type_household_settings_service import (
@@ -156,7 +158,7 @@ def product_type_almost_out_migration_analysis(household_id: str):
 @router.get('/api/households/{household_id}/product-type-almost-out/preview')
 def product_type_almost_out_preview(household_id: str):
     try:
-        return build_product_type_almost_out_preview(household_id)
+        return build_product_type_almost_out_decision(household_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
