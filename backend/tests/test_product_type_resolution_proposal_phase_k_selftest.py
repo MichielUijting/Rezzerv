@@ -1,6 +1,6 @@
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path.cwd()
 SERVICE = ROOT / "app" / "services" / "product_type_resolution_proposal_service.py"
 source = SERVICE.read_text(encoding="utf-8")
 
