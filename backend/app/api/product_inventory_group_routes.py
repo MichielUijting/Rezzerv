@@ -38,6 +38,9 @@ from app.services.product_type_purchase_need_service import (
 from app.services.product_type_quantity_event_service import (
     aggregate_product_type_quantity_events,
 )
+from app.services.product_type_resolution_proposal_service import (
+    build_product_type_resolution_proposals,
+)
 from app.services.product_type_resolution_service import resolve_product_type
 from app.services.receipt_article_product_type_audit_service import (
     audit_linked_receipt_article_product_types,
@@ -110,6 +113,14 @@ def product_type_quantity_event_history(household_id: str):
 def product_type_forecast(household_id: str):
     try:
         return build_product_type_forecast(household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get('/api/households/{household_id}/product-type-resolution-proposals')
+def product_type_resolution_proposals(household_id: str):
+    try:
+        return build_product_type_resolution_proposals(household_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
