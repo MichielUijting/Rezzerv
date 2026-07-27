@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 const HOUSEHOLD_ID = '1'
 const ARTICLE_ID = '58eff2cd-fdde-40e1-92e0-5ab79fd04b7b'
 
-test('handmatige Producttypeselectie zoekt, selecteert en bevestigt expliciet', async ({ page }) => {
+test('handmatige Producttypeselectie zoekt, kiest en bevestigt expliciet', async ({ page }) => {
   let confirmationPayload = null
 
   await page.addInitScript(() => {
@@ -47,11 +47,16 @@ test('handmatige Producttypeselectie zoekt, selecteert en bevestigt expliciet', 
 
   const panel = page.getByTestId('product-type-manual-selection-panel')
   await expect(panel).toBeVisible()
-  await expect(panel.locator('select').first()).toHaveValue(ARTICLE_ID)
+  await expect(panel.getByText('Sommige voorraadartikelen hebben nog geen officiële GS1-productindeling.')).toBeVisible()
 
-  await panel.getByRole('button', { name: 'Zoeken' }).click()
+  const articleSelect = panel.locator('select').first()
+  await expect(articleSelect).toHaveValue('')
+  await articleSelect.selectOption(ARTICLE_ID)
+  await expect(articleSelect).toHaveValue(ARTICLE_ID)
+
+  await panel.getByRole('button', { name: 'Producttype zoeken' }).click()
   await expect(page.getByTestId('product-type-catalog-search-results')).toBeVisible()
-  await panel.getByRole('button', { name: 'Selecteren' }).click()
+  await panel.getByRole('button', { name: 'Kiezen' }).click()
   await expect(panel.getByRole('dialog', { name: 'Producttype bevestigen' })).toBeVisible()
   await panel.getByRole('button', { name: 'Bevestigen en opslaan' }).click()
 
