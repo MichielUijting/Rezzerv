@@ -26,6 +26,10 @@ from app.services.product_type_household_settings_service import (
     list_extended_product_type_settings,
     upsert_extended_product_type_setting,
 )
+from app.services.product_type_inventory_projection_service import (
+    build_product_type_inventory_projection,
+)
+from app.services.product_type_resolution_service import resolve_product_type
 from app.services.receipt_article_product_type_audit_service import (
     audit_linked_receipt_article_product_types,
 )
@@ -54,6 +58,27 @@ def product_groups():
 @router.get('/api/external-databases/linked-receipt-articles/product-type-audit')
 def linked_receipt_articles_product_type_audit():
     return audit_linked_receipt_article_product_types()
+
+
+@router.get('/api/product-types/resolve')
+def product_type_resolve(
+    household_article_id: str | None = Query(default=None),
+    global_product_id: str | None = Query(default=None),
+    inventory_id: str | None = Query(default=None),
+):
+    return resolve_product_type(
+        household_article_id=household_article_id,
+        global_product_id=global_product_id,
+        inventory_id=inventory_id,
+    )
+
+
+@router.get('/api/households/{household_id}/product-type-inventory-projection')
+def product_type_inventory_projection(household_id: str):
+    try:
+        return build_product_type_inventory_projection(household_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post('/api/product-groups')
