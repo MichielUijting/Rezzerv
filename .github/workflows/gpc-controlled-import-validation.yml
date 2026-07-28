@@ -1,0 +1,36 @@
+name: GPC controlled import validation
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/cli/import_gpc_catalog_controlled.py"
+      - "backend/tests/test_gpc_controlled_import.py"
+      - "docs/gpc/GPC-SOURCE-MANIFEST.example.json"
+      - ".github/workflows/gpc-controlled-import-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-controlled-import:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      DATABASE_URL: sqlite:////tmp/rezzerv-gpc-package-tests.db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install minimal dependencies
+        run: pip install sqlalchemy==2.0.36 pytest
+      - name: Compile controlled import package
+        run: |
+          python -m py_compile app/cli/import_gpc_catalog_controlled.py
+          python -m py_compile tests/test_gpc_controlled_import.py
+      - name: Validate dry-run, apply, backup and restore
+        run: python -m pytest -q tests/test_gpc_controlled_import.py tests/test_gpc_catalog_service.py
