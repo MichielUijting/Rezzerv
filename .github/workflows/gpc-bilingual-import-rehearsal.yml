@@ -13,6 +13,8 @@ jobs:
   rehearse-bilingual-import:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      DATABASE_URL: sqlite:////tmp/rezzerv-runtime-placeholder.db
     defaults:
       run:
         working-directory: backend
@@ -28,6 +30,8 @@ jobs:
           pip install gpcc
       - name: Compile rehearsal
         run: python -m py_compile app/cli/rehearse_gpc_bilingual_import.py
+      - name: Prepare evidence directory
+        run: mkdir -p "$RUNNER_TEMP/gpc-rehearsal/evidence"
       - name: Run controlled bilingual import and rollback rehearsal
         run: python -m app.cli.rehearse_gpc_bilingual_import "$RUNNER_TEMP/gpc-rehearsal"
       - name: Upload import evidence
