@@ -1,0 +1,39 @@
+name: GPC article assignment validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/gpc_article_assignment_service.py'
+      - 'backend/app/services/article_detail_write_guard.py'
+      - 'backend/tests/test_gpc_article_assignment_contract.py'
+      - 'frontend/src/features/articles/ArticleGpcPage.jsx'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - '.github/workflows/gpc-article-assignment-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-gpc-article-assignment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile backend modules
+        run: |
+          python -m py_compile \
+            backend/app/services/gpc_article_assignment_service.py \
+            backend/app/services/article_detail_write_guard.py
+      - name: Run GPC assignment contract
+        run: python -m pytest -q backend/tests/test_gpc_article_assignment_contract.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
