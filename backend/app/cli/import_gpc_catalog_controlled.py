@@ -11,7 +11,6 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
-import shutil
 import sqlite3
 import sys
 import tempfile
@@ -35,6 +34,13 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _sqlite_backup(source: Path, target: Path) -> None:
+    """Create a transactionally consistent SQLite backup."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(source) as source_conn, sqlite3.connect(target) as target_conn:
+        source_conn.backup(target_conn)
+
+
 def _counts(path: Path) -> dict[str, int]:
     result: dict[str, int] = {}
     with sqlite3.connect(path) as conn:
@@ -51,7 +57,7 @@ def _load_manifest(path: Path, xml_path: Path) -> dict:
     if missing:
         raise ValueError(f"Bronmanifest mist velden: {', '.join(missing)}")
     actual_hash = _sha256(xml_path)
-    if data["xml_sha256"].lower() != actual_hash:
+    if str(data["xml_sha256"]).lower() != actual_hash:
         raise ValueError("SHA-256 van XML komt niet overeen met het bronmanifest")
     return data
 
@@ -65,7 +71,7 @@ def run_controlled_import(xml_file: Path, manifest_file: Path, database: Path, e
 
     with tempfile.TemporaryDirectory(prefix="rezzerv-gpc-") as temp_dir:
         staged_db = Path(temp_dir) / "rezzerv-staging.db"
-        shutil.copy2(database, staged_db)
+        _sqlite_backup(database, staged_db)
         before = _counts(staged_db)
         staged_engine = create_engine(f"sqlite:///{staged_db}")
         imported = import_gpc_xml(
@@ -92,8 +98,8 @@ def run_controlled_import(xml_file: Path, manifest_file: Path, database: Path, e
 
         if apply:
             backup = evidence_dir / f"rezzerv-pre-gpc-{timestamp}.db"
-            shutil.copy2(database, backup)
-            shutil.copy2(staged_db, database)
+            _sqlite_backup(database, backup)
+            _sqlite_backup(staged_db, database)
             report["status"] = "applied"
             report["backup"] = str(backup)
             report["database_sha256_after"] = _sha256(database)
@@ -107,7 +113,7 @@ def run_controlled_import(xml_file: Path, manifest_file: Path, database: Path, e
 def restore_backup(backup: Path, database: Path) -> dict:
     if not backup.is_file():
         raise FileNotFoundError(f"Back-up ontbreekt: {backup}")
-    shutil.copy2(backup, database)
+    _sqlite_backup(backup, database)
     return {"status": "restored", "backup": str(backup), "database": str(database), "database_sha256": _sha256(database)}
 
 
