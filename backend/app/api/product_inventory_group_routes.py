@@ -12,7 +12,10 @@ from app.services.gpc_localization_service import (
     synchronize_dutch_product_type_display_names,
 )
 from app.services.external_product_candidate_store import promote_external_product_candidate_with_product_type
-from app.services.off_product_link_service import link_off_product_with_product_type
+from app.services.off_product_link_service import (
+    link_off_product_with_product_type,
+    unlink_off_product_link,
+)
 from app.services.product_group_crud_store import create_product_group, delete_product_group, list_product_groups, update_product_group
 from app.services.product_inventory_group_projection_service import list_inventory_groups_with_hierarchy
 from app.services.product_inventory_group_store import assign_inventory_item_to_group, ensure_product_inventory_group_schema, link_global_product_to_inventory_group
@@ -272,6 +275,16 @@ def external_off_product_type_link(payload: dict[str, Any] = Body(default_factor
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return result
+
+
+@router.post('/api/external-products/off/unlink')
+def external_off_product_unlink(payload: dict[str, Any] = Body(default_factory=dict)):
+    try:
+        return unlink_off_product_link(
+            receipt_item_id=str(payload.get('receipt_item_id') or '').strip(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post('/api/admin/inventory/groups/ensure-schema')

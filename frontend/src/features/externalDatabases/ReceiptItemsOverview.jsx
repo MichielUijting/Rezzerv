@@ -568,7 +568,11 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
       ].some((value) => String(value || '').toLowerCase().includes(normalizedProductTypeSearch)))
     : productTypeOptions
   const selectedCandidateCanBeLinked = Boolean(selectedItem && selectedCandidate && !isLinkingProductType && !isClassifyingProductType)
-  const selectedCandidateCanBeUnlinked = false
+  const selectedCandidateCanBeUnlinked = Boolean(
+    selectedItem?.catalogLinked
+    && selectedCandidate?.isLinkedToCatalog
+    && !isLinkingProductType
+  )
   const selectedItemHasKnownGtin = Boolean(selectedItem?.hasKnownGtin || hasKnownGtin(selectedItem?.gtin))
 
   function updateFilter(key, value) { setFilters((current) => ({ ...current, [key]: value })); setPage(1) }
@@ -714,11 +718,28 @@ export default function ReceiptItemsOverview({ onError, onMessage }) {
   }
   async function unlinkSelectedCandidate() {
     if (!selectedItem || !selectedCandidate || !selectedCandidateCanBeUnlinked) return
+    setIsLinkingProductType(true)
     try {
-      const response = await fetchJsonWithAuth('/api/external-databases/catalog/unlink', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ context_keys: [selectedItem.contextKey || selectedItem.id], candidate_ids: [selectedCandidate.raw?.id || selectedCandidate.id] }) })
-      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data?.detail || 'Kandidaat ontkoppelen is mislukt')
-      onMessage?.('Kandidaat is ontkoppeld.'); setSelectedCandidateId(''); await loadItems()
-    } catch (err) { onError?.(err?.message || 'Kandidaat ontkoppelen is mislukt') }
+      const response = await fetchJsonWithAuth('/api/external-products/off/unlink', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          receipt_item_id: selectedItem.receiptItemId || selectedItem.id,
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(data?.detail || 'Kandidaat ontkoppelen is mislukt')
+      onMessage?.('Kandidaat en Producttype zijn van het bonartikel ontkoppeld.')
+      setSelectedCandidateId('')
+      setSelectedProductTypeId('')
+      setProductTypeSearchText('')
+      setProductTypeClassificationStatus('')
+      await Promise.all([loadItems(), loadProductTypeOptions()])
+    } catch (err) {
+      onError?.(err?.message || 'Kandidaat ontkoppelen is mislukt')
+    } finally {
+      setIsLinkingProductType(false)
+    }
   }
   async function consultOpenFoodFactsForItem(item, queryText = defaultOffQuery(item), mode = 'automatisch') {
     if (!item || item.hasKnownGtin || hasKnownGtin(item.gtin)) return
