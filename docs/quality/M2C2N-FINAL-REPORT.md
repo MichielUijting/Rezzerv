@@ -20,12 +20,12 @@ Dit advies betekent dat de afgesproken technische M2C2n-scope aantoonbaar is ge√
 
 De actuele FastAPI-baseline bevat:
 
-- 202 routeregistraties;
-- 202 unieke methode-padcombinaties;
+- 204 routeregistraties;
+- 204 unieke methode-padcombinaties;
 - nul dubbele registraties;
 - 90 leesregistraties;
-- 112 mutatieregistraties;
-- 83 productiemutaties, 17 testingmutaties, 11 adminmutaties en 1 devmutatie.
+- 114 mutatieregistraties;
+- 85 productiemutaties, 17 testingmutaties, 11 adminmutaties en 1 devmutatie.
 
 Iedere routewijziging wordt door de routecatalogusworkflow en fingerprintbaseline zichtbaar gemaakt.
 
