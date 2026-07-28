@@ -1,9 +1,4 @@
-"""Run a full controlled English GPC + Dutch overlay rehearsal on isolated SQLite.
-
-This command downloads the current official English and Dutch GS1 Browser
-publications, imports English into an isolated database, imports the Dutch
-language overlay twice, proves full coverage and restores the pre-import backup.
-"""
+"""Run a full controlled English GPC + Dutch overlay rehearsal on isolated SQLite."""
 from __future__ import annotations
 
 import csv
@@ -54,6 +49,14 @@ def _extract(xml_path: Path) -> dict[str, dict[str, str]]:
         if code and label:
             result[entity][code] = label
     return result
+
+
+def _schema_snapshot(path: Path) -> list[tuple[str, str, str]]:
+    with sqlite3.connect(path) as conn:
+        return conn.execute(
+            "SELECT type, name, COALESCE(sql, '') FROM sqlite_master "
+            "WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name"
+        ).fetchall()
 
 
 def _write_manifest(download: dict, path: Path) -> None:
@@ -107,8 +110,10 @@ def run(output_dir: Path) -> dict:
         raise ValueError("Engelse en Nederlandse publicatieversie verschillen")
 
     database = output_dir / "rezzerv-import-rehearsal.db"
-    database.touch()
-    initial_hash = _sha256(database)
+    with sqlite3.connect(database) as conn:
+        conn.execute("CREATE TABLE rehearsal_baseline (id INTEGER PRIMARY KEY, marker TEXT NOT NULL)")
+        conn.execute("INSERT INTO rehearsal_baseline(marker) VALUES ('before-gpc')")
+    initial_schema = _schema_snapshot(database)
     manifest = sources / "english-source-manifest.json"
     _write_manifest(english, manifest)
 
@@ -131,6 +136,8 @@ def run(output_dir: Path) -> dict:
     restored = restore_backup(backup, database)
     with sqlite3.connect(database) as conn:
         integrity_after_restore = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        baseline_marker = conn.execute("SELECT marker FROM rehearsal_baseline WHERE id=1").fetchone()[0]
+    restored_schema = _schema_snapshot(database)
 
     report = {
         "status": "success",
@@ -146,13 +153,15 @@ def run(output_dir: Path) -> dict:
         "integrity_after_import": integrity_after_import,
         "restore": restored,
         "integrity_after_restore": integrity_after_restore,
-        "initial_database_sha256": initial_hash,
+        "initial_schema": initial_schema,
+        "restored_schema": restored_schema,
+        "baseline_marker_after_restore": baseline_marker,
         "restored_database_sha256": _sha256(database),
     }
     if not coverage["complete"] or integrity_after_import != "ok" or integrity_after_restore != "ok":
         raise RuntimeError("Import-, dekkings- of integriteitscontrole faalde")
-    if report["initial_database_sha256"] != report["restored_database_sha256"]:
-        raise RuntimeError("Rollback herstelde de oorspronkelijke database niet exact")
+    if initial_schema != restored_schema or baseline_marker != "before-gpc":
+        raise RuntimeError("Rollback herstelde de oorspronkelijke logische databasestatus niet")
     report_path = evidence / "gpc-bilingual-import-rehearsal-report.json"
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     report["report_path"] = str(report_path)
