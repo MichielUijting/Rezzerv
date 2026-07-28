@@ -2,6 +2,7 @@ import React from 'react'
 import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
 import ArticlePage from '../../features/articles/ArticlePage'
+import ArticleGpcPage from '../../features/articles/ArticleGpcPage'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
@@ -70,6 +71,7 @@ function LegacyReceiptLineRouteRedirect() {
   return <Navigate to={target} replace />
 }
 
+
 function Protected({ children }) {
   return <AuthGuard>{children}</AuthGuard>
 }
@@ -105,6 +107,7 @@ const router = createBrowserRouter([
   { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
   { path: '/kassabonnen/batch/:batchId/regel/:receiptLineId', element: <Protected><LegacyReceiptLineRouteRedirect /></Protected> },
   { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
+  { path: '/voorraad/:articleId/gpc', element: <Protected><ArticleGpcPage /></Protected> },
   { path: '/instellingen', element: <ProtectedSettings allowViewer={true}><SettingsPage /></ProtectedSettings> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettings allowViewer={true}><SettingsArticleFieldsPage /></ProtectedSettings> },
   { path: '/instellingen/artikelgroepen', element: <ProtectedSettings allowViewer={false}><SettingsArticleGroupsPage /></ProtectedSettings> },
