@@ -18,6 +18,8 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      PYTHONPATH: .
 
     steps:
       - name: Checkout
@@ -40,7 +42,7 @@ jobs:
           python -m py_compile tests/test_gpc_catalog_service.py
 
       - name: Run focused GPC tests
-        run: pytest -q tests/test_gpc_catalog_service.py
+        run: python -m pytest -q tests/test_gpc_catalog_service.py
 
       - name: Run isolated CLI import
         env:
