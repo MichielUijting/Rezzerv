@@ -70,7 +70,6 @@ def export_translation_template(
     target_language: str = "nl",
     db_engine: Engine = runtime_engine,
 ) -> dict:
-    """Export every official GPC label once for translation."""
     ensure_gpc_translation_schema(db_engine)
     target = Path(output_path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -107,13 +106,11 @@ def import_gpc_translations_csv(
     require_complete: bool = True,
     db_engine: Engine = runtime_engine,
 ) -> dict:
-    """Import a reviewed translation overlay and optionally require 100% coverage."""
     path = Path(csv_path)
     if not path.is_file():
         raise FileNotFoundError(f"Vertaalbestand niet gevonden: {path}")
     ensure_gpc_translation_schema(db_engine)
-    raw = path.read_bytes()
-    source_sha256 = hashlib.sha256(raw).hexdigest()
+    source_sha256 = hashlib.sha256(path.read_bytes()).hexdigest()
     imported_at = datetime.now(timezone.utc).isoformat()
     counts = TranslationImportCounts()
     seen: set[tuple[str, str, str]] = set()
@@ -161,13 +158,17 @@ def import_gpc_translations_csv(
                 WHERE entity_type=:entity_type AND entity_code=:entity_code
                   AND language_code=:language_code
             """), {
-                "entity_type": entity_type, "entity_code": entity_code,
+                "entity_type": entity_type,
+                "entity_code": entity_code,
                 "language_code": language_code,
             }).first()
             payload = {
-                "entity_type": entity_type, "entity_code": entity_code,
-                "language_code": language_code, "translated_text": translated_text,
-                "translation_source": translation_source, "reviewed": reviewed,
+                "entity_type": entity_type,
+                "entity_code": entity_code,
+                "language_code": language_code,
+                "translated_text": translated_text,
+                "translation_source": translation_source,
+                "reviewed": reviewed,
                 "updated_at": imported_at,
             }
             if current:
@@ -193,7 +194,11 @@ def import_gpc_translations_csv(
                 counts.inserted += 1
             counts.rows += 1
 
-        coverage = translation_coverage(required_language, db_engine=db_engine, connection=conn)
+        coverage = translation_coverage(
+            required_language,
+            db_engine=db_engine,
+            connection=conn,
+        )
         if require_complete and coverage["missing_total"]:
             raise ValueError(
                 f"Nederlandse vertaling is niet compleet: {coverage['missing_total']} namen ontbreken"
@@ -207,15 +212,20 @@ def import_gpc_translations_csv(
                 'success', :row_count, NULL
             )
         """), {
-            "source_name": path.name, "source_sha256": source_sha256,
-            "language_code": required_language.lower(), "imported_at": imported_at,
+            "source_name": path.name,
+            "source_sha256": source_sha256,
+            "language_code": required_language.lower(),
+            "imported_at": imported_at,
             "row_count": counts.rows,
         })
 
     return {
-        "status": "success", "source_name": path.name,
-        "source_sha256": source_sha256, "language_code": required_language.lower(),
-        "counts": asdict(counts), "coverage": coverage,
+        "status": "success",
+        "source_name": path.name,
+        "source_sha256": source_sha256,
+        "language_code": required_language.lower(),
+        "counts": asdict(counts),
+        "coverage": coverage,
     }
 
 
@@ -225,8 +235,9 @@ def translation_coverage(
     db_engine: Engine = runtime_engine,
     connection=None,
 ) -> dict:
-    ensure_gpc_translation_schema(db_engine)
     own_connection = connection is None
+    if own_connection:
+        ensure_gpc_translation_schema(db_engine)
     conn = connection or db_engine.connect()
     try:
         entities = {}
@@ -251,8 +262,10 @@ def translation_coverage(
             total += source_count
             translated += translated_count
         return {
-            "language_code": language_code.lower(), "entities": entities,
-            "source_total": total, "translated_total": translated,
+            "language_code": language_code.lower(),
+            "entities": entities,
+            "source_total": total,
+            "translated_total": translated,
             "missing_total": total - translated,
             "complete": total == translated,
         }
@@ -262,7 +275,6 @@ def translation_coverage(
 
 
 def localized_text_expression(alias: str, entity_type: str, code_column: str, source_column: str) -> str:
-    """Reusable SQL fragment: Dutch when present, otherwise official source text."""
     return (
         f"COALESCE((SELECT translated_text FROM gpc_translations t "
         f"WHERE t.entity_type='{entity_type}' AND t.entity_code={alias}.{code_column} "
