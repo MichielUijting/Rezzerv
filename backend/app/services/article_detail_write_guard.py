@@ -32,9 +32,13 @@ def install_article_detail_write_guard(main_module) -> None:
     if getattr(app.state, "article_detail_write_guard_installed", False):
         return
 
-    from app.services.gpc_article_assignment_service import install_gpc_article_assignment_routes
+    # De lichte guard-contracttest levert bewust alleen de schrijfrechtfunctie.
+    # In de echte runtime is ook require_household_context aanwezig en worden
+    # de GPC-routes vóór de route-inventarisatie geïnstalleerd.
+    if hasattr(main_module, "require_household_context"):
+        from app.services.gpc_article_assignment_service import install_gpc_article_assignment_routes
+        install_gpc_article_assignment_routes(main_module)
 
-    install_gpc_article_assignment_routes(main_module)
     protected_routes = discover_article_detail_write_routes(app)
 
     @app.middleware("http")
