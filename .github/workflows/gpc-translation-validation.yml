@@ -1,0 +1,37 @@
+name: GPC translation validation
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/services/gpc_translation_service.py"
+      - "backend/app/cli/import_gpc_translations.py"
+      - "backend/tests/test_gpc_translation_service.py"
+      - ".github/workflows/gpc-translation-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-gpc-translations:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      DATABASE_URL: sqlite:////tmp/rezzerv-gpc-translation-runtime.db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install minimal dependencies
+        run: pip install sqlalchemy==2.0.36 pytest
+      - name: Compile translation modules
+        run: |
+          python -m py_compile app/services/gpc_translation_service.py
+          python -m py_compile app/cli/import_gpc_translations.py
+          python -m py_compile tests/test_gpc_translation_service.py
+      - name: Validate multilingual overlay and completeness gate
+        run: python -m pytest -q tests/test_gpc_translation_service.py tests/test_gpc_catalog_service.py
