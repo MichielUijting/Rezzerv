@@ -12,6 +12,7 @@ on:
 permissions:
   contents: read
 
+# Keep this validation isolated from the runtime database.
 jobs:
   validate-gpc-catalog:
     runs-on: ubuntu-latest
