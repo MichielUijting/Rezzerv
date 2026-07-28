@@ -1,0 +1,44 @@
+name: GPC bilingual import rehearsal
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/cli/rehearse_gpc_bilingual_import.py'
+      - 'backend/app/cli/import_gpc_catalog_controlled.py'
+      - 'backend/app/services/gpc_translation_service.py'
+      - '.github/workflows/gpc-bilingual-import-rehearsal.yml'
+  workflow_dispatch:
+
+jobs:
+  rehearse-bilingual-import:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DATABASE_URL: sqlite:////tmp/rezzerv-runtime-placeholder.db
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install gpcc
+      - name: Compile rehearsal
+        run: python -m py_compile app/cli/rehearse_gpc_bilingual_import.py
+      - name: Prepare evidence directory
+        run: mkdir -p "$RUNNER_TEMP/gpc-rehearsal/evidence"
+      - name: Run controlled bilingual import and rollback rehearsal
+        run: python -m app.cli.rehearse_gpc_bilingual_import "$RUNNER_TEMP/gpc-rehearsal"
+      - name: Upload import evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpc-bilingual-import-evidence
+          path: ${{ runner.temp }}/gpc-rehearsal
+          retention-days: 14
+          if-no-files-found: error
