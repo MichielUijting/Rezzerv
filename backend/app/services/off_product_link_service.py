@@ -224,7 +224,13 @@ def _resolve_product_type(conn, assignment: dict[str, Any]) -> str:
 
 
 
-def _link_household_article(conn, household_article_id: Any, global_product_id: str) -> str | None:
+def _link_household_article(
+    conn,
+    household_article_id: Any,
+    global_product_id: str,
+    *,
+    force_relink: bool = False,
+) -> str | None:
     article_id = _clean_text(household_article_id)
     if not article_id or article_id.startswith("live::"):
         return None
@@ -235,7 +241,7 @@ def _link_household_article(conn, household_article_id: Any, global_product_id: 
     if not article:
         return None
     current = _clean_text(article.get("global_product_id"))
-    if current and current != global_product_id:
+    if current and current != global_product_id and not force_relink:
         raise ValueError("Het voorraadartikel is al aan een ander universeel artikel gekoppeld")
     conn.execute(
         text(
@@ -256,6 +262,7 @@ def _link_receipt_item(
     global_product_id: str,
     *,
     link_household_article: bool = True,
+    force_relink: bool = False,
 ) -> dict[str, Any]:
     normalized = _clean_text(receipt_item_id)
     if ":" not in normalized:
@@ -296,6 +303,7 @@ def _link_receipt_item(
                 conn,
                 household_article_id,
                 global_product_id,
+                force_relink=force_relink,
             )
             if link_household_article
             else household_article_id
@@ -359,6 +367,7 @@ def _link_receipt_item(
                 conn,
                 household_article_id,
                 global_product_id,
+                force_relink=force_relink,
             )
             if link_household_article
             else household_article_id
@@ -389,6 +398,7 @@ def _link_receipt_item(
                 conn,
                 household_article_id,
                 global_product_id,
+                force_relink=force_relink,
             )
             if link_household_article
             else household_article_id
@@ -579,6 +589,7 @@ def link_off_product_with_product_type(
     off_product: dict[str, Any],
     product_type_assignment: dict[str, Any],
     force_failure_after_link: bool = False,
+    force_relink: bool = False,
 ) -> dict[str, Any]:
     """Sla OFF-product, bronkoppeling en Producttype in één transactie op.
 
@@ -605,7 +616,12 @@ def link_off_product_with_product_type(
         if not membership.get("ok"):
             raise ValueError(str(membership.get("error") or "Producttype kon niet worden gekoppeld"))
 
-        receipt_link = _link_receipt_item(conn, receipt_item_id, global_product_id)
+        receipt_link = _link_receipt_item(
+            conn,
+            receipt_item_id,
+            global_product_id,
+            force_relink=force_relink,
+        )
         confirmed_external_link = confirm_external_article_for_receipt_item(
             conn,
             receipt_item_id=receipt_item_id,
