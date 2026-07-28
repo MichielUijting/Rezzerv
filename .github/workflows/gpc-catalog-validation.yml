@@ -20,6 +20,7 @@ jobs:
         working-directory: backend
     env:
       PYTHONPATH: .
+      DATABASE_URL: sqlite:////tmp/rezzerv-gpc-pytest.db
 
     steps:
       - name: Checkout
