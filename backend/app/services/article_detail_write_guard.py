@@ -3,8 +3,6 @@ from __future__ import annotations
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
 
-from app.services.gpc_article_assignment_service import install_gpc_article_assignment_routes
-
 _TARGET_ENDPOINTS = {
     "enrich_article_by_id",
     "patch_article_household_details",
@@ -33,6 +31,8 @@ def install_article_detail_write_guard(main_module) -> None:
     app = main_module.app
     if getattr(app.state, "article_detail_write_guard_installed", False):
         return
+
+    from app.services.gpc_article_assignment_service import install_gpc_article_assignment_routes
 
     install_gpc_article_assignment_routes(main_module)
     protected_routes = discover_article_detail_write_routes(app)
