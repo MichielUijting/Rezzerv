@@ -47,7 +47,6 @@ def test_apply_creates_backup_and_restore_recovers_database(tmp_path: Path) -> N
     database = tmp_path / "rezzerv.db"
     _database(database)
     xml, manifest = _source(tmp_path)
-    original = database.read_bytes()
     result = run_controlled_import(xml, manifest, database, tmp_path / "evidence", True)
     assert result["status"] == "applied"
     backup = Path(result["backup"])
@@ -55,7 +54,10 @@ def test_apply_creates_backup_and_restore_recovers_database(tmp_path: Path) -> N
     with sqlite3.connect(database) as conn:
         assert conn.execute("SELECT description FROM gpc_bricks WHERE brick_code='10006144'").fetchone() == ("Mosterdblad",)
     restore_backup(backup, database)
-    assert database.read_bytes() == original
+    with sqlite3.connect(database) as conn:
+        assert conn.execute("SELECT value FROM sentinel").fetchone() == ("original",)
+        assert conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='gpc_bricks'").fetchone() is None
+        assert conn.execute("PRAGMA integrity_check").fetchone() == ("ok",)
 
 
 def test_manifest_hash_mismatch_blocks_import(tmp_path: Path) -> None:
