@@ -3,6 +3,7 @@ import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams }
 import AdminPage from '../../features/admin/AdminPage'
 import ArticlePage from '../../features/articles/ArticlePage'
 import ArticleGpcPage from '../../features/articles/ArticleGpcPage'
+import ArticleGpcInlineSummary from '../../features/articles/components/ArticleGpcInlineSummary'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
@@ -53,7 +54,6 @@ function ResetSessionRoute() {
   return null
 }
 
-
 function LegacyReceiptBatchRouteRedirect() {
   const { batchId = '' } = useParams()
   const target = batchId
@@ -61,7 +61,6 @@ function LegacyReceiptBatchRouteRedirect() {
     : '/kassabonnen'
   return <Navigate to={target} replace />
 }
-
 
 function LegacyReceiptLineRouteRedirect() {
   const { batchId = '' } = useParams()
@@ -71,6 +70,15 @@ function LegacyReceiptLineRouteRedirect() {
   return <Navigate to={target} replace />
 }
 
+function ArticleRoute() {
+  const { articleId = '' } = useParams()
+  return (
+    <>
+      <ArticlePage />
+      <ArticleGpcInlineSummary articleId={articleId} />
+    </>
+  )
+}
 
 function Protected({ children }) {
   return <AuthGuard>{children}</AuthGuard>
@@ -106,7 +114,7 @@ const router = createBrowserRouter([
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
   { path: '/kassabonnen/batch/:batchId/regel/:receiptLineId', element: <Protected><LegacyReceiptLineRouteRedirect /></Protected> },
-  { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
+  { path: '/voorraad/:articleId', element: <Protected><ArticleRoute /></Protected> },
   { path: '/voorraad/:articleId/gpc', element: <Protected><ArticleGpcPage /></Protected> },
   { path: '/instellingen', element: <ProtectedSettings allowViewer={true}><SettingsPage /></ProtectedSettings> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettings allowViewer={true}><SettingsArticleFieldsPage /></ProtectedSettings> },
