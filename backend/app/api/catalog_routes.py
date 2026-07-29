@@ -26,19 +26,6 @@ def _columns(table_name: str) -> set[str]:
     }
 
 
-def _quality_status(row: dict[str, Any]) -> str:
-    source = str(row.get("source") or "").strip().lower()
-    has_gtin = bool(str(row.get("primary_gtin") or "").strip())
-    has_product_type = bool(str(row.get("product_type") or "").strip())
-    if not has_gtin:
-        return "Controle nodig"
-    if not has_product_type:
-        if source == "receipt_user_confirmed":
-            return "GTIN bevestigd — producttype nog te bepalen"
-        return "Controle nodig"
-    return "Compleet"
-
-
 def _household_table() -> str | None:
     tables = _tables()
     for candidate in ("household_articles", "household_products"):
@@ -132,26 +119,21 @@ def _catalog_base_rows() -> list[dict[str, Any]]:
         ORDER BY COALESCE(gp.name, ''), gp.id
     """
     with engine.begin() as conn:
-        rows = [
+        return [
             dict(row)
             for row in conn.execute(text(query)).mappings().all()
         ]
-    for row in rows:
-        row["quality_status"] = _quality_status(row)
-    return rows
 
 
 @router.get("")
 def list_catalog(
     query: str = Query(default="", max_length=200),
     product_type: str = Query(default="", max_length=200),
-    quality_status: str = Query(default="", max_length=50),
     limit: int = Query(default=500, ge=1, le=2000),
 ):
     rows = _catalog_base_rows()
     query_value = query.strip().lower()
     product_type_value = product_type.strip().lower()
-    quality_value = quality_status.strip().lower()
 
     if query_value:
         rows = [
@@ -169,12 +151,6 @@ def list_catalog(
             row
             for row in rows
             if product_type_value in str(row.get("product_type") or "").lower()
-        ]
-    if quality_value:
-        rows = [
-            row
-            for row in rows
-            if quality_value == str(row.get("quality_status") or "").lower()
         ]
     return {"items": rows[:limit], "total": len(rows)}
 
