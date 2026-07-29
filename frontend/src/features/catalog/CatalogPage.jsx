@@ -31,12 +31,6 @@ function sourceLabel(value) {
   return labels[normalized] || text(value)
 }
 
-function qualityClass(status) {
-  if (status === 'Compleet') return 'rz-catalog-status rz-catalog-status--complete'
-  if (status === 'Conflict') return 'rz-catalog-status rz-catalog-status--conflict'
-  return 'rz-catalog-status rz-catalog-status--review'
-}
-
 function csvValue(value) {
   return `"${String(value ?? '').replaceAll('"', '""')}"`
 }
@@ -55,7 +49,6 @@ async function enrichCatalogItemWithGpc(item) {
       ...item,
       product_type: confirmedDescription,
       gpc_brick_code: assignment.brick_code,
-      quality_status: 'Compleet',
     }
   } catch {
     return item
@@ -68,7 +61,7 @@ export default function CatalogPage() {
   const [selectedIds, setSelectedIds] = useState([])
   const [filters, setFilters] = useState({
     name: '', brand: '', primaryGtin: '', productType: '', source: '',
-    householdArticleCount: '', qualityStatus: '',
+    householdArticleCount: '',
   })
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
   const [page, setPage] = useState(1)
@@ -109,7 +102,6 @@ export default function CatalogPage() {
       && (!normalizedFilters.productType || String(item.product_type || '').toLowerCase().includes(normalizedFilters.productType))
       && (!normalizedFilters.source || String(item.source || '').toLowerCase().includes(normalizedFilters.source))
       && (!normalizedFilters.householdArticleCount || String(item.household_article_count ?? '').toLowerCase().includes(normalizedFilters.householdArticleCount))
-      && (!normalizedFilters.qualityStatus || String(item.quality_status || '').toLowerCase() === normalizedFilters.qualityStatus)
     ))
     rows.sort((left, right) => {
       const a = String(left?.[sort.key] ?? '').toLowerCase()
@@ -155,8 +147,8 @@ export default function CatalogPage() {
     const selectedItems = items.filter((item) => selectedIds.includes(item.id))
     if (!selectedItems.length) { setMessage('Selecteer eerst een of meer catalogusartikelen.'); return }
     const rows = [
-      ['Universeel artikel', 'Merk', 'Primaire GTIN', 'Producttype', 'Bron', 'Huishoudartikelen', 'Status'],
-      ...selectedItems.map((item) => [item.name, item.brand, item.primary_gtin, item.product_type, item.source, item.household_article_count, item.quality_status]),
+      ['Universeel artikel', 'Merk', 'Primaire GTIN', 'Producttype', 'Bron', 'Huishoudartikelen'],
+      ...selectedItems.map((item) => [item.name, item.brand, item.primary_gtin, item.product_type, item.source, item.household_article_count]),
     ]
     const csv = rows.map((row) => row.map(csvValue).join(';')).join('\r\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
@@ -198,7 +190,7 @@ export default function CatalogPage() {
                 <colgroup>
                   <col className="rz-catalog-col-select" /><col className="rz-catalog-col-name" /><col className="rz-catalog-col-brand" />
                   <col className="rz-catalog-col-gtin" /><col className="rz-catalog-col-product-type" /><col className="rz-catalog-col-source" />
-                  <col className="rz-catalog-col-household-count" /><col className="rz-catalog-col-status" />
+                  <col className="rz-catalog-col-household-count" />
                 </colgroup>
                 <thead>
                   <tr className="rz-table-header">
@@ -209,7 +201,6 @@ export default function CatalogPage() {
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('product_type')}>Producttype <span>{sortMark('product_type')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('source')}>Bron <span>{sortMark('source')}</span></button></th>
                     <th className="rz-num"><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('household_article_count')}>Huishoudartikelen <span>{sortMark('household_article_count')}</span></button></th>
-                    <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('quality_status')}>Status <span>{sortMark('quality_status')}</span></button></th>
                   </tr>
                   <tr className="rz-external-databases-filter-row">
                     <th />
@@ -219,21 +210,16 @@ export default function CatalogPage() {
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.productType} onChange={(event) => updateFilter('productType', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.source} onChange={(event) => updateFilter('source', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.householdArticleCount} onChange={(event) => updateFilter('householdArticleCount', event.target.value)} /></th>
-                    <th><select className="rz-table-filter" value={filters.qualityStatus} onChange={(event) => updateFilter('qualityStatus', event.target.value)} aria-label="Kwaliteitsstatus filter">
-                      <option value="">Alle</option><option value="compleet">Compleet</option><option value="door gebruiker bevestigd">Door gebruiker bevestigd</option>
-                      <option value="gtin bevestigd — producttype nog te bepalen">GTIN bevestigd — producttype nog te bepalen</option><option value="controle nodig">Controle nodig</option><option value="conflict">Conflict</option>
-                    </select></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? <tr><td colSpan="8">Catalogus laden...</td></tr> : visibleItems.length ? visibleItems.map((item) => (
+                  {isLoading ? <tr><td colSpan="7">Catalogus laden...</td></tr> : visibleItems.length ? visibleItems.map((item) => (
                     <tr key={item.id} onDoubleClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`)} data-testid={`catalog-row-${item.id}`}>
                       <td className="rz-check"><input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`} /></td>
                       <td>{text(item.name)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type)}</td>
                       <td>{sourceLabel(item.source)}</td><td className="rz-num">{Number(item.household_article_count || 0)}</td>
-                      <td><span className={qualityClass(item.quality_status)}>{text(item.quality_status)}</span></td>
                     </tr>
-                  )) : <tr><td colSpan="8">Geen universele artikelen gevonden.</td></tr>}
+                  )) : <tr><td colSpan="7">Geen universele artikelen gevonden.</td></tr>}
                 </tbody>
               </Table>
             </div>
