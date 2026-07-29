@@ -2,8 +2,6 @@ import React from 'react'
 import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
 import ArticlePage from '../../features/articles/ArticlePage'
-import ArticleGpcPage from '../../features/articles/ArticleGpcPage'
-import ArticleGpcInlineSummary from '../../features/articles/components/ArticleGpcInlineSummary'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
@@ -27,6 +25,7 @@ import ProductGroupsPage from '../../features/productGroups/ProductGroupsPage.js
 import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.jsx'
 import CatalogPage from '../../features/catalog/CatalogPage.jsx'
 import CatalogDetailPage from '../../features/catalog/CatalogDetailPage.jsx'
+import CatalogGpcFrame from '../../features/catalog/CatalogGpcFrame.jsx'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import SettingsGuard from './SettingsGuard'
@@ -70,12 +69,11 @@ function LegacyReceiptLineRouteRedirect() {
   return <Navigate to={target} replace />
 }
 
-function ArticleRoute() {
-  const { articleId = '' } = useParams()
+function CatalogDetailWithGpc() {
   return (
     <>
-      <ArticlePage />
-      <ArticleGpcInlineSummary articleId={articleId} />
+      <CatalogDetailPage />
+      <CatalogGpcFrame />
     </>
   )
 }
@@ -109,13 +107,12 @@ const router = createBrowserRouter([
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
   { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
-  { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPage /></ProtectedAdmin> },
+  { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailWithGpc /></ProtectedAdmin> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
   { path: '/kassabonnen/batch/:batchId/regel/:receiptLineId', element: <Protected><LegacyReceiptLineRouteRedirect /></Protected> },
-  { path: '/voorraad/:articleId', element: <Protected><ArticleRoute /></Protected> },
-  { path: '/voorraad/:articleId/gpc', element: <Protected><ArticleGpcPage /></Protected> },
+  { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
   { path: '/instellingen', element: <ProtectedSettings allowViewer={true}><SettingsPage /></ProtectedSettings> },
   { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettings allowViewer={true}><SettingsArticleFieldsPage /></ProtectedSettings> },
   { path: '/instellingen/artikelgroepen', element: <ProtectedSettings allowViewer={false}><SettingsArticleGroupsPage /></ProtectedSettings> },
