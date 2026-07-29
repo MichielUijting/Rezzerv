@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 _TARGET_ENDPOINTS = {
     "enrich_article_by_id",
     "patch_article_household_details",
+    "set_catalog_product_gpc_brick",
+    "clear_catalog_product_gpc_brick",
 }
 _WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -44,7 +46,10 @@ def install_article_detail_write_guard(main_module) -> None:
                 request_parts = request.url.path.strip("/").split("/")
                 if len(template_parts) != len(request_parts):
                     continue
-                if all(tp.startswith("{") and tp.endswith("}") or tp == rp for tp, rp in zip(template_parts, request_parts)):
+                if all(
+                    (part.startswith("{") and part.endswith("}")) or part == actual
+                    for part, actual in zip(template_parts, request_parts)
+                ):
                     matched = True
                     break
         if matched:

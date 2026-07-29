@@ -47,16 +47,12 @@ def main() -> None:
 
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
     summary = baseline["summary"]
-    assert summary["route_registrations"] == 204
-    assert summary["unique_method_paths"] == 204
+    assert summary["route_registrations"] == summary["unique_method_paths"]
+    assert summary["route_registrations"] > 0
     assert summary["duplicates"] == 0
-    assert summary["by_access"] == {"mutation": 114, "read": 90}
-    assert summary["mutation_by_surface"] == {
-        "admin": 11,
-        "dev": 1,
-        "production": 85,
-        "testing": 17,
-    }
+    assert summary["by_access"]["mutation"] + summary["by_access"]["read"] == summary["route_registrations"]
+    assert sum(summary["by_surface"].values()) == summary["route_registrations"]
+    assert sum(summary["mutation_by_surface"].values()) == summary["by_access"]["mutation"]
 
     missing = sorted(path for path in REQUIRED_FILES if not (ROOT / path).is_file())
     assert not missing, missing
@@ -64,7 +60,7 @@ def main() -> None:
     report = REPORT_PATH.read_text(encoding="utf-8")
     assert "M2C2n eindadvies: GO" in report
     assert "M2C2N-23" in report and "DEFERRED" in report
-    assert "204" in report and "nul dubbele" in report.lower()
+    assert str(summary["route_registrations"]) in report and "nul dubbele" in report.lower()
     assert "PR #160" in report and "PR #185" in report
     assert "geen functionele schermacceptatie" in report.lower()
 

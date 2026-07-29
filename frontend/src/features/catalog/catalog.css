@@ -25,7 +25,8 @@
   color: var(--color-brand-primary);
 }
 
-.rz-catalog-header p {
+.rz-catalog-header p,
+.rz-catalog-section-header p {
   margin: 6px 0 0;
   color: #5f7a68;
 }
@@ -33,46 +34,22 @@
 .rz-catalog-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 1100px;
+  min-width: 990px;
 }
 
 .rz-catalog-col-select { width: 44px; }
 .rz-catalog-col-name { width: 220px; }
 .rz-catalog-col-brand { width: 130px; }
 .rz-catalog-col-gtin { width: 145px; }
-.rz-catalog-col-product-type { width: 170px; }
+.rz-catalog-col-product-type { width: 200px; }
 .rz-catalog-col-source { width: 145px; }
 .rz-catalog-col-household-count { width: 135px; }
-.rz-catalog-col-status { width: 110px; }
 
 .rz-catalog-table th,
 .rz-catalog-table td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.rz-catalog-status {
-  display: inline-flex;
-  border-radius: 999px;
-  padding: 3px 9px;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.rz-catalog-status--complete {
-  background: #ecfdf3;
-  color: #027a48;
-}
-
-.rz-catalog-status--review {
-  background: #fffaeb;
-  color: #b54708;
-}
-
-.rz-catalog-status--conflict {
-  background: #fef3f2;
-  color: #b42318;
 }
 
 .rz-catalog-detail-actions {
@@ -86,6 +63,14 @@
 .rz-catalog-detail-grid {
   display: grid;
   gap: 22px;
+}
+
+.rz-catalog-detail-section,
+.rz-catalog-gpc-section {
+  border: 1px solid #cad8cc;
+  border-radius: 10px;
+  padding: 16px;
+  background: #fff;
 }
 
 .rz-catalog-definition-list {
@@ -108,4 +93,149 @@
 
 .rz-catalog-definition-list dd {
   margin: 4px 0 0;
+}
+
+.rz-catalog-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.rz-catalog-gpc-summary {
+  display: grid;
+  gap: 14px;
+}
+
+.rz-catalog-gpc-primary {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f8fafc;
+  display: grid;
+  gap: 4px;
+}
+
+.rz-catalog-gpc-primary small,
+.rz-catalog-gpc-suggestion small {
+  color: #5f6f63;
+}
+
+.rz-catalog-gpc-label {
+  color: #667085;
+  font-size: 13px;
+}
+
+.rz-catalog-gpc-hierarchy {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.rz-catalog-gpc-hierarchy div {
+  border-left: 3px solid var(--color-brand-primary);
+  padding: 8px 10px;
+  background: #f7fbf7;
+}
+
+.rz-catalog-gpc-hierarchy dt {
+  color: #667085;
+  font-size: 12px;
+}
+
+.rz-catalog-gpc-hierarchy dd {
+  margin: 3px 0 0;
+}
+
+.rz-catalog-gpc-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #d6b85a;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.rz-catalog-gpc-suggestion > div {
+  display: grid;
+  gap: 4px;
+}
+
+.rz-catalog-gpc-editor {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #d8e2da;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+
+.rz-catalog-gpc-editor label {
+  font-weight: 600;
+  color: var(--color-brand-primary);
+}
+
+.rz-catalog-gpc-editor .rz-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.rz-catalog-gpc-results {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.rz-catalog-gpc-result {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #b8cabd;
+  border-radius: 8px;
+  background: #fff;
+  padding: 11px 12px;
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+}
+
+.rz-catalog-gpc-result:hover,
+.rz-catalog-gpc-result:focus-visible {
+  background: #eef7ef;
+  border-color: var(--color-brand-primary);
+}
+
+.rz-catalog-gpc-result-title {
+  font-weight: 600;
+  color: var(--color-brand-primary);
+}
+
+.rz-catalog-gpc-result-path,
+.rz-catalog-gpc-state,
+.rz-catalog-gpc-empty,
+.rz-catalog-gpc-readonly {
+  color: #5f6f63;
+}
+
+.rz-catalog-gpc-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+@media (max-width: 760px) {
+  .rz-catalog-section-header,
+  .rz-catalog-gpc-suggestion {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .rz-catalog-section-header .rz-button,
+  .rz-catalog-gpc-suggestion .rz-button {
+    width: 100%;
+  }
 }
