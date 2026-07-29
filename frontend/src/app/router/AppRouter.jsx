@@ -25,6 +25,7 @@ import ProductGroupsPage from '../../features/productGroups/ProductGroupsPage.js
 import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.jsx'
 import CatalogPage from '../../features/catalog/CatalogPage.jsx'
 import CatalogDetailPageV2 from '../../features/catalog/CatalogDetailPageV2.jsx'
+import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.jsx'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import SettingsGuard from './SettingsGuard'
@@ -97,6 +98,7 @@ const router = createBrowserRouter([
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
   { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
+  { path: '/catalogus/gpc-classificeren', element: <ProtectedAdmin><CatalogGpcActionPage /></ProtectedAdmin> },
   { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPageV2 /></ProtectedAdmin> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
