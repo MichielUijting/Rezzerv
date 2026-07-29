@@ -63,6 +63,26 @@ def test_dutch_text_has_official_english_fallback():
     assert "tr.language_code='nl'" in source
 
 
+def test_existing_confirmed_product_group_is_migrated_idempotently():
+    source = GPC_ROUTES.read_text(encoding="utf-8")
+    assert "product_group_memberships" in source
+    assert "product_inventory_groups" in source
+    assert "confirmed_by_user" in source
+    assert "migrated_confirmed_product_group" in source
+    assert "ON CONFLICT(global_product_id) DO NOTHING" in source
+    assert "_migrate_confirmed_legacy_assignment" in source
+    assert "global_product_gpc_migration_suppressions" in source
+
+
+def test_unconfirmed_metadata_match_is_only_a_suggestion():
+    source = GPC_ROUTES.read_text(encoding="utf-8")
+    assert "_metadata_suggestion" in source
+    assert '"suggestion_source": "productmetadata"' in source
+    assert '"suggestion_source": "bestaande_productgroep"' in source
+    assert '"suggestion": suggestion' in source
+    assert "external_product_index" in source
+
+
 def test_registration_is_decoupled_from_article_write_guard():
     catalog_source = CATALOG_ROUTES.read_text(encoding="utf-8")
     guard_source = GUARD.read_text(encoding="utf-8")
@@ -85,6 +105,9 @@ def test_frontend_integrates_frame_natively_in_catalog_detail():
     assert "GPC wijzigen" in frame
     assert "editorOpen" in frame
     assert "/api/catalog/gpc/bricks" in frame
+    assert "Voorgestelde classificatie" in frame
+    assert "Voorstel bevestigen" in frame
+    assert "Overgenomen uit eerder bevestigde GPC-productgroep" in frame
     assert "CatalogGpcFrame globalProductId={globalProductId}" in detail
     assert "CatalogDetailPageV2" in router
     assert "CatalogDetailWithGpc" not in router
@@ -92,3 +115,4 @@ def test_frontend_integrates_frame_natively_in_catalog_detail():
     assert "ArticleGpcInlineSummary" not in router
     assert ".rz-catalog-gpc-section" in css
     assert ".rz-catalog-gpc-result" in css
+    assert ".rz-catalog-gpc-suggestion" in css
