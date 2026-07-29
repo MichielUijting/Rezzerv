@@ -20,9 +20,32 @@ function assignmentSourceLabel(assignment) {
   return source || ''
 }
 
+function rejectionStorageKey(productId, brickCode) {
+  return `rezzerv:gpc-suggestion-rejected:${String(productId || '').trim()}:${String(brickCode || '').trim()}`
+}
+
+function isSuggestionRejected(productId, suggestion) {
+  if (!productId || !suggestion?.brick_code) return false
+  try {
+    return window.localStorage.getItem(rejectionStorageKey(productId, suggestion.brick_code)) === '1'
+  } catch {
+    return false
+  }
+}
+
+function rememberSuggestionRejection(productId, suggestion) {
+  if (!productId || !suggestion?.brick_code) return
+  try {
+    window.localStorage.setItem(rejectionStorageKey(productId, suggestion.brick_code), '1')
+  } catch {
+    // De classificatiefunctie blijft bruikbaar wanneer browseropslag is geblokkeerd.
+  }
+}
+
 export default function CatalogGpcFrame({ globalProductId }) {
   const productId = String(globalProductId || '').trim()
   const [assignment, setAssignment] = useState(null)
+  const [suggestion, setSuggestion] = useState(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
@@ -44,6 +67,8 @@ export default function CatalogGpcFrame({ globalProductId }) {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden geladen.'))
       setAssignment(data?.assignment || null)
+      const candidate = data?.suggestion || null
+      setSuggestion(isSuggestionRejected(productId, candidate) ? null : candidate)
       if (data?.migration?.performed) {
         setFeedback('De eerder bevestigde GPC-classificatie is automatisch overgenomen.')
       }
@@ -95,6 +120,7 @@ export default function CatalogGpcFrame({ globalProductId }) {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden opgeslagen.'))
       setAssignment(data?.assignment || null)
+      setSuggestion(null)
       setFeedback('De GPC-classificatie is opgeslagen.')
       setQuery('')
       setResults([])
@@ -104,6 +130,22 @@ export default function CatalogGpcFrame({ globalProductId }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  function searchAlternative() {
+    setEditorOpen(true)
+    setQuery('')
+    setResults([])
+    setError('')
+    setFeedback('Zoek en selecteer hieronder een betere GPC Brick.')
+    window.setTimeout(() => document.getElementById('catalog-gpc-search')?.focus(), 0)
+  }
+
+  function rejectSuggestion() {
+    if (!suggestion) return
+    rememberSuggestionRejection(productId, suggestion)
+    setSuggestion(null)
+    setFeedback('Het voorstel is genegeerd. Het artikel blijft nog niet geclassificeerd.')
   }
 
   async function clearAssignment() {
@@ -116,6 +158,7 @@ export default function CatalogGpcFrame({ globalProductId }) {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden verwijderd.'))
       setAssignment(null)
+      setSuggestion(null)
       setFeedback('De GPC-classificatie is verwijderd.')
       setEditorOpen(false)
       setQuery('')
@@ -165,6 +208,23 @@ export default function CatalogGpcFrame({ globalProductId }) {
               <div><dt>Class</dt><dd>{valueOrDash(assignment.class_description)}</dd></div>
               <div><dt>Engelse brontekst</dt><dd>{valueOrDash(assignment.brick_description_en)}</dd></div>
             </dl>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!loading && !assignment && suggestion ? (
+        <div className="rz-catalog-gpc-suggestion" data-testid="catalog-gpc-suggestion">
+          <div>
+            <span className="rz-catalog-gpc-label">Voorgestelde classificatie</span>
+            <strong>{suggestion.brick_code} — {valueOrDash(suggestion.brick_description || suggestion.brick_description_en)}</strong>
+            <small>{valueOrDash(suggestion.suggestion_reason)}</small>
+          </div>
+          {canEdit ? (
+            <div className="rz-catalog-gpc-editor-actions">
+              <Button type="button" onClick={() => selectBrick(suggestion.brick_code)} disabled={saving}>Voorstel bevestigen</Button>
+              <Button type="button" variant="secondary" onClick={searchAlternative} disabled={saving}>Andere Brick zoeken</Button>
+              <Button type="button" variant="secondary" onClick={rejectSuggestion} disabled={saving}>Voorstel negeren</Button>
+            </div>
           ) : null}
         </div>
       ) : null}
