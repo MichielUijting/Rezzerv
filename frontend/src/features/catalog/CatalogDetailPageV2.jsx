@@ -104,7 +104,6 @@ export default function CatalogDetailPageV2() {
                   <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
                   <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
                   <div><dt>Bron</dt><dd>{sourceLabel(product.source)}</dd></div>
-                  <div><dt>Kwaliteitsstatus</dt><dd>{text(product.quality_status)}</dd></div>
                 </dl>
               </section>
 
