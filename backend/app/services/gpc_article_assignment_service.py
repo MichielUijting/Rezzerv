@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import inspect, text
 
 from app.db import engine
-from app.services.household_context_adapter import household_context_from_runtime_context
 
 
 class GpcBrickAssignmentRequest(BaseModel):
@@ -17,23 +16,30 @@ class GpcBrickAssignmentRequest(BaseModel):
 def _ensure_schema() -> None:
     with engine.begin() as conn:
         conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS household_article_gpc_bricks (
-                household_article_id TEXT PRIMARY KEY,
+            CREATE TABLE IF NOT EXISTS global_product_gpc_bricks (
+                global_product_id TEXT PRIMARY KEY,
                 brick_code VARCHAR(8) NOT NULL,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (household_article_id) REFERENCES household_articles(id),
+                FOREIGN KEY (global_product_id) REFERENCES global_products(id),
                 FOREIGN KEY (brick_code) REFERENCES gpc_bricks(brick_code)
             )
         """))
         conn.execute(text(
-            "CREATE INDEX IF NOT EXISTS idx_household_article_gpc_brick_code "
-            "ON household_article_gpc_bricks(brick_code)"
+            "CREATE INDEX IF NOT EXISTS idx_global_product_gpc_brick_code "
+            "ON global_product_gpc_bricks(brick_code)"
         ))
 
 
 def _require_gpc_tables() -> None:
     tables = set(inspect(engine).get_table_names())
-    required = {"gpc_bricks", "gpc_classes", "gpc_families", "gpc_segments", "gpc_translations"}
+    required = {
+        "global_products",
+        "gpc_bricks",
+        "gpc_classes",
+        "gpc_families",
+        "gpc_segments",
+        "gpc_translations",
+    }
     missing = sorted(required - tables)
     if missing:
         raise HTTPException(
@@ -42,26 +48,21 @@ def _require_gpc_tables() -> None:
         )
 
 
-def _active_household_id(main_module, authorization: Optional[str], *, write: bool) -> str:
-    runtime_context = (
-        main_module.require_inventory_write_context(authorization, None)
-        if write
-        else main_module.require_household_context(authorization)
-    )
-    household_context = household_context_from_runtime_context(runtime_context)
-    household_id = str(household_context.active_household_id or "").strip()
-    if not household_id:
-        raise HTTPException(status_code=400, detail="Actief huishouden ontbreekt")
-    return household_id
+def _require_read_context(main_module, authorization: Optional[str]) -> None:
+    main_module.require_household_context(authorization)
 
 
-def _article_exists(conn, article_id: str, household_id: str) -> bool:
+def _require_write_context(main_module, authorization: Optional[str]) -> None:
+    main_module.require_inventory_write_context(authorization, None)
+
+
+def _global_product_exists(conn, global_product_id: str) -> bool:
     return bool(conn.execute(text("""
         SELECT 1
-        FROM household_articles
-        WHERE id = :article_id AND household_id = :household_id
+        FROM global_products
+        WHERE id = :global_product_id
         LIMIT 1
-    """), {"article_id": article_id, "household_id": household_id}).first())
+    """), {"global_product_id": global_product_id}).first())
 
 
 def _localized(column_alias: str, entity_type: str, code_column: str, source_column: str) -> str:
@@ -110,7 +111,7 @@ def install_gpc_article_assignment_routes(main_module) -> None:
         limit: int = Query(default=25, ge=1, le=100),
         authorization: Optional[str] = Header(None),
     ):
-        _active_household_id(main_module, authorization, write=False)
+        _require_read_context(main_module, authorization)
         _require_gpc_tables()
         normalized = " ".join(str(query or "").strip().split()).lower()
         params = {"query": f"%{normalized}%", "limit": limit}
@@ -131,74 +132,75 @@ def install_gpc_article_assignment_routes(main_module) -> None:
             rows = [dict(row) for row in conn.execute(text(sql), params).mappings().all()]
         return {"items": rows, "total": len(rows), "query": normalized}
 
-    @app.get("/api/household-articles/{article_id}/gpc-brick")
-    def get_household_article_gpc_brick(
-        article_id: str,
+    @app.get("/api/catalog/{global_product_id}/gpc-brick")
+    def get_catalog_product_gpc_brick(
+        global_product_id: str,
         authorization: Optional[str] = Header(None),
     ):
-        household_id = _active_household_id(main_module, authorization, write=False)
+        _require_read_context(main_module, authorization)
         _require_gpc_tables()
         _ensure_schema()
         with engine.begin() as conn:
-            if not _article_exists(conn, article_id, household_id):
-                raise HTTPException(status_code=404, detail="Artikel niet gevonden")
+            if not _global_product_exists(conn, global_product_id):
+                raise HTTPException(status_code=404, detail="Universeel artikel niet gevonden")
             row = conn.execute(text(
                 _brick_select_sql("""
-                    JOIN household_article_gpc_bricks assignment
+                    JOIN global_product_gpc_bricks assignment
                       ON assignment.brick_code = b.brick_code
-                    WHERE assignment.household_article_id = :article_id
+                    WHERE assignment.global_product_id = :global_product_id
                 """)
-            ), {"article_id": article_id}).mappings().first()
+            ), {"global_product_id": global_product_id}).mappings().first()
         return {"assignment": dict(row) if row else None}
 
-    @app.put("/api/household-articles/{article_id}/gpc-brick")
-    def set_household_article_gpc_brick(
-        article_id: str,
+    @app.put("/api/catalog/{global_product_id}/gpc-brick")
+    def set_catalog_product_gpc_brick(
+        global_product_id: str,
         payload: GpcBrickAssignmentRequest,
         authorization: Optional[str] = Header(None),
     ):
-        household_id = _active_household_id(main_module, authorization, write=True)
+        _require_write_context(main_module, authorization)
         _require_gpc_tables()
         _ensure_schema()
         brick_code = str(payload.brick_code or "").strip()
         with engine.begin() as conn:
-            if not _article_exists(conn, article_id, household_id):
-                raise HTTPException(status_code=404, detail="Artikel niet gevonden")
+            if not _global_product_exists(conn, global_product_id):
+                raise HTTPException(status_code=404, detail="Universeel artikel niet gevonden")
             if not conn.execute(
                 text("SELECT 1 FROM gpc_bricks WHERE brick_code = :brick_code LIMIT 1"),
                 {"brick_code": brick_code},
             ).first():
                 raise HTTPException(status_code=400, detail="Onbekende GPC Brickcode")
             conn.execute(text("""
-                INSERT INTO household_article_gpc_bricks (
-                    household_article_id, brick_code, updated_at
-                ) VALUES (:article_id, :brick_code, CURRENT_TIMESTAMP)
-                ON CONFLICT(household_article_id) DO UPDATE SET
+                INSERT INTO global_product_gpc_bricks (
+                    global_product_id, brick_code, updated_at
+                ) VALUES (:global_product_id, :brick_code, CURRENT_TIMESTAMP)
+                ON CONFLICT(global_product_id) DO UPDATE SET
                     brick_code = excluded.brick_code,
                     updated_at = CURRENT_TIMESTAMP
-            """), {"article_id": article_id, "brick_code": brick_code})
+            """), {"global_product_id": global_product_id, "brick_code": brick_code})
             row = conn.execute(text(
                 _brick_select_sql("""
-                    JOIN household_article_gpc_bricks assignment
+                    JOIN global_product_gpc_bricks assignment
                       ON assignment.brick_code = b.brick_code
-                    WHERE assignment.household_article_id = :article_id
+                    WHERE assignment.global_product_id = :global_product_id
                 """)
-            ), {"article_id": article_id}).mappings().first()
+            ), {"global_product_id": global_product_id}).mappings().first()
         return {"status": "success", "assignment": dict(row)}
 
-    @app.delete("/api/household-articles/{article_id}/gpc-brick")
-    def clear_household_article_gpc_brick(
-        article_id: str,
+    @app.delete("/api/catalog/{global_product_id}/gpc-brick")
+    def clear_catalog_product_gpc_brick(
+        global_product_id: str,
         authorization: Optional[str] = Header(None),
     ):
-        household_id = _active_household_id(main_module, authorization, write=True)
+        _require_write_context(main_module, authorization)
+        _require_gpc_tables()
         _ensure_schema()
         with engine.begin() as conn:
-            if not _article_exists(conn, article_id, household_id):
-                raise HTTPException(status_code=404, detail="Artikel niet gevonden")
+            if not _global_product_exists(conn, global_product_id):
+                raise HTTPException(status_code=404, detail="Universeel artikel niet gevonden")
             conn.execute(text(
-                "DELETE FROM household_article_gpc_bricks WHERE household_article_id = :article_id"
-            ), {"article_id": article_id})
+                "DELETE FROM global_product_gpc_bricks WHERE global_product_id = :global_product_id"
+            ), {"global_product_id": global_product_id})
         return {"status": "success", "assignment": None}
 
     app.state.gpc_article_assignment_routes_installed = True
