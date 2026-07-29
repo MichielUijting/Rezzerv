@@ -34,11 +34,8 @@ def _household_table() -> str | None:
     return None
 
 
-def _catalog_base_rows() -> list[dict[str, Any]]:
+def _catalog_projection() -> tuple[list[str], list[str], dict[str, str]]:
     tables = _tables()
-    if "global_products" not in tables:
-        return []
-
     gp_columns = _columns("global_products")
     selectable = {
         "id": "gp.id",
@@ -56,30 +53,63 @@ def _catalog_base_rows() -> list[dict[str, Any]]:
         else f"NULL AS {alias}"
         for alias, expression in selectable.items()
     ]
-
     joins: list[str] = []
+
+    legacy_product_type = "NULL"
+    legacy_product_type_id = "NULL"
     if {"product_group_memberships", "product_inventory_groups"}.issubset(tables):
+        joins.append("""
+            LEFT JOIN (
+                SELECT pgm.global_product_id,
+                       MAX(pgm.inventory_group_key) AS inventory_group_key,
+                       MAX(pig.display_name) AS display_name
+                FROM product_group_memberships pgm
+                JOIN product_inventory_groups pig
+                  ON pig.inventory_group_key = pgm.inventory_group_key
+                WHERE COALESCE(pgm.active, 1) = 1
+                  AND COALESCE(pig.active, 1) = 1
+                GROUP BY pgm.global_product_id
+            ) legacy_group ON legacy_group.global_product_id = gp.id
+        """)
+        legacy_product_type = "legacy_group.display_name"
+        legacy_product_type_id = "legacy_group.inventory_group_key"
+
+    gpc_product_type = "NULL"
+    gpc_brick_code = "NULL"
+    if {"global_product_gpc_bricks", "gpc_bricks"}.issubset(tables):
         joins.extend([
             """
-            LEFT JOIN product_group_memberships pgm
-              ON pgm.global_product_id = gp.id
-             AND COALESCE(pgm.active, 1) = 1
+            LEFT JOIN global_product_gpc_bricks catalog_gpc
+              ON catalog_gpc.global_product_id = gp.id
             """,
             """
-            LEFT JOIN product_inventory_groups pig
-              ON pig.inventory_group_key = pgm.inventory_group_key
-             AND COALESCE(pig.active, 1) = 1
+            LEFT JOIN gpc_bricks catalog_brick
+              ON catalog_brick.brick_code = catalog_gpc.brick_code
             """,
         ])
-        select_parts.extend([
-            "pgm.inventory_group_key AS product_type_id",
-            "pig.display_name AS product_type",
-        ])
-    else:
-        select_parts.extend([
-            "NULL AS product_type_id",
-            "NULL AS product_type",
-        ])
+        gpc_brick_code = "catalog_gpc.brick_code"
+        if "gpc_translations" in tables:
+            gpc_product_type = """
+                COALESCE(
+                    (SELECT tr.translated_text
+                     FROM gpc_translations tr
+                     WHERE tr.entity_type = 'brick'
+                       AND tr.entity_code = catalog_gpc.brick_code
+                       AND tr.language_code = 'nl'
+                     LIMIT 1),
+                    catalog_brick.description
+                )
+            """
+        else:
+            gpc_product_type = "catalog_brick.description"
+
+    product_type_expression = f"COALESCE({gpc_product_type}, {legacy_product_type})"
+    product_type_id_expression = f"COALESCE({gpc_brick_code}, {legacy_product_type_id})"
+    select_parts.extend([
+        f"{product_type_id_expression} AS product_type_id",
+        f"{product_type_expression} AS product_type",
+        f"{gpc_brick_code} AS gpc_brick_code",
+    ])
 
     household_table = _household_table()
     if household_table:
@@ -89,70 +119,133 @@ def _catalog_base_rows() -> list[dict[str, Any]]:
                 FROM {household_table}
                 WHERE global_product_id IS NOT NULL
                 GROUP BY global_product_id
-            ) hac ON hac.global_product_id = gp.id
+            ) household_counts ON household_counts.global_product_id = gp.id
         """)
-        select_parts.append(
-            "COALESCE(hac.household_article_count, 0) AS household_article_count"
-        )
+        household_count_expression = "COALESCE(household_counts.household_article_count, 0)"
     else:
-        select_parts.append("0 AS household_article_count")
+        household_count_expression = "0"
+    select_parts.append(f"{household_count_expression} AS household_article_count")
 
-    if (
-        "product_identities" in tables
-        and "global_product_id" in _columns("product_identities")
-    ):
+    if "product_identities" in tables and "global_product_id" in _columns("product_identities"):
         joins.append("""
             LEFT JOIN (
                 SELECT global_product_id, COUNT(*) AS identity_count
                 FROM product_identities
                 GROUP BY global_product_id
-            ) pic ON pic.global_product_id = gp.id
+            ) identity_counts ON identity_counts.global_product_id = gp.id
         """)
-        select_parts.append("COALESCE(pic.identity_count, 0) AS identity_count")
+        identity_count_expression = "COALESCE(identity_counts.identity_count, 0)"
     else:
-        select_parts.append("0 AS identity_count")
+        identity_count_expression = "0"
+    select_parts.append(f"{identity_count_expression} AS identity_count")
 
-    query = f"""
+    expressions = {
+        "name": "COALESCE(gp.name, '')",
+        "brand": "COALESCE(gp.brand, '')",
+        "primary_gtin": "COALESCE(gp.primary_gtin, '')",
+        "product_type": f"COALESCE({product_type_expression}, '')",
+        "source": "COALESCE(gp.source, '')",
+        "household_article_count": household_count_expression,
+    }
+    return select_parts, joins, expressions
+
+
+def _catalog_where(
+    expressions: dict[str, str],
+    name: str,
+    brand: str,
+    primary_gtin: str,
+    product_type: str,
+    source: str,
+    household_article_count: str,
+) -> tuple[str, dict[str, Any]]:
+    conditions: list[str] = []
+    params: dict[str, Any] = {}
+    filters = {
+        "name": name,
+        "brand": brand,
+        "primary_gtin": primary_gtin,
+        "product_type": product_type,
+        "source": source,
+    }
+    for key, raw_value in filters.items():
+        value = raw_value.strip().lower()
+        if value:
+            conditions.append(f"LOWER({expressions[key]}) LIKE :{key}")
+            params[key] = f"%{value}%"
+    household_value = household_article_count.strip()
+    if household_value:
+        conditions.append(
+            f"CAST({expressions['household_article_count']} AS TEXT) LIKE :household_article_count"
+        )
+        params["household_article_count"] = f"%{household_value}%"
+    return ("WHERE " + " AND ".join(conditions)) if conditions else "", params
+
+
+def _catalog_row(global_product_id: str) -> dict[str, Any] | None:
+    if "global_products" not in _tables():
+        return None
+    select_parts, joins, _ = _catalog_projection()
+    sql = f"""
         SELECT {", ".join(select_parts)}
         FROM global_products gp
         {" ".join(joins)}
-        ORDER BY COALESCE(gp.name, ''), gp.id
+        WHERE gp.id = :global_product_id
+        LIMIT 1
     """
     with engine.begin() as conn:
-        return [
-            dict(row)
-            for row in conn.execute(text(query)).mappings().all()
-        ]
+        row = conn.execute(
+            text(sql),
+            {"global_product_id": global_product_id},
+        ).mappings().first()
+    return dict(row) if row else None
 
 
 @router.get("")
 def list_catalog(
-    query: str = Query(default="", max_length=200),
+    name: str = Query(default="", max_length=200),
+    brand: str = Query(default="", max_length=200),
+    primary_gtin: str = Query(default="", max_length=200),
     product_type: str = Query(default="", max_length=200),
-    limit: int = Query(default=500, ge=1, le=2000),
+    source: str = Query(default="", max_length=200),
+    household_article_count: str = Query(default="", max_length=50),
+    sort_by: str = Query(default="name", max_length=50),
+    sort_direction: str = Query(default="asc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=10, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ):
-    rows = _catalog_base_rows()
-    query_value = query.strip().lower()
-    product_type_value = product_type.strip().lower()
+    if "global_products" not in _tables():
+        return {"items": [], "total": 0, "limit": limit, "offset": offset}
 
-    if query_value:
-        rows = [
-            row
-            for row in rows
-            if query_value in " ".join([
-                str(row.get("name") or ""),
-                str(row.get("brand") or ""),
-                str(row.get("primary_gtin") or ""),
-                str(row.get("product_type") or ""),
-            ]).lower()
+    select_parts, joins, expressions = _catalog_projection()
+    where_sql, params = _catalog_where(
+        expressions,
+        name,
+        brand,
+        primary_gtin,
+        product_type,
+        source,
+        household_article_count,
+    )
+    order_expression = expressions.get(sort_by, expressions["name"])
+    direction = "DESC" if sort_direction.lower() == "desc" else "ASC"
+    from_sql = f"FROM global_products gp {' '.join(joins)} {where_sql}"
+
+    count_sql = f"SELECT COUNT(*) {from_sql}"
+    page_sql = f"""
+        SELECT {", ".join(select_parts)}
+        {from_sql}
+        ORDER BY {order_expression} COLLATE NOCASE {direction}, gp.id ASC
+        LIMIT :limit OFFSET :offset
+    """
+    page_params = {**params, "limit": limit, "offset": offset}
+    with engine.begin() as conn:
+        total = int(conn.execute(text(count_sql), params).scalar() or 0)
+        items = [
+            dict(row)
+            for row in conn.execute(text(page_sql), page_params).mappings().all()
         ]
-    if product_type_value:
-        rows = [
-            row
-            for row in rows
-            if product_type_value in str(row.get("product_type") or "").lower()
-        ]
-    return {"items": rows[:limit], "total": len(rows)}
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 def _identity_rows(global_product_id: str) -> list[dict[str, Any]]:
@@ -218,16 +311,8 @@ def _household_article_rows(global_product_id: str) -> list[dict[str, Any]]:
         if "minimum_stock" in columns
         else "NULL AS minimum_stock"
     )
-    ideal_expression = (
-        "ideal_stock"
-        if "ideal_stock" in columns
-        else "NULL AS ideal_stock"
-    )
-    group_expression = (
-        "article_group_id"
-        if "article_group_id" in columns
-        else "NULL AS article_group_id"
-    )
+    ideal_expression = "ideal_stock" if "ideal_stock" in columns else "NULL AS ideal_stock"
+    group_expression = "article_group_id" if "article_group_id" in columns else "NULL AS article_group_id"
     with engine.begin() as conn:
         return [
             dict(row)
@@ -249,10 +334,7 @@ def _household_article_rows(global_product_id: str) -> list[dict[str, Any]]:
 
 
 def _receipt_line_rows(global_product_id: str) -> list[dict[str, Any]]:
-    if not {
-        "purchase_import_lines",
-        "purchase_import_batches",
-    }.issubset(_tables()):
+    if not {"purchase_import_lines", "purchase_import_batches"}.issubset(_tables()):
         return []
     with engine.begin() as conn:
         return [
@@ -263,33 +345,16 @@ def _receipt_line_rows(global_product_id: str) -> list[dict[str, Any]]:
                     pil.batch_id,
                     pil.article_name_raw,
                     pil.matched_household_article_id,
-                    COALESCE(
-                        pil.matched_global_product_id,
-                        ha.global_product_id
-                    ) AS matched_global_product_id,
-                    COALESCE(
-                        ha.custom_name,
-                        ha.naam
-                    ) AS household_article_name,
-                    COALESCE(
-                        ha.barcode,
-                        gp.primary_gtin
-                    ) AS gtin,
+                    COALESCE(pil.matched_global_product_id, ha.global_product_id) AS matched_global_product_id,
+                    COALESCE(ha.custom_name, ha.naam) AS household_article_name,
+                    COALESCE(ha.barcode, gp.primary_gtin) AS gtin,
                     pib.created_at
                 FROM purchase_import_lines pil
-                JOIN purchase_import_batches pib
-                  ON pib.id = pil.batch_id
-                LEFT JOIN household_articles ha
-                  ON ha.id = pil.matched_household_article_id
+                JOIN purchase_import_batches pib ON pib.id = pil.batch_id
+                LEFT JOIN household_articles ha ON ha.id = pil.matched_household_article_id
                 LEFT JOIN global_products gp
-                  ON gp.id = COALESCE(
-                      pil.matched_global_product_id,
-                      ha.global_product_id
-                  )
-                WHERE COALESCE(
-                    pil.matched_global_product_id,
-                    ha.global_product_id
-                ) = :global_product_id
+                  ON gp.id = COALESCE(pil.matched_global_product_id, ha.global_product_id)
+                WHERE COALESCE(pil.matched_global_product_id, ha.global_product_id) = :global_product_id
                 ORDER BY datetime(pib.created_at) DESC, pil.id DESC
             """), {
                 "global_product_id": global_product_id,
@@ -299,19 +364,9 @@ def _receipt_line_rows(global_product_id: str) -> list[dict[str, Any]]:
 
 @router.get("/{global_product_id}")
 def get_catalog_product(global_product_id: str):
-    product = next(
-        (
-            row
-            for row in _catalog_base_rows()
-            if str(row.get("id") or "") == str(global_product_id)
-        ),
-        None,
-    )
+    product = _catalog_row(global_product_id)
     if not product:
-        raise HTTPException(
-            status_code=404,
-            detail="Universeel artikel niet gevonden",
-        )
+        raise HTTPException(status_code=404, detail="Universeel artikel niet gevonden")
     return {
         "product": product,
         "identities": _identity_rows(global_product_id),
