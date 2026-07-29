@@ -1,7 +1,8 @@
 param(
   [switch]$SkipDockerBuild,
   [int]$FrontendPort = 5174,
-  [int]$BackendPort = 8011
+  [int]$BackendPort = 8011,
+  [string]$ExpectedBranch = ''
 )
 
 $ErrorActionPreference = "Stop"
@@ -46,6 +47,15 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 
 try {
+  $currentBranch = (git branch --show-current).Trim()
+  $currentCommit = (git rev-parse HEAD).Trim()
+  Write-Host "Branch:   $currentBranch"
+  Write-Host "Commit:   $currentCommit"
+
+  if ($ExpectedBranch -and $currentBranch -ne $ExpectedBranch) {
+    throw "Verkeerde branch voor deze regressietest. Verwacht: '$ExpectedBranch'. Actueel: '$currentBranch'. Start de runner vanuit de juiste repositorymap."
+  }
+
   if (-not $SkipDockerBuild) {
     if ($FrontendPort -ne 5174 -or $BackendPort -ne 8011) {
       throw "Docker build/start via deze runner ondersteunt alleen de standaardpoorten 5174/8011. Start een geïsoleerde omgeving vooraf en gebruik -SkipDockerBuild met -FrontendPort en -BackendPort."
