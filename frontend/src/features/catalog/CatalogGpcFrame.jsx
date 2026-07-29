@@ -42,7 +42,7 @@ function rememberSuggestionRejection(productId, suggestion) {
   }
 }
 
-export default function CatalogGpcFrame({ globalProductId }) {
+export default function CatalogGpcFrame({ globalProductId, onAssignmentChange }) {
   const productId = String(globalProductId || '').trim()
   const [assignment, setAssignment] = useState(null)
   const [suggestion, setSuggestion] = useState(null)
@@ -66,7 +66,9 @@ export default function CatalogGpcFrame({ globalProductId }) {
       const response = await fetchJsonWithAuth(`/api/catalog/${encodeURIComponent(productId)}/gpc-brick`)
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden geladen.'))
-      setAssignment(data?.assignment || null)
+      const currentAssignment = data?.assignment || null
+      setAssignment(currentAssignment)
+      onAssignmentChange?.(currentAssignment)
       const candidate = data?.suggestion || null
       setSuggestion(isSuggestionRejected(productId, candidate) ? null : candidate)
       if (data?.migration?.performed) {
@@ -119,7 +121,9 @@ export default function CatalogGpcFrame({ globalProductId }) {
       })
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden opgeslagen.'))
-      setAssignment(data?.assignment || null)
+      const savedAssignment = data?.assignment || null
+      setAssignment(savedAssignment)
+      onAssignmentChange?.(savedAssignment)
       setSuggestion(null)
       setFeedback('De GPC-classificatie is opgeslagen.')
       setQuery('')
@@ -158,6 +162,7 @@ export default function CatalogGpcFrame({ globalProductId }) {
       const data = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden verwijderd.'))
       setAssignment(null)
+      onAssignmentChange?.(null)
       setSuggestion(null)
       setFeedback('De GPC-classificatie is verwijderd.')
       setEditorOpen(false)
