@@ -32,12 +32,6 @@ def install_article_detail_write_guard(main_module) -> None:
     if getattr(app.state, "article_detail_write_guard_installed", False):
         return
 
-    # Registreer de Catalogus-GPC-routes altijd. De endpointfuncties gebruiken
-    # de runtime-authenticatiefuncties pas bij een daadwerkelijk verzoek, zodat
-    # registratie veilig is ongeacht de volgorde waarin main.py wordt opgebouwd.
-    from app.services.gpc_article_assignment_service import install_gpc_article_assignment_routes
-    install_gpc_article_assignment_routes(main_module)
-
     protected_routes = discover_article_detail_write_routes(app)
 
     @app.middleware("http")
@@ -53,8 +47,8 @@ def install_article_detail_write_guard(main_module) -> None:
                 if len(template_parts) != len(request_parts):
                     continue
                 if all(
-                    (tp.startswith("{") and tp.endswith("}")) or tp == rp
-                    for tp, rp in zip(template_parts, request_parts)
+                    (part.startswith("{") and part.endswith("}")) or part == actual
+                    for part, actual in zip(template_parts, request_parts)
                 ):
                     matched = True
                     break
