@@ -26,10 +26,10 @@ def test_catalog_router_contains_real_gpc_runtime_routes():
         for route in router.routes
         for method in (getattr(route, "methods", set()) or set())
     }
-    assert ("GET", "/gpc/bricks") in routes
-    assert ("GET", "/{global_product_id}/gpc-brick") in routes
-    assert ("PUT", "/{global_product_id}/gpc-brick") in routes
-    assert ("DELETE", "/{global_product_id}/gpc-brick") in routes
+    assert ("GET", "/api/catalog/gpc/bricks") in routes
+    assert ("GET", "/api/catalog/{global_product_id}/gpc-brick") in routes
+    assert ("PUT", "/api/catalog/{global_product_id}/gpc-brick") in routes
+    assert ("DELETE", "/api/catalog/{global_product_id}/gpc-brick") in routes
 
 
 def test_main_catalog_router_mount_produces_expected_public_paths():
