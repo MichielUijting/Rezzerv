@@ -13,9 +13,17 @@ function functionalError(data, fallback) {
   return detail
 }
 
+function assignmentSourceLabel(assignment) {
+  const source = String(assignment?.assignment_source || '').trim()
+  if (source === 'migrated_confirmed_product_group') return 'Overgenomen uit eerder bevestigde GPC-productgroep'
+  if (source === 'manual_catalog_detail') return 'Handmatig bevestigd in Catalogusdetail'
+  return source || ''
+}
+
 export default function CatalogGpcFrame({ globalProductId }) {
   const productId = String(globalProductId || '').trim()
   const [assignment, setAssignment] = useState(null)
+  const [suggestion, setSuggestion] = useState(null)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(true)
@@ -41,6 +49,10 @@ export default function CatalogGpcFrame({ globalProductId }) {
         throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden geladen.'))
       }
       setAssignment(data?.assignment || null)
+      setSuggestion(data?.suggestion || null)
+      if (data?.migration?.performed) {
+        setFeedback('De eerder bevestigde GPC-classificatie is automatisch overgenomen.')
+      }
     } catch (loadError) {
       setError(loadError?.message || 'De GPC-classificatie kon niet worden geladen.')
     } finally {
@@ -107,6 +119,7 @@ export default function CatalogGpcFrame({ globalProductId }) {
         throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden opgeslagen.'))
       }
       setAssignment(data?.assignment || null)
+      setSuggestion(null)
       setFeedback('De GPC-classificatie is opgeslagen.')
       setQuery('')
       setResults([])
@@ -133,6 +146,7 @@ export default function CatalogGpcFrame({ globalProductId }) {
         throw new Error(functionalError(data, 'De GPC-classificatie kon niet worden verwijderd.'))
       }
       setAssignment(null)
+      setSuggestion(null)
       setFeedback('De GPC-classificatie is verwijderd.')
       setEditorOpen(false)
       setQuery('')
@@ -181,6 +195,9 @@ export default function CatalogGpcFrame({ globalProductId }) {
           <div className="rz-catalog-gpc-primary">
             <span className="rz-catalog-gpc-label">Huidige classificatie</span>
             <strong>{currentLabel}</strong>
+            {assignmentSourceLabel(assignment) ? (
+              <small>Bron: {assignmentSourceLabel(assignment)}</small>
+            ) : null}
           </div>
           {assignment ? (
             <dl className="rz-catalog-gpc-hierarchy">
@@ -189,6 +206,21 @@ export default function CatalogGpcFrame({ globalProductId }) {
               <div><dt>Class</dt><dd>{valueOrDash(assignment.class_description)}</dd></div>
               <div><dt>Engelse brontekst</dt><dd>{valueOrDash(assignment.brick_description_en)}</dd></div>
             </dl>
+          ) : null}
+        </div>
+      ) : null}
+
+      {!loading && !assignment && suggestion ? (
+        <div className="rz-catalog-gpc-suggestion" data-testid="catalog-gpc-suggestion">
+          <div>
+            <span className="rz-catalog-gpc-label">Voorgestelde classificatie</span>
+            <strong>{suggestion.brick_code} — {suggestion.brick_description}</strong>
+            <small>{suggestion.suggestion_reason}</small>
+          </div>
+          {canEdit ? (
+            <Button type="button" onClick={() => selectBrick(suggestion.brick_code)} disabled={saving}>
+              Voorstel bevestigen
+            </Button>
           ) : null}
         </div>
       ) : null}
