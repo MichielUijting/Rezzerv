@@ -4,8 +4,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SERVICE = ROOT / "backend/app/services/gpc_article_assignment_service.py"
 GUARD = ROOT / "backend/app/services/article_detail_write_guard.py"
-FRONTEND = ROOT / "frontend/src/features/catalog/CatalogGpcFrame.jsx"
+FRAME = ROOT / "frontend/src/features/catalog/CatalogGpcFrame.jsx"
+DETAIL = ROOT / "frontend/src/features/catalog/CatalogDetailPageV2.jsx"
 ROUTER = ROOT / "frontend/src/app/router/AppRouter.jsx"
+CSS = ROOT / "frontend/src/features/catalog/catalog.css"
 
 
 def test_backend_routes_cover_search_read_write_and_clear_for_catalog():
@@ -33,22 +35,32 @@ def test_dutch_text_has_official_english_fallback():
     assert "tr.language_code='nl'" in source
 
 
-def test_write_guard_discovers_catalog_gpc_mutations():
+def test_routes_are_registered_unconditionally_before_guard_inventory():
     source = GUARD.read_text(encoding="utf-8")
+    install = source.index("install_gpc_article_assignment_routes(main_module)")
+    discover = source.index("protected_routes = discover_article_detail_write_routes(app)")
+    assert install < discover
+    assert 'hasattr(main_module, "require_household_context")' not in source
     assert '"set_catalog_product_gpc_brick"' in source
     assert '"clear_catalog_product_gpc_brick"' in source
-    assert "install_gpc_article_assignment_routes(main_module)" in source
-    assert '"set_household_article_gpc_brick"' not in source
 
 
-def test_frontend_exposes_gpc_frame_only_on_catalog_detail():
-    page = FRONTEND.read_text(encoding="utf-8")
+def test_frontend_integrates_frame_natively_in_catalog_detail():
+    frame = FRAME.read_text(encoding="utf-8")
+    detail = DETAIL.read_text(encoding="utf-8")
     router = ROUTER.read_text(encoding="utf-8")
-    assert "GS1 GPC-classificatie" in page
-    assert "Zoek op Brickcode, Nederlandse of Engelse omschrijving" in page
-    assert "GPC-classificatie opgeslagen." in page
-    assert "segment_description" in page
-    assert "brick_description_en" in page
-    assert "CatalogDetailWithGpc" in router
+    css = CSS.read_text(encoding="utf-8")
+
+    assert "createPortal" not in frame
+    assert "document.querySelector" not in frame
+    assert "functionalError" in frame
+    assert "GPC classificeren" in frame
+    assert "GPC wijzigen" in frame
+    assert "editorOpen" in frame
+    assert "CatalogGpcFrame globalProductId={globalProductId}" in detail
+    assert "CatalogDetailPageV2" in router
+    assert "CatalogDetailWithGpc" not in router
     assert "'/voorraad/:articleId/gpc'" not in router
     assert "ArticleGpcInlineSummary" not in router
+    assert ".rz-catalog-gpc-section" in css
+    assert ".rz-catalog-gpc-result" in css
