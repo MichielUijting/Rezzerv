@@ -1,4 +1,4 @@
-name: GPC article assignment validation
+name: GPC catalog assignment validation
 
 on:
   pull_request:
@@ -6,13 +6,14 @@ on:
       - 'backend/app/services/gpc_article_assignment_service.py'
       - 'backend/app/services/article_detail_write_guard.py'
       - 'backend/tests/test_gpc_article_assignment_contract.py'
-      - 'frontend/src/features/articles/ArticleGpcPage.jsx'
+      - 'frontend/src/features/catalog/CatalogGpcFrame.jsx'
+      - 'frontend/src/features/catalog/CatalogDetailPage.jsx'
       - 'frontend/src/app/router/AppRouter.jsx'
       - '.github/workflows/gpc-article-assignment-validation.yml'
   workflow_dispatch:
 
 jobs:
-  validate-gpc-article-assignment:
+  validate-gpc-catalog-assignment:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +27,7 @@ jobs:
           python -m py_compile \
             backend/app/services/gpc_article_assignment_service.py \
             backend/app/services/article_detail_write_guard.py
-      - name: Run GPC assignment contract
+      - name: Run GPC catalog contract
         run: python -m pytest -q backend/tests/test_gpc_article_assignment_contract.py
       - uses: actions/setup-node@v4
         with:
