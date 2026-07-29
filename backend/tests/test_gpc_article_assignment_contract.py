@@ -11,6 +11,8 @@ GPC_ROUTES = ROOT / "backend/app/api/catalog_gpc_routes.py"
 CATALOG_ROUTES = ROOT / "backend/app/api/catalog_routes.py"
 GUARD = ROOT / "backend/app/services/article_detail_write_guard.py"
 FRAME = ROOT / "frontend/src/features/catalog/CatalogGpcFrame.jsx"
+ACTION_PAGE = ROOT / "frontend/src/features/catalog/CatalogGpcActionPage.jsx"
+CATALOG_PAGE = ROOT / "frontend/src/features/catalog/CatalogPage.jsx"
 DETAIL = ROOT / "frontend/src/features/catalog/CatalogDetailPageV2.jsx"
 FRONTEND_ROUTER = ROOT / "frontend/src/app/router/AppRouter.jsx"
 CSS = ROOT / "frontend/src/features/catalog/catalog.css"
@@ -74,15 +76,6 @@ def test_existing_confirmed_product_group_is_migrated_idempotently():
     assert "global_product_gpc_migration_suppressions" in source
 
 
-def test_unconfirmed_metadata_match_is_only_a_suggestion():
-    source = GPC_ROUTES.read_text(encoding="utf-8")
-    assert "_metadata_suggestion" in source
-    assert '"suggestion_source": "productmetadata"' in source
-    assert '"suggestion_source": "bestaande_productgroep"' in source
-    assert '"suggestion": suggestion' in source
-    assert "external_product_index" in source
-
-
 def test_registration_is_decoupled_from_article_write_guard():
     catalog_source = CATALOG_ROUTES.read_text(encoding="utf-8")
     guard_source = GUARD.read_text(encoding="utf-8")
@@ -92,7 +85,24 @@ def test_registration_is_decoupled_from_article_write_guard():
     assert '"clear_catalog_product_gpc_brick"' in guard_source
 
 
-def test_frontend_integrates_frame_natively_in_catalog_detail():
+def test_catalog_exposes_direct_gpc_action_button_and_normal_route():
+    catalog = CATALOG_PAGE.read_text(encoding="utf-8")
+    action = ACTION_PAGE.read_text(encoding="utf-8")
+    router = FRONTEND_ROUTER.read_text(encoding="utf-8")
+
+    assert "GPC classificeren" in catalog
+    assert "navigate('/catalogus/gpc-classificeren')" in catalog
+    assert "path: '/catalogus/gpc-classificeren'" in router
+    assert "CatalogGpcActionPage" in router
+    assert "Zoeken op artikelnaam, merk, barcode, GTIN of EAN" in action
+    assert "/api/catalog?limit=2000" in action
+    assert "/gpc-brick" in action
+    assert "/api/catalog/gpc/bricks" in action
+    assert "De bestaande bevestigde GPC-classificatie is gevonden." in action
+    assert "De GPC Brick is bevestigd en opgeslagen" in action
+
+
+def test_frontend_integrates_frame_natively_without_unreliable_suggestion():
     frame = FRAME.read_text(encoding="utf-8")
     detail = DETAIL.read_text(encoding="utf-8")
     router = FRONTEND_ROUTER.read_text(encoding="utf-8")
@@ -105,8 +115,8 @@ def test_frontend_integrates_frame_natively_in_catalog_detail():
     assert "GPC wijzigen" in frame
     assert "editorOpen" in frame
     assert "/api/catalog/gpc/bricks" in frame
-    assert "Voorgestelde classificatie" in frame
-    assert "Voorstel bevestigen" in frame
+    assert "Voorgestelde classificatie" not in frame
+    assert "Voorstel bevestigen" not in frame
     assert "Overgenomen uit eerder bevestigde GPC-productgroep" in frame
     assert "CatalogGpcFrame globalProductId={globalProductId}" in detail
     assert "CatalogDetailPageV2" in router
@@ -115,4 +125,3 @@ def test_frontend_integrates_frame_natively_in_catalog_detail():
     assert "ArticleGpcInlineSummary" not in router
     assert ".rz-catalog-gpc-section" in css
     assert ".rz-catalog-gpc-result" in css
-    assert ".rz-catalog-gpc-suggestion" in css
