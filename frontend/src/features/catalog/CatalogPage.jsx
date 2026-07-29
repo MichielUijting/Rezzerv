@@ -35,30 +35,11 @@ function csvValue(value) {
   return `"${String(value ?? '').replaceAll('"', '""')}"`
 }
 
-async function enrichCatalogItemWithGpc(item) {
-  const productId = String(item?.id || '').trim()
-  if (!productId) return item
-  try {
-    const response = await fetchJsonWithAuth(`/api/catalog/${encodeURIComponent(productId)}/gpc-brick`, { method: 'GET' })
-    const data = await response.json().catch(() => ({}))
-    if (!response.ok || !data?.assignment) return item
-    const assignment = data.assignment
-    const confirmedDescription = String(assignment.brick_description || assignment.brick_description_en || '').trim()
-    if (!confirmedDescription) return item
-    return {
-      ...item,
-      product_type: confirmedDescription,
-      gpc_brick_code: assignment.brick_code,
-    }
-  } catch {
-    return item
-  }
-}
-
 export default function CatalogPage() {
   const navigate = useNavigate()
   const [items, setItems] = useState([])
-  const [selectedIds, setSelectedIds] = useState([])
+  const [total, setTotal] = useState(0)
+  const [selectedRows, setSelectedRows] = useState({})
   const [filters, setFilters] = useState({
     name: '', brand: '', primaryGtin: '', productType: '', source: '',
     householdArticleCount: '',
@@ -71,81 +52,106 @@ export default function CatalogPage() {
 
   useEffect(() => {
     let cancelled = false
-    async function loadCatalog() {
+    const timer = window.setTimeout(async () => {
       setIsLoading(true)
       setError('')
       try {
-        const response = await fetchJsonWithAuth('/api/catalog?limit=2000', { method: 'GET' })
+        const params = new URLSearchParams({
+          limit: String(PAGE_SIZE),
+          offset: String((page - 1) * PAGE_SIZE),
+          sort_by: sort.key,
+          sort_direction: sort.direction,
+        })
+        const mappings = {
+          name: 'name',
+          brand: 'brand',
+          primaryGtin: 'primary_gtin',
+          productType: 'product_type',
+          source: 'source',
+          householdArticleCount: 'household_article_count',
+        }
+        Object.entries(mappings).forEach(([stateKey, parameter]) => {
+          const value = String(filters[stateKey] || '').trim()
+          if (value) params.set(parameter, value)
+        })
+        const response = await fetchJsonWithAuth(`/api/catalog?${params.toString()}`, { method: 'GET' })
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(data?.detail || 'Catalogus kon niet worden geladen')
-        const catalogItems = Array.isArray(data?.items) ? data.items : []
-        const enrichedItems = await Promise.all(catalogItems.map(enrichCatalogItemWithGpc))
-        if (!cancelled) setItems(enrichedItems)
+        if (!cancelled) {
+          setItems(Array.isArray(data?.items) ? data.items : [])
+          setTotal(Number(data?.total || 0))
+        }
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Catalogus kon niet worden geladen')
       } finally {
         if (!cancelled) setIsLoading(false)
       }
+    }, 250)
+    return () => {
+      cancelled = true
+      window.clearTimeout(timer)
     }
-    loadCatalog()
-    return () => { cancelled = true }
-  }, [])
+  }, [filters, page, sort])
 
-  const filteredItems = useMemo(() => {
-    const normalizedFilters = Object.fromEntries(
-      Object.entries(filters).map(([key, value]) => [key, String(value || '').trim().toLowerCase()])
-    )
-    const rows = items.filter((item) => (
-      (!normalizedFilters.name || String(item.name || '').toLowerCase().includes(normalizedFilters.name))
-      && (!normalizedFilters.brand || String(item.brand || '').toLowerCase().includes(normalizedFilters.brand))
-      && (!normalizedFilters.primaryGtin || String(item.primary_gtin || '').toLowerCase().includes(normalizedFilters.primaryGtin))
-      && (!normalizedFilters.productType || String(item.product_type || '').toLowerCase().includes(normalizedFilters.productType))
-      && (!normalizedFilters.source || String(item.source || '').toLowerCase().includes(normalizedFilters.source))
-      && (!normalizedFilters.householdArticleCount || String(item.household_article_count ?? '').toLowerCase().includes(normalizedFilters.householdArticleCount))
-    ))
-    rows.sort((left, right) => {
-      const a = String(left?.[sort.key] ?? '').toLowerCase()
-      const b = String(right?.[sort.key] ?? '').toLowerCase()
-      const result = a.localeCompare(b, 'nl')
-      return sort.direction === 'desc' ? -result : result
-    })
-    return rows
-  }, [items, filters, sort])
+  const selectedIds = useMemo(() => Object.keys(selectedRows), [selectedRows])
+  const visibleIds = items.map((item) => item.id)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => Boolean(selectedRows[id]))
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const currentPage = Math.min(page, pageCount)
 
   useEffect(() => {
-    setSelectedIds((current) => current.filter((id) => items.some((item) => item.id === id)))
-  }, [items])
+    if (page > pageCount) setPage(pageCount)
+  }, [page, pageCount])
 
-  const pageCount = Math.max(1, Math.ceil(filteredItems.length / PAGE_SIZE))
-  const currentPage = Math.min(page, pageCount)
-  const visibleItems = filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-  const visibleIds = visibleItems.map((item) => item.id)
-  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id))
+  function updateFilter(key, value) {
+    setFilters((current) => ({ ...current, [key]: value }))
+    setPage(1)
+  }
 
-  function updateFilter(key, value) { setFilters((current) => ({ ...current, [key]: value })); setPage(1) }
   function updateSort(key) {
     setSort((current) => current.key === key
       ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
       : { key, direction: 'asc' })
     setPage(1)
   }
-  function sortMark(key) { return sort.key === key && sort.direction === 'asc' ? '^' : 'v' }
-  function goToPage(targetPage) { setPage(Math.max(1, Math.min(pageCount, targetPage))) }
-  function toggleSelected(id) {
-    setSelectedIds((current) => current.includes(id)
-      ? current.filter((selectedId) => selectedId !== id)
-      : [...current, id])
+
+  function sortMark(key) {
+    return sort.key === key && sort.direction === 'asc' ? '^' : 'v'
   }
+
+  function goToPage(targetPage) {
+    setPage(Math.max(1, Math.min(pageCount, targetPage)))
+  }
+
+  function toggleSelected(item) {
+    setSelectedRows((current) => {
+      const next = { ...current }
+      if (next[item.id]) delete next[item.id]
+      else next[item.id] = item
+      return next
+    })
+  }
+
   function toggleVisible() {
-    setSelectedIds((current) => allVisibleSelected
-      ? current.filter((id) => !visibleIds.includes(id))
-      : Array.from(new Set([...current, ...visibleIds])))
+    setSelectedRows((current) => {
+      const next = { ...current }
+      if (allVisibleSelected) items.forEach((item) => { delete next[item.id] })
+      else items.forEach((item) => { next[item.id] = item })
+      return next
+    })
   }
-  function clearSelection() { setSelectedIds([]); setMessage('Selectie gewist.') }
+
+  function clearSelection() {
+    setSelectedRows({})
+    setMessage('Selectie gewist.')
+  }
 
   function exportSelected() {
-    const selectedItems = items.filter((item) => selectedIds.includes(item.id))
-    if (!selectedItems.length) { setMessage('Selecteer eerst een of meer catalogusartikelen.'); return }
+    const selectedItems = Object.values(selectedRows)
+    if (!selectedItems.length) {
+      setMessage('Selecteer eerst een of meer catalogusartikelen.')
+      return
+    }
     const rows = [
       ['Universeel artikel', 'Merk', 'Primaire GTIN', 'Producttype', 'Bron', 'Huishoudartikelen'],
       ...selectedItems.map((item) => [item.name, item.brand, item.primary_gtin, item.product_type, item.source, item.household_article_count]),
@@ -177,9 +183,7 @@ export default function CatalogPage() {
             {message ? <div className="rz-inline-feedback">{message}</div> : null}
 
             <div className="rz-external-databases-actions" aria-label="Acties Catalogus">
-              <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>
-                GPC classificeren
-              </Button>
+              <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button>
               <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={exportSelected}>Exporteren</Button>
               <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={clearSelection}>Selectie wissen</Button>
               <span className="rz-external-databases-muted">Geselecteerd: {selectedIds.length}</span>
@@ -213,9 +217,9 @@ export default function CatalogPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? <tr><td colSpan="7">Catalogus laden...</td></tr> : visibleItems.length ? visibleItems.map((item) => (
+                  {isLoading ? <tr><td colSpan="7">Catalogus laden...</td></tr> : items.length ? items.map((item) => (
                     <tr key={item.id} onDoubleClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`)} data-testid={`catalog-row-${item.id}`}>
-                      <td className="rz-check"><input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`} /></td>
+                      <td className="rz-check"><input type="checkbox" checked={Boolean(selectedRows[item.id])} onChange={() => toggleSelected(item)} aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`} /></td>
                       <td>{text(item.name)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type)}</td>
                       <td>{sourceLabel(item.source)}</td><td className="rz-num">{Number(item.household_article_count || 0)}</td>
                     </tr>
@@ -225,12 +229,12 @@ export default function CatalogPage() {
             </div>
 
             <div className="rz-external-databases-pagination" aria-label="Paginering Catalogus">
-              <Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => goToPage(1)}>Eerste</Button>
-              <Button type="button" variant="secondary" disabled={currentPage <= 1} onClick={() => goToPage(currentPage - 1)}>Vorige</Button>
+              <Button type="button" variant="secondary" disabled={currentPage <= 1 || isLoading} onClick={() => goToPage(1)}>Eerste</Button>
+              <Button type="button" variant="secondary" disabled={currentPage <= 1 || isLoading} onClick={() => goToPage(currentPage - 1)}>Vorige</Button>
               <span className="rz-external-databases-page-indicator">Pagina {currentPage} van {pageCount}</span>
-              <Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => goToPage(currentPage + 1)}>Volgende</Button>
-              <Button type="button" variant="secondary" disabled={currentPage >= pageCount} onClick={() => goToPage(pageCount)}>Laatste</Button>
-              <span className="rz-external-databases-muted">{filteredItems.length} artikelen</span>
+              <Button type="button" variant="secondary" disabled={currentPage >= pageCount || isLoading} onClick={() => goToPage(currentPage + 1)}>Volgende</Button>
+              <Button type="button" variant="secondary" disabled={currentPage >= pageCount || isLoading} onClick={() => goToPage(pageCount)}>Laatste</Button>
+              <span className="rz-external-databases-muted">{total} artikelen</span>
             </div>
           </div>
         </ScreenCard>
