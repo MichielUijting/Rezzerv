@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
-import Button from '../../ui/Button'
 import { fetchJsonWithAuth } from '../../lib/authSession'
 import CatalogGpcFrame from './CatalogGpcFrame'
 import './catalog.css'
@@ -46,8 +45,8 @@ function identityTypeLabel(value) {
 
 export default function CatalogDetailPageV2() {
   const { globalProductId = '' } = useParams()
-  const navigate = useNavigate()
   const [detail, setDetail] = useState(null)
+  const [confirmedProductType, setConfirmedProductType] = useState('')
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -82,17 +81,17 @@ export default function CatalogDetailPageV2() {
   const identities = Array.isArray(detail?.identities) ? detail.identities : []
   const householdArticles = Array.isArray(detail?.household_articles) ? detail.household_articles : []
   const receiptLines = Array.isArray(detail?.receipt_lines) ? detail.receipt_lines : []
+  const productType = confirmedProductType || product.product_type
+
+  function handleGpcAssignmentChange(assignment) {
+    const description = String(assignment?.brick_description || assignment?.brick_description_en || '').trim()
+    setConfirmedProductType(description)
+  }
 
   return (
     <AppShell title="Catalogusdetail" showExit={false}>
       <div className="rz-catalog-page" data-testid="catalog-detail-page">
         <ScreenCard fullWidth>
-          <div className="rz-catalog-detail-actions">
-            <Button type="button" variant="secondary" onClick={() => navigate('/catalogus')}>
-              Terug naar Catalogus
-            </Button>
-          </div>
-
           {isLoading ? <div>Catalogusartikel laden…</div> : null}
           {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
 
@@ -101,20 +100,19 @@ export default function CatalogDetailPageV2() {
               <section className="rz-catalog-detail-section">
                 <h2>{text(product.name, 'Universeel artikel')}</h2>
                 <dl className="rz-catalog-definition-list">
-                  <div><dt>ID</dt><dd>{text(product.id)}</dd></div>
                   <div><dt>Merk</dt><dd>{text(product.brand)}</dd></div>
                   <div><dt>Primaire GTIN</dt><dd>{text(product.primary_gtin)}</dd></div>
-                  <div><dt>Producttype</dt><dd>{text(product.product_type, 'Nog niet geclassificeerd')}</dd></div>
+                  <div><dt>Producttype</dt><dd>{text(productType, 'Nog niet geclassificeerd')}</dd></div>
                   <div><dt>Bron</dt><dd>{sourceLabel(product.source)}</dd></div>
                   <div><dt>Kwaliteitsstatus</dt><dd>{text(product.quality_status)}</dd></div>
                 </dl>
               </section>
 
-              <CatalogGpcFrame globalProductId={globalProductId} />
+              <CatalogGpcFrame globalProductId={globalProductId} onAssignmentChange={handleGpcAssignmentChange} />
 
               <section className="rz-catalog-detail-section">
                 <h3>Identiteiten</h3>
-                <Table dataTestId="catalog-identities-table">
+                <Table dataTestId="catalog-identities-table" tableClassName="rz-catalog-detail-table rz-catalog-detail-table--4-columns">
                   <thead>
                     <tr className="rz-table-header">
                       <th>Type</th><th>Waarde</th><th>Primair</th><th>Bron</th>
@@ -137,7 +135,7 @@ export default function CatalogDetailPageV2() {
 
               <section className="rz-catalog-detail-section">
                 <h3>Gekoppelde huishoudartikelen</h3>
-                <Table dataTestId="catalog-household-articles-table">
+                <Table dataTestId="catalog-household-articles-table" tableClassName="rz-catalog-detail-table rz-catalog-detail-table--4-columns">
                   <thead>
                     <tr className="rz-table-header">
                       <th>Huishouden</th><th>Huishoudartikel</th><th>Minimum</th><th>Ideaal</th>
@@ -160,7 +158,7 @@ export default function CatalogDetailPageV2() {
 
               <section className="rz-catalog-detail-section">
                 <h3>Gekoppelde kassabonregels</h3>
-                <Table dataTestId="catalog-receipt-lines-table">
+                <Table dataTestId="catalog-receipt-lines-table" tableClassName="rz-catalog-detail-table rz-catalog-detail-table--3-columns">
                   <thead>
                     <tr className="rz-table-header">
                       <th>Bonartikel</th><th>Huishoudartikel</th><th>GTIN</th>
