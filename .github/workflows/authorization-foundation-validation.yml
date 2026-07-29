@@ -1,0 +1,27 @@
+name: Authorization foundation validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/tests/test_authorization_foundation_contract.py'
+      - '.github/workflows/authorization-foundation-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-authorization-foundation:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:////tmp/rezzerv-authorization-validation.db
+      SQLITE_RUNTIME_VOLUME: github-actions-tmp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install focused test dependencies
+        run: python -m pip install --quiet pytest sqlalchemy==2.0.36
+      - name: Compile authorization foundation
+        run: python -m py_compile backend/app/services/authorization_foundation_service.py
+      - name: Run authorization contract tests
+        run: PYTHONPATH=backend python -m pytest -q backend/tests/test_authorization_foundation_contract.py
