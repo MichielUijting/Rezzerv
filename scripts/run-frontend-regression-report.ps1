@@ -77,7 +77,8 @@ try {
     "tests/e2e/external-databases-no-redundant-buttons.frontend-regression.spec.js",
     "tests/e2e/product-groups.frontend-regression.spec.js",
     "tests/e2e/settings-article-groups.frontend-regression.spec.js",
-    "tests/e2e/article-detail.frontend-regression.spec.js"
+    "tests/e2e/article-detail.frontend-regression.spec.js",
+    "tests/e2e/catalog-gpc-search.frontend-regression.spec.js"
   ) -join " "
 
   docker run --rm `
