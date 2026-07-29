@@ -30,7 +30,7 @@ def test_catalog_overview_uses_backend_pagination_without_n_plus_one_requests():
     assert "Promise.all(catalogItems.map(enrichCatalogItemWithGpc))" not in frontend
     assert "enrichCatalogItemWithGpc" not in frontend
     assert "/api/catalog?limit=2000" not in frontend
-    assert "Query(default=10, ge=1, le=100)" in backend
+    assert "Query(default=10, ge=1, le=2000)" in backend
     assert "offset: int = Query(default=0, ge=0)" in backend
     assert "LIMIT :limit OFFSET :offset" in backend
     assert "SELECT COUNT(*)" in backend
