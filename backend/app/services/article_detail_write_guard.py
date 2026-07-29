@@ -6,8 +6,8 @@ from fastapi.responses import JSONResponse
 _TARGET_ENDPOINTS = {
     "enrich_article_by_id",
     "patch_article_household_details",
-    "set_household_article_gpc_brick",
-    "clear_household_article_gpc_brick",
+    "set_catalog_product_gpc_brick",
+    "clear_catalog_product_gpc_brick",
 }
 _WRITE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -32,9 +32,6 @@ def install_article_detail_write_guard(main_module) -> None:
     if getattr(app.state, "article_detail_write_guard_installed", False):
         return
 
-    # De lichte guard-contracttest levert bewust alleen de schrijfrechtfunctie.
-    # In de echte runtime is ook require_household_context aanwezig en worden
-    # de GPC-routes vóór de route-inventarisatie geïnstalleerd.
     if hasattr(main_module, "require_household_context"):
         from app.services.gpc_article_assignment_service import install_gpc_article_assignment_routes
         install_gpc_article_assignment_routes(main_module)
