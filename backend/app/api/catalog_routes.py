@@ -211,7 +211,7 @@ def list_catalog(
     household_article_count: str = Query(default="", max_length=50),
     sort_by: str = Query(default="name", max_length=50),
     sort_direction: str = Query(default="asc", pattern="^(asc|desc)$"),
-    limit: int = Query(default=10, ge=1, le=100),
+    limit: int = Query(default=10, ge=1, le=2000),
     offset: int = Query(default=0, ge=0),
 ):
     if "global_products" not in _tables():
