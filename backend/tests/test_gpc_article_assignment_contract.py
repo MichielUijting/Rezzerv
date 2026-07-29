@@ -102,7 +102,22 @@ def test_catalog_exposes_direct_gpc_action_button_and_normal_route():
     assert "De GPC Brick is bevestigd en opgeslagen" in action
 
 
-def test_frontend_integrates_frame_natively_without_unreliable_suggestion():
+def test_suggestion_can_be_confirmed_rejected_or_replaced_in_both_screens():
+    frame = FRAME.read_text(encoding="utf-8")
+    action = ACTION_PAGE.read_text(encoding="utf-8")
+
+    for source in (frame, action):
+        assert "Voorgestelde classificatie" in source
+        assert "Voorstel bevestigen" in source
+        assert "Andere Brick zoeken" in source
+        assert "Voorstel negeren" in source
+        assert "rezzerv:gpc-suggestion-rejected:" in source
+        assert "rememberSuggestionRejection" in source
+        assert "isSuggestionRejected" in source
+        assert "/api/catalog/gpc/bricks" in source
+
+
+def test_frontend_integrates_frame_natively_in_catalog_detail():
     frame = FRAME.read_text(encoding="utf-8")
     detail = DETAIL.read_text(encoding="utf-8")
     router = FRONTEND_ROUTER.read_text(encoding="utf-8")
@@ -114,9 +129,6 @@ def test_frontend_integrates_frame_natively_without_unreliable_suggestion():
     assert "GPC classificeren" in frame
     assert "GPC wijzigen" in frame
     assert "editorOpen" in frame
-    assert "/api/catalog/gpc/bricks" in frame
-    assert "Voorgestelde classificatie" not in frame
-    assert "Voorstel bevestigen" not in frame
     assert "Overgenomen uit eerder bevestigde GPC-productgroep" in frame
     assert "CatalogGpcFrame globalProductId={globalProductId}" in detail
     assert "CatalogDetailPageV2" in router
@@ -125,3 +137,4 @@ def test_frontend_integrates_frame_natively_without_unreliable_suggestion():
     assert "ArticleGpcInlineSummary" not in router
     assert ".rz-catalog-gpc-section" in css
     assert ".rz-catalog-gpc-result" in css
+    assert ".rz-catalog-gpc-suggestion" in css
