@@ -66,7 +66,7 @@ export default function CatalogGpcFrame({ globalProductId }) {
       setError('')
       try {
         const response = await fetchJsonWithAuth(
-          `/api/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=25`,
+          `/api/catalog/gpc/bricks?query=${encodeURIComponent(normalized)}&limit=25`,
         )
         const data = await response.json().catch(() => ({}))
         if (!response.ok) {
