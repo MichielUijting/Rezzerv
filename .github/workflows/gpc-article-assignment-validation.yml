@@ -7,7 +7,8 @@ on:
       - 'backend/app/services/article_detail_write_guard.py'
       - 'backend/tests/test_gpc_article_assignment_contract.py'
       - 'frontend/src/features/catalog/CatalogGpcFrame.jsx'
-      - 'frontend/src/features/catalog/CatalogDetailPage.jsx'
+      - 'frontend/src/features/catalog/CatalogDetailPageV2.jsx'
+      - 'frontend/src/features/catalog/catalog.css'
       - 'frontend/src/app/router/AppRouter.jsx'
       - '.github/workflows/gpc-article-assignment-validation.yml'
   workflow_dispatch:
