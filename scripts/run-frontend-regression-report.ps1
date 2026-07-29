@@ -1,10 +1,19 @@
 param(
-  [switch]$SkipDockerBuild
+  [switch]$SkipDockerBuild,
+  [int]$FrontendPort = 5174,
+  [int]$BackendPort = 8011
 )
 
 $ErrorActionPreference = "Stop"
 
+$frontendBaseUrl = "http://localhost:$FrontendPort"
+$backendBaseUrl = "http://localhost:$BackendPort"
+$playwrightFrontendUrl = "http://host.docker.internal:$FrontendPort"
+$playwrightBackendUrl = "http://host.docker.internal:$BackendPort"
+
 Write-Host "=== Rezzerv centrale frontendregressie ===" -ForegroundColor Cyan
+Write-Host "Frontend: $frontendBaseUrl"
+Write-Host "Backend:  $backendBaseUrl"
 
 function Invoke-RegressionFixtureCleanup {
   param(
@@ -20,7 +29,7 @@ function Invoke-RegressionFixtureCleanup {
       if ($attempt -gt 1) {
         Write-Host "Cleanup opnieuw proberen ($attempt/$MaxAttempts)..." -ForegroundColor Yellow
       }
-      Invoke-RestMethod -Method Post -Uri "http://localhost:8011/api/testing/fixtures/cleanup" -Headers $headers | Out-Host
+      Invoke-RestMethod -Method Post -Uri "$backendBaseUrl/api/testing/fixtures/cleanup" -Headers $headers | Out-Host
       return
     } catch {
       $lastError = $_
@@ -38,6 +47,10 @@ Push-Location $repoRoot
 
 try {
   if (-not $SkipDockerBuild) {
+    if ($FrontendPort -ne 5174 -or $BackendPort -ne 8011) {
+      throw "Docker build/start via deze runner ondersteunt alleen de standaardpoorten 5174/8011. Start een geïsoleerde omgeving vooraf en gebruik -SkipDockerBuild met -FrontendPort en -BackendPort."
+    }
+
     Write-Host "`n=== Docker build/start ===" -ForegroundColor Cyan
     docker compose up -d --build
   }
@@ -47,7 +60,7 @@ try {
   for ($i = 1; $i -le 12; $i++) {
     try {
       Write-Host "Healthcheck poging $i..."
-      Invoke-RestMethod http://localhost:8011/api/health | Out-Host
+      Invoke-RestMethod "$backendBaseUrl/api/health" | Out-Host
       $healthOk = $true
       break
     } catch {
@@ -57,7 +70,7 @@ try {
   }
 
   if (-not $healthOk) {
-    throw "Backend healthcheck niet groen na 12 pogingen."
+    throw "Backend healthcheck niet groen na 12 pogingen op $backendBaseUrl."
   }
 
   Invoke-RegressionFixtureCleanup
@@ -82,8 +95,8 @@ try {
 
   docker run --rm `
     --add-host=host.docker.internal:host-gateway `
-    -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:5174 `
-    -e PLAYWRIGHT_API_URL=http://host.docker.internal:8011 `
+    -e PLAYWRIGHT_BASE_URL=$playwrightFrontendUrl `
+    -e PLAYWRIGHT_API_URL=$playwrightBackendUrl `
     -v "${frontendPath}:/work" `
     -v rezzerv_playwright_node_modules:/work/node_modules `
     -w /work `
