@@ -8,6 +8,7 @@ on:
       - 'backend/app/services/article_detail_write_guard.py'
       - 'backend/tests/test_gpc_article_assignment_contract.py'
       - 'frontend/src/features/catalog/CatalogGpcFrame.jsx'
+      - 'frontend/src/features/catalog/CatalogGpcClassificationPage.jsx'
       - 'frontend/src/features/catalog/CatalogDetailPageV2.jsx'
       - 'frontend/src/features/catalog/catalog.css'
       - 'frontend/src/app/router/AppRouter.jsx'
@@ -17,6 +18,9 @@ on:
 jobs:
   validate-gpc-catalog-assignment:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:////tmp/rezzerv-gpc-validation.db
+      SQLITE_RUNTIME_VOLUME: github-actions-tmp
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
