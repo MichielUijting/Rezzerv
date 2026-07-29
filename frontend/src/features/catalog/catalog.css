@@ -141,6 +141,11 @@
   gap: 4px;
 }
 
+.rz-catalog-gpc-primary small,
+.rz-catalog-gpc-suggestion small {
+  color: #5f6f63;
+}
+
 .rz-catalog-gpc-label {
   color: #667085;
   font-size: 13px;
@@ -166,6 +171,23 @@
 
 .rz-catalog-gpc-hierarchy dd {
   margin: 3px 0 0;
+}
+
+.rz-catalog-gpc-suggestion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #d6b85a;
+  border-radius: 8px;
+  background: #fffaf0;
+}
+
+.rz-catalog-gpc-suggestion > div {
+  display: grid;
+  gap: 4px;
 }
 
 .rz-catalog-gpc-editor {
@@ -230,12 +252,14 @@
 }
 
 @media (max-width: 760px) {
-  .rz-catalog-section-header {
+  .rz-catalog-section-header,
+  .rz-catalog-gpc-suggestion {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .rz-catalog-section-header .rz-button {
+  .rz-catalog-section-header .rz-button,
+  .rz-catalog-gpc-suggestion .rz-button {
     width: 100%;
   }
 }
