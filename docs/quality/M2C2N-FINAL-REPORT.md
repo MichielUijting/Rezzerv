@@ -1,7 +1,7 @@
 # M2C2n eindrapport
 
-Statusdatum: 2026-07-22  
-Basis voor eindcontrole: `main` na PR #185, mergecommit `b2e5f4a89bd1a7afa9d4e2c69422bd20a5eb9840`.
+Statusdatum: 2026-07-29  
+Basis voor eindcontrole: actuele PR-head met de gecontroleerde runtime-routebaseline.
 
 ## Eindadvies
 
@@ -20,14 +20,14 @@ Dit advies betekent dat de afgesproken technische M2C2n-scope aantoonbaar is ge√
 
 De actuele FastAPI-baseline bevat:
 
-- 204 routeregistraties;
-- 204 unieke methode-padcombinaties;
+- 208 routeregistraties;
+- 208 unieke methode-padcombinaties;
 - nul dubbele registraties;
-- 90 leesregistraties;
-- 114 mutatieregistraties;
-- 85 productiemutaties, 17 testingmutaties, 11 adminmutaties en 1 devmutatie.
+- 92 leesregistraties;
+- 116 mutatieregistraties;
+- 87 productiemutaties, 17 testingmutaties, 11 adminmutaties en 1 devmutatie.
 
-Iedere routewijziging wordt door de routecatalogusworkflow en fingerprintbaseline zichtbaar gemaakt.
+De uitbreiding ten opzichte van de vorige baseline bestaat uit vier bedoelde productieroutes voor Catalogus-GPC: Brick zoeken, classificatie lezen, classificatie opslaan en classificatie verwijderen. Iedere routewijziging wordt door de routecatalogusworkflow en fingerprintbaseline zichtbaar gemaakt.
 
 ## Afgesloten werkpakketten
 
