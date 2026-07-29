@@ -41,6 +41,27 @@ function csvValue(value) {
   return `"${String(value ?? '').replaceAll('"', '""')}"`
 }
 
+async function enrichCatalogItemWithGpc(item) {
+  const productId = String(item?.id || '').trim()
+  if (!productId) return item
+  try {
+    const response = await fetchJsonWithAuth(`/api/catalog/${encodeURIComponent(productId)}/gpc-brick`, { method: 'GET' })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok || !data?.assignment) return item
+    const assignment = data.assignment
+    const confirmedDescription = String(assignment.brick_description || assignment.brick_description_en || '').trim()
+    if (!confirmedDescription) return item
+    return {
+      ...item,
+      product_type: confirmedDescription,
+      gpc_brick_code: assignment.brick_code,
+      quality_status: 'Compleet',
+    }
+  } catch {
+    return item
+  }
+}
+
 export default function CatalogPage() {
   const navigate = useNavigate()
   const [items, setItems] = useState([])
@@ -64,7 +85,9 @@ export default function CatalogPage() {
         const response = await fetchJsonWithAuth('/api/catalog?limit=2000', { method: 'GET' })
         const data = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(data?.detail || 'Catalogus kon niet worden geladen')
-        if (!cancelled) setItems(Array.isArray(data?.items) ? data.items : [])
+        const catalogItems = Array.isArray(data?.items) ? data.items : []
+        const enrichedItems = await Promise.all(catalogItems.map(enrichCatalogItemWithGpc))
+        if (!cancelled) setItems(enrichedItems)
       } catch (err) {
         if (!cancelled) setError(err?.message || 'Catalogus kon niet worden geladen')
       } finally {
