@@ -112,7 +112,8 @@ export default function CatalogDetailPageV2() {
 
               <section className="rz-catalog-detail-section">
                 <h3>Identiteiten</h3>
-                <Table dataTestId="catalog-identities-table" tableClassName="rz-catalog-detail-table rz-catalog-detail-table--4-columns">
+                <Table dataTestId="catalog-identities-table" tableClassName="rz-catalog-detail-table" tableStyle={{ tableLayout: 'fixed', width: '100%' }}>
+                  <colgroup><col style={{ width: '25%' }} /><col style={{ width: '25%' }} /><col style={{ width: '25%' }} /><col style={{ width: '25%' }} /></colgroup>
                   <thead>
                     <tr className="rz-table-header">
                       <th>Type</th><th>Waarde</th><th>Primair</th><th>Bron</th>
@@ -135,7 +136,8 @@ export default function CatalogDetailPageV2() {
 
               <section className="rz-catalog-detail-section">
                 <h3>Gekoppelde huishoudartikelen</h3>
-                <Table dataTestId="catalog-household-articles-table" tableClassName="rz-catalog-detail-table rz-catalog-detail-table--4-columns">
+                <Table dataTestId="catalog-household-articles-table" tableClassName="rz-catalog-detail-table" tableStyle={{ tableLayout: 'fixed', width: '100%' }}>
+                  <colgroup><col style={{ width: '25%' }} /><col style={{ width: '25%' }} /><col style={{ width: '25%' }} /><col style={{ width: '25%' }} /></colgroup>
                   <thead>
                     <tr className="rz-table-header">
                       <th>Huishouden</th><th>Huishoudartikel</th><th>Minimum</th><th>Ideaal</th>
@@ -158,7 +160,8 @@ export default function CatalogDetailPageV2() {
 
               <section className="rz-catalog-detail-section">
                 <h3>Gekoppelde kassabonregels</h3>
-                <Table dataTestId="catalog-receipt-lines-table" tableClassName="rz-catalog-detail-table rz-catalog-detail-table--3-columns">
+                <Table dataTestId="catalog-receipt-lines-table" tableClassName="rz-catalog-detail-table" tableStyle={{ tableLayout: 'fixed', width: '100%' }}>
+                  <colgroup><col style={{ width: '33.333%' }} /><col style={{ width: '33.333%' }} /><col style={{ width: '33.334%' }} /></colgroup>
                   <thead>
                     <tr className="rz-table-header">
                       <th>Bonartikel</th><th>Huishoudartikel</th><th>GTIN</th>
