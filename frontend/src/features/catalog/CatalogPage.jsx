@@ -46,13 +46,8 @@ export default function CatalogPage() {
   const [items, setItems] = useState([])
   const [selectedIds, setSelectedIds] = useState([])
   const [filters, setFilters] = useState({
-    name: '',
-    brand: '',
-    primaryGtin: '',
-    productType: '',
-    source: '',
-    householdArticleCount: '',
-    qualityStatus: '',
+    name: '', brand: '', primaryGtin: '', productType: '', source: '',
+    householdArticleCount: '', qualityStatus: '',
   })
   const [sort, setSort] = useState({ key: 'name', direction: 'asc' })
   const [page, setPage] = useState(1)
@@ -62,7 +57,6 @@ export default function CatalogPage() {
 
   useEffect(() => {
     let cancelled = false
-
     async function loadCatalog() {
       setIsLoading(true)
       setError('')
@@ -77,7 +71,6 @@ export default function CatalogPage() {
         if (!cancelled) setIsLoading(false)
       }
     }
-
     loadCatalog()
     return () => { cancelled = true }
   }, [])
@@ -86,24 +79,21 @@ export default function CatalogPage() {
     const normalizedFilters = Object.fromEntries(
       Object.entries(filters).map(([key, value]) => [key, String(value || '').trim().toLowerCase()])
     )
-
-    const rows = items.filter((item) => {
-      return (!normalizedFilters.name || String(item.name || '').toLowerCase().includes(normalizedFilters.name))
-        && (!normalizedFilters.brand || String(item.brand || '').toLowerCase().includes(normalizedFilters.brand))
-        && (!normalizedFilters.primaryGtin || String(item.primary_gtin || '').toLowerCase().includes(normalizedFilters.primaryGtin))
-        && (!normalizedFilters.productType || String(item.product_type || '').toLowerCase().includes(normalizedFilters.productType))
-        && (!normalizedFilters.source || String(item.source || '').toLowerCase().includes(normalizedFilters.source))
-        && (!normalizedFilters.householdArticleCount || String(item.household_article_count ?? '').toLowerCase().includes(normalizedFilters.householdArticleCount))
-        && (!normalizedFilters.qualityStatus || String(item.quality_status || '').toLowerCase() === normalizedFilters.qualityStatus)
-    })
-
+    const rows = items.filter((item) => (
+      (!normalizedFilters.name || String(item.name || '').toLowerCase().includes(normalizedFilters.name))
+      && (!normalizedFilters.brand || String(item.brand || '').toLowerCase().includes(normalizedFilters.brand))
+      && (!normalizedFilters.primaryGtin || String(item.primary_gtin || '').toLowerCase().includes(normalizedFilters.primaryGtin))
+      && (!normalizedFilters.productType || String(item.product_type || '').toLowerCase().includes(normalizedFilters.productType))
+      && (!normalizedFilters.source || String(item.source || '').toLowerCase().includes(normalizedFilters.source))
+      && (!normalizedFilters.householdArticleCount || String(item.household_article_count ?? '').toLowerCase().includes(normalizedFilters.householdArticleCount))
+      && (!normalizedFilters.qualityStatus || String(item.quality_status || '').toLowerCase() === normalizedFilters.qualityStatus)
+    ))
     rows.sort((left, right) => {
       const a = String(left?.[sort.key] ?? '').toLowerCase()
       const b = String(right?.[sort.key] ?? '').toLowerCase()
       const result = a.localeCompare(b, 'nl')
       return sort.direction === 'desc' ? -result : result
     })
-
     return rows
   }, [items, filters, sort])
 
@@ -117,64 +107,34 @@ export default function CatalogPage() {
   const visibleIds = visibleItems.map((item) => item.id)
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id))
 
-  function updateFilter(key, value) {
-    setFilters((current) => ({ ...current, [key]: value }))
-    setPage(1)
-  }
-
+  function updateFilter(key, value) { setFilters((current) => ({ ...current, [key]: value })); setPage(1) }
   function updateSort(key) {
     setSort((current) => current.key === key
       ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
       : { key, direction: 'asc' })
     setPage(1)
   }
-
-  function sortMark(key) {
-    return sort.key === key && sort.direction === 'asc' ? '^' : 'v'
-  }
-
-  function goToPage(targetPage) {
-    setPage(Math.max(1, Math.min(pageCount, targetPage)))
-  }
-
+  function sortMark(key) { return sort.key === key && sort.direction === 'asc' ? '^' : 'v' }
+  function goToPage(targetPage) { setPage(Math.max(1, Math.min(pageCount, targetPage))) }
   function toggleSelected(id) {
     setSelectedIds((current) => current.includes(id)
       ? current.filter((selectedId) => selectedId !== id)
       : [...current, id])
   }
-
   function toggleVisible() {
-    setSelectedIds((current) => {
-      if (allVisibleSelected) return current.filter((id) => !visibleIds.includes(id))
-      return Array.from(new Set([...current, ...visibleIds]))
-    })
+    setSelectedIds((current) => allVisibleSelected
+      ? current.filter((id) => !visibleIds.includes(id))
+      : Array.from(new Set([...current, ...visibleIds])))
   }
-
-  function clearSelection() {
-    setSelectedIds([])
-    setMessage('Selectie gewist.')
-  }
+  function clearSelection() { setSelectedIds([]); setMessage('Selectie gewist.') }
 
   function exportSelected() {
     const selectedItems = items.filter((item) => selectedIds.includes(item.id))
-    if (!selectedItems.length) {
-      setMessage('Selecteer eerst een of meer catalogusartikelen.')
-      return
-    }
-
+    if (!selectedItems.length) { setMessage('Selecteer eerst een of meer catalogusartikelen.'); return }
     const rows = [
       ['Universeel artikel', 'Merk', 'Primaire GTIN', 'Producttype', 'Bron', 'Huishoudartikelen', 'Status'],
-      ...selectedItems.map((item) => [
-        item.name,
-        item.brand,
-        item.primary_gtin,
-        item.product_type,
-        item.source,
-        item.household_article_count,
-        item.quality_status,
-      ]),
+      ...selectedItems.map((item) => [item.name, item.brand, item.primary_gtin, item.product_type, item.source, item.household_article_count, item.quality_status]),
     ]
-
     const csv = rows.map((row) => row.map(csvValue).join(';')).join('\r\n')
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
@@ -194,45 +154,32 @@ export default function CatalogPage() {
             <div className="rz-catalog-header">
               <div>
                 <h2>Catalogus</h2>
-                <p>Alleen-lezenoverzicht van universele artikelen, producttypen en centrale productidentiteiten.</p>
+                <p>Overzicht van universele artikelen, centrale productidentiteiten en GS1 GPC-classificaties.</p>
               </div>
             </div>
 
             {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
             {message ? <div className="rz-inline-feedback">{message}</div> : null}
 
-            <div className="rz-external-databases-actions" aria-label="Bulkacties Catalogus">
-              <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={exportSelected}>
-                Exporteren
+            <div className="rz-external-databases-actions" aria-label="Acties Catalogus">
+              <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>
+                GPC classificeren
               </Button>
-              <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={clearSelection}>
-                Selectie wissen
-              </Button>
+              <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={exportSelected}>Exporteren</Button>
+              <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={clearSelection}>Selectie wissen</Button>
               <span className="rz-external-databases-muted">Geselecteerd: {selectedIds.length}</span>
             </div>
 
             <div className="rz-table-scroll rz-table-scroll--wide">
               <Table dataTestId="catalog-table" tableClassName="rz-catalog-table" resizableColumns>
                 <colgroup>
-                  <col className="rz-catalog-col-select" />
-                  <col className="rz-catalog-col-name" />
-                  <col className="rz-catalog-col-brand" />
-                  <col className="rz-catalog-col-gtin" />
-                  <col className="rz-catalog-col-product-type" />
-                  <col className="rz-catalog-col-source" />
-                  <col className="rz-catalog-col-household-count" />
-                  <col className="rz-catalog-col-status" />
+                  <col className="rz-catalog-col-select" /><col className="rz-catalog-col-name" /><col className="rz-catalog-col-brand" />
+                  <col className="rz-catalog-col-gtin" /><col className="rz-catalog-col-product-type" /><col className="rz-catalog-col-source" />
+                  <col className="rz-catalog-col-household-count" /><col className="rz-catalog-col-status" />
                 </colgroup>
                 <thead>
                   <tr className="rz-table-header">
-                    <th className="rz-check">
-                      <input
-                        type="checkbox"
-                        checked={allVisibleSelected}
-                        onChange={toggleVisible}
-                        aria-label="Selecteer alle zichtbare catalogusartikelen"
-                      />
-                    </th>
+                    <th className="rz-check"><input type="checkbox" checked={allVisibleSelected} onChange={toggleVisible} aria-label="Selecteer alle zichtbare catalogusartikelen" /></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('name')}>Universeel artikel <span>{sortMark('name')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('brand')}>Merk <span>{sortMark('brand')}</span></button></th>
                     <th><button type="button" className="rz-external-databases-sort" onClick={() => updateSort('primary_gtin')}>Primaire GTIN <span>{sortMark('primary_gtin')}</span></button></th>
@@ -249,42 +196,21 @@ export default function CatalogPage() {
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.productType} onChange={(event) => updateFilter('productType', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.source} onChange={(event) => updateFilter('source', event.target.value)} /></th>
                     <th><input className="rz-table-filter" placeholder="Filter" value={filters.householdArticleCount} onChange={(event) => updateFilter('householdArticleCount', event.target.value)} /></th>
-                    <th>
-                      <select className="rz-table-filter" value={filters.qualityStatus} onChange={(event) => updateFilter('qualityStatus', event.target.value)} aria-label="Kwaliteitsstatus filter">
-                        <option value="">Alle</option>
-                        <option value="compleet">Compleet</option>
-                        <option value="door gebruiker bevestigd">Door gebruiker bevestigd</option>
-                        <option value="gtin bevestigd — producttype nog te bepalen">GTIN bevestigd — producttype nog te bepalen</option>
-                        <option value="controle nodig">Controle nodig</option>
-                        <option value="conflict">Conflict</option>
-                      </select>
-                    </th>
+                    <th><select className="rz-table-filter" value={filters.qualityStatus} onChange={(event) => updateFilter('qualityStatus', event.target.value)} aria-label="Kwaliteitsstatus filter">
+                      <option value="">Alle</option><option value="compleet">Compleet</option><option value="door gebruiker bevestigd">Door gebruiker bevestigd</option>
+                      <option value="gtin bevestigd — producttype nog te bepalen">GTIN bevestigd — producttype nog te bepalen</option><option value="controle nodig">Controle nodig</option><option value="conflict">Conflict</option>
+                    </select></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {isLoading ? (
-                    <tr><td colSpan="8">Catalogus laden...</td></tr>
-                  ) : visibleItems.length ? visibleItems.map((item) => (
+                  {isLoading ? <tr><td colSpan="8">Catalogus laden...</td></tr> : visibleItems.length ? visibleItems.map((item) => (
                     <tr key={item.id} onDoubleClick={() => navigate(`/catalogus/${encodeURIComponent(item.id)}`)} data-testid={`catalog-row-${item.id}`}>
-                      <td className="rz-check">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(item.id)}
-                          onChange={() => toggleSelected(item.id)}
-                          aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`}
-                        />
-                      </td>
-                      <td>{text(item.name)}</td>
-                      <td>{text(item.brand)}</td>
-                      <td>{text(item.primary_gtin)}</td>
-                      <td>{text(item.product_type)}</td>
-                      <td>{sourceLabel(item.source)}</td>
-                      <td className="rz-num">{Number(item.household_article_count || 0)}</td>
+                      <td className="rz-check"><input type="checkbox" checked={selectedIds.includes(item.id)} onChange={() => toggleSelected(item.id)} aria-label={`Selecteer ${text(item.name, 'catalogusartikel')}`} /></td>
+                      <td>{text(item.name)}</td><td>{text(item.brand)}</td><td>{text(item.primary_gtin)}</td><td>{text(item.product_type)}</td>
+                      <td>{sourceLabel(item.source)}</td><td className="rz-num">{Number(item.household_article_count || 0)}</td>
                       <td><span className={qualityClass(item.quality_status)}>{text(item.quality_status)}</span></td>
                     </tr>
-                  )) : (
-                    <tr><td colSpan="8">Geen universele artikelen gevonden.</td></tr>
-                  )}
+                  )) : <tr><td colSpan="8">Geen universele artikelen gevonden.</td></tr>}
                 </tbody>
               </Table>
             </div>
