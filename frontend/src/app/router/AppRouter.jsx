@@ -24,8 +24,7 @@ import ExternalDatabasesPage from '../../features/externalDatabases/ExternalData
 import ProductGroupsPage from '../../features/productGroups/ProductGroupsPage.jsx'
 import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.jsx'
 import CatalogPage from '../../features/catalog/CatalogPage.jsx'
-import CatalogDetailPage from '../../features/catalog/CatalogDetailPage.jsx'
-import CatalogGpcFrame from '../../features/catalog/CatalogGpcFrame.jsx'
+import CatalogDetailPageV2 from '../../features/catalog/CatalogDetailPageV2.jsx'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import SettingsGuard from './SettingsGuard'
@@ -69,15 +68,6 @@ function LegacyReceiptLineRouteRedirect() {
   return <Navigate to={target} replace />
 }
 
-function CatalogDetailWithGpc() {
-  return (
-    <>
-      <CatalogDetailPage />
-      <CatalogGpcFrame />
-    </>
-  )
-}
-
 function Protected({ children }) {
   return <AuthGuard>{children}</AuthGuard>
 }
@@ -107,7 +97,7 @@ const router = createBrowserRouter([
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
   { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
-  { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailWithGpc /></ProtectedAdmin> },
+  { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPageV2 /></ProtectedAdmin> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
