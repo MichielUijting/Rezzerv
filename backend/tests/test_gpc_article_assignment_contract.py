@@ -117,6 +117,23 @@ def test_suggestion_can_be_confirmed_rejected_or_replaced_in_both_screens():
         assert "/api/catalog/gpc/bricks" in source
 
 
+def test_catalog_detail_uses_confirmed_brick_as_product_type_and_equal_columns():
+    frame = FRAME.read_text(encoding="utf-8")
+    detail = DETAIL.read_text(encoding="utf-8")
+
+    assert "Terug naar Catalogus" not in detail
+    assert "<dt>ID</dt>" not in detail
+    assert "onAssignmentChange?.(currentAssignment)" in frame
+    assert "onAssignmentChange?.(savedAssignment)" in frame
+    assert "onAssignmentChange?.(null)" in frame
+    assert "confirmedProductType || product.product_type" in detail
+    assert "assignment?.brick_description || assignment?.brick_description_en" in detail
+    assert detail.count("width: '25%'") == 8
+    assert "width: '33.333%'" in detail
+    assert "width: '33.334%'" in detail
+    assert detail.count("tableLayout: 'fixed'") == 3
+
+
 def test_frontend_integrates_frame_natively_in_catalog_detail():
     frame = FRAME.read_text(encoding="utf-8")
     detail = DETAIL.read_text(encoding="utf-8")
@@ -131,6 +148,7 @@ def test_frontend_integrates_frame_natively_in_catalog_detail():
     assert "editorOpen" in frame
     assert "Overgenomen uit eerder bevestigde GPC-productgroep" in frame
     assert "CatalogGpcFrame globalProductId={globalProductId}" in detail
+    assert "onAssignmentChange={handleGpcAssignmentChange}" in detail
     assert "CatalogDetailPageV2" in router
     assert "CatalogDetailWithGpc" not in router
     assert "'/voorraad/:articleId/gpc'" not in router
