@@ -51,7 +51,12 @@ def main() -> None:
         assert "authorization" in signature, f"Authorization-header ontbreekt op {key}"
 
         if guard_type == "household":
-            assert "_household_actor(authorization)" in source, f"Huishoudguard ontbreekt op {key}"
+            assert "_household_actor(" in source and "authorization" in source, (
+                f"Huishoudguard ontbreekt op {key}"
+            )
+            assert "x_rezzerv_household_id" in signature, (
+                f"Expliciete actieve-huishoudheader ontbreekt op {key}"
+            )
         elif guard_type == "platform_read":
             assert '_platform_actor(authorization, "platform.support_access.read")' in source, (
                 f"Platform-readguard ontbreekt op {key}"
