@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import create_engine, text
 
 from app.services.authorization_foundation_service import ensure_authorization_foundation
@@ -11,8 +12,7 @@ from app.services.authorization_membership_service import (
 
 
 def _connection():
-    engine = create_engine("sqlite:///:memory:")
-    conn = engine.connect()
+    conn = create_engine("sqlite:///:memory:").connect()
     ensure_authorization_foundation(conn)
     return conn
 
@@ -48,13 +48,13 @@ def test_legacy_memberships_migrate_admin_member_and_viewer():
     """))
 
     result = migrate_legacy_household_memberships(conn)
-
-    assert result.scanned == 3
-    assert result.created == 3
     roles = dict(conn.execute(text("""
         SELECT membership_id, role_key FROM auth_membership_roles
         ORDER BY membership_id
     """)).all())
+
+    assert result.scanned == 3
+    assert result.created == 3
     assert roles == {
         "m-admin": "household.admin",
         "m-member": "household.member",
@@ -99,17 +99,14 @@ def test_guard_allows_admin_and_denies_member_for_member_management():
         permission_key='members.manage',
     ).allowed
 
-    try:
+    with pytest.raises(AuthorizationDeniedError) as exc_info:
         require_household_permission(
             conn,
             household_id='h1',
             membership_id='member',
             permission_key='members.manage',
         )
-    except AuthorizationDeniedError as exc:
-        assert exc.decision.reason == 'not_granted'
-    else:
-        raise AssertionError('member management should have been denied')
+    assert exc_info.value.decision.reason == 'not_granted'
 
 
 def test_role_change_requires_permission_and_writes_audit():
@@ -132,8 +129,7 @@ def test_role_change_requires_permission_and_writes_audit():
         WHERE household_id = 'h1' AND membership_id = 'target'
     """)).scalar() == 'household.advanced_member'
     assert conn.execute(text("""
-        SELECT action FROM auth_audit_log
-        WHERE object_id = 'target'
+        SELECT action FROM auth_audit_log WHERE object_id = 'target'
     """)).scalar() == 'authorization.membership_role.updated'
 
 
@@ -141,7 +137,7 @@ def test_last_admin_cannot_be_demoted():
     conn = _connection()
     _assign(conn, 'h1', 'admin', 'household.admin')
 
-    try:
+    with pytest.raises(ValueError, match='minimaal één actieve beheerder'):
         set_household_membership_role(
             conn,
             household_id='h1',
@@ -150,10 +146,6 @@ def test_last_admin_cannot_be_demoted():
             target_membership_id='admin',
             role_key='household.member',
         )
-    except ValueError as exc:
-        assert 'active household administrator' in str(exc).lower()
-    else:
-        raise AssertionError('last administrator demotion should have failed')
 
 
 def test_permission_override_requires_permission_and_deny_wins():
@@ -172,24 +164,21 @@ def test_permission_override_requires_permission_and_deny_wins():
         reason='Tijdelijke beperking',
     )
 
-    try:
+    with pytest.raises(AuthorizationDeniedError) as exc_info:
         require_household_permission(
             conn,
             household_id='h1',
             membership_id='target',
             permission_key='inventory.view',
         )
-    except AuthorizationDeniedError as exc:
-        assert exc.decision.reason == 'explicit_deny'
-    else:
-        raise AssertionError('explicit deny should win over role grant')
+    assert exc_info.value.decision.reason == 'explicit_deny'
 
 
 def test_household_scope_cannot_assign_platform_permission():
     conn = _connection()
     _assign(conn, 'h1', 'admin', 'household.admin')
 
-    try:
+    with pytest.raises(ValueError, match='Platform permissions'):
         set_household_permission_override(
             conn,
             household_id='h1',
@@ -199,7 +188,3 @@ def test_household_scope_cannot_assign_platform_permission():
             permission_key='platform.permissions.manage',
             effect='allow',
         )
-    except ValueError as exc:
-        assert 'platform permissions' in str(exc).lower()
-    else:
-        raise AssertionError('platform permission assignment should have failed')
