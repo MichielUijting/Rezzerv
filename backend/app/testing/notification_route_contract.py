@@ -10,6 +10,7 @@ EXPECTED_SUPPORT_ROUTES = {
     ("GET", "/api/support/threads"): "household",
     ("GET", "/api/support/threads/{thread_id}"): "household",
     ("POST", "/api/support/threads/{thread_id}/messages"): "household",
+    ("PATCH", "/api/support/threads/{thread_id}/status"): "household",
     ("GET", "/api/platform/support/threads"): "platform_read",
     ("GET", "/api/platform/support/threads/{thread_id}"): "platform_read",
     ("POST", "/api/platform/support/threads"): "platform_mutate",
