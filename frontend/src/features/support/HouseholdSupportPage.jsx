@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -14,6 +15,11 @@ import {
 const STATUSES = ['', 'Open', 'In behandeling', 'Gesloten']
 
 export default function HouseholdSupportPage() {
+  const location = useLocation()
+  const query = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const originRoute = query.get('from') || '/meldingen'
+  const originScreen = query.get('screen') || 'Rezzerv'
+
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
   const [status, setStatus] = useState('')
@@ -42,6 +48,15 @@ export default function HouseholdSupportPage() {
 
   useEffect(() => { refresh() }, [status])
 
+  useEffect(() => {
+    if (query.get('new') === '1') {
+      setSelected(null)
+      setSubject('')
+      setMessage('')
+      setFeedback('')
+    }
+  }, [location.search])
+
   async function openThread(threadId) {
     setBusy(true)
     setFeedback('')
@@ -58,8 +73,8 @@ export default function HouseholdSupportPage() {
       const created = await createHouseholdThread({
         subject,
         message,
-        screen_name: document.title || 'Rezzerv',
-        route: window.location.pathname,
+        screen_name: originScreen,
+        route: originRoute,
         app_version: getRezzervVersionTag(),
       })
       setSubject('')
@@ -141,7 +156,7 @@ export default function HouseholdSupportPage() {
           ) : (
             <form onSubmit={submitNew} className="rz-support-form">
               <h2>Nieuwe melding</h2>
-              <p>De actieve pagina, route en appversie worden automatisch meegestuurd.</p>
+              <p>Herkomst: <strong>{originScreen}</strong> · <code>{originRoute}</code></p>
               <label>Onderwerp<Input value={subject} onChange={(event) => setSubject(event.target.value)} required maxLength={250} /></label>
               <label>Bericht<textarea value={message} onChange={(event) => setMessage(event.target.value)} required maxLength={10000} /></label>
               <Button variant="primary" type="submit" disabled={busy || !subject.trim() || !message.trim()}>Melding versturen</Button>
