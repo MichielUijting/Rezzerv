@@ -5,6 +5,17 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+function activeHouseholdHeaders() {
+  try {
+    const raw = localStorage.getItem('rezzerv_auth_context')
+    const context = raw ? JSON.parse(raw) : null
+    const householdId = String(context?.active_household_id || '').trim()
+    return householdId ? { 'X-Rezzerv-Household-ID': householdId } : {}
+  } catch {
+    return {}
+  }
+}
+
 async function request(url, options = {}) {
   const response = await fetch(url, {
     cache: 'no-store',
@@ -14,6 +25,7 @@ async function request(url, options = {}) {
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       Pragma: 'no-cache',
       ...authHeaders(),
+      ...activeHouseholdHeaders(),
       ...(options.headers || {}),
     },
   })
