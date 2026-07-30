@@ -25,11 +25,24 @@ const tiles = [
   { key: 'admin', label: 'Admin', icon: '🛠️' },
 ]
 
+const ADMIN_ROLES = new Set(['admin', 'owner', 'household.admin', 'huishoudbeheerder'])
+
+function isActiveHouseholdAdmin(context) {
+  const activeId = String(context?.active_household_id || '').trim()
+  const membership = (Array.isArray(context?.memberships) ? context.memberships : []).find((item) => {
+    const membershipId = String(item?.household_id || item?.id || '').trim()
+    return activeId && membershipId === activeId
+  })
+  const membershipRole = String(membership?.role || membership?.membership_role || '').trim().toLowerCase()
+  const displayRole = String(context?.display_role || '').trim().toLowerCase()
+  return ADMIN_ROLES.has(membershipRole) || ADMIN_ROLES.has(displayRole)
+}
+
 export default function HomePage() {
   const navigate = useNavigate()
   const storedContext = readStoredAuthContext()
   const [householdName, setHouseholdName] = useState(storedContext?.active_household_name || '')
-  const [isHouseholdAdmin, setIsHouseholdAdmin] = useState(String(storedContext?.display_role || '').toLowerCase() === 'admin')
+  const [isHouseholdAdmin, setIsHouseholdAdmin] = useState(isActiveHouseholdAdmin(storedContext))
   const [isViewer, setIsViewer] = useState(isHouseholdViewerFromContext(storedContext))
 
   useEffect(() => {
@@ -40,7 +53,7 @@ export default function HomePage() {
       .then((data) => {
         const name = data?.naam || 'Mijn huishouden'
         setHouseholdName(name)
-        setIsHouseholdAdmin(Boolean(data?.is_household_admin))
+        setIsHouseholdAdmin((current) => current || Boolean(data?.is_household_admin))
         setIsViewer(Boolean(data?.is_viewer))
         localStorage.setItem('rezzerv_household_name', name)
       }).catch(() => {})
