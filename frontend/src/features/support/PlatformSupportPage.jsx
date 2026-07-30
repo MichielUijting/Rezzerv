@@ -28,6 +28,8 @@ export default function PlatformSupportPage() {
   const [reply, setReply] = useState('')
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
+  const [refreshCount, setRefreshCount] = useState(0)
 
   async function loadThreads({ showBusy = false, showErrors = true } = {}) {
     if (showBusy) setBusy(true)
@@ -37,6 +39,8 @@ export default function PlatformSupportPage() {
       if (selected?.thread?.id) {
         setSelected(await readPlatformThread(selected.thread.id))
       }
+      setLastRefreshedAt(new Date())
+      setRefreshCount((value) => value + 1)
     } catch (error) {
       if (showErrors) setFeedback(error.message)
     } finally {
@@ -124,6 +128,10 @@ export default function PlatformSupportPage() {
     }
   }
 
+  const refreshLabel = lastRefreshedAt
+    ? `Laatst ververst: ${lastRefreshedAt.toLocaleTimeString('nl-NL')} · cyclus ${refreshCount}`
+    : 'Nog niet ververst'
+
   return (
     <AppShell title="Superuser / Meldingen" showExit={false}>
       <div className="rz-support-layout" data-testid="platform-support-page">
@@ -132,6 +140,7 @@ export default function PlatformSupportPage() {
             <div>
               <h2>Alle meldingen</h2>
               <p>Automatische verversing iedere 2 seconden.</p>
+              <p aria-live="polite" data-testid="platform-support-refresh-status">{refreshLabel}</p>
             </div>
             <Button variant="secondary" onClick={() => downloadPlatformSupportCsv(status).catch((error) => setFeedback(error.message))}>CSV exporteren</Button>
           </div>
