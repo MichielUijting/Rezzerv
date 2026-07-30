@@ -13,6 +13,9 @@ on:
 jobs:
   authorization-membership-api:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:///./authorization-membership-api-ci.db
+      SQLITE_RUNTIME_VOLUME: github_actions_workspace
     defaults:
       run:
         working-directory: backend
