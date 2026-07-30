@@ -18,7 +18,7 @@ export default function AuthorizedControl({
   if (allowed) return children
 
   const child = cloneElement(children, {
-    disabled: 'disabled' in (children.props || {}) ? true : children.props?.disabled,
+    disabled: true,
     'aria-disabled': 'true',
     tabIndex: -1,
     onClick: (event) => {
