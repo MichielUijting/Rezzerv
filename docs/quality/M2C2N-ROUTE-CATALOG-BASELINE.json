@@ -1,6 +1,6 @@
 {
   "catalog_version": 1,
-  "route_fingerprint_sha256": "be243f492c2b85b7c8110ef1512e9ed2e5760f63dd1db009c4337e9d6b0a3342",
+  "route_fingerprint_sha256": "2d6da254c72dd77a28765b49916bbb646936317b38bb4ea165ef9f58eb0ebd71",
   "summary": {
     "route_registrations": 214,
     "unique_method_paths": 214,
