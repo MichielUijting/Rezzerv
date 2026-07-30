@@ -80,7 +80,13 @@ def test_admin_can_list_members_roles_and_permissions():
         'household.admin', 'household.member'
     }
     assert roles.status_code == 200
-    assert len(roles.json()['items']) == 4
+    role_items = roles.json()['items']
+    assert len(role_items) == 4
+    admin_role = next(item for item in role_items if item['role_key'] == 'household.admin')
+    viewer_role = next(item for item in role_items if item['role_key'] == 'household.viewer')
+    assert 'permissions.manage' in admin_role['permission_keys']
+    assert 'inventory.view' in viewer_role['permission_keys']
+    assert 'inventory.update' not in viewer_role['permission_keys']
     assert permissions.status_code == 200
     assert any(item['permission_key'] == 'permissions.manage' for item in permissions.json()['items'])
 
