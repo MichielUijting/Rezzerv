@@ -2,7 +2,11 @@ import { fetchJsonWithAuth, readStoredAuthContext } from '../../../lib/authSessi
 
 function activeHouseholdId() {
   const context = readStoredAuthContext()
-  return String(context?.active_household_id || '').trim() || '1'
+  const householdId = String(context?.active_household_id || '').trim()
+  if (!householdId) {
+    throw new Error('Geen actief huishouden beschikbaar. Log opnieuw in of selecteer een huishouden.')
+  }
+  return householdId
 }
 
 async function parseJson(response) {
@@ -22,14 +26,15 @@ function endpoint(path = '') {
 }
 
 export async function fetchAuthorizationOverview() {
+  const householdId = activeHouseholdId()
   const responses = await Promise.all([
-    fetchJsonWithAuth(endpoint('/members'), { headers: { Accept: 'application/json' } }),
-    fetchJsonWithAuth(endpoint('/roles'), { headers: { Accept: 'application/json' } }),
-    fetchJsonWithAuth(endpoint('/permissions'), { headers: { Accept: 'application/json' } }),
+    fetchJsonWithAuth(`/api/households/${encodeURIComponent(householdId)}/authorization/members`, { headers: { Accept: 'application/json' } }),
+    fetchJsonWithAuth(`/api/households/${encodeURIComponent(householdId)}/authorization/roles`, { headers: { Accept: 'application/json' } }),
+    fetchJsonWithAuth(`/api/households/${encodeURIComponent(householdId)}/authorization/permissions`, { headers: { Accept: 'application/json' } }),
   ])
   const [members, roles, permissions] = await Promise.all(responses.map(parseJson))
   return {
-    householdId: String(members?.household_id || activeHouseholdId()),
+    householdId: String(members?.household_id || householdId),
     members: Array.isArray(members?.items) ? members.items : [],
     roles: Array.isArray(roles?.items) ? roles.items : [],
     permissions: Array.isArray(permissions?.items) ? permissions.items : [],
