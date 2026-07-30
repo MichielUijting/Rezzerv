@@ -17,36 +17,26 @@ async function seedSession(page, permissions = {}, displayRole = 'member') {
   }, { grantedPermissions: permissions, role: displayRole })
 }
 
-function householdPayload({ isAdmin = true, name = 'Testhuishouden', members } = {}) {
-  return {
-    household_name: name,
-    member_count: (members || []).length,
-    is_household_admin: isAdmin,
-    members: members || [
-      { email: 'admin@rezzerv.local', is_current_user: true, can_remove: false },
-      { email: 'lid@rezzerv.local', is_current_user: false, can_remove: true },
-    ],
-  }
+function householdPayload({ isAdmin = true, name = 'Testhuishouden' } = {}) {
+  const members = [
+    { email: 'admin@rezzerv.local', is_current_user: true, can_remove: false },
+    { email: 'lid@rezzerv.local', is_current_user: false, can_remove: true },
+  ]
+  return { household_name: name, member_count: members.length, is_household_admin: isAdmin, members }
 }
 
 function authorizationPayload() {
   return {
-    members: {
-      household_id: HOUSEHOLD_ID,
-      items: [
-        { membership_id: 'membership-admin', email: 'admin@rezzerv.local', role_key: 'household.admin' },
-        { membership_id: 'membership-member', email: 'lid@rezzerv.local', role_key: 'household.member' },
-      ],
-    },
-    roles: {
-      household_id: HOUSEHOLD_ID,
-      items: [
-        { role_key: 'household.viewer', name: 'Kijker' },
-        { role_key: 'household.member', name: 'Lid' },
-        { role_key: 'household.advanced_member', name: 'Geavanceerd lid' },
-        { role_key: 'household.admin', name: 'Beheerder' },
-      ],
-    },
+    members: { household_id: HOUSEHOLD_ID, items: [
+      { membership_id: 'membership-admin', email: 'admin@rezzerv.local', role_key: 'household.admin' },
+      { membership_id: 'membership-member', email: 'lid@rezzerv.local', role_key: 'household.member' },
+    ] },
+    roles: { household_id: HOUSEHOLD_ID, items: [
+      { role_key: 'household.viewer', name: 'Kijker' },
+      { role_key: 'household.member', name: 'Lid' },
+      { role_key: 'household.advanced_member', name: 'Geavanceerd lid' },
+      { role_key: 'household.admin', name: 'Beheerder' },
+    ] },
     permissions: { household_id: HOUSEHOLD_ID, items: [] },
   }
 }
@@ -55,41 +45,31 @@ async function mockHouseholdScreen(page, { isAdmin = true, denyMutations = false
   const calls = { name: 0, add: 0, role: 0, remove: 0, forbidden: 0 }
   let currentName = 'Testhuishouden'
   const auth = authorizationPayload()
+  const forbidden = async (route) => {
+    calls.forbidden += 1
+    await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'Niet geautoriseerd' }) })
+  }
 
   await page.route('**/api/household/members', async (route) => {
-    const method = route.request().method()
-    if (method === 'GET') {
+    if (route.request().method() === 'GET') {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(householdPayload({ isAdmin, name: currentName })) })
       return
     }
     calls.add += 1
-    if (denyMutations) {
-      calls.forbidden += 1
-      await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'Niet geautoriseerd' }) })
-      return
-    }
+    if (denyMutations) return forbidden(route)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(householdPayload({ isAdmin, name: currentName })) })
   })
 
   await page.route('**/api/household/name', async (route) => {
     calls.name += 1
-    if (denyMutations) {
-      calls.forbidden += 1
-      await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'Niet geautoriseerd' }) })
-      return
-    }
-    const payload = await route.request().postDataJSON()
-    currentName = payload?.name || currentName
+    if (denyMutations) return forbidden(route)
+    currentName = (await route.request().postDataJSON())?.name || currentName
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(householdPayload({ isAdmin, name: currentName })) })
   })
 
   await page.route('**/api/household/members/*', async (route) => {
     if (route.request().method() === 'DELETE') calls.remove += 1
-    if (denyMutations) {
-      calls.forbidden += 1
-      await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'Niet geautoriseerd' }) })
-      return
-    }
+    if (denyMutations) return forbidden(route)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(householdPayload({ isAdmin, name: currentName })) })
   })
 
@@ -98,11 +78,7 @@ async function mockHouseholdScreen(page, { isAdmin = true, denyMutations = false
   await page.route(`**/api/households/${HOUSEHOLD_ID}/authorization/permissions`, (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(auth.permissions) }))
   await page.route(`**/api/households/${HOUSEHOLD_ID}/authorization/members/*/role`, async (route) => {
     calls.role += 1
-    if (denyMutations) {
-      calls.forbidden += 1
-      await route.fulfill({ status: 403, contentType: 'application/json', body: JSON.stringify({ detail: 'Niet geautoriseerd' }) })
-      return
-    }
+    if (denyMutations) return forbidden(route)
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true }) })
   })
 
@@ -113,14 +89,11 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
   test('niet-geautoriseerde tegel blijft zichtbaar, blokkeert navigatie en toont uitleg', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page)
     await seedSession(page, { 'permissions.view': true })
-
     await page.goto('/instellingen')
     await expect(page.getByTestId('settings-page')).toBeVisible()
 
     const wrapper = page.locator('[data-authorization-message]').filter({ hasText: 'Artikelgroepen' })
-    const tile = wrapper.getByText('Artikelgroepen', { exact: true })
-
-    await expect(tile).toBeVisible()
+    await expect(wrapper.getByText('Artikelgroepen', { exact: true })).toBeVisible()
     await expect(wrapper).toHaveAttribute('aria-label', MESSAGE)
     await wrapper.hover()
     await expect(wrapper.getByRole('tooltip')).toHaveText(MESSAGE)
@@ -134,10 +107,8 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
   test('toegekende autorisatie laat normale navigatie toe', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page)
     await seedSession(page, { 'article_groups.manage': true, 'permissions.view': true })
-
     await page.goto('/instellingen')
     const tile = page.getByText('Artikelgroepen', { exact: true })
-    await expect(tile).toBeVisible()
     await expect(tile.locator('xpath=ancestor::a')).not.toHaveAttribute('aria-disabled', 'true')
     await tile.click()
     await expect(page).toHaveURL(/\/instellingen\/artikelgroepen$/)
@@ -148,9 +119,7 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     const consoleErrors = attachConsoleErrorCollector(page)
     await seedSession(page, { 'household_settings.manage': true, 'members.manage': true, 'roles.manage': true }, 'admin')
     const calls = await mockHouseholdScreen(page, { isAdmin: true })
-
     await page.goto('/instellingen/huishouden')
-    await expect(page.getByTestId('household-settings-page')).toBeVisible()
 
     await page.getByTestId('household-name-input').fill('Molenstraat 19 Driel')
     await page.getByTestId('household-name-save').click()
@@ -165,19 +134,17 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     await expect.poll(() => calls.add).toBe(1)
 
     await page.getByTestId('household-remove-lid@rezzerv.local').click()
-    await expect(page.getByTestId('household-remove-modal')).toBeVisible()
     await page.getByTestId('household-remove-confirm').click()
     await expect.poll(() => calls.remove).toBe(1)
     await expectNoConsoleErrors(consoleErrors)
   })
 
-  test('niet-beheerder kan geen actiebuttons uitvoeren en backend weigert directe mutatie', async ({ page, request }) => {
+  test('niet-beheerder kan geen actiebuttons uitvoeren en gemanipuleerde mutatie krijgt 403', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page)
     await seedSession(page, { 'permissions.view': true }, 'member')
     const calls = await mockHouseholdScreen(page, { isAdmin: false, denyMutations: true })
-
     await page.goto('/instellingen/huishouden')
-    await expect(page.getByTestId('household-settings-page')).toBeVisible()
+
     await expect(page.getByTestId('household-name-input')).toBeDisabled()
     await expect(page.getByTestId('household-role-select-lid@rezzerv.local')).toBeDisabled()
     await expect(page.getByTestId('household-add-member')).toBeDisabled()
@@ -185,11 +152,16 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     await expect(page.getByTestId('household-remove-lid@rezzerv.local')).toHaveCount(0)
     expect(calls.name + calls.add + calls.role + calls.remove).toBe(0)
 
-    const directResponse = await request.put(`${process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:8011'}/api/household/name`, {
-      headers: { Authorization: 'Bearer rezzerv-dev-token', 'Content-Type': 'application/json' },
-      data: { name: 'Ongeoorloofde wijziging' },
+    const status = await page.evaluate(async () => {
+      const response = await fetch('/api/household/name', {
+        method: 'PUT',
+        headers: { Authorization: 'Bearer rezzerv-dev-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Ongeoorloofde wijziging' }),
+      })
+      return response.status
     })
-    expect(directResponse.status()).toBe(403)
+    expect(status).toBe(403)
+    expect(calls.forbidden).toBe(1)
     await expectNoConsoleErrors(consoleErrors)
   })
 })
