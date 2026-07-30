@@ -27,8 +27,8 @@ jobs:
         run: npm run build
       - name: Check support routes and API bindings
         run: |
-          grep -F "path:'/meldingen'" src/app/router/AppRouter.jsx
-          grep -F "path:'/admin/meldingen'" src/app/router/AppRouter.jsx
+          grep -E "path:[[:space:]]*'/meldingen'" src/app/router/AppRouter.jsx
+          grep -E "path:[[:space:]]*'/admin/meldingen'" src/app/router/AppRouter.jsx
           grep -F '/api/support/threads' src/features/support/supportApi.js
           grep -F '/api/platform/support/threads' src/features/support/supportApi.js
           grep -F '/api/platform/support/export.csv' src/features/support/supportApi.js
