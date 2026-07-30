@@ -67,7 +67,8 @@ test.describe('Autorisaties frontend-regressie', () => {
     await mockAuthorizationApi(page, () => roleKey, (value) => { roleKey = value })
 
     await page.goto('/instellingen/huishouden/autorisaties')
-    await expect(page.getByTestId('authorization-settings-page')).toBeVisible()
+    const authorizationPage = page.getByTestId('authorization-settings-page')
+    await expect(authorizationPage).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Autorisaties', exact: true })).toBeVisible()
     await expect(page.getByTestId('authorization-role-matrix')).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Kijker', exact: true })).toBeVisible()
@@ -78,9 +79,9 @@ test.describe('Autorisaties frontend-regressie', () => {
     await expect(page.getByLabel('Voorraad bekijken voor Kijker: toegestaan')).toBeChecked()
     await expect(page.getByLabel('Voorraad wijzigen voor Kijker: niet toegestaan')).not.toBeChecked()
     await expect(page.getByLabel('Voorraad wijzigen voor Lid: toegestaan')).toBeChecked()
-    await expect(page.getByText('admin@rezzerv.local')).toHaveCount(0)
-    await expect(page.getByText('inventory.view')).toHaveCount(0)
-    await expect(page.locator('select')).toHaveCount(0)
+    await expect(authorizationPage.getByText('admin@rezzerv.local')).toHaveCount(0)
+    await expect(authorizationPage.getByText('inventory.view')).toHaveCount(0)
+    await expect(authorizationPage.locator('select')).toHaveCount(0)
     await expectNoConsoleErrors(consoleErrors)
   })
 
