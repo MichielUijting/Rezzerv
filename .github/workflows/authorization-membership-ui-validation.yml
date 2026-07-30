@@ -1,0 +1,52 @@
+name: Authorization membership UI validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/authorization_membership_routes.py'
+      - 'backend/tests/test_authorization_membership_routes.py'
+      - 'frontend/src/features/settings/SettingsAuthorizationPage.jsx'
+      - 'frontend/src/features/settings/settingsAuthorization.css'
+      - 'frontend/src/features/settings/services/authorizationMembershipService.js'
+      - 'frontend/src/features/settings/SettingsHouseholdPage.jsx'
+      - 'frontend/src/features/settings/SettingsPage.jsx'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/tests/e2e/settings-authorization.frontend-regression.spec.js'
+      - '.github/workflows/authorization-membership-ui-validation.yml'
+
+jobs:
+  authorization-membership-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build application images
+        run: docker compose build backend frontend
+      - name: Start application
+        run: docker compose up -d backend frontend
+      - name: Wait for backend health
+        shell: bash
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8011/api/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs backend
+          exit 1
+      - name: Run authorization API contract
+        run: |
+          docker compose run --rm --no-deps --entrypoint sh backend -lc "pip install --quiet pytest && python -m pytest -q tests/test_authorization_membership_routes.py"
+      - name: Run authorization UI regression
+        working-directory: frontend
+        env:
+          CI: '1'
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+          PLAYWRIGHT_API_URL: http://127.0.0.1:8011
+        run: |
+          npm install
+          npx playwright install --with-deps chromium
+          npx playwright test tests/e2e/settings-authorization.frontend-regression.spec.js --project=chromium
+      - name: Stop application
+        if: always()
+        run: docker compose down

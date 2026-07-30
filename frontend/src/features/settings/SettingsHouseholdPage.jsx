@@ -1,74 +1,40 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useBlocker } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
 import Input from '../../ui/Input'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import {
   createHouseholdMember,
   deleteHouseholdMember,
   fetchHouseholdMembers,
-  updateHouseholdPermissionPolicy,
-  updateHouseholdMember,
   updateHouseholdName,
 } from './services/householdMembersService'
+import {
+  fetchAuthorizationOverview,
+  updateAuthorizationRole,
+} from './services/authorizationMembershipService'
 import './settingsHousehold.css'
-import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 
-const initialForm = {
-  email: '',
-  password: '',
-  role: 'member',
-}
+const initialForm = { email: '', password: '' }
 
-function roleLabel(value) {
-  const normalized = String(value || '').trim().toLowerCase()
-  if (normalized === 'admin' || normalized === 'owner') return 'Eigenaar'
-  if (normalized === 'viewer') return 'Kijker'
-  return 'Lid'
-}
-
-function buildMutationMessage(payload, fallback) {
-  const inviteStatus = String(payload?.invite_email_status || '').trim().toLowerCase()
-  const inviteMessage = String(payload?.invite_email_message || '').trim()
-  if (!inviteMessage) return fallback
-  if (inviteStatus === 'sent') return `${fallback} ${inviteMessage}`.trim()
-  let normalizedInviteMessage = inviteMessage
-  if (/browser['’]s signature/i.test(normalizedInviteMessage)) {
-    normalizedInviteMessage = [
-      'Externe blokkade: Resend of een tussenliggende beveiligingslaag ziet dit verzoek als verdacht browser/signature-verkeer.',
-      'Controleer of het afzenderadres een geverifieerd domein gebruikt, of REZZERV_RESEND_API_KEY in de backend-container actief is en of firewall, proxy, VPN of browserbeveiliging verkeer naar api.resend.com wijzigt.',
-      normalizedInviteMessage,
-    ].join('\n')
-  }
-  if (inviteStatus === 'disabled' || inviteStatus === 'not_configured' || inviteStatus === 'config_invalid') {
-    return `${fallback} ${normalizedInviteMessage}`.trim()
-  }
-  return `${fallback} ${normalizedInviteMessage}`.trim()
+const ROLE_LABELS = {
+  'household.viewer': 'Kijker',
+  'household.member': 'Lid',
+  'household.advanced_member': 'Geavanceerd lid',
+  'household.admin': 'Beheerder',
 }
 
 function ConfirmRemoveModal({ member, onConfirm, onCancel, busy }) {
   if (!member) return null
   return (
     <div className="rz-modal-backdrop" role="presentation">
-      <div
-        className="rz-modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="household-remove-modal-title"
-        data-testid="household-remove-modal"
-      >
+      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="household-remove-modal-title" data-testid="household-remove-modal">
         <h3 id="household-remove-modal-title" className="rz-modal-title">Huishoudlid ontkoppelen</h3>
-        <p className="rz-modal-text">
-          Weet je zeker dat je <strong>{member.email}</strong> uit dit huishouden wilt verwijderen?
-        </p>
+        <p className="rz-modal-text">Weet je zeker dat je <strong>{member.email}</strong> uit dit huishouden wilt verwijderen?</p>
         <div className="rz-modal-actions">
-          <Button variant="secondary" onClick={onCancel} disabled={busy} data-testid="household-remove-cancel">
-            Annuleren
-          </Button>
-          <Button onClick={onConfirm} disabled={busy} data-testid="household-remove-confirm">
-            {busy ? 'Bezig…' : 'Ontkoppelen'}
-          </Button>
+          <Button variant="secondary" onClick={onCancel} disabled={busy} data-testid="household-remove-cancel">Annuleren</Button>
+          <Button onClick={onConfirm} disabled={busy} data-testid="household-remove-confirm">{busy ? 'Bezig…' : 'Ontkoppelen'}</Button>
         </div>
       </div>
     </div>
@@ -76,7 +42,24 @@ function ConfirmRemoveModal({ member, onConfirm, onCancel, busy }) {
 }
 
 export default function SettingsHouseholdPage() {
+  const { showFeedback } = useAppFeedback()
   const [data, setData] = useState(null)
+  const [authorization, setAuthorization] = useState({ members: [], roles: [] })
+  const [form, setForm] = useState(initialForm)
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [memberToRemove, setMemberToRemove] = useState(null)
+  const [householdNameDraft, setHouseholdNameDraft] = useState('')
+
+  const isAdmin = Boolean(data?.is_household_admin)
+  const householdSummary = useMemo(() => {
+    if (!data) return 'Huishouden laden…'
+    return `${data.household_name || 'Mijn huishouden'} · ${data.member_count || 0} leden`
+  }, [data])
+
+  const authorizationByEmail = useMemo(() => new Map(
+    authorization.members.map((member) => [String(member.email || '').toLowerCase(), member]),
+  ), [authorization.members])
 
   function syncHouseholdName(payload) {
     const nextName = String(payload?.household_name || '').trim()
@@ -91,166 +74,88 @@ export default function SettingsHouseholdPage() {
       window.localStorage.setItem('rezzerv_auth_context', JSON.stringify(parsed))
     } catch {}
   }
-  const [form, setForm] = useState(initialForm)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-  const [memberToRemove, setMemberToRemove] = useState(null)
-  const [householdNameDraft, setHouseholdNameDraft] = useState('')
-  const [memberCanCreateArticle, setMemberCanCreateArticle] = useState(false)
-  const [memberCanUpdateArticle, setMemberCanUpdateArticle] = useState(false)
-  const [lastSavedPermissionSnapshot, setLastSavedPermissionSnapshot] = useState('')
-  const [showLeaveModal, setShowLeaveModal] = useState(false)
-  const dismissTimerRef = useRef(null)
-  const isAdmin = Boolean(data?.is_household_admin)
-  const roleAudit = Array.isArray(data?.role_change_audit) ? data.role_change_audit : []
-  const permissionSnapshot = JSON.stringify({ articleCreate: Boolean(memberCanCreateArticle), articleUpdate: Boolean(memberCanUpdateArticle) })
-  const permissionIsDirty = !isLoading && !!lastSavedPermissionSnapshot && permissionSnapshot !== lastSavedPermissionSnapshot
-  const blocker = useBlocker(permissionIsDirty)
 
-  useDismissOnComponentClick([() => setError(''), () => setMessage('')], Boolean(error || message))
+  function applyPayload(payload) {
+    setData(payload)
+    setHouseholdNameDraft(String(payload?.household_name || ''))
+    syncHouseholdName(payload)
+  }
+
+  async function refreshAuthorization() {
+    const payload = await fetchAuthorizationOverview()
+    setAuthorization(payload)
+    return payload
+  }
 
   useEffect(() => {
     let active = true
     async function load() {
       setIsLoading(true)
-      setError('')
       try {
-        const payload = await fetchHouseholdMembers()
-        if (!active) return
-        setData(payload)
-        setHouseholdNameDraft(String(payload?.household_name || ''))
-        setMemberCanCreateArticle(Boolean(payload?.member_permission_policies?.['article.create']))
-        setMemberCanUpdateArticle(Boolean(payload?.member_permission_policies?.['article.update']))
-        setLastSavedPermissionSnapshot(JSON.stringify({ articleCreate: Boolean(payload?.member_permission_policies?.['article.create']), articleUpdate: Boolean(payload?.member_permission_policies?.['article.update']) }))
-        syncHouseholdName(payload)
-      } catch (loadError) {
-        if (!active) return
-        setError(loadError?.message || 'Huishoudleden konden niet worden geladen.')
+        const [householdPayload, authorizationPayload] = await Promise.all([
+          fetchHouseholdMembers(),
+          fetchAuthorizationOverview(),
+        ])
+        if (active) {
+          applyPayload(householdPayload)
+          setAuthorization(authorizationPayload)
+        }
+      } catch (error) {
+        if (active) showFeedback({ variant: 'error', title: 'Huishouden niet geladen', message: error?.message || 'De huishoudgegevens konden niet worden geladen.' })
       } finally {
         if (active) setIsLoading(false)
       }
     }
     load()
-    return () => {
-      active = false
-    }
-  }, [])
+    return () => { active = false }
+  }, [showFeedback])
 
-  useEffect(() => {
-    if (blocker.state === 'blocked') setShowLeaveModal(true)
-  }, [blocker.state])
-
-  useEffect(() => {
-    function handleBeforeUnload(event) {
-      if (!permissionIsDirty) return
-      event.preventDefault()
-      event.returnValue = ''
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [permissionIsDirty])
-
-  useEffect(() => () => {
-    if (dismissTimerRef.current) clearTimeout(dismissTimerRef.current)
-  }, [])
-
-  const householdSummary = useMemo(() => {
-    if (!data) return 'Huishoudleden laden…'
-    return `${data.household_name || 'Mijn huishouden'} · ${data.member_count || 0} leden`
-  }, [data])
-
-  async function applyMutation(run, successMessageBuilder) {
+  async function runMutation(task, successMessage, { refreshRoles = true } = {}) {
     setIsSaving(true)
-    setError('')
-    setMessage('')
     try {
-      const payload = await run()
-      setData(payload)
-      setHouseholdNameDraft(String(payload?.household_name || ''))
-      setMemberCanCreateArticle(Boolean(payload?.member_permission_policies?.['article.create']))
-      setMemberCanUpdateArticle(Boolean(payload?.member_permission_policies?.['article.update']))
-      setLastSavedPermissionSnapshot(JSON.stringify({ articleCreate: Boolean(payload?.member_permission_policies?.['article.create']), articleUpdate: Boolean(payload?.member_permission_policies?.['article.update']) }))
-      syncHouseholdName(payload)
-      const successMessage = typeof successMessageBuilder === 'function'
-        ? successMessageBuilder(payload)
-        : successMessageBuilder
-      setMessage(successMessage)
+      const payload = await task()
+      if (payload?.members) applyPayload(payload)
+      if (refreshRoles) await refreshAuthorization()
+      showFeedback({ variant: 'success', message: successMessage })
       return true
-    } catch (mutationError) {
-      setError(mutationError?.message || 'Actie is niet gelukt.')
+    } catch (error) {
+      showFeedback({ variant: 'error', title: 'Wijziging niet opgeslagen', message: error?.message || 'De wijziging kon niet worden opgeslagen.' })
       return false
     } finally {
       setIsSaving(false)
     }
   }
 
+  async function handleHouseholdNameSubmit(event) {
+    event.preventDefault()
+    await runMutation(() => updateHouseholdName({ name: householdNameDraft }), 'Huishoudnaam opgeslagen.', { refreshRoles: false })
+  }
+
   async function handleCreateMember(event) {
     event.preventDefault()
-    const ok = await applyMutation(
-      () => createHouseholdMember({
-        email: form.email,
-        password: form.password || undefined,
-        role: form.role,
-      }),
-      (payload) => buildMutationMessage(payload, 'Huishoudlid opgeslagen.'),
+    const ok = await runMutation(
+      () => createHouseholdMember({ email: form.email, password: form.password || undefined, role: 'member' }),
+      'Huishoudlid gekoppeld. De standaardrol Lid is toegepast.',
     )
     if (ok) setForm(initialForm)
   }
 
-  async function handleHouseholdNameSubmit(event) {
-    event.preventDefault()
-    await applyMutation(
-      () => updateHouseholdName({ name: householdNameDraft }),
-      (payload) => String(payload?.household_rename_message || 'Huishoudnaam opgeslagen.'),
+  async function handleRoleChange(member, roleKey) {
+    const linkedAuthorization = authorizationByEmail.get(String(member.email || '').toLowerCase())
+    if (!linkedAuthorization?.membership_id) {
+      showFeedback({ variant: 'error', title: 'Rol niet gewijzigd', message: 'Het gekoppelde huishoudlid kon niet worden gevonden.' })
+      return
+    }
+    await runMutation(
+      () => updateAuthorizationRole(linkedAuthorization.membership_id, roleKey),
+      `De rol van ${member.email} is gewijzigd naar ${ROLE_LABELS[roleKey] || 'de gekozen rol'}.`,
     )
-  }
-
-  async function handleRoleChange(member, nextRole) {
-    await applyMutation(
-      () => updateHouseholdMember(member.email, { role: nextRole }),
-      `${member.email} is nu ${roleLabel(nextRole).toLowerCase()}.`,
-    )
-  }
-
-  async function handlePermissionSubmit(event) {
-    event.preventDefault()
-    const okCreate = await applyMutation(
-      () => updateHouseholdPermissionPolicy('article.create', { member_allowed: memberCanCreateArticle }),
-      (payload) => String(payload?.permission_policy_message || 'Lidrechten opgeslagen.'),
-    )
-    if (!okCreate) return false
-    return applyMutation(
-      () => updateHouseholdPermissionPolicy('article.update', { member_allowed: memberCanUpdateArticle }),
-      (payload) => String(payload?.permission_policy_message || 'Lidrechten opgeslagen.'),
-    )
-  }
-
-  async function handleSaveAndLeave() {
-    const ok = await handlePermissionSubmit({ preventDefault() {} })
-    if (!ok) return
-    setShowLeaveModal(false)
-    if (blocker.state === 'blocked') blocker.proceed()
-  }
-
-  function handleStay() {
-    setShowLeaveModal(false)
-    if (blocker.state === 'blocked') blocker.reset()
-  }
-
-  function handleLeaveWithoutSaving() {
-    setShowLeaveModal(false)
-    if (blocker.state === 'blocked') blocker.proceed()
   }
 
   async function confirmRemoveMember() {
     if (!memberToRemove) return
     const currentMember = memberToRemove
-    const ok = await applyMutation(
-      () => deleteHouseholdMember(currentMember.email),
-      `${currentMember.email} is ontkoppeld van het huishouden.`,
-    )
+    const ok = await runMutation(() => deleteHouseholdMember(currentMember.email), `${currentMember.email} is ontkoppeld van het huishouden.`)
     if (ok) setMemberToRemove(null)
   }
 
@@ -262,264 +167,80 @@ export default function SettingsHouseholdPage() {
             <div className="rz-household-header">
               <div>
                 <h2 className="rz-household-title">Huishouden</h2>
-                <p className="rz-household-subtitle">
-                  Beheer hier wie aan het huishouden is gekoppeld, welke rol ieder lid heeft en hoe het huishouden heet.
-                </p>
+                <p className="rz-household-subtitle">Beheer de naam, gekoppelde gebruikers en hun rol binnen het huishouden.</p>
                 <p className="rz-household-summary">{householdSummary}</p>
-                {!isLoading && !isAdmin ? (
-                  <p className="rz-household-warning">
-                    Alleen de admin van het huishouden kan leden toevoegen, ontkoppelen, rollen wijzigen of de naam aanpassen.
-                  </p>
-                ) : null}
+                {!isLoading && !isAdmin ? <p className="rz-household-warning">Alleen een beheerder kan de huishoudnaam, leden en rollen wijzigen.</p> : null}
               </div>
-
-              <Link to="/instellingen" className="rz-household-back-link">← Terug naar instellingen</Link>
             </div>
 
-            {(message || error) ? (
-              <div className={error ? 'rz-inline-feedback rz-inline-feedback--error' : 'rz-inline-feedback rz-inline-feedback--success'}>
-                {error || message}
-              </div>
-            ) : null}
-
-            {isLoading ? <div>Huishoudleden laden…</div> : (
+            {isLoading ? <div>Huishouden laden…</div> : (
               <>
                 <section className="rz-household-name-section">
                   <div>
                     <h3 className="rz-household-section-title">Naam huishouden</h3>
-                    <p className="rz-household-section-copy">
-                      De admin kan hier de naam van het huishouden aanpassen. Deze naam wordt ook gebruikt in uitnodigingen en de huishoudcontext van Rezzerv.
-                    </p>
+                    <p className="rz-household-section-copy">Deze naam wordt gebruikt in de actieve huishoudcontext en in uitnodigingen.</p>
                   </div>
                   <form onSubmit={handleHouseholdNameSubmit} className="rz-form rz-household-name-form">
                     <div className="rz-household-form-field rz-household-form-field--wide">
-                      <Input
-                        label="Huishoudnaam"
-                        value={householdNameDraft}
-                        onChange={(event) => setHouseholdNameDraft(event.target.value)}
-                        disabled={!isAdmin || isSaving}
-                        required
-                        maxLength={120}
-                        data-testid="household-name-input"
-                      />
+                      <Input label="Huishoudnaam" value={householdNameDraft} onChange={(event) => setHouseholdNameDraft(event.target.value)} disabled={!isAdmin || isSaving} required maxLength={120} data-testid="household-name-input" />
                     </div>
-                    {isAdmin ? (
-                      <div className="rz-household-form-actions">
-                        <Button
-                          type="submit"
-                          disabled={isSaving || !String(householdNameDraft || '').trim() || String(householdNameDraft || '').trim() === String(data?.household_name || '').trim()}
-                          data-testid="household-name-save"
-                        >
-                          Naam opslaan
-                        </Button>
-                      </div>
-                    ) : null}
+                    {isAdmin ? <div className="rz-household-form-actions"><Button type="submit" disabled={isSaving || !String(householdNameDraft || '').trim() || String(householdNameDraft || '').trim() === String(data?.household_name || '').trim()} data-testid="household-name-save">Naam opslaan</Button></div> : null}
                   </form>
                 </section>
 
-                <section className="rz-household-permissions-section">
+                <section className="rz-household-form-section">
                   <div>
-                    <h3 className="rz-household-section-title">Rechten voor leden</h3>
-                    <p className="rz-household-section-copy">
-                      Stel hier als admin in of een lid van het huishouden artikelen mag toevoegen of wijzigen.
-                    </p>
+                    <h3 className="rz-household-section-title">Gekoppelde huishoudleden</h3>
+                    <p className="rz-household-section-copy">Kies hier de rol van ieder lid. Bekijk de betekenis van de rollen via Autorisaties.</p>
                   </div>
-                  <form onSubmit={handlePermissionSubmit} className="rz-household-permissions-form">
-                    <label className="rz-household-permission-toggle" data-testid="household-permission-article-create-toggle-wrap">
-                      <input
-                        type="checkbox"
-                        checked={memberCanCreateArticle}
-                        onChange={(event) => setMemberCanCreateArticle(event.target.checked)}
-                        disabled={!isAdmin || isSaving}
-                        data-testid="household-permission-article-create-toggle"
-                      />
-                      <span>
-                        <strong>Lid mag artikel toevoegen</strong>
-                        <small>Geldt voor het aanmaken van een nieuw artikel vanuit de import van winkel- en bonregels.</small>
-                      </span>
-                    </label>
-                    <label className="rz-household-permission-toggle" data-testid="household-permission-article-update-toggle-wrap">
-                      <input
-                        type="checkbox"
-                        checked={memberCanUpdateArticle}
-                        onChange={(event) => setMemberCanUpdateArticle(event.target.checked)}
-                        disabled={!isAdmin || isSaving}
-                        data-testid="household-permission-article-update-toggle"
-                      />
-                      <span>
-                        <strong>Lid mag artikel wijzigen</strong>
-                        <small>Bij verlaten zonder opslaan verschijnt een waarschuwing.</small>
-                      </span>
-                    </label>
-                    {isAdmin ? (
-                      <div className="rz-household-form-actions">
-                        <Button
-                          type="submit"
-                          disabled={isSaving || !permissionIsDirty}
-                          data-testid="household-permission-save"
-                        >
-                          Rechten opslaan
-                        </Button>
-                      </div>
-                    ) : (
-                      <p className="rz-household-warning rz-household-warning--subtle">
-                        Alleen de admin van het huishouden kan deze rechten aanpassen.
-                      </p>
-                    )}
-                  </form>
-                </section>
-
-                <div className="rz-household-members-list">
-                  {(data?.members || []).map((member) => {
-                    const nextRole = member.display_role === 'admin' ? 'member' : 'owner'
-                    return (
-                      <div
-                        key={member.email}
-                        data-testid={`household-member-${member.email}`}
-                        className="rz-household-member-card"
-                      >
-                        <div className="rz-household-member-content">
-                          <div className="rz-household-member-email">{member.email}</div>
-                          <div className="rz-household-member-meta">
-                            Rol: <strong>{roleLabel(member.display_role)}</strong>
-                            {member.is_current_user ? ' · huidige gebruiker' : ''}
+                  <div className="rz-household-members-list">
+                    {(data?.members || []).map((member) => {
+                      const linkedAuthorization = authorizationByEmail.get(String(member.email || '').toLowerCase())
+                      return (
+                        <div key={member.email} data-testid={`household-member-${member.email}`} className="rz-household-member-card">
+                          <div className="rz-household-member-content">
+                            <div className="rz-household-member-email">{member.email}</div>
+                            <div className="rz-household-member-meta">{member.is_current_user ? 'Huidige gebruiker' : 'Gekoppeld huishoudlid'}</div>
+                          </div>
+                          <div className="rz-household-member-actions">
+                            <label className="rz-household-form-field" style={{ minWidth: '180px' }}>
+                              <span className="rz-label">Rol</span>
+                              <select
+                                className="rz-input rz-household-select"
+                                value={linkedAuthorization?.role_key || ''}
+                                onChange={(event) => handleRoleChange(member, event.target.value)}
+                                disabled={!isAdmin || isSaving || !linkedAuthorization}
+                                data-testid={`household-role-select-${member.email}`}
+                                aria-label={`Rol ${member.email}`}
+                              >
+                                {authorization.roles.map((role) => <option key={role.role_key} value={role.role_key}>{ROLE_LABELS[role.role_key] || role.name}</option>)}
+                              </select>
+                            </label>
+                            {isAdmin ? <Button variant="secondary" onClick={() => setMemberToRemove(member)} disabled={isSaving || !member.can_remove} data-testid={`household-remove-${member.email}`}>Ontkoppelen</Button> : null}
                           </div>
                         </div>
-                        <div className="rz-household-member-actions">
-                          {isAdmin ? (
-                            <>
-                              <label className="rz-household-form-field" style={{ minWidth: '160px' }}>
-                                <span className="rz-label">Rol</span>
-                                <select
-                                  className="rz-input rz-household-select"
-                                  value={member.display_role === 'admin' ? 'owner' : (member.display_role === 'viewer' ? 'viewer' : 'member')}
-                                  onChange={(event) => handleRoleChange(member, event.target.value)}
-                                  disabled={isSaving || !member.can_change_role}
-                                  data-testid={`household-role-select-${member.email}`}
-                                >
-                                  <option value="owner">Eigenaar</option>
-                                  <option value="member">Lid</option>
-                                  <option value="viewer">Kijker</option>
-                                </select>
-                              </label>
-                              <Button
-                                variant="secondary"
-                                onClick={() => setMemberToRemove(member)}
-                                disabled={isSaving || !member.can_remove}
-                                data-testid={`household-remove-${member.email}`}
-                              >
-                                Ontkoppelen
-                              </Button>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
+                      )
+                    })}
+                  </div>
+                </section>
 
                 <section className="rz-household-form-section">
                   <div>
                     <h3 className="rz-household-section-title">Nieuw huishoudlid koppelen</h3>
-                    <p className="rz-household-section-copy">
-                      Gebruik een nieuw e-mailadres met wachtwoord voor een nieuw account. Laat het wachtwoord leeg als je een bestaand account opnieuw aan dit huishouden wilt koppelen.
-                    </p>
+                    <p className="rz-household-section-copy">Nieuwe leden krijgen standaard de rol Lid. Wijzig de rol daarna hierboven.</p>
                   </div>
                   <form onSubmit={handleCreateMember} className="rz-form rz-household-form">
-                    <div className="rz-household-form-field rz-household-form-field--wide">
-                      <Input
-                        label="E-mailadres"
-                        type="email"
-                        value={form.email}
-                        onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
-                        disabled={!isAdmin || isSaving}
-                        required
-                        data-testid="household-member-email-input"
-                      />
-                    </div>
-                    <div className="rz-household-form-field">
-                      <Input
-                        label="Wachtwoord"
-                        type="text"
-                        value={form.password}
-                        onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
-                        disabled={!isAdmin || isSaving}
-                        placeholder="Bij nieuw account verplicht"
-                        data-testid="household-member-password-input"
-                      />
-                    </div>
-                    <label className="rz-household-form-field">
-                      <span className="rz-label">Rol</span>
-                      <select
-                        className="rz-input rz-household-select"
-                        value={form.role}
-                        onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}
-                        disabled={!isAdmin || isSaving}
-                        data-testid="household-member-role-select"
-                      >
-                        <option value="member">Lid</option>
-                        <option value="owner">Eigenaar</option>
-                        <option value="viewer">Kijker</option>
-                      </select>
-                    </label>
-                    <div className="rz-form-actions rz-household-form-actions rz-household-form-field--wide">
-                      <Button type="submit" disabled={!isAdmin || isSaving} data-testid="household-add-member">
-                        {isSaving ? 'Opslaan…' : 'Lid koppelen'}
-                      </Button>
-                    </div>
+                    <div className="rz-household-form-field rz-household-form-field--wide"><Input label="E-mailadres" type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} disabled={!isAdmin || isSaving} required data-testid="household-member-email-input" /></div>
+                    <div className="rz-household-form-field"><Input label="Wachtwoord" type="text" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} disabled={!isAdmin || isSaving} placeholder="Bij nieuw account verplicht" data-testid="household-member-password-input" /></div>
+                    <div className="rz-form-actions rz-household-form-actions rz-household-form-field--wide"><Button type="submit" disabled={!isAdmin || isSaving} data-testid="household-add-member">{isSaving ? 'Opslaan…' : 'Lid koppelen'}</Button></div>
                   </form>
                 </section>
-
-                <section className="rz-household-form-section">
-                  <div>
-                    <h3 className="rz-household-section-title">Rolwijzigingen</h3>
-                    <p className="rz-household-section-copy">De laatste wijzigingen aan leden en rollen binnen dit huishouden.</p>
-                  </div>
-                  <div className="rz-household-members-list" data-testid="household-role-audit-list">
-                    {roleAudit.length ? roleAudit.map((entry, index) => (
-                      <div key={`${entry.changed_user_email}-${entry.created_at}-${index}`} className="rz-household-member-card">
-                        <div className="rz-household-member-content">
-                          <div className="rz-household-member-email">{entry.changed_user_email}</div>
-                          <div className="rz-household-member-meta">
-                            Actie: <strong>{entry.action_type === 'member_added' ? 'Lid toegevoegd' : entry.action_type === 'member_removed' ? 'Lid verwijderd' : 'Rol gewijzigd'}</strong>
-                            {entry.old_role ? ` · van ${roleLabel(entry.old_role)}` : ''}
-                            {entry.new_role ? ` naar ${roleLabel(entry.new_role)}` : ''}
-                            {entry.changed_by_user_email ? ` · door ${entry.changed_by_user_email}` : ''}
-                            {entry.created_at ? ` · ${entry.created_at}` : ''}
-                          </div>
-                        </div>
-                      </div>
-                    )) : (
-                      <p className="rz-household-section-copy">Nog geen rolwijzigingen geregistreerd.</p>
-                    )}
-                  </div>
-                </section>
-
               </>
             )}
           </div>
         </Card>
 
-        <ConfirmRemoveModal
-          member={memberToRemove}
-          onConfirm={confirmRemoveMember}
-          onCancel={() => setMemberToRemove(null)}
-          busy={isSaving}
-        />
-
-        {showLeaveModal ? (
-          <div className="rz-modal-backdrop" role="presentation">
-            <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="leave-household-settings-title" data-testid="warning-dialog">
-              <h3 id="leave-household-settings-title" className="rz-modal-title">Wijzigingen niet opgeslagen</h3>
-              <p className="rz-modal-text">Je hebt wijzigingen aangebracht die nog niet zijn opgeslagen.</p>
-              <div className="rz-modal-actions">
-                <Button variant="secondary" onClick={handleStay} data-testid="warning-cancel">Blijven</Button>
-                <Button variant="secondary" onClick={handleLeaveWithoutSaving} data-testid="warning-confirm">Niet opslaan</Button>
-                <Button onClick={handleSaveAndLeave} disabled={isSaving}>{isSaving ? 'Opslaan…' : 'Opslaan'}</Button>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <ConfirmRemoveModal member={memberToRemove} onConfirm={confirmRemoveMember} onCancel={() => setMemberToRemove(null)} busy={isSaving} />
       </div>
     </AppShell>
   )
