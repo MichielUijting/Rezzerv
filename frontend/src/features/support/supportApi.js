@@ -38,6 +38,12 @@ export function replyHouseholdThread(threadId, message) {
   })
 }
 
+export function updateHouseholdThreadStatus(threadId, status) {
+  return request(`/api/support/threads/${encodeURIComponent(threadId)}/status`, {
+    method: 'PATCH', body: JSON.stringify({ status }),
+  })
+}
+
 export function listPlatformThreads({ status = '', householdId = '' } = {}) {
   const params = new URLSearchParams()
   if (status) params.set('status', status)
