@@ -1,0 +1,32 @@
+name: Authorization membership guards validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/authorization_membership_service.py'
+      - 'backend/app/cli/migrate_authorization_memberships.py'
+      - 'backend/tests/test_authorization_membership_service.py'
+      - '.github/workflows/authorization-membership-guards-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run authorization foundation and membership guard tests
+        run: |
+          python -m pytest -q \
+            tests/test_authorization_foundation_contract.py \
+            tests/test_authorization_membership_service.py
