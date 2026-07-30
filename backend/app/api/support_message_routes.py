@@ -76,28 +76,41 @@ def _household_actor(authorization: str | None) -> dict[str, Any]:
     runtime = _mapping(main_module.require_household_context(authorization))
     context = household_context_from_runtime_context(runtime)
     email = str(runtime.get("email") or runtime.get("user_id") or "").strip().lower()
-    role = str(runtime.get("role") or runtime.get("display_role") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=403, detail="Huishoudgebruiker heeft geen bruikbaar e-mailadres")
 
+    requested_household_id = str(context.active_household_id)
     with main_module.engine.begin() as conn:
-        persisted_role = conn.execute(text("""
-            SELECT role
+        memberships = conn.execute(text("""
+            SELECT household_id, role
             FROM household_memberships
-            WHERE household_id = :household_id
-              AND lower(user_email) = :email
-            LIMIT 1
-        """), {
-            "household_id": str(context.active_household_id),
-            "email": email,
-        }).scalar()
-    persisted_role = str(persisted_role or "").strip().lower()
-    effective_role = persisted_role or role
-    if effective_role not in {"admin", "owner", "household.admin", "huishoudbeheerder"}:
-        raise HTTPException(status_code=403, detail="Alleen een huishoudbeheerder kan meldingen beheren")
+            WHERE lower(user_email) = :email
+            ORDER BY household_id
+        """), {"email": email}).mappings().all()
+
+    allowed_roles = {"admin", "owner", "household.admin", "huishoudbeheerder"}
+    admin_memberships = [
+        {"household_id": str(row["household_id"]), "role": str(row["role"] or "").strip().lower()}
+        for row in memberships
+        if str(row["role"] or "").strip().lower() in allowed_roles
+    ]
+    selected = next(
+        (row for row in admin_memberships if row["household_id"] == requested_household_id),
+        None,
+    )
+    if selected is None and len(admin_memberships) == 1:
+        selected = admin_memberships[0]
+    if selected is None:
+        raise HTTPException(
+            status_code=403,
+            detail="Geen geldige huishoudbeheerder-koppeling voor het actieve huishouden",
+        )
+
     return {
         "user_id": str(runtime.get("user_id") or email),
         "name": str(runtime.get("name") or runtime.get("display_name") or email or "Huishoudbeheerder"),
         "role": "household.admin",
-        "household_id": str(context.active_household_id),
+        "household_id": selected["household_id"],
     }
 
 
@@ -109,7 +122,8 @@ def _platform_actor(authorization: str | None, permission_key: str) -> dict[str,
         raise HTTPException(status_code=403, detail="Platformgebruiker heeft geen bruikbaar gebruikers-ID")
     with main_module.engine.begin() as conn:
         decision = evaluate_platform_permission(conn, user_id=user_id, permission_key=permission_key)
-        if not decision.allowed and str(actor.get("role") or "").strip().lower() == "admin":
+        actor_email = str(actor.get("email") or "").strip().lower()
+        if not decision.allowed and actor_email == "admin@rezzerv.local":
             conn.execute(text("""
                 INSERT INTO auth_platform_user_roles(
                     user_id, role_key, active, created_at, updated_at
