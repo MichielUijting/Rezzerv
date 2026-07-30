@@ -1,0 +1,31 @@
+name: PO beta superuser provisioning validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/beta_superuser_provisioning_service.py'
+      - 'backend/app/cli/provision_po_beta_superuser.py'
+      - 'backend/tests/test_beta_superuser_provisioning_service.py'
+      - '.github/workflows/po-beta-superuser-provisioning-validation.yml'
+
+jobs:
+  po-beta-superuser-provisioning:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+      - name: Compile provisioning code
+        working-directory: backend
+        run: |
+          python -m py_compile app/services/beta_superuser_provisioning_service.py
+          python -m py_compile app/cli/provision_po_beta_superuser.py
+          python -m py_compile tests/test_beta_superuser_provisioning_service.py
+      - name: Run provisioning contract
+        working-directory: backend
+        run: pytest -q tests/test_beta_superuser_provisioning_service.py
