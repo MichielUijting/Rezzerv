@@ -50,10 +50,10 @@ export default function SettingsPage() {
             <div><div style={{ fontWeight: 600 }}>Winkelimport</div><div style={{ color: isViewer ? '#0f5b32' : '#667085', fontSize: '14px' }}>{isViewer ? 'Zichtbaar voor kijkers, maar alleen Artikeldetails is beschikbaar.' : 'Vereenvoudigingsniveau voor het huishouden · alleen beheerder kan wijzigen'}</div></div><div aria-hidden="true">→</div>
           </Link>
           <Link to="/instellingen/huishouden" style={getTileStyle(isViewer)} aria-disabled={isViewer ? 'true' : 'false'} onClick={isViewer ? handleDisabledClick : undefined}>
-            <div><div style={{ fontWeight: 600 }}>Huishouden</div><div style={{ color: isViewer ? '#0f5b32' : '#667085', fontSize: '14px' }}>{isViewer ? 'Zichtbaar voor kijkers, maar alleen Artikeldetails is beschikbaar.' : 'Naam, uitnodigingen en basislidmaatschap beheren'}</div></div><div aria-hidden="true">→</div>
+            <div><div style={{ fontWeight: 600 }}>Huishouden</div><div style={{ color: isViewer ? '#0f5b32' : '#667085', fontSize: '14px' }}>{isViewer ? 'Zichtbaar voor kijkers, maar alleen Artikeldetails is beschikbaar.' : 'Naam, leden en rollen beheren'}</div></div><div aria-hidden="true">→</div>
           </Link>
           <Link to="/instellingen/huishouden/autorisaties" style={getTileStyle(false)} data-testid="authorization-settings-link">
-            <div><div style={{ fontWeight: 600 }}>Huishoudleden en autorisaties</div><div style={{ color: '#667085', fontSize: '14px' }}>{isAdmin ? 'Rollen, toegestane rechten en expliciete weigeringen beheren' : 'Rollen en rechten bekijken; wijzigen vereist beheerrechten'}</div></div><div aria-hidden="true">→</div>
+            <div><div style={{ fontWeight: 600 }}>Autorisaties</div><div style={{ color: '#667085', fontSize: '14px' }}>Bekijk welke mogelijkheden bij elke rol horen</div></div><div aria-hidden="true">→</div>
           </Link>
           <Link to="/instellingen/huishoudautomatisering" style={getTileStyle(isViewer)} aria-disabled={isViewer ? 'true' : 'false'} onClick={isViewer ? handleDisabledClick : undefined}>
             <div><div style={{ fontWeight: 600 }}>Huishoudautomatisering</div><div style={{ color: isViewer ? '#0f5b32' : '#667085', fontSize: '14px' }}>{isViewer ? 'Zichtbaar voor kijkers, maar alleen Artikeldetails is beschikbaar.' : 'Slim afboeken bij herhaalaankoop · alleen beheerder kan wijzigen'}</div></div><div aria-hidden="true">→</div>
