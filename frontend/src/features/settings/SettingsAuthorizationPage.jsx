@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { canCurrentUserPerform } from '../../lib/authSession'
 import {
   deleteAuthorizationPermission,
@@ -17,19 +17,17 @@ function permissionLabel(key) {
 }
 
 export default function SettingsAuthorizationPage() {
+  const { showFeedback } = useAppFeedback()
   const [overview, setOverview] = useState({ members: [], roles: [], permissions: [] })
   const [selectedMembershipId, setSelectedMembershipId] = useState('')
   const [loading, setLoading] = useState(true)
   const [busyKey, setBusyKey] = useState('')
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
 
   const canManageMembers = canCurrentUserPerform('members.manage')
   const canManagePermissions = canCurrentUserPerform('permissions.manage')
 
-  async function load(preferredMembershipId = '') {
+  async function load(preferredMembershipId = '', { showError = true } = {}) {
     setLoading(true)
-    setError('')
     try {
       const payload = await fetchAuthorizationOverview()
       setOverview(payload)
@@ -38,8 +36,16 @@ export default function SettingsAuthorizationPage() {
         ? preferredMembershipId
         : fallbackId
       setSelectedMembershipId(nextId)
-    } catch (loadError) {
-      setError(loadError?.message || 'Autorisaties konden niet worden geladen.')
+      return true
+    } catch (error) {
+      if (showError) {
+        showFeedback({
+          variant: 'error',
+          title: 'Autorisaties niet geladen',
+          message: error?.message || 'De autorisatiegegevens konden niet worden geladen.',
+        })
+      }
+      return false
     } finally {
       setLoading(false)
     }
@@ -60,14 +66,16 @@ export default function SettingsAuthorizationPage() {
 
   async function runMutation(key, task, successMessage) {
     setBusyKey(key)
-    setMessage('')
-    setError('')
     try {
       await task()
-      await load(selectedMembershipId)
-      setMessage(successMessage)
-    } catch (mutationError) {
-      setError(mutationError?.message || 'De wijziging is niet opgeslagen.')
+      await load(selectedMembershipId, { showError: false })
+      showFeedback({ variant: 'success', message: successMessage })
+    } catch (error) {
+      showFeedback({
+        variant: 'error',
+        title: 'Wijziging niet opgeslagen',
+        message: error?.message || 'De autorisatiewijziging kon niet worden opgeslagen.',
+      })
     } finally {
       setBusyKey('')
     }
@@ -88,14 +96,14 @@ export default function SettingsAuthorizationPage() {
       runMutation(
         mutationKey,
         () => deleteAuthorizationPermission(selectedMember.membership_id, permissionKey),
-        `De uitzondering voor ${permissionKey} is verwijderd.`,
+        `De uitzondering voor ${permissionLabel(permissionKey)} is verwijderd.`,
       )
       return
     }
     runMutation(
       mutationKey,
       () => setAuthorizationPermission(selectedMember.membership_id, permissionKey, effect),
-      `De uitzondering voor ${permissionKey} is opgeslagen.`,
+      `De uitzondering voor ${permissionLabel(permissionKey)} is opgeslagen.`,
     )
   }
 
@@ -108,11 +116,7 @@ export default function SettingsAuthorizationPage() {
               <h2>Huishoudleden en autorisaties</h2>
               <p>Beheer rollen en individuele rechten. Alle autorisatiebesluiten blijven server-side.</p>
             </div>
-            <Link to="/instellingen" className="rz-authorization-back">← Terug naar instellingen</Link>
           </div>
-
-          {message ? <div className="rz-authorization-feedback rz-authorization-feedback--success">{message}</div> : null}
-          {error ? <div className="rz-authorization-feedback rz-authorization-feedback--error">{error}</div> : null}
 
           {loading ? <div className="rz-authorization-loading">Autorisaties laden…</div> : (
             <>
