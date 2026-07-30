@@ -17,9 +17,11 @@ async function seedSession(page, permissions = {}, displayRole = 'member') {
   }, { grantedPermissions: permissions, role: displayRole })
 }
 
-async function waitForFeedbackOverlayToClose(page) {
+async function dismissSuccessFeedback(page) {
   const overlay = page.getByTestId('app-feedback-success-overlay')
-  if (await overlay.count()) await overlay.waitFor({ state: 'detached', timeout: 10000 })
+  await expect(overlay).toBeVisible()
+  await page.getByTestId('app-feedback-success-ok-button').click()
+  await expect(overlay).toHaveCount(0)
 }
 
 function householdPayload({ isAdmin = true, name = 'Testhuishouden' } = {}) {
@@ -129,22 +131,22 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     await page.getByTestId('household-name-input').fill('Molenstraat 19 Driel')
     await page.getByTestId('household-name-save').click()
     await expect.poll(() => calls.name).toBe(1)
-    await waitForFeedbackOverlayToClose(page)
+    await dismissSuccessFeedback(page)
 
     await page.getByTestId('household-role-select-lid@rezzerv.local').selectOption('household.advanced_member')
     await expect.poll(() => calls.role).toBe(1)
-    await waitForFeedbackOverlayToClose(page)
+    await dismissSuccessFeedback(page)
 
     await page.getByTestId('household-member-email-input').fill('nieuw@rezzerv.local')
     await page.getByTestId('household-member-password-input').fill('Testwachtwoord-2026')
     await page.getByTestId('household-add-member').click()
     await expect.poll(() => calls.add).toBe(1)
-    await waitForFeedbackOverlayToClose(page)
+    await dismissSuccessFeedback(page)
 
     await page.getByTestId('household-remove-lid@rezzerv.local').click()
     await page.getByTestId('household-remove-confirm').click()
     await expect.poll(() => calls.remove).toBe(1)
-    await waitForFeedbackOverlayToClose(page)
+    await dismissSuccessFeedback(page)
     await expectNoConsoleErrors(consoleErrors)
   })
 
