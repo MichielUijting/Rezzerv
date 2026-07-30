@@ -7,8 +7,15 @@ function authHeaders() {
 
 async function request(url, options = {}) {
   const response = await fetch(url, {
+    cache: 'no-store',
     ...options,
-    headers: { ...JSON_HEADERS, ...authHeaders(), ...(options.headers || {}) },
+    headers: {
+      ...JSON_HEADERS,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      Pragma: 'no-cache',
+      ...authHeaders(),
+      ...(options.headers || {}),
+    },
   })
   const text = await response.text()
   let payload = null
@@ -19,13 +26,19 @@ async function request(url, options = {}) {
   return payload
 }
 
+function freshQuery(params = new URLSearchParams()) {
+  params.set('_refresh', String(Date.now()))
+  return `?${params.toString()}`
+}
+
 export function listHouseholdThreads(status = '') {
-  const query = status ? `?status=${encodeURIComponent(status)}` : ''
-  return request(`/api/support/threads${query}`)
+  const params = new URLSearchParams()
+  if (status) params.set('status', status)
+  return request(`/api/support/threads${freshQuery(params)}`)
 }
 
 export function readHouseholdThread(threadId) {
-  return request(`/api/support/threads/${encodeURIComponent(threadId)}`)
+  return request(`/api/support/threads/${encodeURIComponent(threadId)}${freshQuery()}`)
 }
 
 export function createHouseholdThread(payload) {
@@ -48,12 +61,11 @@ export function listPlatformThreads({ status = '', householdId = '' } = {}) {
   const params = new URLSearchParams()
   if (status) params.set('status', status)
   if (householdId) params.set('household_id', householdId)
-  const query = params.toString() ? `?${params}` : ''
-  return request(`/api/platform/support/threads${query}`)
+  return request(`/api/platform/support/threads${freshQuery(params)}`)
 }
 
 export function readPlatformThread(threadId) {
-  return request(`/api/platform/support/threads/${encodeURIComponent(threadId)}`)
+  return request(`/api/platform/support/threads/${encodeURIComponent(threadId)}${freshQuery()}`)
 }
 
 export function createPlatformThread(payload) {
@@ -73,8 +85,13 @@ export function updatePlatformThreadStatus(threadId, status) {
 }
 
 export function downloadPlatformSupportCsv(status = '') {
-  const query = status ? `?status=${encodeURIComponent(status)}` : ''
-  return fetch(`/api/platform/support/export.csv${query}`, { headers: authHeaders() }).then(async (response) => {
+  const params = new URLSearchParams()
+  if (status) params.set('status', status)
+  const query = freshQuery(params)
+  return fetch(`/api/platform/support/export.csv${query}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', ...authHeaders() },
+  }).then(async (response) => {
     if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || 'CSV-export mislukt')
     const blob = await response.blob()
     const href = URL.createObjectURL(blob)
