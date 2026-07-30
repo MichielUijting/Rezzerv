@@ -5,6 +5,7 @@ import Card from '../../ui/Card.jsx'
 import { readStoredAuthContext, isHouseholdViewerFromContext } from '../../lib/authSession.js'
 
 const tiles = [
+  { key: 'meldingen', label: 'Meldingen', icon: '✉️' },
   { key: 'bijna-op', label: 'Bijna op', icon: '📉' },
   { key: 'winkelen', label: 'Winkelen', icon: '🛒' },
   { key: 'prognoses', label: 'Prognoses', icon: '📊' },
@@ -35,21 +36,18 @@ export default function HomePage() {
     const token = localStorage.getItem('rezzerv_token')
     if (!token) return
     fetch('/api/household', { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Huishouden niet beschikbaar')
-        return res.json()
-      })
+      .then(async (res) => { if (!res.ok) throw new Error('Huishouden niet beschikbaar'); return res.json() })
       .then((data) => {
         const name = data?.naam || 'Mijn huishouden'
         setHouseholdName(name)
         setIsHouseholdAdmin(Boolean(data?.is_household_admin))
         setIsViewer(Boolean(data?.is_viewer))
         localStorage.setItem('rezzerv_household_name', name)
-      })
-      .catch(() => {})
+      }).catch(() => {})
   }, [])
 
   function openTile(key) {
+    if (key === 'meldingen') navigate('/meldingen')
     if (key === 'bijna-op') navigate('/bijna-op')
     if (key === 'voorraad') navigate('/voorraad')
     if (key === 'productgroepen') navigate('/productgroepen')
@@ -62,26 +60,5 @@ export default function HomePage() {
     if (key === 'admin') navigate('/admin')
   }
 
-  return (
-    <div className="rz-screen">
-      <Header title="Startpagina" />
-      <div className="rz-content">
-        <div className="rz-content-inner">
-          <Card className="rz-card-home">
-            <div className="rz-tile-grid" role="navigation" aria-label="Acties">
-              {tiles.filter((tile) => !['admin', 'catalogus'].includes(tile.key) || isHouseholdAdmin).map((t) => {
-                const clickable = ['bijna-op', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus'].includes(t.key)
-                return (
-                  <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
-                    <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>
-                    <div className="rz-tile-label">{t.label}</div>
-                  </div>
-                )
-              })}
-            </div>
-          </Card>
-        </div>
-      </div>
-    </div>
-  )
+  return <div className="rz-screen"><Header title="Startpagina"/><div className="rz-content"><div className="rz-content-inner"><Card className="rz-card-home"><div className="rz-tile-grid" role="navigation" aria-label="Acties">{tiles.filter((tile)=>!['admin','catalogus','meldingen'].includes(tile.key)||isHouseholdAdmin).map((t)=>{const clickable=['meldingen','bijna-op','voorraad','productgroepen','kassabonnen','kassa','spaartegoeden','externe-databases','instellingen','admin','catalogus'].includes(t.key);return <div key={t.key} className="rz-tile" onClick={()=>clickable&&openTile(t.key)} style={{cursor:clickable?'pointer':'default'}}><div className="rz-tile-icon" aria-hidden="true">{t.icon}</div><div className="rz-tile-label">{t.label}</div></div>})}</div></Card></div></div></div>
 }
