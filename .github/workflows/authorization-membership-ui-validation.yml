@@ -36,6 +36,7 @@ jobs:
         env:
           CI: '1'
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
+          PLAYWRIGHT_API_URL: http://127.0.0.1:8011
         run: |
           npm install
           npx playwright install --with-deps chromium
