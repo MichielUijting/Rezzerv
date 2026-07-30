@@ -20,14 +20,14 @@ Dit advies betekent dat de afgesproken technische M2C2n-scope aantoonbaar is ge�
 
 De actuele FastAPI-baseline bevat:
 
-- 224 routeregistraties;
-- 224 unieke methode-padcombinaties;
+- 225 routeregistraties;
+- 225 unieke methode-padcombinaties;
 - nul dubbele registraties;
 - 100 leesregistraties;
-- 124 mutatieregistraties;
-- 95 productiemutaties, 17 testingmutaties, 11 adminmutaties en 1 devmutatie.
+- 125 mutatieregistraties;
+- 96 productiemutaties, 17 testingmutaties, 11 adminmutaties en 1 devmutatie.
 
-De uitbreiding ten opzichte van de vorige baseline bestaat uit tien bedoelde productieroutes voor meldingen tussen huishoudadmins en de platform-superuser. Iedere routewijziging wordt door de routecatalogusworkflow en fingerprintbaseline zichtbaar gemaakt.
+De uitbreiding ten opzichte van de vorige baseline bestaat uit elf bedoelde productieroutes voor meldingen tussen huishoudadmins en de platform-superuser. Iedere routewijziging wordt door de routecatalogusworkflow en fingerprintbaseline zichtbaar gemaakt.
 
 ## Afgesloten werkpakketten
 
@@ -35,7 +35,7 @@ De uitbreiding ten opzichte van de vorige baseline bestaat uit tien bedoelde pro
 2. **WP-2 — Testing en platform-admin:** centrale platform-adminguard voor 27 mutaties en verwijdering van dubbele diagnoseroutes.
 3. **WP-3 — Producten en externe productlinks:** huishoudisolatie, server-side objectbinding en globale catalogusrollen.
 4. **WP-4 — Prognoses en inkoop:** volledige dekking van 23 routes door bestaande context-, schrijf- en platform-admingrenzen.
-5. **WP-5 — Meldingen:** tien expliciete supportmeldingsroutes, zonder dubbelen, met huishoud- of platformpermissieguard per route.
+5. **WP-5 — Meldingen:** elf expliciete supportmeldingsroutes, zonder dubbelen, met huishoud- of platformpermissieguard per route.
 6. **WP-6 — Fallbacks:** 94 relevante verwijzingen geclassificeerd en nul ongeclassificeerde huishoudfallbacks.
 7. **WP-7 — Eindcontrole:** totale matrix-, baseline-, bewijs- en workflowcontrole.
 
