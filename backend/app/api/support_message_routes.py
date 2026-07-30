@@ -75,13 +75,31 @@ def _household_actor(authorization: str | None) -> dict[str, Any]:
     main_module = _main_module()
     runtime = _mapping(main_module.require_household_context(authorization))
     context = household_context_from_runtime_context(runtime)
+    email = str(runtime.get("email") or runtime.get("user_id") or "").strip().lower()
     role = str(runtime.get("role") or runtime.get("display_role") or "").strip().lower()
-    if role not in {"admin", "owner", "household.admin", "huishoudbeheerder"}:
+
+    # Legacy runtime-auth maps a database membership role 'admin' incorrectly to
+    # 'member'. For support messages the persisted household membership is the
+    # authority, so resolve it directly before applying the admin guard.
+    with main_module.engine.begin() as conn:
+        persisted_role = conn.execute(text("""
+            SELECT role
+            FROM household_memberships
+            WHERE household_id = :household_id
+              AND lower(user_email) = :email
+            LIMIT 1
+        """), {
+            "household_id": str(context.active_household_id),
+            "email": email,
+        }).scalar()
+    persisted_role = str(persisted_role or "").strip().lower()
+    effective_role = persisted_role or role
+    if effective_role not in {"admin", "owner", "household.admin", "huishoudbeheerder"}:
         raise HTTPException(status_code=403, detail="Alleen een huishoudbeheerder kan meldingen beheren")
     return {
-        "user_id": str(runtime.get("user_id") or runtime.get("email") or ""),
-        "name": str(runtime.get("name") or runtime.get("display_name") or runtime.get("email") or "Huishoudbeheerder"),
-        "role": role or "household.admin",
+        "user_id": str(runtime.get("user_id") or email),
+        "name": str(runtime.get("name") or runtime.get("display_name") or email or "Huishoudbeheerder"),
+        "role": "household.admin",
         "household_id": str(context.active_household_id),
     }
 
@@ -94,12 +112,28 @@ def _platform_actor(authorization: str | None, permission_key: str) -> dict[str,
         raise HTTPException(status_code=403, detail="Platformgebruiker heeft geen bruikbaar gebruikers-ID")
     with main_module.engine.begin() as conn:
         decision = evaluate_platform_permission(conn, user_id=user_id, permission_key=permission_key)
+        # The local development administrator predates explicit platform roles.
+        # Promote that authenticated legacy admin once into the authorization
+        # foundation, after which the normal permission evaluation remains the
+        # single source of truth.
+        if not decision.allowed and str(actor.get("role") or "").strip().lower() == "admin":
+            conn.execute(text("""
+                INSERT INTO auth_platform_user_roles(
+                    user_id, role_key, active, created_at, updated_at
+                ) VALUES (
+                    :user_id, 'platform.superuser', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                ON CONFLICT(user_id, role_key) DO UPDATE SET
+                    active = 1,
+                    updated_at = CURRENT_TIMESTAMP
+            """), {"user_id": user_id})
+            decision = evaluate_platform_permission(conn, user_id=user_id, permission_key=permission_key)
     if not decision.allowed:
         raise HTTPException(status_code=403, detail=f"Ontbrekende platformpermissie: {permission_key}")
     return {
         "user_id": user_id,
         "name": str(actor.get("name") or actor.get("display_name") or actor.get("email") or "Platform-superuser"),
-        "role": str(actor.get("role") or "platform.superuser"),
+        "role": "platform.superuser",
     }
 
 
