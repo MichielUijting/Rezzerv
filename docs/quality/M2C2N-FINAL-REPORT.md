@@ -1,6 +1,6 @@
 # M2C2n eindrapport
 
-Statusdatum: 2026-07-29  
+Statusdatum: 2026-07-30  
 Basis voor eindcontrole: actuele PR-head met de gecontroleerde runtime-routebaseline.
 
 ## Eindadvies
@@ -20,14 +20,14 @@ Dit advies betekent dat de afgesproken technische M2C2n-scope aantoonbaar is geÃ
 
 De actuele FastAPI-baseline bevat:
 
-- 208 routeregistraties;
-- 208 unieke methode-padcombinaties;
+- 214 routeregistraties;
+- 214 unieke methode-padcombinaties;
 - nul dubbele registraties;
-- 92 leesregistraties;
-- 116 mutatieregistraties;
-- 87 productiemutaties, 17 testingmutaties, 11 adminmutaties en 1 devmutatie.
+- 95 leesregistraties;
+- 119 mutatieregistraties;
+- 90 productiemutaties, 17 testingmutaties, 11 adminmutaties en 1 devmutatie.
 
-De uitbreiding ten opzichte van de vorige baseline bestaat uit vier bedoelde productieroutes voor Catalogus-GPC: Brick zoeken, classificatie lezen, classificatie opslaan en classificatie verwijderen. Iedere routewijziging wordt door de routecatalogusworkflow en fingerprintbaseline zichtbaar gemaakt.
+De uitbreiding ten opzichte van de vorige baseline bestaat uit zes bedoelde productieroutes voor huishoudleden en autorisaties: leden opvragen, rollen opvragen, permissies opvragen, een rol wijzigen, een individuele rechtenuitzondering opslaan en een rechtenuitzondering verwijderen. Iedere routewijziging wordt door de routecatalogusworkflow en fingerprintbaseline zichtbaar gemaakt.
 
 ## Afgesloten werkpakketten
 
@@ -72,7 +72,8 @@ De repository bevat gerichte contracten en workflows voor:
 - voorraadlocatie-isolatie;
 - product enrichment en artikeldetail;
 - receipt share import;
-- kassabonketen en releasegates.
+- kassabonketen en releasegates;
+- huishoudleden- en autorisatie-APIâ€™s.
 
 ## Bewijsgrenzen
 
