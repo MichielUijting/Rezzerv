@@ -1,0 +1,34 @@
+name: Support message frontend validation
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/features/support/**'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/src/features/home/HomePage.jsx'
+      - 'frontend/src/main.jsx'
+      - '.github/workflows/support-message-frontend-validation.yml'
+
+jobs:
+  support-message-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Build frontend
+        run: npm run build
+      - name: Check support routes and API bindings
+        run: |
+          grep -F "path:'/meldingen'" src/app/router/AppRouter.jsx
+          grep -F "path:'/admin/meldingen'" src/app/router/AppRouter.jsx
+          grep -F '/api/support/threads' src/features/support/supportApi.js
+          grep -F '/api/platform/support/threads' src/features/support/supportApi.js
+          grep -F '/api/platform/support/export.csv' src/features/support/supportApi.js
