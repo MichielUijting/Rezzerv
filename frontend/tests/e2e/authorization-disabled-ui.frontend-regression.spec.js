@@ -17,6 +17,11 @@ async function seedSession(page, permissions = {}, displayRole = 'member') {
   }, { grantedPermissions: permissions, role: displayRole })
 }
 
+async function waitForFeedbackOverlayToClose(page) {
+  const overlay = page.getByTestId('app-feedback-success-overlay')
+  if (await overlay.count()) await overlay.waitFor({ state: 'detached', timeout: 10000 })
+}
+
 function householdPayload({ isAdmin = true, name = 'Testhuishouden' } = {}) {
   const members = [
     { email: 'admin@rezzerv.local', is_current_user: true, can_remove: false },
@@ -124,18 +129,22 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     await page.getByTestId('household-name-input').fill('Molenstraat 19 Driel')
     await page.getByTestId('household-name-save').click()
     await expect.poll(() => calls.name).toBe(1)
+    await waitForFeedbackOverlayToClose(page)
 
     await page.getByTestId('household-role-select-lid@rezzerv.local').selectOption('household.advanced_member')
     await expect.poll(() => calls.role).toBe(1)
+    await waitForFeedbackOverlayToClose(page)
 
     await page.getByTestId('household-member-email-input').fill('nieuw@rezzerv.local')
     await page.getByTestId('household-member-password-input').fill('Testwachtwoord-2026')
     await page.getByTestId('household-add-member').click()
     await expect.poll(() => calls.add).toBe(1)
+    await waitForFeedbackOverlayToClose(page)
 
     await page.getByTestId('household-remove-lid@rezzerv.local').click()
     await page.getByTestId('household-remove-confirm').click()
     await expect.poll(() => calls.remove).toBe(1)
+    await waitForFeedbackOverlayToClose(page)
     await expectNoConsoleErrors(consoleErrors)
   })
 
@@ -151,6 +160,7 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     await expect(page.getByTestId('household-name-save')).toHaveCount(0)
     await expect(page.getByTestId('household-remove-lid@rezzerv.local')).toHaveCount(0)
     expect(calls.name + calls.add + calls.role + calls.remove).toBe(0)
+    await expectNoConsoleErrors(consoleErrors)
 
     const status = await page.evaluate(async () => {
       const response = await fetch('/api/household/name', {
@@ -162,6 +172,5 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     })
     expect(status).toBe(403)
     expect(calls.forbidden).toBe(1)
-    await expectNoConsoleErrors(consoleErrors)
   })
 })
