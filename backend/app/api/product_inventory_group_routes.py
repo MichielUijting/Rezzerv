@@ -4,6 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Header, HTTPException, Query
 
+from app.api.authorization_membership_routes import router as authorization_membership_router
 from app.services.gpc_import_service import import_gs1_gpc_nl, require_admin_key
 from app.services.gpc_local_catalog_service import classify_gpc_product, import_bundled_gpc_catalog
 from app.services.external_product_candidate_store import promote_external_product_candidate_with_product_type
@@ -13,6 +14,7 @@ from app.services.product_inventory_group_projection_service import list_invento
 from app.services.product_inventory_group_store import assign_inventory_item_to_group, ensure_product_inventory_group_schema, link_global_product_to_inventory_group
 
 router = APIRouter()
+router.include_router(authorization_membership_router)
 
 
 def _payload_text(payload: dict[str, Any], *keys: str) -> str:
