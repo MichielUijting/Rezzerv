@@ -110,7 +110,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettings allowViewer={false}><SettingsAlmostOutPage /></ProtectedSettings> },
   { path: '/instellingen/winkelimport', element: <ProtectedSettings allowViewer={false}><SettingsStoreImportPage /></ProtectedSettings> },
   { path: '/instellingen/huishouden', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdPage /></ProtectedSettings> },
-  { path: '/instellingen/huishouden/autorisaties', element: <ProtectedSettings allowViewer={false}><SettingsAuthorizationPage /></ProtectedSettings> },
+  { path: '/instellingen/huishouden/autorisaties', element: <ProtectedSettings allowViewer={true}><SettingsAuthorizationPage /></ProtectedSettings> },
   { path: '/instellingen/locaties', element: <ProtectedSettings allowViewer={false}><SettingsLocationsPage /></ProtectedSettings> },
   { path: '/instellingen/ruimtes', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
   { path: '/instellingen/sublocaties', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
