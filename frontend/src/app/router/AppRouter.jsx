@@ -13,6 +13,7 @@ import SettingsHouseholdAutomationPage from '../../features/settings/SettingsHou
 import SettingsAlmostOutPage from '../../features/settings/SettingsAlmostOutPage'
 import SettingsStoreImportPage from '../../features/settings/SettingsStoreImportPage'
 import SettingsHouseholdPage from '../../features/settings/SettingsHouseholdPage'
+import SettingsAuthorizationPage from '../../features/settings/SettingsAuthorizationPage.jsx'
 import SettingsLocationsPage from '../../features/settings/SettingsLocationsPage'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
 import Voorraad from '../../pages/Voorraad'
@@ -55,17 +56,13 @@ function ResetSessionRoute() {
 
 function LegacyReceiptBatchRouteRedirect() {
   const { batchId = '' } = useParams()
-  const target = batchId
-    ? `/kassabonnen?batch=${encodeURIComponent(batchId)}`
-    : '/kassabonnen'
+  const target = batchId ? `/kassabonnen?batch=${encodeURIComponent(batchId)}` : '/kassabonnen'
   return <Navigate to={target} replace />
 }
 
 function LegacyReceiptLineRouteRedirect() {
   const { batchId = '' } = useParams()
-  const target = batchId
-    ? `/kassabonnen?batch=${encodeURIComponent(batchId)}`
-    : '/kassabonnen'
+  const target = batchId ? `/kassabonnen?batch=${encodeURIComponent(batchId)}` : '/kassabonnen'
   return <Navigate to={target} replace />
 }
 
@@ -113,6 +110,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettings allowViewer={false}><SettingsAlmostOutPage /></ProtectedSettings> },
   { path: '/instellingen/winkelimport', element: <ProtectedSettings allowViewer={false}><SettingsStoreImportPage /></ProtectedSettings> },
   { path: '/instellingen/huishouden', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdPage /></ProtectedSettings> },
+  { path: '/instellingen/huishouden/autorisaties', element: <ProtectedSettings allowViewer={false}><SettingsAuthorizationPage /></ProtectedSettings> },
   { path: '/instellingen/locaties', element: <ProtectedSettings allowViewer={false}><SettingsLocationsPage /></ProtectedSettings> },
   { path: '/instellingen/ruimtes', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
   { path: '/instellingen/sublocaties', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
