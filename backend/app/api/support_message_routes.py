@@ -71,46 +71,39 @@ def _main_module():
     return main_module
 
 
-def _household_actor(authorization: str | None) -> dict[str, Any]:
+def _household_actor(
+    authorization: str | None,
+    requested_household_id: str | None = None,
+) -> dict[str, Any]:
     main_module = _main_module()
     runtime = _mapping(main_module.require_household_context(authorization))
     context = household_context_from_runtime_context(runtime)
     email = str(runtime.get("email") or runtime.get("user_id") or "").strip().lower()
-    if not email:
-        raise HTTPException(status_code=403, detail="Huishoudgebruiker heeft geen bruikbaar e-mailadres")
+    household_id = str(requested_household_id or context.active_household_id or "").strip()
+    if not email or not household_id:
+        raise HTTPException(status_code=403, detail="Actief huishouden ontbreekt")
 
-    requested_household_id = str(context.active_household_id)
     with main_module.engine.begin() as conn:
-        memberships = conn.execute(text("""
-            SELECT household_id, role
+        membership = conn.execute(text("""
+            SELECT role
             FROM household_memberships
-            WHERE lower(user_email) = :email
-            ORDER BY household_id
-        """), {"email": email}).mappings().all()
+            WHERE household_id = :household_id
+              AND lower(user_email) = :email
+            LIMIT 1
+        """), {"household_id": household_id, "email": email}).mappings().first()
 
-    allowed_roles = {"admin", "owner", "household.admin", "huishoudbeheerder"}
-    admin_memberships = [
-        {"household_id": str(row["household_id"]), "role": str(row["role"] or "").strip().lower()}
-        for row in memberships
-        if str(row["role"] or "").strip().lower() in allowed_roles
-    ]
-    selected = next(
-        (row for row in admin_memberships if row["household_id"] == requested_household_id),
-        None,
-    )
-    if selected is None and len(admin_memberships) == 1:
-        selected = admin_memberships[0]
-    if selected is None:
-        raise HTTPException(
-            status_code=403,
-            detail="Geen geldige huishoudbeheerder-koppeling voor het actieve huishouden",
-        )
+    if not membership:
+        raise HTTPException(status_code=403, detail="Geen lidmaatschap van het actieve huishouden")
+    persisted_role = str(membership.get("role") or "").strip().lower()
+    if persisted_role not in {"admin", "owner", "household.admin", "huishoudbeheerder"}:
+        raise HTTPException(status_code=403, detail="Alleen een huishoudbeheerder kan meldingen beheren")
 
     return {
         "user_id": str(runtime.get("user_id") or email),
+        "email": email,
         "name": str(runtime.get("name") or runtime.get("display_name") or email or "Huishoudbeheerder"),
         "role": "household.admin",
-        "household_id": selected["household_id"],
+        "household_id": household_id,
     }
 
 
@@ -118,12 +111,12 @@ def _platform_actor(authorization: str | None, permission_key: str) -> dict[str,
     main_module = _main_module()
     actor = _mapping(main_module.require_platform_admin_user(authorization))
     user_id = str(actor.get("user_id") or actor.get("id") or actor.get("email") or "").strip()
+    email = str(actor.get("email") or user_id).strip().lower()
     if not user_id:
         raise HTTPException(status_code=403, detail="Platformgebruiker heeft geen bruikbaar gebruikers-ID")
     with main_module.engine.begin() as conn:
         decision = evaluate_platform_permission(conn, user_id=user_id, permission_key=permission_key)
-        actor_email = str(actor.get("email") or "").strip().lower()
-        if not decision.allowed and actor_email == "admin@rezzerv.local":
+        if not decision.allowed and email == "admin@rezzerv.local":
             conn.execute(text("""
                 INSERT INTO auth_platform_user_roles(
                     user_id, role_key, active, created_at, updated_at
@@ -157,7 +150,52 @@ def _thread_header(conn, thread_id: str, *, household_id: str | None = None, is_
         raise HTTPException(status_code=404, detail="Melding niet gevonden")
     if not is_superuser and str(row["household_id"] or "") != str(household_id or ""):
         raise HTTPException(status_code=404, detail="Melding niet gevonden")
+    if not is_superuser and str(row["recipient_type"] or "") == RECIPIENT_SUPERUSER:
+        creator_is_member = conn.execute(text("""
+            SELECT 1
+            FROM household_memberships
+            WHERE household_id = :household_id
+              AND lower(user_email) = lower(:created_by_user_id)
+            LIMIT 1
+        """), {
+            "household_id": str(household_id or ""),
+            "created_by_user_id": str(row["created_by_user_id"] or ""),
+        }).scalar()
+        if not creator_is_member:
+            raise HTTPException(status_code=404, detail="Melding niet gevonden")
     return dict(row)
+
+
+def _list_household_threads(conn, *, household_id: str, status: str | None = None):
+    params: dict[str, Any] = {"household_id": str(household_id)}
+    status_clause = ""
+    if status:
+        params["status"] = status
+        status_clause = " AND t.status = :status"
+    return conn.execute(text(f"""
+        SELECT
+            t.id, t.thread_number, t.household_id, t.created_by_user_id,
+            t.created_by_name, t.subject, t.origin_screen_name, t.origin_route,
+            t.origin_app_version, t.status, t.reply_allowed, t.recipient_type,
+            t.created_at, t.updated_at, t.closed_at,
+            COUNT(m.id) AS message_count,
+            MAX(m.created_at) AS last_message_at
+        FROM support_threads t
+        LEFT JOIN support_messages m ON m.thread_id = t.id
+        WHERE t.household_id = :household_id
+          {status_clause}
+          AND (
+              t.recipient_type <> 'superuser'
+              OR EXISTS (
+                  SELECT 1
+                  FROM household_memberships hm
+                  WHERE hm.household_id = t.household_id
+                    AND lower(hm.user_email) = lower(t.created_by_user_id)
+              )
+          )
+        GROUP BY t.id
+        ORDER BY t.updated_at DESC, t.thread_number DESC
+    """), params).mappings().all()
 
 
 def _support_error(exc: SupportMessageError):
@@ -166,14 +204,23 @@ def _support_error(exc: SupportMessageError):
     raise HTTPException(status_code=status_code, detail=message)
 
 
+def _household_header(value: str | None) -> str | None:
+    normalized = str(value or "").strip()
+    return normalized or None
+
+
 @router.post("/api/support/threads", status_code=201)
-def create_household_support_thread(payload: HouseholdThreadCreateRequest, authorization: str | None = Header(None)):
-    actor = _household_actor(authorization)
+def create_household_support_thread(
+    payload: HouseholdThreadCreateRequest,
+    authorization: str | None = Header(None),
+    x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID"),
+):
+    actor = _household_actor(authorization, _household_header(x_rezzerv_household_id))
     try:
         with _main_module().engine.begin() as conn:
             result = create_support_thread(
                 conn,
-                created_by_user_id=actor["user_id"],
+                created_by_user_id=actor["email"],
                 created_by_name=actor["name"],
                 sender_role=actor["role"],
                 subject=payload.subject,
@@ -191,19 +238,27 @@ def create_household_support_thread(payload: HouseholdThreadCreateRequest, autho
 
 
 @router.get("/api/support/threads")
-def get_household_support_threads(status: str | None = Query(None), authorization: str | None = Header(None)):
-    actor = _household_actor(authorization)
+def get_household_support_threads(
+    status: str | None = Query(None),
+    authorization: str | None = Header(None),
+    x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID"),
+):
+    actor = _household_actor(authorization, _household_header(x_rezzerv_household_id))
     try:
         with _main_module().engine.begin() as conn:
-            rows = list_support_threads(conn, household_id=actor["household_id"], status=status)
+            rows = _list_household_threads(conn, household_id=actor["household_id"], status=status)
         return {"items": [dict(row) for row in rows]}
     except SupportMessageError as exc:
         _support_error(exc)
 
 
 @router.get("/api/support/threads/{thread_id}")
-def get_household_support_thread(thread_id: str, authorization: str | None = Header(None)):
-    actor = _household_actor(authorization)
+def get_household_support_thread(
+    thread_id: str,
+    authorization: str | None = Header(None),
+    x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID"),
+):
+    actor = _household_actor(authorization, _household_header(x_rezzerv_household_id))
     try:
         with _main_module().engine.begin() as conn:
             header = _thread_header(conn, thread_id, household_id=actor["household_id"])
@@ -214,15 +269,20 @@ def get_household_support_thread(thread_id: str, authorization: str | None = Hea
 
 
 @router.post("/api/support/threads/{thread_id}/messages", status_code=201)
-def reply_household_support_thread(thread_id: str, payload: SupportReplyRequest, authorization: str | None = Header(None)):
-    actor = _household_actor(authorization)
+def reply_household_support_thread(
+    thread_id: str,
+    payload: SupportReplyRequest,
+    authorization: str | None = Header(None),
+    x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID"),
+):
+    actor = _household_actor(authorization, _household_header(x_rezzerv_household_id))
     try:
         with _main_module().engine.begin() as conn:
             _thread_header(conn, thread_id, household_id=actor["household_id"])
             message_id = add_support_message(
                 conn,
                 thread_id=thread_id,
-                sender_user_id=actor["user_id"],
+                sender_user_id=actor["email"],
                 sender_name=actor["name"],
                 sender_role=actor["role"],
                 message_text=payload.message,
@@ -235,8 +295,13 @@ def reply_household_support_thread(thread_id: str, payload: SupportReplyRequest,
 
 
 @router.patch("/api/support/threads/{thread_id}/status")
-def update_household_support_thread_status(thread_id: str, payload: SupportStatusRequest, authorization: str | None = Header(None)):
-    actor = _household_actor(authorization)
+def update_household_support_thread_status(
+    thread_id: str,
+    payload: SupportStatusRequest,
+    authorization: str | None = Header(None),
+    x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID"),
+):
+    actor = _household_actor(authorization, _household_header(x_rezzerv_household_id))
     try:
         with _main_module().engine.begin() as conn:
             _thread_header(conn, thread_id, household_id=actor["household_id"])
