@@ -1,15 +1,26 @@
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import BrandLogo from "./BrandLogo.jsx";
 import "./components/header.css";
 
 export default function Header({ title }) {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const email = localStorage.getItem("rezzerv_user_email") || "";
   const household = localStorage.getItem("rezzerv_household_name") || "";
 
   const showUserBox = location.pathname !== "/login" && email;
   const showHouseholdLine = location.pathname !== "/login" && household;
+  const showSupportButton = location.pathname !== "/login" && Boolean(email);
+
+  function openSupportComposer() {
+    const query = new URLSearchParams({
+      new: "1",
+      from: `${location.pathname}${location.search || ""}`,
+      screen: title || document.title || "Rezzerv",
+    });
+    navigate(`/meldingen?${query.toString()}`);
+  }
 
   return (
     <div className="rz-header" data-testid="app-header">
@@ -30,8 +41,22 @@ export default function Header({ title }) {
         </div>
       )}
 
-      <div className="rz-header-logo">
-        <BrandLogo variant="header" />
+      <div className="rz-header-right">
+        <div className="rz-header-logo">
+          <BrandLogo variant="header" />
+        </div>
+        {showSupportButton && (
+          <button
+            type="button"
+            className="rz-header-support-button"
+            onClick={openSupportComposer}
+            aria-label="Melding sturen"
+            title="Melding sturen"
+            data-testid="header-support-button"
+          >
+            <span aria-hidden="true">✉</span>
+          </button>
+        )}
       </div>
     </div>
   );
