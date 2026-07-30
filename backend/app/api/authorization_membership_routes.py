@@ -178,7 +178,24 @@ def list_authorization_roles(
                 WHEN 'household.admin' THEN 4
                 ELSE 99 END
         """)).mappings().all()
-        return {"household_id": str(household_id), "items": [dict(row) for row in rows]}
+        items = []
+        for row in rows:
+            permission_keys = conn.execute(text("""
+                SELECT rp.permission_key
+                FROM auth_role_permissions rp
+                JOIN auth_permissions p
+                  ON p.permission_key = rp.permission_key
+                 AND p.active = 1
+                 AND p.scope = 'household'
+                WHERE rp.role_key = :role_key
+                ORDER BY rp.permission_key
+            """), {"role_key": row["role_key"]}).scalars().all()
+            items.append({
+                "role_key": row["role_key"],
+                "name": row["name"],
+                "permission_keys": [str(key) for key in permission_keys],
+            })
+        return {"household_id": str(household_id), "items": items}
 
 
 @router.get("/api/households/{household_id}/authorization/permissions")
