@@ -13,6 +13,7 @@ import {
 } from './supportApi.js'
 
 const STATUSES = ['', 'Open', 'In behandeling', 'Gesloten']
+const AUTO_REFRESH_MS = 2000
 
 export default function PlatformSupportPage() {
   const [threads, setThreads] = useState([])
@@ -28,20 +29,31 @@ export default function PlatformSupportPage() {
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
 
-  async function refresh() {
-    setBusy(true)
-    setFeedback('')
+  async function loadThreads({ showBusy = false, showErrors = true } = {}) {
+    if (showBusy) setBusy(true)
     try {
       const data = await listPlatformThreads({ status, householdId })
       setThreads(data?.items || [])
+      if (selected?.thread?.id) {
+        setSelected(await readPlatformThread(selected.thread.id))
+      }
     } catch (error) {
-      setFeedback(error.message)
+      if (showErrors) setFeedback(error.message)
     } finally {
-      setBusy(false)
+      if (showBusy) setBusy(false)
     }
   }
 
-  useEffect(() => { refresh() }, [status])
+  useEffect(() => {
+    loadThreads({ showBusy: true })
+  }, [status])
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      loadThreads({ showBusy: false, showErrors: false })
+    }, AUTO_REFRESH_MS)
+    return () => window.clearInterval(timer)
+  }, [status, householdId, selected?.thread?.id])
 
   async function openThread(id) {
     setBusy(true)
@@ -68,7 +80,7 @@ export default function PlatformSupportPage() {
       setSubject('')
       setMessage('')
       setAdminIds('')
-      await refresh()
+      await loadThreads()
       await openThread(created.thread_id)
       setFeedback('Melding verzonden.')
     } catch (error) {
@@ -82,11 +94,12 @@ export default function PlatformSupportPage() {
     event.preventDefault()
     if (!selected?.thread?.id) return
     setBusy(true)
+    setFeedback('')
     try {
       await replyPlatformThread(selected.thread.id, reply)
       setReply('')
       setSelected(await readPlatformThread(selected.thread.id))
-      await refresh()
+      await loadThreads()
       setFeedback('Reactie verzonden.')
     } catch (error) {
       setFeedback(error.message)
@@ -98,10 +111,11 @@ export default function PlatformSupportPage() {
   async function changeStatus(nextStatus) {
     if (!selected?.thread?.id) return
     setBusy(true)
+    setFeedback('')
     try {
       await updatePlatformThreadStatus(selected.thread.id, nextStatus)
       setSelected(await readPlatformThread(selected.thread.id))
-      await refresh()
+      await loadThreads()
       setFeedback('Status bijgewerkt.')
     } catch (error) {
       setFeedback(error.message)
@@ -115,7 +129,10 @@ export default function PlatformSupportPage() {
       <div className="rz-support-layout" data-testid="platform-support-page">
         <Card>
           <div className="rz-support-toolbar">
-            <h2>Alle meldingen</h2>
+            <div>
+              <h2>Alle meldingen</h2>
+              <p>Automatische verversing iedere 2 seconden.</p>
+            </div>
             <Button variant="secondary" onClick={() => downloadPlatformSupportCsv(status).catch((error) => setFeedback(error.message))}>CSV exporteren</Button>
           </div>
           <div className="rz-support-filters">
@@ -123,7 +140,7 @@ export default function PlatformSupportPage() {
               {STATUSES.map((value) => <option key={value || 'all'} value={value}>{value || 'Alle statussen'}</option>)}
             </select>
             <Input value={householdId} onChange={(event) => setHouseholdId(event.target.value)} placeholder="Huishoud-ID" />
-            <Button variant="secondary" onClick={refresh}>Zoeken</Button>
+            <Button variant="secondary" onClick={() => loadThreads({ showBusy: true })}>Zoeken</Button>
           </div>
           {!busy && !threads.length ? <p>Geen meldingen gevonden.</p> : null}
           <div className="rz-support-list">
@@ -141,11 +158,20 @@ export default function PlatformSupportPage() {
           {selected ? (
             <>
               <div className="rz-support-detail-head">
-                <div><h2>{selected.thread.subject}</h2><p>{selected.thread.thread_number} · huishouden {selected.thread.household_id}</p></div>
+                <div><h2>{selected.thread.subject}</h2><p>{selected.thread.thread_number} · huishouden {selected.thread.household_id} · {selected.thread.status}</p></div>
                 <Button variant="secondary" onClick={() => setSelected(null)}>Nieuwe melding</Button>
               </div>
-              <div className="rz-support-status-actions">
-                {STATUSES.filter(Boolean).map((value) => <Button key={value} variant={selected.thread.status === value ? 'primary' : 'secondary'} onClick={() => changeStatus(value)} disabled={busy}>{value}</Button>)}
+              <div className="rz-support-status-actions" aria-label="Status van melding">
+                {STATUSES.filter(Boolean).map((value) => (
+                  <Button
+                    key={value}
+                    variant={selected.thread.status === value ? 'primary' : 'secondary'}
+                    onClick={() => changeStatus(value)}
+                    disabled={busy}
+                  >
+                    {value}
+                  </Button>
+                ))}
               </div>
               <div className="rz-support-conversation">
                 {(selected.messages || []).map((item) => (
