@@ -4,6 +4,7 @@ import "./ui/components/button.css";
 import "./ui/components/card.css";
 import "./ui/components/header.css";
 import "./ui/components/table.css";
+import "./features/support/support.css";
 import "./styles.css";
 
 import React from 'react'
@@ -15,7 +16,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 )
-
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
