@@ -33,17 +33,95 @@ import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import SettingsGuard from './SettingsGuard'
 
-function LoginRoute() { const navigate = useNavigate(); function handleLogin(newToken,email){localStorage.setItem('rezzerv_token',newToken);if(email)localStorage.setItem('rezzerv_user_email',email);navigate('/home',{replace:false})} return <LoginPage onLoggedIn={handleLogin}/> }
-function ResetSessionRoute(){React.useEffect(()=>{try{localStorage.removeItem('rezzerv_token');localStorage.removeItem('rezzerv_user_email');sessionStorage.clear()}finally{window.location.replace('/login')}},[]);return null}
-function LegacyReceiptBatchRouteRedirect(){const{batchId=''}=useParams();return <Navigate to={batchId?`/kassabonnen?batch=${encodeURIComponent(batchId)}`:'/kassabonnen'} replace/>}
-function LegacyReceiptLineRouteRedirect(){const{batchId=''}=useParams();return <Navigate to={batchId?`/kassabonnen?batch=${encodeURIComponent(batchId)}`:'/kassabonnen'} replace/>}
-function Protected({children}){return <AuthGuard>{children}</AuthGuard>}
-function ProtectedAdmin({children}){return <AuthGuard><AdminGuard>{children}</AdminGuard></AuthGuard>}
-function ProtectedSettings({children,allowViewer=true}){return <AuthGuard><SettingsGuard allowViewer={allowViewer}>{children}</SettingsGuard></AuthGuard>}
+function LoginRoute() {
+  const navigate = useNavigate()
+  function handleLogin(newToken, email) {
+    localStorage.setItem('rezzerv_token', newToken)
+    if (email) localStorage.setItem('rezzerv_user_email', email)
+    navigate('/home', { replace: false })
+  }
+  return <LoginPage onLoggedIn={handleLogin} />
+}
 
-const router=createBrowserRouter([
-{path:'/login',element:<LoginRoute/>},{path:'/reset-session',element:<ResetSessionRoute/>},{path:'/',element:<Navigate to="/login" replace/>},
-{path:'/home',element:<Protected><HomePage/></Protected>},{path:'/meldingen',element:<Protected><HouseholdSupportPage/></Protected>},{path:'/voorraad',element:<Protected><Voorraad/></Protected>},{path:'/bijna-op',element:<Protected><AlmostOutPage/></Protected>},{path:'/spaartegoeden',element:<Protected><LoyaltyStampsPage/></Protected>},{path:'/productgroepen',element:<Protected><ProductGroupsPage/></Protected>},{path:'/voorraad/incidentele-aankoop',element:<Protected><IncidentalPurchasePage/></Protected>},{path:'/dev/scanner-lab',element:<Protected><ScannerLabPage/></Protected>},{path:'/dev/receipt-review-preview',element:<Protected><ReceiptReviewPreviewPage/></Protected>},{path:'/kassabonnen',element:<Protected><ReceiptsPage/></Protected>},{path:'/kassa',element:<Protected><KassaPage/></Protected>},{path:'/kassa/nieuw',element:<Protected><KassaPage/></Protected>},{path:'/externe-databases',element:<Protected><ExternalDatabasesPage/></Protected>},{path:'/catalogus',element:<ProtectedAdmin><CatalogPage/></ProtectedAdmin>},{path:'/catalogus/gpc-classificeren',element:<ProtectedAdmin><CatalogGpcActionPage/></ProtectedAdmin>},{path:'/catalogus/:globalProductId',element:<ProtectedAdmin><CatalogDetailPageV2/></ProtectedAdmin>},{path:'/kassabon',element:<Protected><Navigate to="/kassa" replace/></Protected>},{path:'/import-kassabon',element:<Protected><Navigate to="/kassabonnen" replace/></Protected>},{path:'/kassabonnen/batch/:batchId',element:<Protected><LegacyReceiptBatchRouteRedirect/></Protected>},{path:'/kassabonnen/batch/:batchId/regel/:receiptLineId',element:<Protected><LegacyReceiptLineRouteRedirect/></Protected>},{path:'/voorraad/:articleId',element:<Protected><ArticlePage/></Protected>},
-{path:'/instellingen',element:<ProtectedSettings allowViewer={true}><SettingsPage/></ProtectedSettings>},{path:'/instellingen/artikeldetails/veldzichtbaarheid',element:<ProtectedSettings allowViewer={true}><SettingsArticleFieldsPage/></ProtectedSettings>},{path:'/instellingen/artikelgroepen',element:<ProtectedSettings allowViewer={false}><SettingsArticleGroupsPage/></ProtectedSettings>},{path:'/instellingen/privacy-datadeling',element:<ProtectedSettings allowViewer={true}><SettingsPrivacyDataSharingPage/></ProtectedSettings>},{path:'/instellingen/huishoudautomatisering',element:<ProtectedSettings allowViewer={false}><SettingsHouseholdAutomationPage/></ProtectedSettings>},{path:'/instellingen/bijna-op-voorspelling',element:<ProtectedSettings allowViewer={false}><SettingsAlmostOutPage/></ProtectedSettings>},{path:'/instellingen/winkelimport',element:<ProtectedSettings allowViewer={false}><SettingsStoreImportPage/></ProtectedSettings>},{path:'/instellingen/huishouden',element:<ProtectedSettings allowViewer={false}><SettingsHouseholdPage/></ProtectedSettings>},{path:'/instellingen/huishouden/autorisaties',element:<ProtectedSettings allowViewer={true}><SettingsAuthorizationPage/></ProtectedSettings>},{path:'/instellingen/locaties',element:<ProtectedSettings allowViewer={false}><SettingsLocationsPage/></ProtectedSettings>},{path:'/instellingen/ruimtes',element:<ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace/></ProtectedSettings>},{path:'/instellingen/sublocaties',element:<ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace/></ProtectedSettings>},
-{path:'/admin',element:<ProtectedAdmin><AdminPage/></ProtectedAdmin>},{path:'/admin/meldingen',element:<ProtectedAdmin><PlatformSupportPage/></ProtectedAdmin>},{path:'*',element:<Navigate to="/login" replace/>}])
-export default function AppRouter(){return <RouterProvider router={router}/>}
+function ResetSessionRoute() {
+  React.useEffect(() => {
+    try {
+      localStorage.removeItem('rezzerv_token')
+      localStorage.removeItem('rezzerv_user_email')
+      sessionStorage.clear()
+    } finally {
+      window.location.replace('/login')
+    }
+  }, [])
+  return null
+}
+
+function LegacyReceiptBatchRouteRedirect() {
+  const { batchId = '' } = useParams()
+  const target = batchId ? `/kassabonnen?batch=${encodeURIComponent(batchId)}` : '/kassabonnen'
+  return <Navigate to={target} replace />
+}
+
+function LegacyReceiptLineRouteRedirect() {
+  const { batchId = '' } = useParams()
+  const target = batchId ? `/kassabonnen?batch=${encodeURIComponent(batchId)}` : '/kassabonnen'
+  return <Navigate to={target} replace />
+}
+
+function Protected({ children }) {
+  return <AuthGuard>{children}</AuthGuard>
+}
+
+function ProtectedAdmin({ children }) {
+  return <AuthGuard><AdminGuard>{children}</AdminGuard></AuthGuard>
+}
+
+function ProtectedSettings({ children, allowViewer = true }) {
+  return <AuthGuard><SettingsGuard allowViewer={allowViewer}>{children}</SettingsGuard></AuthGuard>
+}
+
+const router = createBrowserRouter([
+  { path: '/login', element: <LoginRoute /> },
+  { path: '/reset-session', element: <ResetSessionRoute /> },
+  { path: '/', element: <Navigate to="/login" replace /> },
+  { path: '/home', element: <Protected><HomePage /></Protected> },
+  { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
+  { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
+  { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
+  { path: '/spaartegoeden', element: <Protected><LoyaltyStampsPage /></Protected> },
+  { path: '/productgroepen', element: <Protected><ProductGroupsPage /></Protected> },
+  { path: '/voorraad/incidentele-aankoop', element: <Protected><IncidentalPurchasePage /></Protected> },
+  { path: '/dev/scanner-lab', element: <Protected><ScannerLabPage /></Protected> },
+  { path: '/dev/receipt-review-preview', element: <Protected><ReceiptReviewPreviewPage /></Protected> },
+  { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
+  { path: '/kassa', element: <Protected><KassaPage /></Protected> },
+  { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
+  { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
+  { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
+  { path: '/catalogus/gpc-classificeren', element: <ProtectedAdmin><CatalogGpcActionPage /></ProtectedAdmin> },
+  { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPageV2 /></ProtectedAdmin> },
+  { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
+  { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
+  { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
+  { path: '/kassabonnen/batch/:batchId/regel/:receiptLineId', element: <Protected><LegacyReceiptLineRouteRedirect /></Protected> },
+  { path: '/voorraad/:articleId', element: <Protected><ArticlePage /></Protected> },
+  { path: '/instellingen', element: <ProtectedSettings allowViewer={true}><SettingsPage /></ProtectedSettings> },
+  { path: '/instellingen/artikeldetails/veldzichtbaarheid', element: <ProtectedSettings allowViewer={true}><SettingsArticleFieldsPage /></ProtectedSettings> },
+  { path: '/instellingen/artikelgroepen', element: <ProtectedSettings allowViewer={false}><SettingsArticleGroupsPage /></ProtectedSettings> },
+  { path: '/instellingen/privacy-datadeling', element: <ProtectedSettings allowViewer={true}><SettingsPrivacyDataSharingPage /></ProtectedSettings> },
+  { path: '/instellingen/huishoudautomatisering', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdAutomationPage /></ProtectedSettings> },
+  { path: '/instellingen/bijna-op-voorspelling', element: <ProtectedSettings allowViewer={false}><SettingsAlmostOutPage /></ProtectedSettings> },
+  { path: '/instellingen/winkelimport', element: <ProtectedSettings allowViewer={false}><SettingsStoreImportPage /></ProtectedSettings> },
+  { path: '/instellingen/huishouden', element: <ProtectedSettings allowViewer={false}><SettingsHouseholdPage /></ProtectedSettings> },
+  { path: '/instellingen/huishouden/autorisaties', element: <ProtectedSettings allowViewer={true}><SettingsAuthorizationPage /></ProtectedSettings> },
+  { path: '/instellingen/locaties', element: <ProtectedSettings allowViewer={false}><SettingsLocationsPage /></ProtectedSettings> },
+  { path: '/instellingen/ruimtes', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
+  { path: '/instellingen/sublocaties', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
+  { path: '/admin', element: <ProtectedAdmin><AdminPage /></ProtectedAdmin> },
+  { path: '/admin/meldingen', element: <ProtectedAdmin><PlatformSupportPage /></ProtectedAdmin> },
+  { path: '*', element: <Navigate to="/login" replace /> },
+])
+
+export default function AppRouter() {
+  return <RouterProvider router={router} />
+}
