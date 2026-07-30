@@ -78,9 +78,6 @@ def _household_actor(authorization: str | None) -> dict[str, Any]:
     email = str(runtime.get("email") or runtime.get("user_id") or "").strip().lower()
     role = str(runtime.get("role") or runtime.get("display_role") or "").strip().lower()
 
-    # Legacy runtime-auth maps a database membership role 'admin' incorrectly to
-    # 'member'. For support messages the persisted household membership is the
-    # authority, so resolve it directly before applying the admin guard.
     with main_module.engine.begin() as conn:
         persisted_role = conn.execute(text("""
             SELECT role
@@ -112,10 +109,6 @@ def _platform_actor(authorization: str | None, permission_key: str) -> dict[str,
         raise HTTPException(status_code=403, detail="Platformgebruiker heeft geen bruikbaar gebruikers-ID")
     with main_module.engine.begin() as conn:
         decision = evaluate_platform_permission(conn, user_id=user_id, permission_key=permission_key)
-        # The local development administrator predates explicit platform roles.
-        # Promote that authenticated legacy admin once into the authorization
-        # foundation, after which the normal permission evaluation remains the
-        # single source of truth.
         if not decision.allowed and str(actor.get("role") or "").strip().lower() == "admin":
             conn.execute(text("""
                 INSERT INTO auth_platform_user_roles(
@@ -188,7 +181,8 @@ def get_household_support_threads(status: str | None = Query(None), authorizatio
     actor = _household_actor(authorization)
     try:
         with _main_module().engine.begin() as conn:
-            return {"items": [dict(row) for row in list_support_threads(conn, household_id=actor["household_id"], status=status)]}
+            rows = list_support_threads(conn, household_id=actor["household_id"], status=status)
+        return {"items": [dict(row) for row in rows]}
     except SupportMessageError as exc:
         _support_error(exc)
 
@@ -210,6 +204,7 @@ def reply_household_support_thread(thread_id: str, payload: SupportReplyRequest,
     actor = _household_actor(authorization)
     try:
         with _main_module().engine.begin() as conn:
+            _thread_header(conn, thread_id, household_id=actor["household_id"])
             message_id = add_support_message(
                 conn,
                 thread_id=thread_id,
@@ -221,6 +216,18 @@ def reply_household_support_thread(thread_id: str, payload: SupportReplyRequest,
                 household_id=actor["household_id"],
             )
         return {"message_id": message_id}
+    except SupportMessageError as exc:
+        _support_error(exc)
+
+
+@router.patch("/api/support/threads/{thread_id}/status")
+def update_household_support_thread_status(thread_id: str, payload: SupportStatusRequest, authorization: str | None = Header(None)):
+    actor = _household_actor(authorization)
+    try:
+        with _main_module().engine.begin() as conn:
+            _thread_header(conn, thread_id, household_id=actor["household_id"])
+            set_support_thread_status(conn, thread_id=thread_id, status=payload.status)
+        return {"thread_id": thread_id, "status": payload.status}
     except SupportMessageError as exc:
         _support_error(exc)
 
@@ -305,6 +312,7 @@ def update_platform_support_thread_status(thread_id: str, payload: SupportStatus
     _platform_actor(authorization, "platform.support_access.mutate")
     try:
         with _main_module().engine.begin() as conn:
+            _thread_header(conn, thread_id, is_superuser=True)
             set_support_thread_status(conn, thread_id=thread_id, status=payload.status)
         return {"thread_id": thread_id, "status": payload.status}
     except SupportMessageError as exc:
