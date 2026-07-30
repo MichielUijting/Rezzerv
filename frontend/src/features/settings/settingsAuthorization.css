@@ -1,1 +1,104 @@
-.rz-authorization-page{display:grid;gap:20px}.rz-authorization-header{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-bottom:20px}.rz-authorization-header h2{margin:0 0 8px;font-size:22px}.rz-authorization-header p{margin:0;color:#667085}.rz-authorization-back{color:#0f5b32;text-decoration:none;white-space:nowrap}.rz-authorization-feedback{padding:12px 14px;border-radius:10px;margin-bottom:16px}.rz-authorization-feedback--success{background:#e8f5e9;color:#185c37}.rz-authorization-feedback--error{background:#fdecec;color:#9b1c1c}.rz-authorization-loading{padding:24px 0}.rz-authorization-section{display:grid;gap:14px;padding:18px 0;border-top:1px solid #e5e7eb}.rz-authorization-section:first-of-type{border-top:0}.rz-authorization-section h3{margin:0;font-size:18px}.rz-authorization-table-wrap{overflow-x:auto}.rz-authorization-table{width:100%;border-collapse:collapse}.rz-authorization-table th,.rz-authorization-table td{padding:12px;border-bottom:1px solid #e5e7eb;text-align:left}.rz-authorization-table th{background:#f3f4f6;font-weight:600}.rz-authorization-table tr.is-selected td{background:#eef8f0}.rz-authorization-member-button{border:0;background:transparent;color:#0f5b32;padding:0;cursor:pointer;text-align:left}.rz-authorization-table select,.rz-authorization-permission-row select{min-width:170px;padding:9px 10px;border:1px solid #cfd6dd;border-radius:8px;background:#fff}.rz-authorization-note{margin:0;color:#667085;font-size:14px}.rz-authorization-permission-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:18px}.rz-authorization-permission-heading p{margin:5px 0 0;color:#667085}.rz-authorization-permission-list{display:grid;gap:10px}.rz-authorization-permission-row{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:12px 14px;border:1px solid #dfe4ea;border-radius:10px;background:#fff}.rz-authorization-permission-row div{display:grid;gap:4px}.rz-authorization-permission-row span{color:#667085;font-size:13px}@media(max-width:720px){.rz-authorization-header,.rz-authorization-permission-heading,.rz-authorization-permission-row{align-items:stretch;flex-direction:column}.rz-authorization-table select,.rz-authorization-permission-row select{width:100%}.rz-authorization-back{white-space:normal}}
+.rz-authorization-page {
+  display: grid;
+  gap: 20px;
+}
+
+.rz-authorization-header {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.rz-authorization-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.rz-authorization-header p,
+.rz-authorization-explanation {
+  margin: 0;
+  color: #667085;
+}
+
+.rz-authorization-explanation {
+  margin-bottom: 16px;
+}
+
+.rz-authorization-loading {
+  padding: 24px 0;
+}
+
+.rz-authorization-matrix-wrap {
+  overflow-x: auto;
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+}
+
+.rz-authorization-matrix {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.rz-authorization-matrix th,
+.rz-authorization-matrix td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+}
+
+.rz-authorization-matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f3f4f6;
+  text-align: center;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rz-authorization-matrix thead th:first-child,
+.rz-authorization-matrix tbody th {
+  text-align: left;
+}
+
+.rz-authorization-matrix tbody th {
+  min-width: 280px;
+  font-weight: 500;
+  background: #ffffff;
+}
+
+.rz-authorization-matrix td {
+  min-width: 120px;
+  text-align: center;
+}
+
+.rz-authorization-matrix tr:last-child th,
+.rz-authorization-matrix tr:last-child td {
+  border-bottom: 0;
+}
+
+.rz-authorization-matrix th:last-child,
+.rz-authorization-matrix td:last-child {
+  border-right: 0;
+}
+
+.rz-authorization-matrix input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #0f5b32;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .rz-authorization-matrix {
+    min-width: 700px;
+  }
+
+  .rz-authorization-matrix th,
+  .rz-authorization-matrix td {
+    padding: 10px;
+  }
+}
