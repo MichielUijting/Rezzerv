@@ -28,4 +28,6 @@ jobs:
           python -m py_compile tests/test_beta_superuser_provisioning_service.py
       - name: Run provisioning contract
         working-directory: backend
+        env:
+          PYTHONPATH: .
         run: pytest -q tests/test_beta_superuser_provisioning_service.py
