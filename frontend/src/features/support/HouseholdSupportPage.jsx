@@ -10,6 +10,7 @@ import {
   listHouseholdThreads,
   readHouseholdThread,
   replyHouseholdThread,
+  updateHouseholdThreadStatus,
 } from './supportApi.js'
 
 const STATUSES = ['', 'Open', 'In behandeling', 'Gesloten']
@@ -107,6 +108,22 @@ export default function HouseholdSupportPage() {
     }
   }
 
+  async function changeStatus(nextStatus) {
+    if (!selected?.thread?.id) return
+    setBusy(true)
+    setFeedback('')
+    try {
+      await updateHouseholdThreadStatus(selected.thread.id, nextStatus)
+      setSelected(await readHouseholdThread(selected.thread.id))
+      await refresh()
+      setFeedback('Status bijgewerkt.')
+    } catch (error) {
+      setFeedback(error.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <AppShell title="Meldingen" showExit={false}>
       <div className="rz-support-layout" data-testid="household-support-page">
@@ -117,6 +134,7 @@ export default function HouseholdSupportPage() {
               {STATUSES.map((value) => <option key={value || 'all'} value={value}>{value || 'Alle statussen'}</option>)}
             </select>
           </div>
+          <p>Je ziet hier uitsluitend meldingen van het actieve huishouden.</p>
           {busy && !threads.length ? <p>Bezig met laden…</p> : null}
           {!busy && !threads.length ? <p>Geen meldingen gevonden.</p> : null}
           <div className="rz-support-list">
@@ -136,6 +154,18 @@ export default function HouseholdSupportPage() {
               <div className="rz-support-detail-head">
                 <div><h2>{selected.thread.subject}</h2><p>{selected.thread.thread_number} · {selected.thread.status}</p></div>
                 <Button variant="secondary" onClick={() => setSelected(null)}>Nieuwe melding</Button>
+              </div>
+              <div className="rz-support-status-actions" aria-label="Status van melding">
+                {STATUSES.filter(Boolean).map((value) => (
+                  <Button
+                    key={value}
+                    variant={selected.thread.status === value ? 'primary' : 'secondary'}
+                    onClick={() => changeStatus(value)}
+                    disabled={busy}
+                  >
+                    {value}
+                  </Button>
+                ))}
               </div>
               <div className="rz-support-conversation">
                 {(selected.messages || []).map((item) => (
