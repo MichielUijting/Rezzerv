@@ -1,10 +1,11 @@
 /* =========================================
-   REZZERV HEADER COMPONENT v1.1
+   REZZERV HEADER COMPONENT v1.2
    Shared header with household context line
+   and global support action
 ========================================= */
 
 .rz-header {
-  min-height: 56px; /* styleguide baseline */
+  min-height: 56px;
   width: 100%;
   background: var(--color-brand-primary, var(--color-brand-green));
   position: relative;
@@ -48,7 +49,6 @@
   margin-top: 2px;
 }
 
-/* Centered userbox */
 .rz-userbox-wrapper {
   position: absolute;
   left: 50%;
@@ -74,6 +74,15 @@
   text-overflow: ellipsis;
 }
 
+.rz-header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
 .rz-header-logo {
   display: flex;
   align-items: center;
@@ -83,6 +92,35 @@
 .rz-header-logo img {
   height: 28px !important;
   width: auto !important;
+}
+
+.rz-header-support-button {
+  width: 30px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--color-brand-primary, var(--color-brand-green));
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 1px 2px 0 rgba(0, 0, 0, 0.28);
+}
+
+.rz-header-support-button:hover,
+.rz-header-support-button:focus-visible {
+  transform: translateY(-1px);
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+.rz-header-support-button:active {
+  transform: translateY(1px);
+  box-shadow: none;
 }
 
 @media (max-width: 900px) {
