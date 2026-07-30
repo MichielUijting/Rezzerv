@@ -1,24 +1,24 @@
 {
-  "catalog_version": 1,
-  "route_fingerprint_sha256": "2d6da254c72dd77a28765b49916bbb646936317b38bb4ea165ef9f58eb0ebd71",
+  "catalog_version": 2,
+  "route_fingerprint_sha256": "09a187316f4aa766808e3adbf7862cd57ef06f4996402e58fce9f3eb74873c70",
   "summary": {
-    "route_registrations": 214,
-    "unique_method_paths": 214,
+    "route_registrations": 224,
+    "unique_method_paths": 224,
     "duplicates": 0,
     "by_surface": {
       "admin": 15,
       "dev": 2,
-      "production": 159,
+      "production": 169,
       "testing": 38
     },
     "by_access": {
-      "mutation": 119,
-      "read": 95
+      "mutation": 124,
+      "read": 100
     },
     "mutation_by_surface": {
       "admin": 11,
       "dev": 1,
-      "production": 90,
+      "production": 95,
       "testing": 17
     }
   },
