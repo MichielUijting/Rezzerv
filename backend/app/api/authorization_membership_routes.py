@@ -224,7 +224,14 @@ def update_authorization_member_role(
         except AuthorizationDeniedError as exc:
             raise HTTPException(status_code=403, detail={"code": "authorization_denied", "permission_key": exc.decision.permission_key, "reason": exc.decision.reason}) from exc
         except ValueError as exc:
-            raise HTTPException(status_code=409 if "administrator" in str(exc).lower() else 400, detail=str(exc)) from exc
+            message = str(exc)
+            normalized_message = message.lower()
+            is_last_admin_conflict = (
+                "administrator" in normalized_message
+                or "beheerder" in normalized_message
+                or "last admin" in normalized_message
+            )
+            raise HTTPException(status_code=409 if is_last_admin_conflict else 400, detail=message) from exc
         return {"ok": True, "household_id": str(household_id), "membership_id": str(membership_id), "role_key": role_key}
 
 
