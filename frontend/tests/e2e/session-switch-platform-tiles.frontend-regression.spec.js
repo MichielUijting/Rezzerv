@@ -34,7 +34,7 @@ async function mockRegularOwnerApis(page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ id: '2', naam: 'Testhuishouden 2', is_household_admin: true, is_viewer: false }),
+      body: JSON.stringify({ id: '2', naam: 'Testhuishouden 2', is_household_admin: false, is_viewer: false }),
     })
   })
   await page.route('**/api/platform/toegang?*', async (route) => {
@@ -43,7 +43,7 @@ async function mockRegularOwnerApis(page) {
 }
 
 test.describe('Sessiewissel en centrale tegelisolatie', () => {
-  test('wist Supergebruikerscontext en toont reguliere Eigenaar geen centrale tegels', async ({ page }) => {
+  test('wist Supergebruikerscontext, behoudt Meldingen en verbergt centrale tegels', async ({ page }) => {
     await mockRegularOwnerApis(page)
     await page.addInitScript((context) => {
       localStorage.setItem('rezzerv_token', 'rezzerv-dev-token::supergebruiker@rezzerv.local')
