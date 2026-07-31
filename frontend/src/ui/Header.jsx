@@ -1,16 +1,18 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import BrandLogo from "./BrandLogo.jsx";
+import { readStoredAuthContext } from "../lib/authSession.js";
 import "./components/header.css";
 
 export default function Header({ title }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const authContext = readStoredAuthContext();
 
-  const email = localStorage.getItem("rezzerv_user_email") || "";
-  const household = localStorage.getItem("rezzerv_household_name") || "";
+  const email = String(authContext?.email || authContext?.user_id || "").trim();
+  const household = String(authContext?.active_household_name || "").trim();
 
-  const showUserBox = location.pathname !== "/login" && email;
-  const showHouseholdLine = location.pathname !== "/login" && household;
+  const showUserBox = location.pathname !== "/login" && Boolean(email);
+  const showHouseholdLine = location.pathname !== "/login" && Boolean(household);
   const showSupportButton = location.pathname !== "/login" && Boolean(email);
 
   function openSupportComposer() {
