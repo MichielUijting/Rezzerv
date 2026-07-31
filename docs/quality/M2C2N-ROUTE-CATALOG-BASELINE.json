@@ -1,31 +1,31 @@
 {
   "catalog_version": 2,
-  "route_fingerprint_sha256": "e78532b192914284f5c8d87eb5e0c2e09f7f6dbef334836d895cb8a87776fc14",
+  "route_fingerprint_sha256": "018dd37d76c708474ba3f68e3edd683e199cb13bc8060b3611a69371c9f21d17",
   "summary": {
-    "route_registrations": 225,
-    "unique_method_paths": 225,
+    "route_registrations": 227,
+    "unique_method_paths": 227,
     "duplicates": 0,
     "by_surface": {
       "admin": 15,
       "dev": 2,
-      "production": 170,
+      "production": 172,
       "testing": 38
     },
     "by_access": {
-      "mutation": 125,
-      "read": 100
+      "mutation": 126,
+      "read": 101
     },
     "mutation_by_surface": {
       "admin": 11,
       "dev": 1,
-      "production": 96,
+      "production": 97,
       "testing": 17
     }
   },
   "duplicates": [],
   "testing_mutations": [
     "POST /api/testing/diagnostics/store-location-options :: app.main.run_store_location_diagnostic",
-    "POST /api/testing/fixtures/browser-regression/reset :: app.main.reset_browser_regression_fixture",
+    "POST /api/testing/fixtures/browser-regression/reset :: app.main.reset_browser_regression_fixture_state_endpoint",
     "POST /api/testing/fixtures/cleanup :: app.main.cleanup_regression_fixture_state_endpoint",
     "POST /api/testing/fixtures/inventory/ensure :: app.main.ensure_regression_inventory_fixture_endpoint",
     "POST /api/testing/fixtures/receipt-export/generate :: app.main.generate_receipt_export_fixture",
