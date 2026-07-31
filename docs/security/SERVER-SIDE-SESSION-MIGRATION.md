@@ -44,11 +44,12 @@ Beoogde cookie:
 1. `server_sessions` en sessieservice. **Gerealiseerd in branch.**
 2. Contracttests voor fail-closed gedrag en rotatie. **Gerealiseerd in branch.**
 3. Login/logout en `GET /api/session` koppelen aan de sessieservice. **Gerealiseerd en als runtime-entrypoint geactiveerd in branch.**
-4. `POST /api/session/active-household` toevoegen. **Nog open.**
-5. Bestaande `Authorization`-tokencontext en browseropslag verwijderen. **Nog open.**
-6. Alle beveiligde routes server-side scopen. **Nog open.**
-7. Frontend uitsluitend context laten ophalen via `GET /api/session`. **Nog open.**
-8. Chromium-, Firefox-, WebKit-, Docker- en regressietests uitvoeren. **In uitvoering; GitHub-controles lopen.**
+4. Bestaande centrale Authorization-context vervangen door de server-side requestcontext. **Gerealiseerd in tranche 3.**
+5. `POST /api/session/active-household` toevoegen. **Nog open.**
+6. Resterende browseropslag en Authorization-headers uit frontend en routecontracten verwijderen. **Nog open.**
+7. Alle domeinqueries en uitzonderingsroutes aantoonbaar server-side scopen. **Audit in uitvoering.**
+8. Frontend uitsluitend context laten ophalen via `GET /api/session`. **Nog open.**
+9. Chromium-, Firefox-, WebKit-, Docker- en regressietests uitvoeren. **In uitvoering.**
 
 ## Runtime-activering tranche 2
 
@@ -60,8 +61,21 @@ De Docker-runtime start via `app.session_entrypoint:app`. Dit entrypoint:
 - stopt de applicatiestart wanneer een vereiste sessieroute ontbreekt of dubbel geregistreerd is;
 - behoudt alle overige bestaande routes.
 
-Hiermee wordt vermeden dat twee handlers met hetzelfde pad actief blijven, terwijl de fysieke opschoning van de grote legacy-authsectie als afzonderlijke, gecontroleerde refactor kan plaatsvinden.
+## Server-side routecontext tranche 3
+
+Het runtime-entrypoint installeert nu tevens een requestgebonden context voor de opaque sessiecookie. De centrale legacy-guards worden bij applicatiestart vervangen door adapters die uitsluitend deze server-side context gebruiken:
+
+- `get_current_user_from_authorization` wordt vervangen door een adapter die de Authorization-waarde volledig negeert;
+- `require_household_context` wordt vervangen door een adapter die gebruiker, rol en actief huishouden opnieuw uit de serversessie resolveert;
+- een Bearer-token zonder geldige sessiecookie levert altijd HTTP 401;
+- een aangevraagde `household_id` die niet gelijk is aan het actieve serverhuishouden levert HTTP 403;
+- een frontendverzoek kan daardoor niet zelfstandig van huishouden wisselen;
+- bestaande routes die via deze centrale functies lopen, krijgen de nieuwe context zonder wijziging van hun domeinimplementatie.
+
+De middleware bewaart alleen de opaque cookiewaarde in een requestlokale `ContextVar`. Iedere daadwerkelijke autorisatie-opvraag leest het sessierecord en het actuele lidmaatschap opnieuw uit de database.
+
+Voor tranche 3 is een afzonderlijke GitHub Actions-gate toegevoegd: `Server-side session security`. Deze voert de sessieservice-, endpoint-, entrypoint- en requestcontexttests gezamenlijk uit.
 
 ## Huidige releasebeoordeling
 
-Tranche 2 is code-technisch aangesloten, maar de volledige migratie is nog niet afgerond. De bestaande beveiligde domeinroutes vertrouwen nog grotendeels op de oude Authorization-context en de frontend is nog niet omgezet. Daarom blijft PR #216 **Draft en NO-GO** totdat de volledige migratie is geïntegreerd en Scope Gate, QA/QC Gate en Packaging Gate groen zijn.
+Tranche 3 is code-technisch aangesloten, maar de volledige migratie is nog niet afgerond. De frontend verstuurt mogelijk nog Authorization-context en gebruikt mogelijk nog browseropslag. Daarnaast moet de resterende route- en queryscope systematisch worden geaudit en moet de server-side huishoudenwissel nog worden toegevoegd. Daarom blijft PR #216 **Draft en NO-GO** totdat de volledige migratie is geïntegreerd en Scope Gate, QA/QC Gate en Packaging Gate groen zijn.
