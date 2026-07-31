@@ -5,6 +5,10 @@ on:
     paths:
       - 'frontend/src/features/support/**'
       - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/src/app/router/PlatformGuard.jsx'
+      - 'frontend/src/features/admin/FrontteamUsersPage.jsx'
+      - 'frontend/src/features/catalog/**'
+      - 'frontend/src/features/externalDatabases/**'
       - 'frontend/src/features/home/HomePage.jsx'
       - 'frontend/src/main.jsx'
       - '.github/workflows/support-message-frontend-validation.yml'
@@ -25,7 +29,7 @@ jobs:
       - run: npm ci
       - name: Build frontend
         run: npm run build
-      - name: Check support routes, polling and API bindings
+      - name: Check support and central permission bindings
         run: |
           grep -E "path:[[:space:]]*'/meldingen'" src/app/router/AppRouter.jsx
           grep -E "path:[[:space:]]*'/admin/meldingen'" src/app/router/AppRouter.jsx
@@ -34,3 +38,12 @@ jobs:
           grep -F '/api/platform/support/export.csv' src/features/support/supportApi.js
           grep -F 'updateHouseholdThreadStatus' src/features/support/HouseholdSupportPage.jsx
           grep -F 'AUTO_REFRESH_MS = 2000' src/features/support/PlatformSupportPage.jsx
+          grep -F '/api/platform/toegang?bevoegdheid=' src/app/router/PlatformGuard.jsx
+          grep -F 'permissionKey="platform.external_databases.view"' src/app/router/AppRouter.jsx
+          grep -F 'permissionKey="platform.catalog.view"' src/app/router/AppRouter.jsx
+          grep -F 'permissionKey="platform.support_access.read"' src/app/router/AppRouter.jsx
+          grep -F 'permissionKey="platform.users.view"' src/app/router/AppRouter.jsx
+          if grep -E "path:[[:space:]]*'/((externe-databases)|(catalogus)|(admin/meldingen)|(admin/gebruikers))'.*ProtectedAdmin" src/app/router/AppRouter.jsx; then
+            echo 'Centrale route gebruikt nog de oude AdminGuard' >&2
+            exit 1
+          fi
