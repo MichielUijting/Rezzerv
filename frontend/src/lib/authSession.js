@@ -109,6 +109,14 @@ export function clearAuthSession(message = '') {
   setLoginMessage(message)
 }
 
+export function beginNewAuthSession(token, email = '') {
+  clearAuthSession('')
+  try {
+    if (token) window.localStorage.setItem('rezzerv_token', token)
+    if (email) window.localStorage.setItem('rezzerv_user_email', email)
+  } catch {}
+}
+
 export function redirectToLogin(message = '') {
   clearAuthSession(message)
   const win = safeWindow()
