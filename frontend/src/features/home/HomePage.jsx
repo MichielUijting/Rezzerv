@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
-import { readStoredAuthContext, isHouseholdViewerFromContext } from '../../lib/authSession.js'
+import { fetchJsonWithAuth, readStoredAuthContext, isHouseholdViewerFromContext } from '../../lib/authSession.js'
 
 const tiles = [
   { key: 'meldingen', label: 'Meldingen', icon: '✉️' },
@@ -26,6 +26,11 @@ const tiles = [
 ]
 
 const ADMIN_ROLES = new Set(['admin', 'owner', 'household.admin', 'huishoudbeheerder'])
+const PLATFORM_TILE_PERMISSIONS = {
+  'externe-databases': 'platform.external_databases.view',
+  catalogus: 'platform.catalog.view',
+  admin: 'platform.users.view',
+}
 
 function isActiveHouseholdAdmin(context) {
   const activeId = String(context?.active_household_id || '').trim()
@@ -38,25 +43,55 @@ function isActiveHouseholdAdmin(context) {
   return ADMIN_ROLES.has(membershipRole) || ADMIN_ROLES.has(displayRole)
 }
 
+async function hasPlatformPermission(permissionKey) {
+  try {
+    const response = await fetchJsonWithAuth(`/api/platform/toegang?bevoegdheid=${encodeURIComponent(permissionKey)}`, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+    })
+    if (!response.ok) return false
+    const data = await response.json().catch(() => ({}))
+    return data?.toegang === true
+  } catch {
+    return false
+  }
+}
+
 export default function HomePage() {
   const navigate = useNavigate()
   const storedContext = readStoredAuthContext()
   const [householdName, setHouseholdName] = useState(storedContext?.active_household_name || '')
   const [isHouseholdAdmin, setIsHouseholdAdmin] = useState(isActiveHouseholdAdmin(storedContext))
   const [isViewer, setIsViewer] = useState(isHouseholdViewerFromContext(storedContext))
+  const [platformTiles, setPlatformTiles] = useState({
+    'externe-databases': false,
+    catalogus: false,
+    admin: false,
+  })
 
   useEffect(() => {
+    let active = true
     const token = localStorage.getItem('rezzerv_token')
-    if (!token) return
+    if (!token) return undefined
+
     fetch('/api/household', { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' })
       .then(async (res) => { if (!res.ok) throw new Error('Huishouden niet beschikbaar'); return res.json() })
       .then((data) => {
+        if (!active) return
         const name = data?.naam || 'Mijn huishouden'
         setHouseholdName(name)
-        setIsHouseholdAdmin((current) => current || Boolean(data?.is_household_admin))
+        setIsHouseholdAdmin(Boolean(data?.is_household_admin))
         setIsViewer(Boolean(data?.is_viewer))
         localStorage.setItem('rezzerv_household_name', name)
       }).catch(() => {})
+
+    Promise.all(
+      Object.entries(PLATFORM_TILE_PERMISSIONS).map(async ([key, permissionKey]) => [key, await hasPlatformPermission(permissionKey)]),
+    ).then((entries) => {
+      if (active) setPlatformTiles(Object.fromEntries(entries))
+    })
+
+    return () => { active = false }
   }, [])
 
   function openTile(key) {
@@ -75,7 +110,7 @@ export default function HomePage() {
 
   const visibleTiles = tiles.filter((tile) => {
     if (tile.key === 'meldingen') return isHouseholdAdmin
-    if (['admin', 'catalogus'].includes(tile.key)) return isHouseholdAdmin
+    if (Object.hasOwn(PLATFORM_TILE_PERMISSIONS, tile.key)) return Boolean(platformTiles[tile.key])
     return true
   })
 
