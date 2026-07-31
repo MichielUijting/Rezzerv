@@ -23,6 +23,21 @@ def test_alle_catalogusroutes_hebben_centrale_leesbeveiliging():
         )
 
 
+def test_gpc_routes_hebben_aanvullende_wijzigingsbeveiliging():
+    gpc_routes = [
+        route
+        for route in router.routes
+        if isinstance(route, APIRoute)
+        and route.path.startswith("/api/catalog")
+        and ("/gpc/" in route.path or route.path.endswith("/gpc-brick"))
+    ]
+    assert gpc_routes
+    for route in gpc_routes:
+        assert "require_catalog_update" in _dependency_names(route), (
+            f"GPC-route zonder centrale wijzigingsbeveiliging: {sorted(route.methods or [])} {route.path}"
+        )
+
+
 def test_catalogusrouter_bevat_lees_en_gpc_mutatieroutes():
     manifest = {
         (method, route.path)
