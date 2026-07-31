@@ -84,10 +84,10 @@ def _resolve_membership(conn, *, user_id: str, email: str, household_id: str | N
         f"FROM household_memberships WHERE {where} ORDER BY {household_column}"
     ), params).mappings().all()
     if not rows:
-        raise BetaSuperuserProvisioningError("Geen actief huishoudlidmaatschap gevonden voor het beta-account")
+        raise BetaSuperuserProvisioningError("Geen actief huishoudlidmaatschap gevonden voor het bèta-account")
     if household_id is None and len(rows) != 1:
         raise BetaSuperuserProvisioningError(
-            "Het beta-account heeft meerdere huishoudens; geef --household-id expliciet op"
+            "Het bèta-account heeft meerdere huishoudens; geef --household-id expliciet op"
         )
     return str(rows[0]["membership_id"]), str(rows[0]["household_id"])
 
@@ -97,7 +97,7 @@ def provision_po_beta_superuser(
     *,
     email: str,
     household_id: str | None = None,
-    actor_user_id: str = "system:po-beta-provisioning",
+    actor_user_id: str = "systeem:po-beta-provisioning",
     reason: str = "Expliciete PO-bètatoegang",
 ) -> BetaSuperuserProvisioningResult:
     normalized_email = str(email or "").strip()
@@ -121,23 +121,23 @@ def provision_po_beta_superuser(
         "household_id": resolved_household_id,
         "membership_id": membership_id,
     }).scalar()
-    household_changed = old_household_role != "household.admin"
+    household_changed = old_household_role != "huishouden.eigenaar"
     conn.execute(text("""
         INSERT INTO auth_membership_roles(household_id, membership_id, role_key, active, updated_at)
-        VALUES (:household_id, :membership_id, 'household.admin', 1, CURRENT_TIMESTAMP)
+        VALUES (:household_id, :membership_id, 'huishouden.eigenaar', 1, CURRENT_TIMESTAMP)
         ON CONFLICT(household_id, membership_id) DO UPDATE SET
-            role_key = 'household.admin', active = 1, updated_at = CURRENT_TIMESTAMP
+            role_key = 'huishouden.eigenaar', active = 1, updated_at = CURRENT_TIMESTAMP
     """), {"household_id": resolved_household_id, "membership_id": membership_id})
 
     old_platform_active = conn.execute(text("""
         SELECT active FROM auth_platform_user_roles
-        WHERE user_id = :user_id AND role_key = 'platform.superuser'
+        WHERE lower(user_id) = lower(:user_id) AND role_key = 'platform.supergebruiker'
         LIMIT 1
     """), {"user_id": user_id}).scalar()
     platform_changed = old_platform_active != 1
     conn.execute(text("""
         INSERT INTO auth_platform_user_roles(user_id, role_key, active, updated_at)
-        VALUES (:user_id, 'platform.superuser', 1, CURRENT_TIMESTAMP)
+        VALUES (:user_id, 'platform.supergebruiker', 1, CURRENT_TIMESTAMP)
         ON CONFLICT(user_id, role_key) DO UPDATE SET
             active = 1, updated_at = CURRENT_TIMESTAMP
     """), {"user_id": user_id})
@@ -146,25 +146,25 @@ def provision_po_beta_superuser(
         write_authorization_audit(
             conn,
             actor_user_id=actor_user_id,
-            actor_type="system_operator",
+            actor_type="systeembeheer",
             household_id=resolved_household_id,
-            action="authorization.po_beta.household_admin.provisioned",
-            object_type="household_membership",
+            action="autorisatie.po_beta.eigenaar.toegekend",
+            object_type="huishoudlidmaatschap",
             object_id=membership_id,
-            old_value={"role_key": old_household_role},
-            new_value={"role_key": "household.admin"},
+            old_value={"rol": old_household_role},
+            new_value={"rol": "huishouden.eigenaar"},
             reason=reason,
         )
     if platform_changed:
         write_authorization_audit(
             conn,
             actor_user_id=actor_user_id,
-            actor_type="system_operator",
-            action="authorization.po_beta.platform_superuser.provisioned",
-            object_type="app_user",
+            actor_type="systeembeheer",
+            action="autorisatie.po_beta.supergebruiker.toegekend",
+            object_type="rezzerv_gebruiker",
             object_id=user_id,
-            old_value={"active": old_platform_active},
-            new_value={"role_key": "platform.superuser", "active": 1},
+            old_value={"actief": old_platform_active},
+            new_value={"rol": "platform.supergebruiker", "actief": 1},
             reason=reason,
         )
 
@@ -172,15 +172,15 @@ def provision_po_beta_superuser(
         conn,
         household_id=resolved_household_id,
         membership_id=membership_id,
-        permission_key="permissions.manage",
+        permission_key="members.manage",
     )
     platform_decision = evaluate_platform_permission(
         conn,
         user_id=user_id,
-        permission_key="platform.permissions.manage",
+        permission_key="platform.frontteam.manage",
     )
     if not household_decision.allowed or not platform_decision.allowed:
-        raise BetaSuperuserProvisioningError("Provisioning kon niet end-to-end worden geverifieerd")
+        raise BetaSuperuserProvisioningError("Provisioning kon niet volledig worden geverifieerd")
 
     return BetaSuperuserProvisioningResult(
         user_id=user_id,
