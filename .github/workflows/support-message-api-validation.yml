@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'backend/app/api/support_message_routes.py'
+      - 'backend/app/api/frontteam_support_scope_routes.py'
       - 'backend/app/api/platform_access_routes.py'
       - 'backend/app/api/platform_dependencies.py'
       - 'backend/app/api/router.py'
