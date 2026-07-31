@@ -11,6 +11,17 @@ export default function AuthGuard({ children }) {
   })
 
   useEffect(() => {
+    function handleStorage(event) {
+      if (event.key !== 'rezzerv_token') return
+      const activeToken = getStoredToken()
+      if (activeToken !== token) window.location.reload()
+    }
+
+    window.addEventListener('storage', handleStorage)
+    return () => window.removeEventListener('storage', handleStorage)
+  }, [token])
+
+  useEffect(() => {
     if (!token) {
       setStatus('invalid')
       return
@@ -27,6 +38,10 @@ export default function AuthGuard({ children }) {
       })
       .catch((error) => {
         if (!active) return
+        if (error?.code === 'STALE_AUTH_SESSION') {
+          window.location.reload()
+          return
+        }
         clearAuthSession(error?.message || 'Je sessie is verlopen. Log opnieuw in.')
         setStatus('invalid')
       })
