@@ -60,8 +60,9 @@ async function hasPlatformPermission(permissionKey) {
 export default function HomePage() {
   const navigate = useNavigate()
   const storedContext = readStoredAuthContext()
+  const contextConfirmsHouseholdAdmin = isActiveHouseholdAdmin(storedContext)
   const [householdName, setHouseholdName] = useState(storedContext?.active_household_name || '')
-  const [isHouseholdAdmin, setIsHouseholdAdmin] = useState(isActiveHouseholdAdmin(storedContext))
+  const [isHouseholdAdmin, setIsHouseholdAdmin] = useState(contextConfirmsHouseholdAdmin)
   const [isViewer, setIsViewer] = useState(isHouseholdViewerFromContext(storedContext))
   const [platformTiles, setPlatformTiles] = useState({
     'externe-databases': false,
@@ -80,7 +81,7 @@ export default function HomePage() {
         if (!active) return
         const name = data?.naam || 'Mijn huishouden'
         setHouseholdName(name)
-        setIsHouseholdAdmin(Boolean(data?.is_household_admin))
+        setIsHouseholdAdmin(contextConfirmsHouseholdAdmin || Boolean(data?.is_household_admin))
         setIsViewer(Boolean(data?.is_viewer))
         localStorage.setItem('rezzerv_household_name', name)
       }).catch(() => {})
@@ -92,7 +93,7 @@ export default function HomePage() {
     })
 
     return () => { active = false }
-  }, [])
+  }, [contextConfirmsHouseholdAdmin])
 
   function openTile(key) {
     if (key === 'meldingen') navigate('/meldingen')
