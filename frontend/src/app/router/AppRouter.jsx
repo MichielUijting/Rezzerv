@@ -34,23 +34,21 @@ import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import PlatformGuard from './PlatformGuard.jsx'
 import SettingsGuard from './SettingsGuard'
+import { beginNewAuthSession, clearAuthSession } from '../../lib/authSession.js'
 
 function LoginRoute() {
   const navigate = useNavigate()
   function handleLogin(newToken, email) {
-    localStorage.setItem('rezzerv_token', newToken)
-    if (email) localStorage.setItem('rezzerv_user_email', email)
-    navigate('/home', { replace: false })
+    beginNewAuthSession(newToken, email)
+    navigate('/home', { replace: true })
   }
   return <LoginPage onLoggedIn={handleLogin} />
 }
 
 function ResetSessionRoute() {
   React.useEffect(() => {
+    clearAuthSession('')
     try {
-      localStorage.removeItem('rezzerv_token')
-      localStorage.removeItem('rezzerv_user_email')
-      localStorage.removeItem('rezzerv_auth_context')
       sessionStorage.clear()
     } finally {
       window.location.replace('/login')
@@ -124,7 +122,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/locaties', element: <ProtectedSettings allowViewer={false}><SettingsLocationsPage /></ProtectedSettings> },
   { path: '/instellingen/ruimtes', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
   { path: '/instellingen/sublocaties', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
-  { path: '/admin', element: <ProtectedAdmin><AdminPage /></ProtectedAdmin> },
+  { path: '/admin', element: <ProtectedPlatform permissionKey="platform.users.view"><AdminPage /></ProtectedPlatform> },
   { path: '/admin/meldingen', element: <ProtectedPlatform permissionKey="platform.support_access.read"><PlatformSupportPage /></ProtectedPlatform> },
   { path: '/admin/gebruikers', element: <ProtectedPlatform permissionKey="platform.users.view"><FrontteamUsersPage /></ProtectedPlatform> },
   { path: '*', element: <Navigate to="/login" replace /> },
