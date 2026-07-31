@@ -1,6 +1,7 @@
 import React from 'react'
 import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
+import FrontteamUsersPage from '../../features/admin/FrontteamUsersPage.jsx'
 import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
@@ -48,6 +49,7 @@ function ResetSessionRoute() {
     try {
       localStorage.removeItem('rezzerv_token')
       localStorage.removeItem('rezzerv_user_email')
+      localStorage.removeItem('rezzerv_auth_context')
       sessionStorage.clear()
     } finally {
       window.location.replace('/login')
@@ -96,7 +98,7 @@ const router = createBrowserRouter([
   { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
-  { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
+  { path: '/externe-databases', element: <ProtectedAdmin><ExternalDatabasesPage /></ProtectedAdmin> },
   { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
   { path: '/catalogus/gpc-classificeren', element: <ProtectedAdmin><CatalogGpcActionPage /></ProtectedAdmin> },
   { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPageV2 /></ProtectedAdmin> },
@@ -119,6 +121,7 @@ const router = createBrowserRouter([
   { path: '/instellingen/sublocaties', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
   { path: '/admin', element: <ProtectedAdmin><AdminPage /></ProtectedAdmin> },
   { path: '/admin/meldingen', element: <ProtectedAdmin><PlatformSupportPage /></ProtectedAdmin> },
+  { path: '/admin/gebruikers', element: <ProtectedAdmin><FrontteamUsersPage /></ProtectedAdmin> },
   { path: '*', element: <Navigate to="/login" replace /> },
 ])
 
