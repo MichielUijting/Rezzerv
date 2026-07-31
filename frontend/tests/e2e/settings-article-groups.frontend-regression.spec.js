@@ -78,7 +78,7 @@ test.describe('Instellingen Artikelgroepen frontend-regressie', () => {
     await confirmDialog.getByRole('button', { name: 'Opslaan', exact: true }).click();
 
     await expect.poll(() => assignmentPayload).toEqual({
-      household_id: '1',
+      household_id: '0',
       article_group_id: 'group-sauzen',
     });
     await expect(page.getByText(/1 voorraadartikel toegewezen aan Artikelgroep Sauzen\./)).toBeVisible();
