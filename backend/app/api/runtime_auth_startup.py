@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.services.runtime_auth_compatibility_service import (
     build_explicit_runtime_token,
@@ -15,8 +15,48 @@ from app.services.runtime_auth_compatibility_service import (
 LEGACY_DEFAULT_ADMIN_EMAIL = "admin@rezzerv.local"
 
 
+def _load_persisted_user_record(main_module: Any, email: str) -> dict | None:
+    """Lees een runtime-identiteit rechtstreeks uit de persistente gebruikersbron.
+
+    De vaste Supergebruiker wordt tijdens startup in ``app_users`` ingericht en
+    hoeft daardoor niet in de historische in-memory gebruikerslijst te staan.
+    """
+    with main_module.engine.begin() as conn:
+        inspector = inspect(conn)
+        if "app_users" not in inspector.get_table_names():
+            return None
+        columns = {str(column["name"]) for column in inspector.get_columns("app_users")}
+        id_column = "id" if "id" in columns else "user_id" if "user_id" in columns else None
+        email_column = (
+            "email"
+            if "email" in columns
+            else "email_address"
+            if "email_address" in columns
+            else "user_email"
+            if "user_email" in columns
+            else None
+        )
+        if not id_column or not email_column:
+            return None
+        row = conn.execute(
+            text(
+                f"SELECT {id_column} AS user_id, {email_column} AS email "
+                f"FROM app_users WHERE lower(trim({email_column})) = :email LIMIT 1"
+            ),
+            {"email": email},
+        ).mappings().first()
+    if not row:
+        return None
+    return {
+        "id": str(row.get("user_id") or email).strip().lower(),
+        "user_id": str(row.get("user_id") or email).strip().lower(),
+        "email": str(row.get("email") or email).strip().lower(),
+        "name": str(row.get("email") or email).strip(),
+    }
+
+
 def _load_runtime_identity(main_module: Any, email: str, get_user_record: Callable[[str], Any]) -> dict:
-    user = get_user_record(email)
+    user = get_user_record(email) or _load_persisted_user_record(main_module, email)
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
