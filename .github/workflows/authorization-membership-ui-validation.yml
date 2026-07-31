@@ -12,10 +12,13 @@ on:
       - 'frontend/src/features/settings/services/authorizationMembershipService.js'
       - 'frontend/src/features/settings/SettingsHouseholdPage.jsx'
       - 'frontend/src/features/settings/SettingsPage.jsx'
+      - 'frontend/src/features/home/HomePage.jsx'
+      - 'frontend/src/lib/authSession.js'
       - 'frontend/src/app/router/AppRouter.jsx'
       - 'frontend/tests/e2e/auth.setup.js'
       - 'frontend/tests/e2e/helpers/devApi.js'
       - 'frontend/tests/e2e/settings-authorization.frontend-regression.spec.js'
+      - 'frontend/tests/e2e/session-switch-platform-tiles.frontend-regression.spec.js'
       - '.github/workflows/authorization-membership-ui-validation.yml'
 
 jobs:
@@ -75,7 +78,7 @@ jobs:
         run: |
           npm install
           npx playwright install --with-deps chromium
-          npx playwright test tests/e2e/settings-authorization.frontend-regression.spec.js --project=chromium
+          npx playwright test tests/e2e/settings-authorization.frontend-regression.spec.js tests/e2e/session-switch-platform-tiles.frontend-regression.spec.js --project=chromium
       - name: Show backend logs after UI failure
         if: failure()
         run: docker compose logs --no-color backend
