@@ -57,6 +57,10 @@ export function updateHouseholdThreadStatus(threadId, status) {
   })
 }
 
+export function getPlatformSupportScope() {
+  return request(`/api/platform/support/bereik${freshQuery()}`)
+}
+
 export function listPlatformThreads({ status = '', householdId = '' } = {}) {
   const params = new URLSearchParams()
   if (status) params.set('status', status)
