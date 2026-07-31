@@ -12,7 +12,7 @@ function Invoke-RegressionFixtureCleanup {
   )
 
   Write-Host "`n=== Regression fixture cleanup ===" -ForegroundColor Cyan
-  $headers = @{ Authorization = "Bearer rezzerv-dev-token::admin@rezzerv.local" }
+  $headers = @{ Authorization = "Bearer rezzerv-dev-token::supergebruiker@rezzerv.local" }
   $lastError = $null
 
   for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {

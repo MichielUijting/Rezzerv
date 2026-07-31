@@ -28,7 +28,7 @@ def _assign(conn, household_id, membership_id, role_key):
     })
 
 
-def test_legacy_memberships_migrate_admin_member_and_viewer():
+def test_legacy_memberships_migrate_to_dutch_roles():
     conn = _connection()
     conn.execute(text("""
         CREATE TABLE household_memberships (
@@ -42,7 +42,7 @@ def test_legacy_memberships_migrate_admin_member_and_viewer():
     conn.execute(text("""
         INSERT INTO household_memberships(id, household_id, user_id, role, status)
         VALUES
-          ('m-admin', 'h1', 'u1', 'beheerder', 'active'),
+          ('m-owner', 'h1', 'u1', 'beheerder', 'active'),
           ('m-member', 'h1', 'u2', 'member', 'active'),
           ('m-viewer', 'h1', 'u3', 'viewer', 'active')
     """))
@@ -56,9 +56,9 @@ def test_legacy_memberships_migrate_admin_member_and_viewer():
     assert result.scanned == 3
     assert result.created == 3
     assert roles == {
-        "m-admin": "household.admin",
-        "m-member": "household.member",
-        "m-viewer": "household.viewer",
+        "m-owner": "huishouden.eigenaar",
+        "m-member": "huishouden.lid",
+        "m-viewer": "huishouden.kijker",
     }
 
 
@@ -75,7 +75,7 @@ def test_migration_is_idempotent_and_preserves_explicit_role():
         INSERT INTO household_memberships(id, household_id, role)
         VALUES ('m1', 'h1', 'beheerder')
     """))
-    _assign(conn, 'h1', 'm1', 'household.viewer')
+    _assign(conn, 'h1', 'm1', 'huishouden.kijker')
 
     result = migrate_legacy_household_memberships(conn)
 
@@ -84,107 +84,102 @@ def test_migration_is_idempotent_and_preserves_explicit_role():
     assert conn.execute(text("""
         SELECT role_key FROM auth_membership_roles
         WHERE household_id = 'h1' AND membership_id = 'm1'
-    """)).scalar() == 'household.viewer'
+    """)).scalar() == 'huishouden.kijker'
 
 
-def test_guard_allows_admin_and_denies_member_for_member_management():
+def test_owner_can_manage_members_and_member_cannot():
     conn = _connection()
-    _assign(conn, 'h1', 'admin', 'household.admin')
-    _assign(conn, 'h1', 'member', 'household.member')
+    _assign(conn, 'h1', 'owner', 'huishouden.eigenaar')
+    _assign(conn, 'h1', 'member', 'huishouden.lid')
 
     assert require_household_permission(
         conn,
         household_id='h1',
-        membership_id='admin',
+        membership_id='owner',
         permission_key='members.manage',
     ).allowed
 
-    with pytest.raises(AuthorizationDeniedError) as exc_info:
+    with pytest.raises(AuthorizationDeniedError):
         require_household_permission(
             conn,
             household_id='h1',
             membership_id='member',
             permission_key='members.manage',
         )
-    assert exc_info.value.decision.reason == 'not_granted'
 
 
-def test_role_change_requires_permission_and_writes_audit():
+def test_owner_can_change_member_to_viewer_and_audit_is_written():
     conn = _connection()
-    _assign(conn, 'h1', 'admin', 'household.admin')
-    _assign(conn, 'h1', 'target', 'household.member')
+    _assign(conn, 'h1', 'owner', 'huishouden.eigenaar')
+    _assign(conn, 'h1', 'target', 'huishouden.lid')
 
     set_household_membership_role(
         conn,
         household_id='h1',
-        actor_membership_id='admin',
-        actor_user_id='u-admin',
+        actor_membership_id='owner',
+        actor_user_id='u-owner',
         target_membership_id='target',
-        role_key='household.advanced_member',
-        reason='Meer beheermogelijkheden nodig',
+        role_key='huishouden.kijker',
+        reason='Alleen meekijken',
     )
 
     assert conn.execute(text("""
         SELECT role_key FROM auth_membership_roles
         WHERE household_id = 'h1' AND membership_id = 'target'
-    """)).scalar() == 'household.advanced_member'
+    """)).scalar() == 'huishouden.kijker'
     assert conn.execute(text("""
         SELECT action FROM auth_audit_log WHERE object_id = 'target'
-    """)).scalar() == 'authorization.membership_role.updated'
+    """)).scalar() == 'autorisatie.huishoudrol.gewijzigd'
 
 
-def test_last_admin_cannot_be_demoted():
+def test_owner_cannot_demote_self_without_transfer():
     conn = _connection()
-    _assign(conn, 'h1', 'admin', 'household.admin')
+    _assign(conn, 'h1', 'owner', 'huishouden.eigenaar')
 
-    with pytest.raises(ValueError, match='minimaal één actieve beheerder'):
+    with pytest.raises(ValueError, match='eigenaarschap'):
         set_household_membership_role(
             conn,
             household_id='h1',
-            actor_membership_id='admin',
-            actor_user_id='u-admin',
-            target_membership_id='admin',
-            role_key='household.member',
+            actor_membership_id='owner',
+            actor_user_id='u-owner',
+            target_membership_id='owner',
+            role_key='huishouden.lid',
         )
 
 
-def test_permission_override_requires_permission_and_deny_wins():
+def test_ownership_transfer_demotes_previous_owner():
     conn = _connection()
-    _assign(conn, 'h1', 'admin', 'household.admin')
-    _assign(conn, 'h1', 'target', 'household.admin')
+    _assign(conn, 'h1', 'owner', 'huishouden.eigenaar')
+    _assign(conn, 'h1', 'target', 'huishouden.lid')
 
-    set_household_permission_override(
+    set_household_membership_role(
         conn,
         household_id='h1',
-        actor_membership_id='admin',
-        actor_user_id='u-admin',
+        actor_membership_id='owner',
+        actor_user_id='u-owner',
         target_membership_id='target',
-        permission_key='inventory.view',
-        effect='deny',
-        reason='Tijdelijke beperking',
+        role_key='huishouden.eigenaar',
     )
 
-    with pytest.raises(AuthorizationDeniedError) as exc_info:
-        require_household_permission(
-            conn,
-            household_id='h1',
-            membership_id='target',
-            permission_key='inventory.view',
-        )
-    assert exc_info.value.decision.reason == 'explicit_deny'
+    roles = dict(conn.execute(text("""
+        SELECT membership_id, role_key FROM auth_membership_roles
+        WHERE household_id = 'h1'
+    """)).all())
+    assert roles == {
+        'owner': 'huishouden.lid',
+        'target': 'huishouden.eigenaar',
+    }
 
 
-def test_household_scope_cannot_assign_platform_permission():
+def test_individual_permission_overrides_are_disabled():
     conn = _connection()
-    _assign(conn, 'h1', 'admin', 'household.admin')
-
-    with pytest.raises(ValueError, match='Platform permissions'):
+    with pytest.raises(ValueError, match='niet beschikbaar'):
         set_household_permission_override(
             conn,
             household_id='h1',
-            actor_membership_id='admin',
-            actor_user_id='u-admin',
-            target_membership_id='admin',
-            permission_key='platform.permissions.manage',
-            effect='allow',
+            actor_membership_id='owner',
+            actor_user_id='u-owner',
+            target_membership_id='target',
+            permission_key='inventory.view',
+            effect='deny',
         )

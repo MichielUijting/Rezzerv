@@ -4,13 +4,23 @@ on:
   pull_request:
     paths:
       - 'backend/app/services/beta_superuser_provisioning_service.py'
+      - 'backend/app/services/system_superuser_service.py'
+      - 'backend/app/services/platform_actor_service.py'
+      - 'backend/app/api/system_superuser_startup.py'
+      - 'backend/app/api/router.py'
       - 'backend/app/cli/provision_po_beta_superuser.py'
       - 'backend/tests/test_beta_superuser_provisioning_service.py'
+      - 'backend/tests/test_system_superuser_service.py'
+      - 'backend/tests/test_system_superuser_startup.py'
+      - 'backend/tests/test_platform_actor_service.py'
       - '.github/workflows/po-beta-superuser-provisioning-validation.yml'
 
 jobs:
   po-beta-superuser-provisioning:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:////tmp/rezzerv-po-superuser-test.db
+      SQLITE_RUNTIME_VOLUME: github-actions-temporary-test-database
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,10 +34,21 @@ jobs:
         working-directory: backend
         run: |
           python -m py_compile app/services/beta_superuser_provisioning_service.py
+          python -m py_compile app/services/system_superuser_service.py
+          python -m py_compile app/services/platform_actor_service.py
+          python -m py_compile app/api/system_superuser_startup.py
           python -m py_compile app/cli/provision_po_beta_superuser.py
           python -m py_compile tests/test_beta_superuser_provisioning_service.py
-      - name: Run provisioning contract
+          python -m py_compile tests/test_system_superuser_service.py
+          python -m py_compile tests/test_system_superuser_startup.py
+          python -m py_compile tests/test_platform_actor_service.py
+      - name: Run provisioning, startup and central actor contracts
         working-directory: backend
         env:
           PYTHONPATH: .
-        run: pytest -q tests/test_beta_superuser_provisioning_service.py
+        run: >-
+          pytest -q
+          tests/test_beta_superuser_provisioning_service.py
+          tests/test_system_superuser_service.py
+          tests/test_system_superuser_startup.py
+          tests/test_platform_actor_service.py

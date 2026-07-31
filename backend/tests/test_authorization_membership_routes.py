@@ -32,15 +32,15 @@ def _client():
         """))
         conn.execute(text("""
             INSERT INTO app_users(id, email) VALUES
-              ('u-admin', 'admin@example.test'),
-              ('u-member', 'member@example.test'),
-              ('u-outsider', 'outsider@example.test')
+              ('u-owner', 'eigenaar@example.test'),
+              ('u-member', 'lid@example.test'),
+              ('u-outsider', 'buitenstaander@example.test')
         """))
         conn.execute(text("""
             INSERT INTO household_memberships(id, household_id, user_email, role, status) VALUES
-              ('m-admin', 'h1', 'admin@example.test', 'owner', 'active'),
-              ('m-member', 'h1', 'member@example.test', 'member', 'active'),
-              ('m-outsider', 'h2', 'outsider@example.test', 'owner', 'active')
+              ('m-owner', 'h1', 'eigenaar@example.test', 'owner', 'active'),
+              ('m-member', 'h1', 'lid@example.test', 'member', 'active'),
+              ('m-outsider', 'h2', 'buitenstaander@example.test', 'owner', 'active')
         """))
         ensure_authorization_foundation(conn)
     routes.engine = engine
@@ -63,51 +63,56 @@ def test_household_outsider_is_denied():
     client, _ = _client()
     response = client.get(
         '/api/households/h1/authorization/members',
-        headers=_headers('outsider@example.test'),
+        headers=_headers('buitenstaander@example.test'),
     )
     assert response.status_code == 403
 
 
-def test_admin_can_list_members_roles_and_permissions():
+def test_owner_can_list_members_roles_and_permissions():
     client, _ = _client()
-    headers = _headers('admin@example.test')
+    headers = _headers('eigenaar@example.test')
     members = client.get('/api/households/h1/authorization/members', headers=headers)
     roles = client.get('/api/households/h1/authorization/roles', headers=headers)
     permissions = client.get('/api/households/h1/authorization/permissions', headers=headers)
+
     assert members.status_code == 200
     assert members.json()['total'] == 2
     assert {item['role_key'] for item in members.json()['items']} == {
-        'household.admin', 'household.member'
+        'huishouden.eigenaar', 'huishouden.lid'
     }
+
     assert roles.status_code == 200
     role_items = roles.json()['items']
-    assert len(role_items) == 4
-    admin_role = next(item for item in role_items if item['role_key'] == 'household.admin')
-    viewer_role = next(item for item in role_items if item['role_key'] == 'household.viewer')
-    assert 'permissions.manage' in admin_role['permission_keys']
+    assert {item['role_key'] for item in role_items} == {
+        'huishouden.eigenaar', 'huishouden.lid', 'huishouden.kijker'
+    }
+    owner_role = next(item for item in role_items if item['role_key'] == 'huishouden.eigenaar')
+    viewer_role = next(item for item in role_items if item['role_key'] == 'huishouden.kijker')
+    assert 'members.manage' in owner_role['permission_keys']
     assert 'inventory.view' in viewer_role['permission_keys']
     assert 'inventory.update' not in viewer_role['permission_keys']
+
     assert permissions.status_code == 200
-    assert any(item['permission_key'] == 'permissions.manage' for item in permissions.json()['items'])
+    assert any(item['permission_key'] == 'members.manage' for item in permissions.json()['items'])
 
 
 def test_member_cannot_manage_roles():
     client, _ = _client()
     response = client.put(
-        '/api/households/h1/authorization/members/m-admin/role',
-        headers=_headers('member@example.test'),
-        json={'role_key': 'household.member'},
+        '/api/households/h1/authorization/members/m-owner/role',
+        headers=_headers('lid@example.test'),
+        json={'role_key': 'huishouden.lid'},
     )
     assert response.status_code == 403
     assert response.json()['detail']['permission_key'] == 'members.manage'
 
 
-def test_admin_can_change_member_role_and_audit_is_written():
+def test_owner_can_change_member_to_viewer_and_audit_is_written():
     client, engine = _client()
     response = client.put(
         '/api/households/h1/authorization/members/m-member/role',
-        headers=_headers('admin@example.test'),
-        json={'role_key': 'household.advanced_member', 'reason': 'Meer mogelijkheden'},
+        headers=_headers('eigenaar@example.test'),
+        json={'role_key': 'huishouden.kijker', 'reason': 'Alleen meekijken'},
     )
     assert response.status_code == 200
     with engine.begin() as conn:
@@ -119,49 +124,27 @@ def test_admin_can_change_member_role_and_audit_is_written():
             SELECT action FROM auth_audit_log
             WHERE object_id = 'm-member'
         """)).scalar()
-    assert role == 'household.advanced_member'
-    assert action == 'authorization.membership_role.updated'
+    assert role == 'huishouden.kijker'
+    assert action == 'autorisatie.huishoudrol.gewijzigd'
 
 
-def test_last_admin_demotion_returns_409():
+def test_owner_cannot_demote_self_without_transfer():
     client, _ = _client()
     response = client.put(
-        '/api/households/h1/authorization/members/m-admin/role',
-        headers=_headers('admin@example.test'),
-        json={'role_key': 'household.member'},
-    )
-    assert response.status_code == 409
-
-
-def test_override_can_be_created_listed_and_deleted():
-    client, _ = _client()
-    headers = _headers('admin@example.test')
-    created = client.put(
-        '/api/households/h1/authorization/members/m-member/permissions/inventory.view',
-        headers=headers,
-        json={'effect': 'deny', 'reason': 'Tijdelijk'},
-    )
-    assert created.status_code == 200
-    members = client.get('/api/households/h1/authorization/members', headers=headers)
-    target = next(item for item in members.json()['items'] if item['membership_id'] == 'm-member')
-    assert target['permission_overrides'][0]['effect'] == 'deny'
-    deleted = client.delete(
-        '/api/households/h1/authorization/members/m-member/permissions/inventory.view',
-        headers=headers,
-    )
-    assert deleted.status_code == 200
-    missing = client.delete(
-        '/api/households/h1/authorization/members/m-member/permissions/inventory.view',
-        headers=headers,
-    )
-    assert missing.status_code == 404
-
-
-def test_platform_permission_cannot_be_assigned_in_household_scope():
-    client, _ = _client()
-    response = client.put(
-        '/api/households/h1/authorization/members/m-member/permissions/platform.audit.view',
-        headers=_headers('admin@example.test'),
-        json={'effect': 'allow'},
+        '/api/households/h1/authorization/members/m-owner/role',
+        headers=_headers('eigenaar@example.test'),
+        json={'role_key': 'huishouden.lid'},
     )
     assert response.status_code == 400
+    assert 'eigenaarschap' in str(response.json()['detail']).lower()
+
+
+def test_individual_permission_override_is_disabled():
+    client, _ = _client()
+    response = client.put(
+        '/api/households/h1/authorization/members/m-member/permissions/inventory.view',
+        headers=_headers('eigenaar@example.test'),
+        json={'effect': 'deny', 'reason': 'Tijdelijk'},
+    )
+    assert response.status_code == 400
+    assert 'niet beschikbaar' in str(response.json()['detail']).lower()

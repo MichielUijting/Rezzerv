@@ -1,6 +1,7 @@
 import React from 'react'
 import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
+import FrontteamUsersPage from '../../features/admin/FrontteamUsersPage.jsx'
 import ArticlePage from '../../features/articles/ArticlePage'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
@@ -16,6 +17,8 @@ import SettingsHouseholdPage from '../../features/settings/SettingsHouseholdPage
 import SettingsAuthorizationPage from '../../features/settings/SettingsAuthorizationPage.jsx'
 import SettingsLocationsPage from '../../features/settings/SettingsLocationsPage'
 import SettingsPrivacyDataSharingPage from '../../features/settings/SettingsPrivacyDataSharingPage'
+import HouseholdSupportPage from '../../features/support/HouseholdSupportPage.jsx'
+import PlatformSupportPage from '../../features/support/PlatformSupportPage.jsx'
 import Voorraad from '../../pages/Voorraad'
 import ScannerLabPage from '../../pages/ScannerLabPage.jsx'
 import ReceiptReviewPreviewPage from '../../pages/ReceiptReviewPreviewPage.jsx'
@@ -29,23 +32,23 @@ import CatalogDetailPageV2 from '../../features/catalog/CatalogDetailPageV2.jsx'
 import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.jsx'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
+import PlatformGuard from './PlatformGuard.jsx'
 import SettingsGuard from './SettingsGuard'
+import { beginNewAuthSession, clearAuthSession } from '../../lib/authSession.js'
 
 function LoginRoute() {
   const navigate = useNavigate()
   function handleLogin(newToken, email) {
-    localStorage.setItem('rezzerv_token', newToken)
-    if (email) localStorage.setItem('rezzerv_user_email', email)
-    navigate('/home', { replace: false })
+    beginNewAuthSession(newToken, email)
+    navigate('/home', { replace: true })
   }
   return <LoginPage onLoggedIn={handleLogin} />
 }
 
 function ResetSessionRoute() {
   React.useEffect(() => {
+    clearAuthSession('')
     try {
-      localStorage.removeItem('rezzerv_token')
-      localStorage.removeItem('rezzerv_user_email')
       sessionStorage.clear()
     } finally {
       window.location.replace('/login')
@@ -74,6 +77,10 @@ function ProtectedAdmin({ children }) {
   return <AuthGuard><AdminGuard>{children}</AdminGuard></AuthGuard>
 }
 
+function ProtectedPlatform({ permissionKey, children }) {
+  return <AuthGuard><PlatformGuard permissionKey={permissionKey}>{children}</PlatformGuard></AuthGuard>
+}
+
 function ProtectedSettings({ children, allowViewer = true }) {
   return <AuthGuard><SettingsGuard allowViewer={allowViewer}>{children}</SettingsGuard></AuthGuard>
 }
@@ -83,6 +90,7 @@ const router = createBrowserRouter([
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/home', element: <Protected><HomePage /></Protected> },
+  { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
   { path: '/spaartegoeden', element: <Protected><LoyaltyStampsPage /></Protected> },
@@ -93,10 +101,10 @@ const router = createBrowserRouter([
   { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
-  { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
-  { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
-  { path: '/catalogus/gpc-classificeren', element: <ProtectedAdmin><CatalogGpcActionPage /></ProtectedAdmin> },
-  { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPageV2 /></ProtectedAdmin> },
+  { path: '/externe-databases', element: <ProtectedPlatform permissionKey="platform.external_databases.view"><ExternalDatabasesPage /></ProtectedPlatform> },
+  { path: '/catalogus', element: <ProtectedPlatform permissionKey="platform.catalog.view"><CatalogPage /></ProtectedPlatform> },
+  { path: '/catalogus/gpc-classificeren', element: <ProtectedPlatform permissionKey="platform.catalog.view"><CatalogGpcActionPage /></ProtectedPlatform> },
+  { path: '/catalogus/:globalProductId', element: <ProtectedPlatform permissionKey="platform.catalog.view"><CatalogDetailPageV2 /></ProtectedPlatform> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
@@ -114,7 +122,9 @@ const router = createBrowserRouter([
   { path: '/instellingen/locaties', element: <ProtectedSettings allowViewer={false}><SettingsLocationsPage /></ProtectedSettings> },
   { path: '/instellingen/ruimtes', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
   { path: '/instellingen/sublocaties', element: <ProtectedSettings allowViewer={false}><Navigate to="/instellingen/locaties" replace /></ProtectedSettings> },
-  { path: '/admin', element: <ProtectedAdmin><AdminPage /></ProtectedAdmin> },
+  { path: '/admin', element: <ProtectedPlatform permissionKey="platform.users.view"><AdminPage /></ProtectedPlatform> },
+  { path: '/admin/meldingen', element: <ProtectedPlatform permissionKey="platform.support_access.read"><PlatformSupportPage /></ProtectedPlatform> },
+  { path: '/admin/gebruikers', element: <ProtectedPlatform permissionKey="platform.users.view"><FrontteamUsersPage /></ProtectedPlatform> },
   { path: '*', element: <Navigate to="/login" replace /> },
 ])
 

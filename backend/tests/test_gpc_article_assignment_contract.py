@@ -79,7 +79,9 @@ def test_existing_confirmed_product_group_is_migrated_idempotently():
 def test_registration_is_decoupled_from_article_write_guard():
     catalog_source = CATALOG_ROUTES.read_text(encoding="utf-8")
     guard_source = GUARD.read_text(encoding="utf-8")
-    assert "router.include_router(catalog_gpc_router)" in catalog_source
+    assert "router.include_router(" in catalog_source
+    assert "catalog_gpc_router" in catalog_source
+    assert "require_catalog_update" in catalog_source
     assert "install_gpc_article_assignment_routes" not in guard_source
     assert '"set_catalog_product_gpc_brick"' in guard_source
     assert '"clear_catalog_product_gpc_brick"' in guard_source

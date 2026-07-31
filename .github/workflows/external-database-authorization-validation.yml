@@ -1,0 +1,41 @@
+name: External database authorization validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/system_routes.py'
+      - 'backend/app/api/platform_dependencies.py'
+      - 'backend/app/services/platform_actor_service.py'
+      - 'backend/tests/test_external_database_route_authorization.py'
+      - '.github/workflows/external-database-authorization-validation.yml'
+
+jobs:
+  external-database-authorization:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:////tmp/rezzerv-external-database-authorization-test.db
+      SQLITE_RUNTIME_VOLUME: github-actions-temporary-test-database
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install focused test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest fastapi pydantic sqlalchemy
+
+      - name: Compile external database routes
+        run: python -m py_compile app/api/system_routes.py app/api/platform_dependencies.py
+
+      - name: Validate external database route authorization
+        env:
+          PYTHONPATH: .
+        run: pytest -q tests/test_external_database_route_authorization.py

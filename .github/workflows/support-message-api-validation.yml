@@ -4,15 +4,27 @@ on:
   pull_request:
     paths:
       - 'backend/app/api/support_message_routes.py'
+      - 'backend/app/api/frontteam_support_scope_routes.py'
+      - 'backend/app/api/platform_access_routes.py'
+      - 'backend/app/api/platform_dependencies.py'
       - 'backend/app/api/router.py'
       - 'backend/app/services/support_message_service.py'
+      - 'backend/app/services/frontteam_support_scope_service.py'
       - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/platform_actor_service.py'
       - 'backend/tests/test_support_message_api_contract.py'
+      - 'backend/tests/test_frontteam_support_scope_service.py'
+      - 'backend/tests/test_frontteam_support_route_scope.py'
+      - 'backend/tests/test_platform_actor_service.py'
+      - 'backend/tests/test_platform_access_routes.py'
       - '.github/workflows/support-message-api-validation.yml'
 
 jobs:
   support-message-api:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:////tmp/rezzerv-support-message-api-test.db
+      SQLITE_RUNTIME_VOLUME: github-actions-temporary-test-database
     defaults:
       run:
         working-directory: backend
@@ -30,7 +42,14 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pytest fastapi pydantic sqlalchemy
 
-      - name: Run support message API contract tests
+      - name: Run support message and central authorization contract tests
         env:
           PYTHONPATH: .
-        run: pytest -q tests/test_support_message_api_contract.py tests/test_support_message_service.py
+        run: >-
+          pytest -q
+          tests/test_support_message_api_contract.py
+          tests/test_support_message_service.py
+          tests/test_frontteam_support_scope_service.py
+          tests/test_frontteam_support_route_scope.py
+          tests/test_platform_actor_service.py
+          tests/test_platform_access_routes.py

@@ -17,8 +17,13 @@ from pathlib import Path
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
+from app.api.platform_dependencies import (
+    require_external_databases_manage,
+    require_external_databases_update,
+    require_external_databases_view,
+)
 from app.api.route_governance import build_route_governance_manifest
 from app.db import get_runtime_datastore_info
 from app.receipt_ingestion.spaarzegels_terms import is_spaarzegels_flow_excluded
@@ -225,7 +230,10 @@ def api_version():
     }
 
 
-@router.post('/api/external-databases/catalog/promote-candidate')
+@router.post(
+    '/api/external-databases/catalog/promote-candidate',
+    dependencies=[Depends(require_external_databases_manage)],
+)
 def external_databases_promote_selected_candidate(payload: dict[str, Any] = Body(default_factory=dict)):
     return promote_external_product_candidate(
         candidate_id=str(payload.get('candidate_id') or ''),
@@ -233,17 +241,20 @@ def external_databases_promote_selected_candidate(payload: dict[str, Any] = Body
     )
 
 
-@router.get('/api/external-databases/summary')
+@router.get('/api/external-databases/summary', dependencies=[Depends(require_external_databases_view)])
 def external_databases_summary():
     return get_external_database_summary()
 
 
-@router.get('/api/external-databases/retailers')
+@router.get('/api/external-databases/retailers', dependencies=[Depends(require_external_databases_view)])
 def external_databases_retailers():
     return {'retailers': list_external_database_retailers()}
 
 
-@router.post('/api/external-databases/retailers/{retailer_code}/match-preview')
+@router.post(
+    '/api/external-databases/retailers/{retailer_code}/match-preview',
+    dependencies=[Depends(require_external_databases_view)],
+)
 def external_databases_match_preview(retailer_code: str, payload: dict[str, Any] = Body(default_factory=dict)):
     receipt_line_text = str(payload.get('receipt_line_text') or payload.get('query') or '').strip()
     include_below_threshold = bool(payload.get('include_below_threshold', True))
@@ -256,7 +267,10 @@ def external_databases_match_preview(retailer_code: str, payload: dict[str, Any]
     )
 
 
-@router.post('/api/external-databases/retailers/{retailer_code}/diagnose-real-candidates')
+@router.post(
+    '/api/external-databases/retailers/{retailer_code}/diagnose-real-candidates',
+    dependencies=[Depends(require_external_databases_view)],
+)
 def external_databases_diagnose_real_candidates(retailer_code: str, payload: dict[str, Any] = Body(default_factory=dict)):
     receipt_line_text = str(payload.get('receipt_line_text') or payload.get('query') or '').strip()
     include_below_threshold = bool(payload.get('include_below_threshold', True))
@@ -269,7 +283,10 @@ def external_databases_diagnose_real_candidates(retailer_code: str, payload: dic
     )
 
 
-@router.post('/api/external-databases/retailers/{retailer_code}/save-candidates')
+@router.post(
+    '/api/external-databases/retailers/{retailer_code}/save-candidates',
+    dependencies=[Depends(require_external_databases_update)],
+)
 def external_databases_save_candidates(retailer_code: str, payload: dict[str, Any] = Body(default_factory=dict)):
     receipt_line_text = str(payload.get('receipt_line_text') or payload.get('query') or '').strip()
     if not receipt_line_text:
@@ -283,7 +300,7 @@ def external_databases_save_candidates(retailer_code: str, payload: dict[str, An
     )
 
 
-@router.post('/api/external-products/off/search')
+@router.post('/api/external-products/off/search', dependencies=[Depends(require_external_databases_view)])
 def external_products_open_food_facts_search(payload: dict[str, Any] = Body(default_factory=dict)):
     """Nieuwe tijdelijke OFF-zoekflow zonder databasewrites."""
     try:
@@ -292,7 +309,7 @@ def external_products_open_food_facts_search(payload: dict[str, Any] = Body(defa
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post('/api/external-databases/off/search-preview')
+@router.post('/api/external-databases/off/search-preview', dependencies=[Depends(require_external_databases_view)])
 def external_databases_open_food_facts_search_preview(payload: dict[str, Any] = Body(default_factory=dict)):
     """Read-only OFF search from Rezzerv candidate evidence.
 
@@ -306,7 +323,7 @@ def external_databases_open_food_facts_search_preview(payload: dict[str, Any] = 
     return result
 
 
-@router.post('/api/external-databases/off/save-candidates')
+@router.post('/api/external-databases/off/save-candidates', dependencies=[Depends(require_external_databases_update)])
 def external_databases_open_food_facts_save_candidates(payload: dict[str, Any] = Body(default_factory=dict)):
     """Store OFF preview results as explicit external candidates only.
 
@@ -319,14 +336,17 @@ def external_databases_open_food_facts_save_candidates(payload: dict[str, Any] =
     return result
 
 
-@router.get('/api/external-databases/receipt-items')
+@router.get('/api/external-databases/receipt-items', dependencies=[Depends(require_external_databases_view)])
 def external_databases_receipt_items(limit: int = Query(default=200)):
     payload = list_external_receipt_items(limit=limit)
     payload = _without_taxonomy_seed_candidates(payload)
     return _without_spaarzegels_receipt_items(payload)
 
 
-@router.post('/api/external-databases/receipt-items/ensure-candidates')
+@router.post(
+    '/api/external-databases/receipt-items/ensure-candidates',
+    dependencies=[Depends(require_external_databases_update)],
+)
 def external_databases_ensure_receipt_item_candidates(payload: dict[str, Any] = Body(default_factory=dict)):
     return ensure_external_receipt_item_candidates(
         items=list(payload.get('items') or []),
@@ -334,7 +354,7 @@ def external_databases_ensure_receipt_item_candidates(payload: dict[str, Any] = 
     )
 
 
-@router.post('/api/external-databases/coverage/receipt-items')
+@router.post('/api/external-databases/coverage/receipt-items', dependencies=[Depends(require_external_databases_view)])
 def external_databases_blind_receipt_item_coverage(payload: dict[str, Any] = Body(default_factory=dict)):
     return build_blind_receipt_coverage_report(
         limit=int(payload.get('limit') or 500),
@@ -342,7 +362,7 @@ def external_databases_blind_receipt_item_coverage(payload: dict[str, Any] = Bod
     )
 
 
-@router.get('/api/external-databases/candidates')
+@router.get('/api/external-databases/candidates', dependencies=[Depends(require_external_databases_view)])
 def external_databases_saved_candidates(
     context_key: str | None = Query(default=None),
     retailer_code: str | None = Query(default=None),
@@ -362,7 +382,10 @@ def external_databases_saved_candidates(
     return _without_taxonomy_seed_candidates(list_saved_external_product_candidates(context_key=resolved_context_key, limit=limit))
 
 
-@router.post('/api/external-databases/catalog/promote-highest')
+@router.post(
+    '/api/external-databases/catalog/promote-highest',
+    dependencies=[Depends(require_external_databases_manage)],
+)
 def external_databases_promote_highest_candidate(payload: dict[str, Any] = Body(default_factory=dict)):
     receipt_line_text = str(payload.get('receipt_line_text') or '').strip() or None
     retailer_code = str(payload.get('retailer_code') or '').strip() or None
@@ -378,7 +401,7 @@ def external_databases_promote_highest_candidate(payload: dict[str, Any] = Body(
     )
 
 
-@router.post('/api/external-databases/catalog/unlink')
+@router.post('/api/external-databases/catalog/unlink', dependencies=[Depends(require_external_databases_manage)])
 def external_databases_unlink_catalog(payload: dict[str, Any] = Body(default_factory=dict)):
     return unlink_external_catalog_links(
         context_keys=list(payload.get('context_keys') or []),
@@ -386,17 +409,20 @@ def external_databases_unlink_catalog(payload: dict[str, Any] = Body(default_fac
     )
 
 
-@router.get('/api/external-databases/catalog/products')
+@router.get('/api/external-databases/catalog/products', dependencies=[Depends(require_external_databases_view)])
 def external_databases_catalog_products(limit: int = Query(default=50)):
     return list_catalog_products(limit=limit)
 
 
-@router.get('/api/admin/external-relations/batch')
+@router.get('/api/admin/external-relations/batch', dependencies=[Depends(require_external_databases_manage)])
 def admin_external_relation_batch(household_id: str | None = Query(default=None), limit: int = Query(default=50)):
     return list_external_relation_batch_items(household_id=household_id, limit=limit)
 
 
-@router.post('/api/admin/external-relations/batch/decision')
+@router.post(
+    '/api/admin/external-relations/batch/decision',
+    dependencies=[Depends(require_external_databases_manage)],
+)
 def admin_external_relation_batch_decision(payload: dict[str, Any] = Body(default_factory=dict)):
     return apply_external_relation_batch_decision(
         candidate_id=str(payload.get('candidate_id') or '').strip(),

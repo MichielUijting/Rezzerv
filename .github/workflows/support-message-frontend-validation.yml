@@ -1,0 +1,53 @@
+name: Support message frontend validation
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/features/support/**'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/src/app/router/PlatformGuard.jsx'
+      - 'frontend/src/features/admin/FrontteamUsersPage.jsx'
+      - 'frontend/src/features/catalog/**'
+      - 'frontend/src/features/externalDatabases/**'
+      - 'frontend/src/features/home/HomePage.jsx'
+      - 'frontend/src/main.jsx'
+      - '.github/workflows/support-message-frontend-validation.yml'
+
+jobs:
+  support-message-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Build frontend
+        run: npm run build
+      - name: Check support and central permission bindings
+        run: |
+          grep -E "path:[[:space:]]*'/meldingen'" src/app/router/AppRouter.jsx
+          grep -E "path:[[:space:]]*'/admin/meldingen'" src/app/router/AppRouter.jsx
+          grep -F '/api/support/threads' src/features/support/supportApi.js
+          grep -F '/api/platform/support/threads' src/features/support/supportApi.js
+          grep -F '/api/platform/support/bereik' src/features/support/supportApi.js
+          grep -F '/api/platform/support/export.csv' src/features/support/supportApi.js
+          grep -F 'updateHouseholdThreadStatus' src/features/support/HouseholdSupportPage.jsx
+          grep -F 'AUTO_REFRESH_MS = 2000' src/features/support/PlatformSupportPage.jsx
+          grep -F 'toegestane_huishoudens' src/features/support/PlatformSupportPage.jsx
+          grep -F 'targetHouseholdId' src/features/support/PlatformSupportPage.jsx
+          grep -F 'Alle toegestane huishoudens' src/features/support/PlatformSupportPage.jsx
+          grep -F '/api/platform/toegang?bevoegdheid=' src/app/router/PlatformGuard.jsx
+          grep -F 'permissionKey="platform.external_databases.view"' src/app/router/AppRouter.jsx
+          grep -F 'permissionKey="platform.catalog.view"' src/app/router/AppRouter.jsx
+          grep -F 'permissionKey="platform.support_access.read"' src/app/router/AppRouter.jsx
+          grep -F 'permissionKey="platform.users.view"' src/app/router/AppRouter.jsx
+          if grep -E "path:[[:space:]]*'/((externe-databases)|(catalogus)|(admin/meldingen)|(admin/gebruikers))'.*ProtectedAdmin" src/app/router/AppRouter.jsx; then
+            echo 'Centrale route gebruikt nog de oude AdminGuard' >&2
+            exit 1
+          fi
