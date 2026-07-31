@@ -6,15 +6,17 @@ import { fetchAuthorizationOverview } from './services/authorizationMembershipSe
 import './settingsAuthorization.css'
 
 const ROLE_LABELS = {
-  'household.viewer': 'Kijker',
-  'household.member': 'Lid',
-  'household.advanced_member': 'Geavanceerd lid',
-  'household.admin': 'Beheerder',
+  'huishouden.kijker': 'Kijker',
+  'huishouden.lid': 'Lid',
+  'huishouden.eigenaar': 'Eigenaar',
+  'platform.frontteam': 'Frontteam',
+  'platform.supergebruiker': 'Supergebruiker',
 }
 
 const AUTHORIZATION_ROWS = [
   ['dashboard.view', 'Startscherm bekijken'],
-  ['notifications.update', 'Meldingen afhandelen'],
+  ['notifications.view', 'Meldingen bekijken'],
+  ['notifications.update', 'Meldingen sturen en beantwoorden'],
   ['inventory.view', 'Voorraad bekijken'],
   ['inventory.update', 'Voorraad wijzigen'],
   ['inventory.correct', 'Voorraad corrigeren'],
@@ -47,17 +49,10 @@ const AUTHORIZATION_ROWS = [
   ['insights.view', 'Inzichten en prognoses bekijken'],
   ['insights.export', 'Inzichten en prognoses exporteren'],
   ['members.view', 'Huishoudleden bekijken'],
-  ['members.manage', 'Huishoudleden en rollen beheren'],
+  ['members.manage', 'Huishoudleden beheren'],
   ['household_settings.view', 'Huishoudinstellingen bekijken'],
   ['household_settings.manage', 'Huishoudinstellingen beheren'],
   ['permissions.view', 'Autorisaties bekijken'],
-  ['permissions.manage', 'Individuele autorisaties beheren'],
-  ['catalog.view', 'Catalogus bekijken'],
-  ['catalog.update', 'Catalogus wijzigen'],
-  ['catalog.manage', 'Catalogus beheren'],
-  ['gpc.view', 'Productclassificatie bekijken'],
-  ['gpc.update', 'Productclassificatie wijzigen'],
-  ['gpc.manage', 'Productclassificatie beheren'],
 ]
 
 export default function SettingsAuthorizationPage() {
@@ -89,11 +84,13 @@ export default function SettingsAuthorizationPage() {
   }, [showFeedback])
 
   const roleColumns = useMemo(
-    () => overview.roles.map((role) => ({
-      ...role,
-      label: ROLE_LABELS[role.role_key] || role.name,
-      granted: new Set(role.permission_keys || []),
-    })),
+    () => overview.roles
+      .filter((role) => ['huishouden.kijker', 'huishouden.lid', 'huishouden.eigenaar'].includes(role.role_key))
+      .map((role) => ({
+        ...role,
+        label: ROLE_LABELS[role.role_key] || role.name,
+        granted: new Set(role.permission_keys || []),
+      })),
     [overview.roles],
   )
 
@@ -113,19 +110,22 @@ export default function SettingsAuthorizationPage() {
         <Card>
           <div className="rz-authorization-header">
             <h2>Autorisaties</h2>
-            <p>Bekijk per rol welke mogelijkheden binnen het huishouden beschikbaar zijn.</p>
+            <p>Bekijk per Nederlandse huishoudrol welke mogelijkheden beschikbaar zijn.</p>
           </div>
 
           {loading ? <div className="rz-authorization-loading">Autorisaties laden…</div> : (
             <>
               <p className="rz-authorization-explanation">
-                De rollen zijn vaste profielen. Wijs een rol aan een huishoudlid toe in het scherm Huishouden.
+                De eerste gebruiker van een huishouden is Eigenaar. Volgende gebruikers zijn Lid. Een Eigenaar kan een gebruiker Kijker maken. Aanvullend kan alleen de Supergebruiker Frontteam aan- of uitzetten.
+              </p>
+              <p className="rz-authorization-explanation">
+                Heeft een gebruiker meerdere rollen, dan is een handeling toegestaan zodra minimaal één actieve rol toestemming geeft, tenzij een vaste huishoudgrens de handeling blokkeert.
               </p>
               <div className="rz-authorization-matrix-wrap">
                 <table className="rz-authorization-matrix" data-testid="authorization-role-matrix">
                   <thead>
                     <tr>
-                      <th scope="col">Autorisatie</th>
+                      <th scope="col">Bevoegdheid</th>
                       {roleColumns.map((role) => <th scope="col" key={role.role_key}>{role.label}</th>)}
                     </tr>
                   </thead>
