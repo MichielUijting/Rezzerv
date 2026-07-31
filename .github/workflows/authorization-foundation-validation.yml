@@ -3,10 +3,13 @@ name: Authorization foundation validation
 on:
   pull_request:
     paths:
+      - 'backend/app/api/router.py'
+      - 'backend/app/api/runtime_auth_startup.py'
       - 'backend/app/services/authorization_foundation_service.py'
       - 'backend/app/services/runtime_auth_compatibility_service.py'
       - 'backend/tests/test_authorization_foundation_contract.py'
       - 'backend/tests/test_runtime_auth_compatibility_service.py'
+      - 'backend/tests/test_runtime_auth_startup.py'
       - '.github/workflows/authorization-foundation-validation.yml'
   workflow_dispatch:
 
@@ -27,8 +30,10 @@ jobs:
         run: |
           python -m py_compile backend/app/services/authorization_foundation_service.py
           python -m py_compile backend/app/services/runtime_auth_compatibility_service.py
+          python -m py_compile backend/app/api/runtime_auth_startup.py
       - name: Run authorization contract tests
         run: |
           PYTHONPATH=backend python -m pytest -q \
             backend/tests/test_authorization_foundation_contract.py \
-            backend/tests/test_runtime_auth_compatibility_service.py
+            backend/tests/test_runtime_auth_compatibility_service.py \
+            backend/tests/test_runtime_auth_startup.py
