@@ -18,6 +18,9 @@ on:
 jobs:
   support-message-api:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:////tmp/rezzerv-support-message-api-test.db
+      SQLITE_RUNTIME_VOLUME: github-actions-temporary-test-database
     defaults:
       run:
         working-directory: backend
