@@ -6,6 +6,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import inspect, text
 
+from app.services.platform_actor_service import SUPERGEBRUIKER_EMAIL
 from app.services.runtime_auth_compatibility_service import (
     build_explicit_runtime_token,
     parse_explicit_runtime_token,
@@ -16,11 +17,7 @@ LEGACY_DEFAULT_ADMIN_EMAIL = "admin@rezzerv.local"
 
 
 def _load_persisted_user_record(main_module: Any, email: str) -> dict | None:
-    """Lees een runtime-identiteit rechtstreeks uit de persistente gebruikersbron.
-
-    De vaste Supergebruiker wordt tijdens startup in ``app_users`` ingericht en
-    hoeft daardoor niet in de historische in-memory gebruikerslijst te staan.
-    """
+    """Lees een runtime-identiteit rechtstreeks uit de persistente gebruikersbron."""
     with main_module.engine.begin() as conn:
         inspector = inspect(conn)
         if "app_users" not in inspector.get_table_names():
@@ -108,9 +105,6 @@ def _load_runtime_identity(main_module: Any, email: str, get_user_record: Callab
     membership_role = str((membership or {}).get("role") or "").strip().lower()
     platform_role_key = str((platform_role or {}).get("role_key") or "").strip()
 
-    # Compatibility for the remaining legacy central test routes: only the
-    # actual Supergebruiker is represented as admin. Household ownership alone
-    # never grants central access anymore.
     if platform_role_key == "platform.supergebruiker":
         normalized["role"] = "admin"
     elif membership_role in {"owner", "member", "viewer"}:
@@ -120,6 +114,45 @@ def _load_runtime_identity(main_module: Any, email: str, get_user_record: Callab
 
     normalized["platform_role_key"] = platform_role_key or None
     return normalized
+
+
+def _require_explicit_platform_superuser(main_module: Any, authorization: str | None) -> dict:
+    """Beveilig resterende legacy test- en onderhoudsroutes centraal.
+
+    Deze controle gebruikt uitsluitend het expliciet gebonden token en de
+    persistente centrale rol. Een huishoud-Eigenaar en Frontteam krijgen geen
+    toegang, ook niet wanneer een oude runtimeweergave hen ``admin`` noemt.
+    """
+    email = parse_explicit_runtime_token(authorization)
+    if email != SUPERGEBRUIKER_EMAIL:
+        raise HTTPException(status_code=403, detail="Alleen de Supergebruiker mag deze actie uitvoeren")
+
+    with main_module.engine.begin() as conn:
+        role_key = conn.execute(
+            text(
+                """
+                SELECT role_key
+                FROM auth_platform_user_roles
+                WHERE lower(trim(user_id)) = :user_id
+                  AND role_key = 'platform.supergebruiker'
+                  AND active = 1
+                LIMIT 1
+                """
+            ),
+            {"user_id": email},
+        ).scalar()
+
+    if str(role_key or "").strip() != "platform.supergebruiker":
+        raise HTTPException(status_code=403, detail="Alleen de Supergebruiker mag deze actie uitvoeren")
+
+    return {
+        "id": email,
+        "user_id": email,
+        "email": email,
+        "name": "Supergebruiker",
+        "role": "platform.supergebruiker",
+        "platform_role_key": "platform.supergebruiker",
+    }
 
 
 def apply_runtime_auth_override(main_module: Any) -> None:
@@ -140,9 +173,13 @@ def apply_runtime_auth_override(main_module: Any) -> None:
             raise HTTPException(status_code=401, detail="Unauthorized")
         return _load_runtime_identity(main_module, email, safe_get_user_record)
 
+    def secure_require_platform_admin_user(authorization: str | None):
+        return _require_explicit_platform_superuser(main_module, authorization)
+
     main_module.users.pop(LEGACY_DEFAULT_ADMIN_EMAIL, None)
     main_module.get_user_record = safe_get_user_record
     main_module.get_current_user_from_authorization = secure_get_current_user_from_authorization
+    main_module.require_platform_admin_user = secure_require_platform_admin_user
     main_module.build_auth_token = build_explicit_runtime_token
     main_module._runtime_auth_override_applied = True
 
