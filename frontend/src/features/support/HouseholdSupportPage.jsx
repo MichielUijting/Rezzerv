@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
+import { readStoredAuthContext } from '../../lib/authSession.js'
 import { getRezzervVersionTag } from '../../ui/version.js'
 import {
   createHouseholdThread,
@@ -14,12 +15,14 @@ import {
 } from './supportApi.js'
 
 const STATUSES = ['', 'Open', 'In behandeling', 'Gesloten']
+const AUTO_REFRESH_MS = 2000
 
 export default function HouseholdSupportPage() {
   const location = useLocation()
   const query = useMemo(() => new URLSearchParams(location.search), [location.search])
   const originRoute = query.get('from') || '/meldingen'
   const originScreen = query.get('screen') || 'Rezzerv'
+  const currentEmail = String(readStoredAuthContext()?.email || localStorage.getItem('rezzerv_user_email') || '').trim().toLowerCase()
 
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
@@ -30,24 +33,45 @@ export default function HouseholdSupportPage() {
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
 
-  async function refresh() {
-    setBusy(true)
-    setFeedback('')
+  function belongsToCurrentHouseholdUser(thread) {
+    if (String(thread?.recipient_type || '') !== 'superuser') return true
+    return String(thread?.created_by_user_id || '').trim().toLowerCase() === currentEmail
+  }
+
+  async function refresh({ showBusy = false, showErrors = true } = {}) {
+    if (showBusy) setBusy(true)
+    if (showErrors) setFeedback('')
     try {
       const data = await listHouseholdThreads(status)
-      setThreads(data?.items || [])
+      const ownThreads = (data?.items || []).filter(belongsToCurrentHouseholdUser)
+      setThreads(ownThreads)
       if (selected?.thread?.id) {
-        const detail = await readHouseholdThread(selected.thread.id)
-        setSelected(detail)
+        const stillVisible = ownThreads.some((thread) => thread.id === selected.thread.id)
+        if (stillVisible) setSelected(await readHouseholdThread(selected.thread.id))
+        else setSelected(null)
       }
     } catch (error) {
-      setFeedback(error.message)
+      if (showErrors) setFeedback(error.message)
     } finally {
-      setBusy(false)
+      if (showBusy) setBusy(false)
     }
   }
 
-  useEffect(() => { refresh() }, [status])
+  useEffect(() => { refresh({ showBusy: true }) }, [status])
+
+  useEffect(() => {
+    let cancelled = false
+    let timer = null
+    const poll = async () => {
+      await refresh({ showBusy: false, showErrors: false })
+      if (!cancelled) timer = window.setTimeout(poll, AUTO_REFRESH_MS)
+    }
+    timer = window.setTimeout(poll, AUTO_REFRESH_MS)
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+    }
+  }, [status, selected?.thread?.id, currentEmail])
 
   useEffect(() => {
     if (query.get('new') === '1') {
@@ -157,14 +181,7 @@ export default function HouseholdSupportPage() {
               </div>
               <div className="rz-support-status-actions" aria-label="Status van melding">
                 {STATUSES.filter(Boolean).map((value) => (
-                  <Button
-                    key={value}
-                    variant={selected.thread.status === value ? 'primary' : 'secondary'}
-                    onClick={() => changeStatus(value)}
-                    disabled={busy}
-                  >
-                    {value}
-                  </Button>
+                  <Button key={value} variant={selected.thread.status === value ? 'primary' : 'secondary'} onClick={() => changeStatus(value)} disabled={busy}>{value}</Button>
                 ))}
               </div>
               <div className="rz-support-conversation">
