@@ -59,7 +59,7 @@ test.describe('Sessiewissel en centrale tegelisolatie', () => {
     await page.getByTestId('login-submit').click()
 
     await expect(page).toHaveURL(/\/home$/)
-    await expect(page.getByText('Testhuishouden 2', { exact: true })).toBeVisible()
+    await expect(page.getByText(/Huishouden:\s*Testhuishouden 2/)).toBeVisible()
     await expect(page.getByText('Meldingen', { exact: true })).toBeVisible()
     await expect(page.getByText('Externe databases', { exact: true })).toHaveCount(0)
     await expect(page.getByText('Catalogus', { exact: true })).toHaveCount(0)
