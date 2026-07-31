@@ -4,8 +4,12 @@ on:
   pull_request:
     paths:
       - 'backend/app/services/beta_superuser_provisioning_service.py'
+      - 'backend/app/services/system_superuser_service.py'
+      - 'backend/app/services/platform_actor_service.py'
       - 'backend/app/cli/provision_po_beta_superuser.py'
       - 'backend/tests/test_beta_superuser_provisioning_service.py'
+      - 'backend/tests/test_system_superuser_service.py'
+      - 'backend/tests/test_platform_actor_service.py'
       - '.github/workflows/po-beta-superuser-provisioning-validation.yml'
 
 jobs:
@@ -24,10 +28,18 @@ jobs:
         working-directory: backend
         run: |
           python -m py_compile app/services/beta_superuser_provisioning_service.py
+          python -m py_compile app/services/system_superuser_service.py
+          python -m py_compile app/services/platform_actor_service.py
           python -m py_compile app/cli/provision_po_beta_superuser.py
           python -m py_compile tests/test_beta_superuser_provisioning_service.py
-      - name: Run provisioning contract
+          python -m py_compile tests/test_system_superuser_service.py
+          python -m py_compile tests/test_platform_actor_service.py
+      - name: Run provisioning and central actor contracts
         working-directory: backend
         env:
           PYTHONPATH: .
-        run: pytest -q tests/test_beta_superuser_provisioning_service.py
+        run: >-
+          pytest -q
+          tests/test_beta_superuser_provisioning_service.py
+          tests/test_system_superuser_service.py
+          tests/test_platform_actor_service.py
