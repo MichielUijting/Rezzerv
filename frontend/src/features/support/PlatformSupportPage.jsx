@@ -36,9 +36,7 @@ export default function PlatformSupportPage() {
     try {
       const data = await listPlatformThreads({ status, householdId })
       setThreads(data?.items || [])
-      if (selected?.thread?.id) {
-        setSelected(await readPlatformThread(selected.thread.id))
-      }
+      if (selected?.thread?.id) setSelected(await readPlatformThread(selected.thread.id))
       setLastRefreshedAt(new Date())
       setRefreshCount((value) => value + 1)
     } catch (error) {
@@ -53,10 +51,36 @@ export default function PlatformSupportPage() {
   }, [status])
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      loadThreads({ showBusy: false, showErrors: false })
-    }, AUTO_REFRESH_MS)
-    return () => window.clearInterval(timer)
+    let cancelled = false
+    let timer = null
+    let running = false
+
+    const schedule = () => {
+      if (!cancelled) timer = window.setTimeout(run, AUTO_REFRESH_MS)
+    }
+
+    const run = async () => {
+      if (cancelled || running) return
+      running = true
+      await loadThreads({ showBusy: false, showErrors: false })
+      running = false
+      schedule()
+    }
+
+    const refreshImmediately = () => {
+      if (document.visibilityState === 'visible') run()
+    }
+
+    schedule()
+    window.addEventListener('focus', refreshImmediately)
+    document.addEventListener('visibilitychange', refreshImmediately)
+
+    return () => {
+      cancelled = true
+      if (timer) window.clearTimeout(timer)
+      window.removeEventListener('focus', refreshImmediately)
+      document.removeEventListener('visibilitychange', refreshImmediately)
+    }
   }, [status, householdId, selected?.thread?.id])
 
   async function openThread(id) {
@@ -172,14 +196,7 @@ export default function PlatformSupportPage() {
               </div>
               <div className="rz-support-status-actions" aria-label="Status van melding">
                 {STATUSES.filter(Boolean).map((value) => (
-                  <Button
-                    key={value}
-                    variant={selected.thread.status === value ? 'primary' : 'secondary'}
-                    onClick={() => changeStatus(value)}
-                    disabled={busy}
-                  >
-                    {value}
-                  </Button>
+                  <Button key={value} variant={selected.thread.status === value ? 'primary' : 'secondary'} onClick={() => changeStatus(value)} disabled={busy}>{value}</Button>
                 ))}
               </div>
               <div className="rz-support-conversation">
