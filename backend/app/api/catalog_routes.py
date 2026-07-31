@@ -2,14 +2,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import inspect, text
 
 from app.api.catalog_gpc_routes import router as catalog_gpc_router
+from app.api.platform_dependencies import require_catalog_view
 from app.db import engine
 
 
-router = APIRouter(prefix="/api/catalog", tags=["catalog"])
+router = APIRouter(
+    prefix="/api/catalog",
+    tags=["catalog"],
+    dependencies=[Depends(require_catalog_view)],
+)
 router.include_router(catalog_gpc_router)
 
 
