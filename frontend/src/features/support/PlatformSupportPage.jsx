@@ -6,6 +6,7 @@ import Input from '../../ui/Input.jsx'
 import {
   createPlatformThread,
   downloadPlatformSupportCsv,
+  getPlatformSupportScope,
   listPlatformThreads,
   readPlatformThread,
   replyPlatformThread,
@@ -20,6 +21,8 @@ export default function PlatformSupportPage() {
   const [selected, setSelected] = useState(null)
   const [status, setStatus] = useState('')
   const [householdId, setHouseholdId] = useState('')
+  const [targetHouseholdId, setTargetHouseholdId] = useState('')
+  const [supportScope, setSupportScope] = useState(null)
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [recipientType, setRecipientType] = useState('single_household_admin')
@@ -30,6 +33,23 @@ export default function PlatformSupportPage() {
   const [feedback, setFeedback] = useState('')
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
   const [refreshCount, setRefreshCount] = useState(0)
+
+  const unrestricted = supportScope?.onbeperkt === true
+  const allowedHouseholds = supportScope?.toegestane_huishoudens || []
+
+  async function loadScope() {
+    try {
+      const data = await getPlatformSupportScope()
+      setSupportScope(data)
+      if (!data?.onbeperkt) {
+        const allowed = data?.toegestane_huishoudens || []
+        setTargetHouseholdId((current) => allowed.includes(current) ? current : (allowed[0] || ''))
+        setHouseholdId((current) => current && !allowed.includes(current) ? '' : current)
+      }
+    } catch (error) {
+      setFeedback(error.message)
+    }
+  }
 
   async function loadThreads({ showBusy = false, showErrors = true } = {}) {
     if (showBusy) setBusy(true)
@@ -45,6 +65,10 @@ export default function PlatformSupportPage() {
       if (showBusy) setBusy(false)
     }
   }
+
+  useEffect(() => {
+    loadScope()
+  }, [])
 
   useEffect(() => {
     loadThreads({ showBusy: true })
@@ -100,7 +124,7 @@ export default function PlatformSupportPage() {
       const created = await createPlatformThread({
         subject,
         message,
-        household_id: householdId,
+        household_id: targetHouseholdId,
         recipient_type: recipientType,
         admin_user_ids,
         reply_allowed: replyAllowed,
@@ -164,6 +188,7 @@ export default function PlatformSupportPage() {
             <div>
               <h2>Alle meldingen</h2>
               <p>Automatische verversing iedere 2 seconden.</p>
+              {supportScope ? <p>Rol: {supportScope.rol} · {unrestricted ? 'alle huishoudens' : `huishouden 0 en eigen huishoudens (${allowedHouseholds.join(', ')})`}</p> : null}
               <p aria-live="polite" data-testid="platform-support-refresh-status">{refreshLabel}</p>
             </div>
             <Button variant="secondary" onClick={() => downloadPlatformSupportCsv(status).catch((error) => setFeedback(error.message))}>CSV exporteren</Button>
@@ -172,7 +197,14 @@ export default function PlatformSupportPage() {
             <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter op status">
               {STATUSES.map((value) => <option key={value || 'all'} value={value}>{value || 'Alle statussen'}</option>)}
             </select>
-            <Input value={householdId} onChange={(event) => setHouseholdId(event.target.value)} placeholder="Huishoud-ID" />
+            {unrestricted ? (
+              <Input value={householdId} onChange={(event) => setHouseholdId(event.target.value)} placeholder="Huishoud-ID" />
+            ) : (
+              <select value={householdId} onChange={(event) => setHouseholdId(event.target.value)} aria-label="Filter op toegestaan huishouden">
+                <option value="">Alle toegestane huishoudens</option>
+                {allowedHouseholds.map((value) => <option key={value} value={value}>Huishouden {value}</option>)}
+              </select>
+            )}
             <Button variant="secondary" onClick={() => loadThreads({ showBusy: true })}>Zoeken</Button>
           </div>
           {!busy && !threads.length ? <p>Geen meldingen gevonden.</p> : null}
@@ -214,13 +246,21 @@ export default function PlatformSupportPage() {
           ) : (
             <form onSubmit={submitNew} className="rz-support-form">
               <h2>Nieuwe melding aan huishoudadmin(s)</h2>
-              <label>Huishoud-ID<Input value={householdId} onChange={(event) => setHouseholdId(event.target.value)} required /></label>
+              <label>Huishouden
+                {unrestricted ? (
+                  <Input value={targetHouseholdId} onChange={(event) => setTargetHouseholdId(event.target.value)} required />
+                ) : (
+                  <select value={targetHouseholdId} onChange={(event) => setTargetHouseholdId(event.target.value)} required>
+                    {allowedHouseholds.map((value) => <option key={value} value={value}>Huishouden {value}</option>)}
+                  </select>
+                )}
+              </label>
               <label>Ontvangers<select value={recipientType} onChange={(event) => setRecipientType(event.target.value)}><option value="single_household_admin">Eén huishoudadmin</option><option value="all_household_admins">Alle huishoudadmins</option></select></label>
               <label>Admin-gebruikers-ID's<Input value={adminIds} onChange={(event) => setAdminIds(event.target.value)} placeholder="Komma-gescheiden" required /></label>
               <label>Onderwerp<Input value={subject} onChange={(event) => setSubject(event.target.value)} required maxLength={250} /></label>
               <label>Bericht<textarea value={message} onChange={(event) => setMessage(event.target.value)} required maxLength={10000} /></label>
               <label className="rz-support-checkbox"><input type="checkbox" checked={replyAllowed} onChange={(event) => setReplyAllowed(event.target.checked)} /> Antwoorden toestaan</label>
-              <Button variant="primary" type="submit" disabled={busy}>Melding versturen</Button>
+              <Button variant="primary" type="submit" disabled={busy || !targetHouseholdId}>Melding versturen</Button>
             </form>
           )}
           {feedback ? <p className="rz-support-feedback" role="status">{feedback}</p> : null}
