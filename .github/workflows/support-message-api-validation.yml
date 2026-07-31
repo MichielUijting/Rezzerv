@@ -13,6 +13,7 @@ on:
       - 'backend/app/services/platform_actor_service.py'
       - 'backend/tests/test_support_message_api_contract.py'
       - 'backend/tests/test_frontteam_support_scope_service.py'
+      - 'backend/tests/test_frontteam_support_route_scope.py'
       - 'backend/tests/test_platform_actor_service.py'
       - 'backend/tests/test_platform_access_routes.py'
       - '.github/workflows/support-message-api-validation.yml'
@@ -48,5 +49,6 @@ jobs:
           tests/test_support_message_api_contract.py
           tests/test_support_message_service.py
           tests/test_frontteam_support_scope_service.py
+          tests/test_frontteam_support_route_scope.py
           tests/test_platform_actor_service.py
           tests/test_platform_access_routes.py
