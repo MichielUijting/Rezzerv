@@ -6,6 +6,13 @@ function safeWindow() {
   return typeof window !== 'undefined' ? window : null
 }
 
+function explicitDevTokenEmail(token) {
+  const prefix = 'rezzerv-dev-token::'
+  const normalized = String(token || '').trim()
+  if (!normalized.startsWith(prefix)) return ''
+  return normalized.slice(prefix.length).trim().toLowerCase()
+}
+
 export function getStoredToken() {
   try {
     return window.localStorage.getItem('rezzerv_token') || ''
@@ -130,12 +137,12 @@ function buildAuthErrorMessage(status, fallback) {
 }
 
 export async function fetchAuthContext() {
-  const token = getStoredToken()
-  if (!token) throw new Error('Geen actieve sessie')
+  const requestToken = getStoredToken()
+  if (!requestToken) throw new Error('Geen actieve sessie')
   const response = await fetch('/api/auth/context', {
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${requestToken}`,
     },
     cache: 'no-store',
   })
@@ -146,8 +153,23 @@ export async function fetchAuthContext() {
     error.status = response.status
     throw error
   }
+
+  if (getStoredToken() !== requestToken) {
+    const error = new Error('Een nieuwere sessie is actief; verouderde autorisatiecontext is genegeerd.')
+    error.code = 'STALE_AUTH_SESSION'
+    throw error
+  }
+
+  const expectedEmail = explicitDevTokenEmail(requestToken)
+  const contextEmail = String(data?.email || data?.user_id || '').trim().toLowerCase()
+  if (expectedEmail && contextEmail !== expectedEmail) {
+    const error = new Error('De autorisatiecontext hoort niet bij de actieve gebruiker. Log opnieuw in.')
+    error.code = 'AUTH_CONTEXT_MISMATCH'
+    throw error
+  }
+
   const stored = storeAuthContext(data)
-  markAuthCheckedForToken(token)
+  markAuthCheckedForToken(requestToken)
   return stored
 }
 
