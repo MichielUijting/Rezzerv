@@ -25,6 +25,30 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build application images
         run: docker compose build backend frontend
+      - name: Initialize CI household zero
+        run: |
+          docker compose run --rm --no-deps --entrypoint sh backend -lc "python - <<'PY'
+          from sqlalchemy import text
+          from app import main  # initialiseert het bestaande databaseschema
+          from app.db import engine
+
+          with engine.begin() as conn:
+              conn.execute(text('''
+                  CREATE TABLE IF NOT EXISTS household_registry (
+                      id TEXT PRIMARY KEY,
+                      naam TEXT NOT NULL,
+                      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                  )
+              '''))
+              conn.execute(
+                  text('''
+                      INSERT INTO household_registry (id, naam, created_at)
+                      VALUES (:id, :naam, CURRENT_TIMESTAMP)
+                      ON CONFLICT(id) DO NOTHING
+                  '''),
+                  {'id': '0', 'naam': 'Systeemhuishouden'},
+              )
+          PY"
       - name: Start application
         run: docker compose up -d backend frontend
       - name: Wait for backend health
