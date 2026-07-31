@@ -7,7 +7,9 @@ on:
       - 'backend/app/api/router.py'
       - 'backend/app/services/support_message_service.py'
       - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/platform_actor_service.py'
       - 'backend/tests/test_support_message_api_contract.py'
+      - 'backend/tests/test_platform_actor_service.py'
       - '.github/workflows/support-message-api-validation.yml'
 
 jobs:
@@ -30,7 +32,7 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install pytest fastapi pydantic sqlalchemy
 
-      - name: Run support message API contract tests
+      - name: Run support message and central actor contract tests
         env:
           PYTHONPATH: .
-        run: pytest -q tests/test_support_message_api_contract.py tests/test_support_message_service.py
+        run: pytest -q tests/test_support_message_api_contract.py tests/test_support_message_service.py tests/test_platform_actor_service.py
