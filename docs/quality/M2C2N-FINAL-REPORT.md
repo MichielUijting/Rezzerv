@@ -1,6 +1,6 @@
 # M2C2n eindrapport
 
-Statusdatum: 2026-07-30  
+Statusdatum: 2026-07-31  
 Basis voor eindcontrole: actuele PR-head met de gecontroleerde runtime-routebaseline.
 
 ## Eindadvies
@@ -20,23 +20,23 @@ Dit advies betekent dat de afgesproken technische M2C2n-scope aantoonbaar is ge�
 
 De actuele FastAPI-baseline bevat:
 
-- 225 routeregistraties;
-- 225 unieke methode-padcombinaties;
+- 227 routeregistraties;
+- 227 unieke methode-padcombinaties;
 - nul dubbele registraties;
-- 100 leesregistraties;
-- 125 mutatieregistraties;
-- 96 productiemutaties, 17 testingmutaties, 11 adminmutaties en 1 devmutatie.
+- 101 leesregistraties;
+- 126 mutatieregistraties;
+- 97 productiemutaties, 17 testingmutaties, 11 adminmutaties en 1 devmutatie.
 
-De uitbreiding ten opzichte van de vorige baseline bestaat uit elf bedoelde productieroutes voor meldingen tussen huishoudadmins en de platform-superuser. Iedere routewijziging wordt door de routecatalogusworkflow en fingerprintbaseline zichtbaar gemaakt.
+De uitbreiding ten opzichte van de vorige baseline bestaat uit elf bedoelde productieroutes voor meldingen tussen huishoudens en de Supergebruiker, plus twee beveiligde routes voor het beheren van Frontteam-lidmaatschap. Iedere routewijziging wordt door de routecatalogusworkflow en fingerprintbaseline zichtbaar gemaakt.
 
 ## Afgesloten werkpakketten
 
 1. **WP-1 — Routecatalogus:** reproduceerbare runtimecatalogus en fingerprintbaseline.
-2. **WP-2 — Testing en platform-admin:** centrale platform-adminguard voor 27 mutaties en verwijdering van dubbele diagnoseroutes.
-3. **WP-3 — Producten en externe productlinks:** huishoudisolatie, server-side objectbinding en globale catalogusrollen.
-4. **WP-4 — Prognoses en inkoop:** volledige dekking van 23 routes door bestaande context-, schrijf- en platform-admingrenzen.
-5. **WP-5 — Meldingen:** elf expliciete supportmeldingsroutes, zonder dubbelen, met huishoud- of platformpermissieguard per route.
-6. **WP-6 — Fallbacks:** 94 relevante verwijzingen geclassificeerd en nul ongeclassificeerde huishoudfallbacks.
+2. **WP-2 — Testing en platformbeheer:** centrale platformbeveiliging voor mutaties en verwijdering van dubbele diagnoseroutes.
+3. **WP-3 — Producten en externe productlinks:** huishoudisolatie, server-side objectbinding en centrale catalogusrollen.
+4. **WP-4 — Prognoses en inkoop:** volledige dekking door bestaande context-, schrijf- en platformgrenzen.
+5. **WP-5 — Meldingen:** expliciete meldingenroutes, zonder dubbelen, met huishoud- of platformbevoegdheid per route.
+6. **WP-6 — Fallbacks:** relevante verwijzingen geclassificeerd en nul ongeclassificeerde huishoudfallbacks.
 7. **WP-7 — Eindcontrole:** totale matrix-, baseline-, bewijs- en workflowcontrole.
 
 ## Bewijsreeks
@@ -45,7 +45,7 @@ De inhoudelijke beveiligingsreeks loopt van PR #160 tot en met PR #185. De afslu
 
 - PR #179 — centrale afsluitmatrix;
 - PR #180 — reproduceerbare routecatalogus;
-- PR #181 — testing- en platform-adminconsolidatie;
+- PR #181 — testing- en platformbeheerconsolidatie;
 - PR #182 — producten en externe productlinks;
 - PR #183 — prognoses en inkoop;
 - PR #184 — meldingen;
@@ -63,17 +63,18 @@ Deze uitzondering mag niet worden uitgebreid en blokkeert de formele afsluiting 
 De repository bevat gerichte contracten en workflows voor:
 
 - routecatalogus en fingerprint;
-- platform-adminroutes;
+- platformroutes;
 - product- en artikelroutes;
 - prognose-, aankoop- en importroutes;
-- supportmeldingsroutes en hun autorisatieguards;
+- meldingenroutes en hun autorisatiegrenzen;
 - huishoudfallbackclassificatie;
 - Uitpakken-object- en locatie-isolatie;
 - voorraadlocatie-isolatie;
-- product enrichment en artikeldetail;
-- receipt share import;
-- kassabonketen en releasegates;
-- huishoudleden- en autorisatie-API’s.
+- productverrijking en artikeldetail;
+- gedeelde kassabonimport;
+- kassabonketen en vrijgavecontroles;
+- huishoudleden- en autorisatie-API’s;
+- Eigenaar, Lid, Kijker, Supergebruiker en Frontteam.
 
 ## Bewijsgrenzen
 
@@ -84,7 +85,7 @@ De eindcontrole bewijst de technische route-, huishoud-, object- en rolgrenzen b
 M2C2n kan definitief worden afgesloten wanneer:
 
 1. het automatische WP-7-contract groen is;
-2. alle regressie- en releaseworkflows op dezelfde headcommit groen zijn;
+2. alle regressie- en vrijgavecontroles op dezelfde headcommit groen zijn;
 3. QA/QC de definitieve PR-scope goedkeurt;
 4. de PO expliciet GO geeft op de WP-7-PR;
 5. de mergecommit daarna afzonderlijk als actuele `main`-head wordt bewezen.
