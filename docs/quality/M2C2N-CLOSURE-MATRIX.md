@@ -33,7 +33,7 @@ Statuswaarden: **GEREED**, **CONTROLE**, **OPEN** en **DEFERRED**. Onbekend bete
 | M2C2N-18 | Overige product- en artikelroutes | Routefamilie gecatalogiseerd | Login, voorraadschrijfrecht of centrale platformbevoegdheid | WP-3-audit en contract | GEREED | Geen |
 | M2C2N-19 | Prognoses en Bijna-op-productie | Actieve of gevalideerde huishoudcontext | Lidmaatschap, Eigenaar of centrale platformbevoegdheid | WP-4-contract | GEREED | Geen |
 | M2C2N-20 | Inkoop en importinstellingen | Eigenaarshuishouden server-side | Lidmaatschap, voorraadschrijfrecht, Eigenaar of centrale platformbevoegdheid | WP-4-contract | GEREED | Geen |
-| M2C2N-21 | Meldingen | Huishoudroutes server-side gebonden; centrale routes afzonderlijk beveiligd | Eigenaar/Lid voor huishouden; Supergebruiker/Frontteam volgens centrale bevoegdheid | Meldingen-API-, frontend- en routecontracten | GEREED | Frontteam-ontvangerregel blijft onderdeel van PR #214 |
+| M2C2N-21 | Meldingen | Huishoudroutes server-side gebonden; centrale routes afzonderlijk beveiligd | Eigenaar/Lid voor huishouden; Supergebruiker onbeperkt; Frontteam huishouden 0 plus eigen lidmaatschappen | Meldingen-API-, frontend-, scope- en routecontracten | GEREED | Geen |
 | M2C2N-22 | Fallbacks `"1"` en `"demo-household"` | Runtimeverwijzingen geclassificeerd; nul ongeclassificeerd | Bestaande context- en rolgrenzen; frontend heeft geen serverautoriteit | WP-6-audit en contract | GEREED | Contract bij scopewijziging bijwerken |
 | M2C2N-23 | `/api/receipts/share-target` | Vrij `household_id` is niet eindontwerp | Toekomstig ondertekend token | Ontwerpbesluit | DEFERRED | Later afzonderlijk ontwerp |
 | M2C2N-24 | Centrale platformrouteguard | Centrale expliciete routescope | Centrale rol- en bevoegdheidscontrole | Algemene guard en volledig contract | GEREED | Oude compatibiliteitsnamen regulier opruimen |
@@ -42,12 +42,12 @@ Statuswaarden: **GEREED**, **CONTROLE**, **OPEN** en **DEFERRED**. Onbekend bete
 
 | Kengetal | Waarde |
 |---|---:|
-| Routeregistraties | 228 |
-| Unieke methode-padcombinaties | 228 |
+| Routeregistraties | 229 |
+| Unieke methode-padcombinaties | 229 |
 | Dubbele registraties | 0 |
-| Leesregistraties | 102 |
+| Leesregistraties | 103 |
 | Mutatieregistraties | 126 |
-| Productie | 173 totaal / 97 muterend |
+| Productie | 174 totaal / 97 muterend |
 | Testing | 38 totaal / 17 muterend |
 | Admin | 15 totaal / 11 muterend |
 | Dev | 2 totaal / 1 muterend |
@@ -62,7 +62,7 @@ De fingerprintbaseline staat in `docs/quality/M2C2N-ROUTE-CATALOG-BASELINE.json`
 | WP-2 — Testing en platformbeveiliging | GEREED | Algemene guard, contracten en diagnose-ontdubbeling |
 | WP-3 — Producten en externe productlinks | GEREED | Route-audit en productroutecontract |
 | WP-4 — Prognoses en inkoop | GEREED | Volledig dekkingscontract |
-| WP-5 — Meldingen | GEREED | Huishoud- en centrale routes, autorisatie- en frontendcontracten |
+| WP-5 — Meldingen | GEREED | Huishoud- en centrale routes, autorisatie-, scope- en frontendcontracten |
 | WP-6 — Fallbacks | GEREED | Verwijzingen geclassificeerd, nul ongeclassificeerd |
 | WP-7 — Eindrapport | GEREED | Eindrapport en automatisch totaalcontract |
 
