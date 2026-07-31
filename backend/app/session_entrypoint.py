@@ -1,17 +1,25 @@
 """Rezzerv runtime entrypoint for the server-side session migration.
 
-The existing application remains the single application instance.  This module
-removes only the legacy authentication endpoints and then mounts the new
-cookie-based session router exactly once.  All unrelated routes keep their
-existing order and implementation.
+The existing application remains the single application instance. This module
+replaces the legacy authentication endpoints and redirects the central legacy
+route guards to the server-side session context. Unrelated routes retain their
+existing implementation and order.
 """
 
 from __future__ import annotations
 
+from fastapi import Request
 from fastapi.routing import APIRoute
 
+import app.main as legacy_main
 from app.main import app
 from app.api.server_session_routes import router as server_session_router
+from app.services.session_request_context import (
+    bind_request_session,
+    household_context_from_session,
+    legacy_user_payload_from_session,
+    reset_request_session,
+)
 
 
 SESSION_ROUTE_METHODS = {
@@ -29,6 +37,22 @@ def _is_replaced_session_route(route) -> bool:
         route.path == path and method in route_methods
         for path, method in SESSION_ROUTE_METHODS
     )
+
+
+def activate_server_side_route_context() -> None:
+    """Make the server session the sole authority for existing route guards."""
+
+    legacy_main.get_current_user_from_authorization = legacy_user_payload_from_session
+    legacy_main.require_household_context = household_context_from_session
+
+
+@app.middleware("http")
+async def server_session_request_context(request: Request, call_next):
+    token = bind_request_session(request)
+    try:
+        return await call_next(request)
+    finally:
+        reset_request_session(token)
 
 
 def activate_server_side_session_routes() -> None:
@@ -67,4 +91,5 @@ def activate_server_side_session_routes() -> None:
         )
 
 
+activate_server_side_route_context()
 activate_server_side_session_routes()
