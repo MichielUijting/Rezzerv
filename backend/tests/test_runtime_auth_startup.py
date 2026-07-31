@@ -22,6 +22,11 @@ class _Result:
     def first(self):
         return self._row
 
+    def scalar(self):
+        if isinstance(self._row, dict):
+            return next(iter(self._row.values()), None)
+        return self._row
+
 
 class _Connection:
     def __init__(
@@ -43,6 +48,12 @@ class _Connection:
                 {"role": self.membership_role} if self.membership_role else None
             )
         if "FROM auth_platform_user_roles" in sql:
+            if "role_key = 'platform.supergebruiker'" in sql:
+                return _Result(
+                    "platform.supergebruiker"
+                    if self.platform_role_key == "platform.supergebruiker"
+                    else None
+                )
             return _Result(
                 {"role_key": self.platform_role_key}
                 if self.platform_role_key
@@ -94,6 +105,10 @@ def _main_module(
             "email": "eigenaar@example.com",
             "role": "admin",
         },
+        "frontteam@example.com": {
+            "email": "frontteam@example.com",
+            "role": "member",
+        },
         "kijker@example.com": {
             "email": "kijker@example.com",
             "role": "member",
@@ -110,6 +125,7 @@ def _main_module(
         engine=_Engine(membership_role, platform_role_key, persisted_user),
         get_user_record=lambda email: records.get(str(email).strip().lower()),
         get_current_user_from_authorization=lambda authorization: None,
+        require_platform_admin_user=lambda authorization: None,
         build_auth_token=lambda email: "legacy",
     )
 
@@ -172,6 +188,44 @@ def test_only_supergebruiker_gets_temporary_legacy_admin_representation() -> Non
     assert user["platform_role_key"] == "platform.supergebruiker"
 
 
+def test_legacy_test_guard_allows_only_active_fixed_superuser() -> None:
+    main_module = _main_module(
+        membership_role="owner",
+        platform_role_key="platform.supergebruiker",
+    )
+    apply_runtime_auth_override(main_module)
+
+    actor = main_module.require_platform_admin_user(
+        "Bearer rezzerv-dev-token::supergebruiker@rezzerv.local"
+    )
+
+    assert actor["email"] == "supergebruiker@rezzerv.local"
+    assert actor["platform_role_key"] == "platform.supergebruiker"
+
+
+@pytest.mark.parametrize(
+    ("email", "platform_role_key"),
+    [
+        ("eigenaar@example.com", None),
+        ("frontteam@example.com", "platform.frontteam"),
+        ("supergebruiker@rezzerv.local", None),
+    ],
+)
+def test_legacy_test_guard_rejects_non_superusers(email, platform_role_key) -> None:
+    main_module = _main_module(
+        membership_role="owner",
+        platform_role_key=platform_role_key,
+    )
+    apply_runtime_auth_override(main_module)
+
+    with pytest.raises(HTTPException) as exc_info:
+        main_module.require_platform_admin_user(
+            f"Bearer rezzerv-dev-token::{email}"
+        )
+
+    assert exc_info.value.status_code == 403
+
+
 def test_persisted_supergebruiker_is_accepted_without_legacy_runtime_record(monkeypatch) -> None:
     email = "supergebruiker@rezzerv.local"
     main_module = _main_module(
@@ -207,10 +261,12 @@ def test_override_is_idempotent_and_token_builder_is_explicit() -> None:
     main_module = _main_module()
     apply_runtime_auth_override(main_module)
     first_getter = main_module.get_current_user_from_authorization
+    first_platform_guard = main_module.require_platform_admin_user
 
     apply_runtime_auth_override(main_module)
 
     assert main_module.get_current_user_from_authorization is first_getter
+    assert main_module.require_platform_admin_user is first_platform_guard
     assert (
         main_module.build_auth_token("Gebruiker@Example.com")
         == "rezzerv-dev-token::gebruiker@example.com"
