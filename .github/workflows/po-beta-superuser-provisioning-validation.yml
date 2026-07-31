@@ -18,6 +18,9 @@ on:
 jobs:
   po-beta-superuser-provisioning:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:////tmp/rezzerv-po-superuser-test.db
+      SQLITE_RUNTIME_VOLUME: github-actions-temporary-test-database
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
