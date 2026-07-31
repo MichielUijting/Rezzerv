@@ -25,7 +25,7 @@
   "duplicates": [],
   "testing_mutations": [
     "POST /api/testing/diagnostics/store-location-options :: app.main.run_store_location_diagnostic",
-    "POST /api/testing/fixtures/browser-regression/reset :: app.main.reset_browser_regression_fixture_state_endpoint",
+    "POST /api/testing/fixtures/browser-regression/reset :: app.main.reset_browser_regression_fixture",
     "POST /api/testing/fixtures/cleanup :: app.main.cleanup_regression_fixture_state_endpoint",
     "POST /api/testing/fixtures/inventory/ensure :: app.main.ensure_regression_inventory_fixture_endpoint",
     "POST /api/testing/fixtures/receipt-export/generate :: app.main.generate_receipt_export_fixture",
