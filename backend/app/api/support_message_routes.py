@@ -6,7 +6,13 @@ from fastapi import APIRouter, Header, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
-from app.services.authorization_foundation_service import evaluate_platform_permission
+from app.services.authorization_foundation_service import (
+    ensure_authorization_foundation,
+    evaluate_platform_permission,
+    is_frontteam_member,
+    set_frontteam_membership,
+    write_authorization_audit,
+)
 from app.services.household_context_adapter import household_context_from_runtime_context
 from app.services.support_message_service import (
     RECIPIENT_ALL_ADMINS,
@@ -22,7 +28,9 @@ from app.services.support_message_service import (
     set_support_thread_status,
 )
 
-router = APIRouter(tags=["support-messages"])
+router = APIRouter(tags=["meldingen-en-autorisatie"])
+
+SUPERGEBRUIKER_EMAIL = "supergebruiker@rezzerv.local"
 
 
 class HouseholdThreadCreateRequest(BaseModel):
@@ -40,8 +48,8 @@ class PlatformThreadCreateRequest(BaseModel):
     recipient_type: str
     admin_user_ids: list[str] = Field(default_factory=list)
     reply_allowed: bool = True
-    screen_name: str = "Superuser Meldingen"
-    route: str | None = "/superuser/meldingen"
+    screen_name: str = "Supergebruiker Meldingen"
+    route: str | None = "/supergebruiker/meldingen"
     app_version: str | None = None
 
 
@@ -51,6 +59,10 @@ class SupportReplyRequest(BaseModel):
 
 class SupportStatusRequest(BaseModel):
     status: str
+
+
+class FrontteamRequest(BaseModel):
+    frontteam: bool
 
 
 def _mapping(value: Any) -> dict[str, Any]:
@@ -71,10 +83,7 @@ def _main_module():
     return main_module
 
 
-def _household_actor(
-    authorization: str | None,
-    requested_household_id: str | None = None,
-) -> dict[str, Any]:
+def _household_actor(authorization: str | None, requested_household_id: str | None = None) -> dict[str, Any]:
     main_module = _main_module()
     runtime = _mapping(main_module.require_household_context(authorization))
     context = household_context_from_runtime_context(runtime)
@@ -95,14 +104,20 @@ def _household_actor(
     if not membership:
         raise HTTPException(status_code=403, detail="Geen lidmaatschap van het actieve huishouden")
     persisted_role = str(membership.get("role") or "").strip().lower()
-    if persisted_role not in {"admin", "owner", "household.admin", "huishoudbeheerder"}:
-        raise HTTPException(status_code=403, detail="Alleen een huishoudbeheerder kan meldingen beheren")
+    role_mapping = {
+        "owner": "Eigenaar", "eigenaar": "Eigenaar", "admin": "Eigenaar",
+        "member": "Lid", "lid": "Lid",
+        "viewer": "Kijker", "kijker": "Kijker",
+    }
+    nederlandse_rol = role_mapping.get(persisted_role)
+    if nederlandse_rol not in {"Eigenaar", "Lid"}:
+        raise HTTPException(status_code=403, detail="Alleen een Eigenaar of Lid kan meldingen sturen en beantwoorden")
 
     return {
         "user_id": str(runtime.get("user_id") or email),
         "email": email,
-        "name": str(runtime.get("name") or runtime.get("display_name") or email or "Huishoudbeheerder"),
-        "role": "household.admin",
+        "name": str(runtime.get("name") or runtime.get("display_name") or email),
+        "role": nederlandse_rol,
         "household_id": household_id,
     }
 
@@ -110,30 +125,21 @@ def _household_actor(
 def _platform_actor(authorization: str | None, permission_key: str) -> dict[str, Any]:
     main_module = _main_module()
     actor = _mapping(main_module.require_platform_admin_user(authorization))
-    user_id = str(actor.get("user_id") or actor.get("id") or actor.get("email") or "").strip()
+    user_id = str(actor.get("user_id") or actor.get("id") or actor.get("email") or "").strip().lower()
     email = str(actor.get("email") or user_id).strip().lower()
     if not user_id:
         raise HTTPException(status_code=403, detail="Platformgebruiker heeft geen bruikbaar gebruikers-ID")
     with main_module.engine.begin() as conn:
+        ensure_authorization_foundation(conn)
         decision = evaluate_platform_permission(conn, user_id=user_id, permission_key=permission_key)
-        if not decision.allowed and email == "admin@rezzerv.local":
-            conn.execute(text("""
-                INSERT INTO auth_platform_user_roles(
-                    user_id, role_key, active, created_at, updated_at
-                ) VALUES (
-                    :user_id, 'platform.superuser', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                )
-                ON CONFLICT(user_id, role_key) DO UPDATE SET
-                    active = 1,
-                    updated_at = CURRENT_TIMESTAMP
-            """), {"user_id": user_id})
-            decision = evaluate_platform_permission(conn, user_id=user_id, permission_key=permission_key)
     if not decision.allowed:
-        raise HTTPException(status_code=403, detail=f"Ontbrekende platformpermissie: {permission_key}")
+        raise HTTPException(status_code=403, detail=f"Ontbrekende centrale bevoegdheid: {permission_key}")
     return {
         "user_id": user_id,
-        "name": str(actor.get("name") or actor.get("display_name") or actor.get("email") or "Platform-superuser"),
-        "role": "platform.superuser",
+        "email": email,
+        "name": str(actor.get("name") or actor.get("display_name") or actor.get("email") or "Supergebruiker"),
+        "role": "Supergebruiker" if decision.granted_by == "platform.supergebruiker" else "Frontteam",
+        "toegekend_door": decision.granted_by,
     }
 
 
@@ -150,19 +156,6 @@ def _thread_header(conn, thread_id: str, *, household_id: str | None = None, is_
         raise HTTPException(status_code=404, detail="Melding niet gevonden")
     if not is_superuser and str(row["household_id"] or "") != str(household_id or ""):
         raise HTTPException(status_code=404, detail="Melding niet gevonden")
-    if not is_superuser and str(row["recipient_type"] or "") == RECIPIENT_SUPERUSER:
-        creator_is_member = conn.execute(text("""
-            SELECT 1
-            FROM household_memberships
-            WHERE household_id = :household_id
-              AND lower(user_email) = lower(:created_by_user_id)
-            LIMIT 1
-        """), {
-            "household_id": str(household_id or ""),
-            "created_by_user_id": str(row["created_by_user_id"] or ""),
-        }).scalar()
-        if not creator_is_member:
-            raise HTTPException(status_code=404, detail="Melding niet gevonden")
     return dict(row)
 
 
@@ -184,15 +177,6 @@ def _list_household_threads(conn, *, household_id: str, status: str | None = Non
         LEFT JOIN support_messages m ON m.thread_id = t.id
         WHERE t.household_id = :household_id
           {status_clause}
-          AND (
-              t.recipient_type <> 'superuser'
-              OR EXISTS (
-                  SELECT 1
-                  FROM household_memberships hm
-                  WHERE hm.household_id = t.household_id
-                    AND lower(hm.user_email) = lower(t.created_by_user_id)
-              )
-          )
         GROUP BY t.id
         ORDER BY t.updated_at DESC, t.thread_number DESC
     """), params).mappings().all()
@@ -210,27 +194,16 @@ def _household_header(value: str | None) -> str | None:
 
 
 @router.post("/api/support/threads", status_code=201)
-def create_household_support_thread(
-    payload: HouseholdThreadCreateRequest,
-    authorization: str | None = Header(None),
-    x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID"),
-):
+def create_household_support_thread(payload: HouseholdThreadCreateRequest, authorization: str | None = Header(None), x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID")):
     actor = _household_actor(authorization, _household_header(x_rezzerv_household_id))
     try:
         with _main_module().engine.begin() as conn:
             result = create_support_thread(
                 conn,
-                created_by_user_id=actor["email"],
-                created_by_name=actor["name"],
-                sender_role=actor["role"],
-                subject=payload.subject,
-                message_text=payload.message,
-                origin_screen_name=payload.screen_name,
-                origin_route=payload.route,
-                origin_app_version=payload.app_version,
-                household_id=actor["household_id"],
-                recipient_type=RECIPIENT_SUPERUSER,
-                reply_allowed=True,
+                created_by_user_id=actor["email"], created_by_name=actor["name"], sender_role=actor["role"],
+                subject=payload.subject, message_text=payload.message, origin_screen_name=payload.screen_name,
+                origin_route=payload.route, origin_app_version=payload.app_version,
+                household_id=actor["household_id"], recipient_type=RECIPIENT_SUPERUSER, reply_allowed=True,
             )
         return result.__dict__
     except SupportMessageError as exc:
@@ -238,69 +211,36 @@ def create_household_support_thread(
 
 
 @router.get("/api/support/threads")
-def get_household_support_threads(
-    status: str | None = Query(None),
-    authorization: str | None = Header(None),
-    x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID"),
-):
+def get_household_support_threads(status: str | None = Query(None), authorization: str | None = Header(None), x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID")):
     actor = _household_actor(authorization, _household_header(x_rezzerv_household_id))
-    try:
-        with _main_module().engine.begin() as conn:
-            rows = _list_household_threads(conn, household_id=actor["household_id"], status=status)
-        return {"items": [dict(row) for row in rows]}
-    except SupportMessageError as exc:
-        _support_error(exc)
+    with _main_module().engine.begin() as conn:
+        rows = _list_household_threads(conn, household_id=actor["household_id"], status=status)
+    return {"items": [dict(row) for row in rows]}
 
 
 @router.get("/api/support/threads/{thread_id}")
-def get_household_support_thread(
-    thread_id: str,
-    authorization: str | None = Header(None),
-    x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID"),
-):
+def get_household_support_thread(thread_id: str, authorization: str | None = Header(None), x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID")):
     actor = _household_actor(authorization, _household_header(x_rezzerv_household_id))
-    try:
-        with _main_module().engine.begin() as conn:
-            header = _thread_header(conn, thread_id, household_id=actor["household_id"])
-            messages = list_support_messages(conn, thread_id=thread_id, household_id=actor["household_id"])
-        return {"thread": header, "messages": [dict(row) for row in messages]}
-    except SupportMessageError as exc:
-        _support_error(exc)
+    with _main_module().engine.begin() as conn:
+        header = _thread_header(conn, thread_id, household_id=actor["household_id"])
+        messages = list_support_messages(conn, thread_id=thread_id, household_id=actor["household_id"])
+    return {"thread": header, "messages": [dict(row) for row in messages]}
 
 
 @router.post("/api/support/threads/{thread_id}/messages", status_code=201)
-def reply_household_support_thread(
-    thread_id: str,
-    payload: SupportReplyRequest,
-    authorization: str | None = Header(None),
-    x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID"),
-):
+def reply_household_support_thread(thread_id: str, payload: SupportReplyRequest, authorization: str | None = Header(None), x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID")):
     actor = _household_actor(authorization, _household_header(x_rezzerv_household_id))
     try:
         with _main_module().engine.begin() as conn:
             _thread_header(conn, thread_id, household_id=actor["household_id"])
-            message_id = add_support_message(
-                conn,
-                thread_id=thread_id,
-                sender_user_id=actor["email"],
-                sender_name=actor["name"],
-                sender_role=actor["role"],
-                message_text=payload.message,
-                is_superuser=False,
-                household_id=actor["household_id"],
-            )
+            message_id = add_support_message(conn, thread_id=thread_id, sender_user_id=actor["email"], sender_name=actor["name"], sender_role=actor["role"], message_text=payload.message, is_superuser=False, household_id=actor["household_id"])
         return {"message_id": message_id}
     except SupportMessageError as exc:
         _support_error(exc)
 
 
 @router.patch("/api/support/threads/{thread_id}/status")
-def update_household_support_thread_status(
-    thread_id: str,
-    payload: SupportStatusRequest,
-    authorization: str | None = Header(None),
-    x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID"),
-):
+def update_household_support_thread_status(thread_id: str, payload: SupportStatusRequest, authorization: str | None = Header(None), x_rezzerv_household_id: str | None = Header(None, alias="X-Rezzerv-Household-ID")):
     actor = _household_actor(authorization, _household_header(x_rezzerv_household_id))
     try:
         with _main_module().engine.begin() as conn:
@@ -314,54 +254,35 @@ def update_household_support_thread_status(
 @router.get("/api/platform/support/threads")
 def get_platform_support_threads(status: str | None = Query(None), household_id: str | None = Query(None), authorization: str | None = Header(None)):
     _platform_actor(authorization, "platform.support_access.read")
-    try:
-        with _main_module().engine.begin() as conn:
-            rows = list_support_threads(conn, household_id=household_id, status=status)
-        return {"items": [dict(row) for row in rows]}
-    except SupportMessageError as exc:
-        _support_error(exc)
+    with _main_module().engine.begin() as conn:
+        rows = list_support_threads(conn, household_id=household_id, status=status)
+    return {"items": [dict(row) for row in rows]}
 
 
 @router.get("/api/platform/support/threads/{thread_id}")
 def get_platform_support_thread(thread_id: str, authorization: str | None = Header(None)):
     _platform_actor(authorization, "platform.support_access.read")
-    try:
-        with _main_module().engine.begin() as conn:
-            header = _thread_header(conn, thread_id, is_superuser=True)
-            messages = list_support_messages(conn, thread_id=thread_id, is_superuser=True)
-        return {"thread": header, "messages": [dict(row) for row in messages]}
-    except SupportMessageError as exc:
-        _support_error(exc)
+    with _main_module().engine.begin() as conn:
+        header = _thread_header(conn, thread_id, is_superuser=True)
+        messages = list_support_messages(conn, thread_id=thread_id, is_superuser=True)
+    return {"thread": header, "messages": [dict(row) for row in messages]}
 
 
 @router.post("/api/platform/support/threads", status_code=201)
 def create_platform_support_thread(payload: PlatformThreadCreateRequest, authorization: str | None = Header(None)):
     actor = _platform_actor(authorization, "platform.support_access.mutate")
     if payload.recipient_type not in {RECIPIENT_SINGLE_ADMIN, RECIPIENT_ALL_ADMINS}:
-        raise HTTPException(status_code=400, detail="Ontvangertype moet één of alle huishoudadmins zijn")
-    recipients = sorted({str(value).strip() for value in payload.admin_user_ids if str(value).strip()})
+        raise HTTPException(status_code=400, detail="Ontvangertype moet één of alle Eigenaars zijn")
+    recipients = sorted({str(value).strip().lower() for value in payload.admin_user_ids if str(value).strip()})
     if payload.recipient_type == RECIPIENT_SINGLE_ADMIN and len(recipients) != 1:
-        raise HTTPException(status_code=400, detail="Selecteer exact één huishoudadmin")
+        raise HTTPException(status_code=400, detail="Selecteer exact één Eigenaar")
     if payload.recipient_type == RECIPIENT_ALL_ADMINS and not recipients:
-        raise HTTPException(status_code=400, detail="Er zijn geen huishoudadmins als ontvanger opgegeven")
+        raise HTTPException(status_code=400, detail="Er zijn geen Eigenaars als ontvanger opgegeven")
     try:
         with _main_module().engine.begin() as conn:
-            result = create_support_thread(
-                conn,
-                created_by_user_id=actor["user_id"],
-                created_by_name=actor["name"],
-                sender_role=actor["role"],
-                subject=payload.subject,
-                message_text=payload.message,
-                origin_screen_name=payload.screen_name,
-                origin_route=payload.route,
-                origin_app_version=payload.app_version,
-                household_id=payload.household_id,
-                recipient_type=payload.recipient_type,
-                reply_allowed=payload.reply_allowed,
-            )
-            for admin_user_id in recipients:
-                add_support_recipient(conn, thread_id=result.thread_id, household_id=payload.household_id, admin_user_id=admin_user_id)
+            result = create_support_thread(conn, created_by_user_id=actor["user_id"], created_by_name=actor["name"], sender_role=actor["role"], subject=payload.subject, message_text=payload.message, origin_screen_name=payload.screen_name, origin_route=payload.route, origin_app_version=payload.app_version, household_id=payload.household_id, recipient_type=payload.recipient_type, reply_allowed=payload.reply_allowed)
+            for user_id in recipients:
+                add_support_recipient(conn, thread_id=result.thread_id, household_id=payload.household_id, admin_user_id=user_id)
         return {**result.__dict__, "recipient_count": len(recipients)}
     except SupportMessageError as exc:
         _support_error(exc)
@@ -372,15 +293,7 @@ def reply_platform_support_thread(thread_id: str, payload: SupportReplyRequest, 
     actor = _platform_actor(authorization, "platform.support_access.mutate")
     try:
         with _main_module().engine.begin() as conn:
-            message_id = add_support_message(
-                conn,
-                thread_id=thread_id,
-                sender_user_id=actor["user_id"],
-                sender_name=actor["name"],
-                sender_role=actor["role"],
-                message_text=payload.message,
-                is_superuser=True,
-            )
+            message_id = add_support_message(conn, thread_id=thread_id, sender_user_id=actor["user_id"], sender_name=actor["name"], sender_role=actor["role"], message_text=payload.message, is_superuser=True)
         return {"message_id": message_id}
     except SupportMessageError as exc:
         _support_error(exc)
@@ -401,13 +314,51 @@ def update_platform_support_thread_status(thread_id: str, payload: SupportStatus
 @router.get("/api/platform/support/export.csv")
 def export_platform_support_threads(status: str | None = Query(None), authorization: str | None = Header(None)):
     _platform_actor(authorization, "platform.support_access.read")
-    try:
-        with _main_module().engine.begin() as conn:
-            csv_text = export_support_threads_csv(conn, status=status)
-        return Response(
-            content=csv_text,
-            media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": "attachment; filename=rezzerv-meldingen.csv"},
-        )
-    except SupportMessageError as exc:
-        _support_error(exc)
+    with _main_module().engine.begin() as conn:
+        csv_text = export_support_threads_csv(conn, status=status)
+    return Response(content=csv_text, media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=rezzerv-meldingen.csv"})
+
+
+@router.get("/api/platform/gebruikers")
+def list_rezzerv_users(authorization: str | None = Header(None)):
+    _platform_actor(authorization, "platform.users.view")
+    with _main_module().engine.begin() as conn:
+        ensure_authorization_foundation(conn)
+        rows = conn.execute(text("""
+            SELECT lower(hm.user_email) AS gebruiker,
+                   GROUP_CONCAT(DISTINCT hm.household_id) AS huishoudens,
+                   GROUP_CONCAT(DISTINCT CASE
+                       WHEN lower(hm.role) IN ('owner', 'eigenaar', 'admin') THEN 'Eigenaar'
+                       WHEN lower(hm.role) IN ('viewer', 'kijker') THEN 'Kijker'
+                       ELSE 'Lid'
+                   END) AS huishoudrollen
+            FROM household_memberships hm
+            GROUP BY lower(hm.user_email)
+            ORDER BY lower(hm.user_email)
+        """)).mappings().all()
+        items = []
+        for row in rows:
+            user_id = str(row["gebruiker"])
+            items.append({
+                "gebruiker": user_id,
+                "huishoudens": str(row["huishoudens"] or "").split(",") if row["huishoudens"] else [],
+                "huishoudrollen": str(row["huishoudrollen"] or "").split(",") if row["huishoudrollen"] else [],
+                "frontteam": is_frontteam_member(conn, user_id=user_id),
+                "supergebruiker": user_id == SUPERGEBRUIKER_EMAIL,
+            })
+    return {"items": items}
+
+
+@router.put("/api/platform/gebruikers/{user_id}/frontteam")
+def update_frontteam(user_id: str, payload: FrontteamRequest, authorization: str | None = Header(None)):
+    actor = _platform_actor(authorization, "platform.frontteam.manage")
+    normalized = str(user_id or "").strip().lower()
+    if not normalized:
+        raise HTTPException(status_code=400, detail="Gebruiker ontbreekt")
+    if normalized == SUPERGEBRUIKER_EMAIL and not payload.frontteam:
+        raise HTTPException(status_code=400, detail="De Supergebruiker blijft altijd lid van Frontteam")
+    with _main_module().engine.begin() as conn:
+        previous = is_frontteam_member(conn, user_id=normalized)
+        set_frontteam_membership(conn, user_id=normalized, active=payload.frontteam)
+        write_authorization_audit(conn, actor_user_id=actor["user_id"], actor_type="Supergebruiker", action="Frontteam gewijzigd", object_type="Rezzerv-gebruiker", object_id=normalized, old_value={"Frontteam": previous}, new_value={"Frontteam": payload.frontteam})
+    return {"gebruiker": normalized, "frontteam": payload.frontteam}
