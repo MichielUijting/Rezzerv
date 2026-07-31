@@ -8,12 +8,15 @@ from sqlalchemy import text
 
 from app.services.authorization_foundation_service import (
     ensure_authorization_foundation,
-    evaluate_platform_permission,
     is_frontteam_member,
     set_frontteam_membership,
     write_authorization_audit,
 )
 from app.services.household_context_adapter import household_context_from_runtime_context
+from app.services.platform_actor_service import (
+    SUPERGEBRUIKER_EMAIL,
+    resolve_platform_actor,
+)
 from app.services.support_message_service import (
     RECIPIENT_ALL_ADMINS,
     RECIPIENT_SINGLE_ADMIN,
@@ -29,8 +32,6 @@ from app.services.support_message_service import (
 )
 
 router = APIRouter(tags=["meldingen-en-autorisatie"])
-
-SUPERGEBRUIKER_EMAIL = "supergebruiker@rezzerv.local"
 
 
 class HouseholdThreadCreateRequest(BaseModel):
@@ -124,22 +125,15 @@ def _household_actor(authorization: str | None, requested_household_id: str | No
 
 def _platform_actor(authorization: str | None, permission_key: str) -> dict[str, Any]:
     main_module = _main_module()
-    actor = _mapping(main_module.require_platform_admin_user(authorization))
-    user_id = str(actor.get("user_id") or actor.get("id") or actor.get("email") or "").strip().lower()
-    email = str(actor.get("email") or user_id).strip().lower()
-    if not user_id:
-        raise HTTPException(status_code=403, detail="Platformgebruiker heeft geen bruikbaar gebruikers-ID")
+    runtime_user = _mapping(main_module.get_current_user_from_authorization(authorization))
     with main_module.engine.begin() as conn:
-        ensure_authorization_foundation(conn)
-        decision = evaluate_platform_permission(conn, user_id=user_id, permission_key=permission_key)
-    if not decision.allowed:
-        raise HTTPException(status_code=403, detail=f"Ontbrekende centrale bevoegdheid: {permission_key}")
+        actor = resolve_platform_actor(conn, runtime_user=runtime_user, permission_key=permission_key)
     return {
-        "user_id": user_id,
-        "email": email,
-        "name": str(actor.get("name") or actor.get("display_name") or actor.get("email") or "Supergebruiker"),
-        "role": "Supergebruiker" if decision.granted_by == "platform.supergebruiker" else "Frontteam",
-        "toegekend_door": decision.granted_by,
+        "user_id": actor.user_id,
+        "email": actor.email,
+        "name": actor.name,
+        "role": actor.role,
+        "toegekend_door": actor.role_key,
     }
 
 
