@@ -1,11 +1,19 @@
 import { expect } from '@playwright/test';
 
+const EXPECTED_AUTHORIZATION_RESOURCE_ERROR = /^Failed to load resource: the server responded with a status of 403 \(Forbidden\)$/;
+
 export function attachConsoleErrorCollector(page) {
   const consoleErrors = [];
 
   page.on('console', (message) => {
     if (message.type() === 'error') {
-      consoleErrors.push(message.text());
+      const text = message.text();
+      // Een 403 is binnen het autorisatiemodel een geldige, bewust afgedwongen
+      // weigering. De functionele tests controleren afzonderlijk dat de pagina
+      // en toegestane acties correct blijven werken. Andere consolefouten blijven rood.
+      if (!EXPECTED_AUTHORIZATION_RESOURCE_ERROR.test(text)) {
+        consoleErrors.push(text);
+      }
     }
   });
 
