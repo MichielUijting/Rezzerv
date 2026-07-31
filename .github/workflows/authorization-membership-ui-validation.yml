@@ -4,13 +4,17 @@ on:
   pull_request:
     paths:
       - 'backend/app/api/authorization_membership_routes.py'
+      - 'backend/app/api/runtime_auth_startup.py'
       - 'backend/tests/test_authorization_membership_routes.py'
+      - 'backend/tests/test_runtime_auth_startup.py'
       - 'frontend/src/features/settings/SettingsAuthorizationPage.jsx'
       - 'frontend/src/features/settings/settingsAuthorization.css'
       - 'frontend/src/features/settings/services/authorizationMembershipService.js'
       - 'frontend/src/features/settings/SettingsHouseholdPage.jsx'
       - 'frontend/src/features/settings/SettingsPage.jsx'
       - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/tests/e2e/auth.setup.js'
+      - 'frontend/tests/e2e/helpers/devApi.js'
       - 'frontend/tests/e2e/settings-authorization.frontend-regression.spec.js'
       - '.github/workflows/authorization-membership-ui-validation.yml'
 
@@ -47,6 +51,9 @@ jobs:
           npm install
           npx playwright install --with-deps chromium
           npx playwright test tests/e2e/settings-authorization.frontend-regression.spec.js --project=chromium
+      - name: Show backend logs after UI failure
+        if: failure()
+        run: docker compose logs --no-color backend
       - name: Stop application
         if: always()
         run: docker compose down
