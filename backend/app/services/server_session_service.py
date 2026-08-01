@@ -17,6 +17,11 @@ from fastapi import HTTPException
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
+from app.services.system_superuser_session_provisioning import (
+    SUPERGEBRUIKER_EMAIL,
+    SUPERGEBRUIKER_HUISHOUDEN_ID,
+)
+
 SESSION_COOKIE_NAME = "rezzerv_session"
 DEFAULT_SESSION_TTL = timedelta(hours=12)
 
@@ -92,6 +97,17 @@ def membership_active_condition(
     return "1 = 1"
 
 
+def _household_zero_allowed(*, household_id: str, email: str, role: str) -> bool:
+    """Allow the reserved household only for the canonical fixed superuser."""
+
+    if household_id != SUPERGEBRUIKER_HUISHOUDEN_ID:
+        return True
+    return (
+        str(email or "").strip().lower() == SUPERGEBRUIKER_EMAIL
+        and str(role or "").strip().lower() == "owner"
+    )
+
+
 def ensure_server_session_schema(conn: Connection) -> None:
     """Create the session table idempotently."""
 
@@ -150,7 +166,7 @@ def create_server_session(
     household_id = str(active_household_id or "").strip()
     if not user_id:
         raise HTTPException(status_code=401, detail="Gebruiker ontbreekt")
-    if not household_id or household_id == "0":
+    if not household_id:
         raise HTTPException(status_code=403, detail="Actief huishouden ontbreekt")
 
     join_condition = membership_user_join_condition(conn)
@@ -171,6 +187,15 @@ def create_server_session(
     ).mappings().first()
     if not membership:
         raise HTTPException(status_code=403, detail="Geen toegang tot dit huishouden")
+
+    membership_email = str(membership.get("email") or "")
+    membership_role = str(membership.get("role") or "").strip().lower()
+    if not _household_zero_allowed(
+        household_id=household_id,
+        email=membership_email,
+        role=membership_role,
+    ):
+        raise HTTPException(status_code=403, detail="Ongeldig actief huishouden")
 
     raw_session_id = new_opaque_session_id()
     token_hash = hash_session_id(raw_session_id)
@@ -217,9 +242,9 @@ def create_server_session(
     return raw_session_id, ServerSessionContext(
         session_id=record_id,
         user_id=user_id,
-        email=str(membership.get("email") or ""),
+        email=membership_email,
         active_household_id=household_id,
-        role=str(membership.get("role") or "").strip().lower(),
+        role=membership_role,
         session_version=1,
         issued_at=issued_at,
         expires_at=expires_at,
@@ -275,16 +300,23 @@ def resolve_server_session(
         raise HTTPException(status_code=401, detail="Sessie is verlopen")
 
     household_id = str(row.get("active_household_id") or "").strip()
+    email = str(row.get("email") or "")
     role = str(row.get("role") or "").strip().lower()
-    if not household_id or household_id == "0":
+    if not household_id:
         raise HTTPException(status_code=403, detail="Actief huishouden ontbreekt")
     if not role:
         raise HTTPException(status_code=403, detail="Bevoegdheid ontbreekt")
+    if not _household_zero_allowed(
+        household_id=household_id,
+        email=email,
+        role=role,
+    ):
+        raise HTTPException(status_code=403, detail="Ongeldig actief huishouden")
 
     return ServerSessionContext(
         session_id=str(row.get("session_id")),
         user_id=str(row.get("user_id")),
-        email=str(row.get("email") or ""),
+        email=email,
         active_household_id=household_id,
         role=role,
         session_version=int(row.get("session_version") or 1),
@@ -319,7 +351,7 @@ def rotate_active_household(
 ) -> tuple[str, ServerSessionContext]:
     current = resolve_server_session(conn, raw_session_id, now=now)
     new_household_id = str(new_household_id or "").strip()
-    if not new_household_id or new_household_id == "0":
+    if not new_household_id:
         raise HTTPException(status_code=403, detail="Ongeldig huishouden")
 
     raw_new_session_id, new_context = create_server_session(
