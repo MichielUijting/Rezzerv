@@ -1,44 +1,21 @@
-const AUTH_CONTEXT_KEY = 'rezzerv_auth_context'
-const AUTH_CHECKED_TOKEN_KEY = 'rezzerv_auth_checked_token'
 const LOGIN_MESSAGE_KEY = 'rezzerv_login_message'
+
+let currentSessionContext = null
+let sessionRequest = null
 
 function safeWindow() {
   return typeof window !== 'undefined' ? window : null
 }
 
-export function getStoredToken() {
-  try {
-    return window.localStorage.getItem('rezzerv_token') || ''
-  } catch {
-    return ''
-  }
-}
-
-export function getAuthHeaders() {
-  const token = getStoredToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-export function readStoredAuthContext() {
-  try {
-    const raw = window.localStorage.getItem(AUTH_CONTEXT_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    return parsed && typeof parsed === 'object' ? parsed : null
-  } catch {
-    return null
-  }
-}
-
-export function storeAuthContext(context) {
+function normalizeSessionContext(context) {
   if (!context || typeof context !== 'object') return null
-  const normalized = {
+  return {
     user_id: context.user_id || '',
     email: context.email || '',
     active_household_id: context.active_household_id || '',
     active_household_name: context.active_household_name || '',
     role: context.role || '',
-    display_role: context.display_role || '',
+    display_role: context.display_role || context.role || '',
     membership_count: Number(context.membership_count || 0),
     can_switch_households: Boolean(context.can_switch_households),
     memberships: Array.isArray(context.memberships) ? context.memberships : [],
@@ -49,31 +26,42 @@ export function storeAuthContext(context) {
     can_manage_members: Boolean(context.can_manage_members),
     is_viewer: Boolean(context.is_viewer),
   }
-  try {
-    window.localStorage.setItem(AUTH_CONTEXT_KEY, JSON.stringify(normalized))
-    if (normalized.email) window.localStorage.setItem('rezzerv_user_email', normalized.email)
-    if (normalized.active_household_name) window.localStorage.setItem('rezzerv_household_name', normalized.active_household_name)
-  } catch {}
-  return normalized
 }
 
-export function markAuthCheckedForToken(token) {
+function removeLegacyAuthStorage() {
   try {
-    if (!token) {
-      window.sessionStorage.removeItem(AUTH_CHECKED_TOKEN_KEY)
-      return
-    }
-    window.sessionStorage.setItem(AUTH_CHECKED_TOKEN_KEY, token)
+    window.localStorage.removeItem('rezzerv_token')
+    window.localStorage.removeItem('rezzerv_user_email')
+    window.localStorage.removeItem('rezzerv_household_name')
+    window.localStorage.removeItem('rezzerv_auth_context')
+  } catch {}
+  try {
+    window.sessionStorage.removeItem('rezzerv_auth_checked_token')
   } catch {}
 }
 
-export function isTokenAlreadyValidated(token) {
-  if (!token) return false
-  try {
-    return window.sessionStorage.getItem(AUTH_CHECKED_TOKEN_KEY) === token
-  } catch {
-    return false
-  }
+export function getStoredToken() {
+  return ''
+}
+
+export function getAuthHeaders() {
+  return {}
+}
+
+export function readStoredAuthContext() {
+  return currentSessionContext
+}
+
+export function storeAuthContext(context) {
+  currentSessionContext = normalizeSessionContext(context)
+  removeLegacyAuthStorage()
+  return currentSessionContext
+}
+
+export function markAuthCheckedForToken() {}
+
+export function isTokenAlreadyValidated() {
+  return Boolean(currentSessionContext)
 }
 
 export function getLoginMessage() {
@@ -97,15 +85,9 @@ export function setLoginMessage(message) {
 }
 
 export function clearAuthSession(message = '') {
-  try {
-    window.localStorage.removeItem('rezzerv_token')
-    window.localStorage.removeItem('rezzerv_user_email')
-    window.localStorage.removeItem('rezzerv_household_name')
-    window.localStorage.removeItem(AUTH_CONTEXT_KEY)
-  } catch {}
-  try {
-    window.sessionStorage.removeItem(AUTH_CHECKED_TOKEN_KEY)
-  } catch {}
+  currentSessionContext = null
+  sessionRequest = null
+  removeLegacyAuthStorage()
   setLoginMessage(message)
 }
 
@@ -121,41 +103,58 @@ function buildAuthErrorMessage(status, fallback) {
   return fallback || 'Verzoek mislukt.'
 }
 
-export async function fetchAuthContext() {
-  const token = getStoredToken()
-  if (!token) throw new Error('Geen actieve sessie')
-  const response = await fetch('/api/auth/context', {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
+export async function fetchAuthContext({ force = false } = {}) {
+  removeLegacyAuthStorage()
+  if (!force && currentSessionContext) return currentSessionContext
+  if (!force && sessionRequest) return sessionRequest
+
+  sessionRequest = fetch('/api/session', {
+    method: 'GET',
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
     cache: 'no-store',
   })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const message = buildAuthErrorMessage(response.status, data?.detail || 'Je sessie is verlopen. Log opnieuw in.')
-    const error = new Error(message)
-    error.status = response.status
-    throw error
+    .then(async (response) => {
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const message = buildAuthErrorMessage(response.status, data?.detail || 'Je sessie is verlopen. Log opnieuw in.')
+        const error = new Error(message)
+        error.status = response.status
+        throw error
+      }
+      return storeAuthContext(data)
+    })
+    .finally(() => {
+      sessionRequest = null
+    })
+
+  return sessionRequest
+}
+
+export async function logoutServerSession() {
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    })
+  } finally {
+    clearAuthSession()
   }
-  const stored = storeAuthContext(data)
-  markAuthCheckedForToken(token)
-  return stored
 }
 
 export async function fetchJsonWithAuth(url, options = {}) {
   const { headers: optionHeaders = {}, cache = 'no-store', ...restOptions } = options
-  const mergedHeaders = {
-    'Content-Type': 'application/json',
-    ...optionHeaders,
-  }
-  const authHeaders = getAuthHeaders()
-  if (!mergedHeaders.Authorization && authHeaders.Authorization) {
-    mergedHeaders.Authorization = authHeaders.Authorization
-  }
+  const mergedHeaders = { ...optionHeaders }
+  const hasBody = restOptions.body !== undefined && restOptions.body !== null
+  if (hasBody && !mergedHeaders['Content-Type']) mergedHeaders['Content-Type'] = 'application/json'
+  delete mergedHeaders.Authorization
+  delete mergedHeaders.authorization
 
   const response = await fetch(url, {
     ...restOptions,
+    credentials: 'include',
     headers: mergedHeaders,
     cache,
   })
@@ -170,12 +169,12 @@ export async function fetchJsonWithAuth(url, options = {}) {
 
 export function isHouseholdAdminFromContext(context = null) {
   const source = context || readStoredAuthContext()
-  return String(source?.display_role || '').trim().toLowerCase() === 'admin'
+  return String(source?.display_role || source?.role || '').trim().toLowerCase() === 'admin'
 }
 
 export function isHouseholdViewerFromContext(context = null) {
   const source = context || readStoredAuthContext()
-  return String(source?.display_role || '').trim().toLowerCase() === 'viewer'
+  return String(source?.display_role || source?.role || '').trim().toLowerCase() === 'viewer'
 }
 
 export function canCurrentUserPerform(permissionKey, context = null) {
