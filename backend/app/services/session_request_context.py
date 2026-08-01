@@ -20,6 +20,8 @@ from app.services.server_session_service import (
     resolve_server_session,
 )
 
+PLATFORM_SUPERUSER_EMAIL = "superuser@rezzerv.local"
+
 _raw_session_cookie: ContextVar[str | None] = ContextVar(
     "rezzerv_raw_session_cookie", default=None
 )
@@ -115,12 +117,24 @@ def request_household_id_from_session(
     return str(context["active_household_id"])
 
 
+def is_platform_superuser(user: dict[str, Any]) -> bool:
+    """Return whether the live session belongs to the canonical platform superuser."""
+
+    return (
+        str(user.get("email") or "").strip().lower()
+        == PLATFORM_SUPERUSER_EMAIL
+    )
+
+
 def require_platform_admin_from_session(
     _authorization: str | None = None,
 ) -> dict[str, Any]:
-    """Resolve the current session and fail closed unless its live role is admin."""
+    """Fail closed unless the live session is the canonical platform superuser."""
 
     user = legacy_user_payload_from_session(None)
-    if str(user.get("role") or "").strip().lower() != "admin":
-        raise HTTPException(status_code=403, detail="Alleen de beheerder mag deze actie uitvoeren")
+    if not is_platform_superuser(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Alleen de platform-superuser mag deze actie uitvoeren",
+        )
     return user
