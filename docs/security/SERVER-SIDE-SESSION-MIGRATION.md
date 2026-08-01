@@ -76,6 +76,44 @@ De middleware bewaart alleen de opaque cookiewaarde in een requestlokale `Contex
 
 Voor tranche 3 is een afzonderlijke GitHub Actions-gate toegevoegd: `Server-side session security`. Deze voert de sessieservice-, endpoint-, entrypoint- en requestcontexttests gezamenlijk uit.
 
+## Autorisatiematrix en regressiegate
+
+De server-side sessiecontext is gekoppeld aan de door de Product Owner vastgestelde autorisatiematrix v1.1.
+
+Canonieke documentatie:
+
+```text
+docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md
+```
+
+Uitvoerbare matrixacceptatietest:
+
+```text
+backend/app/testing/authorization_matrix_acceptance.py
+```
+
+Lokaal startprogramma:
+
+```text
+RUN_AUTORISATIEMATRIX_TEST.bat
+```
+
+CI-regressiegate:
+
+```text
+.github/workflows/authorization-matrix-acceptance.yml
+```
+
+De gate voert 190 controles uit en geeft alleen GO wanneer alle rol-permissiecombinaties en aanvullende structuurregels overeenkomen met matrix v1.1. Dezelfde workflow controleert dat de canonieke autorisatiedocumentatie en het regressieprotocol aanwezig en onderling consistent zijn.
+
+Het handmatige vervolgprotocol staat in:
+
+```text
+docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md
+```
+
+Een wijziging aan sessies, rollen, permissies, routeguards, Admin, Catalogus, GPC, Externe databases of platformbeheer verplicht tot een nieuwe volledige matrixacceptatietest en UI-steekproef.
+
 ## Huidige releasebeoordeling
 
 Tranche 3 is code-technisch aangesloten, maar de volledige migratie is nog niet afgerond. De frontend verstuurt mogelijk nog Authorization-context en gebruikt mogelijk nog browseropslag. Daarnaast moet de resterende route- en queryscope systematisch worden geaudit en moet de server-side huishoudenwissel nog worden toegevoegd. Daarom blijft PR #216 **Draft en NO-GO** totdat de volledige migratie is geïntegreerd en Scope Gate, QA/QC Gate en Packaging Gate groen zijn.
