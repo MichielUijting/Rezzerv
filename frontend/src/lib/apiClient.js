@@ -2,14 +2,16 @@ const RAW_API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && i
 const API_BASE = RAW_API_BASE.endsWith('/') ? RAW_API_BASE.slice(0, -1) : RAW_API_BASE
 
 export async function apiPost(path, body) {
-  const res = await fetch(`${API_BASE}${path}`, {
+  return fetch(`${API_BASE}${path}`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      Accept: 'application/json',
     },
     body: JSON.stringify(body),
+    cache: 'no-store',
   })
-  return res
 }
 
 export const API_BASE_URL = API_BASE
