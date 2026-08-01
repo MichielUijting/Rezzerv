@@ -21,6 +21,10 @@ from app.services.server_session_service import (
     resolve_server_session,
     revoke_server_session,
 )
+from app.services.system_superuser_session_provisioning import (
+    SUPERGEBRUIKER_EMAIL,
+    SUPERGEBRUIKER_HUISHOUDEN_ID,
+)
 
 
 class SessionLoginRequest(BaseModel):
@@ -122,14 +126,20 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
         raise HTTPException(status_code=401, detail="Ongeldige inloggegevens")
 
     household_id = str(first.get("household_id") or "").strip()
-    if not household_id or household_id == "0":
+    resolved_email = str(first.get("email") or "").strip().lower()
+    role = str(first.get("role") or "").strip().lower()
+    if not household_id:
+        raise HTTPException(status_code=403, detail="Geen geldig actief huishouden beschikbaar")
+    if household_id == SUPERGEBRUIKER_HUISHOUDEN_ID and not (
+        resolved_email == SUPERGEBRUIKER_EMAIL and role == "owner"
+    ):
         raise HTTPException(status_code=403, detail="Geen geldig actief huishouden beschikbaar")
 
     return {
         "user_id": str(first.get("user_id") or ""),
         "email": str(first.get("email") or ""),
         "active_household_id": household_id,
-        "role": str(first.get("role") or "").strip().lower(),
+        "role": role,
     }
 
 
