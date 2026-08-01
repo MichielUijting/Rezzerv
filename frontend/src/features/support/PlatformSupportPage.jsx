@@ -3,7 +3,9 @@ import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
+import { readStoredAuthContext } from '../../lib/authSession.js'
 import {
+  deletePlatformThread,
   downloadPlatformSupportCsv,
   listPlatformThreads,
   readPlatformThread,
@@ -11,17 +13,27 @@ import {
   updatePlatformThreadStatus,
 } from './supportApi.js'
 
-const STATUSES = ['', 'Open', 'In behandeling', 'Gesloten']
+const STATUSES = ['Open', '', 'In behandeling', 'Gesloten']
 const AUTO_REFRESH_MS = 2000
 
 export default function PlatformSupportPage() {
+  const currentUserId = String(readStoredAuthContext()?.user_id || readStoredAuthContext()?.email || '').trim().toLowerCase()
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState('Open')
   const [householdId, setHouseholdId] = useState('')
   const [reply, setReply] = useState('')
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
+  const [refreshCount, setRefreshCount] = useState(0)
+  const [readThreadIds, setReadThreadIds] = useState(() => new Set())
+
+  function isUnread(thread) {
+    return Boolean(thread?.last_sender_user_id)
+      && String(thread.last_sender_user_id).trim().toLowerCase() !== currentUserId
+      && !readThreadIds.has(thread.id)
+  }
 
   async function loadThreads({ showBusy = false, showErrors = true } = {}) {
     if (showBusy) setBusy(true)
@@ -34,6 +46,8 @@ export default function PlatformSupportPage() {
         const stillVisible = items.some((thread) => thread.id === selected.thread.id)
         setSelected(stillVisible ? await readPlatformThread(selected.thread.id) : null)
       }
+      setLastRefreshedAt(new Date())
+      setRefreshCount((value) => value + 1)
     } catch (error) {
       if (showErrors) setFeedback(error.message)
     } finally {
@@ -60,8 +74,23 @@ export default function PlatformSupportPage() {
   async function openThread(id) {
     setBusy(true)
     setFeedback('')
-    try { setSelected(await readPlatformThread(id)) }
-    catch (error) { setFeedback(error.message) }
+    try {
+      setSelected(await readPlatformThread(id))
+      setReadThreadIds((current) => new Set([...current, id]))
+    } catch (error) { setFeedback(error.message) }
+    finally { setBusy(false) }
+  }
+
+  async function removeThread(threadId) {
+    if (!window.confirm('Deze melding definitief verwijderen?')) return
+    setBusy(true)
+    setFeedback('')
+    try {
+      await deletePlatformThread(threadId)
+      if (selected?.thread?.id === threadId) setSelected(null)
+      await loadThreads()
+      setFeedback('Melding verwijderd.')
+    } catch (error) { setFeedback(error.message) }
     finally { setBusy(false) }
   }
 
@@ -76,11 +105,8 @@ export default function PlatformSupportPage() {
       setSelected(await readPlatformThread(selected.thread.id))
       await loadThreads()
       setFeedback('Reactie verzonden aan de indiener.')
-    } catch (error) {
-      setFeedback(error.message)
-    } finally {
-      setBusy(false)
-    }
+    } catch (error) { setFeedback(error.message) }
+    finally { setBusy(false) }
   }
 
   async function changeStatus(nextStatus) {
@@ -92,12 +118,13 @@ export default function PlatformSupportPage() {
       setSelected(await readPlatformThread(selected.thread.id))
       await loadThreads()
       setFeedback('Status bijgewerkt.')
-    } catch (error) {
-      setFeedback(error.message)
-    } finally {
-      setBusy(false)
-    }
+    } catch (error) { setFeedback(error.message) }
+    finally { setBusy(false) }
   }
+
+  const refreshLabel = lastRefreshedAt
+    ? `Laatst ververst: ${lastRefreshedAt.toLocaleTimeString('nl-NL')} · cyclus ${refreshCount}`
+    : 'Nog niet ververst'
 
   return (
     <AppShell title="Superuser / Meldingen" showExit={false}>
@@ -107,6 +134,7 @@ export default function PlatformSupportPage() {
             <div>
               <h2>Alle meldingen</h2>
               <p>Hier staan meldingen van alle huishoudens, inclusief nieuwe inzendingen.</p>
+              <p aria-live="polite" className="rz-support-refresh">{refreshLabel}</p>
             </div>
             <Button variant="secondary" onClick={() => downloadPlatformSupportCsv(status).catch((error) => setFeedback(error.message))}>CSV exporteren</Button>
           </div>
@@ -121,11 +149,14 @@ export default function PlatformSupportPage() {
           {!busy && !threads.length ? <p>Geen meldingen gevonden.</p> : null}
           <div className="rz-support-list">
             {threads.map((thread) => (
-              <button key={thread.id} type="button" className="rz-support-thread" onClick={() => openThread(thread.id)}>
-                <strong>{thread.subject}</strong>
-                <span>{thread.thread_number} · {thread.status}</span>
-                <span>Huishouden {thread.household_id || '-'} · {thread.created_by_name} · {thread.message_count} bericht(en)</span>
-              </button>
+              <div key={thread.id} className={`rz-support-thread-row ${isUnread(thread) ? 'rz-support-thread-row--unread' : ''}`}>
+                <button type="button" className="rz-support-thread" onClick={() => openThread(thread.id)}>
+                  <strong>{thread.subject}</strong>
+                  <span>{thread.thread_number} · {thread.status}</span>
+                  <span>Huishouden {thread.household_id || '-'} · {thread.created_by_name} · {thread.message_count} bericht(en)</span>
+                </button>
+                <button type="button" className="rz-support-delete" aria-label={`Melding ${thread.subject} verwijderen`} onClick={() => removeThread(thread.id)}>🗑</button>
+              </div>
             ))}
           </div>
         </Card>
