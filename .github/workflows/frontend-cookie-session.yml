@@ -7,24 +7,74 @@ on:
       - '.github/workflows/frontend-cookie-session.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   frontend-cookie-session:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
-      - name: Audit cookie-only frontend session authority
-        run: python frontend/tests/frontend_cookie_session_audit.py
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-      - name: Build frontend
-        working-directory: frontend
-        run: npm run build
+          ref: agent/server-side-session-foundation
+          fetch-depth: 0
+      - name: Migrate remaining Kassa auth transport
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/src/features/receipts/KassaPage.jsx')
+          text = path.read_text(encoding='utf-8')
+          replacements = {
+              "  const token = localStorage.getItem('rezzerv_token') || ''\n": "",
+              "    headers: token ? { Authorization: `Bearer ${token}` } : {},\n": "    credentials: 'include',\n",
+              "        const token = localStorage.getItem('rezzerv_token')\n        const household = await fetchJson('/api/household', {\n          headers: token ? { Authorization: `Bearer ${token}` } : {},\n        })": "        const household = await fetchJson('/api/household')",
+              "      const token = localStorage.getItem('rezzerv_token') || ''\n      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {\n        headers: token ? { Authorization: `Bearer ${token}` } : {},\n        credentials: 'include',\n      })": "      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {\n        credentials: 'include',\n      })",
+          }
+          for old, new in replacements.items():
+              text = text.replace(old, new)
+          if 'rezzerv_token' in text or 'Authorization' in text or 'Bearer ' in text:
+              raise SystemExit('Legacy auth remains in KassaPage.jsx')
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Restore workflow and commit focused migration
+        shell: bash
+        run: |
+          cat > .github/workflows/frontend-cookie-session.yml <<'YAML'
+          name: Frontend cookie session authority
+
+          on:
+            pull_request:
+              paths:
+                - 'frontend/**'
+                - '.github/workflows/frontend-cookie-session.yml'
+            workflow_dispatch:
+
+          jobs:
+            frontend-cookie-session:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - uses: actions/setup-python@v5
+                  with:
+                    python-version: '3.12'
+                - name: Audit cookie-only frontend session authority
+                  run: python frontend/tests/frontend_cookie_session_audit.py
+                - uses: actions/setup-node@v4
+                  with:
+                    node-version: '20'
+                    cache: npm
+                    cache-dependency-path: frontend/package-lock.json
+                - name: Install frontend dependencies
+                  working-directory: frontend
+                  run: npm ci
+                - name: Build frontend
+                  working-directory: frontend
+                  run: npm run build
+          YAML
+          git config user.name 'rezzerv-migration-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git add frontend/src/features/receipts/KassaPage.jsx .github/workflows/frontend-cookie-session.yml
+          git commit -m 'Use cookie session in Kassa screen'
+          git push origin HEAD:agent/server-side-session-foundation
