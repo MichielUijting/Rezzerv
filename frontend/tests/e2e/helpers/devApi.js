@@ -1,5 +1,7 @@
 const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:8001';
 const DEMO_HOUSEHOLD_ID = process.env.PLAYWRIGHT_HOUSEHOLD_ID || '1';
+const SUPERUSER_EMAIL = process.env.PLAYWRIGHT_SUPERUSER_EMAIL || 'superuser@rezzerv.local';
+const SUPERUSER_PASSWORD = process.env.PLAYWRIGHT_SUPERUSER_PASSWORD || 'Rezzerv123';
 
 async function parseJson(response) {
   const text = await response.text();
@@ -14,8 +16,8 @@ async function parseJson(response) {
 export async function authenticateRequestSession(request) {
   const response = await request.post(`${API_URL}/api/auth/login`, {
     data: {
-      email: 'admin@rezzerv.local',
-      password: 'Rezzerv123',
+      email: SUPERUSER_EMAIL,
+      password: SUPERUSER_PASSWORD,
     },
   });
   const payload = await parseJson(response);
@@ -88,10 +90,10 @@ export async function resetAndSeedStoreImportFixture(request) {
 
 export async function loginThroughUi(page) {
   await page.goto('/login');
-  await page.getByLabel('E-mail').fill('admin@rezzerv.local');
-  await page.getByLabel('Wachtwoord').fill('Rezzerv123');
+  await page.getByLabel('E-mail').fill(SUPERUSER_EMAIL);
+  await page.getByLabel('Wachtwoord').fill(SUPERUSER_PASSWORD);
   await page.getByRole('button', { name: 'Inloggen' }).click();
   await page.waitForURL('**/home');
 }
 
-export { API_URL, DEMO_HOUSEHOLD_ID };
+export { API_URL, DEMO_HOUSEHOLD_ID, SUPERUSER_EMAIL, SUPERUSER_PASSWORD };
