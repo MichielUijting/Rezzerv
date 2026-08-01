@@ -11,6 +11,8 @@ LOGIN_PAGE = ROOT / "features" / "auth" / "LoginPage.jsx"
 API_CLIENT = ROOT / "lib" / "apiClient.js"
 HOME_PAGE = ROOT / "features" / "home" / "HomePage.jsx"
 ADMIN_GUARD = ROOT / "app" / "router" / "AdminGuard.jsx"
+FRONTTEAM_GUARD = ROOT / "app" / "router" / "FrontteamGuard.jsx"
+APP_ROUTER = ROOT / "app" / "router" / "AppRouter.jsx"
 HEADER = ROOT / "ui" / "Header.jsx"
 
 FORBIDDEN = {
@@ -50,6 +52,8 @@ def run() -> int:
     api_text = API_CLIENT.read_text(encoding="utf-8")
     home_text = HOME_PAGE.read_text(encoding="utf-8")
     admin_guard_text = ADMIN_GUARD.read_text(encoding="utf-8")
+    frontteam_guard_text = FRONTTEAM_GUARD.read_text(encoding="utf-8")
+    router_text = APP_ROUTER.read_text(encoding="utf-8")
     header_text = HEADER.read_text(encoding="utf-8")
 
     required = {
@@ -61,13 +65,14 @@ def run() -> int:
         "header reads server session context": "readStoredAuthContext" in header_text,
         "header renders active household": "active_household_id" in header_text and "Huishouden:" in header_text,
         "header does not read legacy localStorage": "localStorage.getItem" not in header_text,
-        "canonical platform superuser helper exists": "isPlatformSuperuserFromContext" in auth_text,
-        "canonical platform superuser email is fixed": "supergebruiker@rezzerv.local" in auth_text,
-        "home admin tile uses platform authority": "tile.key !== 'admin' || isPlatformSuperuser" in home_text,
-        "catalog tile is not tied to admin visibility": "['admin', 'catalogus']" not in home_text,
-        "admin route uses platform authority": "isPlatformSuperuserFromContext" in admin_guard_text,
-        "admin route does not use household admin authority": "isHouseholdAdminFromContext" not in admin_guard_text,
-        "beheerder2 is never canonical platform superuser": "beheerder2@rezzerv.local" not in auth_text,
+        "household admin helper accepts admin": "'admin'" in auth_text,
+        "household admin helper accepts owner": "'owner'" in auth_text,
+        "home admin tile uses household admin authority": "canOpenAdmin: isHouseholdAdminFromContext" in home_text,
+        "admin route uses household admin authority": "isHouseholdAdminFromContext" in admin_guard_text,
+        "frontteam helper exists": "isFrontteamMemberFromContext" in auth_text,
+        "external databases tile uses frontteam authority": "canOpenExternalDatabases: isFrontteamMemberFromContext" in home_text,
+        "frontteam route guard exists": "isFrontteamMemberFromContext" in frontteam_guard_text,
+        "external databases route uses frontteam guard": "<ProtectedFrontteam><ExternalDatabasesPage" in router_text,
     }
     for label, passed in required.items():
         if not passed:
@@ -83,8 +88,8 @@ def run() -> int:
     print("PASS frontend requests use the HttpOnly session cookie")
     print("PASS header renders the active household from server session context")
     print("PASS no frontend source reads or writes a Bearer token")
-    print("PASS platform admin is restricted to supergebruiker@rezzerv.local")
-    print("PASS household admin authority does not grant platform admin access")
+    print("PASS admin is available to active-household admin and owner roles")
+    print("PASS external databases requires separate frontteam authority")
     print("FRONTEND_COOKIE_SESSION_AUDIT_GREEN")
     return 0
 
