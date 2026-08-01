@@ -27,6 +27,7 @@ import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.js
 import CatalogPage from '../../features/catalog/CatalogPage.jsx'
 import CatalogDetailPageV2 from '../../features/catalog/CatalogDetailPageV2.jsx'
 import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.jsx'
+import HouseholdSupportPage from '../../features/support/HouseholdSupportPage.jsx'
 import { clearAuthSession } from '../../lib/authSession.js'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
@@ -87,6 +88,7 @@ const router = createBrowserRouter([
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/home', element: <Protected><HomePage /></Protected> },
+  { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
   { path: '/spaartegoeden', element: <Protected><LoyaltyStampsPage /></Protected> },
