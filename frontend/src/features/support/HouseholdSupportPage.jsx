@@ -4,6 +4,7 @@ import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { readStoredAuthContext } from '../../lib/authSession.js'
 import { getRezzervVersionTag } from '../../ui/version.js'
 import {
@@ -20,6 +21,7 @@ const AUTO_REFRESH_MS = 3000
 
 export default function HouseholdSupportPage() {
   const location = useLocation()
+  const { showFeedback } = useAppFeedback()
   const query = useMemo(() => new URLSearchParams(location.search), [location.search])
   const originRoute = query.get('from') || '/meldingen'
   const originScreen = query.get('screen') || 'Rezzerv'
@@ -85,8 +87,7 @@ export default function HouseholdSupportPage() {
     finally { setBusy(false) }
   }
 
-  async function removeThread(threadId) {
-    if (!window.confirm('Deze melding definitief verwijderen?')) return
+  async function performRemoveThread(threadId) {
     setBusy(true)
     setFeedback('')
     try {
@@ -94,8 +95,24 @@ export default function HouseholdSupportPage() {
       if (selected?.thread?.id === threadId) setSelected(null)
       await refresh()
       setFeedback('Melding verwijderd.')
-    } catch (error) { setFeedback(error.message) }
-    finally { setBusy(false) }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function removeThread(threadId, threadSubject) {
+    showFeedback({
+      variant: 'warning',
+      title: 'Melding verwijderen',
+      message: `Wil je de melding “${threadSubject}” definitief verwijderen?`,
+      detail: 'Deze actie kan niet ongedaan worden gemaakt.',
+      dismissMode: 'action-only',
+      primaryActionLabel: 'Verwijderen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => performRemoveThread(threadId),
+      key: `support-delete-${threadId}`,
+      testId: 'support-delete-confirmation',
+    })
   }
 
   async function submitNew(event) {
@@ -151,7 +168,7 @@ export default function HouseholdSupportPage() {
                   <span>{thread.thread_number} · {thread.status}</span>
                   <span>{thread.origin_screen_name} · {thread.message_count} bericht(en)</span>
                 </button>
-                <button type="button" className="rz-support-delete" aria-label={`Melding ${thread.subject} verwijderen`} onClick={() => removeThread(thread.id)}>🗑</button>
+                <button type="button" className="rz-support-delete" aria-label={`Melding ${thread.subject} verwijderen`} onClick={() => removeThread(thread.id, thread.subject)}>🗑</button>
               </div>
             ))}
           </div>
