@@ -8,13 +8,14 @@ import { readStoredAuthContext } from '../../lib/authSession.js'
 import { getRezzervVersionTag } from '../../ui/version.js'
 import {
   createHouseholdThread,
+  deleteHouseholdThread,
   listHouseholdThreads,
   readHouseholdThread,
   replyHouseholdThread,
 } from './supportApi.js'
 import './support.css'
 
-const STATUSES = ['', 'Open', 'In behandeling', 'Gesloten']
+const STATUSES = ['Open', '', 'In behandeling', 'Gesloten']
 const AUTO_REFRESH_MS = 3000
 
 export default function HouseholdSupportPage() {
@@ -26,15 +27,20 @@ export default function HouseholdSupportPage() {
 
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
-  const [status, setStatus] = useState('')
+  const [status, setStatus] = useState('Open')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [reply, setReply] = useState('')
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
+  const [refreshCount, setRefreshCount] = useState(0)
+  const [readThreadIds, setReadThreadIds] = useState(() => new Set())
 
-  function belongsToCurrentUser(thread) {
-    return String(thread?.created_by_user_id || '').trim().toLowerCase() === currentUserId
+  function isUnread(thread) {
+    return Boolean(thread?.last_sender_user_id)
+      && String(thread.last_sender_user_id).trim().toLowerCase() !== currentUserId
+      && !readThreadIds.has(thread.id)
   }
 
   async function refresh({ showBusy = false, showErrors = true } = {}) {
@@ -42,11 +48,13 @@ export default function HouseholdSupportPage() {
     if (showErrors) setFeedback('')
     try {
       const data = await listHouseholdThreads(status)
-      const ownThreads = (data?.items || []).filter(belongsToCurrentUser)
+      const ownThreads = data?.items || []
       setThreads(ownThreads)
       if (selected?.thread?.id && ownThreads.some((thread) => thread.id === selected.thread.id)) {
         setSelected(await readHouseholdThread(selected.thread.id))
       }
+      setLastRefreshedAt(new Date())
+      setRefreshCount((value) => value + 1)
     } catch (error) {
       if (showErrors) setFeedback(error.message)
     } finally {
@@ -70,8 +78,23 @@ export default function HouseholdSupportPage() {
   async function openThread(threadId) {
     setBusy(true)
     setFeedback('')
-    try { setSelected(await readHouseholdThread(threadId)) }
-    catch (error) { setFeedback(error.message) }
+    try {
+      setSelected(await readHouseholdThread(threadId))
+      setReadThreadIds((current) => new Set([...current, threadId]))
+    } catch (error) { setFeedback(error.message) }
+    finally { setBusy(false) }
+  }
+
+  async function removeThread(threadId) {
+    if (!window.confirm('Deze melding definitief verwijderen?')) return
+    setBusy(true)
+    setFeedback('')
+    try {
+      await deleteHouseholdThread(threadId)
+      if (selected?.thread?.id === threadId) setSelected(null)
+      await refresh()
+      setFeedback('Melding verwijderd.')
+    } catch (error) { setFeedback(error.message) }
     finally { setBusy(false) }
   }
 
@@ -80,23 +103,14 @@ export default function HouseholdSupportPage() {
     setBusy(true)
     setFeedback('')
     try {
-      const created = await createHouseholdThread({
-        subject,
-        message,
-        screen_name: originScreen,
-        route: originRoute,
-        app_version: getRezzervVersionTag(),
-      })
+      const created = await createHouseholdThread({ subject, message, screen_name: originScreen, route: originRoute, app_version: getRezzervVersionTag() })
       setSubject('')
       setMessage('')
       await refresh()
       await openThread(created.thread_id)
       setFeedback('Melding verzonden naar de superuser.')
-    } catch (error) {
-      setFeedback(error.message)
-    } finally {
-      setBusy(false)
-    }
+    } catch (error) { setFeedback(error.message) }
+    finally { setBusy(false) }
   }
 
   async function submitReply(event) {
@@ -109,19 +123,20 @@ export default function HouseholdSupportPage() {
       setReply('')
       setSelected(await readHouseholdThread(selected.thread.id))
       setFeedback('Reactie verzonden.')
-    } catch (error) {
-      setFeedback(error.message)
-    } finally {
-      setBusy(false)
-    }
+    } catch (error) { setFeedback(error.message) }
+    finally { setBusy(false) }
   }
+
+  const refreshLabel = lastRefreshedAt
+    ? `Laatst ververst: ${lastRefreshedAt.toLocaleTimeString('nl-NL')} · cyclus ${refreshCount}`
+    : 'Nog niet ververst'
 
   return (
     <AppShell title="Meldingen" showExit={false}>
       <div className="rz-support-layout" data-testid="household-support-page">
         <Card>
           <div className="rz-support-toolbar">
-            <h2>Mijn meldingen</h2>
+            <div><h2>Mijn meldingen</h2><p aria-live="polite" className="rz-support-refresh">{refreshLabel}</p></div>
             <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter op status">
               {STATUSES.map((value) => <option key={value || 'all'} value={value}>{value || 'Alle statussen'}</option>)}
             </select>
@@ -130,11 +145,14 @@ export default function HouseholdSupportPage() {
           {!busy && !threads.length ? <p>Geen meldingen gevonden.</p> : null}
           <div className="rz-support-list">
             {threads.map((thread) => (
-              <button key={thread.id} type="button" className="rz-support-thread" onClick={() => openThread(thread.id)}>
-                <strong>{thread.subject}</strong>
-                <span>{thread.thread_number} · {thread.status}</span>
-                <span>{thread.origin_screen_name} · {thread.message_count} bericht(en)</span>
-              </button>
+              <div key={thread.id} className={`rz-support-thread-row ${isUnread(thread) ? 'rz-support-thread-row--unread' : ''}`}>
+                <button type="button" className="rz-support-thread" onClick={() => openThread(thread.id)}>
+                  <strong>{thread.subject}</strong>
+                  <span>{thread.thread_number} · {thread.status}</span>
+                  <span>{thread.origin_screen_name} · {thread.message_count} bericht(en)</span>
+                </button>
+                <button type="button" className="rz-support-delete" aria-label={`Melding ${thread.subject} verwijderen`} onClick={() => removeThread(thread.id)}>🗑</button>
+              </div>
             ))}
           </div>
         </Card>
