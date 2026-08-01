@@ -68,11 +68,32 @@ def household_context_from_session(
         "user_id": context.user_id,
         "email": context.email,
         "role": context.role,
+        "display_role": context.role,
         "household_id": context.active_household_id,
         "active_household_id": context.active_household_id,
         "membership_count": 1,
         "can_switch_households": False,
     }
+
+
+def require_household_admin_from_session(
+    _authorization: str | None = None,
+    requested_household_id: str | None = None,
+) -> dict[str, Any]:
+    """Require household ownership from the authoritative server session.
+
+    ``owner`` is the canonical household-management role. ``admin`` remains
+    accepted only for compatibility with still-active legacy memberships.
+    """
+
+    context = household_context_from_session(None, requested_household_id)
+    role = str(context.get("role") or "").strip().lower()
+    if role not in {"owner", "admin"}:
+        raise HTTPException(
+            status_code=403,
+            detail="Alleen de beheerder van het huishouden mag deze actie uitvoeren",
+        )
+    return context
 
 
 def authorized_household_id_from_session(
