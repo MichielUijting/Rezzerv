@@ -26,13 +26,22 @@ jobs:
       - name: Wait for backend health
         shell: bash
         run: |
-          for attempt in {1..60}; do
+          # Een schone CI-run kan PaddleOCR-modellen eenmalig in het lege
+          # rezzerv_paddlex-volume moeten provisioneren. Dat hoort de
+          # autorisatievalidatie niet na 120 seconden af te breken.
+          for attempt in {1..180}; do
             if curl --fail --silent http://127.0.0.1:8011/api/health >/dev/null; then
+              echo "Backend is gezond na ${attempt} pogingen."
               exit 0
+            fi
+            if (( attempt % 30 == 0 )); then
+              echo "Backend start nog; tussenstatus na ${attempt} pogingen:"
+              docker compose logs --no-color --tail=80 backend
             fi
             sleep 2
           done
-          docker compose logs backend
+          echo "Backend werd niet gezond binnen 360 seconden."
+          docker compose logs --no-color --tail=500 backend
           exit 1
       - name: Run authorization API contract
         run: |
