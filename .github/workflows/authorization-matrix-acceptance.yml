@@ -1,0 +1,26 @@
+name: Authorization matrix acceptance
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  authorization-matrix:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+
+      - name: Validate PO authorization matrix v1.1
+        run: python -m app.testing.authorization_matrix_acceptance
