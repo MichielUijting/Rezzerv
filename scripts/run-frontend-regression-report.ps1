@@ -83,9 +83,18 @@ $superuserEmail = if ($env:REZZERV_REGRESSION_SUPERUSER_EMAIL) {
   "supergebruiker@rezzerv.local"
 }
 $superuserPassword = $env:REZZERV_REGRESSION_SUPERUSER_PASSWORD
+$memberEmail = if ($env:REZZERV_REGRESSION_MEMBER_EMAIL) {
+  $env:REZZERV_REGRESSION_MEMBER_EMAIL
+} else {
+  "lid@rezzerv.local"
+}
+$memberPassword = $env:REZZERV_REGRESSION_MEMBER_PASSWORD
 
 if (-not $superuserPassword) {
   throw "REZZERV_REGRESSION_SUPERUSER_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
+}
+if (-not $memberPassword) {
+  throw "REZZERV_REGRESSION_MEMBER_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
 }
 
 try {
@@ -118,9 +127,22 @@ try {
     -Label "platform-regressiesessie"
   Invoke-RegressionFixtureCleanup -WebSession $cleanupSession
 
+  Write-Host "`n=== Autorisatiematrix server-side sessies ===" -ForegroundColor Cyan
+  docker compose exec -T `
+    -e REZZERV_TEST_SUPERUSER_EMAIL=$superuserEmail `
+    -e REZZERV_TEST_SUPERUSER_PASSWORD=$superuserPassword `
+    -e REZZERV_TEST_MEMBER_EMAIL=$memberEmail `
+    -e REZZERV_TEST_MEMBER_PASSWORD=$memberPassword `
+    -e REZZERV_TEST_HOUSEHOLD_ID=0 `
+    backend python /app/tests/authorization_role_matrix_selftest.py
+
+  if ($LASTEXITCODE -ne 0) {
+    throw "Autorisatiematrix-selftest is gefaald met exitcode $LASTEXITCODE."
+  }
+
   Write-Host "`n=== Playwright frontend regressie via Docker ===" -ForegroundColor Cyan
   Write-Host "Canonieke supergebruiker: $superuserEmail; regressiehuishouden: 0" -ForegroundColor Cyan
-  Write-Host "Ledenfixture: lid@rezzerv.local; rol: household.member" -ForegroundColor Cyan
+  Write-Host "Ledenfixture: $memberEmail; rol: household.member" -ForegroundColor Cyan
 
   $frontendPath = Join-Path $repoRoot "frontend"
   $frontendPath = $frontendPath.Replace("\", "/")
