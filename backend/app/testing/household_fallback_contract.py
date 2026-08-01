@@ -16,11 +16,11 @@ def main() -> None:
     assert summary["unclassified_runtime_occurrences"] == 0, payload["unclassified_runtime_occurrences"]
     assert categories.get("deferred-share-target") == 2, categories
     assert categories.get("frontend-server-authority") == 6, categories
-    assert categories.get("auth-bootstrap") == 8, categories
+    assert categories.get("auth-bootstrap") == 9, categories
     assert categories.get("non-household-boolean-or-value") == 1, categories
     assert categories.get("signed-state-or-server-source") == 8, categories
     assert categories.get("authenticated-route-or-helper") == 20, categories
-    assert categories.get("authenticated-internal-helper") == 13, categories
+    assert categories.get("authenticated-internal-helper") == 12, categories
     assert categories.get("platform-admin-diagnostic-or-test") == 35, categories
     assert categories.get("test-dev-fixture") == 2, categories
 
