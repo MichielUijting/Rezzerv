@@ -1,19 +1,12 @@
 import { useEffect, useState } from 'react'
 import Button from '../../ui/Button'
+import { fetchJsonWithAuth } from '../../lib/authSession'
 import { normalizeErrorMessage } from '../stores/storeImportShared'
 import './receiptDebugExportButton.css'
 
 const ACTIVE_RECEIPT_KEY = 'rezzerv_active_receipt_table_id'
 const FETCH_PATCH_MARKER = '__rezzervReceiptDebugFetchObserverInstalled'
 const RECEIPT_URL_PATTERN = /\/api\/receipts\/([^/?#]+)(?:\/preview|\/debug-export|\b)/
-
-function getToken() {
-  try {
-    return window.localStorage.getItem('rezzerv_token') || ''
-  } catch {
-    return ''
-  }
-}
 
 function rememberReceiptIdFromFetchInput(input) {
   const url = typeof input === 'string' ? input : String(input?.url || '')
@@ -97,10 +90,9 @@ export default function ReceiptDebugExportButton() {
     setIsDownloading(true)
     setMessage('')
     try {
-      const token = getToken()
-      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {
+      const response = await fetchJsonWithAuth(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {
         method: 'GET',
-        headers: token ? { Authorization: `Bearer ${token}`, Accept: 'application/json' } : { Accept: 'application/json' },
+        headers: { Accept: 'application/json' },
       })
       const bodyText = await response.text()
       if (!response.ok) {
