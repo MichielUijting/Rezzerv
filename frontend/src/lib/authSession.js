@@ -1,5 +1,6 @@
 const LOGIN_MESSAGE_KEY = 'rezzerv_login_message'
 const PLATFORM_SUPERUSER_EMAIL = 'supergebruiker@rezzerv.local'
+const FRONTTEAM_EXTERNAL_DATABASES_PERMISSION = 'frontteam.external_databases.access'
 
 let currentSessionContext = null
 let sessionRequest = null
@@ -26,6 +27,7 @@ function normalizeSessionContext(context) {
     can_manage_member_permissions: Boolean(context.can_manage_member_permissions),
     can_manage_members: Boolean(context.can_manage_members),
     is_viewer: Boolean(context.is_viewer),
+    is_frontteam_member: Boolean(context.is_frontteam_member),
   }
 }
 
@@ -170,7 +172,7 @@ export async function fetchJsonWithAuth(url, options = {}) {
 
 export function isHouseholdAdminFromContext(context = null) {
   const source = context || readStoredAuthContext()
-  return ['admin', 'owner'].includes(
+  return ['admin', 'owner', 'household.admin'].includes(
     String(source?.display_role || source?.role || '').trim().toLowerCase(),
   )
 }
@@ -178,6 +180,14 @@ export function isHouseholdAdminFromContext(context = null) {
 export function isPlatformSuperuserFromContext(context = null) {
   const source = context || readStoredAuthContext()
   return String(source?.email || '').trim().toLowerCase() === PLATFORM_SUPERUSER_EMAIL
+}
+
+export function isFrontteamMemberFromContext(context = null) {
+  const source = context || readStoredAuthContext()
+  return Boolean(
+    source?.is_frontteam_member
+    || source?.permissions?.[FRONTTEAM_EXTERNAL_DATABASES_PERMISSION],
+  )
 }
 
 export function isHouseholdViewerFromContext(context = null) {
