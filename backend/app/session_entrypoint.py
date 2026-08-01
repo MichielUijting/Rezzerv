@@ -23,6 +23,9 @@ from app.services.session_request_context import (
     require_platform_admin_from_session,
     reset_request_session,
 )
+from app.services.system_superuser_session_provisioning import (
+    ensure_system_superuser_for_session_runtime,
+)
 
 
 SESSION_ROUTE_METHODS = {
@@ -103,6 +106,9 @@ def activate_server_side_session_routes() -> None:
             "Server-side sessieroutes niet uniek geregistreerd: " + ", ".join(duplicates)
         )
 
+
+with legacy_main.engine.begin() as provisioning_conn:
+    ensure_system_superuser_for_session_runtime(provisioning_conn)
 
 activate_server_side_route_context()
 activate_server_side_session_routes()
