@@ -54,10 +54,7 @@ export default function StoreConnectionsPage() {
     setIsLoading(true)
     setError('')
     try {
-      const token = localStorage.getItem('rezzerv_token')
-      const householdData = await fetchJson('/api/household', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const householdData = await fetchJson('/api/household')
       const [providerData, connectionData] = await Promise.all([
         fetchJson('/api/store-providers'),
         fetchJson(`/api/store-connections?householdId=${encodeURIComponent(householdData.id)}`),
