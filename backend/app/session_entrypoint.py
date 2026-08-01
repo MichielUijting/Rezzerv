@@ -27,6 +27,7 @@ from app.services.session_request_context import (
     require_platform_admin_from_session,
     reset_request_session,
 )
+from app.services.support_message_session_adapter import household_support_actor
 from app.services.system_superuser_session_provisioning import (
     ensure_system_superuser_for_session_runtime,
 )
@@ -62,6 +63,13 @@ def activate_server_side_route_context() -> None:
     legacy_main.resolve_authorized_household_id = authorized_household_id_from_session
     legacy_main.get_request_household_id = request_household_id_from_session
     legacy_main.require_platform_admin_user = require_platform_admin_from_session
+
+    # The existing support-message router originally admitted only household
+    # administrators. Rezzerv's functional contract allows every authenticated
+    # active household member to contact the superuser and continue that
+    # conversation. Platform support routes keep their platform permission gate.
+    from app.api import support_message_routes
+    support_message_routes._household_actor = household_support_actor
 
 
 @app.middleware("http")
