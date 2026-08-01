@@ -4,8 +4,10 @@ import pytest
 from sqlalchemy import create_engine, text
 
 from app.services.authorization_foundation_service import (
+    ADMIN_PERMISSIONS,
     HOUSEHOLD_PERMISSIONS,
     PLATFORM_PERMISSIONS,
+    ROLE_PERMISSIONS,
     assert_last_household_admin_remains,
     ensure_authorization_foundation,
     evaluate_household_permission,
@@ -26,10 +28,10 @@ def test_registry_and_system_roles_are_seeded_idempotently():
         permission_count = conn.execute(text("SELECT COUNT(*) FROM auth_permissions")).scalar_one()
         role_count = conn.execute(text("SELECT COUNT(*) FROM auth_roles")).scalar_one()
     assert permission_count == len(HOUSEHOLD_PERMISSIONS) + len(PLATFORM_PERMISSIONS)
-    assert role_count == 6
+    assert role_count == len(ROLE_PERMISSIONS)
 
 
-def test_household_admin_receives_all_household_rights_but_no_platform_rights():
+def test_household_admin_receives_matrix_admin_rights_but_no_platform_rights():
     engine = make_engine()
     with engine.begin() as conn:
         ensure_authorization_foundation(conn)
@@ -44,7 +46,7 @@ def test_household_admin_receives_all_household_rights_but_no_platform_rights():
                 membership_id="member-admin",
                 permission_key=permission_key,
             )
-            assert decision.allowed, permission_key
+            assert decision.allowed is (permission_key in ADMIN_PERMISSIONS), permission_key
         wrong_scope = evaluate_household_permission(
             conn,
             household_id="household-a",
