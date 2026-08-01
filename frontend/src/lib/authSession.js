@@ -1,4 +1,5 @@
 const LOGIN_MESSAGE_KEY = 'rezzerv_login_message'
+const PLATFORM_SUPERUSER_EMAIL = 'supergebruiker@rezzerv.local'
 
 let currentSessionContext = null
 let sessionRequest = null
@@ -169,7 +170,14 @@ export async function fetchJsonWithAuth(url, options = {}) {
 
 export function isHouseholdAdminFromContext(context = null) {
   const source = context || readStoredAuthContext()
-  return String(source?.display_role || source?.role || '').trim().toLowerCase() === 'admin'
+  return ['admin', 'owner'].includes(
+    String(source?.display_role || source?.role || '').trim().toLowerCase(),
+  )
+}
+
+export function isPlatformSuperuserFromContext(context = null) {
+  const source = context || readStoredAuthContext()
+  return String(source?.email || '').trim().toLowerCase() === PLATFORM_SUPERUSER_EMAIL
 }
 
 export function isHouseholdViewerFromContext(context = null) {
