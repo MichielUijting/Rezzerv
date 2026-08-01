@@ -1,9 +1,7 @@
 const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:8001';
-const DEMO_HOUSEHOLD_ID = process.env.PLAYWRIGHT_HOUSEHOLD_ID || '1';
-const PLATFORM_EMAIL = process.env.PLAYWRIGHT_PLATFORM_EMAIL;
-const PLATFORM_PASSWORD = process.env.PLAYWRIGHT_PLATFORM_PASSWORD;
-const HOUSEHOLD_EMAIL = process.env.PLAYWRIGHT_HOUSEHOLD_EMAIL;
-const HOUSEHOLD_PASSWORD = process.env.PLAYWRIGHT_HOUSEHOLD_PASSWORD;
+const DEMO_HOUSEHOLD_ID = process.env.PLAYWRIGHT_HOUSEHOLD_ID || '0';
+const SUPERUSER_EMAIL = process.env.PLAYWRIGHT_SUPERUSER_EMAIL || 'supergebruiker@rezzerv.local';
+const SUPERUSER_PASSWORD = process.env.PLAYWRIGHT_SUPERUSER_PASSWORD;
 const AUTHORIZATION_FIXTURE_MEMBER_EMAIL = 'lid@rezzerv.local';
 const AUTHORIZATION_FIXTURE_MEMBER_ROLE = 'household.member';
 
@@ -24,26 +22,23 @@ async function parseJson(response) {
   }
 }
 
-async function authenticateRequestAs(request, email, password, label) {
+export async function authenticateRequestSession(request) {
   const response = await request.post(`${API_URL}/api/auth/login`, {
     data: {
-      email: requireCredential(email, `${label} e-mail`),
-      password: requireCredential(password, `${label} wachtwoord`),
+      email: SUPERUSER_EMAIL,
+      password: requireCredential(SUPERUSER_PASSWORD, 'platform-superuser wachtwoord'),
     },
   });
   const payload = await parseJson(response);
   if (!response.ok()) {
-    throw new Error(`API /api/auth/login (${label}) failed with ${response.status()}: ${JSON.stringify(payload)}`);
+    throw new Error(`API /api/auth/login failed with ${response.status()}: ${JSON.stringify(payload)}`);
+  }
+  if (String(payload?.active_household_id ?? '') !== String(DEMO_HOUSEHOLD_ID)) {
+    throw new Error(
+      `Verkeerd actief regressiehuishouden: verwacht ${DEMO_HOUSEHOLD_ID}, ontvangen ${payload?.active_household_id}.`,
+    );
   }
   return payload;
-}
-
-export async function authenticateRequestSession(request) {
-  return authenticateRequestAs(request, PLATFORM_EMAIL, PLATFORM_PASSWORD, 'platform');
-}
-
-export async function authenticateHouseholdRequestSession(request) {
-  return authenticateRequestAs(request, HOUSEHOLD_EMAIL, HOUSEHOLD_PASSWORD, 'huishouden');
 }
 
 export async function apiFetch(request, path, options = {}) {
@@ -103,13 +98,10 @@ export async function resetAndSeedStoreImportFixture(request) {
   await apiFetch(request, '/api/testing/fixtures/browser-regression/reset', { method: 'POST' });
   await apiFetch(request, '/api/testing/fixtures/receipts/seed-kassa', { method: 'POST' });
 
-  await authenticateHouseholdRequestSession(request);
-
   const householdId = await resolveAuthorizedHouseholdId(request);
   if (householdId !== String(DEMO_HOUSEHOLD_ID)) {
-    throw new Error(`Verkeerd actief huishouden: verwacht ${DEMO_HOUSEHOLD_ID}, ontvangen ${householdId}.`);
+    throw new Error(`Verkeerd actief regressiehuishouden: verwacht ${DEMO_HOUSEHOLD_ID}, ontvangen ${householdId}.`);
   }
-
   await seedAuthorizationMembershipFixture(request, householdId);
 
   const providers = await apiFetch(request, '/api/store-providers');
@@ -147,8 +139,8 @@ export async function resetAndSeedStoreImportFixture(request) {
 
 export async function loginThroughUi(page) {
   await page.goto('/login');
-  await page.getByLabel('E-mail').fill(requireCredential(HOUSEHOLD_EMAIL, 'huishouden e-mail'));
-  await page.getByLabel('Wachtwoord').fill(requireCredential(HOUSEHOLD_PASSWORD, 'huishouden wachtwoord'));
+  await page.getByLabel('E-mail').fill(SUPERUSER_EMAIL);
+  await page.getByLabel('Wachtwoord').fill(requireCredential(SUPERUSER_PASSWORD, 'platform-superuser wachtwoord'));
   await page.getByRole('button', { name: 'Inloggen' }).click();
   await page.waitForURL('**/home');
 }
@@ -156,8 +148,8 @@ export async function loginThroughUi(page) {
 export {
   API_URL,
   DEMO_HOUSEHOLD_ID,
-  PLATFORM_EMAIL,
-  PLATFORM_PASSWORD,
-  HOUSEHOLD_EMAIL,
-  HOUSEHOLD_PASSWORD,
+  SUPERUSER_EMAIL,
+  SUPERUSER_PASSWORD,
+  AUTHORIZATION_FIXTURE_MEMBER_EMAIL,
+  AUTHORIZATION_FIXTURE_MEMBER_ROLE,
 };
