@@ -12,8 +12,8 @@ function safeWindow() {
 function normalizeSessionContext(context) {
   if (!context || typeof context !== 'object') return null
   return {
-    user_id: context.user_id || '',
-    email: context.email || '',
+    user_id: context.user_id || context.user?.id || '',
+    email: context.email || context.user?.email || '',
     active_household_id: context.active_household_id || '',
     active_household_name: context.active_household_name || '',
     role: context.role || '',
@@ -27,7 +27,8 @@ function normalizeSessionContext(context) {
     can_manage_member_permissions: Boolean(context.can_manage_member_permissions),
     can_manage_members: Boolean(context.can_manage_members),
     is_viewer: Boolean(context.is_viewer),
-    is_frontteam_member: Boolean(context.is_frontteam_member),
+    is_frontteam: Boolean(context.is_frontteam || context.is_frontteam_member),
+    is_platform_superuser: Boolean(context.is_platform_superuser),
   }
 }
 
@@ -172,20 +173,22 @@ export async function fetchJsonWithAuth(url, options = {}) {
 
 export function isHouseholdAdminFromContext(context = null) {
   const source = context || readStoredAuthContext()
-  return ['admin', 'owner', 'household.admin'].includes(
-    String(source?.display_role || source?.role || '').trim().toLowerCase(),
-  )
+  return Boolean(source?.permissions?.['admin.access']) || [
+    'admin', 'owner', 'frontteam', 'frontteamlid',
+    'household.admin', 'household.owner', 'household.frontteam',
+  ].includes(String(source?.display_role || source?.role || '').trim().toLowerCase())
 }
 
 export function isPlatformSuperuserFromContext(context = null) {
   const source = context || readStoredAuthContext()
-  return String(source?.email || '').trim().toLowerCase() === PLATFORM_SUPERUSER_EMAIL
+  return Boolean(source?.is_platform_superuser)
+    || String(source?.email || '').trim().toLowerCase() === PLATFORM_SUPERUSER_EMAIL
 }
 
 export function isFrontteamMemberFromContext(context = null) {
   const source = context || readStoredAuthContext()
   return Boolean(
-    source?.is_frontteam_member
+    source?.is_frontteam
     || source?.permissions?.[FRONTTEAM_EXTERNAL_DATABASES_PERMISSION],
   )
 }
