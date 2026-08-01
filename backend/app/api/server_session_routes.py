@@ -110,14 +110,12 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
                 u.email,
                 u.password,
                 hm.household_id,
-                hm.role,
-                hm.created_at AS membership_created_at
+                hm.role
             FROM app_users u
             JOIN household_memberships hm ON hm.user_id = u.id
             WHERE lower(trim(u.email)) = :email
             ORDER BY
                 CASE WHEN lower(trim(hm.role)) = 'owner' THEN 0 ELSE 1 END,
-                hm.created_at ASC,
                 hm.household_id ASC
             """
         ),
