@@ -23,19 +23,33 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('frontend/src/features/receipts/KassaPage.jsx')
           text = path.read_text(encoding='utf-8')
-          replacements = {
-              "  const token = localStorage.getItem('rezzerv_token') || ''\n": "",
-              "    headers: token ? { Authorization: `Bearer ${token}` } : {},\n": "    credentials: 'include',\n",
-              "        const token = localStorage.getItem('rezzerv_token')\n        const household = await fetchJson('/api/household', {\n          headers: token ? { Authorization: `Bearer ${token}` } : {},\n        })": "        const household = await fetchJson('/api/household')",
-              "      const token = localStorage.getItem('rezzerv_token') || ''\n      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {\n        headers: token ? { Authorization: `Bearer ${token}` } : {},\n        credentials: 'include',\n      })": "      const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {\n        credentials: 'include',\n      })",
-          }
-          for old, new in replacements.items():
-              text = text.replace(old, new)
-          if 'rezzerv_token' in text or 'Authorization' in text or 'Bearer ' in text:
-              raise SystemExit('Legacy auth remains in KassaPage.jsx')
+
+          text = re.sub(
+              r"^\s*const token = localStorage\.getItem\('rezzerv_token'\)(?: \|\| '')?\s*\n",
+              '',
+              text,
+              flags=re.MULTILINE,
+          )
+          text = re.sub(
+              r"^(\s*)headers: token \? \{ Authorization: `Bearer \$\{token\}` \} : \{\},\s*$",
+              r"\1credentials: 'include',",
+              text,
+              flags=re.MULTILINE,
+          )
+          text = re.sub(
+              r"const household = await fetchJson\('/api/household', \{\s*credentials: 'include',\s*\}\)",
+              "const household = await fetchJson('/api/household')",
+              text,
+          )
+
+          remaining = [term for term in ('rezzerv_token', 'Authorization', 'Bearer ') if term in text]
+          if remaining:
+              raise SystemExit(f'Legacy auth remains in KassaPage.jsx: {remaining}')
+
           path.write_text(text, encoding='utf-8')
           PY
       - name: Restore workflow and commit focused migration
