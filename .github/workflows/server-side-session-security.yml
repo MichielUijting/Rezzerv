@@ -7,8 +7,7 @@ on:
       - 'backend/app/services/server_session_service.py'
       - 'backend/app/services/session_request_context.py'
       - 'backend/app/session_entrypoint.py'
-      - 'backend/tests/test_server_session_*.py'
-      - 'backend/tests/test_session_request_context.py'
+      - 'backend/tests/server_session_security_selftest.py'
       - 'backend/requirements.txt'
       - '.github/workflows/server-side-session-security.yml'
   workflow_dispatch:
@@ -30,14 +29,17 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
-      - name: Run server-side session security tests
+      - name: Compile server-side session modules
+        run: |
+          PYTHONPATH=. python -m py_compile \
+            app/api/server_session_routes.py \
+            app/services/server_session_service.py \
+            app/services/session_request_context.py \
+            app/session_entrypoint.py \
+            tests/server_session_security_selftest.py
+      - name: Run Rezzerv server-side session security selftest
         env:
           DATABASE_URL: sqlite:////tmp/rezzerv-server-session-tests.db
           REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
-          python -m pytest -q \
-            tests/test_server_session_service.py \
-            tests/test_server_session_routes.py \
-            tests/test_server_session_entrypoint.py \
-            tests/test_session_request_context.py
+          PYTHONPATH=. python tests/server_session_security_selftest.py
