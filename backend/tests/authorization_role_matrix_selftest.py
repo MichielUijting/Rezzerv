@@ -8,6 +8,11 @@ import urllib.request
 from dataclasses import dataclass
 from http.cookiejar import CookieJar
 
+from app.db import engine
+from app.services.authorization_ui_fixture_provisioning import (
+    ensure_authorization_ui_fixture_member,
+)
+
 
 API_URL = os.getenv("REZZERV_TEST_API_URL", "http://127.0.0.1:8000").rstrip("/")
 SUPERUSER_EMAIL = os.getenv("REZZERV_TEST_SUPERUSER_EMAIL", "supergebruiker@rezzerv.local")
@@ -27,6 +32,33 @@ def require_secret(value: str | None, name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} ontbreekt in de testomgeving")
     return value
+
+
+def provision_member_fixture() -> None:
+    with engine.begin() as connection:
+        result = ensure_authorization_ui_fixture_member(connection)
+    if result is None:
+        raise RuntimeError(
+            "Autorisatiefixture is uitgeschakeld; "
+            "REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO moet true zijn"
+        )
+    if result.email.lower() != MEMBER_EMAIL.lower():
+        raise RuntimeError(
+            f"Verkeerde fixturegebruiker: verwacht {MEMBER_EMAIL}, ontvangen {result.email}"
+        )
+    if str(result.household_id) != EXPECTED_HOUSEHOLD_ID:
+        raise RuntimeError(
+            "Verkeerd fixturehuishouden: "
+            f"verwacht {EXPECTED_HOUSEHOLD_ID}, ontvangen {result.household_id}"
+        )
+    if result.role_key != "household.member":
+        raise RuntimeError(
+            f"Verkeerde fixturerol: verwacht household.member, ontvangen {result.role_key}"
+        )
+    print(
+        "authorization_fixture: PASS; "
+        f"email={result.email}; household={result.household_id}; role={result.role_key}"
+    )
 
 
 def opener() -> urllib.request.OpenerDirector:
@@ -84,6 +116,8 @@ def assert_household_context(payload: dict, expected_role: str) -> None:
 def main() -> int:
     superuser_password = require_secret(SUPERUSER_PASSWORD, "REZZERV_TEST_SUPERUSER_PASSWORD")
     member_password = require_secret(MEMBER_PASSWORD, "REZZERV_TEST_MEMBER_PASSWORD")
+
+    provision_member_fixture()
 
     superuser_client, superuser_login = login(SUPERUSER_EMAIL, superuser_password)
     assert_household_context(superuser_login, "owner")
