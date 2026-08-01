@@ -14,6 +14,9 @@ from fastapi.routing import APIRoute
 import app.main as legacy_main
 from app.main import app
 from app.api.server_session_routes import create_server_session_router
+from app.services.authorization_ui_fixture_provisioning import (
+    ensure_authorization_ui_fixture_member,
+)
 from app.services.session_request_context import (
     authorized_household_id_from_session,
     bind_request_session,
@@ -111,6 +114,7 @@ def activate_server_side_session_routes() -> None:
 
 with legacy_main.engine.begin() as provisioning_conn:
     ensure_system_superuser_for_session_runtime(provisioning_conn)
+    ensure_authorization_ui_fixture_member(provisioning_conn)
 
 activate_server_side_route_context()
 activate_server_side_session_routes()
