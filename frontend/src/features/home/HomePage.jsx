@@ -6,6 +6,7 @@ import {
   fetchAuthContext,
   isFrontteamMemberFromContext,
   isHouseholdAdminFromContext,
+  isPlatformSuperuserFromContext,
   readStoredAuthContext,
 } from '../../lib/authSession.js'
 
@@ -34,6 +35,7 @@ function visibilityFromContext(context) {
   return {
     canOpenAdmin: isHouseholdAdminFromContext(context),
     canOpenExternalDatabases: isFrontteamMemberFromContext(context),
+    isPlatformSuperuser: isPlatformSuperuserFromContext(context),
   }
 }
 
@@ -56,7 +58,7 @@ export default function HomePage() {
   }, [])
 
   function openTile(key) {
-    if (key === 'meldingen') navigate('/meldingen')
+    if (key === 'meldingen') navigate(visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen')
     if (key === 'bijna-op') navigate('/bijna-op')
     if (key === 'voorraad') navigate('/voorraad')
     if (key === 'productgroepen') navigate('/productgroepen')
