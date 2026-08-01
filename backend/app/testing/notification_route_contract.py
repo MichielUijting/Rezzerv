@@ -10,11 +10,13 @@ EXPECTED_SUPPORT_ROUTES = {
     ("GET", "/api/support/threads"): "household",
     ("GET", "/api/support/threads/{thread_id}"): "household",
     ("POST", "/api/support/threads/{thread_id}/messages"): "household",
+    ("DELETE", "/api/support/threads/{thread_id}"): "household",
     ("GET", "/api/platform/support/threads"): "platform_read",
     ("GET", "/api/platform/support/threads/{thread_id}"): "platform_read",
     ("POST", "/api/platform/support/threads"): "platform_mutate",
     ("POST", "/api/platform/support/threads/{thread_id}/messages"): "platform_mutate",
     ("PATCH", "/api/platform/support/threads/{thread_id}/status"): "platform_mutate",
+    ("DELETE", "/api/platform/support/threads/{thread_id}"): "platform_mutate",
     ("GET", "/api/platform/support/export.csv"): "platform_read",
 }
 
