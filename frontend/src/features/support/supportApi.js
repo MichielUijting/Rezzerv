@@ -47,6 +47,10 @@ export function replyHouseholdThread(threadId, message) {
   })
 }
 
+export function deleteHouseholdThread(threadId) {
+  return request(`/api/support/threads/${encodeURIComponent(threadId)}`, { method: 'DELETE' })
+}
+
 export function listPlatformThreads({ status = '', householdId = '' } = {}) {
   const params = new URLSearchParams()
   if (status) params.set('status', status)
@@ -72,6 +76,10 @@ export function updatePlatformThreadStatus(threadId, status) {
   return request(`/api/platform/support/threads/${encodeURIComponent(threadId)}/status`, {
     method: 'PATCH', body: JSON.stringify({ status }),
   })
+}
+
+export function deletePlatformThread(threadId) {
+  return request(`/api/platform/support/threads/${encodeURIComponent(threadId)}`, { method: 'DELETE' })
 }
 
 export function downloadPlatformSupportCsv(status = '') {
