@@ -30,12 +30,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install pytest
       - name: Run server-side session security tests
         env:
           DATABASE_URL: sqlite:////tmp/rezzerv-server-session-tests.db
           REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
-          pytest -q \
+          python -m pytest -q \
             tests/test_server_session_service.py \
             tests/test_server_session_routes.py \
             tests/test_server_session_entrypoint.py \
