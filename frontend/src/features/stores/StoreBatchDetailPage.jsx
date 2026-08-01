@@ -1105,10 +1105,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     setIsLoading(true)
     setError('')
     try {
-      const token = localStorage.getItem('rezzerv_token')
-      const householdData = await fetchJson('/api/household', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const householdData = await fetchJson('/api/household')
       setHousehold(householdData)
 
       const [providerData, backendArticles, articleGroupsData, spacesData, sublocationsData, loadedBatch] = await Promise.all([
