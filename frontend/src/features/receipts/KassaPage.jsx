@@ -1347,7 +1347,6 @@ async function saveLine(lineId, overrides = null) {
     try {
       const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {
         credentials: 'include',
-        credentials: 'include',
       })
       if (!response.ok) {
         let message = 'Parsing-debug kon niet worden gedownload.'
