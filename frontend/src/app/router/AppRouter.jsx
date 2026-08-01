@@ -27,15 +27,14 @@ import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.js
 import CatalogPage from '../../features/catalog/CatalogPage.jsx'
 import CatalogDetailPageV2 from '../../features/catalog/CatalogDetailPageV2.jsx'
 import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.jsx'
+import { clearAuthSession } from '../../lib/authSession.js'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import SettingsGuard from './SettingsGuard'
 
 function LoginRoute() {
   const navigate = useNavigate()
-  function handleLogin(newToken, email) {
-    localStorage.setItem('rezzerv_token', newToken)
-    if (email) localStorage.setItem('rezzerv_user_email', email)
+  function handleLogin() {
     navigate('/home', { replace: false })
   }
   return <LoginPage onLoggedIn={handleLogin} />
@@ -43,13 +42,8 @@ function LoginRoute() {
 
 function ResetSessionRoute() {
   React.useEffect(() => {
-    try {
-      localStorage.removeItem('rezzerv_token')
-      localStorage.removeItem('rezzerv_user_email')
-      sessionStorage.clear()
-    } finally {
-      window.location.replace('/login')
-    }
+    clearAuthSession()
+    window.location.replace('/login')
   }, [])
   return null
 }
