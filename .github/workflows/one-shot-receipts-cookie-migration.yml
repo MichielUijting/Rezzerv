@@ -1,0 +1,47 @@
+name: One-shot Receipts cookie migration
+
+on:
+  push:
+    branches:
+      - agent/server-side-session-foundation
+    paths:
+      - '.github/workflows/one-shot-receipts-cookie-migration.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/server-side-session-foundation
+          fetch-depth: 0
+      - name: Replace legacy Receipts auth block
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/src/features/receipts/ReceiptsPage.jsx')
+          text = path.read_text(encoding='utf-8')
+          old = """        const token = localStorage.getItem('rezzerv_token')
+          const householdData = await fetchJson('/api/household', {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          })"""
+          new = """        const householdData = await fetchJson('/api/household')"""
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one legacy auth block, found {count}')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+      - name: Commit focused migration and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name 'rezzerv-migration-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm .github/workflows/one-shot-receipts-cookie-migration.yml
+          git add frontend/src/features/receipts/ReceiptsPage.jsx
+          git commit -m 'Use cookie session in receipts overview'
+          git push origin HEAD:agent/server-side-session-foundation
