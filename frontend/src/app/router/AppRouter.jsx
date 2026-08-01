@@ -31,6 +31,7 @@ import { clearAuthSession } from '../../lib/authSession.js'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import FrontteamGuard from './FrontteamGuard'
+import PermissionGuard from './PermissionGuard'
 import SettingsGuard from './SettingsGuard'
 
 function LoginRoute() {
@@ -73,6 +74,10 @@ function ProtectedFrontteam({ children }) {
   return <AuthGuard><FrontteamGuard>{children}</FrontteamGuard></AuthGuard>
 }
 
+function ProtectedPermission({ permission, children, message }) {
+  return <AuthGuard><PermissionGuard permission={permission} message={message}>{children}</PermissionGuard></AuthGuard>
+}
+
 function ProtectedSettings({ children, allowViewer = true }) {
   return <AuthGuard><SettingsGuard allowViewer={allowViewer}>{children}</SettingsGuard></AuthGuard>
 }
@@ -93,9 +98,9 @@ const router = createBrowserRouter([
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
   { path: '/externe-databases', element: <ProtectedFrontteam><ExternalDatabasesPage /></ProtectedFrontteam> },
-  { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
-  { path: '/catalogus/gpc-classificeren', element: <ProtectedAdmin><CatalogGpcActionPage /></ProtectedAdmin> },
-  { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPageV2 /></ProtectedAdmin> },
+  { path: '/catalogus', element: <Protected><CatalogPage /></Protected> },
+  { path: '/catalogus/gpc-classificeren', element: <ProtectedPermission permission="gpc.update" message="Je rol mag GPC bekijken, maar niet wijzigen."><CatalogGpcActionPage /></ProtectedPermission> },
+  { path: '/catalogus/:globalProductId', element: <Protected><CatalogDetailPageV2 /></Protected> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },
