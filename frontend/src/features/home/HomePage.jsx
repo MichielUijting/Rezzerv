@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
-import { readStoredAuthContext, isHouseholdViewerFromContext } from '../../lib/authSession.js'
+import { fetchAuthContext, readStoredAuthContext } from '../../lib/authSession.js'
 
 const tiles = [
   { key: 'bijna-op', label: 'Bijna op', icon: '📉' },
@@ -24,29 +24,24 @@ const tiles = [
   { key: 'admin', label: 'Admin', icon: '🛠️' },
 ]
 
+function isAdmin(context) {
+  return String(context?.display_role || context?.role || '').trim().toLowerCase() === 'admin'
+}
+
 export default function HomePage() {
   const navigate = useNavigate()
-  const storedContext = readStoredAuthContext()
-  const [householdName, setHouseholdName] = useState(storedContext?.active_household_name || '')
-  const [isHouseholdAdmin, setIsHouseholdAdmin] = useState(String(storedContext?.display_role || '').toLowerCase() === 'admin')
-  const [isViewer, setIsViewer] = useState(isHouseholdViewerFromContext(storedContext))
+  const [isHouseholdAdmin, setIsHouseholdAdmin] = useState(() => isAdmin(readStoredAuthContext()))
 
   useEffect(() => {
-    const token = localStorage.getItem('rezzerv_token')
-    if (!token) return
-    fetch('/api/household', { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Huishouden niet beschikbaar')
-        return res.json()
-      })
-      .then((data) => {
-        const name = data?.naam || 'Mijn huishouden'
-        setHouseholdName(name)
-        setIsHouseholdAdmin(Boolean(data?.is_household_admin))
-        setIsViewer(Boolean(data?.is_viewer))
-        localStorage.setItem('rezzerv_household_name', name)
+    let cancelled = false
+    fetchAuthContext()
+      .then((context) => {
+        if (!cancelled) setIsHouseholdAdmin(isAdmin(context))
       })
       .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   function openTile(key) {
