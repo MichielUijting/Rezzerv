@@ -66,6 +66,10 @@ export function createPlatformThread(payload) {
   return request('/api/platform/support/threads', { method: 'POST', body: JSON.stringify(payload) })
 }
 
+export function createPlatformBroadcast(payload) {
+  return request('/api/platform/support/broadcast', { method: 'POST', body: JSON.stringify(payload) })
+}
+
 export function replyPlatformThread(threadId, message) {
   return request(`/api/platform/support/threads/${encodeURIComponent(threadId)}/messages`, {
     method: 'POST', body: JSON.stringify({ message }),
