@@ -14,6 +14,13 @@ checks = {
     "platform shows refresh status": "Laatst ververst:" in PLATFORM and "refreshCount" in PLATFORM,
     "household supports deletion": "deleteHouseholdThread" in HOUSEHOLD and "rz-support-delete" in HOUSEHOLD,
     "platform supports deletion": "deletePlatformThread" in PLATFORM and "rz-support-delete" in PLATFORM,
+    "household uses central feedback confirmation": "useAppFeedback" in HOUSEHOLD and "support-delete-confirmation" in HOUSEHOLD,
+    "platform uses central feedback confirmation": "useAppFeedback" in PLATFORM and "support-delete-confirmation" in PLATFORM,
+    "native browser confirm removed": "window.confirm" not in HOUSEHOLD and "window.confirm" not in PLATFORM,
+    "delete confirmation has canonical actions": all(
+        token in HOUSEHOLD and token in PLATFORM
+        for token in ["primaryActionLabel: 'Verwijderen'", "secondaryActionLabel: 'Annuleren'"]
+    ),
     "API exposes delete calls": "method: 'DELETE'" in API,
     "backend exposes household delete": '@router.delete("/api/support/threads/{thread_id}")' in ROUTES,
     "backend exposes platform delete": '@router.delete("/api/platform/support/threads/{thread_id}")' in ROUTES,
