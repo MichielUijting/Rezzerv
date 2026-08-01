@@ -30,6 +30,7 @@ import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.js
 import { clearAuthSession } from '../../lib/authSession.js'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
+import FrontteamGuard from './FrontteamGuard'
 import SettingsGuard from './SettingsGuard'
 
 function LoginRoute() {
@@ -68,6 +69,10 @@ function ProtectedAdmin({ children }) {
   return <AuthGuard><AdminGuard>{children}</AdminGuard></AuthGuard>
 }
 
+function ProtectedFrontteam({ children }) {
+  return <AuthGuard><FrontteamGuard>{children}</FrontteamGuard></AuthGuard>
+}
+
 function ProtectedSettings({ children, allowViewer = true }) {
   return <AuthGuard><SettingsGuard allowViewer={allowViewer}>{children}</SettingsGuard></AuthGuard>
 }
@@ -87,7 +92,7 @@ const router = createBrowserRouter([
   { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
-  { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
+  { path: '/externe-databases', element: <ProtectedFrontteam><ExternalDatabasesPage /></ProtectedFrontteam> },
   { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
   { path: '/catalogus/gpc-classificeren', element: <ProtectedAdmin><CatalogGpcActionPage /></ProtectedAdmin> },
   { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPageV2 /></ProtectedAdmin> },
