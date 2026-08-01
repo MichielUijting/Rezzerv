@@ -1,32 +1,28 @@
-CLS
-
 param(
   [switch]$SkipDockerBuild
 )
+
+CLS
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "=== Rezzerv centrale frontendregressie ===" -ForegroundColor Cyan
 
 function New-RegressionAuthenticatedSession {
-  Write-Host "`n=== Server-side regressiesessie ===" -ForegroundColor Cyan
+  param(
+    [Parameter(Mandatory = $true)]
+    [string]$Email,
+    [Parameter(Mandatory = $true)]
+    [string]$Password,
+    [string]$Label = "regressiesessie"
+  )
 
-  $email = if ($env:PLAYWRIGHT_SUPERUSER_EMAIL) {
-    $env:PLAYWRIGHT_SUPERUSER_EMAIL
-  } else {
-    "supergebruiker@rezzerv.local"
-  }
-
-  $password = if ($env:PLAYWRIGHT_SUPERUSER_PASSWORD) {
-    $env:PLAYWRIGHT_SUPERUSER_PASSWORD
-  } else {
-    "RezzervSuper123!"
-  }
+  Write-Host "`n=== Server-side $Label ===" -ForegroundColor Cyan
 
   $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
   $body = @{
-    email = $email
-    password = $password
+    email = $Email
+    password = $Password
   } | ConvertTo-Json
 
   $login = Invoke-RestMethod `
@@ -37,7 +33,7 @@ function New-RegressionAuthenticatedSession {
     -WebSession $session
 
   if (-not $login -or -not $login.email) {
-    throw "Server-side regressiesessie kon niet worden vastgesteld."
+    throw "Server-side $Label kon niet worden vastgesteld."
   }
 
   Write-Host "Aangemeld als $($login.email)." -ForegroundColor Green
@@ -77,7 +73,18 @@ function Invoke-RegressionFixtureCleanup {
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
-$regressionWebSession = $null
+
+$platformEmail = if ($env:REZZERV_PLATFORM_EMAIL) { $env:REZZERV_PLATFORM_EMAIL } else { "supergebruiker@rezzerv.local" }
+$platformPassword = $env:REZZERV_PLATFORM_PASSWORD
+$householdEmail = if ($env:REZZERV_PLAYWRIGHT_EMAIL) { $env:REZZERV_PLAYWRIGHT_EMAIL } else { "admin@rezzerv.local" }
+$householdPassword = $env:REZZERV_PLAYWRIGHT_PASSWORD
+
+if (-not $platformPassword) {
+  throw "REZZERV_PLATFORM_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
+}
+if (-not $householdPassword) {
+  throw "REZZERV_PLAYWRIGHT_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
+}
 
 try {
   if (-not $SkipDockerBuild) {
@@ -103,21 +110,15 @@ try {
     throw "Backend healthcheck niet groen na 12 pogingen."
   }
 
-  $regressionWebSession = New-RegressionAuthenticatedSession
-  Invoke-RegressionFixtureCleanup -WebSession $regressionWebSession
-
-  $playwrightEmail = if ($env:REZZERV_PLAYWRIGHT_EMAIL) {
-    $env:REZZERV_PLAYWRIGHT_EMAIL
-  } else {
-    "admin@rezzerv.local"
-  }
-  $playwrightPassword = $env:REZZERV_PLAYWRIGHT_PASSWORD
-  if (-not $playwrightPassword) {
-    throw "REZZERV_PLAYWRIGHT_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
-  }
+  $cleanupSession = New-RegressionAuthenticatedSession `
+    -Email $platformEmail `
+    -Password $platformPassword `
+    -Label "platform-regressiesessie"
+  Invoke-RegressionFixtureCleanup -WebSession $cleanupSession
 
   Write-Host "`n=== Playwright frontend regressie via Docker ===" -ForegroundColor Cyan
-  Write-Host "Playwright-gebruiker: $playwrightEmail; huishouden: 1" -ForegroundColor Cyan
+  Write-Host "Platformgebruiker: $platformEmail" -ForegroundColor Cyan
+  Write-Host "Playwright-gebruiker: $householdEmail; huishouden: 1" -ForegroundColor Cyan
 
   $frontendPath = Join-Path $repoRoot "frontend"
   $frontendPath = $frontendPath.Replace("\", "/")
@@ -140,8 +141,10 @@ try {
     --add-host=host.docker.internal:host-gateway `
     -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:5174 `
     -e PLAYWRIGHT_API_URL=http://host.docker.internal:8011 `
-    -e PLAYWRIGHT_SUPERUSER_EMAIL=$playwrightEmail `
-    -e PLAYWRIGHT_SUPERUSER_PASSWORD=$playwrightPassword `
+    -e PLAYWRIGHT_PLATFORM_EMAIL=$platformEmail `
+    -e PLAYWRIGHT_PLATFORM_PASSWORD=$platformPassword `
+    -e PLAYWRIGHT_HOUSEHOLD_EMAIL=$householdEmail `
+    -e PLAYWRIGHT_HOUSEHOLD_PASSWORD=$householdPassword `
     -e PLAYWRIGHT_HOUSEHOLD_ID=1 `
     -v "${frontendPath}:/work" `
     -v rezzerv_playwright_node_modules:/work/node_modules `
@@ -157,8 +160,11 @@ try {
 }
 finally {
   try {
-    $regressionWebSession = New-RegressionAuthenticatedSession
-    Invoke-RegressionFixtureCleanup -WebSession $regressionWebSession
+    $cleanupSession = New-RegressionAuthenticatedSession `
+      -Email $platformEmail `
+      -Password $platformPassword `
+      -Label "platform-regressiesessie"
+    Invoke-RegressionFixtureCleanup -WebSession $cleanupSession
   } catch {
     Write-Host "Regression fixture cleanup na test faalde: $($_.Exception.Message)" -ForegroundColor Red
     if ($LASTEXITCODE -eq 0) {
