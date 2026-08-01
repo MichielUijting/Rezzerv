@@ -7,6 +7,9 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from http.cookiejar import CookieJar
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db import engine
 from app.services.authorization_ui_fixture_provisioning import (
