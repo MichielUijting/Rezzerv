@@ -6,13 +6,50 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Rezzerv centrale frontendregressie ===" -ForegroundColor Cyan
 
+function New-RegressionAuthenticatedSession {
+  Write-Host "`n=== Server-side regressiesessie ===" -ForegroundColor Cyan
+
+  $email = if ($env:PLAYWRIGHT_SUPERUSER_EMAIL) {
+    $env:PLAYWRIGHT_SUPERUSER_EMAIL
+  } else {
+    "supergebruiker@rezzerv.local"
+  }
+
+  $password = if ($env:PLAYWRIGHT_SUPERUSER_PASSWORD) {
+    $env:PLAYWRIGHT_SUPERUSER_PASSWORD
+  } else {
+    "RezzervSuper123!"
+  }
+
+  $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+  $body = @{
+    email = $email
+    password = $password
+  } | ConvertTo-Json
+
+  $login = Invoke-RestMethod `
+    -Method Post `
+    -Uri "http://localhost:8011/api/auth/login" `
+    -ContentType "application/json" `
+    -Body $body `
+    -WebSession $session
+
+  if (-not $login -or -not $login.email) {
+    throw "Server-side regressiesessie kon niet worden vastgesteld."
+  }
+
+  Write-Host "Aangemeld als $($login.email)." -ForegroundColor Green
+  return $session
+}
+
 function Invoke-RegressionFixtureCleanup {
   param(
+    [Parameter(Mandatory = $true)]
+    [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession,
     [int]$MaxAttempts = 5
   )
 
   Write-Host "`n=== Regression fixture cleanup ===" -ForegroundColor Cyan
-  $headers = @{ Authorization = "Bearer rezzerv-dev-token::admin@rezzerv.local" }
   $lastError = $null
 
   for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
@@ -20,7 +57,10 @@ function Invoke-RegressionFixtureCleanup {
       if ($attempt -gt 1) {
         Write-Host "Cleanup opnieuw proberen ($attempt/$MaxAttempts)..." -ForegroundColor Yellow
       }
-      Invoke-RestMethod -Method Post -Uri "http://localhost:8011/api/testing/fixtures/cleanup" -Headers $headers | Out-Host
+      Invoke-RestMethod `
+        -Method Post `
+        -Uri "http://localhost:8011/api/testing/fixtures/cleanup" `
+        -WebSession $WebSession | Out-Host
       return
     } catch {
       $lastError = $_
@@ -35,6 +75,7 @@ function Invoke-RegressionFixtureCleanup {
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
+$regressionWebSession = $null
 
 try {
   if (-not $SkipDockerBuild) {
@@ -60,7 +101,8 @@ try {
     throw "Backend healthcheck niet groen na 12 pogingen."
   }
 
-  Invoke-RegressionFixtureCleanup
+  $regressionWebSession = New-RegressionAuthenticatedSession
+  Invoke-RegressionFixtureCleanup -WebSession $regressionWebSession
 
   Write-Host "`n=== Playwright frontend regressie via Docker ===" -ForegroundColor Cyan
 
@@ -98,12 +140,14 @@ try {
   Write-Host "`n=== Frontend regressie groen ===" -ForegroundColor Green
 }
 finally {
-  try {
-    Invoke-RegressionFixtureCleanup
-  } catch {
-    Write-Host "Regression fixture cleanup na test faalde: $($_.Exception.Message)" -ForegroundColor Red
-    if ($LASTEXITCODE -eq 0) {
-      $global:LASTEXITCODE = 1
+  if ($null -ne $regressionWebSession) {
+    try {
+      Invoke-RegressionFixtureCleanup -WebSession $regressionWebSession
+    } catch {
+      Write-Host "Regression fixture cleanup na test faalde: $($_.Exception.Message)" -ForegroundColor Red
+      if ($LASTEXITCODE -eq 0) {
+        $global:LASTEXITCODE = 1
+      }
     }
   }
   Pop-Location
