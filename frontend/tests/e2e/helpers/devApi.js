@@ -2,6 +2,8 @@ const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:8001';
 const DEMO_HOUSEHOLD_ID = process.env.PLAYWRIGHT_HOUSEHOLD_ID || '0';
 const SUPERUSER_EMAIL = process.env.PLAYWRIGHT_SUPERUSER_EMAIL || 'supergebruiker@rezzerv.local';
 const SUPERUSER_PASSWORD = process.env.PLAYWRIGHT_SUPERUSER_PASSWORD || 'RezzervSuper123!';
+const AUTHORIZATION_FIXTURE_MEMBER_EMAIL = 'lid@rezzerv.local';
+const AUTHORIZATION_FIXTURE_MEMBER_ROLE = 'household.member';
 
 async function parseJson(response) {
   const text = await response.text();
@@ -46,6 +48,36 @@ export async function resolveAuthorizedHouseholdId(request) {
   return String(household?.id || household?.household_id || DEMO_HOUSEHOLD_ID);
 }
 
+async function seedAuthorizationMembershipFixture(request, householdId) {
+  const membersPayload = await apiFetch(
+    request,
+    `/api/households/${encodeURIComponent(householdId)}/authorization/members`,
+  );
+  const member = (membersPayload?.items || []).find(
+    (item) => String(item?.email || '').trim().toLowerCase() === AUTHORIZATION_FIXTURE_MEMBER_EMAIL,
+  );
+
+  if (!member?.membership_id) {
+    throw new Error(
+      `Autorisatie-fixturelid ${AUTHORIZATION_FIXTURE_MEMBER_EMAIL} ontbreekt in huishouden ${householdId}.`,
+    );
+  }
+
+  if (member.role_key !== AUTHORIZATION_FIXTURE_MEMBER_ROLE) {
+    await apiFetch(
+      request,
+      `/api/households/${encodeURIComponent(householdId)}/authorization/members/${encodeURIComponent(member.membership_id)}/role`,
+      {
+        method: 'PUT',
+        data: {
+          role_key: AUTHORIZATION_FIXTURE_MEMBER_ROLE,
+          reason: 'Deterministische browser-regressiefixture',
+        },
+      },
+    );
+  }
+}
+
 export async function cleanupRegressionFixtures(request) {
   return apiFetch(request, '/api/testing/fixtures/cleanup', { method: 'POST' });
 }
@@ -55,6 +87,8 @@ export async function resetAndSeedStoreImportFixture(request) {
   await apiFetch(request, '/api/testing/fixtures/receipts/seed-kassa', { method: 'POST' });
 
   const householdId = await resolveAuthorizedHouseholdId(request);
+  await seedAuthorizationMembershipFixture(request, householdId);
+
   const providers = await apiFetch(request, '/api/store-providers');
   const requiredProviderCodes = ['lidl', 'jumbo'];
 
