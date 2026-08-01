@@ -3,6 +3,7 @@ import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
+import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { readStoredAuthContext } from '../../lib/authSession.js'
 import {
   deletePlatformThread,
@@ -17,6 +18,7 @@ const STATUSES = ['Open', '', 'In behandeling', 'Gesloten']
 const AUTO_REFRESH_MS = 2000
 
 export default function PlatformSupportPage() {
+  const { showFeedback } = useAppFeedback()
   const currentUserId = String(readStoredAuthContext()?.user_id || readStoredAuthContext()?.email || '').trim().toLowerCase()
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
@@ -81,8 +83,7 @@ export default function PlatformSupportPage() {
     finally { setBusy(false) }
   }
 
-  async function removeThread(threadId) {
-    if (!window.confirm('Deze melding definitief verwijderen?')) return
+  async function performRemoveThread(threadId) {
     setBusy(true)
     setFeedback('')
     try {
@@ -90,8 +91,24 @@ export default function PlatformSupportPage() {
       if (selected?.thread?.id === threadId) setSelected(null)
       await loadThreads()
       setFeedback('Melding verwijderd.')
-    } catch (error) { setFeedback(error.message) }
-    finally { setBusy(false) }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function removeThread(threadId, threadSubject) {
+    showFeedback({
+      variant: 'warning',
+      title: 'Melding verwijderen',
+      message: `Wil je de melding “${threadSubject}” definitief verwijderen?`,
+      detail: 'Deze actie kan niet ongedaan worden gemaakt.',
+      dismissMode: 'action-only',
+      primaryActionLabel: 'Verwijderen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: async () => performRemoveThread(threadId),
+      key: `platform-support-delete-${threadId}`,
+      testId: 'support-delete-confirmation',
+    })
   }
 
   async function submitReply(event) {
@@ -155,7 +172,7 @@ export default function PlatformSupportPage() {
                   <span>{thread.thread_number} · {thread.status}</span>
                   <span>Huishouden {thread.household_id || '-'} · {thread.created_by_name} · {thread.message_count} bericht(en)</span>
                 </button>
-                <button type="button" className="rz-support-delete" aria-label={`Melding ${thread.subject} verwijderen`} onClick={() => removeThread(thread.id)}>🗑</button>
+                <button type="button" className="rz-support-delete" aria-label={`Melding ${thread.subject} verwijderen`} onClick={() => removeThread(thread.id, thread.subject)}>🗑</button>
               </div>
             ))}
           </div>
