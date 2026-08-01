@@ -89,7 +89,7 @@ def authorized_household_id_from_session(
     _authorization: str | None = None,
     requested_household_id: str | None = None,
     *,
-    fallback: str = "demo-household",
+    fallback: str | None = None,
     require_authorization: bool = False,
 ) -> str:
     """Cookie-only replacement for the legacy household resolver.
@@ -106,7 +106,7 @@ def authorized_household_id_from_session(
 
 def request_household_id_from_session(
     _authorization: str | None = None,
-    fallback: str = "demo-household",
+    fallback: str | None = None,
 ) -> str:
     """Cookie-only replacement for legacy request-household fallback logic."""
 
