@@ -9,6 +9,8 @@ ROOT = Path(__file__).resolve().parents[1] / "src"
 AUTH_SESSION = ROOT / "lib" / "authSession.js"
 LOGIN_PAGE = ROOT / "features" / "auth" / "LoginPage.jsx"
 API_CLIENT = ROOT / "lib" / "apiClient.js"
+HOME_PAGE = ROOT / "features" / "home" / "HomePage.jsx"
+ADMIN_GUARD = ROOT / "app" / "router" / "AdminGuard.jsx"
 HEADER = ROOT / "ui" / "Header.jsx"
 
 FORBIDDEN = {
@@ -37,7 +39,6 @@ def run() -> int:
             if needle not in text:
                 continue
             if path.resolve() == ALLOWED_COMPATIBILITY_FILE and needle == "rezzerv_token":
-                # The compatibility adapter may delete the old key, but never read or write it.
                 bad_reads = "getItem('rezzerv_token')" in text or 'getItem("rezzerv_token")' in text
                 bad_writes = "setItem('rezzerv_token'" in text or 'setItem("rezzerv_token"' in text
                 if not bad_reads and not bad_writes:
@@ -47,6 +48,8 @@ def run() -> int:
     auth_text = AUTH_SESSION.read_text(encoding="utf-8")
     login_text = LOGIN_PAGE.read_text(encoding="utf-8")
     api_text = API_CLIENT.read_text(encoding="utf-8")
+    home_text = HOME_PAGE.read_text(encoding="utf-8")
+    admin_guard_text = ADMIN_GUARD.read_text(encoding="utf-8")
     header_text = HEADER.read_text(encoding="utf-8")
 
     required = {
@@ -58,6 +61,13 @@ def run() -> int:
         "header reads server session context": "readStoredAuthContext" in header_text,
         "header renders active household": "active_household_id" in header_text and "Huishouden:" in header_text,
         "header does not read legacy localStorage": "localStorage.getItem" not in header_text,
+        "canonical platform superuser helper exists": "isPlatformSuperuserFromContext" in auth_text,
+        "canonical platform superuser email is fixed": "supergebruiker@rezzerv.local" in auth_text,
+        "home admin tile uses platform authority": "tile.key !== 'admin' || isPlatformSuperuser" in home_text,
+        "catalog tile is not tied to admin visibility": "['admin', 'catalogus']" not in home_text,
+        "admin route uses platform authority": "isPlatformSuperuserFromContext" in admin_guard_text,
+        "admin route does not use household admin authority": "isHouseholdAdminFromContext" not in admin_guard_text,
+        "beheerder2 is never canonical platform superuser": "beheerder2@rezzerv.local" not in auth_text,
     }
     for label, passed in required.items():
         if not passed:
@@ -73,6 +83,8 @@ def run() -> int:
     print("PASS frontend requests use the HttpOnly session cookie")
     print("PASS header renders the active household from server session context")
     print("PASS no frontend source reads or writes a Bearer token")
+    print("PASS platform admin is restricted to supergebruiker@rezzerv.local")
+    print("PASS household admin authority does not grant platform admin access")
     print("FRONTEND_COOKIE_SESSION_AUDIT_GREEN")
     return 0
 
