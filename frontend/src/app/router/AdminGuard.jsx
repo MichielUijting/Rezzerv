@@ -1,6 +1,6 @@
 import { Navigate } from 'react-router-dom'
 import {
-  isPlatformSuperuserFromContext,
+  isHouseholdAdminFromContext,
   readStoredAuthContext,
   setLoginMessage,
 } from '../../lib/authSession'
@@ -8,8 +8,8 @@ import {
 export default function AdminGuard({ children }) {
   const context = readStoredAuthContext()
   if (!context) return <Navigate to="/login" replace />
-  if (!isPlatformSuperuserFromContext(context)) {
-    setLoginMessage('Alleen de platform-supergebruiker heeft toegang tot platformbeheer.')
+  if (!isHouseholdAdminFromContext(context)) {
+    setLoginMessage('Alleen de beheerder van het actieve huishouden heeft toegang tot beheerfuncties.')
     return <Navigate to="/home" replace />
   }
   return children
