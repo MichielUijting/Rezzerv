@@ -91,8 +91,8 @@ def _clear_session_cookie(response: Response, configuration: SessionApiConfigura
 def _verify_password(stored_password: Any, supplied_password: str) -> bool:
     """Compatibility verifier for the current Rezzerv user registry.
 
-    Current `app_users.password` values are plaintext compatibility data.  The
-    comparison is constant-time.  Password hashing remains a separate security
+    Current `app_users.password` values are plaintext compatibility data. The
+    comparison is constant-time. Password hashing remains a separate security
     migration and is not silently mixed into this session tranche.
     """
 
@@ -102,7 +102,7 @@ def _verify_password(stored_password: Any, supplied_password: str) -> bool:
 
 
 def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
-    row = conn.execute(
+    rows = conn.execute(
         text(
             """
             SELECT
