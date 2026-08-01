@@ -13,8 +13,11 @@ checks = {
     "backend broadcast-route aanwezig": '@router.post("/api/platform/support/broadcast"' in ROUTE,
     "alleen platformmutatie toegestaan": "platform.support_access.mutate" in ROUTE,
     "actieve leden worden geselecteerd": "_active_member_targets" in ROUTE and "household_memberships" in ROUTE,
+    "runtime user_email wordt ondersteund": '"user_email"' in ROUTE,
+    "app_users wordt gebruikt voor intern gebruikers-ID": "_resolve_app_user_id" in ROUTE and "app_users" in ROUTE,
     "systeemhuishouden wordt uitgesloten": 'household_id == "0"' in ROUTE,
-    "ieder lid krijgt eigen gesprek": "for target_user_id, household_id in targets" in ROUTE,
+    "superuser wordt als ontvanger uitgesloten": "actor_email" in ROUTE and "user_id == actor_user_id" in ROUTE,
+    "ieder lid krijgt eigen gesprek": "for target_user_id, household_id, target_name in targets" in ROUTE,
     "superuser blijft afzender": "UPDATE support_messages" in ROUTE and 'sender_user_id": actor["user_id"]' in ROUTE,
     "route is geregistreerd": "support_broadcast_router" in ENTRYPOINT and "app.include_router(support_broadcast_router)" in ENTRYPOINT,
 }
