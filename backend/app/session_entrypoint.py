@@ -13,7 +13,7 @@ from fastapi.routing import APIRoute
 
 import app.main as legacy_main
 from app.main import app
-from app.api.server_session_routes import router as server_session_router
+from app.api.server_session_routes import create_server_session_router
 from app.services.session_request_context import (
     authorized_household_id_from_session,
     bind_request_session,
@@ -74,7 +74,7 @@ def activate_server_side_session_routes() -> None:
     app.router.routes[:] = [
         route for route in app.router.routes if not _is_replaced_session_route(route)
     ]
-    app.include_router(server_session_router)
+    app.include_router(create_server_session_router(legacy_main.engine))
 
     registered = {
         (route.path, method)
