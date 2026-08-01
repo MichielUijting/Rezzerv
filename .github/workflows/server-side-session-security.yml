@@ -7,7 +7,9 @@ on:
       - 'backend/app/services/server_session_service.py'
       - 'backend/app/services/session_request_context.py'
       - 'backend/app/session_entrypoint.py'
+      - 'backend/app/main.py'
       - 'backend/tests/server_session_security_selftest.py'
+      - 'backend/tests/server_session_route_guard_audit.py'
       - 'backend/requirements.txt'
       - '.github/workflows/server-side-session-security.yml'
   workflow_dispatch:
@@ -29,17 +31,21 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-      - name: Compile server-side session modules
+      - name: Compile server-side session modules and audits
         run: |
           PYTHONPATH=. python -m py_compile \
             app/api/server_session_routes.py \
             app/services/server_session_service.py \
             app/services/session_request_context.py \
             app/session_entrypoint.py \
-            tests/server_session_security_selftest.py
+            tests/server_session_security_selftest.py \
+            tests/server_session_route_guard_audit.py
       - name: Run Rezzerv server-side session security selftest
         env:
           DATABASE_URL: sqlite:////tmp/rezzerv-server-session-tests.db
           REZZERV_SESSION_COOKIE_SECURE: 'false'
         run: |
           PYTHONPATH=. python tests/server_session_security_selftest.py
+      - name: Audit legacy route guards
+        run: |
+          PYTHONPATH=. python tests/server_session_route_guard_audit.py
