@@ -188,7 +188,8 @@ export function isPlatformSuperuserFromContext(context = null) {
 export function isFrontteamMemberFromContext(context = null) {
   const source = context || readStoredAuthContext()
   return Boolean(
-    source?.is_frontteam
+    isPlatformSuperuserFromContext(source)
+    || source?.is_frontteam
     || source?.permissions?.[FRONTTEAM_EXTERNAL_DATABASES_PERMISSION],
   )
 }
