@@ -24,3 +24,16 @@ jobs:
 
       - name: Validate PO authorization matrix v1.1
         run: python -m app.testing.authorization_matrix_acceptance
+
+      - name: Validate canonical authorization documentation
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md
+          test -f docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md
+          test -f RUN_AUTORISATIEMATRIX_TEST.bat
+          grep -q "190 controles" docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md
+          grep -q "AUTORISATIEMATRIX_ACCEPTATIE_GREEN" docs/testing/AUTORISATIE-REGRESSIEPROTOCOL-v1.1.md
+          grep -q "superuser.*Externe databases" docs/security/AUTORISATIEMECHANISME-EN-MATRIX-v1.1.md
+          echo "AUTORISATIEDOCUMENTATIE_CONTRACT_GREEN"
