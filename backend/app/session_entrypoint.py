@@ -20,6 +20,7 @@ from app.services.session_request_context import (
     household_context_from_session,
     legacy_user_payload_from_session,
     request_household_id_from_session,
+    require_household_admin_from_session,
     require_platform_admin_from_session,
     reset_request_session,
 )
@@ -54,6 +55,7 @@ def activate_server_side_route_context() -> None:
 
     legacy_main.get_current_user_from_authorization = legacy_user_payload_from_session
     legacy_main.require_household_context = household_context_from_session
+    legacy_main.require_household_admin_context = require_household_admin_from_session
     legacy_main.resolve_authorized_household_id = authorized_household_id_from_session
     legacy_main.get_request_household_id = request_household_id_from_session
     legacy_main.require_platform_admin_user = require_platform_admin_from_session
