@@ -129,10 +129,7 @@ export default function StoresPage() {
     setIsLoading(true)
     setError('')
     try {
-      const token = localStorage.getItem('rezzerv_token')
-      const householdData = await fetchJson('/api/household', {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      })
+      const householdData = await fetchJson('/api/household')
       setHousehold(householdData)
 
       const [providerData, connectionData] = await Promise.all([
