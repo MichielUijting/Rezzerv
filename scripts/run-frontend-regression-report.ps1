@@ -1,3 +1,5 @@
+CLS
+
 param(
   [switch]$SkipDockerBuild
 )
@@ -104,7 +106,18 @@ try {
   $regressionWebSession = New-RegressionAuthenticatedSession
   Invoke-RegressionFixtureCleanup -WebSession $regressionWebSession
 
+  $playwrightEmail = if ($env:REZZERV_PLAYWRIGHT_EMAIL) {
+    $env:REZZERV_PLAYWRIGHT_EMAIL
+  } else {
+    "admin@rezzerv.local"
+  }
+  $playwrightPassword = $env:REZZERV_PLAYWRIGHT_PASSWORD
+  if (-not $playwrightPassword) {
+    throw "REZZERV_PLAYWRIGHT_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
+  }
+
   Write-Host "`n=== Playwright frontend regressie via Docker ===" -ForegroundColor Cyan
+  Write-Host "Playwright-gebruiker: $playwrightEmail; huishouden: 1" -ForegroundColor Cyan
 
   $frontendPath = Join-Path $repoRoot "frontend"
   $frontendPath = $frontendPath.Replace("\", "/")
@@ -127,6 +140,9 @@ try {
     --add-host=host.docker.internal:host-gateway `
     -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:5174 `
     -e PLAYWRIGHT_API_URL=http://host.docker.internal:8011 `
+    -e PLAYWRIGHT_SUPERUSER_EMAIL=$playwrightEmail `
+    -e PLAYWRIGHT_SUPERUSER_PASSWORD=$playwrightPassword `
+    -e PLAYWRIGHT_HOUSEHOLD_ID=1 `
     -v "${frontendPath}:/work" `
     -v rezzerv_playwright_node_modules:/work/node_modules `
     -w /work `
@@ -140,14 +156,13 @@ try {
   Write-Host "`n=== Frontend regressie groen ===" -ForegroundColor Green
 }
 finally {
-  if ($null -ne $regressionWebSession) {
-    try {
-      Invoke-RegressionFixtureCleanup -WebSession $regressionWebSession
-    } catch {
-      Write-Host "Regression fixture cleanup na test faalde: $($_.Exception.Message)" -ForegroundColor Red
-      if ($LASTEXITCODE -eq 0) {
-        $global:LASTEXITCODE = 1
-      }
+  try {
+    $regressionWebSession = New-RegressionAuthenticatedSession
+    Invoke-RegressionFixtureCleanup -WebSession $regressionWebSession
+  } catch {
+    Write-Host "Regression fixture cleanup na test faalde: $($_.Exception.Message)" -ForegroundColor Red
+    if ($LASTEXITCODE -eq 0) {
+      $global:LASTEXITCODE = 1
     }
   }
   Pop-Location
