@@ -349,14 +349,13 @@ async function fetchReceiptImportBatchStatus(householdId, batchId) {
 }
 
 async function uploadReceiptFile(householdId, file) {
-  const token = localStorage.getItem('rezzerv_token') || ''
   const formData = new FormData()
   formData.append('household_id', String(householdId))
   formData.append('file', file)
 
   const response = await fetch('/api/receipts/import', {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
     body: formData,
   })
   const responseText = await response.text()
@@ -379,7 +378,6 @@ async function uploadReceiptFile(householdId, file) {
 
 
 async function uploadSharedReceiptFile(householdId, file, sourceContext = 'shared_file', sourceLabel = '') {
-  const token = localStorage.getItem('rezzerv_token') || ''
   const formData = new FormData()
   formData.append('household_id', String(householdId))
   formData.append('file', file)
@@ -388,7 +386,7 @@ async function uploadSharedReceiptFile(householdId, file, sourceContext = 'share
 
   const response = await fetch('/api/receipts/share-import', {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
     body: formData,
   })
   const responseText = await response.text()
@@ -411,14 +409,13 @@ async function uploadSharedReceiptFile(householdId, file, sourceContext = 'share
 
 
 async function uploadPicnicEmailReceiptFile(householdId, emailFile) {
-  const token = localStorage.getItem('rezzerv_token') || ''
   const formData = new FormData()
   formData.append('household_id', String(householdId))
   formData.append('email_file', emailFile)
 
   const response = await fetch('/api/receipts/picnic-email-import', {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
     body: formData,
   })
 
@@ -518,13 +515,12 @@ async function createReceiptSource(payload) {
 }
 
 async function fetchReceiptPreview(receiptTableId, variant = 'original') {
-  const token = localStorage.getItem('rezzerv_token') || ''
   const params = new URLSearchParams()
   if (variant && variant !== 'original') params.set('variant', variant)
   const querySuffix = params.toString() ? `?${params.toString()}` : ''
   const response = await fetch(`/api/receipts/${encodeURIComponent(receiptTableId)}/preview${querySuffix}`, {
     method: 'GET',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: 'include',
   })
   if (!response.ok) {
     let detail = response.statusText
@@ -1349,9 +1345,7 @@ async function saveLine(lineId, overrides = null) {
     const receiptId = String(receipt?.id || '')
     if (!receiptId) return
     try {
-      const token = localStorage.getItem('rezzerv_token') || ''
       const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
         credentials: 'include',
       })
       if (!response.ok) {
@@ -2212,10 +2206,7 @@ export default function KassaPage() {
     let cancelled = false
     async function bootstrap() {
       try {
-        const token = localStorage.getItem('rezzerv_token')
-        const household = await fetchJson('/api/household', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
+        const household = await fetchJson('/api/household')
         if (cancelled) return
         const resolvedHouseholdId = String(household?.id || '1')
         setCurrentUserDisplayRole(String(household?.display_role || household?.current_user_display_role || 'viewer').toLowerCase())

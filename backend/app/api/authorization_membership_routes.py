@@ -18,21 +18,9 @@ from app.services.authorization_membership_service import (
     set_household_membership_role,
     set_household_permission_override,
 )
+from app.services.session_request_context import resolve_current_server_session
 
 router = APIRouter(tags=["authorization"])
-
-
-def _bearer_email(authorization: str | None) -> str:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    token = authorization.split(" ", 1)[1].strip()
-    if token == "rezzerv-dev-token":
-        return "admin@rezzerv.local"
-    if token.startswith("rezzerv-dev-token::"):
-        email = token.split("::", 1)[1].strip().lower()
-        if email:
-            return email
-    raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 def _column_names(conn, table_name: str) -> set[str]:
@@ -42,8 +30,21 @@ def _column_names(conn, table_name: str) -> set[str]:
     return {str(column["name"]) for column in inspector.get_columns(table_name)}
 
 
-def _actor_context(conn, authorization: str | None, household_id: str) -> dict[str, str]:
-    email = _bearer_email(authorization)
+def _session_identity(household_id: str) -> tuple[str, str]:
+    """Resolve the actor exclusively from the authoritative server session."""
+
+    session = resolve_current_server_session()
+    requested_household_id = str(household_id or "").strip()
+    if requested_household_id != str(session.active_household_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen toegang tot het gevraagde huishouden",
+        )
+    return str(session.email), str(session.user_id)
+
+
+def _actor_context(conn, household_id: str) -> dict[str, str]:
+    email, session_user_id = _session_identity(household_id)
     user_columns = _column_names(conn, "app_users")
     if not user_columns or "email" not in user_columns:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -54,15 +55,37 @@ def _actor_context(conn, authorization: str | None, household_id: str) -> dict[s
     ), {"email": email}).mappings().first()
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    if str(user["user_id"]) != session_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
     membership_columns = _column_names(conn, "household_memberships")
-    if not {"household_id", "user_email"}.issubset(membership_columns):
+    if "household_id" not in membership_columns:
         raise HTTPException(status_code=403, detail="Geen toegang tot het gevraagde huishouden")
-    membership_id_expression = "id" if "id" in membership_columns else "user_email"
-    membership = conn.execute(text(
-        f"SELECT {membership_id_expression} AS membership_id FROM household_memberships "
-        "WHERE household_id = :household_id AND lower(user_email) = lower(:email) LIMIT 1"
-    ), {"household_id": str(household_id), "email": email}).mappings().first()
+
+    membership_id_expression = "id" if "id" in membership_columns else (
+        "user_email" if "user_email" in membership_columns else "user_id"
+    )
+    active_condition = (
+        "AND lower(trim(COALESCE(status, 'active'))) = 'active'"
+        if "status" in membership_columns
+        else ""
+    )
+    if "user_email" in membership_columns:
+        membership = conn.execute(text(
+            f"SELECT {membership_id_expression} AS membership_id FROM household_memberships "
+            "WHERE household_id = :household_id "
+            "AND lower(user_email) = lower(:email) "
+            f"{active_condition} LIMIT 1"
+        ), {"household_id": str(household_id), "email": email}).mappings().first()
+    elif "user_id" in membership_columns:
+        membership = conn.execute(text(
+            f"SELECT {membership_id_expression} AS membership_id FROM household_memberships "
+            "WHERE household_id = :household_id AND user_id = :user_id "
+            f"{active_condition} LIMIT 1"
+        ), {"household_id": str(household_id), "user_id": str(user["user_id"])}).mappings().first()
+    else:
+        raise HTTPException(status_code=403, detail="Geen toegang tot het gevraagde huishouden")
+
     if not membership:
         raise HTTPException(status_code=403, detail="Geen toegang tot het gevraagde huishouden")
 
@@ -116,8 +139,9 @@ def list_authorization_members(
     household_id: str,
     authorization: str | None = Header(default=None),
 ):
+    del authorization
     with engine.begin() as conn:
-        context = _actor_context(conn, authorization, household_id)
+        context = _actor_context(conn, household_id)
         _require(conn, context, "members.view")
         membership_columns = _column_names(conn, "household_memberships")
         id_column = "id" if "id" in membership_columns else "user_email"
@@ -164,8 +188,9 @@ def list_authorization_roles(
     household_id: str,
     authorization: str | None = Header(default=None),
 ):
+    del authorization
     with engine.begin() as conn:
-        context = _actor_context(conn, authorization, household_id)
+        context = _actor_context(conn, household_id)
         _require(conn, context, "permissions.view")
         rows = conn.execute(text("""
             SELECT role_key, name
@@ -203,8 +228,9 @@ def list_authorization_permissions(
     household_id: str,
     authorization: str | None = Header(default=None),
 ):
+    del authorization
     with engine.begin() as conn:
-        context = _actor_context(conn, authorization, household_id)
+        context = _actor_context(conn, household_id)
         _require(conn, context, "permissions.view")
         rows = conn.execute(text("""
             SELECT permission_key, description
@@ -222,11 +248,12 @@ def update_authorization_member_role(
     payload: dict[str, Any] = Body(default_factory=dict),
     authorization: str | None = Header(default=None),
 ):
+    del authorization
     role_key = str(payload.get("role_key") or "").strip()
     if not role_key:
         raise HTTPException(status_code=400, detail="role_key is verplicht")
     with engine.begin() as conn:
-        context = _actor_context(conn, authorization, household_id)
+        context = _actor_context(conn, household_id)
         _target_membership(conn, household_id, membership_id)
         try:
             set_household_membership_role(
@@ -260,9 +287,10 @@ def update_authorization_member_permission(
     payload: dict[str, Any] = Body(default_factory=dict),
     authorization: str | None = Header(default=None),
 ):
+    del authorization
     effect = str(payload.get("effect") or "").strip().lower()
     with engine.begin() as conn:
-        context = _actor_context(conn, authorization, household_id)
+        context = _actor_context(conn, household_id)
         _target_membership(conn, household_id, membership_id)
         try:
             set_household_permission_override(
@@ -289,8 +317,9 @@ def delete_authorization_member_permission(
     permission_key: str,
     authorization: str | None = Header(default=None),
 ):
+    del authorization
     with engine.begin() as conn:
-        context = _actor_context(conn, authorization, household_id)
+        context = _actor_context(conn, household_id)
         _require(conn, context, "permissions.manage")
         _target_membership(conn, household_id, membership_id)
         old_effect = conn.execute(text("""

@@ -1,0 +1,36 @@
+name: Support messages reintegration
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/support_message_session_adapter.py'
+      - 'backend/app/session_entrypoint.py'
+      - 'backend/app/api/support_message_routes.py'
+      - 'frontend/src/features/support/**'
+      - 'frontend/src/features/home/HomePage.jsx'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/tests/support_messages_reintegration_audit.py'
+      - '.github/workflows/support-messages-reintegration.yml'
+  workflow_dispatch:
+
+jobs:
+  support-messages-reintegration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit restored Meldingen flow
+        run: python frontend/tests/support_messages_reintegration_audit.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build

@@ -27,15 +27,18 @@ import LoyaltyStampsPage from '../../features/loyaltyStamps/LoyaltyStampsPage.js
 import CatalogPage from '../../features/catalog/CatalogPage.jsx'
 import CatalogDetailPageV2 from '../../features/catalog/CatalogDetailPageV2.jsx'
 import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.jsx'
+import HouseholdSupportPage from '../../features/support/HouseholdSupportPage.jsx'
+import PlatformSupportPage from '../../features/support/PlatformSupportPage.jsx'
+import { clearAuthSession } from '../../lib/authSession.js'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
+import FrontteamGuard from './FrontteamGuard'
+import PermissionGuard from './PermissionGuard'
 import SettingsGuard from './SettingsGuard'
 
 function LoginRoute() {
   const navigate = useNavigate()
-  function handleLogin(newToken, email) {
-    localStorage.setItem('rezzerv_token', newToken)
-    if (email) localStorage.setItem('rezzerv_user_email', email)
+  function handleLogin() {
     navigate('/home', { replace: false })
   }
   return <LoginPage onLoggedIn={handleLogin} />
@@ -43,13 +46,8 @@ function LoginRoute() {
 
 function ResetSessionRoute() {
   React.useEffect(() => {
-    try {
-      localStorage.removeItem('rezzerv_token')
-      localStorage.removeItem('rezzerv_user_email')
-      sessionStorage.clear()
-    } finally {
-      window.location.replace('/login')
-    }
+    clearAuthSession()
+    window.location.replace('/login')
   }, [])
   return null
 }
@@ -74,6 +72,14 @@ function ProtectedAdmin({ children }) {
   return <AuthGuard><AdminGuard>{children}</AdminGuard></AuthGuard>
 }
 
+function ProtectedFrontteam({ children }) {
+  return <AuthGuard><FrontteamGuard>{children}</FrontteamGuard></AuthGuard>
+}
+
+function ProtectedPermission({ permission, children, message }) {
+  return <AuthGuard><PermissionGuard permission={permission} message={message}>{children}</PermissionGuard></AuthGuard>
+}
+
 function ProtectedSettings({ children, allowViewer = true }) {
   return <AuthGuard><SettingsGuard allowViewer={allowViewer}>{children}</SettingsGuard></AuthGuard>
 }
@@ -83,6 +89,8 @@ const router = createBrowserRouter([
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/home', element: <Protected><HomePage /></Protected> },
+  { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
+  { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" message="Alleen de superuser kan alle meldingen bekijken."><PlatformSupportPage /></ProtectedPermission> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
   { path: '/spaartegoeden', element: <Protected><LoyaltyStampsPage /></Protected> },
@@ -93,10 +101,10 @@ const router = createBrowserRouter([
   { path: '/kassabonnen', element: <Protected><ReceiptsPage /></Protected> },
   { path: '/kassa', element: <Protected><KassaPage /></Protected> },
   { path: '/kassa/nieuw', element: <Protected><KassaPage /></Protected> },
-  { path: '/externe-databases', element: <Protected><ExternalDatabasesPage /></Protected> },
-  { path: '/catalogus', element: <ProtectedAdmin><CatalogPage /></ProtectedAdmin> },
-  { path: '/catalogus/gpc-classificeren', element: <ProtectedAdmin><CatalogGpcActionPage /></ProtectedAdmin> },
-  { path: '/catalogus/:globalProductId', element: <ProtectedAdmin><CatalogDetailPageV2 /></ProtectedAdmin> },
+  { path: '/externe-databases', element: <ProtectedFrontteam><ExternalDatabasesPage /></ProtectedFrontteam> },
+  { path: '/catalogus', element: <Protected><CatalogPage /></Protected> },
+  { path: '/catalogus/gpc-classificeren', element: <ProtectedPermission permission="gpc.update" message="Je rol mag GPC bekijken, maar niet wijzigen."><CatalogGpcActionPage /></ProtectedPermission> },
+  { path: '/catalogus/:globalProductId', element: <Protected><CatalogDetailPageV2 /></Protected> },
   { path: '/kassabon', element: <Protected><Navigate to="/kassa" replace /></Protected> },
   { path: '/import-kassabon', element: <Protected><Navigate to="/kassabonnen" replace /></Protected> },
   { path: '/kassabonnen/batch/:batchId', element: <Protected><LegacyReceiptBatchRouteRedirect /></Protected> },

@@ -1,3 +1,5 @@
+import { fetchJsonWithAuth } from '../../../lib/authSession'
+
 const FRAME_ID = "rezzerv-regression-runner-frame"
 const WAIT_TIMEOUT = 9000
 
@@ -44,7 +46,7 @@ const FAILURE_TRIAGE = {
   },
   'Winkelwaarschuwing Terug annuleert verwerking zonder voorraadeffect': {
     category: 'functionele bug',
-    rationale: 'Dit scenario test een bewust geïntroduceerd gebruikerspad. Als Terug geen stabiele annulering zonder voorraadeffect oplevert, is dat functioneel relevant.',
+    rationale: 'Dit scenario test een bewust geïntroduceerd gebruikerspad. Als Terug geen stabiele annulering zonder voorraadeffect oplevertt, is dat functioneel relevant.',
     suggestedAction: 'Controleer waarschuwing-modal, actiebinding van Terug en eventuele onbedoelde process-triggering.',
   },
   'Winkelwaarschuwing Negeren verwerkt alleen complete regels': {
@@ -97,11 +99,9 @@ function classifyFailure(name, errorMessage) {
   }
 }
 
-
 function delay(ms) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
 }
-
 
 function updateRegressionProgress(patch = {}) {
   try {
@@ -159,8 +159,6 @@ function waitForCondition(check, timeout = WAIT_TIMEOUT, errorMessage = 'Timeout
     tick()
   })
 }
-
-
 
 function waitForAsyncCondition(check, timeout = WAIT_TIMEOUT, errorMessage = 'Timeout') {
   const start = Date.now()
@@ -310,7 +308,6 @@ async function runScenario(name, fn, results) {
   }
 }
 
-
 function createBlockedError(message) {
   const error = new Error(message)
   error.blocked = true
@@ -329,24 +326,15 @@ function summarizeFailureMatrix(results) {
     }))
 }
 
-function getRegressionAuthHeaders() {
-  try {
-    const token = window.localStorage.getItem('rezzerv_token') || ''
-    return token ? { Authorization: `Bearer ${token}` } : {}
-  } catch {
-    return {}
-  }
-}
-
 async function requestJson(path, options = {}) {
   const method = String(options.method || 'GET').toUpperCase()
   const cacheBustedPath = method === 'GET'
     ? `${path}${String(path).includes('?') ? '&' : '?'}_ts=${Date.now()}`
     : path
-  const response = await fetch(cacheBustedPath, {
-    cache: 'no-store',
-    headers: { 'Content-Type': 'application/json', ...getRegressionAuthHeaders(), ...(options.headers || {}) },
+  const response = await fetchJsonWithAuth(cacheBustedPath, {
     ...options,
+    cache: 'no-store',
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -398,11 +386,8 @@ async function prepareRegressionFixture(frame, options = {}) {
   return fixture
 }
 
-async function getRegressionHouseholdId(frame) {
-  const token = frame?.contentWindow?.localStorage?.getItem('rezzerv_token') || ''
-  const household = await requestJson('/api/household', {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  })
+async function getRegressionHouseholdId() {
+  const household = await requestJson('/api/household')
   return String(household?.id || '1')
 }
 
@@ -432,7 +417,6 @@ function resetAutomationState(frame) {
   frame.contentWindow.localStorage.removeItem(ARTICLE_OVERRIDE_KEY)
 }
 
-
 function getActiveBatchId(frame) {
   const pathname = frame?.contentWindow?.location?.pathname || ''
   const match = pathname.match(/\/kassabonnen\/batch\/([^/?#]+)/)
@@ -455,7 +439,6 @@ async function getActiveBatchLine(frame, articleName) {
   return getBatchLine(batch, articleName)
 }
 
-
 async function waitForStoreBatchSettled(frame) {
   await waitForAsyncCondition(async () => {
     const doc = getFrameDocument(frame)
@@ -475,7 +458,6 @@ async function waitForStoreBatchIdle(frame) {
   }, WAIT_TIMEOUT, 'Knop Naar voorraad bleef uitgeschakeld')
 }
 
-
 async function openStoresPage(frame) {
   await navigateFrame(frame, '/kassabonnen')
   const doc = getFrameDocument(frame)
@@ -488,7 +470,6 @@ async function clickButtonByText(doc, label) {
   clickElement(button)
   return button
 }
-
 
 function getProcessWarningModal(frame) {
   return getFrameDocument(frame)?.querySelector('[data-testid="process-warning-modal"]') || null
@@ -570,7 +551,7 @@ async function ensureStoreFieldStyleguide(frame, articleName) {
 
 async function ensureProviderConnectionAndBatch(frame, providerName, expectedArticleName) {
   await openStoresPage(frame)
-  let doc = getFrameDocument(frame)
+  const doc = getFrameDocument(frame)
 
   const connectButton = Array.from(doc?.querySelectorAll('button') || []).find((entry) => entry.textContent?.includes(`${providerName} koppelen`))
   if (connectButton) {
@@ -843,7 +824,6 @@ async function processCurrentStoreBatch(frame, options = {}) {
 }
 
 async function getInventoryRows() {
-
   const data = await requestJson('/api/dev/inventory-preview')
   return Array.isArray(data?.rows) ? data.rows : []
 }
@@ -956,7 +936,6 @@ async function getArticleHistoryRows(articleName) {
   return Array.isArray(data?.rows) ? data.rows : []
 }
 
-
 async function ensureStoreImportPersisted(articleName, beforeQuantity, providerCode = null, timeout = WAIT_TIMEOUT) {
   await waitForAsyncCondition(async () => {
     const quantity = await getInventoryQuantity(articleName)
@@ -1002,7 +981,6 @@ async function ensureInventoryContainsArticle(frame, articleName) {
     return rows.some((entry) => normalizeInventoryArticleText(entry.querySelectorAll('td')[1]?.textContent) === normalizeInventoryArticleText(articleName))
   }, WAIT_TIMEOUT, `Artikel ${articleName} niet zichtbaar in Voorraad`)
 }
-
 
 async function ensureInventoryDoesNotContainArticle(frame, articleName) {
   await navigateFrame(frame, '/voorraad')
@@ -1067,7 +1045,6 @@ async function setArticleOverride(frame, mode) {
   setSelectValue(select, mode)
   await delay(200)
 }
-
 
 async function ensureTabContains(frame, tabLabel, expectedText, errorText) {
   await openArticleTab(frame, tabLabel)
@@ -1134,6 +1111,7 @@ export async function runBrowserRegressionTests() {
       await openArticleFromInventory(frame, 'Tomaten')
       await ensureTabContains(frame, 'Historie', 'Voorraadhistorie', 'Historie-tab toont geen inhoud')
     }, results)
+
     await runScenario('Handmatige voorraadcorrectie blijft persistent en zichtbaar in historie', async () => {
       await prepareRegressionFixture(frame)
       await setInventoryQuantityViaApi('Mosterd', 1)
@@ -1296,7 +1274,6 @@ export async function runBrowserRegressionTests() {
       }
     }, results)
 
-
     await runScenario('Winkelimport toont uitleg bij bekende regel met alleen voorstel', async () => {
       await prepareRegressionFixture(frame)
       const melkId = await getStoreReviewArticleOptionId('Melk')
@@ -1324,7 +1301,6 @@ export async function runBrowserRegressionTests() {
       await ensureProviderConnectionAndBatch(frame, 'Lidl', 'Halfvolle melk')
       await ensureStoreLineExplanationContains(frame, 'Banaan', 'Geen eerdere mapping gevonden')
     }, results)
-
 
     await runScenario('Winkelwaarschuwing Terug annuleert verwerking zonder voorraadeffect', async () => {
       await prepareRegressionFixture(frame)
@@ -1513,4 +1489,3 @@ export async function runBrowserRegressionTests() {
   }
   return results
 }
-

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../../../lib/apiClient'
+import { fetchJsonWithAuth } from '../../../lib/authSession'
 
 const STORAGE_KEY = 'rezzerv_article_auto_consume_overrides'
 const EVENT_NAME = 'rezzerv-article-auto-consume-overrides-updated'
@@ -13,11 +14,6 @@ function normalizeMode(value) {
   if (value === AUTO_CONSUME_MODES.ALWAYS_ON) return AUTO_CONSUME_MODES.ALWAYS_ON
   if (value === AUTO_CONSUME_MODES.ALWAYS_OFF) return AUTO_CONSUME_MODES.ALWAYS_OFF
   return AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD
-}
-
-function getAuthHeaders() {
-  const token = window.localStorage.getItem('rezzerv_token') || ''
-  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 function readAllOverrides() {
@@ -52,10 +48,9 @@ export function getArticleAutoConsumeMode(articleId) {
 export async function fetchArticleAutoConsumeMode(articleId) {
   if (!articleId) return AUTO_CONSUME_MODES.FOLLOW_HOUSEHOLD
   try {
-    const response = await fetch(`${API_BASE_URL}/api/household-articles/${encodeURIComponent(articleId)}/automation-override`, {
+    const response = await fetchJsonWithAuth(`${API_BASE_URL}/api/household-articles/${encodeURIComponent(articleId)}/automation-override`, {
       method: 'GET',
-      headers: { Accept: 'application/json', ...getAuthHeaders() },
-      credentials: 'include',
+      headers: { Accept: 'application/json' },
     })
     const data = await response.json().catch(() => ({}))
     if (!response.ok) {
@@ -79,14 +74,12 @@ export async function fetchArticleAutoConsumeMode(articleId) {
 
 export async function saveArticleAutoConsumeMode(articleId, mode) {
   const normalized = normalizeMode(mode)
-  const response = await fetch(`${API_BASE_URL}/api/household-articles/${encodeURIComponent(articleId)}/automation-override`, {
+  const response = await fetchJsonWithAuth(`${API_BASE_URL}/api/household-articles/${encodeURIComponent(articleId)}/automation-override`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'application/json',
-      ...getAuthHeaders(),
     },
-    credentials: 'include',
     body: JSON.stringify({ mode: normalized }),
   })
   const data = await response.json().catch(() => ({}))

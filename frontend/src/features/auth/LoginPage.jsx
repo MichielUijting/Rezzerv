@@ -4,7 +4,7 @@ import Input from '../../ui/Input.jsx'
 import Button from '../../ui/Button.jsx'
 import { apiPost } from '../../lib/apiClient.js'
 import { useState } from 'react'
-import { getLoginMessage } from '../../lib/authSession.js'
+import { fetchAuthContext, getLoginMessage } from '../../lib/authSession.js'
 import useDismissOnComponentClick from '../../lib/useDismissOnComponentClick.js'
 
 export default function LoginPage({ onLoggedIn }) {
@@ -22,9 +22,10 @@ export default function LoginPage({ onLoggedIn }) {
     setLoading(true)
     try {
       const res = await apiPost('/api/auth/login', { email, password })
-      if (!res.ok) throw new Error('Inloggen mislukt')
-      const data = await res.json()
-      onLoggedIn(data.token, email)
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.detail || 'Inloggen mislukt')
+      await fetchAuthContext({ force: true })
+      onLoggedIn()
     } catch (err) {
       setError(err.message)
     } finally {
@@ -55,7 +56,7 @@ export default function LoginPage({ onLoggedIn }) {
                 data-testid="login-password"
               />
 
-              <Button type="submit" variant="primary"  disabled={loading} className="rz-btn-center" data-testid="login-submit">
+              <Button type="submit" variant="primary" disabled={loading} className="rz-btn-center" data-testid="login-submit">
                 {loading ? 'Bezig...' : 'Inloggen'}
               </Button>
 

@@ -76,12 +76,10 @@ def _household_actor(authorization: str | None) -> dict[str, Any]:
     runtime = _mapping(main_module.require_household_context(authorization))
     context = household_context_from_runtime_context(runtime)
     role = str(runtime.get("role") or runtime.get("display_role") or "").strip().lower()
-    if role not in {"admin", "owner", "household.admin", "huishoudbeheerder"}:
-        raise HTTPException(status_code=403, detail="Alleen een huishoudbeheerder kan meldingen beheren")
     return {
         "user_id": str(runtime.get("user_id") or runtime.get("email") or ""),
-        "name": str(runtime.get("name") or runtime.get("display_name") or runtime.get("email") or "Huishoudbeheerder"),
-        "role": role or "household.admin",
+        "name": str(runtime.get("name") or runtime.get("display_name") or runtime.get("email") or "Rezzerv-gebruiker"),
+        "role": role or "household.member",
         "household_id": str(context.active_household_id),
     }
 
@@ -119,6 +117,29 @@ def _thread_header(conn, thread_id: str, *, household_id: str | None = None, is_
     return dict(row)
 
 
+def _rows_with_last_sender(conn, rows):
+    enriched = []
+    for row in rows:
+        item = dict(row)
+        item["last_sender_user_id"] = conn.execute(text("""
+            SELECT sender_user_id
+            FROM support_messages
+            WHERE thread_id = :thread_id
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+        """), {"thread_id": str(item["id"])}).scalar() or ""
+        enriched.append(item)
+    return enriched
+
+
+def _delete_thread(conn, thread_id: str) -> None:
+    conn.execute(text("DELETE FROM support_recipients WHERE thread_id = :thread_id"), {"thread_id": str(thread_id)})
+    conn.execute(text("DELETE FROM support_messages WHERE thread_id = :thread_id"), {"thread_id": str(thread_id)})
+    result = conn.execute(text("DELETE FROM support_threads WHERE id = :thread_id"), {"thread_id": str(thread_id)})
+    if result.rowcount != 1:
+        raise HTTPException(status_code=404, detail="Melding niet gevonden")
+
+
 def _support_error(exc: SupportMessageError):
     message = str(exc)
     status_code = 404 if "niet gevonden" in message.lower() else 403 if "niet toegestaan" in message.lower() or "behoort niet" in message.lower() else 400
@@ -154,7 +175,9 @@ def get_household_support_threads(status: str | None = Query(None), authorizatio
     actor = _household_actor(authorization)
     try:
         with _main_module().engine.begin() as conn:
-            return {"items": [dict(row) for row in list_support_threads(conn, household_id=actor["household_id"], status=status)]}
+            rows = list_support_threads(conn, household_id=actor["household_id"], status=status)
+            own_rows = [row for row in rows if str(row["created_by_user_id"] or "") == actor["user_id"]]
+            return {"items": _rows_with_last_sender(conn, own_rows)}
     except SupportMessageError as exc:
         _support_error(exc)
 
@@ -165,6 +188,8 @@ def get_household_support_thread(thread_id: str, authorization: str | None = Hea
     try:
         with _main_module().engine.begin() as conn:
             header = _thread_header(conn, thread_id, household_id=actor["household_id"])
+            if str(header["created_by_user_id"] or "") != actor["user_id"]:
+                raise HTTPException(status_code=404, detail="Melding niet gevonden")
             messages = list_support_messages(conn, thread_id=thread_id, household_id=actor["household_id"])
         return {"thread": header, "messages": [dict(row) for row in messages]}
     except SupportMessageError as exc:
@@ -176,6 +201,9 @@ def reply_household_support_thread(thread_id: str, payload: SupportReplyRequest,
     actor = _household_actor(authorization)
     try:
         with _main_module().engine.begin() as conn:
+            header = _thread_header(conn, thread_id, household_id=actor["household_id"])
+            if str(header["created_by_user_id"] or "") != actor["user_id"]:
+                raise HTTPException(status_code=404, detail="Melding niet gevonden")
             message_id = add_support_message(
                 conn,
                 thread_id=thread_id,
@@ -191,13 +219,24 @@ def reply_household_support_thread(thread_id: str, payload: SupportReplyRequest,
         _support_error(exc)
 
 
+@router.delete("/api/support/threads/{thread_id}")
+def delete_household_support_thread(thread_id: str, authorization: str | None = Header(None)):
+    actor = _household_actor(authorization)
+    with _main_module().engine.begin() as conn:
+        header = _thread_header(conn, thread_id, household_id=actor["household_id"])
+        if str(header["created_by_user_id"] or "") != actor["user_id"]:
+            raise HTTPException(status_code=403, detail="Je mag alleen je eigen melding verwijderen")
+        _delete_thread(conn, thread_id)
+    return {"thread_id": thread_id, "deleted": True}
+
+
 @router.get("/api/platform/support/threads")
 def get_platform_support_threads(status: str | None = Query(None), household_id: str | None = Query(None), authorization: str | None = Header(None)):
     _platform_actor(authorization, "platform.support_access.read")
     try:
         with _main_module().engine.begin() as conn:
             rows = list_support_threads(conn, household_id=household_id, status=status)
-        return {"items": [dict(row) for row in rows]}
+            return {"items": _rows_with_last_sender(conn, rows)}
     except SupportMessageError as exc:
         _support_error(exc)
 
@@ -275,6 +314,15 @@ def update_platform_support_thread_status(thread_id: str, payload: SupportStatus
         return {"thread_id": thread_id, "status": payload.status}
     except SupportMessageError as exc:
         _support_error(exc)
+
+
+@router.delete("/api/platform/support/threads/{thread_id}")
+def delete_platform_support_thread(thread_id: str, authorization: str | None = Header(None)):
+    _platform_actor(authorization, "platform.support_access.mutate")
+    with _main_module().engine.begin() as conn:
+        _thread_header(conn, thread_id, is_superuser=True)
+        _delete_thread(conn, thread_id)
+    return {"thread_id": thread_id, "deleted": True}
 
 
 @router.get("/api/platform/support/export.csv")

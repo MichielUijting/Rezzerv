@@ -1,0 +1,25 @@
+name: Support message broadcast
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/support_broadcast_routes.py'
+      - 'backend/app/session_entrypoint.py'
+      - 'frontend/src/features/support/**'
+      - 'frontend/tests/support_message_broadcast_audit.py'
+      - '.github/workflows/support-message-broadcast.yml'
+  workflow_dispatch:
+
+jobs:
+  support-message-broadcast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Compile backend broadcast modules
+        run: |
+          python -m py_compile backend/app/api/support_broadcast_routes.py backend/app/session_entrypoint.py
+      - name: Audit superuser broadcast contract
+        run: python frontend/tests/support_message_broadcast_audit.py

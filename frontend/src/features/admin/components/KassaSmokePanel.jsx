@@ -1,12 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import Button from '../../../ui/Button'
+import { fetchJsonWithAuth } from '../../../lib/authSession'
 
 const KASSA_SMOKE_COUNT = 6
-
-function getAuthHeaders() {
-  const token = localStorage.getItem('rezzerv_token') || ''
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
 
 async function readJsonOrText(response) {
   const text = await response.text()
@@ -43,8 +39,8 @@ export default function KassaSmokePanel({ onMessage }) {
   const [report, setReport] = useState(null)
 
   async function fetchSmokeStatus() {
-    const res = await fetch('/api/admin/kassa-smoke/status', {
-      headers: { Accept: 'application/json', ...getAuthHeaders() },
+    const res = await fetchJsonWithAuth('/api/admin/kassa-smoke/status', {
+      headers: { Accept: 'application/json' },
     })
     const data = await readJsonOrText(res)
     if (!res.ok) {
@@ -76,9 +72,9 @@ export default function KassaSmokePanel({ onMessage }) {
     setReport(null)
     setIsRunning(true)
     try {
-      const res = await fetch('/api/admin/kassa-smoke/run', {
+      const res = await fetchJsonWithAuth('/api/admin/kassa-smoke/run', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: { 'Content-Type': 'application/json' },
         body: '{}',
       })
       const data = await readJsonOrText(res)

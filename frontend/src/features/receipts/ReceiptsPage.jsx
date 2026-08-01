@@ -45,10 +45,7 @@ export default function ReceiptsPage() {
       setIsLoading(true)
       setError('')
       try {
-        const token = localStorage.getItem('rezzerv_token')
-        const householdData = await fetchJson('/api/household', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
+        const householdData = await fetchJson('/api/household')
         if (cancelled) return
 
         const unpackData = await fetchJson(`/api/unpack-start-batches?householdId=${encodeURIComponent(householdData.id)}`)

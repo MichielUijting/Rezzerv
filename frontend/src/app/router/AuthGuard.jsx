@@ -1,21 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Navigate } from 'react-router-dom'
-import { clearAuthSession, fetchAuthContext, getStoredToken, isTokenAlreadyValidated, readStoredAuthContext } from '../../lib/authSession'
+import { clearAuthSession, fetchAuthContext, readStoredAuthContext } from '../../lib/authSession'
 
 export default function AuthGuard({ children }) {
-  const token = getStoredToken()
-  const cachedContext = readStoredAuthContext()
-  const [status, setStatus] = useState(() => {
-    if (!token) return 'invalid'
-    return isTokenAlreadyValidated(token) && cachedContext ? 'ready' : 'checking'
-  })
+  const [status, setStatus] = useState(() => readStoredAuthContext() ? 'ready' : 'checking')
 
   useEffect(() => {
-    if (!token) {
-      setStatus('invalid')
-      return
-    }
-    if (isTokenAlreadyValidated(token) && readStoredAuthContext()) {
+    if (readStoredAuthContext()) {
       setStatus('ready')
       return
     }
@@ -31,9 +22,9 @@ export default function AuthGuard({ children }) {
         setStatus('invalid')
       })
     return () => { active = false }
-  }, [token])
+  }, [])
 
-  if (!token || status === 'invalid') return <Navigate to="/login" replace />
+  if (status === 'invalid') return <Navigate to="/login" replace />
   if (status !== 'ready') return <div className="rz-screen"><div className="rz-content"><div className="rz-content-inner">Sessie controleren…</div></div></div>
   return children
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Button from '../../../ui/Button'
 import Input from '../../../ui/Input'
+import { fetchJsonWithAuth } from '../../../lib/authSession'
 
 function normalizeLocationName(value) {
   return value || 'Onbekende locatie'
@@ -19,11 +20,6 @@ function formatQuantity(value) {
 function getPrimaryLocation(locations) {
   if (!locations.length) return null
   return [...locations].sort((a, b) => (Number(b?.aantal ?? b?.quantity) || 0) - (Number(a?.aantal ?? a?.quantity) || 0))[0]
-}
-
-function getAuthHeaders() {
-  const token = window.localStorage.getItem('rezzerv_token') || ''
-  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 function buildTransferForm() {
@@ -63,8 +59,8 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
     setLocationsError('')
 
     Promise.all([
-      fetch(`/api/spaces?_ts=${Date.now()}`, { cache: 'no-store', headers: getAuthHeaders() }).then((response) => response.json().then((data) => ({ ok: response.ok, data }))),
-      fetch(`/api/sublocations?_ts=${Date.now()}`, { cache: 'no-store', headers: getAuthHeaders() }).then((response) => response.json().then((data) => ({ ok: response.ok, data }))),
+      fetchJsonWithAuth(`/api/spaces?_ts=${Date.now()}`, { cache: 'no-store' }).then((response) => response.json().then((data) => ({ ok: response.ok, data }))),
+      fetchJsonWithAuth(`/api/sublocations?_ts=${Date.now()}`, { cache: 'no-store' }).then((response) => response.json().then((data) => ({ ok: response.ok, data }))),
     ])
       .then(([spacesResponse, sublocationsResponse]) => {
         if (cancelled) return
@@ -148,11 +144,10 @@ export default function ArticleLocationsTab({ articleData = {}, onInventoryChang
     setTransferBusy(true)
 
     try {
-      const response = await fetch('/api/inventory-transfers', {
+      const response = await fetchJsonWithAuth('/api/inventory-transfers', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           inventory_id: transferForm.inventoryId || undefined,

@@ -1,19 +1,23 @@
 import { useMemo, useState } from 'react'
+import {
+  clearAuthSession,
+  readStoredAuthContext,
+  storeAuthContext,
+} from '../../lib/authSession'
 
 export function useAuth() {
-  const [token, setToken] = useState(() => localStorage.getItem('rezzerv_token') || '')
+  const [session, setSessionState] = useState(() => readStoredAuthContext())
 
-  const isLoggedIn = useMemo(() => Boolean(token), [token])
+  const isLoggedIn = useMemo(() => Boolean(session?.user_id), [session])
 
-  function setSession(newToken) {
-    localStorage.setItem('rezzerv_token', newToken)
-    setToken(newToken)
+  function setSession(context) {
+    setSessionState(storeAuthContext(context))
   }
 
   function clearSession() {
-    localStorage.removeItem('rezzerv_token')
-    setToken('')
+    clearAuthSession()
+    setSessionState(null)
   }
 
-  return { token, isLoggedIn, setSession, clearSession }
+  return { session, isLoggedIn, setSession, clearSession }
 }

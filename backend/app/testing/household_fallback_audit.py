@@ -19,6 +19,7 @@ AUTH_MARKERS = (
 AUTH_BOOTSTRAP_FUNCTIONS = {
     'bootstrap_auth_registry', 'refresh_runtime_users_from_db',
     'resolve_user_household_memberships', 'login',
+    'ensure_system_superuser_for_session_runtime',
 }
 SIGNED_SOURCE_FUNCTIONS = {
     'upsert_receipt_gmail_account', 'build_receipt_gmail_account_response',
@@ -30,7 +31,7 @@ INTERNAL_HELPERS = {
     'resolve_review_article_option', 'resolve_space_and_sublocation_ids',
     'create_receipt_source', 'import_shared_receipt', 'get_request_household_id',
     'resolve_authorized_household_id', '_normalize_household_id',
-    'build_household_email_address',
+    'build_household_email_address', '_household_zero_allowed',
 }
 NON_HOUSEHOLD_ONE_FUNCTIONS = {'normalize_household_auto_consume_mode'}
 
@@ -178,7 +179,7 @@ def audit(root: Path) -> dict[str, Any]:
         by_category[category] = by_category.get(category, 0) + 1
     unclassified = [row for row in runtime_rows if row['fallback_category'] == 'unclassified']
     return {
-        'audit_version': 5,
+        'audit_version': 6,
         'targets': list(DEMO_TARGETS + ONE_TARGETS),
         'summary': {
             'household_occurrences': len(rows),

@@ -4,7 +4,11 @@ import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
 import Button from '../../ui/Button'
-import { fetchJsonWithAuth } from '../../lib/authSession'
+import {
+  canCurrentUserPerform,
+  fetchJsonWithAuth,
+  readStoredAuthContext,
+} from '../../lib/authSession'
 import '../externalDatabases/externalDatabases.css'
 import './catalog.css'
 
@@ -37,6 +41,8 @@ function csvValue(value) {
 
 export default function CatalogPage() {
   const navigate = useNavigate()
+  const authContext = readStoredAuthContext()
+  const canUpdateGpc = canCurrentUserPerform('gpc.update', authContext)
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [selectedRows, setSelectedRows] = useState({})
@@ -181,9 +187,10 @@ export default function CatalogPage() {
 
             {error ? <div className="rz-inline-feedback rz-inline-feedback--error">{error}</div> : null}
             {message ? <div className="rz-inline-feedback">{message}</div> : null}
+            {!canUpdateGpc ? <div className="rz-inline-feedback">Alleen-lezen: jouw rol mag de catalogus bekijken, maar niet classificeren of beheren.</div> : null}
 
             <div className="rz-external-databases-actions" aria-label="Acties Catalogus">
-              <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button>
+              {canUpdateGpc ? <Button type="button" onClick={() => navigate('/catalogus/gpc-classificeren')}>GPC classificeren</Button> : null}
               <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={exportSelected}>Exporteren</Button>
               <Button type="button" variant="secondary" disabled={!selectedIds.length} onClick={clearSelection}>Selectie wissen</Button>
               <span className="rz-external-databases-muted">Geselecteerd: {selectedIds.length}</span>
