@@ -5,7 +5,9 @@ import Button from '../../ui/Button.jsx'
 import Input from '../../ui/Input.jsx'
 import { useAppFeedback } from '../../ui/AppFeedbackProvider.jsx'
 import { readStoredAuthContext } from '../../lib/authSession.js'
+import { getRezzervVersionTag } from '../../ui/version.js'
 import {
+  createPlatformBroadcast,
   deletePlatformThread,
   downloadPlatformSupportCsv,
   listPlatformThreads,
@@ -25,6 +27,9 @@ export default function PlatformSupportPage() {
   const [status, setStatus] = useState('Open')
   const [householdId, setHouseholdId] = useState('')
   const [reply, setReply] = useState('')
+  const [broadcastSubject, setBroadcastSubject] = useState('')
+  const [broadcastMessage, setBroadcastMessage] = useState('')
+  const [broadcastReplyAllowed, setBroadcastReplyAllowed] = useState(true)
   const [busy, setBusy] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [lastRefreshedAt, setLastRefreshedAt] = useState(null)
@@ -111,6 +116,41 @@ export default function PlatformSupportPage() {
     })
   }
 
+  async function performBroadcast() {
+    setBusy(true)
+    setFeedback('')
+    try {
+      const result = await createPlatformBroadcast({
+        subject: broadcastSubject,
+        message: broadcastMessage,
+        reply_allowed: broadcastReplyAllowed,
+        app_version: getRezzervVersionTag(),
+      })
+      setBroadcastSubject('')
+      setBroadcastMessage('')
+      await loadThreads()
+      setFeedback(`Melding verzonden aan ${result.recipient_count} actieve leden.`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  function confirmBroadcast(event) {
+    event.preventDefault()
+    showFeedback({
+      variant: 'warning',
+      title: 'Melding aan alle leden versturen',
+      message: `Wil je “${broadcastSubject}” naar alle actieve Rezzerv-leden sturen?`,
+      detail: 'Voor iedere actieve gebruiker wordt een eigen gesprek aangemaakt.',
+      dismissMode: 'action-only',
+      primaryActionLabel: 'Versturen',
+      secondaryActionLabel: 'Annuleren',
+      onPrimaryAction: performBroadcast,
+      key: 'platform-support-broadcast-confirmation',
+      testId: 'support-broadcast-confirmation',
+    })
+  }
+
   async function submitReply(event) {
     event.preventDefault()
     if (!selected?.thread?.id) return
@@ -186,6 +226,7 @@ export default function PlatformSupportPage() {
                   <h2>{selected.thread.subject}</h2>
                   <p>{selected.thread.thread_number} · huishouden {selected.thread.household_id} · {selected.thread.status}</p>
                 </div>
+                <Button variant="secondary" onClick={() => setSelected(null)}>Nieuwe melding aan alle leden</Button>
               </div>
               <div className="rz-support-status-actions" aria-label="Status van melding">
                 {STATUSES.filter(Boolean).map((value) => (
@@ -207,11 +248,14 @@ export default function PlatformSupportPage() {
               </form>
             </>
           ) : (
-            <div>
-              <h2>Melding openen</h2>
-              <p>Selecteer links een melding om het gesprek te bekijken en te beantwoorden.</p>
-              <p>De functie om als superuser een melding aan alle leden te sturen wordt in de volgende hersteltranche aangesloten.</p>
-            </div>
+            <form onSubmit={confirmBroadcast} className="rz-support-form" data-testid="platform-support-broadcast-form">
+              <h2>Nieuwe melding aan alle leden</h2>
+              <p>Alleen de superuser kan een platformmelding naar alle actieve Rezzerv-leden sturen.</p>
+              <label>Onderwerp<Input value={broadcastSubject} onChange={(event) => setBroadcastSubject(event.target.value)} required maxLength={250} /></label>
+              <label>Bericht<textarea value={broadcastMessage} onChange={(event) => setBroadcastMessage(event.target.value)} required maxLength={10000} /></label>
+              <label className="rz-support-checkbox"><input type="checkbox" checked={broadcastReplyAllowed} onChange={(event) => setBroadcastReplyAllowed(event.target.checked)} /> Antwoorden toestaan</label>
+              <Button variant="primary" type="submit" disabled={busy || !broadcastSubject.trim() || !broadcastMessage.trim()}>Naar alle leden versturen</Button>
+            </form>
           )}
           {feedback ? <p className="rz-support-feedback" role="status">{feedback}</p> : null}
         </Card>
