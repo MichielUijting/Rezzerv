@@ -35,8 +35,11 @@ function New-RegressionAuthenticatedSession {
   if (-not $login -or -not $login.email) {
     throw "Server-side $Label kon niet worden vastgesteld."
   }
+  if ("$($login.active_household_id)" -ne "0") {
+    throw "De centrale regressiesessie moet huishouden 0 gebruiken; ontvangen: $($login.active_household_id)."
+  }
 
-  Write-Host "Aangemeld als $($login.email)." -ForegroundColor Green
+  Write-Host "Aangemeld als $($login.email), huishouden $($login.active_household_id), rol $($login.role)." -ForegroundColor Green
   return $session
 }
 
@@ -74,16 +77,15 @@ function Invoke-RegressionFixtureCleanup {
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 
-$platformEmail = if ($env:REZZERV_PLATFORM_EMAIL) { $env:REZZERV_PLATFORM_EMAIL } else { "supergebruiker@rezzerv.local" }
-$platformPassword = $env:REZZERV_PLATFORM_PASSWORD
-$householdEmail = if ($env:REZZERV_PLAYWRIGHT_EMAIL) { $env:REZZERV_PLAYWRIGHT_EMAIL } else { "admin@rezzerv.local" }
-$householdPassword = $env:REZZERV_PLAYWRIGHT_PASSWORD
-
-if (-not $platformPassword) {
-  throw "REZZERV_PLATFORM_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
+$superuserEmail = if ($env:REZZERV_REGRESSION_SUPERUSER_EMAIL) {
+  $env:REZZERV_REGRESSION_SUPERUSER_EMAIL
+} else {
+  "supergebruiker@rezzerv.local"
 }
-if (-not $householdPassword) {
-  throw "REZZERV_PLAYWRIGHT_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
+$superuserPassword = $env:REZZERV_REGRESSION_SUPERUSER_PASSWORD
+
+if (-not $superuserPassword) {
+  throw "REZZERV_REGRESSION_SUPERUSER_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
 }
 
 try {
@@ -111,14 +113,14 @@ try {
   }
 
   $cleanupSession = New-RegressionAuthenticatedSession `
-    -Email $platformEmail `
-    -Password $platformPassword `
+    -Email $superuserEmail `
+    -Password $superuserPassword `
     -Label "platform-regressiesessie"
   Invoke-RegressionFixtureCleanup -WebSession $cleanupSession
 
   Write-Host "`n=== Playwright frontend regressie via Docker ===" -ForegroundColor Cyan
-  Write-Host "Platformgebruiker: $platformEmail" -ForegroundColor Cyan
-  Write-Host "Playwright-gebruiker: $householdEmail; huishouden: 1" -ForegroundColor Cyan
+  Write-Host "Canonieke supergebruiker: $superuserEmail; regressiehuishouden: 0" -ForegroundColor Cyan
+  Write-Host "Ledenfixture: lid@rezzerv.local; rol: household.member" -ForegroundColor Cyan
 
   $frontendPath = Join-Path $repoRoot "frontend"
   $frontendPath = $frontendPath.Replace("\", "/")
@@ -141,11 +143,9 @@ try {
     --add-host=host.docker.internal:host-gateway `
     -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:5174 `
     -e PLAYWRIGHT_API_URL=http://host.docker.internal:8011 `
-    -e PLAYWRIGHT_PLATFORM_EMAIL=$platformEmail `
-    -e PLAYWRIGHT_PLATFORM_PASSWORD=$platformPassword `
-    -e PLAYWRIGHT_HOUSEHOLD_EMAIL=$householdEmail `
-    -e PLAYWRIGHT_HOUSEHOLD_PASSWORD=$householdPassword `
-    -e PLAYWRIGHT_HOUSEHOLD_ID=1 `
+    -e PLAYWRIGHT_SUPERUSER_EMAIL=$superuserEmail `
+    -e PLAYWRIGHT_SUPERUSER_PASSWORD=$superuserPassword `
+    -e PLAYWRIGHT_HOUSEHOLD_ID=0 `
     -v "${frontendPath}:/work" `
     -v rezzerv_playwright_node_modules:/work/node_modules `
     -w /work `
@@ -161,8 +161,8 @@ try {
 finally {
   try {
     $cleanupSession = New-RegressionAuthenticatedSession `
-      -Email $platformEmail `
-      -Password $platformPassword `
+      -Email $superuserEmail `
+      -Password $superuserPassword `
       -Label "platform-regressiesessie"
     Invoke-RegressionFixtureCleanup -WebSession $cleanupSession
   } catch {
