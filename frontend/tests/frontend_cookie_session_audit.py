@@ -9,6 +9,7 @@ AUTH_SESSION = ROOT / "lib" / "authSession.js"
 LOGIN_PAGE = ROOT / "features" / "auth" / "LoginPage.jsx"
 API_CLIENT = ROOT / "lib" / "apiClient.js"
 HOME_PAGE = ROOT / "features" / "home" / "HomePage.jsx"
+CATALOG_PAGE = ROOT / "features" / "catalog" / "CatalogPage.jsx"
 ADMIN_GUARD = ROOT / "app" / "router" / "AdminGuard.jsx"
 FRONTTEAM_GUARD = ROOT / "app" / "router" / "FrontteamGuard.jsx"
 PERMISSION_GUARD = ROOT / "app" / "router" / "PermissionGuard.jsx"
@@ -50,6 +51,7 @@ def run() -> int:
     login_text = LOGIN_PAGE.read_text(encoding="utf-8")
     api_text = API_CLIENT.read_text(encoding="utf-8")
     home_text = HOME_PAGE.read_text(encoding="utf-8")
+    catalog_text = CATALOG_PAGE.read_text(encoding="utf-8")
     admin_guard_text = ADMIN_GUARD.read_text(encoding="utf-8")
     frontteam_guard_text = FRONTTEAM_GUARD.read_text(encoding="utf-8")
     permission_guard_text = PERMISSION_GUARD.read_text(encoding="utf-8")
@@ -71,6 +73,7 @@ def run() -> int:
         "home admin tile uses household admin authority": "canOpenAdmin: isHouseholdAdminFromContext" in home_text,
         "admin route uses household admin authority": "isHouseholdAdminFromContext" in admin_guard_text,
         "frontteam helper exists": "isFrontteamMemberFromContext" in auth_text,
+        "platform superuser inherits external database access": "isPlatformSuperuserFromContext(source)" in auth_text,
         "external databases tile uses frontteam authority": "canOpenExternalDatabases: isFrontteamMemberFromContext" in home_text,
         "frontteam route guard exists": "isFrontteamMemberFromContext" in frontteam_guard_text,
         "external databases route uses frontteam guard": "<ProtectedFrontteam><ExternalDatabasesPage" in router_text,
@@ -78,6 +81,9 @@ def run() -> int:
         "catalog overview is available to members": "path: '/catalogus', element: <Protected><CatalogPage" in router_text,
         "catalog detail is available to members": "path: '/catalogus/:globalProductId', element: <Protected><CatalogDetailPageV2" in router_text,
         "gpc mutation requires gpc update": "permission=\"gpc.update\"" in router_text,
+        "catalog page reads gpc update permission": "canCurrentUserPerform('gpc.update'" in catalog_text,
+        "catalog page hides gpc mutation for read-only roles": "{canUpdateGpc ? <Button" in catalog_text,
+        "catalog page explains read-only access": "Alleen-lezen:" in catalog_text,
     }
     for label, passed in required.items():
         if not passed:
@@ -93,8 +99,8 @@ def run() -> int:
     print("PASS frontend requests use the HttpOnly session cookie")
     print("PASS header renders identity and active household from server session context")
     print("PASS admin is available to beheerder, owner and frontteam roles")
-    print("PASS external databases requires the frontteam role")
-    print("PASS catalog view and GPC mutation routes follow the PO matrix")
+    print("PASS external databases is available to frontteam and platform superuser")
+    print("PASS catalog view and GPC mutation controls follow the PO matrix")
     print("FRONTEND_COOKIE_SESSION_AUDIT_GREEN")
     return 0
 
