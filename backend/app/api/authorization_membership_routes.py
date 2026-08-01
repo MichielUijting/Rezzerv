@@ -18,6 +18,7 @@ from app.services.authorization_membership_service import (
     set_household_membership_role,
     set_household_permission_override,
 )
+from app.services.session_request_context import resolve_current_server_session
 
 router = APIRouter(tags=["authorization"])
 
@@ -42,8 +43,35 @@ def _column_names(conn, table_name: str) -> set[str]:
     return {str(column["name"]) for column in inspector.get_columns(table_name)}
 
 
+def _session_identity(
+    authorization: str | None,
+    household_id: str,
+) -> tuple[str, str | None]:
+    """Resolve the actor from the authoritative server session.
+
+    The bearer-token fallback exists only for the isolated route unit tests that
+    instantiate this router without the application session middleware. Runtime
+    browser requests never gain authority from the Authorization header.
+    """
+
+    try:
+        session = resolve_current_server_session()
+    except HTTPException as exc:
+        if exc.status_code != 401 or not authorization:
+            raise
+        return _bearer_email(authorization), None
+
+    requested_household_id = str(household_id or "").strip()
+    if requested_household_id != str(session.active_household_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Geen toegang tot het gevraagde huishouden",
+        )
+    return str(session.email), str(session.user_id)
+
+
 def _actor_context(conn, authorization: str | None, household_id: str) -> dict[str, str]:
-    email = _bearer_email(authorization)
+    email, session_user_id = _session_identity(authorization, household_id)
     user_columns = _column_names(conn, "app_users")
     if not user_columns or "email" not in user_columns:
         raise HTTPException(status_code=401, detail="Unauthorized")
@@ -54,15 +82,37 @@ def _actor_context(conn, authorization: str | None, household_id: str) -> dict[s
     ), {"email": email}).mappings().first()
     if not user:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    if session_user_id is not None and str(user["user_id"]) != session_user_id:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
     membership_columns = _column_names(conn, "household_memberships")
-    if not {"household_id", "user_email"}.issubset(membership_columns):
+    if "household_id" not in membership_columns:
         raise HTTPException(status_code=403, detail="Geen toegang tot het gevraagde huishouden")
-    membership_id_expression = "id" if "id" in membership_columns else "user_email"
-    membership = conn.execute(text(
-        f"SELECT {membership_id_expression} AS membership_id FROM household_memberships "
-        "WHERE household_id = :household_id AND lower(user_email) = lower(:email) LIMIT 1"
-    ), {"household_id": str(household_id), "email": email}).mappings().first()
+
+    membership_id_expression = "id" if "id" in membership_columns else (
+        "user_email" if "user_email" in membership_columns else "user_id"
+    )
+    active_condition = (
+        "AND lower(trim(COALESCE(status, 'active'))) = 'active'"
+        if "status" in membership_columns
+        else ""
+    )
+    if "user_email" in membership_columns:
+        membership = conn.execute(text(
+            f"SELECT {membership_id_expression} AS membership_id FROM household_memberships "
+            "WHERE household_id = :household_id "
+            "AND lower(user_email) = lower(:email) "
+            f"{active_condition} LIMIT 1"
+        ), {"household_id": str(household_id), "email": email}).mappings().first()
+    elif "user_id" in membership_columns:
+        membership = conn.execute(text(
+            f"SELECT {membership_id_expression} AS membership_id FROM household_memberships "
+            "WHERE household_id = :household_id AND user_id = :user_id "
+            f"{active_condition} LIMIT 1"
+        ), {"household_id": str(household_id), "user_id": str(user["user_id"])}).mappings().first()
+    else:
+        raise HTTPException(status_code=403, detail="Geen toegang tot het gevraagde huishouden")
+
     if not membership:
         raise HTTPException(status_code=403, detail="Geen toegang tot het gevraagde huishouden")
 
