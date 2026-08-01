@@ -18,6 +18,10 @@ from app.services.server_session_service import (
     revoke_server_session,
 )
 from app.services.session_request_context import is_platform_superuser
+from app.services.system_superuser_session_provisioning import (
+    SUPERGEBRUIKER_EMAIL,
+    SUPERGEBRUIKER_HUISHOUDEN_ID,
+)
 
 
 def _expect_http_status(expected_status: int, fn) -> None:
@@ -41,11 +45,15 @@ def _prepare_database(engine) -> None:
         ))
         conn.execute(text(
             "INSERT INTO app_users (id, email) VALUES "
-            "('user-a', 'a@rezzerv.local'), ('user-b', 'b@rezzerv.local')"
+            "('user-a', 'a@rezzerv.local'), "
+            "('user-b', 'b@rezzerv.local'), "
+            "('system-superuser', 'supergebruiker@rezzerv.local')"
         ))
         conn.execute(text(
             "INSERT INTO household_memberships (user_id, household_id, role) VALUES "
-            "('user-a', '1', 'owner'), ('user-b', '2', 'member')"
+            "('user-a', '1', 'owner'), "
+            "('user-b', '2', 'member'), "
+            "('system-superuser', '0', 'owner')"
         ))
 
 
@@ -91,6 +99,26 @@ def run() -> int:
         checks.append("role_refreshed_server_side")
 
         with engine.begin() as conn:
+            superuser_session, superuser_context = create_server_session(
+                conn,
+                user_id="system-superuser",
+                active_household_id=SUPERGEBRUIKER_HUISHOUDEN_ID,
+            )
+            assert superuser_session
+            assert superuser_context.email == SUPERGEBRUIKER_EMAIL
+            assert superuser_context.active_household_id == SUPERGEBRUIKER_HUISHOUDEN_ID
+            assert superuser_context.role == "owner"
+        with engine.begin() as conn:
+            resolved_superuser = resolve_server_session(conn, superuser_session)
+            assert resolved_superuser.email == SUPERGEBRUIKER_EMAIL
+            assert resolved_superuser.active_household_id == SUPERGEBRUIKER_HUISHOUDEN_ID
+        checks.append("canonical_superuser_household_zero_allowed")
+
+        with engine.begin() as conn:
+            conn.execute(text(
+                "INSERT INTO household_memberships (user_id, household_id, role) "
+                "VALUES ('user-a', '0', 'owner')"
+            ))
             _expect_http_status(
                 403,
                 lambda: create_server_session(
@@ -99,7 +127,7 @@ def run() -> int:
                     active_household_id="0",
                 ),
             )
-        checks.append("household_zero_blocked")
+        checks.append("household_zero_blocked_for_regular_user")
 
         with engine.begin() as conn:
             _expect_http_status(
@@ -112,8 +140,8 @@ def run() -> int:
             )
         checks.append("cross_household_membership_blocked")
 
-        assert is_platform_superuser({"email": "superuser@rezzerv.local", "role": "owner"})
-        assert is_platform_superuser({"email": "  SUPERUSER@REZZERV.LOCAL  ", "role": "member"})
+        assert is_platform_superuser({"email": SUPERGEBRUIKER_EMAIL, "role": "owner"})
+        assert is_platform_superuser({"email": "  SUPERGEBRUIKER@REZZERV.LOCAL  ", "role": "member"})
         assert not is_platform_superuser({"email": "admin@rezzerv.local", "role": "admin"})
         assert not is_platform_superuser({"email": "owner@rezzerv.local", "role": "owner"})
         checks.append("platform_superuser_matrix_enforced")
