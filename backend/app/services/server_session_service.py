@@ -1,6 +1,6 @@
 """Server-side session storage for Rezzerv.
 
-This module is intentionally independent from browser state.  It stores only a
+This module is intentionally independent from browser state. It stores only a
 cryptographic hash of the opaque session identifier and resolves user,
 household and membership context from the database on every request.
 """
@@ -14,7 +14,7 @@ import secrets
 from typing import Any, Mapping
 
 from fastapi import HTTPException
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection
 
 SESSION_COOKIE_NAME = "rezzerv_session"
@@ -48,13 +48,52 @@ def new_opaque_session_id() -> str:
     return secrets.token_urlsafe(48)
 
 
-def ensure_server_session_schema(conn: Connection) -> None:
-    """Create the session table idempotently.
+def _membership_columns(conn: Connection) -> set[str]:
+    return {
+        str(column.get("name") or "").strip().lower()
+        for column in inspect(conn).get_columns("household_memberships")
+    }
 
-    The table contains no role snapshot.  Membership and role are resolved from
-    household_memberships for every request, so privilege changes take effect
-    immediately.
+
+def membership_user_join_condition(
+    conn: Connection,
+    *,
+    membership_alias: str = "hm",
+    user_alias: str = "u",
+) -> str:
+    """Return the safe join used by the active runtime membership schema.
+
+    Historic test databases used ``user_id`` while the production Rezzerv
+    schema identifies a membership through ``user_email``. Only these two
+    explicitly supported layouts are accepted; an unknown layout fails closed.
     """
+
+    columns = _membership_columns(conn)
+    if "user_email" in columns:
+        return (
+            f"lower(trim({membership_alias}.user_email)) = "
+            f"lower(trim({user_alias}.email))"
+        )
+    if "user_id" in columns:
+        return f"{membership_alias}.user_id = {user_alias}.id"
+    raise RuntimeError(
+        "household_memberships mist zowel user_email als user_id"
+    )
+
+
+def membership_active_condition(
+    conn: Connection,
+    *,
+    membership_alias: str = "hm",
+) -> str:
+    columns = _membership_columns(conn)
+    if "status" in columns:
+        return f"lower(trim(COALESCE({membership_alias}.status, 'active'))) = 'active'"
+    return "1 = 1"
+
+
+def ensure_server_session_schema(conn: Connection) -> None:
+    """Create the session table idempotently."""
 
     conn.execute(
         text(
@@ -104,13 +143,6 @@ def create_server_session(
     replace_existing: bool = True,
     now: datetime | None = None,
 ) -> tuple[str, ServerSessionContext]:
-    """Create one opaque server-side session.
-
-    A new login invalidates existing active sessions for the same user when
-    ``replace_existing`` is true.  The raw session identifier is returned once
-    for placement in an HttpOnly cookie; only its hash is persisted.
-    """
-
     ensure_server_session_schema(conn)
     issued_at = (now or utc_now()).astimezone(timezone.utc)
     expires_at = issued_at + ttl
@@ -121,14 +153,17 @@ def create_server_session(
     if not household_id or household_id == "0":
         raise HTTPException(status_code=403, detail="Actief huishouden ontbreekt")
 
+    join_condition = membership_user_join_condition(conn)
+    active_condition = membership_active_condition(conn)
     membership = conn.execute(
         text(
-            """
+            f"""
             SELECT u.id AS user_id, u.email, hm.role
             FROM app_users u
-            JOIN household_memberships hm ON hm.user_id = u.id
+            JOIN household_memberships hm ON {join_condition}
             WHERE u.id = :user_id
               AND hm.household_id = :household_id
+              AND {active_condition}
             LIMIT 1
             """
         ),
@@ -197,15 +232,15 @@ def resolve_server_session(
     *,
     now: datetime | None = None,
 ) -> ServerSessionContext:
-    """Resolve current authorization context or fail closed."""
-
     if not raw_session_id:
         raise HTTPException(status_code=401, detail="Geen geldige sessie")
     ensure_server_session_schema(conn)
     current_time = (now or utc_now()).astimezone(timezone.utc)
+    join_condition = membership_user_join_condition(conn)
+    active_condition = membership_active_condition(conn)
     row = conn.execute(
         text(
-            """
+            f"""
             SELECT
                 s.id AS session_id,
                 s.user_id,
@@ -219,8 +254,9 @@ def resolve_server_session(
             FROM server_sessions s
             JOIN app_users u ON u.id = s.user_id
             JOIN household_memberships hm
-              ON hm.user_id = s.user_id
+              ON {join_condition}
              AND hm.household_id = s.active_household_id
+             AND {active_condition}
             WHERE s.session_token_hash = :token_hash
             LIMIT 1
             """
@@ -281,8 +317,6 @@ def rotate_active_household(
     *,
     now: datetime | None = None,
 ) -> tuple[str, ServerSessionContext]:
-    """Change household only after membership validation and rotate the ID."""
-
     current = resolve_server_session(conn, raw_session_id, now=now)
     new_household_id = str(new_household_id or "").strip()
     if not new_household_id or new_household_id == "0":
@@ -316,8 +350,6 @@ def rotate_active_household(
 
 
 def public_session_payload(context: ServerSessionContext) -> Mapping[str, Any]:
-    """Return presentation context; never expose the session identifier."""
-
     return {
         "user": {"id": context.user_id, "email": context.email},
         "active_household_id": context.active_household_id,
