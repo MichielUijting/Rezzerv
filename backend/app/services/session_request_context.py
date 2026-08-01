@@ -19,8 +19,7 @@ from app.services.server_session_service import (
     ServerSessionContext,
     resolve_server_session,
 )
-
-PLATFORM_SUPERUSER_EMAIL = "superuser@rezzerv.local"
+from app.services.system_superuser_session_provisioning import SUPERGEBRUIKER_EMAIL
 
 _raw_session_cookie: ContextVar[str | None] = ContextVar(
     "rezzerv_raw_session_cookie", default=None
@@ -29,7 +28,6 @@ _raw_session_cookie: ContextVar[str | None] = ContextVar(
 
 def bind_request_session(request: Request) -> Token:
     """Bind only the opaque cookie value for the lifetime of one request."""
-
     return _raw_session_cookie.set(request.cookies.get(SESSION_COOKIE_NAME))
 
 
@@ -43,15 +41,7 @@ def resolve_current_server_session() -> ServerSessionContext:
         return resolve_server_session(conn, raw_session_id)
 
 
-def legacy_user_payload_from_session(
-    _authorization: str | None = None,
-) -> dict[str, Any]:
-    """Compatibility payload for existing route code.
-
-    ``_authorization`` is intentionally ignored. Supplying a valid-looking
-    Bearer token without a valid session cookie must still result in HTTP 401.
-    """
-
+def legacy_user_payload_from_session(_authorization: str | None = None) -> dict[str, Any]:
     context = resolve_current_server_session()
     return {
         "id": context.user_id,
@@ -67,8 +57,6 @@ def household_context_from_session(
     _authorization: str | None = None,
     requested_household_id: str | None = None,
 ) -> dict[str, Any]:
-    """Return the active household and reject browser-driven switching."""
-
     context = resolve_current_server_session()
     requested = str(requested_household_id or "").strip()
     if requested and requested != context.active_household_id:
@@ -94,13 +82,6 @@ def authorized_household_id_from_session(
     fallback: str | None = None,
     require_authorization: bool = False,
 ) -> str:
-    """Cookie-only replacement for the legacy household resolver.
-
-    ``fallback`` and ``require_authorization`` are retained only for signature
-    compatibility. A missing serversessie always fails closed with HTTP 401;
-    no demo/default household is ever selected in the migrated runtime.
-    """
-
     del fallback, require_authorization
     context = household_context_from_session(None, requested_household_id)
     return str(context["active_household_id"])
@@ -110,31 +91,22 @@ def request_household_id_from_session(
     _authorization: str | None = None,
     fallback: str | None = None,
 ) -> str:
-    """Cookie-only replacement for legacy request-household fallback logic."""
-
     del fallback
     context = household_context_from_session(None, None)
     return str(context["active_household_id"])
 
 
 def is_platform_superuser(user: dict[str, Any]) -> bool:
-    """Return whether the live session belongs to the canonical platform superuser."""
-
-    return (
-        str(user.get("email") or "").strip().lower()
-        == PLATFORM_SUPERUSER_EMAIL
-    )
+    return str(user.get("email") or "").strip().lower() == SUPERGEBRUIKER_EMAIL
 
 
 def require_platform_admin_from_session(
     _authorization: str | None = None,
 ) -> dict[str, Any]:
-    """Fail closed unless the live session is the canonical platform superuser."""
-
     user = legacy_user_payload_from_session(None)
     if not is_platform_superuser(user):
         raise HTTPException(
             status_code=403,
-            detail="Alleen de platform-superuser mag deze actie uitvoeren",
+            detail="Alleen de platform-supergebruiker mag deze actie uitvoeren",
         )
     return user
