@@ -19,11 +19,11 @@ APPROVED_GUARDS = {
     "require_platform_admin_context",
     "require_household_admin_context",
     "require_household_permission_context",
-    # Bestaande centrale wrapper. Deze roept require_household_context aan
-    # zodra Authorization aanwezig is en faalt gesloten wanneer autorisatie
-    # verplicht is. De runtime vervangt require_household_context door de
-    # server-side sessieadapter.
+    # Bestaande centrale wrappers. Deze delegeren naar de hierboven genoemde
+    # guards, die tijdens runtime door de server-side sessieadapter worden
+    # geleverd.
     "resolve_authorized_household_id",
+    "require_platform_admin_user",
 }
 
 
