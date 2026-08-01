@@ -47,6 +47,9 @@ jobs:
           npm install
           npx playwright install --with-deps chromium
           npx playwright test tests/e2e/settings-authorization.frontend-regression.spec.js --project=chromium
+      - name: Print backend logs after failure
+        if: failure()
+        run: docker compose logs --no-color --tail=500 backend
       - name: Stop application
         if: always()
         run: docker compose down
