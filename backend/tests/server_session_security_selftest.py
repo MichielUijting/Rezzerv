@@ -17,6 +17,7 @@ from app.services.server_session_service import (
     resolve_server_session,
     revoke_server_session,
 )
+from app.services.session_request_context import is_platform_superuser
 
 
 def _expect_http_status(expected_status: int, fn) -> None:
@@ -110,6 +111,12 @@ def run() -> int:
                 ),
             )
         checks.append("cross_household_membership_blocked")
+
+        assert is_platform_superuser({"email": "superuser@rezzerv.local", "role": "owner"})
+        assert is_platform_superuser({"email": "  SUPERUSER@REZZERV.LOCAL  ", "role": "member"})
+        assert not is_platform_superuser({"email": "admin@rezzerv.local", "role": "admin"})
+        assert not is_platform_superuser({"email": "owner@rezzerv.local", "role": "owner"})
+        checks.append("platform_superuser_matrix_enforced")
 
         with engine.begin() as conn:
             revoke_server_session(conn, raw_session)
