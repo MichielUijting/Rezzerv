@@ -1,9 +1,4 @@
-"""Cookie-based authentication endpoints for the server-side session model.
-
-The router is deliberately isolated from the legacy Authorization-token paths.
-It can be mounted by the application entrypoint once the legacy login route is
-removed, preventing two competing `/api/auth/login` implementations.
-"""
+"""Cookie-based authentication endpoints for the server-side session model."""
 
 from __future__ import annotations
 
@@ -20,6 +15,8 @@ from app.services.server_session_service import (
     DEFAULT_SESSION_TTL,
     SESSION_COOKIE_NAME,
     create_server_session,
+    membership_active_condition,
+    membership_user_join_condition,
     public_session_payload,
     resolve_server_session,
     revoke_server_session,
@@ -89,22 +86,17 @@ def _clear_session_cookie(response: Response, configuration: SessionApiConfigura
 
 
 def _verify_password(stored_password: Any, supplied_password: str) -> bool:
-    """Compatibility verifier for the current Rezzerv user registry.
-
-    Current `app_users.password` values are plaintext compatibility data. The
-    comparison is constant-time. Password hashing remains a separate security
-    migration and is not silently mixed into this session tranche.
-    """
-
     stored = str(stored_password or "")
     supplied = str(supplied_password or "")
     return bool(stored) and hmac.compare_digest(stored, supplied)
 
 
 def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
+    join_condition = membership_user_join_condition(conn)
+    active_condition = membership_active_condition(conn)
     rows = conn.execute(
         text(
-            """
+            f"""
             SELECT
                 u.id AS user_id,
                 u.email,
@@ -112,8 +104,9 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
                 hm.household_id,
                 hm.role
             FROM app_users u
-            JOIN household_memberships hm ON hm.user_id = u.id
+            JOIN household_memberships hm ON {join_condition}
             WHERE lower(trim(u.email)) = :email
+              AND {active_condition}
             ORDER BY
                 CASE WHEN lower(trim(hm.role)) = 'owner' THEN 0 ELSE 1 END,
                 hm.household_id ASC
