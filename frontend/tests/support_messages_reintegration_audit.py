@@ -17,7 +17,12 @@ def run() -> int:
     api = API.read_text(encoding="utf-8")
 
     checks = {
-        "Meldingen-tegel bestaat": "key: 'meldingen'" in home and "navigate('/meldingen')" in home,
+        "Meldingen-tegel bestaat": "key: 'meldingen'" in home,
+        "Meldingen-tegel routeert rolgebonden": (
+            "visibility.isPlatformSuperuser" in home
+            and "'/superuser/meldingen'" in home
+            and "'/meldingen'" in home
+        ),
         "Meldingen-route is beveiligd": "path: '/meldingen'" in router and "<Protected><HouseholdSupportPage" in router,
         "gebruiker kan melding maken": "createHouseholdThread" in page and "Melding versturen" in page,
         "gebruiker kan gesprek voortzetten": "replyHouseholdThread" in page and "Reactie" in page,
@@ -35,7 +40,7 @@ def run() -> int:
             print(f"FAIL {failure}")
         return 1
 
-    print("PASS Meldingen-tegel en beveiligde route hersteld")
+    print("PASS Meldingen-tegel en rolgebonden beveiligde routes hersteld")
     print("PASS gebruikers kunnen melden en antwoorden via server-side sessie")
     print("SUPPORT_MESSAGES_REINTEGRATION_GREEN")
     return 0
