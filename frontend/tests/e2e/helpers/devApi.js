@@ -1,6 +1,5 @@
 const API_URL = process.env.PLAYWRIGHT_API_URL || 'http://127.0.0.1:8001';
 const DEMO_HOUSEHOLD_ID = process.env.PLAYWRIGHT_HOUSEHOLD_ID || '1';
-const DEV_ADMIN_TOKEN = process.env.PLAYWRIGHT_ADMIN_TOKEN || 'rezzerv-dev-token::admin@rezzerv.local';
 
 async function parseJson(response) {
   const text = await response.text();
@@ -12,13 +11,25 @@ async function parseJson(response) {
   }
 }
 
-export async function apiFetch(request, path, options = {}) {
-  const headers = {
-    ...(options.headers || {}),
-    Authorization: `Bearer ${DEV_ADMIN_TOKEN}`,
-  };
+export async function authenticateRequestSession(request) {
+  const response = await request.post(`${API_URL}/api/auth/login`, {
+    data: {
+      email: 'admin@rezzerv.local',
+      password: 'Rezzerv123',
+    },
+  });
+  const payload = await parseJson(response);
+  if (!response.ok()) {
+    throw new Error(`API /api/auth/login failed with ${response.status()}: ${JSON.stringify(payload)}`);
+  }
+  return payload;
+}
 
-  const response = await request.fetch(`${API_URL}${path}`, { ...options, headers });
+export async function apiFetch(request, path, options = {}) {
+  const response = await request.fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: { ...(options.headers || {}) },
+  });
   const payload = await parseJson(response);
 
   if (!response.ok()) {
