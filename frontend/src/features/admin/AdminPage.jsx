@@ -5,14 +5,10 @@ import Card from "../../ui/Card";
 import Button from "../../ui/Button";
 import Input from "../../ui/Input";
 import useDismissOnComponentClick from "../../lib/useDismissOnComponentClick.js";
+import { fetchJsonWithAuth, readStoredAuthContext } from "../../lib/authSession.js";
 import KassaSmokePanel from "./components/KassaSmokePanel.jsx";
 
 const KASSA_REGRESSION_COUNT = 18;
-
-function getAuthHeaders() {
-  const token = localStorage.getItem("rezzerv_token") || "";
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
 
 async function readJsonOrText(response) {
   const text = await response.text();
@@ -52,10 +48,11 @@ function summarizeKassaError(data, fallback) {
 
 export default function AdminPage() {
   const navigate = useNavigate();
+  const sessionContext = readStoredAuthContext();
 
   const [status, setStatus] = useState({ spaces: 0, sublocations: 0, inventory: 0 });
   const [message, setMessage] = useState("");
-  const [householdId, setHouseholdId] = useState("demo-household");
+  const [householdId, setHouseholdId] = useState(String(sessionContext?.active_household_id || "demo-household"));
   const [isPurgingArchivedReceipts, setIsPurgingArchivedReceipts] = useState(false);
   const [isRunningKassaRegression, setIsRunningKassaRegression] = useState(false);
   const [kassaRegressionJob, setKassaRegressionJob] = useState(null);
@@ -74,7 +71,7 @@ export default function AdminPage() {
 
   async function fetchStatus() {
     try {
-      const res = await fetch("/api/dev/status", { headers: getAuthHeaders() });
+      const res = await fetchJsonWithAuth("/api/dev/status", { headers: { Accept: "application/json" } });
       const data = await res.json();
       setStatus(data);
     } catch {
@@ -83,8 +80,8 @@ export default function AdminPage() {
   }
 
   async function fetchKassaRegressionStatus() {
-    const res = await fetch("/api/admin/kassa-regression/status", {
-      headers: { Accept: "application/json", ...getAuthHeaders() },
+    const res = await fetchJsonWithAuth("/api/admin/kassa-regression/status", {
+      headers: { Accept: "application/json" },
     });
     const data = await readJsonOrText(res);
     if (!res.ok) {
@@ -100,10 +97,7 @@ export default function AdminPage() {
   useEffect(() => {
     fetchStatus();
     fetchKassaRegressionStatus().catch(() => {});
-    const token = localStorage.getItem("rezzerv_token");
-    fetch("/api/household", {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-    })
+    fetchJsonWithAuth("/api/household", { headers: { Accept: "application/json" } })
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data?.id) setHouseholdId(String(data.id));
@@ -123,9 +117,9 @@ export default function AdminPage() {
 
   async function postJson(url, payload, successMessage) {
     setMessage("");
-    const res = await fetch(url, {
+    const res = await fetchJsonWithAuth(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload || {}),
     });
     const data = await res.json();
@@ -140,8 +134,8 @@ export default function AdminPage() {
 
   async function handleResetGenerate() {
     setMessage("");
-    await fetch("/api/dev/reset-data", { method: "POST", headers: getAuthHeaders() });
-    await fetch("/api/dev/generate-demo-data", { method: "POST", headers: getAuthHeaders() });
+    await fetchJsonWithAuth("/api/dev/reset-data", { method: "POST" });
+    await fetchJsonWithAuth("/api/dev/generate-demo-data", { method: "POST" });
     navigate("/voorraad", { replace: false });
   }
 
@@ -151,9 +145,9 @@ export default function AdminPage() {
     if (!confirmed) return;
     setIsPurgingArchivedReceipts(true);
     try {
-      const res = await fetch("/api/admin/receipts/purge-archived", {
+      const res = await fetchJsonWithAuth("/api/admin/receipts/purge-archived", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ household_id: householdId }),
       });
       const data = await res.json();
@@ -175,9 +169,9 @@ export default function AdminPage() {
     setKassaRegressionReport(null);
     setIsRunningKassaRegression(true);
     try {
-      const res = await fetch("/api/admin/kassa-regression/run", {
+      const res = await fetchJsonWithAuth("/api/admin/kassa-regression/run", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
+        headers: { "Content-Type": "application/json" },
         body: "{}",
       });
       const data = await readJsonOrText(res);
@@ -237,7 +231,7 @@ export default function AdminPage() {
                 <Button variant="secondary" onClick={handleResetGenerate}>Reset + Demo data</Button>
                 <Button variant="secondary" onClick={() => postJson("/api/dev/reset-data", {}, "Demo data verwijderd")}>Reset demo data</Button>
                 <Button variant="secondary" onClick={handlePurgeArchivedReceipts} disabled={isPurgingArchivedReceipts}>{isPurgingArchivedReceipts ? "Verwijderen…" : "Gearchiveerde bonnen definitief verwijderen"}</Button>
-                <Button variant="secondary" onClick={() => fetch("/api/dev/generate-article-testdata", { method: "POST", headers: getAuthHeaders() }).then(() => navigate("/voorraad", { replace: false }))}>Artikel testdata</Button>
+                <Button variant="secondary" onClick={() => fetchJsonWithAuth("/api/dev/generate-article-testdata", { method: "POST" }).then(() => navigate("/voorraad", { replace: false }))}>Artikel testdata</Button>
               </div>
             </div>
 
