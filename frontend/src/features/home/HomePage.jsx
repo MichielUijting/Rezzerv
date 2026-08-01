@@ -2,7 +2,11 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
-import { fetchAuthContext, readStoredAuthContext } from '../../lib/authSession.js'
+import {
+  fetchAuthContext,
+  isPlatformSuperuserFromContext,
+  readStoredAuthContext,
+} from '../../lib/authSession.js'
 
 const tiles = [
   { key: 'bijna-op', label: 'Bijna op', icon: '📉' },
@@ -24,19 +28,19 @@ const tiles = [
   { key: 'admin', label: 'Admin', icon: '🛠️' },
 ]
 
-function isAdmin(context) {
-  return String(context?.display_role || context?.role || '').trim().toLowerCase() === 'admin'
-}
-
 export default function HomePage() {
   const navigate = useNavigate()
-  const [isHouseholdAdmin, setIsHouseholdAdmin] = useState(() => isAdmin(readStoredAuthContext()))
+  const [isPlatformSuperuser, setIsPlatformSuperuser] = useState(() =>
+    isPlatformSuperuserFromContext(readStoredAuthContext()),
+  )
 
   useEffect(() => {
     let cancelled = false
     fetchAuthContext()
       .then((context) => {
-        if (!cancelled) setIsHouseholdAdmin(isAdmin(context))
+        if (!cancelled) {
+          setIsPlatformSuperuser(isPlatformSuperuserFromContext(context))
+        }
       })
       .catch(() => {})
     return () => {
@@ -64,15 +68,17 @@ export default function HomePage() {
         <div className="rz-content-inner">
           <Card className="rz-card-home">
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
-              {tiles.filter((tile) => !['admin', 'catalogus'].includes(tile.key) || isHouseholdAdmin).map((t) => {
-                const clickable = ['bijna-op', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus'].includes(t.key)
-                return (
-                  <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
-                    <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>
-                    <div className="rz-tile-label">{t.label}</div>
-                  </div>
-                )
-              })}
+              {tiles
+                .filter((tile) => tile.key !== 'admin' || isPlatformSuperuser)
+                .map((t) => {
+                  const clickable = ['bijna-op', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus'].includes(t.key)
+                  return (
+                    <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
+                      <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>
+                      <div className="rz-tile-label">{t.label}</div>
+                    </div>
+                  )
+                })}
             </div>
           </Card>
         </div>
