@@ -19,6 +19,7 @@ AUTH_MARKERS = (
 AUTH_BOOTSTRAP_FUNCTIONS = {
     'bootstrap_auth_registry', 'refresh_runtime_users_from_db',
     'resolve_user_household_memberships', 'login',
+    'ensure_system_superuser_for_session_runtime',
 }
 SIGNED_SOURCE_FUNCTIONS = {
     'upsert_receipt_gmail_account', 'build_receipt_gmail_account_response',
