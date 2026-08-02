@@ -99,7 +99,8 @@ test.describe('Uitpakken frontend-regressie', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          id: '1',
+          id: '0',
+          active_household_id: '0',
           is_viewer: false,
           permissions: { 'article.create': true },
           store_import_simplification_level: 'gebalanceerd',
@@ -252,7 +253,8 @@ test.describe('Uitpakken frontend-regressie', () => {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        id: '1',
+        id: '0',
+        active_household_id: '0',
         is_viewer: false,
         permissions: { 'article.create': true },
         store_import_simplification_level: 'gebalanceerd',
