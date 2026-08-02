@@ -57,6 +57,7 @@ def ensure_shopping_list_schema(conn: Connection) -> None:
             quantity NUMERIC,
             volume NUMERIC,
             unit TEXT,
+            size TEXT,
             note TEXT,
             checked INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
@@ -67,6 +68,7 @@ def ensure_shopping_list_schema(conn: Connection) -> None:
     _ensure_column(conn, "shopping_list_items", "article_group_name", "TEXT")
     _ensure_column(conn, "shopping_list_items", "product_type_name", "TEXT")
     _ensure_column(conn, "shopping_list_items", "source_id", "TEXT")
+    _ensure_column(conn, "shopping_list_items", "size", "TEXT")
     conn.execute(text("""
         CREATE INDEX IF NOT EXISTS idx_shopping_list_items_active
         ON shopping_list_items(household_id, shopping_list_id, checked, article_name)
@@ -115,6 +117,7 @@ def _serialize_item(row: Any) -> dict[str, Any]:
         "quantity": _serialize_decimal(row.get("quantity")),
         "volume": _serialize_decimal(row.get("volume")),
         "unit": str(row.get("unit") or ""),
+        "size": str(row.get("size") or ""),
         "note": str(row.get("note") or ""),
         "checked": bool(row.get("checked")),
         "created_at": str(row.get("created_at") or ""),
@@ -282,7 +285,7 @@ def get_active_shopping_list(conn: Connection, household_id: str) -> dict[str, A
     rows = conn.execute(text("""
         SELECT id, shopping_list_id, household_id, article_name, article_group_name,
                product_type_name, source_type, source_id, quantity, volume, unit,
-               note, checked, created_at, updated_at
+               size, note, checked, created_at, updated_at
         FROM shopping_list_items
         WHERE shopping_list_id = :shopping_list_id AND household_id = :household_id
         ORDER BY checked ASC, lower(article_name) ASC, created_at ASC
@@ -312,6 +315,7 @@ def add_shopping_list_item(conn: Connection, household_id: str, payload: dict[st
         "quantity": quantity,
         "volume": volume,
         "unit": unit,
+        "size": str(payload.get("size") or "").strip(),
         "note": str(payload.get("note") or "").strip(),
         "created_at": now,
         "updated_at": now,
@@ -320,11 +324,11 @@ def add_shopping_list_item(conn: Connection, household_id: str, payload: dict[st
         INSERT INTO shopping_list_items(
             id, shopping_list_id, household_id, article_name, article_group_name,
             product_type_name, source_type, source_id, quantity, volume, unit,
-            note, checked, created_at, updated_at
+            size, note, checked, created_at, updated_at
         ) VALUES (
             :id, :shopping_list_id, :household_id, :article_name, :article_group_name,
             :product_type_name, :source_type, :source_id, :quantity, :volume, :unit,
-            :note, 0, :created_at, :updated_at
+            :size, :note, 0, :created_at, :updated_at
         )
     """), values)
     row = conn.execute(text("SELECT * FROM shopping_list_items WHERE id = :id"), {"id": item_id}).mappings().one()
@@ -346,6 +350,7 @@ def update_shopping_list_item(conn: Connection, household_id: str, item_id: str,
         "quantity": _database_number(_normalize_decimal(payload.get("quantity", existing.get("quantity")), "Aantal")),
         "volume": _database_number(_normalize_decimal(payload.get("volume", existing.get("volume")), "Volume")),
         "unit": _normalize_unit(payload.get("unit", existing.get("unit"))),
+        "size": str(payload.get("size", existing.get("size") or "") or "").strip(),
         "note": str(payload.get("note", existing.get("note") or "") or "").strip(),
         "checked": 1 if bool(payload.get("checked", bool(existing.get("checked")))) else 0,
         "updated_at": _utc_now_iso(),
@@ -360,6 +365,7 @@ def update_shopping_list_item(conn: Connection, household_id: str, item_id: str,
             quantity = :quantity,
             volume = :volume,
             unit = :unit,
+            size = :size,
             note = :note,
             checked = :checked,
             updated_at = :updated_at
