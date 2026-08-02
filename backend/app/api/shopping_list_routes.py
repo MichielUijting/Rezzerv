@@ -172,17 +172,21 @@ def shopping_list_catalog_search(
     try:
         with engine.begin() as conn:
             context = _authorized_context(conn, request, "shopping_list.view")
-            existing_projection = _project_existing_catalog(
-                normalized_scope,
-                context.active_household_id,
-                query,
-                limit,
-            )
-            if existing_projection is not None:
-                return existing_projection
+            active_household_id = str(context.active_household_id)
+
+        existing_projection = _project_existing_catalog(
+            normalized_scope,
+            active_household_id,
+            query,
+            limit,
+        )
+        if existing_projection is not None:
+            return existing_projection
+
+        with engine.begin() as conn:
             return search_shopping_catalog(
                 conn,
-                context.active_household_id,
+                active_household_id,
                 scope=normalized_scope,
                 query=query,
                 limit=limit,
