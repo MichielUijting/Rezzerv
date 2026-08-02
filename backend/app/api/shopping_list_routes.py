@@ -27,28 +27,21 @@ from app.services.shopping_list_service import (
 )
 
 router = APIRouter()
+CATALOG_SCOPES = ("household_articles", "product_types", "article_groups")
+SOURCE_PRIORITY = {"household_article": 0, "product_type": 1, "article_group": 2}
 
 
 def _membership_id(conn, *, household_id: str, user_id: str, email: str) -> str:
-    columns = {
-        str(column.get("name") or "")
-        for column in inspect(conn).get_columns("household_memberships")
-    }
+    columns = {str(column.get("name") or "") for column in inspect(conn).get_columns("household_memberships")}
     membership_id_column = "id" if "id" in columns else (
         "membership_id" if "membership_id" in columns else (
-            "user_email" if "user_email" in columns else (
-                "user_id" if "user_id" in columns else None
-            )
+            "user_email" if "user_email" in columns else ("user_id" if "user_id" in columns else None)
         )
     )
     if not membership_id_column:
         raise HTTPException(status_code=403, detail="Huishoudlidmaatschap heeft geen geldige identificatie")
 
-    active_condition = (
-        "AND lower(trim(COALESCE(status, 'active'))) = 'active'"
-        if "status" in columns
-        else ""
-    )
+    active_condition = "AND lower(trim(COALESCE(status, 'active'))) = 'active'" if "status" in columns else ""
     if "user_email" in columns:
         row = conn.execute(text(f"""
             SELECT {membership_id_column} AS membership_id
@@ -154,6 +147,28 @@ def _project_existing_catalog(scope: str, household_id: str, query: str, limit: 
     return None
 
 
+def _search_one_scope(scope: str, household_id: str, query: str, limit: int) -> dict[str, Any]:
+    projected = _project_existing_catalog(scope, household_id, query, limit)
+    if projected is not None:
+        return projected
+    with engine.begin() as conn:
+        return search_shopping_catalog(
+            conn,
+            household_id,
+            scope=scope,
+            query=query,
+            limit=limit,
+        )
+
+
+def _relevance_key(item: dict[str, Any], query: str) -> tuple[int, int, str]:
+    label = str(item.get("label") or "").strip().lower()
+    needle = str(query or "").strip().lower()
+    match_rank = 0 if label == needle else (1 if label.startswith(needle) else 2)
+    source_rank = SOURCE_PRIORITY.get(str(item.get("source_type") or ""), 9)
+    return match_rank, source_rank, label
+
+
 @router.get("/api/shopping-list")
 def shopping_list_get(request: Request):
     with engine.begin() as conn:
@@ -164,42 +179,67 @@ def shopping_list_get(request: Request):
 @router.get("/api/shopping-list/catalog-search")
 def shopping_list_catalog_search(
     request: Request,
-    scope: str = Query(...),
+    scope: str = Query(default="all"),
     query: str = Query(default=""),
     limit: int = Query(default=20, ge=1, le=50),
 ):
-    normalized_scope = str(scope or "").strip().lower()
+    normalized_scope = str(scope or "all").strip().lower()
+    if normalized_scope != "all" and normalized_scope not in CATALOG_SCOPES:
+        raise HTTPException(status_code=400, detail="Ongeldige zoekbron")
+
     try:
         with engine.begin() as conn:
             context = _authorized_context(conn, request, "shopping_list.view")
-            active_household_id = str(context.active_household_id)
+            household_id = context.active_household_id
 
-        existing_projection = _project_existing_catalog(
-            normalized_scope,
-            active_household_id,
-            query,
-            limit,
-        )
-        if existing_projection is not None:
-            return existing_projection
+        if normalized_scope != "all":
+            return _search_one_scope(normalized_scope, household_id, query, limit)
 
-        with engine.begin() as conn:
-            return search_shopping_catalog(
-                conn,
-                active_household_id,
-                scope=normalized_scope,
-                query=query,
-                limit=limit,
-            )
+        normalized_query = " ".join(str(query or "").strip().split())
+        if len(normalized_query) < 2:
+            return {
+                "scope": "all",
+                "query": normalized_query,
+                "items": [],
+                "total": 0,
+                "counts": {"household_article": 0, "product_type": 0, "article_group": 0},
+            }
+
+        combined: list[dict[str, Any]] = []
+        counts = {"household_article": 0, "product_type": 0, "article_group": 0}
+        for catalog_scope in CATALOG_SCOPES:
+            payload = _search_one_scope(catalog_scope, household_id, normalized_query, limit)
+            scope_items = list(payload.get("items") or [])
+            combined.extend(scope_items)
+            for item in scope_items:
+                source_type = str(item.get("source_type") or "")
+                if source_type in counts:
+                    counts[source_type] += 1
+
+        deduplicated: list[dict[str, Any]] = []
+        seen: set[tuple[str, str]] = set()
+        for item in sorted(combined, key=lambda candidate: _relevance_key(candidate, normalized_query)):
+            key = (str(item.get("source_type") or ""), str(item.get("source_id") or item.get("label") or ""))
+            if key in seen:
+                continue
+            seen.add(key)
+            deduplicated.append(item)
+            if len(deduplicated) >= limit:
+                break
+
+        return {
+            "scope": "all",
+            "query": normalized_query,
+            "items": deduplicated,
+            "total": len(deduplicated),
+            "counts": counts,
+        }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/api/shopping-list/items", status_code=201)
-def shopping_list_item_create(
-    request: Request,
-    payload: dict[str, Any] = Body(default_factory=dict),
-):
+def shopping_list_item_create(request: Request, payload: dict[str, Any] = Body(default_factory=dict)):
     try:
         with engine.begin() as conn:
             context = _authorized_context(conn, request, "shopping_list.update")
@@ -209,20 +249,11 @@ def shopping_list_item_create(
 
 
 @router.put("/api/shopping-list/items/{item_id}")
-def shopping_list_item_update(
-    item_id: str,
-    request: Request,
-    payload: dict[str, Any] = Body(default_factory=dict),
-):
+def shopping_list_item_update(item_id: str, request: Request, payload: dict[str, Any] = Body(default_factory=dict)):
     try:
         with engine.begin() as conn:
             context = _authorized_context(conn, request, "shopping_list.update")
-            item = update_shopping_list_item(
-                conn,
-                context.active_household_id,
-                item_id,
-                payload,
-            )
+            item = update_shopping_list_item(conn, context.active_household_id, item_id, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if item is None:
@@ -244,8 +275,4 @@ def shopping_list_item_delete(item_id: str, request: Request):
 def shopping_list_complete(request: Request):
     with engine.begin() as conn:
         context = _authorized_context(conn, request, "shopping_list.manage")
-        return complete_active_shopping_list(
-            conn,
-            context.active_household_id,
-            context.user_id,
-        )
+        return complete_active_shopping_list(conn, context.active_household_id, context.user_id)
