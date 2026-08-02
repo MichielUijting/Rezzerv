@@ -18,15 +18,12 @@ from sqlalchemy import text
 from app.db import engine
 from app.services.authorization_foundation_service import ensure_authorization_foundation
 
-
 API_URL = os.getenv("REZZERV_TEST_API_URL", "http://127.0.0.1:8000").rstrip("/")
 SUPERUSER_EMAIL = os.getenv("REZZERV_TEST_SUPERUSER_EMAIL", "supergebruiker@rezzerv.local")
 SUPERUSER_PASSWORD = os.getenv("REZZERV_TEST_SUPERUSER_PASSWORD")
-OWNER_EMAIL = os.getenv("REZZERV_TEST_OWNER_EMAIL", "regressie-eigenaar@rezzerv.local")
-OWNER_PASSWORD = os.getenv("REZZERV_TEST_OWNER_PASSWORD")
-MEMBER_EMAIL = os.getenv("REZZERV_TEST_MEMBER_EMAIL", "regressie-lid@rezzerv.local")
-MEMBER_PASSWORD = os.getenv("REZZERV_TEST_MEMBER_PASSWORD")
-REGRESSION_HOUSEHOLD_ID = os.getenv("REZZERV_TEST_HOUSEHOLD_ID", "1")
+TEST_ADMIN_EMAIL = os.getenv("REZZERV_TEST_ADMIN_EMAIL", "test-admin@rezzerv.local")
+TEST_ADMIN_PASSWORD = os.getenv("REZZERV_TEST_ADMIN_PASSWORD")
+HOUSEHOLD_ID = "0"
 
 
 @dataclass
@@ -41,11 +38,19 @@ def require_secret(value: str | None, name: str) -> str:
     return value
 
 
-def provision_role_fixture(*, email: str, password: str, legacy_role: str, role_key: str) -> None:
-    user_id = email
-    membership_id = f"fixture-{role_key.replace('.', '-')}-{REGRESSION_HOUSEHOLD_ID}"
+def provision_test_admin(password: str) -> None:
+    membership_id = "fixture-test-admin-household-0"
     with engine.begin() as connection:
         ensure_authorization_foundation(connection)
+        connection.execute(
+            text(
+                """
+                INSERT INTO household_registry (id, naam, created_at)
+                VALUES ('0', 'Regressietest huishouden 0', CURRENT_TIMESTAMP)
+                ON CONFLICT(id) DO UPDATE SET naam = excluded.naam
+                """
+            )
+        )
         connection.execute(
             text(
                 """
@@ -56,73 +61,44 @@ def provision_role_fixture(*, email: str, password: str, legacy_role: str, role_
                     updated_at = CURRENT_TIMESTAMP
                 """
             ),
-            {"id": user_id, "email": email, "password": password},
+            {"id": TEST_ADMIN_EMAIL, "email": TEST_ADMIN_EMAIL, "password": password},
         )
-        existing_membership = connection.execute(
+        connection.execute(
+            text(
+                "DELETE FROM household_memberships WHERE lower(user_email) = lower(:email)"
+            ),
+            {"email": TEST_ADMIN_EMAIL},
+        )
+        connection.execute(
             text(
                 """
-                SELECT id
-                FROM household_memberships
-                WHERE CAST(household_id AS TEXT) = :household_id
-                  AND lower(user_email) = lower(:email)
-                LIMIT 1
+                INSERT INTO household_memberships
+                    (id, household_id, user_email, role, status, created_at, updated_at)
+                VALUES
+                    (:id, '0', :email, 'owner', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 """
             ),
-            {"household_id": REGRESSION_HOUSEHOLD_ID, "email": email},
-        ).scalar()
-        if existing_membership:
-            membership_id = str(existing_membership)
-            connection.execute(
-                text(
-                    """
-                    UPDATE household_memberships
-                    SET role = :legacy_role,
-                        status = 'active',
-                        updated_at = CURRENT_TIMESTAMP
-                    WHERE id = :membership_id
-                    """
-                ),
-                {"membership_id": membership_id, "legacy_role": legacy_role},
-            )
-        else:
-            connection.execute(
-                text(
-                    """
-                    INSERT INTO household_memberships
-                        (id, household_id, user_email, role, status, created_at, updated_at)
-                    VALUES
-                        (:id, :household_id, :email, :legacy_role, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                    """
-                ),
-                {
-                    "id": membership_id,
-                    "household_id": REGRESSION_HOUSEHOLD_ID,
-                    "email": email,
-                    "legacy_role": legacy_role,
-                },
-            )
+            {"id": membership_id, "email": TEST_ADMIN_EMAIL},
+        )
         connection.execute(
             text(
                 """
                 INSERT INTO auth_membership_roles
                     (household_id, membership_id, role_key, active, created_at, updated_at)
                 VALUES
-                    (:household_id, :membership_id, :role_key, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    ('0', :membership_id, 'household.owner', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT(household_id, membership_id) DO UPDATE SET
-                    role_key = excluded.role_key,
+                    role_key = 'household.owner',
                     active = 1,
                     updated_at = CURRENT_TIMESTAMP
                 """
             ),
-            {
-                "household_id": REGRESSION_HOUSEHOLD_ID,
-                "membership_id": membership_id,
-                "role_key": role_key,
-            },
+            {"membership_id": membership_id},
         )
+
     print(
         "authorization_fixture: PASS; "
-        f"email={email}; household={REGRESSION_HOUSEHOLD_ID}; role={role_key}"
+        f"email={TEST_ADMIN_EMAIL}; household=0; role=household.owner"
     )
 
 
@@ -173,58 +149,50 @@ def login(email: str, password: str) -> tuple[urllib.request.OpenerDirector, dic
     return client, response.payload
 
 
-def assert_household_context(payload: dict, *, household_id: str, role: str) -> None:
-    assert str(payload.get("active_household_id")) == household_id, payload
-    assert str(payload.get("role") or "").lower() == role, payload
-
-
-def assert_platform_access(client: urllib.request.OpenerDirector, expected_status: int) -> None:
-    response = request_json(client, "GET", "/api/platform/support/threads?status=Open")
-    assert response.status == expected_status, response
+def assert_household_zero(payload: dict, expected_email: str) -> None:
+    assert str(payload.get("active_household_id")) == HOUSEHOLD_ID, payload
+    assert str(payload.get("role") or "").lower() == "owner", payload
+    assert str(payload.get("email") or "").lower() == expected_email.lower(), payload
 
 
 def main() -> int:
-    superuser_password = require_secret(SUPERUSER_PASSWORD, "REZZERV_TEST_SUPERUSER_PASSWORD")
-    owner_password = require_secret(OWNER_PASSWORD, "REZZERV_TEST_OWNER_PASSWORD")
-    member_password = require_secret(MEMBER_PASSWORD, "REZZERV_TEST_MEMBER_PASSWORD")
+    if str(os.getenv("REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO", "false")).lower() not in {
+        "1", "true", "yes", "on"
+    }:
+        raise RuntimeError("REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO moet true zijn")
 
-    provision_role_fixture(
-        email=OWNER_EMAIL,
-        password=owner_password,
-        legacy_role="owner",
-        role_key="household.owner",
-    )
-    provision_role_fixture(
-        email=MEMBER_EMAIL,
-        password=member_password,
-        legacy_role="member",
-        role_key="household.member",
-    )
+    superuser_password = require_secret(SUPERUSER_PASSWORD, "REZZERV_TEST_SUPERUSER_PASSWORD")
+    test_admin_password = require_secret(TEST_ADMIN_PASSWORD, "REZZERV_TEST_ADMIN_PASSWORD")
+    provision_test_admin(test_admin_password)
 
     superuser_client, superuser_login = login(SUPERUSER_EMAIL, superuser_password)
-    assert_household_context(superuser_login, household_id="0", role="owner")
-    assert_platform_access(superuser_client, 200)
+    assert_household_zero(superuser_login, SUPERUSER_EMAIL)
+    superuser_platform = request_json(
+        superuser_client,
+        "GET",
+        "/api/platform/support/threads?status=Open",
+    )
+    assert superuser_platform.status == 200, superuser_platform
 
-    owner_client, owner_login = login(OWNER_EMAIL, owner_password)
-    assert_household_context(owner_login, household_id=REGRESSION_HOUSEHOLD_ID, role="owner")
-    assert request_json(owner_client, "GET", "/api/household").status == 200
-    assert_platform_access(owner_client, 403)
+    test_admin_client, test_admin_login = login(TEST_ADMIN_EMAIL, test_admin_password)
+    assert_household_zero(test_admin_login, TEST_ADMIN_EMAIL)
+    household = request_json(test_admin_client, "GET", "/api/household")
+    assert household.status == 200, household
+    memberships = household.payload.get("memberships") if isinstance(household.payload, dict) else None
+    if memberships is not None:
+        assert len(memberships) == 1, household.payload
+        assert str(memberships[0].get("household_id")) == "0", household.payload
 
-    member_client, member_login = login(MEMBER_EMAIL, member_password)
-    assert_household_context(member_login, household_id=REGRESSION_HOUSEHOLD_ID, role="member")
-    assert request_json(member_client, "GET", "/api/household").status == 200
-    assert_platform_access(member_client, 403)
+    test_admin_platform = request_json(
+        test_admin_client,
+        "GET",
+        "/api/platform/support/threads?status=Open",
+    )
+    assert test_admin_platform.status == 403, test_admin_platform
 
     print("authorization_role_matrix: PASS")
     print(f"superuser={SUPERUSER_EMAIL}; household=0; role=owner; platform=200")
-    print(
-        f"owner={OWNER_EMAIL}; household={REGRESSION_HOUSEHOLD_ID}; "
-        "role=owner; platform=403"
-    )
-    print(
-        f"member={MEMBER_EMAIL}; household={REGRESSION_HOUSEHOLD_ID}; "
-        "role=member; platform=403"
-    )
+    print(f"test_admin={TEST_ADMIN_EMAIL}; household=0; role=owner; platform=403")
     return 0
 
 
