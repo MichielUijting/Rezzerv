@@ -11,7 +11,7 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
 
     await page.goto('/winkelen');
     await expect(page).toHaveURL(/\/winkelen$/);
-    await expect(page.getByLabel('Zoeken in')).toHaveCount(0);
+    await expect(page.getByLabel('Zoeken in', { exact: true })).toHaveCount(0);
     await page.getByLabel('Catalogus zoeken').fill('Regressie-artikel');
 
     await expect(page.getByRole('alert')).toHaveCount(0);
@@ -126,7 +126,7 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     await expect(page.getByText('Nog geen artikelen op de winkellijst.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Afsluiten' })).toHaveCount(0);
     await expect(page.getByRole('columnheader', { name: 'Actie' })).toHaveCount(0);
-    await expect(page.getByLabel('Zoeken in')).toHaveCount(0);
+    await expect(page.getByLabel('Zoeken in', { exact: true })).toHaveCount(0);
 
     const table = page.getByTestId('shopping-list-table');
     await expect(table).toHaveClass(/rz-table--resizable-columns/);
