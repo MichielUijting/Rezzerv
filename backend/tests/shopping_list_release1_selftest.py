@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 from sqlalchemy import create_engine, text
+
+APP_ROOT = Path(__file__).resolve().parents[1]
+if str(APP_ROOT) not in sys.path:
+    sys.path.insert(0, str(APP_ROOT))
 
 from app.services.shopping_list_service import (
     add_shopping_list_item,
