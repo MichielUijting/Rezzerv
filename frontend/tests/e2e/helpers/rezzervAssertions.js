@@ -2,10 +2,29 @@ import { expect } from '@playwright/test';
 
 export function attachConsoleErrorCollector(page) {
   const consoleErrors = [];
+  const recordedResponses = new Set();
 
   page.on('console', (message) => {
     if (message.type() === 'error') {
-      consoleErrors.push(message.text());
+      const location = message.location();
+      const sourceUrl = String(location?.url || '').trim();
+      const line = Number(location?.lineNumber || 0);
+      const column = Number(location?.columnNumber || 0);
+      const source = sourceUrl
+        ? ` [bron: ${sourceUrl}${line ? `:${line}` : ''}${column ? `:${column}` : ''}]`
+        : '';
+      consoleErrors.push(`${message.text()}${source}`);
+    }
+  });
+
+  page.on('response', (response) => {
+    if (response.status() !== 403) return;
+
+    const request = response.request();
+    const detail = `HTTP 403 ${request.method()} ${response.url()}`;
+    if (!recordedResponses.has(detail)) {
+      recordedResponses.add(detail);
+      consoleErrors.push(detail);
     }
   });
 
