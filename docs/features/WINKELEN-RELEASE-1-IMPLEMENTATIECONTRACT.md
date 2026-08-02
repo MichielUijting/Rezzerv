@@ -13,10 +13,7 @@ Release 1 levert één zelfstandige actieve winkellijst per huishouden. De lijst
 1. Nieuw scherm `/winkelen` volgens de standaard Rezzerv-UI.
 2. Eén actieve winkellijst per huishouden.
 3. Een lege lijst toont de Rezzerv-empty-state.
-4. Boven de tabel staat één full-text zoekveld dat gelijktijdig zoekt in:
-   - Huishoudartikelen;
-   - Producttypen;
-   - Artikelgroepen.
+4. Boven de tabel staat één full-text zoekveld dat gelijktijdig zoekt in Huishoudartikelen, Producttypen en Artikelgroepen.
 5. De keuzelijst `Zoeken in` is niet aanwezig.
 6. Zoekresultaten worden per bron gegroepeerd en dragen een herkenbaar bronlabel.
 7. De gebruiker selecteert één zoekresultaat en voegt dit met `Toevoegen` aan de winkellijst toe.
