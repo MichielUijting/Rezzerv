@@ -1897,7 +1897,7 @@ export default function KassaPage() {
   const location = useLocation()
   const { showFeedback } = useAppFeedback()
   const isAddReceiptRoute = location.pathname === '/kassa/nieuw'
-  const [householdId, setHouseholdId] = useState('1')
+  const [householdId, setHouseholdId] = useState('')
   const [currentUserDisplayRole, setCurrentUserDisplayRole] = useState('viewer')
   const [receipts, setReceipts] = useState([])
   const [filters, setFilters] = useState(DEFAULT_RECEIPT_FILTERS)
