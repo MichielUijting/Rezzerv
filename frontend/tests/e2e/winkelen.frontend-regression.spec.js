@@ -108,7 +108,7 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     await expect(page.getByRole('columnheader', { name: 'Actie' })).toHaveCount(0);
     await expect(page.getByTestId('shopping-list-table')).toHaveClass(/rz-table--resizable-columns/);
 
-    await page.getByLabel('Zoeken in').selectOption('household_articles');
+    await page.getByLabel('Zoeken in', { exact: true }).selectOption('household_articles');
     await page.getByLabel('Catalogus zoeken').fill('melk');
     await expect(page.getByLabel('Zoekresultaat')).toContainText('Melk');
     await page.getByLabel('Zoekresultaat').selectOption('household_article:household-article-melk');
