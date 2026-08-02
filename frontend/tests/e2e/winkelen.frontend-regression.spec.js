@@ -135,22 +135,23 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
       page.getByRole('columnheader', { name: 'Sorteer op Producttype', exact: true }),
       page.getByRole('columnheader', { name: 'Sorteer op Omvang', exact: true }),
     ];
+    const sortIndicator = (header) => header.locator('span').filter({ hasText: /^[\^v]$/ });
 
     await expect(sortableHeaders[0]).toHaveAttribute('aria-sort', /ascending|descending/);
-    await expect(sortableHeaders[0]).toContainText(/[\^v]/);
+    await expect(sortIndicator(sortableHeaders[0])).toHaveCount(1);
     for (let index = 1; index < sortableHeaders.length; index += 1) {
       await expect(sortableHeaders[index]).toHaveAttribute('aria-sort', 'none');
-      await expect(sortableHeaders[index]).not.toContainText(/[\^v]/);
+      await expect(sortIndicator(sortableHeaders[index])).toHaveCount(0);
     }
 
     for (let index = 1; index < sortableHeaders.length; index += 1) {
       await sortableHeaders[index].click();
       await expect(sortableHeaders[index]).toHaveAttribute('aria-sort', /ascending|descending/);
-      await expect(sortableHeaders[index]).toContainText(/[\^v]/);
+      await expect(sortIndicator(sortableHeaders[index])).toHaveCount(1);
       for (let otherIndex = 0; otherIndex < sortableHeaders.length; otherIndex += 1) {
         if (otherIndex === index) continue;
         await expect(sortableHeaders[otherIndex]).toHaveAttribute('aria-sort', 'none');
-        await expect(sortableHeaders[otherIndex]).not.toContainText(/[\^v]/);
+        await expect(sortIndicator(sortableHeaders[otherIndex])).toHaveCount(0);
       }
     }
 
