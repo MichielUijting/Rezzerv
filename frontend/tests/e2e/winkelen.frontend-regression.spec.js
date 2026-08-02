@@ -6,6 +6,19 @@ import {
 
 
 test.describe('Winkelen Release 1 frontend-regressie', () => {
+  test('echte huishoudartikelcatalogusroute levert resultaten zonder API-fout', async ({ page }) => {
+    const consoleErrors = attachConsoleErrorCollector(page);
+
+    await page.goto('/winkelen');
+    await expect(page).toHaveURL(/\/winkelen$/);
+    await page.getByLabel('Zoeken in', { exact: true }).selectOption('household_articles');
+    await page.getByLabel('Catalogus zoeken').fill('Regressie-artikel');
+
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    await expect(page.getByLabel('Zoekresultaat')).toContainText('Regressie-artikel');
+    await expectNoConsoleErrors(consoleErrors);
+  });
+
   test('catalogus zoeken, toevoegen, inline aanvullen, afvinken en afronden', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let activeListId = 'shopping-list-active-1';
