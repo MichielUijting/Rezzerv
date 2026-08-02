@@ -5,16 +5,8 @@ import Button from '../../ui/Button.jsx'
 import Table from '../../ui/Table.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
-const EMPTY_FORM = {
-  article_name: '',
-  quantity: '',
-  volume: '',
-  unit: '',
-  note: '',
-}
-
 const UNITS = [
-  ['', 'Geen'],
+  ['', 'Filter'],
   ['stuk', 'stuk'],
   ['stuks', 'stuks'],
   ['gram', 'gram'],
@@ -22,6 +14,12 @@ const UNITS = [
   ['milliliter', 'milliliter'],
   ['liter', 'liter'],
   ['verpakking', 'verpakking'],
+]
+
+const SEARCH_SCOPES = [
+  ['household_articles', 'Huishoudartikelen'],
+  ['product_types', 'Producttypen'],
+  ['article_groups', 'Artikelgroepen'],
 ]
 
 async function requestJson(url, options = {}) {
@@ -35,17 +33,20 @@ async function requestJson(url, options = {}) {
   return payload
 }
 
-function formatNumber(value) {
-  if (value === null || value === undefined || value === '') return ''
-  return new Intl.NumberFormat('nl-NL', { maximumFractionDigits: 3 }).format(Number(value))
+function filterOptions(items, field) {
+  return [...new Set((items || []).map((item) => String(item?.[field] || '').trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, 'nl'))
 }
 
 export default function ShoppingPage() {
   const [list, setList] = useState({ items: [], item_count: 0 })
-  const [form, setForm] = useState(EMPTY_FORM)
-  const [search, setSearch] = useState('')
-  const [checkedFilter, setCheckedFilter] = useState('all')
+  const [scope, setScope] = useState('household_articles')
+  const [catalogQuery, setCatalogQuery] = useState('')
+  const [catalogResults, setCatalogResults] = useState([])
+  const [selectedResultId, setSelectedResultId] = useState('')
+  const [filters, setFilters] = useState({ checked: 'all', article: '', articleGroup: '', productType: '', unit: '' })
   const [loading, setLoading] = useState(true)
+  const [searching, setSearching] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [message, setMessage] = useState('')
@@ -54,8 +55,7 @@ export default function ShoppingPage() {
     setLoading(true)
     setError('')
     try {
-      const payload = await requestJson('/api/shopping-list')
-      setList(payload)
+      setList(await requestJson('/api/shopping-list'))
     } catch (loadError) {
       setError(loadError?.message || 'Winkellijst kon niet worden geladen.')
     } finally {
@@ -67,20 +67,50 @@ export default function ShoppingPage() {
     loadList()
   }, [])
 
-  const visibleItems = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    return (list.items || []).filter((item) => {
-      if (query && !String(item.article_name || '').toLowerCase().includes(query)) return false
-      if (checkedFilter === 'open' && item.checked) return false
-      if (checkedFilter === 'checked' && !item.checked) return false
-      return true
-    })
-  }, [list.items, search, checkedFilter])
+  useEffect(() => {
+    const query = catalogQuery.trim()
+    setSelectedResultId('')
+    if (query.length < 2) {
+      setCatalogResults([])
+      return undefined
+    }
+    const timer = window.setTimeout(async () => {
+      setSearching(true)
+      setError('')
+      try {
+        const payload = await requestJson(`/api/shopping-list/catalog-search?scope=${encodeURIComponent(scope)}&query=${encodeURIComponent(query)}`)
+        setCatalogResults(Array.isArray(payload?.items) ? payload.items : [])
+      } catch (searchError) {
+        setCatalogResults([])
+        setError(searchError?.message || 'Catalogus kon niet worden doorzocht.')
+      } finally {
+        setSearching(false)
+      }
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [scope, catalogQuery])
 
-  async function addItem(event) {
-    event.preventDefault()
-    if (!form.article_name.trim()) {
-      setError('Artikelnaam is verplicht.')
+  const selectedResult = useMemo(
+    () => catalogResults.find((item) => `${item.source_type}:${item.source_id}` === selectedResultId) || null,
+    [catalogResults, selectedResultId],
+  )
+
+  const articleGroupOptions = useMemo(() => filterOptions(list.items, 'article_group_name'), [list.items])
+  const productTypeOptions = useMemo(() => filterOptions(list.items, 'product_type_name'), [list.items])
+
+  const visibleItems = useMemo(() => (list.items || []).filter((item) => {
+    if (filters.checked === 'open' && item.checked) return false
+    if (filters.checked === 'checked' && !item.checked) return false
+    if (filters.article && !String(item.article_name || '').toLowerCase().includes(filters.article.toLowerCase())) return false
+    if (filters.articleGroup && String(item.article_group_name || '') !== filters.articleGroup) return false
+    if (filters.productType && String(item.product_type_name || '') !== filters.productType) return false
+    if (filters.unit && String(item.unit || '') !== filters.unit) return false
+    return true
+  }), [list.items, filters])
+
+  async function addSelectedResult() {
+    if (!selectedResult) {
+      setError('Selecteer eerst een zoekresultaat.')
       return
     }
     setSaving(true)
@@ -90,16 +120,20 @@ export default function ShoppingPage() {
       await requestJson('/api/shopping-list/items', {
         method: 'POST',
         body: JSON.stringify({
-          ...form,
-          quantity: form.quantity === '' ? null : form.quantity,
-          volume: form.volume === '' ? null : form.volume,
+          article_name: selectedResult.article_name || selectedResult.label,
+          article_group_name: selectedResult.article_group_name || '',
+          product_type_name: selectedResult.product_type_name || '',
+          source_type: selectedResult.source_type,
+          source_id: selectedResult.source_id,
         }),
       })
-      setForm(EMPTY_FORM)
-      setMessage('Artikel toegevoegd aan de winkellijst.')
+      setMessage(`${selectedResult.label} toegevoegd aan de winkellijst.`)
+      setCatalogQuery('')
+      setCatalogResults([])
+      setSelectedResultId('')
       await loadList()
     } catch (saveError) {
-      setError(saveError?.message || 'Artikel kon niet worden toegevoegd.')
+      setError(saveError?.message || 'Het geselecteerde resultaat kon niet worden toegevoegd.')
     } finally {
       setSaving(false)
     }
@@ -108,7 +142,6 @@ export default function ShoppingPage() {
   async function updateItem(item, patch) {
     setSaving(true)
     setError('')
-    setMessage('')
     try {
       await requestJson(`/api/shopping-list/items/${encodeURIComponent(item.id)}`, {
         method: 'PUT',
@@ -126,31 +159,9 @@ export default function ShoppingPage() {
   function updateChecked(item, checked) {
     setList((current) => ({
       ...current,
-      items: (current.items || []).map((currentItem) => (
-        currentItem.id === item.id
-          ? { ...currentItem, checked }
-          : currentItem
-      )),
+      items: (current.items || []).map((currentItem) => currentItem.id === item.id ? { ...currentItem, checked } : currentItem),
     }))
     void updateItem(item, { checked })
-  }
-
-  async function deleteItem(item) {
-    if (!window.confirm(`${item.article_name} van de winkellijst verwijderen?`)) return
-    setSaving(true)
-    setError('')
-    setMessage('')
-    try {
-      await requestJson(`/api/shopping-list/items/${encodeURIComponent(item.id)}`, {
-        method: 'DELETE',
-      })
-      setMessage('Artikel verwijderd van de winkellijst.')
-      await loadList()
-    } catch (deleteError) {
-      setError(deleteError?.message || 'Artikel kon niet worden verwijderd.')
-    } finally {
-      setSaving(false)
-    }
   }
 
   async function completeShopping() {
@@ -169,50 +180,36 @@ export default function ShoppingPage() {
     }
   }
 
+  const inlineInputStyle = { width: '100%', minWidth: 80, boxSizing: 'border-box' }
+
   return (
-    <AppShell title="Winkelen">
+    <AppShell title="Winkelen" showExit={false}>
       <Card>
-        <div style={{ display: 'grid', gap: 20, width: '100%' }} data-testid="shopping-page">
+        <div style={{ display: 'grid', gap: 18, width: '100%' }} data-testid="shopping-page">
           <div>
             <h2 style={{ margin: 0 }}>Inkooplijst — {Number(list.item_count || 0)} artikelen</h2>
-            <p style={{ marginBottom: 0, color: '#667085' }}>
-              Stel de winkellijst samen en vink artikelen tijdens het winkelen af.
-            </p>
+            <p style={{ marginBottom: 0, color: '#667085' }}>Zoek een kandidaat in de catalogus, voeg deze toe en vul alleen waar nodig aanvullende gegevens in.</p>
           </div>
 
-          <form onSubmit={addItem} style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 2fr) repeat(3, minmax(110px, 1fr)) minmax(220px, 2fr) auto', gap: 12, alignItems: 'end' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '220px minmax(240px, 1.4fr) minmax(240px, 1.2fr) auto', gap: 12, alignItems: 'end' }}>
             <label className="rz-input-field">
-              <span className="rz-label">Artikel</span>
-              <input className="rz-input" value={form.article_name} onChange={(event) => setForm((current) => ({ ...current, article_name: event.target.value }))} placeholder="Artikelnaam" />
-            </label>
-            <label className="rz-input-field">
-              <span className="rz-label">Aantal</span>
-              <input className="rz-input" inputMode="decimal" value={form.quantity} onChange={(event) => setForm((current) => ({ ...current, quantity: event.target.value }))} />
-            </label>
-            <label className="rz-input-field">
-              <span className="rz-label">Volume</span>
-              <input className="rz-input" inputMode="decimal" value={form.volume} onChange={(event) => setForm((current) => ({ ...current, volume: event.target.value }))} />
-            </label>
-            <label className="rz-input-field">
-              <span className="rz-label">Eenheid</span>
-              <select className="rz-input" value={form.unit} onChange={(event) => setForm((current) => ({ ...current, unit: event.target.value }))}>
-                {UNITS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              <span className="rz-label">Zoeken in</span>
+              <select className="rz-input" value={scope} onChange={(event) => setScope(event.target.value)} aria-label="Zoeken in">
+                {SEARCH_SCOPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </label>
             <label className="rz-input-field">
-              <span className="rz-label">Opmerking</span>
-              <input className="rz-input" value={form.note} onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))} placeholder="Optioneel" />
+              <span className="rz-label">Catalogus zoeken</span>
+              <input className="rz-input" value={catalogQuery} onChange={(event) => setCatalogQuery(event.target.value)} placeholder="Zoek artikel, producttype of artikelgroep" aria-label="Catalogus zoeken" />
             </label>
-            <Button type="submit" disabled={saving}>Toevoegen</Button>
-          </form>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 220px', gap: 12 }}>
-            <input className="rz-input" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Zoeken" aria-label="Zoeken" />
-            <select className="rz-input" value={checkedFilter} onChange={(event) => setCheckedFilter(event.target.value)} aria-label="Filter gekocht">
-              <option value="all">Alle artikelen</option>
-              <option value="open">Nog te kopen</option>
-              <option value="checked">Gekocht</option>
-            </select>
+            <label className="rz-input-field">
+              <span className="rz-label">Zoekresultaat</span>
+              <select className="rz-input" value={selectedResultId} onChange={(event) => setSelectedResultId(event.target.value)} aria-label="Zoekresultaat" disabled={searching || catalogResults.length === 0}>
+                <option value="">{searching ? 'Zoeken…' : catalogResults.length ? 'Selecteer resultaat' : 'Geen resultaten'}</option>
+                {catalogResults.map((item) => <option key={`${item.source_type}:${item.source_id}`} value={`${item.source_type}:${item.source_id}`}>{item.label}</option>)}
+              </select>
+            </label>
+            <Button type="button" onClick={addSelectedResult} disabled={saving || !selectedResult}>Toevoegen</Button>
           </div>
 
           {error ? <div role="alert" style={{ color: '#9b1c1c' }}>{error}</div> : null}
@@ -223,42 +220,74 @@ export default function ShoppingPage() {
               <tr className="rz-table-header">
                 <th>Gekocht</th>
                 <th>Artikel</th>
+                <th>Artikelgroep</th>
+                <th>Producttype</th>
                 <th className="rz-num">Aantal</th>
                 <th className="rz-num">Volume</th>
                 <th>Eenheid</th>
                 <th>Opmerking</th>
-                <th>Actie</th>
+              </tr>
+              <tr>
+                <th>
+                  <select className="rz-input" value={filters.checked} onChange={(event) => setFilters((current) => ({ ...current, checked: event.target.value }))} aria-label="Filter gekocht">
+                    <option value="all">Filter</option>
+                    <option value="open">Nog te kopen</option>
+                    <option value="checked">Gekocht</option>
+                  </select>
+                </th>
+                <th><input className="rz-input" value={filters.article} onChange={(event) => setFilters((current) => ({ ...current, article: event.target.value }))} placeholder="Zoeken" aria-label="Zoeken in winkellijst" /></th>
+                <th>
+                  <select className="rz-input" value={filters.articleGroup} onChange={(event) => setFilters((current) => ({ ...current, articleGroup: event.target.value }))} aria-label="Filter artikelgroep">
+                    <option value="">Filter</option>
+                    {articleGroupOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                </th>
+                <th>
+                  <select className="rz-input" value={filters.productType} onChange={(event) => setFilters((current) => ({ ...current, productType: event.target.value }))} aria-label="Filter producttype">
+                    <option value="">Filter</option>
+                    {productTypeOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                  </select>
+                </th>
+                <th>&nbsp;</th>
+                <th>&nbsp;</th>
+                <th>
+                  <select className="rz-input" value={filters.unit} onChange={(event) => setFilters((current) => ({ ...current, unit: event.target.value }))} aria-label="Filter eenheid">
+                    {UNITS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                </th>
+                <th>&nbsp;</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={7}>Winkellijst laden…</td></tr>
+                <tr><td colSpan={8}>Winkellijst laden…</td></tr>
               ) : visibleItems.length === 0 ? (
                 <>
-                  <tr><td colSpan={7}>Nog geen artikelen op de winkellijst.</td></tr>
-                  <tr><td colSpan={7}>&nbsp;</td></tr>
-                  <tr><td colSpan={7}>&nbsp;</td></tr>
+                  <tr><td colSpan={8}>Nog geen artikelen op de winkellijst.</td></tr>
+                  <tr><td colSpan={8}>&nbsp;</td></tr>
+                  <tr><td colSpan={8}>&nbsp;</td></tr>
                 </>
               ) : visibleItems.map((item) => (
                 <tr key={item.id}>
-                  <td>
-                    <input type="checkbox" checked={Boolean(item.checked)} onChange={(event) => updateChecked(item, event.target.checked)} aria-label={`Gekocht ${item.article_name}`} style={{ accentColor: '#1A3E2B', width: 16, height: 16 }} />
-                  </td>
+                  <td><input type="checkbox" checked={Boolean(item.checked)} onChange={(event) => updateChecked(item, event.target.checked)} aria-label={`Gekocht ${item.article_name}`} style={{ accentColor: '#1A3E2B', width: 16, height: 16 }} /></td>
                   <td>{item.article_name}</td>
-                  <td className="rz-num">{formatNumber(item.quantity)}</td>
-                  <td className="rz-num">{formatNumber(item.volume)}</td>
-                  <td>{item.unit}</td>
-                  <td>{item.note}</td>
-                  <td><Button type="button" variant="secondary" onClick={() => deleteItem(item)} disabled={saving}>Verwijderen</Button></td>
+                  <td>{item.article_group_name}</td>
+                  <td>{item.product_type_name}</td>
+                  <td><input className="rz-input rz-num" style={inlineInputStyle} defaultValue={item.quantity ?? ''} inputMode="decimal" aria-label={`Aantal ${item.article_name}`} onBlur={(event) => updateItem(item, { quantity: event.target.value || null })} /></td>
+                  <td><input className="rz-input rz-num" style={inlineInputStyle} defaultValue={item.volume ?? ''} inputMode="decimal" aria-label={`Volume ${item.article_name}`} onBlur={(event) => updateItem(item, { volume: event.target.value || null })} /></td>
+                  <td>
+                    <select className="rz-input" style={inlineInputStyle} value={item.unit || ''} aria-label={`Eenheid ${item.article_name}`} onChange={(event) => updateItem(item, { unit: event.target.value })}>
+                      {UNITS.map(([value, label]) => <option key={value} value={value}>{value ? label : 'Geen'}</option>)}
+                    </select>
+                  </td>
+                  <td><input className="rz-input" style={inlineInputStyle} defaultValue={item.note || ''} aria-label={`Opmerking ${item.article_name}`} onBlur={(event) => updateItem(item, { note: event.target.value })} /></td>
                 </tr>
               ))}
             </tbody>
           </Table>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button type="button" onClick={completeShopping} disabled={saving || Number(list.item_count || 0) === 0}>
-              Winkelen afgerond
-            </Button>
+            <Button type="button" onClick={completeShopping} disabled={saving || Number(list.item_count || 0) === 0}>Winkelen afgerond</Button>
           </div>
         </div>
       </Card>
