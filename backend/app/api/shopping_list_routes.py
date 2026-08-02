@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi import APIRouter, Body, HTTPException, Query, Request
 from sqlalchemy import inspect, text
 
 from app.db import engine
@@ -18,6 +18,7 @@ from app.services.shopping_list_service import (
     complete_active_shopping_list,
     delete_shopping_list_item,
     get_active_shopping_list,
+    search_shopping_catalog,
     update_shopping_list_item,
 )
 
@@ -105,6 +106,27 @@ def shopping_list_get(request: Request):
     with engine.begin() as conn:
         context = _authorized_context(conn, request, "shopping_list.view")
         return get_active_shopping_list(conn, context.active_household_id)
+
+
+@router.get("/api/shopping-list/catalog-search")
+def shopping_list_catalog_search(
+    request: Request,
+    scope: str = Query(...),
+    query: str = Query(default=""),
+    limit: int = Query(default=20, ge=1, le=50),
+):
+    try:
+        with engine.begin() as conn:
+            context = _authorized_context(conn, request, "shopping_list.view")
+            return search_shopping_catalog(
+                conn,
+                context.active_household_id,
+                scope=scope,
+                query=query,
+                limit=limit,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.post("/api/shopping-list/items", status_code=201)
