@@ -26,6 +26,8 @@ from app.services.system_superuser_session_provisioning import (
     SUPERGEBRUIKER_HUISHOUDEN_ID,
 )
 
+REGRESSION_TEST_ADMIN_EMAIL = "test-admin@rezzerv.local"
+
 
 class SessionLoginRequest(BaseModel):
     email: str
@@ -65,6 +67,12 @@ def session_api_configuration_from_environment() -> SessionApiConfiguration:
         cookie_secure=cookie_secure,
         cookie_samesite=str(os.getenv("REZZERV_SESSION_COOKIE_SAMESITE", "lax") or "lax"),
     )
+
+
+def _test_household_zero_enabled() -> bool:
+    return str(
+        os.getenv("REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO", "false") or "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _set_session_cookie(response: Response, raw_session_id: str, configuration: SessionApiConfiguration) -> None:
@@ -130,8 +138,17 @@ def _resolve_login_identity(conn, email: str, password: str) -> dict[str, str]:
     role = str(first.get("role") or "").strip().lower()
     if not household_id:
         raise HTTPException(status_code=403, detail="Geen geldig actief huishouden beschikbaar")
-    if household_id == SUPERGEBRUIKER_HUISHOUDEN_ID and not (
+
+    is_system_superuser = (
         resolved_email == SUPERGEBRUIKER_EMAIL and role == "owner"
+    )
+    is_regression_test_admin = (
+        _test_household_zero_enabled()
+        and resolved_email == REGRESSION_TEST_ADMIN_EMAIL
+        and role == "owner"
+    )
+    if household_id == SUPERGEBRUIKER_HUISHOUDEN_ID and not (
+        is_system_superuser or is_regression_test_admin
     ):
         raise HTTPException(status_code=403, detail="Geen geldig actief huishouden beschikbaar")
 
