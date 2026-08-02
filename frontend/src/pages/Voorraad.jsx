@@ -596,7 +596,7 @@ async function fetchArticleGroupAssignments() {
 }
 
 async function fetchArticleGroupOptions() {
-  const householdId = String(readStoredAuthContext()?.active_household_id || '').trim()
+  const householdId = String(readStoredAuthContext()?.active_household_id ?? '').trim()
   const query = new URLSearchParams({ _ts: String(Date.now()) })
   if (householdId) query.set('household_id', householdId)
 
@@ -620,7 +620,7 @@ async function fetchArticleGroupOptions() {
 async function saveArticleGroupAssignment(row, articleGroupId) {
   const householdArticleId = String(row?.householdArticleId || '').trim()
   if (!householdArticleId) throw new Error('Voorraadregel mist een gekoppeld huishoudartikel')
-  const householdId = String(readStoredAuthContext()?.active_household_id || '').trim() || null
+  const householdId = String(readStoredAuthContext()?.active_household_id ?? '').trim() || null
   const response = await fetch(`/api/household-articles/${encodeURIComponent(householdArticleId)}/article-group`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -635,7 +635,7 @@ async function saveArticleGroupAssignment(row, articleGroupId) {
 }
 
 async function createArticleGroup(name) {
-  const householdId = String(readStoredAuthContext()?.active_household_id || '').trim() || null
+  const householdId = String(readStoredAuthContext()?.active_household_id ?? '').trim() || null
   const response = await fetch('/api/article-groups', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },

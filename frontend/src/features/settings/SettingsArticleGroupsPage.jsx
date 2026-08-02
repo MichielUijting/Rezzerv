@@ -26,7 +26,7 @@ const articleColumnDefaults = Object.fromEntries(articleTableColumns.map(({ key,
 const greenCheckboxStyle = { accentColor: '#1A3E2B', width: 16, height: 16 }
 
 function getActiveHouseholdId() {
-  return String(readStoredAuthContext()?.active_household_id || '1').trim() || '1'
+  return String(readStoredAuthContext()?.active_household_id ?? '1').trim() || '1'
 }
 
 function extractErrorMessage(payload, fallback) {

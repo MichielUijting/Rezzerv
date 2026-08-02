@@ -2,7 +2,7 @@ import { fetchJsonWithAuth, readStoredAuthContext } from '../../../lib/authSessi
 
 function activeHouseholdId() {
   const context = readStoredAuthContext()
-  const householdId = String(context?.active_household_id || '').trim()
+  const householdId = String(context?.active_household_id ?? '').trim()
   if (!householdId) {
     throw new Error('Geen actief huishouden beschikbaar. Log opnieuw in of selecteer een huishouden.')
   }

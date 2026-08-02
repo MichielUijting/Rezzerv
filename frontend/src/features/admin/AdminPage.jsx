@@ -52,7 +52,7 @@ export default function AdminPage() {
 
   const [status, setStatus] = useState({ spaces: 0, sublocations: 0, inventory: 0 });
   const [message, setMessage] = useState("");
-  const [householdId, setHouseholdId] = useState(String(sessionContext?.active_household_id || "demo-household"));
+  const [householdId, setHouseholdId] = useState(String(sessionContext?.active_household_id ?? "demo-household"));
   const [isPurgingArchivedReceipts, setIsPurgingArchivedReceipts] = useState(false);
   const [isRunningKassaRegression, setIsRunningKassaRegression] = useState(false);
   const [kassaRegressionJob, setKassaRegressionJob] = useState(null);

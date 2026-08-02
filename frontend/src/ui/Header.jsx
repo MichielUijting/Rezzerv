@@ -7,7 +7,7 @@ function activeHouseholdLabel(context) {
   const name = String(context?.active_household_name || "").trim();
   if (name) return name;
 
-  const householdId = String(context?.active_household_id || "").trim();
+  const householdId = String(context?.active_household_id ?? "").trim();
   if (householdId === "0") return "Systeemhuishouden";
   return householdId;
 }
