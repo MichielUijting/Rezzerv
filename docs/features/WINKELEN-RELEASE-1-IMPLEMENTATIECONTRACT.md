@@ -6,28 +6,31 @@ Branch: `feature/winkelen-release-1`
 
 ## Doel
 
-Release 1 levert één zelfstandige actieve winkellijst per huishouden. De lijst start leeg. De gebruiker zoekt eerst een kandidaat in de Rezzerv-catalogus, voegt deze toe en vult daarna alleen waar nodig aanvullende gegevens in de tabel aan. Release 1 bevat nog geen push vanuit Bijna op of Gerechten.
+Release 1 levert één zelfstandige actieve winkellijst per huishouden. De lijst start leeg. De gebruiker zoekt met één zoekveld tegelijk in alle relevante Rezzerv-catalogusbronnen, kiest een kandidaat, voegt deze toe en vult daarna alleen waar nodig aanvullende gegevens in de tabel aan. Release 1 bevat nog geen push vanuit Bijna op of Gerechten.
 
 ## Functionele scope
 
 1. Nieuw scherm `/winkelen` volgens de standaard Rezzerv-UI.
 2. Eén actieve winkellijst per huishouden.
 3. Een lege lijst toont de Rezzerv-empty-state.
-4. Boven de tabel staat één full-text zoekfunctie met de zoekscopes:
+4. Boven de tabel staat één full-text zoekveld dat gelijktijdig zoekt in:
    - Huishoudartikelen;
    - Producttypen;
    - Artikelgroepen.
-5. De gebruiker selecteert één zoekresultaat en voegt dit met `Toevoegen` aan de winkellijst toe.
-6. Aantal, volume, eenheid en opmerking zijn niet verplicht bij toevoegen.
-7. Deze aanvullende gegevens zijn daarna inline in de tabel wijzigbaar.
-8. Een regel kan als gekocht worden afgevinkt.
-9. `Winkelen afgerond` vraagt bevestiging en maakt daarna de actieve tabel leeg.
-10. Afronden wijzigt Voorraad, Bijna op, Gerechten en kassabonnen niet.
-11. Data van andere huishoudens is nooit zichtbaar of wijzigbaar.
+5. De keuzelijst `Zoeken in` is niet aanwezig.
+6. Zoekresultaten worden per bron gegroepeerd en dragen een herkenbaar bronlabel.
+7. De gebruiker selecteert één zoekresultaat en voegt dit met `Toevoegen` aan de winkellijst toe.
+8. Aantal, volume, eenheid en opmerking zijn niet verplicht bij toevoegen.
+9. Deze aanvullende gegevens zijn daarna inline in de tabel wijzigbaar.
+10. Een regel kan als gekocht worden afgevinkt.
+11. `Winkelen afgerond` vraagt bevestiging en maakt daarna de actieve tabel leeg.
+12. Afronden wijzigt Voorraad, Bijna op, Gerechten en kassabonnen niet.
+13. Data van andere huishoudens is nooit zichtbaar of wijzigbaar.
 
 ## Expliciet verwijderd uit het scherm
 
 - de eerste invoerregel met Artikel, Aantal, Volume, Eenheid en Opmerking;
+- de dropdown `Zoeken in`;
 - de kolom `Actie`;
 - de regelactie `Verwijderen`;
 - de knop `Afsluiten`.
@@ -79,15 +82,19 @@ Bestaande lokale databases worden additief uitgebreid; bestaande winkellijstrege
 
 Endpoint:
 
-- `GET /api/shopping-list/catalog-search?scope={scope}&query={query}`
+- `GET /api/shopping-list/catalog-search?scope=all&query={query}`
 
-Ondersteunde scopes:
+De gecombineerde zoekactie gebruikt uitsluitend het huishouden uit de server-side sessie en doorzoekt:
 
-- `household_articles`
-- `product_types`
-- `article_groups`
+- `household_articles` via de bestaande huishoudartikelprojectie;
+- `product_types` via de centrale producttype-/productgroepcatalogus;
+- `article_groups` via de bestaande artikelgroepprojectie.
 
-De zoekactie gebruikt uitsluitend het huishouden uit de server-side sessie. Huishoudartikelen en Artikelgroepen hergebruiken de bestaande Rezzerv-projecties. Producttypen worden uit de centrale producttype-/productgroepcatalogus geprojecteerd.
+De route retourneert:
+
+- één gecombineerde lijst `items`;
+- totaal `total`;
+- aantallen per brontype in `counts`.
 
 Een zoekresultaat bevat minimaal:
 
@@ -97,6 +104,16 @@ Een zoekresultaat bevat minimaal:
 - `article_name`
 - `article_group_name`
 - `product_type_name`
+
+Rangschikking:
+
+1. exacte overeenkomst;
+2. begint met zoekterm;
+3. bevat zoekterm;
+4. bij gelijke relevantie: Huishoudartikel, Producttype, Artikelgroep;
+5. daarna alfabetisch.
+
+Gelijke labels uit verschillende bronnen blijven afzonderlijke resultaten, omdat hun bronidentiteit en betekenis verschillen.
 
 ## Overig API-contract
 
@@ -124,10 +141,10 @@ Schermtitel: `Winkelen`
 
 Boven de tabel:
 
-1. dropdown `Zoeken in`;
-2. full-text veld `Catalogus zoeken`;
-3. dropdown `Zoekresultaat`;
-4. knop `Toevoegen`.
+1. full-text veld `Catalogus zoeken`;
+2. gegroepeerde dropdown `Zoekresultaat` met bronlabels;
+3. knop `Toevoegen`;
+4. compacte aantallen per bron.
 
 Tabelkolommen:
 
@@ -148,12 +165,22 @@ Onder de kolomkoppen staat de standaard zoek- en filterregel:
 - Producttype: `Filter`;
 - Eenheid: `Filter`.
 
+### Vaste tabelgeometrie
+
+- de tabel gebruikt `table-layout: fixed`;
+- de totale initiële tabelbreedte is vast en verandert niet door zoekresultaten, toegevoegde waarden of celinhoud;
+- de initiële kolombreedtes zijn vastgelegd via `colgroup`;
+- lange waarden mogen de tabel niet verbreden;
+- volledige tekst blijft beschikbaar via de celtooltip;
+- bij onvoldoende schermruimte wordt horizontaal gescrold;
+- kolommen blijven handmatig verstelbaar;
+- een handmatige resize mag de overige tabelinteractie niet beïnvloeden.
+
 Standaardgedrag:
 
 - numerieke waarden rechts uitgelijnd;
 - donkergroene checkbox;
 - Aantal, Volume, Eenheid en Opmerking inline wijzigbaar;
-- kolombreedtes handmatig verstelbaar;
 - standaard Rezzerv-card en primaire knop;
 - geen exitknop op dit scherm;
 - `Winkelen afgerond` alleen actief bij een niet-lege lijst.
@@ -171,31 +198,34 @@ Na bevestiging:
 ## Acceptatiecriteria
 
 1. Nieuw huishouden opent een lege Winkelen-tabel.
-2. Full-text zoeken werkt voor alle drie scopes.
-3. Alleen een geselecteerd catalogusresultaat kan worden toegevoegd.
-4. Toevoegen vereist geen aantal, volume, eenheid of opmerking.
-5. Toegevoegde regels blijven na herladen bestaan.
-6. Inline aanvullingen blijven na herladen bestaan.
-7. Afvinken blijft na herladen bewaard.
-8. Zoek- en filterregel werkt op de actieve tabel.
-9. Kolombreedtes zijn verstelbaar.
-10. Kolom Actie en knop Afsluiten zijn afwezig.
-11. Afronden maakt de actieve weergave leeg.
-12. Afronden wijzigt Voorraad niet.
-13. Een gebruiker kan nooit regels van een ander huishouden lezen of muteren.
-14. Backend- en frontendbuild zijn groen.
-15. Volledige regressie en productie-ketentest zijn groen op de actuele head.
+2. Eén zoekopdracht doorzoekt alle drie catalogusbronnen.
+3. Resultaten tonen hun bron en zijn per bron gegroepeerd.
+4. Alleen een geselecteerd catalogusresultaat kan worden toegevoegd.
+5. Toevoegen vereist geen aantal, volume, eenheid of opmerking.
+6. Toegevoegde regels blijven na herladen bestaan.
+7. Inline aanvullingen blijven na herladen bestaan.
+8. Afvinken blijft na herladen bewaard.
+9. Zoek- en filterregel werkt op de actieve tabel.
+10. De tabelbreedte blijft exact gelijk vóór zoeken, na zoeken en na toevoegen.
+11. Kolombreedtes zijn verstelbaar.
+12. Dropdown Zoeken in, kolom Actie en knop Afsluiten zijn afwezig.
+13. Afronden maakt de actieve weergave leeg.
+14. Afronden wijzigt Voorraad niet.
+15. Een gebruiker kan nooit regels van een ander huishouden lezen of muteren.
+16. Backend- en frontendbuild zijn groen.
+17. Volledige regressie en productie-ketentest zijn groen op de actuele head.
 
 ## Releasegate
 
-De eerdere groene resultaten van head `b922d2bbab514f1363f601e763364c961af382c5` gelden niet als vrijgave voor deze gewijzigde schermversie.
+Eerdere groene resultaten gelden niet als vrijgave voor de gewijzigde gecombineerde zoekfunctie en vaste tabelgeometrie.
 
 Geen merge, release of deployment zonder:
 
 - groene backend-selftest op de actuele head;
 - groene frontendbuild;
 - volledige bestaande frontendregressie groen;
-- aangepaste Winkelen-regressie groen;
+- echte gecombineerde catalogusroute groen;
+- tabelbreedteregressie groen;
 - productie-ketentest 12/12 groen;
 - gecontroleerde huishoudisolatie;
 - functionele PO-controle;
