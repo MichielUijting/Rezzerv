@@ -43,7 +43,7 @@ $forbiddenTestPatterns = @(
   @{ Name = "hardcoded householdId 1"; Pattern = '(?i)householdId\s*[:=]\s*["'']?1\b' },
   @{ Name = "Playwright huishouden 1"; Pattern = '(?i)PLAYWRIGHT_HOUSEHOLD_ID\s*=\s*["'']?1\b' },
   @{ Name = "demo huishouden 1"; Pattern = '(?i)DEMO_HOUSEHOLD_ID\s*=\s*["'']1["'']' },
-  @{ Name = "fallback naar huishouden 1"; Pattern = '(?i)active_household_id\s*\|\|\s*["'']1["'']' },
+  @{ Name = "fallback naar huishouden 1"; Pattern = '(?i)active_household_id\s*(?:\|\||\?\?)\s*["'']1["'']' },
   @{ Name = "legacy regressieaccount"; Pattern = '(?i)(?<![A-Za-z0-9._%+\-])admin@rezzerv\.local(?![A-Za-z0-9.\-])' }
 )
 
@@ -64,8 +64,8 @@ foreach ($file in $canonicalFiles) {
 }
 
 # Relevante productie-frontendcode wordt apart bewaakt op fouten waarbij
-# huishouden 0 als falsy waarde verloren kan gaan of legacy household.id
-# voorrang krijgt boven de actieve server-side sessie.
+# huishouden 0 als falsy waarde verloren kan gaan, huishouden 1 als fallback
+# wordt gebruikt of legacy household.id voorrang krijgt boven de actieve sessie.
 $frontendSource = Join-Path $repoRoot "frontend\src"
 if (Test-Path $frontendSource) {
   $frontendFiles = Get-ChildItem -Path $frontendSource -Recurse -File | Where-Object {
@@ -75,6 +75,7 @@ if (Test-Path $frontendSource) {
   $frontendRules = @(
     @{ Name = "legacy id voor active_household_id"; Pattern = '(?i)\.id\s*\|\|[^\r\n;]{0,160}active_household_id' },
     @{ Name = "active_household_id gebruikt falsy fallback"; Pattern = '(?i)active_household_id\s*\|\|' },
+    @{ Name = "active_household_id valt terug op huishouden 1"; Pattern = '(?i)active_household_id\s*(?:\|\||\?\?)\s*["'']1["'']' },
     @{ Name = "artikelgroepen hardcoded huishouden 1"; Pattern = '(?i)/api/article-groups\?household_id=1\b' }
   )
 
