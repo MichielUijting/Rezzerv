@@ -1058,7 +1058,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       return
     }
 
-    const householdId = String(batch?.household_id || household?.active_household_id || household?.id || '').trim()
+    const householdId = String(household?.active_household_id ?? batch?.household_id ?? household?.id ?? '').trim()
     if (!householdId) {
       setError('Het actieve huishouden kon niet worden vastgesteld.')
       return
@@ -1111,7 +1111,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const [providerData, backendArticles, articleGroupsData, spacesData, sublocationsData, loadedBatch] = await Promise.all([
         fetchJson('/api/store-providers'),
         fetchJson('/api/store-review-articles').catch(() => articleFallbackOptions),
-        fetchJson(`/api/article-groups?household_id=${encodeURIComponent(householdData.id || householdData.active_household_id || '')}`).catch(() => ({ items: [] })),
+        fetchJson(`/api/article-groups?household_id=${encodeURIComponent((householdData.active_household_id ?? householdData.id ?? ''))}`).catch(() => ({ items: [] })),
         fetchJson('/api/spaces?_ts=' + Date.now()).catch(() => ({ items: [] })),
         fetchJson('/api/sublocations?_ts=' + Date.now()).catch(() => ({ items: [] })),
         fetchJson(`/api/purchase-import-batches/${batchId}`),

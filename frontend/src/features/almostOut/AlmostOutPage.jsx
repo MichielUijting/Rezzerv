@@ -59,7 +59,7 @@ function normalizeText(value) {
 
 async function resolveHouseholdId() {
   const storedContext = readStoredAuthContext()
-  const storedHouseholdId = String(storedContext?.active_household_id || '').trim()
+  const storedHouseholdId = String(storedContext?.active_household_id ?? '').trim()
   if (storedHouseholdId) return storedHouseholdId
 
   const response = await fetchJsonWithAuth('/api/household', { method: 'GET' })

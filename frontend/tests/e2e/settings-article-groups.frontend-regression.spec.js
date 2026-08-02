@@ -3,6 +3,7 @@ import {
   attachConsoleErrorCollector,
   expectNoConsoleErrors,
 } from './helpers/rezzervAssertions.js';
+import { DEMO_HOUSEHOLD_ID } from './helpers/devApi.js';
 
 test.describe('Instellingen Artikelgroepen frontend-regressie', () => {
   test('Universele artikelnaam blijft zichtbaar en bulktoewijzing wordt opgeslagen', async ({ page }) => {
@@ -78,7 +79,7 @@ test.describe('Instellingen Artikelgroepen frontend-regressie', () => {
     await confirmDialog.getByRole('button', { name: 'Opslaan', exact: true }).click();
 
     await expect.poll(() => assignmentPayload).toEqual({
-      household_id: '1',
+      household_id: String(DEMO_HOUSEHOLD_ID),
       article_group_id: 'group-sauzen',
     });
     await expect(page.getByText(/1 voorraadartikel toegewezen aan Artikelgroep Sauzen\./)).toBeVisible();

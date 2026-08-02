@@ -26,7 +26,11 @@ const articleColumnDefaults = Object.fromEntries(articleTableColumns.map(({ key,
 const greenCheckboxStyle = { accentColor: '#1A3E2B', width: 16, height: 16 }
 
 function getActiveHouseholdId() {
-  return String(readStoredAuthContext()?.active_household_id || '1').trim() || '1'
+  const householdId = String(readStoredAuthContext()?.active_household_id ?? '').trim()
+  if (!householdId) {
+    throw new Error('Geen actief huishouden beschikbaar. Log opnieuw in of selecteer een huishouden.')
+  }
+  return householdId
 }
 
 function extractErrorMessage(payload, fallback) {

@@ -14,7 +14,7 @@ function normalizeSessionContext(context) {
   return {
     user_id: context.user_id || context.user?.id || '',
     email: context.email || context.user?.email || '',
-    active_household_id: context.active_household_id || '',
+    active_household_id: context.active_household_id ?? '',
     active_household_name: context.active_household_name || '',
     role: context.role || '',
     display_role: context.display_role || context.role || '',

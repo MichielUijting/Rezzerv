@@ -2,44 +2,51 @@ param(
   [switch]$SkipDockerBuild
 )
 
+CLS
+
 $ErrorActionPreference = "Stop"
 
 Write-Host "=== Rezzerv centrale frontendregressie ===" -ForegroundColor Cyan
 
-function Invoke-RegressionFixtureCleanup {
-  param(
-    [int]$MaxAttempts = 5
-  )
-
-  Write-Host "`n=== Regression fixture cleanup ===" -ForegroundColor Cyan
-  $headers = @{ Authorization = "Bearer rezzerv-dev-token::admin@rezzerv.local" }
-  $lastError = $null
-
-  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-    try {
-      if ($attempt -gt 1) {
-        Write-Host "Cleanup opnieuw proberen ($attempt/$MaxAttempts)..." -ForegroundColor Yellow
-      }
-      Invoke-RestMethod -Method Post -Uri "http://localhost:8011/api/testing/fixtures/cleanup" -Headers $headers | Out-Host
-      return
-    } catch {
-      $lastError = $_
-      if ($attempt -lt $MaxAttempts) {
-        Start-Sleep -Seconds ([Math]::Min(2 * $attempt, 6))
-      }
-    }
-  }
-
-  throw $lastError
-}
-
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 
+$fixturesPrepared = $false
+$runFailed = $false
+
+$superuserEmail = if ($env:REZZERV_REGRESSION_SUPERUSER_EMAIL) {
+  $env:REZZERV_REGRESSION_SUPERUSER_EMAIL
+} else {
+  "supergebruiker@rezzerv.local"
+}
+$superuserPassword = $env:REZZERV_REGRESSION_SUPERUSER_PASSWORD
+$testAdminEmail = "test-admin@rezzerv.local"
+$testAdminPassword = "Rt$([Guid]::NewGuid().ToString('N'))"
+
+if (-not $superuserPassword) {
+  throw "REZZERV_REGRESSION_SUPERUSER_PASSWORD ontbreekt in deze PowerShell-sessie."
+}
+
 try {
+  Write-Host "`n=== Huishouden-0 contractscan ===" -ForegroundColor Cyan
+  try {
+    & (Join-Path $PSScriptRoot "assert-household-zero-test-contract.ps1")
+  }
+  catch {
+    throw "Huishouden-0-contractscan is gefaald: $($_.Exception.Message)"
+  }
+
   if (-not $SkipDockerBuild) {
     Write-Host "`n=== Docker build/start ===" -ForegroundColor Cyan
     docker compose up -d --build
+    $dockerBuildExitCode = $LASTEXITCODE
+
+    if ($dockerBuildExitCode -ne 0) {
+      throw "Docker build/start is gefaald met exitcode $dockerBuildExitCode."
+    }
+
+    Write-Host "`n=== Stabilisatie na hernieuwde opbouw: 90 seconden ===" -ForegroundColor Cyan
+    Start-Sleep -Seconds 90
   }
 
   Write-Host "`n=== Backend health ===" -ForegroundColor Cyan
@@ -50,7 +57,8 @@ try {
       Invoke-RestMethod http://localhost:8011/api/health | Out-Host
       $healthOk = $true
       break
-    } catch {
+    }
+    catch {
       Write-Host "Backend nog niet bereikbaar: $($_.Exception.Message)"
       Start-Sleep -Seconds 10
     }
@@ -60,9 +68,33 @@ try {
     throw "Backend healthcheck niet groen na 12 pogingen."
   }
 
-  Invoke-RegressionFixtureCleanup
+  Write-Host "`n=== Autorisatiematrix server-side sessies ===" -ForegroundColor Cyan
+  docker compose exec -T `
+    -e REZZERV_TEST_SUPERUSER_EMAIL=$superuserEmail `
+    -e REZZERV_TEST_SUPERUSER_PASSWORD=$superuserPassword `
+    -e REZZERV_TEST_ADMIN_EMAIL=$testAdminEmail `
+    -e REZZERV_TEST_ADMIN_PASSWORD=$testAdminPassword `
+    backend python /app/tests/authorization_role_matrix_selftest.py
+  $authorizationExitCode = $LASTEXITCODE
+
+  if ($authorizationExitCode -ne 0) {
+    throw "Autorisatiematrix-selftest is gefaald met exitcode $authorizationExitCode."
+  }
+
+  Write-Host "`n=== Huishouden-0 regressie-fixtures voorbereiden ===" -ForegroundColor Cyan
+  docker compose exec -T backend `
+    python /app/tests/household_zero_regression_fixture.py prepare
+  $fixturePrepareExitCode = $LASTEXITCODE
+
+  if ($fixturePrepareExitCode -ne 0) {
+    throw "Voorbereiden van huishouden-0-fixtures is gefaald met exitcode $fixturePrepareExitCode."
+  }
+
+  $fixturesPrepared = $true
 
   Write-Host "`n=== Playwright frontend regressie via Docker ===" -ForegroundColor Cyan
+  Write-Host "Platform-superuser: $superuserEmail; huishouden: 0" -ForegroundColor Cyan
+  Write-Host "Playwright-testaccount: $testAdminEmail; huishouden: 0" -ForegroundColor Cyan
 
   $frontendPath = Join-Path $repoRoot "frontend"
   $frontendPath = $frontendPath.Replace("\", "/")
@@ -85,26 +117,49 @@ try {
     --add-host=host.docker.internal:host-gateway `
     -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:5174 `
     -e PLAYWRIGHT_API_URL=http://host.docker.internal:8011 `
+    -e PLAYWRIGHT_TEST_ADMIN_EMAIL=$testAdminEmail `
+    -e PLAYWRIGHT_TEST_ADMIN_PASSWORD=$testAdminPassword `
+    -e PLAYWRIGHT_HOUSEHOLD_ID=0 `
     -v "${frontendPath}:/work" `
     -v rezzerv_playwright_node_modules:/work/node_modules `
     -w /work `
     mcr.microsoft.com/playwright:v1.58.2-noble `
     bash -lc "npm ci && ./node_modules/.bin/playwright test --workers=3 $testFiles"
+  $playwrightExitCode = $LASTEXITCODE
 
-  if ($LASTEXITCODE -ne 0) {
-    throw "Playwright frontend regressie is gefaald met exitcode $LASTEXITCODE."
+  if ($playwrightExitCode -ne 0) {
+    throw "Playwright frontend regressie is gefaald met exitcode $playwrightExitCode."
   }
 
   Write-Host "`n=== Frontend regressie groen ===" -ForegroundColor Green
 }
+catch {
+  $runFailed = $true
+  throw
+}
 finally {
-  try {
-    Invoke-RegressionFixtureCleanup
-  } catch {
-    Write-Host "Regression fixture cleanup na test faalde: $($_.Exception.Message)" -ForegroundColor Red
-    if ($LASTEXITCODE -eq 0) {
-      $global:LASTEXITCODE = 1
+  if ($fixturesPrepared) {
+    try {
+      Write-Host "`n=== Huishouden-0 regressie-fixtures opruimen ===" -ForegroundColor Cyan
+      docker compose exec -T backend `
+        python /app/tests/household_zero_regression_fixture.py cleanup
+      $cleanupExitCode = $LASTEXITCODE
+
+      if ($cleanupExitCode -ne 0) {
+        throw "Cleanup gaf exitcode $cleanupExitCode."
+      }
+    }
+    catch {
+      Write-Host "Regression fixture cleanup na test faalde: $($_.Exception.Message)" -ForegroundColor Red
+      if (-not $runFailed) {
+        throw
+      }
     }
   }
+  else {
+    Write-Host "`n=== Fixture-cleanup overgeslagen: fixtures niet voorbereid ===" -ForegroundColor DarkGray
+  }
+
+  $testAdminPassword = $null
   Pop-Location
 }
