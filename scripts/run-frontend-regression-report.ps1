@@ -82,7 +82,9 @@ try {
   }
 
   Write-Host "`n=== Winkelen Release 1 backend-selftest ===" -ForegroundColor Cyan
-  docker compose exec -T backend python /app/tests/shopping_list_release1_selftest.py
+  docker compose exec -T `
+    -e PYTHONPATH=/app `
+    backend python /app/tests/shopping_list_release1_selftest.py
   $shoppingSelftestExitCode = $LASTEXITCODE
 
   if ($shoppingSelftestExitCode -ne 0) {
