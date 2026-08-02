@@ -63,8 +63,9 @@ foreach ($file in $canonicalFiles) {
   }
 }
 
-# Relevante productie-frontendcode wordt apart bewaakt op een verkeerde
-# selectie van legacy household.id boven de actieve server-side sessie.
+# Relevante productie-frontendcode wordt apart bewaakt op fouten waarbij
+# huishouden 0 als falsy waarde verloren kan gaan of legacy household.id
+# voorrang krijgt boven de actieve server-side sessie.
 $frontendSource = Join-Path $repoRoot "frontend\src"
 if (Test-Path $frontendSource) {
   $frontendFiles = Get-ChildItem -Path $frontendSource -Recurse -File | Where-Object {
@@ -73,6 +74,7 @@ if (Test-Path $frontendSource) {
 
   $frontendRules = @(
     @{ Name = "legacy id voor active_household_id"; Pattern = '(?i)\.id\s*\|\|[^\r\n;]{0,160}active_household_id' },
+    @{ Name = "active_household_id gebruikt falsy fallback"; Pattern = '(?i)active_household_id\s*\|\|' },
     @{ Name = "artikelgroepen hardcoded huishouden 1"; Pattern = '(?i)/api/article-groups\?household_id=1\b' }
   )
 
