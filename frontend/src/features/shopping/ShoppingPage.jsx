@@ -117,9 +117,22 @@ export default function ShoppingPage() {
       await loadList()
     } catch (saveError) {
       setError(saveError?.message || 'Winkellijstregel kon niet worden bijgewerkt.')
+      await loadList()
     } finally {
       setSaving(false)
     }
+  }
+
+  function updateChecked(item, checked) {
+    setList((current) => ({
+      ...current,
+      items: (current.items || []).map((currentItem) => (
+        currentItem.id === item.id
+          ? { ...currentItem, checked }
+          : currentItem
+      )),
+    }))
+    void updateItem(item, { checked })
   }
 
   async function deleteItem(item) {
@@ -229,7 +242,7 @@ export default function ShoppingPage() {
               ) : visibleItems.map((item) => (
                 <tr key={item.id}>
                   <td>
-                    <input type="checkbox" checked={Boolean(item.checked)} onChange={(event) => updateItem(item, { checked: event.target.checked })} aria-label={`Gekocht ${item.article_name}`} style={{ accentColor: '#1A3E2B', width: 16, height: 16 }} />
+                    <input type="checkbox" checked={Boolean(item.checked)} onChange={(event) => updateChecked(item, event.target.checked)} aria-label={`Gekocht ${item.article_name}`} style={{ accentColor: '#1A3E2B', width: 16, height: 16 }} />
                   </td>
                   <td>{item.article_name}</td>
                   <td className="rz-num">{formatNumber(item.quantity)}</td>
