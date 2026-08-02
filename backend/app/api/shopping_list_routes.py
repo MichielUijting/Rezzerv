@@ -30,7 +30,11 @@ def _membership_id(conn, *, household_id: str, user_id: str, email: str) -> str:
         for column in inspect(conn).get_columns("household_memberships")
     }
     membership_id_column = "id" if "id" in columns else (
-        "membership_id" if "membership_id" in columns else None
+        "membership_id" if "membership_id" in columns else (
+            "user_email" if "user_email" in columns else (
+                "user_id" if "user_id" in columns else None
+            )
+        )
     )
     if not membership_id_column:
         raise HTTPException(status_code=403, detail="Huishoudlidmaatschap heeft geen geldige identificatie")
