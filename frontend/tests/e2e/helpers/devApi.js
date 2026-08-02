@@ -62,9 +62,9 @@ export async function resolveAuthorizedHouseholdId(request) {
   const household = await apiFetch(request, '/api/household');
   const resolvedHouseholdId = String(
     household?.active_household_id
-      || household?.id
-      || household?.household_id
-      || DEMO_HOUSEHOLD_ID
+      ?? household?.id
+      ?? household?.household_id
+      ?? DEMO_HOUSEHOLD_ID
   );
   if (resolvedHouseholdId !== String(DEMO_HOUSEHOLD_ID)) {
     throw new Error(
