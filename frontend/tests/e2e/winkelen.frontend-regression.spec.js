@@ -6,21 +6,21 @@ import {
 
 
 test.describe('Winkelen Release 1 frontend-regressie', () => {
-  test('echte gecombineerde catalogusroute levert resultaten zonder API-fout', async ({ page }) => {
+  test('echte gecombineerde artikelzoekroute levert resultaten zonder API-fout', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
 
     await page.goto('/winkelen');
     await expect(page).toHaveURL(/\/winkelen$/);
     await expect(page.getByLabel('Zoeken in', { exact: true })).toHaveCount(0);
-    await page.getByLabel('Catalogus zoeken').fill('Regressie-artikel');
+    await page.getByLabel('Artikel zoeken').fill('Regressie-artikel');
 
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.getByLabel('Zoekresultaat')).toContainText('Regressie-artikel');
-    await expect(page.getByLabel('Zoekresultaten samenvatting')).toContainText('huishoudartikelen');
+    await expect(page.getByLabel('Zoekresultaten samenvatting')).toHaveCount(0);
     await expectNoConsoleErrors(consoleErrors);
   });
 
-  test('gecombineerd zoeken, toevoegen, vaste tabelbreedte, inline aanvullen, afvinken en afronden', async ({ page }) => {
+  test('gecombineerd zoeken, toevoegen, vaste tabelbreedte, omvang, filteren, afvinken en afronden', async ({ page }) => {
     const consoleErrors = attachConsoleErrorCollector(page);
     let activeListId = 'shopping-list-active-1';
     let items = [];
@@ -87,9 +87,7 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
         article_name: payload.article_name,
         article_group_name: payload.article_group_name || '',
         product_type_name: payload.product_type_name || '',
-        quantity: null,
-        volume: null,
-        unit: '',
+        size: '',
         note: '',
         checked: false,
         source_type: payload.source_type,
@@ -127,19 +125,53 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     await expect(page.getByRole('button', { name: 'Afsluiten' })).toHaveCount(0);
     await expect(page.getByRole('columnheader', { name: 'Actie' })).toHaveCount(0);
     await expect(page.getByLabel('Zoeken in', { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Catalogus zoeken')).toHaveCount(0);
+    await expect(page.getByLabel('Artikel zoeken')).toBeVisible();
+    await expect(page.getByLabel('Zoekresultaten samenvatting')).toHaveCount(0);
+
+    await expect(page.getByRole('columnheader', { name: /Artikel/ })).toContainText(/[\^v]/);
+    await expect(page.getByRole('columnheader', { name: /Artikelgroep/ })).toContainText(/[\^v]/);
+    await expect(page.getByRole('columnheader', { name: /Producttype/ })).toContainText(/[\^v]/);
+    await expect(page.getByRole('columnheader', { name: /Omvang/ })).toContainText(/[\^v]/);
+    await expect(page.getByRole('columnheader', { name: /Aantal/ })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: /Volume/ })).toHaveCount(0);
+    await expect(page.getByRole('columnheader', { name: /Eenheid/ })).toHaveCount(0);
+
+    const filterInputs = page.locator('thead tr:nth-child(2) .rz-input');
+    await expect(filterInputs).toHaveCount(4);
+    for (let index = 0; index < await filterInputs.count(); index += 1) {
+      const colors = await filterInputs.nth(index).evaluate((element) => {
+        const style = window.getComputedStyle(element);
+        return { color: style.color, backgroundColor: style.backgroundColor };
+      });
+      expect(colors.color).not.toBe(colors.backgroundColor);
+      expect(colors.color).not.toBe('rgba(0, 0, 0, 0)');
+    }
+
+    const articleSearchBox = await page.getByLabel('Artikel zoeken').boundingBox();
+    const resultBox = await page.getByLabel('Zoekresultaat').boundingBox();
+    const addButtonBox = await page.getByRole('button', { name: 'Toevoegen' }).boundingBox();
+    expect(articleSearchBox).not.toBeNull();
+    expect(resultBox).not.toBeNull();
+    expect(addButtonBox).not.toBeNull();
+    expect(Math.abs((articleSearchBox.y + articleSearchBox.height) - (addButtonBox.y + addButtonBox.height))).toBeLessThanOrEqual(2);
+    expect(Math.abs((resultBox.y + resultBox.height) - (addButtonBox.y + addButtonBox.height))).toBeLessThanOrEqual(2);
 
     const table = page.getByTestId('shopping-list-table');
     await expect(table).toHaveClass(/rz-table--resizable-columns/);
     const widthBeforeSearch = await table.evaluate((element) => Math.round(element.getBoundingClientRect().width));
+    const tableTopBeforeSearch = await table.evaluate((element) => Math.round(element.getBoundingClientRect().top));
 
-    await page.getByLabel('Catalogus zoeken').fill('melk');
+    await page.getByLabel('Artikel zoeken').fill('melk');
     await expect(page.getByLabel('Zoekresultaat')).toContainText('Melk — Huishoudartikel');
     await expect(page.getByLabel('Zoekresultaat')).toContainText('Producttype');
     await expect(page.getByLabel('Zoekresultaat')).toContainText('Artikelgroep');
-    await expect(page.getByLabel('Zoekresultaten samenvatting')).toHaveText('1 huishoudartikelen · 1 producttypen · 1 artikelgroepen');
+    await expect(page.getByLabel('Zoekresultaten samenvatting')).toHaveCount(0);
 
     const widthAfterSearch = await table.evaluate((element) => Math.round(element.getBoundingClientRect().width));
+    const tableTopAfterSearch = await table.evaluate((element) => Math.round(element.getBoundingClientRect().top));
     expect(widthAfterSearch).toBe(widthBeforeSearch);
+    expect(tableTopAfterSearch).toBe(tableTopBeforeSearch);
 
     await page.getByLabel('Zoekresultaat').selectOption('household_article:household-article-melk');
     await page.getByRole('button', { name: 'Toevoegen' }).click();
@@ -150,11 +182,8 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     const widthAfterAdd = await table.evaluate((element) => Math.round(element.getBoundingClientRect().width));
     expect(widthAfterAdd).toBe(widthBeforeSearch);
 
-    await page.getByLabel('Aantal Melk').fill('2');
-    await page.getByLabel('Aantal Melk').blur();
-    await page.getByLabel('Volume Melk').fill('1,5');
-    await page.getByLabel('Volume Melk').blur();
-    await page.getByLabel('Eenheid Melk').selectOption('liter');
+    await page.getByLabel('Omvang Melk').fill('2 × 1,5 liter');
+    await page.getByLabel('Omvang Melk').blur();
     await page.getByLabel('Opmerking Melk').fill('Halfvol');
     await page.getByLabel('Opmerking Melk').blur();
 
@@ -162,10 +191,11 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     await expect(page.getByLabel('Gekocht Melk')).toBeChecked();
     await page.reload();
     await expect(page.getByLabel('Gekocht Melk')).toBeChecked();
-    await expect(page.getByLabel('Aantal Melk')).toHaveValue('2');
-    await expect(page.getByLabel('Volume Melk')).toHaveValue('1,5');
-    await expect(page.getByLabel('Eenheid Melk')).toHaveValue('liter');
+    await expect(page.getByLabel('Omvang Melk')).toHaveValue('2 × 1,5 liter');
     await expect(page.getByLabel('Opmerking Melk')).toHaveValue('Halfvol');
+    await expect(page.getByLabel('Aantal Melk')).toHaveCount(0);
+    await expect(page.getByLabel('Volume Melk')).toHaveCount(0);
+    await expect(page.getByLabel('Eenheid Melk')).toHaveCount(0);
 
     await page.getByLabel('Filter artikelgroep').selectOption('Zuivel');
     await expect(page.getByText('Melk', { exact: true })).toBeVisible();
