@@ -54,7 +54,7 @@ def ensure_shopping_list_schema(conn: Connection) -> None:
     """))
 
 
-def _normalize_decimal(value: Any, field_name: str) -> Decimal | None:
+def _normalize_decimal(value: Any, field_name: str) -> float | None:
     if value is None or value == "":
         return None
     try:
@@ -63,7 +63,7 @@ def _normalize_decimal(value: Any, field_name: str) -> Decimal | None:
         raise ValueError(f"{field_name} moet een geldig getal zijn") from exc
     if parsed < 0:
         raise ValueError(f"{field_name} mag niet negatief zijn")
-    return parsed
+    return float(parsed)
 
 
 def _normalize_unit(value: Any) -> str:
