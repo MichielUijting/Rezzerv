@@ -129,10 +129,31 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     await expect(page.getByLabel('Artikel zoeken')).toBeVisible();
     await expect(page.getByLabel('Zoekresultaten samenvatting')).toHaveCount(0);
 
-    await expect(page.getByRole('columnheader', { name: 'Sorteer op Artikel', exact: true })).toContainText(/[\^v]/);
-    await expect(page.getByRole('columnheader', { name: 'Sorteer op Artikelgroep', exact: true })).toContainText(/[\^v]/);
-    await expect(page.getByRole('columnheader', { name: 'Sorteer op Producttype', exact: true })).toContainText(/[\^v]/);
-    await expect(page.getByRole('columnheader', { name: 'Sorteer op Omvang', exact: true })).toContainText(/[\^v]/);
+    const sortableHeaders = [
+      page.getByRole('columnheader', { name: 'Sorteer op Artikel', exact: true }),
+      page.getByRole('columnheader', { name: 'Sorteer op Artikelgroep', exact: true }),
+      page.getByRole('columnheader', { name: 'Sorteer op Producttype', exact: true }),
+      page.getByRole('columnheader', { name: 'Sorteer op Omvang', exact: true }),
+    ];
+
+    await expect(sortableHeaders[0]).toHaveAttribute('aria-sort', /ascending|descending/);
+    await expect(sortableHeaders[0]).toContainText(/[\^v]/);
+    for (let index = 1; index < sortableHeaders.length; index += 1) {
+      await expect(sortableHeaders[index]).toHaveAttribute('aria-sort', 'none');
+      await expect(sortableHeaders[index]).not.toContainText(/[\^v]/);
+    }
+
+    for (let index = 1; index < sortableHeaders.length; index += 1) {
+      await sortableHeaders[index].click();
+      await expect(sortableHeaders[index]).toHaveAttribute('aria-sort', /ascending|descending/);
+      await expect(sortableHeaders[index]).toContainText(/[\^v]/);
+      for (let otherIndex = 0; otherIndex < sortableHeaders.length; otherIndex += 1) {
+        if (otherIndex === index) continue;
+        await expect(sortableHeaders[otherIndex]).toHaveAttribute('aria-sort', 'none');
+        await expect(sortableHeaders[otherIndex]).not.toContainText(/[\^v]/);
+      }
+    }
+
     await expect(page.getByRole('columnheader', { name: /Aantal/ })).toHaveCount(0);
     await expect(page.getByRole('columnheader', { name: /Volume/ })).toHaveCount(0);
     await expect(page.getByRole('columnheader', { name: /Eenheid/ })).toHaveCount(0);
@@ -146,6 +167,7 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
       });
       expect(colors.color).not.toBe(colors.backgroundColor);
       expect(colors.color).not.toBe('rgba(0, 0, 0, 0)');
+      await expect(filterInputs.nth(index)).not.toHaveValue(/[\^v]/);
     }
 
     const articleSearchBox = await page.getByLabel('Artikel zoeken').boundingBox();
