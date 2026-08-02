@@ -6,24 +6,31 @@ Branch: `feature/winkelen-release-1`
 
 ## Doel
 
-Release 1 levert een zelfstandige actieve winkellijst per huishouden. De lijst start leeg en ondersteunt handmatig toevoegen, aanpassen, afvinken, verwijderen en afronden. Release 1 bevat nog geen koppeling met Bijna op of Gerechten.
+Release 1 levert één zelfstandige actieve winkellijst per huishouden. De lijst start leeg. De gebruiker zoekt eerst een kandidaat in de Rezzerv-catalogus, voegt deze toe en vult daarna alleen waar nodig aanvullende gegevens in de tabel aan. Release 1 bevat nog geen push vanuit Bijna op of Gerechten.
 
 ## Functionele scope
 
 1. Nieuw scherm `/winkelen` volgens de standaard Rezzerv-UI.
 2. Eén actieve winkellijst per huishouden.
 3. Een lege lijst toont de Rezzerv-empty-state.
-4. Handmatig toevoegen van een artikel met:
-   - artikelnaam;
-   - aantal;
-   - volume;
-   - eenheid;
-   - opmerking.
-5. Een regel kan als gekocht worden afgevinkt.
-6. Een regel kan worden gewijzigd of verwijderd.
-7. `Winkelen afgerond` vraagt bevestiging en maakt daarna de actieve tabel leeg.
-8. Afronden wijzigt Voorraad, Bijna op, Gerechten en kassabonnen niet.
-9. Data van andere huishoudens is nooit zichtbaar of wijzigbaar.
+4. Boven de tabel staat één full-text zoekfunctie met de zoekscopes:
+   - Huishoudartikelen;
+   - Producttypen;
+   - Artikelgroepen.
+5. De gebruiker selecteert één zoekresultaat en voegt dit met `Toevoegen` aan de winkellijst toe.
+6. Aantal, volume, eenheid en opmerking zijn niet verplicht bij toevoegen.
+7. Deze aanvullende gegevens zijn daarna inline in de tabel wijzigbaar.
+8. Een regel kan als gekocht worden afgevinkt.
+9. `Winkelen afgerond` vraagt bevestiging en maakt daarna de actieve tabel leeg.
+10. Afronden wijzigt Voorraad, Bijna op, Gerechten en kassabonnen niet.
+11. Data van andere huishoudens is nooit zichtbaar of wijzigbaar.
+
+## Expliciet verwijderd uit het scherm
+
+- de eerste invoerregel met Artikel, Aantal, Volume, Eenheid en Opmerking;
+- de kolom `Actie`;
+- de regelactie `Verwijderen`;
+- de knop `Afsluiten`.
 
 ## Buiten scope
 
@@ -54,6 +61,10 @@ Contract: maximaal één actieve lijst per huishouden.
 - `shopping_list_id`
 - `household_id`
 - `article_name`
+- `article_group_name`
+- `product_type_name`
+- `source_type`
+- `source_id`
 - `quantity`
 - `volume`
 - `unit`
@@ -62,55 +73,90 @@ Contract: maximaal één actieve lijst per huishouden.
 - `created_at`
 - `updated_at`
 
-## API-contract
+Bestaande lokale databases worden additief uitgebreid; bestaande winkellijstregels blijven geldig.
+
+## Cataloguszoekcontract
+
+Endpoint:
+
+- `GET /api/shopping-list/catalog-search?scope={scope}&query={query}`
+
+Ondersteunde scopes:
+
+- `household_articles`
+- `product_types`
+- `article_groups`
+
+De zoekactie gebruikt uitsluitend het huishouden uit de server-side sessie. Huishoudartikelen en Artikelgroepen hergebruiken de bestaande Rezzerv-projecties. Producttypen worden uit de centrale producttype-/productgroepcatalogus geprojecteerd.
+
+Een zoekresultaat bevat minimaal:
+
+- `source_type`
+- `source_id`
+- `label`
+- `article_name`
+- `article_group_name`
+- `product_type_name`
+
+## Overig API-contract
 
 - `GET /api/shopping-list`
 - `POST /api/shopping-list/items`
 - `PUT /api/shopping-list/items/{item_id}`
-- `DELETE /api/shopping-list/items/{item_id}`
+- `DELETE /api/shopping-list/items/{item_id}` blijft technisch beschikbaar, maar heeft in Release 1 geen zichtbare schermactie
 - `POST /api/shopping-list/complete`
 
-Alle endpoints gebruiken uitsluitend het actieve server-side sessiehuishouden. Een `household_id` uit de requestbody mag de sessiecontext niet overschrijven.
+Alle endpoints gebruiken uitsluitend het actieve server-side sessiehuishouden. Een `household_id` uit de browser mag de sessiecontext niet overschrijven.
 
 ## Autorisatie
 
-Nieuwe permissies:
+Bestaande permissies:
 
 - `shopping_list.view`
 - `shopping_list.update`
 - `shopping_list.manage`
 
-Minimale regels:
-
-- viewer: bekijken;
-- member: bekijken en checklist bijwerken;
-- admin/owner: volledig beheer en afronden.
-
-De definitieve roltoekenning moet aansluiten op de bestaande autorisatiematrix en wordt met regressietests vastgelegd.
+De volledige centrale autorisatiematrix geldt, inclusief individuele `allow`- en `deny`-uitzonderingen.
 
 ## UI-contract
 
 Schermtitel: `Winkelen`
 
+Boven de tabel:
+
+1. dropdown `Zoeken in`;
+2. full-text veld `Catalogus zoeken`;
+3. dropdown `Zoekresultaat`;
+4. knop `Toevoegen`.
+
 Tabelkolommen:
 
 1. Gekocht
 2. Artikel
-3. Aantal
-4. Volume
-5. Eenheid
-6. Opmerking
-7. Verwijderen
+3. Artikelgroep
+4. Producttype
+5. Aantal
+6. Volume
+7. Eenheid
+8. Opmerking
+
+Onder de kolomkoppen staat de standaard zoek- en filterregel:
+
+- Gekocht: Filter / Nog te kopen / Gekocht;
+- Artikel: `Zoeken`;
+- Artikelgroep: `Filter`;
+- Producttype: `Filter`;
+- Eenheid: `Filter`.
 
 Standaardgedrag:
 
-- zoekveld `Zoeken` boven Artikel;
-- filter Alle/Open/Gekocht;
-- sortering alfabetisch op Artikel;
 - numerieke waarden rechts uitgelijnd;
 - donkergroene checkbox;
-- standaard Rezzerv-card, tabel, buttons, modal en exitpositie;
-- primaire knop `Winkelen afgerond` alleen actief bij een niet-lege lijst.
+- Aantal, Volume, Eenheid en Opmerking inline wijzigbaar;
+- kolombreedtes handmatig verstelbaar;
+- standaard Rezzerv-card en primaire knop;
+- geen exitknop op dit scherm;
+- `Winkelen afgerond` alleen actief bij een niet-lege lijst.
 
 ## Afrondcontract
 
@@ -125,36 +171,33 @@ Na bevestiging:
 ## Acceptatiecriteria
 
 1. Nieuw huishouden opent een lege Winkelen-tabel.
-2. Toegevoegde regels blijven na herladen bestaan.
-3. Afvinken blijft na herladen bewaard.
-4. Wijzigen en verwijderen werken uitsluitend binnen het actieve huishouden.
-5. Afronden maakt de actieve weergave leeg.
-6. Afronden wijzigt Voorraad niet.
-7. Een gebruiker kan nooit regels van een ander huishouden lezen of muteren.
-8. Backend- en frontendbuild zijn groen.
-9. Bestaande frontendregressie blijft volledig groen.
-10. Nieuwe Winkelen-regressietest is groen.
-
-## Ontwikkelvolgorde
-
-1. database-initialisatie en constraints;
-2. shopping-list service;
-3. API-router en sessie-autorisatie;
-4. backend-selftest;
-5. frontendpagina;
-6. route en starttegel activeren;
-7. frontendregressietest;
-8. volledige regressie en scopecontrole;
-9. Draft PR voor PO-beoordeling.
+2. Full-text zoeken werkt voor alle drie scopes.
+3. Alleen een geselecteerd catalogusresultaat kan worden toegevoegd.
+4. Toevoegen vereist geen aantal, volume, eenheid of opmerking.
+5. Toegevoegde regels blijven na herladen bestaan.
+6. Inline aanvullingen blijven na herladen bestaan.
+7. Afvinken blijft na herladen bewaard.
+8. Zoek- en filterregel werkt op de actieve tabel.
+9. Kolombreedtes zijn verstelbaar.
+10. Kolom Actie en knop Afsluiten zijn afwezig.
+11. Afronden maakt de actieve weergave leeg.
+12. Afronden wijzigt Voorraad niet.
+13. Een gebruiker kan nooit regels van een ander huishouden lezen of muteren.
+14. Backend- en frontendbuild zijn groen.
+15. Volledige regressie en productie-ketentest zijn groen op de actuele head.
 
 ## Releasegate
 
+De eerdere groene resultaten van head `b922d2bbab514f1363f601e763364c961af382c5` gelden niet als vrijgave voor deze gewijzigde schermversie.
+
 Geen merge, release of deployment zonder:
 
-- groene backendtest;
+- groene backend-selftest op de actuele head;
 - groene frontendbuild;
 - volledige bestaande frontendregressie groen;
-- nieuwe Winkelen-regressie groen;
+- aangepaste Winkelen-regressie groen;
+- productie-ketentest 12/12 groen;
 - gecontroleerde huishoudisolatie;
+- functionele PO-controle;
 - QA/QC GO;
 - expliciete PO-GO.
