@@ -14,6 +14,7 @@ from app.services.shopping_list_service import (
     complete_active_shopping_list,
     delete_shopping_list_item,
     get_active_shopping_list,
+    search_shopping_catalog,
     update_shopping_list_item,
 )
 
@@ -34,35 +35,97 @@ def main() -> int:
             INSERT INTO inventory(id, household_id, naam, aantal)
             VALUES ('inventory-sentinel', '0', 'Voorraad blijft gelijk', 7)
         """))
+        conn.execute(text("""
+            CREATE TABLE household_articles (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                article_name TEXT NOT NULL,
+                article_group_name TEXT,
+                product_type_name TEXT
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO household_articles(
+                id, household_id, article_name, article_group_name, product_type_name
+            ) VALUES (
+                'household-article-melk', '0', 'Melk', 'Zuivel', 'Halfvolle melk'
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE article_groups (
+                id TEXT PRIMARY KEY,
+                household_id TEXT NOT NULL,
+                name TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO article_groups(id, household_id, name)
+            VALUES ('article-group-zuivel', '0', 'Zuivel')
+        """))
+        conn.execute(text("""
+            CREATE TABLE product_types (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO product_types(id, name)
+            VALUES ('product-type-brood', 'Brood')
+        """))
+
+        household_results = search_shopping_catalog(
+            conn, "0", scope="household_articles", query="mel", limit=20
+        )
+        assert household_results["total"] == 1, household_results
+        assert household_results["items"][0]["article_group_name"] == "Zuivel", household_results
+        assert household_results["items"][0]["product_type_name"] == "Halfvolle melk", household_results
+
+        product_type_results = search_shopping_catalog(
+            conn, "0", scope="product_types", query="bro", limit=20
+        )
+        assert product_type_results["total"] == 1, product_type_results
+        assert product_type_results["items"][0]["product_type_name"] == "Brood", product_type_results
+
+        article_group_results = search_shopping_catalog(
+            conn, "0", scope="article_groups", query="zui", limit=20
+        )
+        assert article_group_results["total"] == 1, article_group_results
+        assert article_group_results["items"][0]["article_group_name"] == "Zuivel", article_group_results
 
         initial = get_active_shopping_list(conn, "0")
         assert initial["status"] == "active", initial
         assert initial["items"] == [], initial
         first_list_id = initial["id"]
 
-        item = add_shopping_list_item(conn, "0", {
-            "article_name": "Melk",
-            "quantity": 2,
-            "volume": "1,5",
-            "unit": "liter",
-            "note": "Halfvol",
-        })
+        candidate = household_results["items"][0]
+        item = add_shopping_list_item(conn, "0", candidate)
         assert item["household_id"] == "0", item
-        assert item["quantity"] == 2.0, item
-        assert item["volume"] == 1.5, item
+        assert item["article_name"] == "Melk", item
+        assert item["article_group_name"] == "Zuivel", item
+        assert item["product_type_name"] == "Halfvolle melk", item
+        assert item["source_type"] == "household_article", item
+        assert item["source_id"] == "household-article-melk", item
+        assert item["quantity"] is None, item
+        assert item["volume"] is None, item
         assert item["checked"] is False, item
 
         other_household = get_active_shopping_list(conn, "1")
         assert other_household["items"] == [], other_household
 
         updated = update_shopping_list_item(conn, "0", item["id"], {
-            "article_name": "Halfvolle melk",
+            "quantity": 2,
+            "volume": "1,5",
+            "unit": "liter",
+            "note": "Halfvol",
             "checked": True,
         })
         assert updated is not None, updated
-        assert updated["article_name"] == "Halfvolle melk", updated
+        assert updated["article_name"] == "Melk", updated
         assert updated["checked"] is True, updated
         assert updated["quantity"] == 2.0, updated
+        assert updated["volume"] == 1.5, updated
+        assert updated["unit"] == "liter", updated
+        assert updated["note"] == "Halfvol", updated
 
         forbidden_update = update_shopping_list_item(conn, "1", item["id"], {"checked": False})
         assert forbidden_update is None, forbidden_update
@@ -104,7 +167,9 @@ def main() -> int:
         assert int(inventory_amount) == 7, inventory_amount
 
     print("SHOPPING_LIST_RELEASE_1_SELFTEST=PASS")
+    print("catalog_search_three_scopes=PASS")
     print("initial_empty=PASS")
+    print("catalog_candidate_and_inline_fields=PASS")
     print("crud_and_checked=PASS")
     print("household_isolation=PASS")
     print("complete_creates_empty_active_list=PASS")
