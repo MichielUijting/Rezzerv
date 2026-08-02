@@ -35,6 +35,13 @@ try {
   if (-not $SkipDockerBuild) {
     Write-Host "`n=== Docker build/start ===" -ForegroundColor Cyan
     docker compose up -d --build
+
+    if ($LASTEXITCODE -ne 0) {
+      throw "Docker build/start is gefaald met exitcode $LASTEXITCODE."
+    }
+
+    Write-Host "`n=== Stabilisatie na hernieuwde opbouw: 90 seconden ===" -ForegroundColor Cyan
+    Start-Sleep -Seconds 90
   }
 
   Write-Host "`n=== Backend health ===" -ForegroundColor Cyan
