@@ -13,7 +13,7 @@ APP_ROOT = Path(__file__).resolve().parents[1]
 if str(APP_ROOT) not in sys.path:
     sys.path.insert(0, str(APP_ROOT))
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.db import engine
 from app.services.authorization_foundation_service import ensure_authorization_foundation
@@ -36,6 +36,14 @@ def require_secret(value: str | None, name: str) -> str:
     if not value:
         raise RuntimeError(f"{name} ontbreekt in de testomgeving")
     return value
+
+
+def table_columns(connection, table_name: str) -> set[str]:
+    inspector = inspect(connection)
+    return {
+        str(column.get("name") or "")
+        for column in inspector.get_columns(table_name)
+    }
 
 
 def provision_test_admin(password: str) -> None:
@@ -63,20 +71,36 @@ def provision_test_admin(password: str) -> None:
             ),
             {"id": TEST_ADMIN_EMAIL, "email": TEST_ADMIN_EMAIL, "password": password},
         )
+
+        membership_columns = table_columns(connection, "household_memberships")
+        email_column = "user_email" if "user_email" in membership_columns else "email"
+        if email_column not in membership_columns:
+            raise RuntimeError("household_memberships heeft geen e-mailkolom")
+
         connection.execute(
             text(
-                "DELETE FROM household_memberships WHERE lower(user_email) = lower(:email)"
+                f"DELETE FROM household_memberships "
+                f"WHERE lower({email_column}) = lower(:email)"
             ),
             {"email": TEST_ADMIN_EMAIL},
         )
+
+        insert_columns = ["id", "household_id", email_column, "role"]
+        insert_values = [":id", "'0'", ":email", "'owner'"]
+        if "status" in membership_columns:
+            insert_columns.append("status")
+            insert_values.append("'active'")
+        if "created_at" in membership_columns:
+            insert_columns.append("created_at")
+            insert_values.append("CURRENT_TIMESTAMP")
+        if "updated_at" in membership_columns:
+            insert_columns.append("updated_at")
+            insert_values.append("CURRENT_TIMESTAMP")
+
         connection.execute(
             text(
-                """
-                INSERT INTO household_memberships
-                    (id, household_id, user_email, role, status, created_at, updated_at)
-                VALUES
-                    (:id, '0', :email, 'owner', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """
+                f"INSERT INTO household_memberships ({', '.join(insert_columns)}) "
+                f"VALUES ({', '.join(insert_values)})"
             ),
             {"id": membership_id, "email": TEST_ADMIN_EMAIL},
         )
