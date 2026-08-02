@@ -115,8 +115,8 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     await page.getByRole('button', { name: 'Toevoegen' }).click();
 
     await expect(page.getByText('Melk', { exact: true })).toBeVisible();
-    await expect(page.getByText('Zuivel', { exact: true })).toBeVisible();
-    await expect(page.getByText('Halfvolle melk', { exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Zuivel', exact: true })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'Halfvolle melk', exact: true })).toBeVisible();
 
     await page.getByLabel('Aantal Melk').fill('2');
     await page.getByLabel('Aantal Melk').blur();
