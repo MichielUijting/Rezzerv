@@ -2208,7 +2208,7 @@ export default function KassaPage() {
       try {
         const household = await fetchJson('/api/household')
         if (cancelled) return
-        const resolvedHouseholdId = String(household?.id || '1')
+        const resolvedHouseholdId = String(household?.active_household_id ?? household?.id ?? '')
         setCurrentUserDisplayRole(String(household?.display_role || household?.current_user_display_role || 'viewer').toLowerCase())
         setHouseholdId(resolvedHouseholdId)
         const storedDeletedIds = loadStoredReceiptIds(DELETED_RECEIPTS_STORAGE_KEY)

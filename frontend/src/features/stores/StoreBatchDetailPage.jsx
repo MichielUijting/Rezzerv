@@ -1058,7 +1058,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       return
     }
 
-    const householdId = String(batch?.household_id ?? household?.active_household_id ?? household?.id ?? '').trim()
+    const householdId = String(household?.active_household_id ?? batch?.household_id ?? household?.id ?? '').trim()
     if (!householdId) {
       setError('Het actieve huishouden kon niet worden vastgesteld.')
       return
