@@ -129,10 +129,10 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     await expect(page.getByLabel('Artikel zoeken')).toBeVisible();
     await expect(page.getByLabel('Zoekresultaten samenvatting')).toHaveCount(0);
 
-    await expect(page.getByRole('columnheader', { name: /Artikel/ })).toContainText(/[\^v]/);
-    await expect(page.getByRole('columnheader', { name: /Artikelgroep/ })).toContainText(/[\^v]/);
-    await expect(page.getByRole('columnheader', { name: /Producttype/ })).toContainText(/[\^v]/);
-    await expect(page.getByRole('columnheader', { name: /Omvang/ })).toContainText(/[\^v]/);
+    await expect(page.getByRole('columnheader', { name: 'Sorteer op Artikel', exact: true })).toContainText(/[\^v]/);
+    await expect(page.getByRole('columnheader', { name: 'Sorteer op Artikelgroep', exact: true })).toContainText(/[\^v]/);
+    await expect(page.getByRole('columnheader', { name: 'Sorteer op Producttype', exact: true })).toContainText(/[\^v]/);
+    await expect(page.getByRole('columnheader', { name: 'Sorteer op Omvang', exact: true })).toContainText(/[\^v]/);
     await expect(page.getByRole('columnheader', { name: /Aantal/ })).toHaveCount(0);
     await expect(page.getByRole('columnheader', { name: /Volume/ })).toHaveCount(0);
     await expect(page.getByRole('columnheader', { name: /Eenheid/ })).toHaveCount(0);
