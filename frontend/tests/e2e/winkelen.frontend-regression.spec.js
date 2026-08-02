@@ -131,7 +131,7 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     await page.reload();
     await expect(page.getByLabel('Gekocht Melk')).toBeChecked();
     await expect(page.getByLabel('Aantal Melk')).toHaveValue('2');
-    await expect(page.getByLabel('Volume Melk')).toHaveValue('1.5');
+    await expect(page.getByLabel('Volume Melk')).toHaveValue('1,5');
     await expect(page.getByLabel('Eenheid Melk')).toHaveValue('liter');
     await expect(page.getByLabel('Opmerking Melk')).toHaveValue('Halfvol');
 
