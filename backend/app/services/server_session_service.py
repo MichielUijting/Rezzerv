@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
+import os
 import secrets
 from typing import Any, Mapping
 
@@ -25,6 +26,7 @@ from app.services.system_superuser_session_provisioning import (
 
 SESSION_COOKIE_NAME = "rezzerv_session"
 DEFAULT_SESSION_TTL = timedelta(hours=12)
+REGRESSION_TEST_ADMIN_EMAIL = "test-admin@rezzerv.local"
 
 
 @dataclass(frozen=True)
@@ -89,12 +91,25 @@ def membership_active_condition(
     return "1 = 1"
 
 
+def _test_household_zero_enabled() -> bool:
+    return str(
+        os.getenv("REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO", "false") or "false"
+    ).strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _household_zero_allowed(*, household_id: str, email: str, role: str) -> bool:
     if household_id != SUPERGEBRUIKER_HUISHOUDEN_ID:
         return True
+
+    normalized_email = str(email or "").strip().lower()
+    normalized_role = str(role or "").strip().lower()
+    if normalized_email == SUPERGEBRUIKER_EMAIL and normalized_role == "owner":
+        return True
+
     return (
-        str(email or "").strip().lower() == SUPERGEBRUIKER_EMAIL
-        and str(role or "").strip().lower() == "owner"
+        _test_household_zero_enabled()
+        and normalized_email == REGRESSION_TEST_ADMIN_EMAIL
+        and normalized_role == "owner"
     )
 
 
