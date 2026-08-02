@@ -9,9 +9,9 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Write-Host "=== Huishouden-0 contractscan ===" -ForegroundColor Cyan
 
 $scanTargets = @(
-  Join-Path $repoRoot "frontend\tests",
-  Join-Path $repoRoot "backend\tests",
-  Join-Path $repoRoot "scripts"
+  (Join-Path $repoRoot "frontend\tests")
+  (Join-Path $repoRoot "backend\tests")
+  (Join-Path $repoRoot "scripts")
 )
 
 $extensions = @(".js", ".jsx", ".ts", ".tsx", ".py", ".ps1", ".json", ".md")
