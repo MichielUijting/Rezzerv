@@ -25,6 +25,13 @@ if (-not $superuserPassword) {
 }
 
 try {
+  Write-Host "`n=== Huishouden-0 contractscan ===" -ForegroundColor Cyan
+  & (Join-Path $PSScriptRoot "assert-household-zero-test-contract.ps1")
+
+  if ($LASTEXITCODE -ne 0) {
+    throw "Huishouden-0-contractscan is gefaald met exitcode $LASTEXITCODE."
+  }
+
   if (-not $SkipDockerBuild) {
     Write-Host "`n=== Docker build/start ===" -ForegroundColor Cyan
     docker compose up -d --build
