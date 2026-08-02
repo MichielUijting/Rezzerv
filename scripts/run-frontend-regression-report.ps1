@@ -8,72 +8,6 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== Rezzerv centrale frontendregressie ===" -ForegroundColor Cyan
 
-function New-RegressionAuthenticatedSession {
-  param(
-    [Parameter(Mandatory = $true)]
-    [string]$Email,
-    [Parameter(Mandatory = $true)]
-    [string]$Password,
-    [string]$Label = "regressiesessie"
-  )
-
-  Write-Host "`n=== Server-side $Label ===" -ForegroundColor Cyan
-
-  $session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-  $body = @{
-    email = $Email
-    password = $Password
-  } | ConvertTo-Json
-
-  $login = Invoke-RestMethod `
-    -Method Post `
-    -Uri "http://localhost:8011/api/auth/login" `
-    -ContentType "application/json" `
-    -Body $body `
-    -WebSession $session
-
-  if (-not $login -or -not $login.email) {
-    throw "Server-side $Label kon niet worden vastgesteld."
-  }
-  if ("$($login.active_household_id)" -ne "0") {
-    throw "De centrale regressiesessie moet huishouden 0 gebruiken; ontvangen: $($login.active_household_id)."
-  }
-
-  Write-Host "Aangemeld als $($login.email), huishouden $($login.active_household_id), rol $($login.role)." -ForegroundColor Green
-  return $session
-}
-
-function Invoke-RegressionFixtureCleanup {
-  param(
-    [Parameter(Mandatory = $true)]
-    [Microsoft.PowerShell.Commands.WebRequestSession]$WebSession,
-    [int]$MaxAttempts = 5
-  )
-
-  Write-Host "`n=== Regression fixture cleanup ===" -ForegroundColor Cyan
-  $lastError = $null
-
-  for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
-    try {
-      if ($attempt -gt 1) {
-        Write-Host "Cleanup opnieuw proberen ($attempt/$MaxAttempts)..." -ForegroundColor Yellow
-      }
-      Invoke-RestMethod `
-        -Method Post `
-        -Uri "http://localhost:8011/api/testing/fixtures/cleanup" `
-        -WebSession $WebSession | Out-Host
-      return
-    } catch {
-      $lastError = $_
-      if ($attempt -lt $MaxAttempts) {
-        Start-Sleep -Seconds ([Math]::Min(2 * $attempt, 6))
-      }
-    }
-  }
-
-  throw $lastError
-}
-
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location $repoRoot
 
@@ -83,18 +17,11 @@ $superuserEmail = if ($env:REZZERV_REGRESSION_SUPERUSER_EMAIL) {
   "supergebruiker@rezzerv.local"
 }
 $superuserPassword = $env:REZZERV_REGRESSION_SUPERUSER_PASSWORD
-$memberEmail = if ($env:REZZERV_REGRESSION_MEMBER_EMAIL) {
-  $env:REZZERV_REGRESSION_MEMBER_EMAIL
-} else {
-  "lid@rezzerv.local"
-}
-$memberPassword = $env:REZZERV_REGRESSION_MEMBER_PASSWORD
+$testAdminEmail = "test-admin@rezzerv.local"
+$testAdminPassword = "Rt$([Guid]::NewGuid().ToString('N'))"
 
 if (-not $superuserPassword) {
   throw "REZZERV_REGRESSION_SUPERUSER_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
-}
-if (-not $memberPassword) {
-  throw "REZZERV_REGRESSION_MEMBER_PASSWORD ontbreekt. Stel deze tijdelijk in voor de lokale regressierun."
 }
 
 try {
@@ -121,28 +48,29 @@ try {
     throw "Backend healthcheck niet groen na 12 pogingen."
   }
 
-  $cleanupSession = New-RegressionAuthenticatedSession `
-    -Email $superuserEmail `
-    -Password $superuserPassword `
-    -Label "platform-regressiesessie"
-  Invoke-RegressionFixtureCleanup -WebSession $cleanupSession
-
   Write-Host "`n=== Autorisatiematrix server-side sessies ===" -ForegroundColor Cyan
   docker compose exec -T `
     -e REZZERV_TEST_SUPERUSER_EMAIL=$superuserEmail `
     -e REZZERV_TEST_SUPERUSER_PASSWORD=$superuserPassword `
-    -e REZZERV_TEST_MEMBER_EMAIL=$memberEmail `
-    -e REZZERV_TEST_MEMBER_PASSWORD=$memberPassword `
-    -e REZZERV_TEST_HOUSEHOLD_ID=0 `
+    -e REZZERV_TEST_ADMIN_EMAIL=$testAdminEmail `
+    -e REZZERV_TEST_ADMIN_PASSWORD=$testAdminPassword `
     backend python /app/tests/authorization_role_matrix_selftest.py
 
   if ($LASTEXITCODE -ne 0) {
     throw "Autorisatiematrix-selftest is gefaald met exitcode $LASTEXITCODE."
   }
 
+  Write-Host "`n=== Huishouden-0 regressie-fixtures voorbereiden ===" -ForegroundColor Cyan
+  docker compose exec -T backend `
+    python /app/tests/household_zero_regression_fixture.py prepare
+
+  if ($LASTEXITCODE -ne 0) {
+    throw "Voorbereiden van huishouden-0-fixtures is gefaald met exitcode $LASTEXITCODE."
+  }
+
   Write-Host "`n=== Playwright frontend regressie via Docker ===" -ForegroundColor Cyan
-  Write-Host "Canonieke supergebruiker: $superuserEmail; regressiehuishouden: 0" -ForegroundColor Cyan
-  Write-Host "Ledenfixture: $memberEmail; rol: household.member" -ForegroundColor Cyan
+  Write-Host "Platform-superuser: $superuserEmail; huishouden: 0" -ForegroundColor Cyan
+  Write-Host "Playwright-testaccount: $testAdminEmail; huishouden: 0" -ForegroundColor Cyan
 
   $frontendPath = Join-Path $repoRoot "frontend"
   $frontendPath = $frontendPath.Replace("\", "/")
@@ -165,8 +93,8 @@ try {
     --add-host=host.docker.internal:host-gateway `
     -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:5174 `
     -e PLAYWRIGHT_API_URL=http://host.docker.internal:8011 `
-    -e PLAYWRIGHT_SUPERUSER_EMAIL=$superuserEmail `
-    -e PLAYWRIGHT_SUPERUSER_PASSWORD=$superuserPassword `
+    -e PLAYWRIGHT_TEST_ADMIN_EMAIL=$testAdminEmail `
+    -e PLAYWRIGHT_TEST_ADMIN_PASSWORD=$testAdminPassword `
     -e PLAYWRIGHT_HOUSEHOLD_ID=0 `
     -v "${frontendPath}:/work" `
     -v rezzerv_playwright_node_modules:/work/node_modules `
@@ -182,16 +110,18 @@ try {
 }
 finally {
   try {
-    $cleanupSession = New-RegressionAuthenticatedSession `
-      -Email $superuserEmail `
-      -Password $superuserPassword `
-      -Label "platform-regressiesessie"
-    Invoke-RegressionFixtureCleanup -WebSession $cleanupSession
+    Write-Host "`n=== Huishouden-0 regressie-fixtures opruimen ===" -ForegroundColor Cyan
+    docker compose exec -T backend `
+      python /app/tests/household_zero_regression_fixture.py cleanup
+    if ($LASTEXITCODE -ne 0) {
+      throw "Cleanup gaf exitcode $LASTEXITCODE."
+    }
   } catch {
     Write-Host "Regression fixture cleanup na test faalde: $($_.Exception.Message)" -ForegroundColor Red
     if ($LASTEXITCODE -eq 0) {
       $global:LASTEXITCODE = 1
     }
   }
+  $testAdminPassword = $null
   Pop-Location
 }
