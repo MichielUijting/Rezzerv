@@ -16,11 +16,12 @@ setup('seed household-0 fixtures and authenticate documented test-admin', async 
   const seeded = await resetAndSeedStoreImportFixture(request);
   expect(String(seeded.householdId)).toBe('0');
 
-  await loginThroughUi(page);
-  await expect(page.getByText('Startpagina')).toBeVisible();
   await expect.poll(
     async () => resolveAuthorizedHouseholdId(request),
-    { message: 'Playwright-autorisatie moet huishouden 0 gebruiken.' },
+    { message: 'Playwright-API-autorisatie moet huishouden 0 gebruiken.' },
   ).toBe('0');
+
+  await loginThroughUi(page);
+  await expect(page.getByText('Startpagina')).toBeVisible();
   await page.context().storageState({ path: authFile });
 });
