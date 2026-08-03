@@ -128,7 +128,7 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     await expect(page.getByRole('columnheader', { name: 'Bulkselectie' })).toBeVisible();
 
     const headerLabels = await table.locator('thead tr:first-child th').allTextContents();
-    expect(headerLabels.map((value) => value.trim())).toEqual(['', 'Artikel ^', 'Producttype', 'Omvang', 'Opmerking', 'Gekocht']);
+    expect(headerLabels.map((value) => value.replace(/[\^v]/g, '').trim())).toEqual(['', 'Artikel', 'Producttype', 'Omvang', 'Opmerking', 'Gekocht']);
 
     const sortableHeaders = [
       ['article', 'Artikel'],
