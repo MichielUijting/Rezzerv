@@ -41,6 +41,31 @@ def resolve_current_server_session() -> ServerSessionContext:
         return resolve_server_session(conn, raw_session_id)
 
 
+def legacy_display_role_from_canonical_role(role: str | None) -> str:
+    """Translate canonical server-session roles for still-active legacy guards.
+
+    The server-side session uses canonical English role keys, while a small
+    number of legacy routes still consume the historical display roles
+    ``admin``, ``lid`` and ``viewer``. Keeping this translation in one bridge
+    prevents individual routes from making conflicting role decisions.
+    """
+
+    normalized_role = str(role or "").strip().lower()
+    if normalized_role in {"owner", "admin", "household.owner", "household.admin"}:
+        return "admin"
+    if normalized_role in {
+        "member",
+        "advanced_member",
+        "lid",
+        "household.member",
+        "household.advanced_member",
+    }:
+        return "lid"
+    if normalized_role in {"viewer", "household.viewer"}:
+        return "viewer"
+    return normalized_role
+
+
 def legacy_user_payload_from_session(_authorization: str | None = None) -> dict[str, Any]:
     context = resolve_current_server_session()
     return {
@@ -68,7 +93,7 @@ def household_context_from_session(
         "user_id": context.user_id,
         "email": context.email,
         "role": context.role,
-        "display_role": context.role,
+        "display_role": legacy_display_role_from_canonical_role(context.role),
         "household_id": context.active_household_id,
         "active_household_id": context.active_household_id,
         "membership_count": 1,
