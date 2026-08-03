@@ -33,7 +33,10 @@ INTERNAL_HELPERS = {
     'resolve_authorized_household_id', '_normalize_household_id',
     'build_household_email_address', '_household_zero_allowed',
 }
-NON_HOUSEHOLD_ONE_FUNCTIONS = {'normalize_household_auto_consume_mode'}
+NON_HOUSEHOLD_ONE_FUNCTIONS = {
+    'normalize_household_auto_consume_mode',
+    '_test_household_zero_enabled',
+}
 
 
 def classify_path(path: Path) -> str:

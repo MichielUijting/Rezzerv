@@ -81,6 +81,16 @@ try {
     throw "Autorisatiematrix-selftest is gefaald met exitcode $authorizationExitCode."
   }
 
+  Write-Host "`n=== Winkelen Release 1 backend-selftest ===" -ForegroundColor Cyan
+  docker compose exec -T `
+    -e PYTHONPATH=/app `
+    backend python /app/tests/shopping_list_release1_selftest.py
+  $shoppingSelftestExitCode = $LASTEXITCODE
+
+  if ($shoppingSelftestExitCode -ne 0) {
+    throw "Winkelen Release 1 backend-selftest is gefaald met exitcode $shoppingSelftestExitCode."
+  }
+
   Write-Host "`n=== Huishouden-0 regressie-fixtures voorbereiden ===" -ForegroundColor Cyan
   docker compose exec -T backend `
     python /app/tests/household_zero_regression_fixture.py prepare
@@ -102,6 +112,7 @@ try {
   $testFiles = @(
     "tests/e2e/kassa.frontend-regression.spec.js",
     "tests/e2e/uitpakken.frontend-regression.spec.js",
+    "tests/e2e/winkelen.frontend-regression.spec.js",
     "tests/e2e/external-databases.frontend-regression.spec.js",
     "tests/e2e/external-databases-off.frontend-regression.spec.js",
     "tests/e2e/external-databases-unlink.frontend-regression.spec.js",

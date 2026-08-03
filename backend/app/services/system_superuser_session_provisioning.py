@@ -5,6 +5,8 @@ from dataclasses import dataclass
 
 from sqlalchemy import inspect, text
 
+from app.services.authorization_foundation_service import ensure_authorization_foundation
+
 SUPERGEBRUIKER_EMAIL = "supergebruiker@rezzerv.local"
 SUPERGEBRUIKER_HUISHOUDEN_ID = "0"
 SUPERGEBRUIKER_MEMBERSHIP_ID = "system-supergebruiker-huishouden-0"
@@ -36,6 +38,8 @@ def ensure_system_superuser_for_session_runtime(conn) -> SystemSuperuserSessionP
     deliberately created only when the explicit CI/test switch is enabled; a
     normal production runtime must provision it outside this compatibility layer.
     """
+
+    ensure_authorization_foundation(conn)
 
     allow_test_household = str(
         os.getenv("REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO", "false")
@@ -121,6 +125,21 @@ def ensure_system_superuser_for_session_runtime(conn) -> SystemSuperuserSessionP
             ),
             {"user_id": user_id, "email": SUPERGEBRUIKER_EMAIL, "password": password},
         )
+
+    conn.execute(
+        text(
+            """
+            INSERT INTO auth_platform_user_roles
+                (user_id, role_key, active, created_at, updated_at)
+            VALUES
+                (:user_id, 'platform.superuser', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id, role_key) DO UPDATE SET
+                active = 1,
+                updated_at = CURRENT_TIMESTAMP
+            """
+        ),
+        {"user_id": user_id},
+    )
 
     membership_columns = _columns(conn, "household_memberships")
     membership_id_column = _pick(membership_columns, "id", "membership_id")

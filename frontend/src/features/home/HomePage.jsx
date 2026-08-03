@@ -60,6 +60,7 @@ export default function HomePage() {
   function openTile(key) {
     if (key === 'meldingen') navigate(visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen')
     if (key === 'bijna-op') navigate('/bijna-op')
+    if (key === 'winkelen') navigate('/winkelen')
     if (key === 'voorraad') navigate('/voorraad')
     if (key === 'productgroepen') navigate('/productgroepen')
     if (key === 'kassabonnen') navigate('/kassabonnen')
@@ -85,7 +86,7 @@ export default function HomePage() {
           <Card className="rz-card-home">
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
               {tiles.filter(isVisible).map((t) => {
-                const clickable = ['meldingen', 'bijna-op', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus'].includes(t.key)
+                const clickable = ['meldingen', 'bijna-op', 'winkelen', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus'].includes(t.key)
                 return (
                   <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
                     <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>

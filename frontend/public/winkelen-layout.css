@@ -1,0 +1,120 @@
+/*
+ * Winkelen Release 1 — vaste tabel binnen het frame.
+ *
+ * Doel:
+ * - alle zes kolommen blijven tegelijk zichtbaar binnen de card;
+ * - geen horizontale scrollbar op het Winkelen-scherm;
+ * - lange tekst verandert de tabelgeometrie niet;
+ * - filter- en rijcheckboxen hebben exact dezelfde afmetingen.
+ *
+ * De selectors zijn bewust beperkt tot shopping-list-table zodat andere
+ * Rezzerv-tabellen ongewijzigd blijven.
+ */
+
+[data-testid="shopping-list-table"] {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  table-layout: fixed !important;
+}
+
+[data-testid="shopping-list-table"] col:nth-child(1) {
+  width: 5.5% !important;
+}
+
+[data-testid="shopping-list-table"] col:nth-child(2) {
+  width: 27.5% !important;
+}
+
+[data-testid="shopping-list-table"] col:nth-child(3) {
+  width: 24% !important;
+}
+
+[data-testid="shopping-list-table"] col:nth-child(4) {
+  width: 12% !important;
+}
+
+[data-testid="shopping-list-table"] col:nth-child(5) {
+  width: 22% !important;
+}
+
+[data-testid="shopping-list-table"] col:nth-child(6) {
+  width: 9% !important;
+}
+
+[data-testid="shopping-list-table"] th,
+[data-testid="shopping-list-table"] td {
+  min-width: 0 !important;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-testid="shopping-list-table"] th:nth-child(1),
+[data-testid="shopping-list-table"] td:nth-child(1),
+[data-testid="shopping-list-table"] th:nth-child(6),
+[data-testid="shopping-list-table"] td:nth-child(6) {
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+[data-testid="shopping-list-table"] input.rz-input,
+[data-testid="shopping-list-table"] select.rz-input {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+[data-testid="shopping-list-table"] input[type="checkbox"] {
+  appearance: auto;
+  width: 18px !important;
+  min-width: 18px !important;
+  max-width: 18px !important;
+  height: 18px !important;
+  min-height: 18px !important;
+  max-height: 18px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+  vertical-align: middle;
+  accent-color: #1a3e2b;
+}
+
+[data-testid="shopping-list-table"] thead tr:nth-child(2) th:first-child,
+[data-testid="shopping-list-table"] thead tr:nth-child(2) th:last-child,
+[data-testid="shopping-list-table"] tbody td:first-child,
+[data-testid="shopping-list-table"] tbody td:last-child {
+  text-align: center !important;
+  vertical-align: middle !important;
+}
+
+[data-testid="shopping-list-table"].rz-table--resizable-columns th {
+  cursor: default !important;
+}
+
+[data-testid="shopping-list-table"]
+  :is(td, th)
+  > :is(input, select, button, span) {
+  min-width: 0;
+}
+
+.rz-table-wrapper:has(> [data-testid="shopping-list-table"]) {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden !important;
+}
+
+@media (max-width: 1100px) {
+  [data-testid="shopping-list-table"] {
+    font-size: 13px;
+  }
+
+  [data-testid="shopping-list-table"] th,
+  [data-testid="shopping-list-table"] td {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+}

@@ -29,6 +29,7 @@ import CatalogDetailPageV2 from '../../features/catalog/CatalogDetailPageV2.jsx'
 import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.jsx'
 import HouseholdSupportPage from '../../features/support/HouseholdSupportPage.jsx'
 import PlatformSupportPage from '../../features/support/PlatformSupportPage.jsx'
+import ShoppingPage from '../../features/shopping/ShoppingPage.jsx'
 import { clearAuthSession } from '../../lib/authSession.js'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
@@ -93,6 +94,7 @@ const router = createBrowserRouter([
   { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" message="Alleen de superuser kan alle meldingen bekijken."><PlatformSupportPage /></ProtectedPermission> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
+  { path: '/winkelen', element: <ProtectedPermission permission="shopping_list.view" message="Je rol mag Winkelen niet bekijken."><ShoppingPage /></ProtectedPermission> },
   { path: '/spaartegoeden', element: <Protected><LoyaltyStampsPage /></Protected> },
   { path: '/productgroepen', element: <Protected><ProductGroupsPage /></Protected> },
   { path: '/voorraad/incidentele-aankoop', element: <Protected><IncidentalPurchasePage /></Protected> },
