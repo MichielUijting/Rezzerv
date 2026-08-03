@@ -9,26 +9,65 @@ function safeWindow() {
   return typeof window !== 'undefined' ? window : null
 }
 
+function normalizeRoleValue(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+const NON_VIEWER_HOUSEHOLD_ROLES = new Set([
+  'admin',
+  'owner',
+  'lid',
+  'member',
+  'advanced_member',
+  'geavanceerd lid',
+  'frontteam',
+  'frontteamlid',
+  'household.admin',
+  'household.owner',
+  'household.member',
+  'household.advanced_member',
+  'household.frontteam',
+])
+
+export function normalizeHouseholdAccessContext(context) {
+  if (!context || typeof context !== 'object') return context
+
+  const displayRole = normalizeRoleValue(context.display_role)
+  const technicalRole = normalizeRoleValue(context.role || context.membership_role)
+  const hasNonViewerRole = NON_VIEWER_HOUSEHOLD_ROLES.has(displayRole)
+    || NON_VIEWER_HOUSEHOLD_ROLES.has(technicalRole)
+  const canProcessReceipts = Boolean(context.permissions?.['receipts.process'])
+    || hasNonViewerRole
+
+  return {
+    ...context,
+    is_viewer: hasNonViewerRole ? false : Boolean(context.is_viewer || displayRole === 'viewer' || technicalRole === 'viewer'),
+    can_process_receipts: canProcessReceipts,
+  }
+}
+
 function normalizeSessionContext(context) {
   if (!context || typeof context !== 'object') return null
+  const normalizedHouseholdContext = normalizeHouseholdAccessContext(context)
   return {
-    user_id: context.user_id || context.user?.id || '',
-    email: context.email || context.user?.email || '',
-    active_household_id: context.active_household_id ?? '',
-    active_household_name: context.active_household_name || '',
-    role: context.role || '',
-    display_role: context.display_role || context.role || '',
-    membership_count: Number(context.membership_count || 0),
-    can_switch_households: Boolean(context.can_switch_households),
-    memberships: Array.isArray(context.memberships) ? context.memberships : [],
-    permissions: context.permissions && typeof context.permissions === 'object' ? context.permissions : {},
-    member_permission_policies: context.member_permission_policies && typeof context.member_permission_policies === 'object' ? context.member_permission_policies : {},
-    supported_permissions: Array.isArray(context.supported_permissions) ? context.supported_permissions : [],
-    can_manage_member_permissions: Boolean(context.can_manage_member_permissions),
-    can_manage_members: Boolean(context.can_manage_members),
-    is_viewer: Boolean(context.is_viewer),
-    is_frontteam: Boolean(context.is_frontteam || context.is_frontteam_member),
-    is_platform_superuser: Boolean(context.is_platform_superuser),
+    user_id: normalizedHouseholdContext.user_id || normalizedHouseholdContext.user?.id || '',
+    email: normalizedHouseholdContext.email || normalizedHouseholdContext.user?.email || '',
+    active_household_id: normalizedHouseholdContext.active_household_id ?? '',
+    active_household_name: normalizedHouseholdContext.active_household_name || '',
+    role: normalizedHouseholdContext.role || '',
+    display_role: normalizedHouseholdContext.display_role || normalizedHouseholdContext.role || '',
+    membership_count: Number(normalizedHouseholdContext.membership_count || 0),
+    can_switch_households: Boolean(normalizedHouseholdContext.can_switch_households),
+    memberships: Array.isArray(normalizedHouseholdContext.memberships) ? normalizedHouseholdContext.memberships : [],
+    permissions: normalizedHouseholdContext.permissions && typeof normalizedHouseholdContext.permissions === 'object' ? normalizedHouseholdContext.permissions : {},
+    member_permission_policies: normalizedHouseholdContext.member_permission_policies && typeof normalizedHouseholdContext.member_permission_policies === 'object' ? normalizedHouseholdContext.member_permission_policies : {},
+    supported_permissions: Array.isArray(normalizedHouseholdContext.supported_permissions) ? normalizedHouseholdContext.supported_permissions : [],
+    can_manage_member_permissions: Boolean(normalizedHouseholdContext.can_manage_member_permissions),
+    can_manage_members: Boolean(normalizedHouseholdContext.can_manage_members),
+    is_viewer: Boolean(normalizedHouseholdContext.is_viewer),
+    can_process_receipts: Boolean(normalizedHouseholdContext.can_process_receipts),
+    is_frontteam: Boolean(normalizedHouseholdContext.is_frontteam || normalizedHouseholdContext.is_frontteam_member),
+    is_platform_superuser: Boolean(normalizedHouseholdContext.is_platform_superuser),
   }
 }
 
@@ -168,6 +207,24 @@ export async function fetchJsonWithAuth(url, options = {}) {
     error.status = 401
     throw error
   }
+
+  const normalizedUrl = String(url || '').split('?')[0]
+  if (response.ok && normalizedUrl === '/api/household') {
+    try {
+      const payload = await response.clone().json()
+      const normalizedPayload = normalizeHouseholdAccessContext(payload)
+      if (JSON.stringify(payload) !== JSON.stringify(normalizedPayload)) {
+        const headers = new Headers(response.headers)
+        headers.set('Content-Type', 'application/json')
+        return new Response(JSON.stringify(normalizedPayload), {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        })
+      }
+    } catch {}
+  }
+
   return response
 }
 
@@ -195,8 +252,8 @@ export function isFrontteamMemberFromContext(context = null) {
 }
 
 export function isHouseholdViewerFromContext(context = null) {
-  const source = context || readStoredAuthContext()
-  return String(source?.display_role || source?.role || '').trim().toLowerCase() === 'viewer'
+  const source = normalizeHouseholdAccessContext(context || readStoredAuthContext())
+  return Boolean(source?.is_viewer)
 }
 
 export function canCurrentUserPerform(permissionKey, context = null) {
