@@ -10,6 +10,7 @@ from app.api.authorization_membership_routes import _actor_context, _require
 from app.services.day_article_service import (
     DIRECT_CONSUMPTION,
     get_default_inventory_handling,
+    get_default_inventory_handling_batch,
     record_direct_consumption,
     set_default_inventory_handling,
 )
@@ -31,6 +32,29 @@ def get_article_inventory_handling(
             return get_default_inventory_handling(conn, household_id, household_article_id)
         except LookupError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/api/households/{household_id}/articles/inventory-handling/batch")
+def get_article_inventory_handling_batch(
+    household_id: str,
+    payload: dict[str, Any] = Body(default_factory=dict),
+    authorization: str | None = Header(default=None),
+):
+    del authorization
+    article_ids = payload.get("household_article_ids") or []
+    if not isinstance(article_ids, list):
+        raise HTTPException(status_code=400, detail="household_article_ids moet een lijst zijn")
+    if len(article_ids) > 250:
+        raise HTTPException(status_code=400, detail="Maximaal 250 huishoudartikelen per aanvraag")
+
+    with engine.begin() as conn:
+        context = _actor_context(conn, household_id)
+        _require(conn, context, "articles.view")
+        items = get_default_inventory_handling_batch(conn, household_id, article_ids)
+        return {
+            "household_id": str(household_id),
+            "items": items,
+        }
 
 
 @router.put("/api/households/{household_id}/articles/{household_article_id}/inventory-handling")
