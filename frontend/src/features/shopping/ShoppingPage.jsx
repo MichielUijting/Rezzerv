@@ -342,262 +342,262 @@ export default function ShoppingPage() {
     try {
       await Promise.all(selectedItems.map((item) => requestJson(`/api/shopping-list/items/${encodeURIComponent(item.id)}`, { method: 'DELETE' })))
       setSelectedItemIds([])
-    setMessage(`${selectedItems.length} rij(en) verwijderd.`)
-    await loadList()
-  } catch (deleteError) {
-    setError(deleteError?.message || 'De geselecteerde rijen konden niet worden verwijderd.')
-    await loadList()
-  } finally {
-    setSaving(false)
+      setMessage(`${selectedItems.length} rij(en) verwijderd.`)
+      await loadList()
+    } catch (deleteError) {
+      setError(deleteError?.message || 'De geselecteerde rijen konden niet worden verwijderd.')
+      await loadList()
+    } finally {
+      setSaving(false)
+    }
   }
-}
 
-function exportSelectedItems() {
-  if (selectedItems.length === 0) return
-  const rows = [
-    ['Artikel', 'Producttype', 'Omvang', 'Opmerking', 'Gekocht'],
-    ...selectedItems.map((item) => [item.article_name, item.product_type_name, item.size, item.note, item.checked ? 'Ja' : 'Nee']),
-  ]
-  const csv = `\uFEFF${rows.map((row) => row.map(csvValue).join(';')).join('\r\n')}`
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = 'winkelen-geselecteerde-rcjen.csv'
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
-}
-
-async function completeShopping() {
-  if (!window.confirm('De actuele winkellijst wordt leeggemaakt. Voorraad en bronlijsten blijven ongewijzigd.')) return
-  setSaving(true)
-  setError('')
-  setMessage('')
-  try {
-    await requestJson('/api/shopping-list/complete', { method: 'POST' })
-    setSelectedItemIds([])
-    setMessage('Winkelen is afgerond. De winkellijst is leeggemaakt.')
-    await loadList()
-  } catch (completeError) {
-    setError(completeError?.message || 'Winkelen kon niet worden afgerond.')
-  } finally {
-    setSaving(false)
+  function exportSelectedItems() {
+    if (selectedItems.length === 0) return
+    const rows = [
+      ['Artikel', 'Producttype', 'Omvang', 'Opmerking', 'Gekocht'],
+      ...selectedItems.map((item) => [item.article_name, item.product_type_name, item.size, item.note, item.checked ? 'Ja' : 'Nee']),
+    ]
+    const csv = `\uFEFF${rows.map((row) => row.map(csvValue).join(';')).join('\r\n')}`
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'winkelen-geselecteerde-rijen.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
   }
-}
 
-const inlineInputStyle = { width: '100%', minWidth: 0, boxSizing: 'border-box' }
-const tableStyle = { tableLayout: 'fixed', width: '1120px', minWidth: '1120px' }
+  async function completeShopping() {
+    if (!window.confirm('De actuele winkellijst wordt leeggemaakt. Voorraad en bronlijsten blijven ongewijzigd.')) return
+    setSaving(true)
+    setError('')
+    setMessage('')
+    try {
+      await requestJson('/api/shopping-list/complete', { method: 'POST' })
+      setSelectedItemIds([])
+      setMessage('Winkelen is afgerond. De winkellijst is leeggemaakt.')
+      await loadList()
+    } catch (completeError) {
+      setError(completeError?.message || 'Winkelen kon niet worden afgerond.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
-return (
-  <AppShell title="Winkelen" showExit={false}>
-    <div style={{ display: 'grid', gap: 18, width: '100%' }}>
-      <Card>
-        <div style={{ display: 'grid', gap: 18, width: '100%' }} data-testid="shopping-page">
-          <h2 style={{ margin: 0 }}>Winkelen — {Number(list.item_count || 0)} artikelen</h2>
+  const inlineInputStyle = { width: '100%', minWidth: 0, boxSizing: 'border-box' }
+  const tableStyle = { tableLayout: 'fixed', width: '1120px', minWidth: '1120px' }
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(280px, 1fr) auto', gap: 12, alignItems: 'stretch' }}>
-            <label className="rz-input-field">
-              <span className="rz-label">Artikel zoeken</span>
-              <input
-                className="rz-input"
-                value={catalogQuery}
-                onChange={(event) => setCatalogQuery(event.target.value)}
-                placeholder="Zoek artikel, producttype of artikelgroep"
-                aria-label="Artikel zoeken"
-              />
-            </label>
+  return (
+    <AppShell title="Winkelen" showExit={false}>
+      <div style={{ display: 'grid', gap: 18, width: '100%' }}>
+        <Card>
+          <div style={{ display: 'grid', gap: 18, width: '100%' }} data-testid="shopping-page">
+            <h2 style={{ margin: 0 }}>Winkelen — {Number(list.item_count || 0)} artikelen</h2>
 
-            <label className="rz-input-field">
-              <span className="rz-label">Zoekresultaat</span>
-              <select
-                className="rz-input"
-                value={selectedResultId}
-                onChange={(event) => setSelectedResultId(event.target.value)}
-                aria-label="Zoekresultaat"
-                disabled={searching || catalogResults.length === 0}
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 1fr) minmax(280px, 1fr) auto', gap: 12, alignItems: 'stretch' }}>
+              <label className="rz-input-field">
+                <span className="rz-label">Artikel zoeken</span>
+                <input
+                  className="rz-input"
+                  value={catalogQuery}
+                  onChange={(event) => setCatalogQuery(event.target.value)}
+                  placeholder="Zoek artikel, producttype of artikelgroep"
+                  aria-label="Artikel zoeken"
+                />
+              </label>
+
+              <label className="rz-input-field">
+                <span className="rz-label">Zoekresultaat</span>
+                <select
+                  className="rz-input"
+                  value={selectedResultId}
+                  onChange={(event) => setSelectedResultId(event.target.value)}
+                  aria-label="Zoekresultaat"
+                  disabled={searching || catalogResults.length === 0}
+                >
+                  <option value="">
+                    {searching ? 'Zoeken‥' : catalogResults.length ? 'Selecteer resultaat' : 'Geen resultaten'}
+                  </option>
+                  {groupedResults.map((group) => (
+                    <optgroup key={group.sourceType} label={group.label}>
+                      {group.items.map((item) => (
+                        <option
+                          key={`${item.source_type}:${item.source_id}`}
+                          value={`${item.source_type}:${item.source_id}`}
+                        >
+                          {item.label} — {SOURCE_LABELS[item.source_type] || item.source_type}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+
+              <Button
+                type="button"
+                onClick={addSelectedResult}
+                disabled={saving || !selectedResult}
+                style={{ alignSelf: 'end' }}
               >
-                <option value="">
-                  {searching ? 'Zoeken‥' : catalogResults.length ? 'Selecteer resultaat' : 'Geen resultaten'}
-                </option>
-                {groupedResults.map((group) => (
-                  <optgroup key={group.sourceType} label={group.label}>
-                    {group.items.map((item) => (
-                      <option
-                        key={`${item.source_type}:${item.source_id}`}
-                        value={`${item.source_type}:${item.source_id}`}
-                      >
-                        {item.label} — {SOURCE_LABELS[item.source_type] || item.source_type}
-                      </option>
-                    ))}
-                  </optgroup>
+                Toevoegen
+              </Button>
+            </div>
+
+            {error ? <div role="alert" style={{ color: '#9b1c1c' }}>{error}</div> : null}
+            {message ? <div role="status" style={{ color: '#1A3E2B' }}>{message}</div> : null}
+
+            <Table dataTestId="shopping-list-table" resizableColumns tableStyle={tableStyle}>
+              <colgroup>
+                <col style={{ width: 60 }} />
+                <col style={{ width: 330 }} />
+                <col style={{ width: 300 }} />
+                <col style={{ width: 120 }} />
+                <col style={{ width: 220 }} />
+                <col style={{ width: 90 }} />
+              </colgroup>
+              <thead>
+                <tr className="rz-input">
+                  <th aria-label="Bulkselectie">&nbsp;</th>
+                  <SortableHeader field="article" label="Artikel" sort={sort} onSort={changeSort} />
+                  <SortableHeader field="productType" label="Producttype" sort={sort} onSort={changeSort} />
+                  <SortableHeader field="size" label="Omvang" sort={sort} onSort={changeSort} />
+                  <SortableHeader field="note" label="Opmerking" sort={sort} onSort={changeSort} />
+                  <SortableHeader field="checked" label="Gekocht" sort={sort} onSort={changeSort} />
+                </tr>
+                <tr>
+                  <th style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                    <input
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={(event) => toggleAllVisible(event.target.checked)}
+                      aria-label="Selecteer alle zichtbare rijen"
+                      style={CHECKBOX_STYLE}
+                    />
+                  </th>
+                  <th>
+                    <input
+                      className="rz-input"
+                      style={FILTER_CONTROL_STYLE}
+                      value={filters.article}
+                      onChange={(event) => setFilters((current) => ({ ...current, article: event.target.value }))}
+                      placeholder="Zoeken"
+                      aria-label="Zoeken in winkellijst"
+                    />
+                  </th>
+                  <th>
+                    <select
+                      className="rz-input"
+                      style={FILTER_CONTROL_STYLE}
+                      value={filters.productType}
+                      onChange={(event) => setFilters((current) => ({ ...current, productType: event.target.value }))}
+                      aria-label="Filter producttype"
+                    >
+                      <option value="">Filter</option>
+                      {productTypeOptions.map((value) => <option key={value} value={value}>{value}</option>)}
+                    </select>
+                  </th>
+                  <th>&nbsp;</th>
+                  <th>&nbsp;</th>
+                  <th style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                    <input
+                      type="checkbox"
+                      checked={filters.checked === 'checked'}
+                      onChange={(event) => setFilters((current) => ({
+                        ...current,
+                        checked: event.target.checked ? 'checked' : 'all',
+                      }))}
+                      aria-label="Filter gekocht"
+                      style={CHECKBOX_STYLE}
+                    />
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={6}>Winkellijst laden…</td></tr>
+                ) : visibleItems.length === 0 ? (
+                  <>
+                    <tr><td colSpan={6}>Nog geen artikelen op de winkellijst.</td></tr>
+                    <tr><td colSpan={6}>&nbsp;</td></tr>
+                    <tr><td colSpan={6}>&nbsp;</td></tr>
+                  </>
+                ) : visibleItems.map((item) => (
+                  <tr key={item.id}>
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedItemIds.includes(item.id)}
+                        onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
+                        aria-label={`Selecteer ${item.article_name}`}
+                        style={CHECKBOX_STYLE}
+                      />
+                    </td>
+                    <td title={item.article_name}>{item.article_name}</td>
+                    <td title={item.product_type_name}>{item.product_type_name}</td>
+                    <td>
+                      <input
+                        className="rz-input"
+                        style={inlineInputStyle}
+                        defaultValue={item.size || ''}
+                        aria-label={`Omvang ${item.article_name}`}
+                        onBlur={(event) => updateItem(item, { size: event.target.value })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="rz-input"
+                        style={inlineInputStyle}
+                        defaultValue={item.note || ''}
+                        aria-label={`Opmerking ${item.article_name}`}
+                        onBlur={(event) => updateItem(item, { note: event.target.value })}
+                      />
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(item.checked)}
+                        onChange={(event) => updateChecked(item, event.target.checked)}
+                        aria-label={`Gekocht ${item.article_name}`}
+                        style={CHECKBOX_STYLE}
+                      />
+                    </td>
+                  </tr>
                 ))}
-              </select>
-            </label>
+              </tbody>
+            </Table>
 
-            <Button
-              type="button"
-              onClick={addSelectedResult}
-              disabled={saving || !selectedResult}
-              style={{ alignSelf: 'end' }}
-            >
-              Toevoegen
-            </Button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <Button
+                type="button"
+                onClick={deleteSelectedItems}
+                disabled={saving || selectedItems.length === 0}
+              >
+                Verwijderen
+              </Button>
+              <Button
+                type="button"
+                onClick={exportSelectedItems}
+                disabled={selectedItems.length === 0}
+              >
+                Exporteren
+              </Button>
+            </div>
           </div>
+        </Card>
 
-          {error ? <div role="alert" style={{ color: '#9b1c1c' }}>{error}</div> : null}
-          {message ? <div role="status" style={{ color: '#1A3E2B' }}>{message}</div> : null}
-
-          <Table dataTestId="shopping-list-table" resizableColumns tableStyle={tableStyle}>
-            <colgroup>
-              <col style={{ width: 60 }} />
-              <col style={{ width: 330 }} />
-              <col style={{ width: 300 }} />
-              <col style={{ width: 120 }} />
-              <col style={{ width: 220 }} />
-              <col style={{ width: 90 }} />
-            </colgroup>
-            <thead>
-              <tr className="rz-input">
-                <th aria-label="Bulkselectie">&nbsp;</th>
-                <SortableHeader field="article" label="Artikel" sort={sort} onSort={changeSort} />
-                <SortableHeader field="productType" label="Producttype" sort={sort} onSort={changeSort} />
-                <SortableHeader field="size" label="Omvang" sort={sort} onSort={changeSort} />
-                <SortableHeader field="note" label="Opmerking" sort={sort} onSort={changeSort} />
-                <SortableHeader field="checked" label="Gekocht" sort={sort} onSort={changeSort} />
-              </tr>
-              <tr>
-                <th style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                  <input
-                    type="checkbox"
-                    checked={allVisibleSelected}
-                    onChange={(event) => toggleAllVisible(event.target.checked)}
-                    aria-label="Selecteer alle zichtbare rijen"
-                    style={CHECKBOX_STYLE}
-                  />
-                </th>
-                <th>
-                  <input
-                    className="rz-input"
-                    style={FILTER_CONTROL_STYLE}
-                    value={filters.article}
-                    onChange={(event) => setFilters((current) => ({ ...current, article: event.target.value }))}
-                    placeholder="Zoeken"
-                    aria-label="Zoeken in winkellijst"
-                  />
-                </th>
-                <th>
-                  <select
-                    className="rz-input"
-                    style={FILTER_CONTROL_STYLE}
-                    value={filters.productType}
-                    onChange={(event) => setFilters((current) => ({ ...current, productType: event.target.value }))}
-                    aria-label="Filter producttype"
-                  >
-                    <option value="">Filter</option>
-                    {productTypeOptions.map((value) => <option key={value} value={value}>{value}</option>)}
-                  </select>
-                </th>
-                <th>&nbsp;</th>
-                <th>&nbsp;</th>
-                <th style={{ textAlign: 'center', verticalAlign: 'middle' }}>
-                  <input
-                    type="checkbox"
-                    checked={filters.checked === 'checked'}
-                    onChange={(event) => setFilters((current) => ({
-                      ...current,
-                      checked: event.target.checked ? 'checked' : 'all',
-                    }))}
-                    aria-label="Filter gekocht"
-                    style={CHECKBOX_STYLE}
-                  />
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={6}>Winkellijst laden…</td></tr>
-              ) : visibleItems.length === 0 ? (
-                <>
-                  <tr><td colSpan={6}>Nog geen artikelen op de winkellijst.</td></tr>
-                  <tr><td colSpan={6}>&nbsp;</td></tr>
-                  <tr><td colSpan={6}>&nbsp;</td></tr>
-                </>
-              ) : visibleItems.map((item) => (
-                <tr key={item.id}>
-                  <td style={{ textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={selectedItemIds.includes(item.id)}
-                    onChange={(event) => toggleSelectedItem(item.id, event.target.checked)}
-                    aria-label={`Selecteer ${item.article_name}`}
-                    style={CHECKBOX_STYLE}
-                  />
-                </td>
-                <td title={item.article_name}>{item.article_name}</td>
-                <td title={item.product_type_name}>{item.product_type_name}</td>
-                <td>
-                  <input
-                    className="rz-input"
-                    style={inlineInputStyle}
-                    defaultValue={item.size || ''}
-                    aria-label={`Omvang ${item.article_name}`}
-                    onBlur={(event) => updateItem(item, { size: event.target.value })}
-                  />
-                </td>
-                <td>
-                  <input
-                    className="rz-input"
-                    style={inlineInputStyle}
-                    defaultValue={item.note || ''}
-                    aria-label={`Opmerking ${item.article_name}`}
-                    onBlur={(event) => updateItem(item, { note: event.target.value })}
-                  />
-                </td>
-                <td style={{ textAlign: 'center' }}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(item.checked)}
-                    onChange={(event) => updateChecked(item, event.target.checked)}
-                    aria-label={`Gekocht ${item.article_name}`}
-                    style={CHECKBOX_STYLE}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button
             type="button"
-            onClick={deleteSelectedItems}
-            disabled={saving || selectedItems.length === 0}
+            onClick={completeShopping}
+            disabled={saving || Number(list.item_count || 0) === 0}
           >
-            Verwijderen
-          </Button>
-          <Button
-            type="button"
-            onClick={exportSelectedItems}
-            disabled={selectedItems.length === 0}
-          >
-            Exporteren
+            Winkelen afgerond
           </Button>
         </div>
       </div>
-    </Card>
-
-    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-      <Button
-        type="button"
-        onClick={completeShopping}
-        disabled={saving || Number(list.item_count || 0) === 0}
-      >
-        Winkelen afgerond
-      </Button>
-    </div>
-  </div>
- </AppShell>
-)
+    </AppShell>
+  )
 }
