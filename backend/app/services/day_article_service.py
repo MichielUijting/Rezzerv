@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import Any
+from typing import Any, Iterable
 
 from sqlalchemy import inspect, text
 
@@ -103,6 +103,46 @@ def get_default_inventory_handling(conn, household_id: str, household_article_id
     if not row:
         raise LookupError("Huishoudartikel niet gevonden")
     return dict(row)
+
+
+def get_default_inventory_handling_batch(
+    conn,
+    household_id: str,
+    household_article_ids: Iterable[str],
+) -> list[dict[str, Any]]:
+    """Return defaults for unique article ids that belong to one household.
+
+    Unknown ids and ids from another household are deliberately omitted. This
+    prevents a batch lookup from becoming an article-existence oracle across
+    household boundaries. The caller can treat omitted ids as unlinked rows.
+    """
+
+    ensure_day_article_schema(conn)
+    normalized_household_id = str(household_id or "").strip()
+    unique_ids = list(dict.fromkeys(
+        str(article_id or "").strip()
+        for article_id in household_article_ids
+        if str(article_id or "").strip()
+    ))
+    if not unique_ids:
+        return []
+
+    results: list[dict[str, Any]] = []
+    for article_id in unique_ids:
+        row = conn.execute(text("""
+            SELECT id, household_id, naam,
+                   COALESCE(default_inventory_handling, 'STOCK') AS default_inventory_handling,
+                   inventory_handling_updated_at, inventory_handling_updated_by_user_id
+            FROM household_articles
+            WHERE id = :article_id AND household_id = :household_id
+            LIMIT 1
+        """), {
+            "article_id": article_id,
+            "household_id": normalized_household_id,
+        }).mappings().first()
+        if row:
+            results.append(dict(row))
+    return results
 
 
 def set_default_inventory_handling(conn, *, household_id: str, household_article_id: str,
