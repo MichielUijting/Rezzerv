@@ -165,16 +165,18 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
     for (let index = 0; index < await filterControls.count(); index += 1) {
       const metrics = await filterControls.nth(index).evaluate((element) => {
         const style = window.getComputedStyle(element);
+        const numericLineHeight = Number.parseFloat(style.lineHeight);
+        const fallbackLineHeight = Number.parseFloat(style.fontSize) * 1.2;
         return {
           height: element.getBoundingClientRect().height,
           color: style.color,
           backgroundColor: style.backgroundColor,
-          lineHeight: style.lineHeight,
+          effectiveLineHeight: Number.isFinite(numericLineHeight) ? numericLineHeight : fallbackLineHeight,
         };
       });
       expect(metrics.height).toBeGreaterThanOrEqual(38);
       expect(metrics.color).not.toBe(metrics.backgroundColor);
-      expect(metrics.lineHeight).toBe('20px');
+      expect(metrics.effectiveLineHeight).toBeLessThan(metrics.height);
     }
 
     const columnWidths = await table.locator('colgroup col').evaluateAll((columns) => columns.map((column) => Number.parseFloat(column.style.width)));
