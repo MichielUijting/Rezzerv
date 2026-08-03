@@ -38,25 +38,30 @@ jobs:
       PLAYWRIGHT_TEST_ADMIN_EMAIL: test-admin@rezzerv.local
       PLAYWRIGHT_HOUSEHOLD_ID: '0'
       REZZERV_TEST_SUPERUSER_EMAIL: supergebruiker@rezzerv.local
-      REZZERV_TEST_SUPERUSER_PASSWORD: ${{ secrets.REZZERV_TEST_SUPERUSER_PASSWORD }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Generate temporary test-admin password
-        id: credentials
+      - name: Generate temporary test credentials
         shell: bash
         run: |
-          password="Rt$(python - <<'PY'
+          admin_password="Rt$(python - <<'PY'
           import secrets
           print(secrets.token_hex(24))
           PY
           )"
-          echo "PLAYWRIGHT_TEST_ADMIN_PASSWORD=$password" >> "$GITHUB_ENV"
-          echo "REZZERV_TEST_ADMIN_PASSWORD=$password" >> "$GITHUB_ENV"
+          superuser_password="Rs$(python - <<'PY'
+          import secrets
+          print(secrets.token_hex(24))
+          PY
+          )"
+          echo "PLAYWRIGHT_TEST_ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
+          echo "REZZERV_TEST_ADMIN_PASSWORD=$admin_password" >> "$GITHUB_ENV"
           echo "REZZERV_TEST_ADMIN_EMAIL=test-admin@rezzerv.local" >> "$GITHUB_ENV"
-          echo "::add-mask::$password"
+          echo "REZZERV_TEST_SUPERUSER_PASSWORD=$superuser_password" >> "$GITHUB_ENV"
+          echo "::add-mask::$admin_password"
+          echo "::add-mask::$superuser_password"
 
       - name: Build and start Rezzerv
         run: docker compose up -d --build
@@ -64,17 +69,43 @@ jobs:
       - name: Wait for backend health
         shell: bash
         run: |
-          for attempt in $(seq 1 36); do
+          for attempt in $(seq 1 180); do
             if curl --fail --silent http://localhost:8011/api/health >/dev/null; then
-              echo "Backend health is groen."
+              echo "Backend health is groen na $attempt pogingen."
               exit 0
             fi
-            echo "Healthcheck poging $attempt/36..."
-            sleep 10
+            if (( attempt % 30 == 0 )); then
+              echo "Backend start nog; tussenstatus na $attempt pogingen:"
+              docker compose logs --no-color --tail=80 backend
+            fi
+            sleep 2
           done
+          echo "Backend werd niet gezond binnen 360 seconden."
           docker compose ps
-          docker compose logs backend
+          docker compose logs --no-color --tail=500 backend
           exit 1
+
+      - name: Provision temporary system superuser
+        shell: bash
+        run: |
+          docker compose exec -T \
+            -e REZZERV_SUPERGEBRUIKER_PASSWORD="$REZZERV_TEST_SUPERUSER_PASSWORD" \
+            -e REZZERV_PROVISION_TEST_HOUSEHOLD_ZERO='1' \
+            backend python - <<'PY'
+          from app.db import engine
+          from app.services.system_superuser_session_provisioning import (
+              ensure_system_superuser_for_session_runtime,
+          )
+
+          with engine.begin() as conn:
+              result = ensure_system_superuser_for_session_runtime(conn)
+
+          print(
+              "system_superuser_fixture: PASS; "
+              f"email={result.email}; household={result.household_id}; "
+              f"membership={result.membership_id}"
+          )
+          PY
 
       - name: Validate authorization matrix
         run: |
