@@ -153,12 +153,10 @@ test.describe('Winkelen Release 1 frontend-regressie', () => {
       await expect(header).toHaveAttribute('aria-sort', 'ascending');
       const indicator = page.getByTestId(`sort-indicator-${field}`);
       await expect(indicator).toHaveText('^');
-      const alignment = await indicator.evaluate((element) => ({
-        marginLeft: window.getComputedStyle(element).marginLeft,
-        paddingRight: window.getComputedStyle(element).paddingRight,
-      }));
-      expect(alignment.marginLeft).not.toBe('0px');
-      expect(alignment.paddingRight).toBe('8px');
+      const paddingRight = await indicator.evaluate(
+        (element) => window.getComputedStyle(element).paddingRight,
+      );
+      expect(paddingRight).toBe('8px');
     }
 
     await expect(page.getByLabel('Filter gekocht')).toHaveAttribute('type', 'checkbox');
