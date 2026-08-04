@@ -1,0 +1,148 @@
+name: Temporary B3 native table integration
+
+on:
+  push:
+    branches:
+      - feature/uitpakken-dagartikelen-release-b
+    paths:
+      - .github/workflows/temp-b3-native-table-integration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/uitpakken-dagartikelen-release-b
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply native B3 integration
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/src/features/stores/StoreBatchDetailPage.jsx')
+          text = path.read_text(encoding='utf-8')
+
+          def replace_once(old, new, label):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 occurrence, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              "import BarcodeScannerModal from '../barcodes/BarcodeScannerModal.jsx'\n",
+              "import BarcodeScannerModal from '../barcodes/BarcodeScannerModal.jsx'\nimport InventoryHandlingOverrideSelect from '../receipts/InventoryHandlingOverrideSelect.jsx'\nimport {\n  DIRECT_CONSUMPTION,\n  fetchInventoryHandlingByArticleIds,\n  fetchInventoryHandlingOverridesByLineIds,\n  lineInventoryHandlingPresentation,\n  saveInventoryHandlingOverride,\n} from '../receipts/dayArticleHandling.js'\n",
+              'imports',
+          )
+
+          replace_once(
+              "  const [locationOptions, setLocationOptions] = useState([])\n",
+              "  const [locationOptions, setLocationOptions] = useState([])\n  const [inventoryHandlingByArticleId, setInventoryHandlingByArticleId] = useState({})\n  const [inventoryHandlingOverridesByLineId, setInventoryHandlingOverridesByLineId] = useState({})\n",
+              'handling state',
+          )
+
+          replace_once(
+              "    { key: 'aantal', width: 110 },\n    { key: 'locatie', width: 260 },",
+              "    { key: 'aantal', width: 110 },\n    { key: 'verwerking', width: 250 },\n    { key: 'locatie', width: 260 },",
+              'column definition',
+          )
+
+          replace_once(
+              "  async function refreshBatch(nextBatchId = batchId) {\n    const nextBatch = await fetchJson(`/api/purchase-import-batches/${nextBatchId}?_ts=${Date.now()}`)\n    setBatch(nextBatch)\n    return nextBatch\n  }",
+              "  async function refreshInventoryHandling(nextBatch = batch, householdData = household) {\n    const householdId = String(householdData?.active_household_id ?? householdData?.id ?? nextBatch?.household_id ?? '').trim()\n    const lines = Array.isArray(nextBatch?.lines) ? nextBatch.lines : []\n    if (!householdId || lines.length === 0) {\n      setInventoryHandlingByArticleId({})\n      setInventoryHandlingOverridesByLineId({})\n      return { defaults: {}, overrides: {} }\n    }\n\n    const articleIds = lines.map((line) => line?.matched_household_article_id).filter(Boolean)\n    const lineIds = lines.map((line) => line?.id).filter(Boolean)\n    const [defaults, overrides] = await Promise.all([\n      fetchInventoryHandlingByArticleIds(householdId, articleIds),\n      fetchInventoryHandlingOverridesByLineIds(householdId, lineIds),\n    ])\n    setInventoryHandlingByArticleId(defaults)\n    setInventoryHandlingOverridesByLineId(overrides)\n    return { defaults, overrides }\n  }\n\n  async function refreshBatch(nextBatchId = batchId) {\n    const nextBatch = await fetchJson(`/api/purchase-import-batches/${nextBatchId}?_ts=${Date.now()}`)\n    setBatch(nextBatch)\n    await refreshInventoryHandling(nextBatch)\n    return nextBatch\n  }",
+              'refresh batch',
+          )
+
+          replace_once(
+              "  async function refreshLocationOptions() {\n",
+              "  function directLocationOption(options = locationOptions) {\n    return (options || []).find((location) => (\n      String(location?.label || '').trim().toLowerCase() === 'direct / direct'\n      || (String(location?.parent_label || '').trim().toLowerCase() === 'direct'\n        && String(location?.sublocation_label || '').trim().toLowerCase() === 'direct')\n    )) || null\n  }\n\n  async function handleInventoryHandlingOverrideChange(entry, nextOverride) {\n    const householdId = String(household?.active_household_id ?? household?.id ?? batch?.household_id ?? '').trim()\n    if (!householdId) {\n      showUitpakkenFeedback('error', 'Het actieve huishouden kon niet worden vastgesteld.')\n      return\n    }\n\n    const lineId = String(entry?.line?.id || '')\n    setBusyLineId(lineId)\n    try {\n      const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, nextOverride)\n      setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))\n\n      const defaultHandling = entry.defaultInventoryHandling\n      const presentation = lineInventoryHandlingPresentation(defaultHandling, savedOverride)\n      let options = locationOptions\n      if (presentation.handling === DIRECT_CONSUMPTION && !directLocationOption(options)) {\n        options = await refreshLocationOptions()\n      }\n      const directLocation = directLocationOption(options)\n      const currentLocationId = String(entry.draft?.locationId || '')\n\n      if (presentation.handling === DIRECT_CONSUMPTION) {\n        if (!directLocation) throw new Error('De beschermde locatie Direct / Direct is niet beschikbaar.')\n        if (currentLocationId !== String(directLocation.id)) {\n          await persistLineDraft(entry.line, { locationId: String(directLocation.id) }, {\n            defaultLocationPolicy: 'line_only',\n            suppressSuccessFeedback: true,\n          })\n        }\n      } else if (directLocation && currentLocationId === String(directLocation.id)) {\n        await persistLineDraft(entry.line, { locationId: '' }, {\n          defaultLocationPolicy: 'line_only',\n          suppressSuccessFeedback: true,\n        })\n      }\n    } catch (handlingError) {\n      const message = normalizeErrorMessage(handlingError?.message || handlingError) || 'Verwerking kon niet worden opgeslagen.'\n      showUitpakkenFeedback('error', message, { key: `uitpakken-handling-${lineId}-${Date.now()}` })\n      await refreshInventoryHandling(batch, household).catch(() => null)\n    } finally {\n      setBusyLineId('')\n    }\n  }\n\n  async function refreshLocationOptions() {\n",
+              'handling functions',
+          )
+
+          replace_once(
+              "      setLocationOptions(buildActiveLocationOptions(spacesData, sublocationsData))\n      setBatch(loadedBatch)\n      setBatchDiagnostics(null)",
+              "      setLocationOptions(buildActiveLocationOptions(spacesData, sublocationsData))\n      setBatch(loadedBatch)\n      await refreshInventoryHandling(loadedBatch, householdData)\n      setBatchDiagnostics(null)",
+              'load handling',
+          )
+
+          replace_once(
+              "      const selectionState = deriveLineSelectionState({ line, draft, validLocationIds, processingStatus })\n",
+              "      const articleId = String(draft.articleId || line.matched_household_article_id || '')\n      const defaultPresentation = inventoryHandlingByArticleId[articleId] || { handling: 'STOCK' }\n      const defaultInventoryHandling = defaultPresentation.handling || 'STOCK'\n      const inventoryHandlingOverride = inventoryHandlingOverridesByLineId[String(line.id)] || null\n      const inventoryHandling = lineInventoryHandlingPresentation(defaultInventoryHandling, inventoryHandlingOverride)\n      const selectionState = deriveLineSelectionState({ line, draft, validLocationIds, processingStatus })\n",
+              'line handling derive',
+          )
+
+          replace_once(
+              "        mappingState,\n        isReadyForProcessing: isProcessable,",
+              "        mappingState,\n        defaultInventoryHandling,\n        inventoryHandlingOverride,\n        inventoryHandling,\n        isReadyForProcessing: isProcessable,",
+              'line handling return',
+          )
+
+          replace_once(
+              "  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds])",
+              "  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds, inventoryHandlingByArticleId, inventoryHandlingOverridesByLineId])",
+              'line memo dependencies',
+          )
+
+          replace_once(
+              "      locatie: (entry) => (locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''),",
+              "      verwerking: (entry) => entry.inventoryHandling?.label || '',\n      locatie: (entry) => (locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''),",
+              'sort verwerking',
+          )
+
+          replace_once(
+              "                <col style={{ width: `${lineColumnWidths.aantal}px` }} />\n                <col style={{ width: `${lineColumnWidths.locatie}px` }} />",
+              "                <col style={{ width: `${lineColumnWidths.aantal}px` }} />\n                <col style={{ width: `${lineColumnWidths.verwerking}px` }} />\n                <col style={{ width: `${lineColumnWidths.locatie}px` }} />",
+              'colgroup',
+          )
+
+          replace_once(
+              "                  <ResizableHeaderCell columnKey=\"aantal\" widths={lineColumnWidths} onStartResize={startLineResize} className=\"rz-num rz-store-batch-col-quantity\" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Aantal</ResizableHeaderCell>\n                  <ResizableHeaderCell columnKey=\"locatie\"",
+              "                  <ResizableHeaderCell columnKey=\"aantal\" widths={lineColumnWidths} onStartResize={startLineResize} className=\"rz-num rz-store-batch-col-quantity\" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', verwerking: 'asc', locatie: 'asc', gekoppeld: 'asc' }))}>Aantal</ResizableHeaderCell>\n                  <ResizableHeaderCell columnKey=\"verwerking\" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'verwerking'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', verwerking: 'asc', locatie: 'asc', gekoppeld: 'asc' }))}>Verwerking</ResizableHeaderCell>\n                  <ResizableHeaderCell columnKey=\"locatie\"",
+              'header verwerking',
+          )
+
+          replace_once(
+              "                  <th />\n                  <th><select className=\"rz-input rz-inline-input\" value={locationFilter}",
+              "                  <th />\n                  <th />\n                  <th><select className=\"rz-input rz-inline-input\" value={locationFilter}",
+              'filter verwerking',
+          )
+
+          replace_once(
+              "                  <tr><td colSpan={5}>Geen open bonregels in deze selectie.</td></tr>",
+              "                  <tr><td colSpan={6}>Geen open bonregels in deze selectie.</td></tr>",
+              'empty colspan',
+          )
+
+          replace_once(
+              "                      <td className=\"rz-num rz-store-batch-col-quantity\"><div className=\"rz-store-amount\">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>\n                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>\n                        <select",
+              "                      <td className=\"rz-num rz-store-batch-col-quantity\"><div className=\"rz-store-amount\">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>\n                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>\n                        <InventoryHandlingOverrideSelect\n                          articleDefault={entry.defaultInventoryHandling}\n                          value={entry.inventoryHandlingOverride || ''}\n                          disabled={busyLineId === line.id || isProcessingBatch || isViewer || !entry.draft.articleId}\n                          onChange={(nextOverride) => handleInventoryHandlingOverrideChange(entry, nextOverride)}\n                          data-testid={`receipt-line-handling-select-${line.id}`}\n                        />\n                      </td>\n                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>\n                        <select",
+              'row selector',
+          )
+
+          replace_once(
+              "                          disabled={busyLineId === line.id || isProcessingBatch || isViewer}\n                          aria-label={`Locatie voor ${line.article_name_raw}`}",
+              "                          disabled={busyLineId === line.id || isProcessingBatch || isViewer || entry.inventoryHandling?.handling === DIRECT_CONSUMPTION}\n                          aria-label={`Locatie voor ${line.article_name_raw}`}",
+              'disable direct location',
+          )
+
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Validate frontend build
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+      - name: Commit native integration
+        run: |
+          git config user.name "Rezzerv CI"
+          git config user.email "actions@rezzerv.local"
+          git add frontend/src/features/stores/StoreBatchDetailPage.jsx
+          git commit -m "feat(day-articles): integrate B3 selector in Uitpakken table"
+          git push origin HEAD:feature/uitpakken-dagartikelen-release-b
