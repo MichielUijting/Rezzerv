@@ -52,13 +52,13 @@ export default function DayArticleHandlingPanel({ batchId = '' }) {
         const defaults = await fetchInventoryHandlingByArticleIds(householdId, articleIds)
         if (cancelled) return
 
-        setRows(lines.map((line) => {
+        setRows(lines.map((line, index) => {
           const articleId = lineArticleId(line)
           const presentation = articleId
             ? (defaults[articleId] || inventoryHandlingPresentation(STOCK))
             : inventoryHandlingPresentation(STOCK)
           return {
-            id: String(line?.id || `${lineArticleLabel(line)}-${Math.random()}`),
+            id: String(line?.id || `${normalizedBatchId}-line-${index + 1}`),
             article: lineArticleLabel(line),
             linked: Boolean(articleId),
             ...presentation,
