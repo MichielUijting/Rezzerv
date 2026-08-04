@@ -24,6 +24,14 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 import useBarcodeScanner from '../../lib/useBarcodeScanner.js'
 import BarcodeIdentityField from '../barcodes/BarcodeIdentityField.jsx'
 import BarcodeScannerModal from '../barcodes/BarcodeScannerModal.jsx'
+import InventoryHandlingOverrideSelect from '../receipts/InventoryHandlingOverrideSelect.jsx'
+import {
+  DIRECT_CONSUMPTION,
+  fetchInventoryHandlingByArticleIds,
+  fetchInventoryHandlingOverridesByLineIds,
+  lineInventoryHandlingPresentation,
+  saveInventoryHandlingOverride,
+} from '../receipts/dayArticleHandling.js'
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'Alles' },
@@ -226,6 +234,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [newArticleGroupName, setNewArticleGroupName] = useState('')
   const [isCreatingArticleGroup, setIsCreatingArticleGroup] = useState(false)
   const [locationOptions, setLocationOptions] = useState([])
+  const [inventoryHandlingByArticleId, setInventoryHandlingByArticleId] = useState({})
+  const [inventoryHandlingOverridesByLineId, setInventoryHandlingOverridesByLineId] = useState({})
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -264,6 +274,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     { key: 'select', width: 44 },
     { key: 'bonartikel', width: 360 },
     { key: 'aantal', width: 110 },
+    { key: 'verwerking', width: 250 },
     { key: 'locatie', width: 260 },
     { key: 'gekoppeld', width: 320 },
   ]), [])
@@ -723,9 +734,30 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }))
   }
 
+  async function refreshInventoryHandling(nextBatch = batch, householdData = household) {
+    const householdId = String(householdData?.active_household_id ?? householdData?.id ?? nextBatch?.household_id ?? '').trim()
+    const lines = Array.isArray(nextBatch?.lines) ? nextBatch.lines : []
+    if (!householdId || lines.length === 0) {
+      setInventoryHandlingByArticleId({})
+      setInventoryHandlingOverridesByLineId({})
+      return { defaults: {}, overrides: {} }
+    }
+
+    const articleIds = lines.map((line) => line?.matched_household_article_id).filter(Boolean)
+    const lineIds = lines.map((line) => line?.id).filter(Boolean)
+    const [defaults, overrides] = await Promise.all([
+      fetchInventoryHandlingByArticleIds(householdId, articleIds),
+      fetchInventoryHandlingOverridesByLineIds(householdId, lineIds),
+    ])
+    setInventoryHandlingByArticleId(defaults)
+    setInventoryHandlingOverridesByLineId(overrides)
+    return { defaults, overrides }
+  }
+
   async function refreshBatch(nextBatchId = batchId) {
     const nextBatch = await fetchJson(`/api/purchase-import-batches/${nextBatchId}?_ts=${Date.now()}`)
     setBatch(nextBatch)
+    await refreshInventoryHandling(nextBatch)
     return nextBatch
   }
 
@@ -733,6 +765,59 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     if (!nextBatchId) return null
     setBatchDiagnostics(null)
     return null
+  }
+
+  function directLocationOption(options = locationOptions) {
+    return (options || []).find((location) => (
+      String(location?.label || '').trim().toLowerCase() === 'direct / direct'
+      || (String(location?.parent_label || '').trim().toLowerCase() === 'direct'
+        && String(location?.sublocation_label || '').trim().toLowerCase() === 'direct')
+    )) || null
+  }
+
+  async function handleInventoryHandlingOverrideChange(entry, nextOverride) {
+    const householdId = String(household?.active_household_id ?? household?.id ?? batch?.household_id ?? '').trim()
+    if (!householdId) {
+      showUitpakkenFeedback('error', 'Het actieve huishouden kon niet worden vastgesteld.')
+      return
+    }
+
+    const lineId = String(entry?.line?.id || '')
+    setBusyLineId(lineId)
+    try {
+      const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, nextOverride)
+      setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))
+
+      const defaultHandling = entry.defaultInventoryHandling
+      const presentation = lineInventoryHandlingPresentation(defaultHandling, savedOverride)
+      let options = locationOptions
+      if (presentation.handling === DIRECT_CONSUMPTION && !directLocationOption(options)) {
+        options = await refreshLocationOptions()
+      }
+      const directLocation = directLocationOption(options)
+      const currentLocationId = String(entry.draft?.locationId || '')
+
+      if (presentation.handling === DIRECT_CONSUMPTION) {
+        if (!directLocation) throw new Error('De beschermde locatie Direct / Direct is niet beschikbaar.')
+        if (currentLocationId !== String(directLocation.id)) {
+          await persistLineDraft(entry.line, { locationId: String(directLocation.id) }, {
+            defaultLocationPolicy: 'line_only',
+            suppressSuccessFeedback: true,
+          })
+        }
+      } else if (directLocation && currentLocationId === String(directLocation.id)) {
+        await persistLineDraft(entry.line, { locationId: '' }, {
+          defaultLocationPolicy: 'line_only',
+          suppressSuccessFeedback: true,
+        })
+      }
+    } catch (handlingError) {
+      const message = normalizeErrorMessage(handlingError?.message || handlingError) || 'Verwerking kon niet worden opgeslagen.'
+      showUitpakkenFeedback('error', message, { key: `uitpakken-handling-${lineId}-${Date.now()}` })
+      await refreshInventoryHandling(batch, household).catch(() => null)
+    } finally {
+      setBusyLineId('')
+    }
   }
 
   async function refreshLocationOptions() {
@@ -1122,6 +1207,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       setArticleGroupOptions(sortOptionObjects(Array.isArray(articleGroupsData?.items) ? articleGroupsData.items.filter((group) => String(group?.status || 'active') === 'active') : [], (group) => group?.name || ''))
       setLocationOptions(buildActiveLocationOptions(spacesData, sublocationsData))
       setBatch(loadedBatch)
+      await refreshInventoryHandling(loadedBatch, householdData)
       setBatchDiagnostics(null)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
@@ -1374,6 +1460,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const processingStatus = line.processing_status || 'pending'
       const reviewDecision = line.review_decision || 'pending'
       const isSelected = selectedSet.has(line.id)
+      const articleId = String(draft.articleId || line.matched_household_article_id || '')
+      const defaultPresentation = inventoryHandlingByArticleId[articleId] || { handling: 'STOCK' }
+      const defaultInventoryHandling = defaultPresentation.handling || 'STOCK'
+      const inventoryHandlingOverride = inventoryHandlingOverridesByLineId[String(line.id)] || null
+      const inventoryHandling = lineInventoryHandlingPresentation(defaultInventoryHandling, inventoryHandlingOverride)
       const selectionState = deriveLineSelectionState({ line, draft, validLocationIds, processingStatus })
       const {
         effectiveArticleId,
@@ -1448,6 +1539,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         statusLabel,
         statusReason,
         mappingState,
+        defaultInventoryHandling,
+        inventoryHandlingOverride,
+        inventoryHandling,
         isReadyForProcessing: isProcessable,
         isSelectionIncomplete: isSelected && !isProcessable && processingStatus !== 'processed',
         searchText: [line.article_name_raw, line.brand_raw, standardProductLabel(line), standardProductDetail(line), line.resolved_household_article_name]
@@ -1456,7 +1550,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           .toLowerCase(),
       }
     })
-  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds])
+  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds, inventoryHandlingByArticleId, inventoryHandlingOverridesByLineId])
 
   const summaryCounts = useMemo(() => {
     const counts = {
@@ -1500,6 +1594,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       artikelgroep: (entry) => (
         articleGroupOptions.find((group) => String(group.id) === String(entry.draft.articleGroupId || ''))?.name || ''
       ),
+      verwerking: (entry) => entry.inventoryHandling?.label || '',
       locatie: (entry) => (locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''),
       status: (entry) => entry.statusLabel || '',
     })
@@ -1617,6 +1712,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 <col style={{ width: `${lineColumnWidths.select}px` }} />
                 <col style={{ width: `${lineColumnWidths.bonartikel}px` }} />
                 <col style={{ width: `${lineColumnWidths.aantal}px` }} />
+                <col style={{ width: `${lineColumnWidths.verwerking}px` }} />
                 <col style={{ width: `${lineColumnWidths.locatie}px` }} />
                 <col style={{ width: `${lineColumnWidths.gekoppeld}px` }} />
               </colgroup>
@@ -1626,7 +1722,8 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
                   </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', status: 'asc' }))}>Bonartikel</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Aantal</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', verwerking: 'asc', locatie: 'asc', gekoppeld: 'asc' }))}>Aantal</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="verwerking" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'verwerking'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', verwerking: 'asc', locatie: 'asc', gekoppeld: 'asc' }))}>Verwerking</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Locatie</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Mijn artikel</ResizableHeaderCell>
                 </tr>
@@ -1634,13 +1731,14 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <th />
                   <th><input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of artikelgroep" /></th>
                   <th />
+                  <th />
                   <th><select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Filter op locatie">{LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}</select></th>
                   <th><select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)} aria-label="Filter op Mijn artikel">{MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}</select></th>
                 </tr>
               </thead>
               <tbody>
                 {visibleLineUiStates.length === 0 ? (
-                  <tr><td colSpan={5}>Geen open bonregels in deze selectie.</td></tr>
+                  <tr><td colSpan={6}>Geen open bonregels in deze selectie.</td></tr>
                 ) : visibleLineUiStates.map((entry) => {
                   const { line } = entry
                   const selected = entry.isSelected
@@ -1651,10 +1749,19 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+                        <InventoryHandlingOverrideSelect
+                          articleDefault={entry.defaultInventoryHandling}
+                          value={entry.inventoryHandlingOverride || ''}
+                          disabled={busyLineId === line.id || isProcessingBatch || isViewer || !entry.draft.articleId}
+                          onChange={(nextOverride) => handleInventoryHandlingOverrideChange(entry, nextOverride)}
+                          data-testid={`receipt-line-handling-select-${line.id}`}
+                        />
+                      </td>
+                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
                         <select
                           className="rz-input rz-inline-input"
                           value={entry.draft.locationId || ''}
-                          disabled={busyLineId === line.id || isProcessingBatch || isViewer}
+                          disabled={busyLineId === line.id || isProcessingBatch || isViewer || entry.inventoryHandling?.handling === DIRECT_CONSUMPTION}
                           aria-label={`Locatie voor ${line.article_name_raw}`}
                           data-testid={`receipt-line-location-select-${line.id}`}
                           onChange={(event) => {
