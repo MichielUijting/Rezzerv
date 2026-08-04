@@ -9,6 +9,7 @@ from app.db import engine
 from app.api.authorization_membership_routes import _actor_context, _require
 from app.services.day_article_service import (
     DIRECT_CONSUMPTION,
+    ensure_direct_location,
     get_default_inventory_handling,
     get_default_inventory_handling_batch,
     record_direct_consumption,
@@ -35,7 +36,7 @@ def get_article_inventory_handling(
 
 
 @router.post("/api/households/{household_id}/articles/inventory-handling/batch")
-def get_article_inventory_handling_batch(
+def get_article_inventory_handling_batch_route(
     household_id: str,
     payload: dict[str, Any] = Body(default_factory=dict),
     authorization: str | None = Header(default=None),
@@ -51,9 +52,11 @@ def get_article_inventory_handling_batch(
         context = _actor_context(conn, household_id)
         _require(conn, context, "articles.view")
         items = get_default_inventory_handling_batch(conn, household_id, article_ids)
+        direct_location = ensure_direct_location(conn, household_id)
         return {
             "household_id": str(household_id),
             "items": items,
+            "direct_location": direct_location,
         }
 
 
