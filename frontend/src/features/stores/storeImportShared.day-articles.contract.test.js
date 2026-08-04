@@ -29,6 +29,8 @@ describe('Release B2 native Uitpakken-locatie', () => {
     expect(sharedSource).toContain("default_inventory_handling_label: 'Direct consumeren'")
     expect(sharedSource).toContain('target_location_id: protectedDirectLocationId')
     expect(sharedSource).toContain('suggested_location_id: protectedDirectLocationId')
+    expect(sharedSource).toContain('/purchase-import-lines/inventory-handling-overrides/batch')
+    expect(sharedSource).toContain('const effectiveHandling = lineOverride || articleDefault')
   })
 
   it('laat de bestaande Uitpakken-flow bruikbaar bij een aanvullende lookupfout', () => {

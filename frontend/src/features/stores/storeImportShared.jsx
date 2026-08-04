@@ -101,15 +101,27 @@ async function addDayArticlePresentation(batch) {
       .map((line) => String(line?.matched_household_article_id || '').trim())
       .filter(Boolean),
   ))
+  const lineIds = Array.from(new Set(
+    lines
+      .map((line) => String(line?.id || '').trim())
+      .filter(Boolean),
+  ))
   if (!householdId || articleIds.length === 0) return batch
 
   try {
-    const [handlingData, spacesData, sublocationsData] = await Promise.all([
+    const [handlingData, overrideData, spacesData, sublocationsData] = await Promise.all([
       requestJson(
         `/api/households/${encodeURIComponent(householdId)}/articles/inventory-handling/batch`,
         {
           method: 'POST',
           body: JSON.stringify({ household_article_ids: articleIds }),
+        },
+      ),
+      requestJson(
+        `/api/households/${encodeURIComponent(householdId)}/purchase-import-lines/inventory-handling-overrides/batch`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ purchase_import_line_ids: lineIds }),
         },
       ),
       requestJson('/api/spaces?_day_articles=1'),
@@ -122,13 +134,23 @@ async function addDayArticlePresentation(batch) {
         String(item?.default_inventory_handling || '').trim().toUpperCase(),
       ]),
     )
+    const overrideByLineId = Object.fromEntries(
+      (Array.isArray(overrideData?.items) ? overrideData.items : []).map((item) => [
+        String(item?.purchase_import_line_id || ''),
+        String(item?.inventory_handling_override || '').trim().toUpperCase(),
+      ]),
+    )
     const protectedDirectLocationId = directLocationId(spacesData, sublocationsData)
 
     return {
       ...batch,
       lines: lines.map((line) => {
         const articleId = String(line?.matched_household_article_id || '').trim()
-        const isDirect = handlingByArticleId[articleId] === DIRECT_CONSUMPTION
+        const lineId = String(line?.id || '').trim()
+        const articleDefault = handlingByArticleId[articleId] || 'STOCK'
+        const lineOverride = overrideByLineId[lineId] || ''
+        const effectiveHandling = lineOverride || articleDefault
+        const isDirect = effectiveHandling === DIRECT_CONSUMPTION
         if (!isDirect || !protectedDirectLocationId) return line
         return {
           ...line,
