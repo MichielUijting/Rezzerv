@@ -46,4 +46,10 @@ describe('Release B1 native Tabellen', () => {
     expect(source).toContain('Selecteer alle zichtbare huishoudartikelen')
     expect(source).not.toContain('>Selectie</ResizableHeaderCell>')
   })
+
+  it('slaat standaardverwerking direct op zonder bevestigingsmelding', () => {
+    expect(source).not.toContain('huishoudartikel${groupArticles.length === 1')
+    expect(source).toContain('for (const article of groupArticles) await saveHandling(article.id, checked)')
+    expect(source).toContain("setError(saveError?.message || 'Standaardverwerking van de Artikelgroep kon niet worden opgeslagen.')")
+  })
 })
