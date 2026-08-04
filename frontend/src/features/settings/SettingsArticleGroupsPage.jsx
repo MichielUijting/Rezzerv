@@ -198,6 +198,39 @@ export default function SettingsArticleGroupsPage() {
       })
   }, [articles, groups, selectedGroupId, articleFilter, articleGroupFilter])
 
+  const selectableVisibleGroupIds = useMemo(
+    () => filteredGroups
+      .filter((group) => Number(articleCounts[String(group.id)] || 0) === 0)
+      .map((group) => String(group.id)),
+    [filteredGroups, articleCounts],
+  )
+  const visibleArticleIds = useMemo(
+    () => visibleArticles.map((article) => String(article.id)),
+    [visibleArticles],
+  )
+  const allVisibleGroupsSelected = selectableVisibleGroupIds.length > 0
+    && selectableVisibleGroupIds.every((id) => selectedGroupIds.includes(id))
+  const allVisibleArticlesSelected = visibleArticleIds.length > 0
+    && visibleArticleIds.every((id) => selectedArticleIds.includes(id))
+
+  function toggleAllVisibleGroups() {
+    const visibleSet = new Set(selectableVisibleGroupIds)
+    if (allVisibleGroupsSelected) {
+      setSelectedGroupIds((current) => current.filter((id) => !visibleSet.has(id)))
+      return
+    }
+    setSelectedGroupIds((current) => Array.from(new Set([...current, ...selectableVisibleGroupIds])))
+  }
+
+  function toggleAllVisibleArticles() {
+    const visibleSet = new Set(visibleArticleIds)
+    if (allVisibleArticlesSelected) {
+      setSelectedArticleIds((current) => current.filter((id) => !visibleSet.has(id)))
+      return
+    }
+    setSelectedArticleIds((current) => Array.from(new Set([...current, ...visibleArticleIds])))
+  }
+
   async function saveHandling(articleId, checked) {
     const next = checked ? DIRECT_CONSUMPTION : STOCK
     const previous = defaults[String(articleId)] || STOCK
@@ -352,7 +385,9 @@ export default function SettingsArticleGroupsPage() {
               </colgroup>
               <thead>
                 <tr className="rz-table-header">
-                  <ResizableHeaderCell columnKey="select" widths={groupColumnWidths} onStartResize={startGroupResize}>Selectie</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="select" widths={groupColumnWidths} onStartResize={startGroupResize}>
+                    <input type="checkbox" style={greenCheckboxStyle} checked={allVisibleGroupsSelected} disabled={selectableVisibleGroupIds.length === 0} onChange={toggleAllVisibleGroups} aria-label="Selecteer alle zichtbare selecteerbare Artikelgroepen" />
+                  </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="name" widths={groupColumnWidths} onStartResize={startGroupResize}>Artikelgroep</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="articles" widths={groupColumnWidths} onStartResize={startGroupResize} className="rz-num">Aantal artikelen</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="handling" widths={groupColumnWidths} onStartResize={startGroupResize}>Standaardverwerking</ResizableHeaderCell>
@@ -398,7 +433,9 @@ export default function SettingsArticleGroupsPage() {
               </colgroup>
               <thead>
                 <tr className="rz-table-header">
-                  <ResizableHeaderCell columnKey="select" widths={articleColumnWidths} onStartResize={startArticleResize}>Selectie</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="select" widths={articleColumnWidths} onStartResize={startArticleResize}>
+                    <input type="checkbox" style={greenCheckboxStyle} checked={allVisibleArticlesSelected} disabled={visibleArticleIds.length === 0} onChange={toggleAllVisibleArticles} aria-label="Selecteer alle zichtbare huishoudartikelen" />
+                  </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="article" widths={articleColumnWidths} onStartResize={startArticleResize}>Artikel</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="group" widths={articleColumnWidths} onStartResize={startArticleResize}>Artikelgroep</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="handling" widths={articleColumnWidths} onStartResize={startArticleResize}>Standaardverwerking</ResizableHeaderCell>
