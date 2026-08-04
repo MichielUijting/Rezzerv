@@ -1,7 +1,7 @@
 import React from 'react'
 import { Navigate, RouterProvider, createBrowserRouter, useNavigate, useParams } from 'react-router-dom'
 import AdminPage from '../../features/admin/AdminPage'
-import ArticlePage from '../../features/articles/ArticlePage'
+import ArticlePage from '../../features/articles/ArticlePageWithInventoryHandling.jsx'
 import LoginPage from '../../features/auth/LoginPage'
 import HomePage from '../../features/home/HomePage'
 import ReceiptsPage from '../../features/receipts/ReceiptsPage'
