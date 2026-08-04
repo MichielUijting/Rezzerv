@@ -254,7 +254,6 @@ export default function SettingsArticleGroupsPage() {
     setError('')
     try {
       for (const article of groupArticles) await saveHandling(article.id, checked)
-      setMessage(`${groupArticles.length} huishoudartikel${groupArticles.length === 1 ? '' : 'en'} bijgewerkt.`)
     } catch (saveError) {
       setError(saveError?.message || 'Standaardverwerking van de Artikelgroep kon niet worden opgeslagen.')
       await loadData()
