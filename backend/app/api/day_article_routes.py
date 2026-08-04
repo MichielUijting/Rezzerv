@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Body, Header, HTTPException
+from sqlalchemy import text
 
 from app.db import engine
 from app.api.authorization_membership_routes import _actor_context, _require
@@ -53,6 +54,8 @@ def get_article_inventory_handling_batch_route(
         _require(conn, context, "articles.view")
         items = get_default_inventory_handling_batch(conn, household_id, article_ids)
         direct_location = ensure_direct_location(conn, household_id)
+        conn.execute(text("UPDATE spaces SET active = 1 WHERE id = :id"), {"id": direct_location["space_id"]})
+        conn.execute(text("UPDATE sublocations SET active = 1 WHERE id = :id"), {"id": direct_location["sublocation_id"]})
         return {
             "household_id": str(household_id),
             "items": items,
