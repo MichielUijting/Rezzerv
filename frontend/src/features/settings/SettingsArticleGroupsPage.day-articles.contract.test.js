@@ -21,7 +21,7 @@ describe('Release B1 native Tabellen', () => {
   it('rendert Standaardverwerking rechtstreeks in beide Table-componenten', () => {
     expect((source.match(/<Table/g) || []).length).toBe(2)
     expect((source.match(/Standaardverwerking/g) || []).length).toBeGreaterThanOrEqual(2)
-    expect(source).toContain("columnKey=\"handling\"")
+    expect(source).toContain('columnKey="handling"')
     expect(source).toContain('colSpan={4}')
   })
 
@@ -37,5 +37,13 @@ describe('Release B1 native Tabellen', () => {
     expect(source).toContain('setArticleHandling')
     expect(source).toContain('groupArticles')
     expect(source).not.toContain('setGroupHandling(article')
+  })
+
+  it('toont in beide eerste kolomkoppen een selecteer-alles-checkbox zonder teksttitel', () => {
+    expect(source).toContain('toggleAllVisibleGroups')
+    expect(source).toContain('toggleAllVisibleArticles')
+    expect(source).toContain('Selecteer alle zichtbare selecteerbare Artikelgroepen')
+    expect(source).toContain('Selecteer alle zichtbare huishoudartikelen')
+    expect(source).not.toContain('>Selectie</ResizableHeaderCell>')
   })
 })
