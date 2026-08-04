@@ -51,13 +51,13 @@ Release B maakt het in Release A gebouwde backendfundament voor dagartikelen fun
 - Alleen beheerder/eigenaar of `articles.manage` kan de blijvende standaard wijzigen.
 - Portals, `MutationObserver` en achteraf geïnjecteerde tabelkolommen zijn expliciet uitgesloten.
 
-### PO-acceptatie
+### PO-acceptatie B1
 
 - Functionele PO-test uitgevoerd op 4 augustus 2026.
 - Resultaat: **GO**.
 - Bevestigd door PO:
   - beide tabellen en checkboxes werken correct;
-  - groepswerking werkt in beide richtingen aan/uit naar de gekoppelde artikelen;
+  - groepswerking werkt aan/uit naar de gekoppelde artikelen;
   - individuele artikelmutaties blijven geïsoleerd;
   - wijzigingen worden direct geaccepteerd zonder bevestigingsdialoog;
   - tabelopbouw en kolombreedtes zijn bruikbaar zonder horizontale scroll bij normale schermbreedte.
@@ -72,30 +72,97 @@ Release B maakt het in Release A gebouwde backendfundament voor dagartikelen fun
 
 ## Deelrelease B2 — Artikelstandaard tonen in Uitpakken
 
+### Gerealiseerd
+
+- Uitpakken leest per gekoppeld huishoudartikel de actuele artikelstandaard uit B1.
+- Bestaande en nieuw aangemaakte huishoudartikelen gebruiken consequent de echte `household_article_id`.
+- Een opgeslagen artikelkoppeling blijft na verversen zichtbaar in **Mijn artikel**.
+- `DIRECT_CONSUMPTION` zet de bestaande bonregel automatisch op de beschermde bestemming **Direct / Direct**.
+- Een wijziging in Beheer Artikelgroepen wordt na opnieuw laden van Uitpakken opnieuw toegepast.
+- Normale `STOCK`-artikelen behouden de bestaande locatiekeuze.
+- De bestaande voorraadmutatie is in B2 nog niet gewijzigd.
+
+### PO-acceptatie B2
+
+- Functionele PO-test uitgevoerd op 4 augustus 2026.
+- Resultaat: **GO**.
+- Bevestigd door PO:
+  - huishoudartikel **Appel** stond in Beheer Artikelgroepen op `DIRECT_CONSUMPTION`;
+  - een bonregel kon aan het bestaande huishoudartikel Appel worden gekoppeld;
+  - **Mijn artikel** bleef na verversen op Appel staan;
+  - **Locatie** werd automatisch **Direct / Direct**;
+  - **Direct / Direct** bleef na verversen behouden;
+  - de overige Uitpakken-regels bleven ongewijzigd functioneren.
+
+### Technische eindstatus B2
+
+- Eindcommit: `a29e0ebf`.
+- Frontend cookie session authority: groen.
+- Authorization matrix acceptance: groen.
+- Household viewer role regression: groen.
+- Uitpakken dagartikelen Release A: groen.
+- B2 is functioneel en technisch afgerond.
+
+### Vastgelegd UX-verbeterpunt
+
+Tijdens de PO-test is vastgesteld dat de huidige locatiekeuze ook een hoofdlocatie zonder sublocatie kan laten kiezen, waarna pas achteraf een validatiemelding verschijnt. Dit blokkeert B2 niet.
+
+Vervolgactie:
+
+- bestaande locatie-/sublocatiekiezer elders in Rezzerv opsporen;
+- deze generiek hergebruiken in Uitpakken;
+- alleen geldige locatie-/sublocatiecombinaties aanbieden, of eerst een locatie en daarna alleen de bijbehorende sublocaties;
+- dubbele locatiekeuzecode verwijderen.
+
+Dit verbeterpunt wordt afzonderlijk opgepakt en niet stilzwijgend in B3 vermengd.
+
+## Deelrelease B3 — Tijdelijke afwijking per bonregel
+
 ### Doel
 
-Uitpakken leest per gekoppeld huishoudartikel de actuele artikelstandaard uit B1 en toont deze bij de bonregel.
+Een huishoudlid kan voor één uitpakregel afwijken van de blijvende artikelstandaard, zonder die artikelstandaard te wijzigen.
 
-### Scope B2
+### Functioneel contract
 
-- `STOCK` wordt getoond als **Opslaan in voorraad**.
-- `DIRECT_CONSUMPTION` wordt getoond als **Direct consumeren**.
-- Voor `DIRECT_CONSUMPTION` worden **Locatie: Direct** en **Sublocatie: Direct** als voorgestelde bestemming getoond.
-- De gebruiker kan de verwerking in B2 nog niet per regel wijzigen.
-- De daadwerkelijke ontvangst- en voorraadmutatie blijft in B2 ongewijzigd.
+- Zonder afwijking gebruikt de regel de artikelstandaard.
+- Een dagartikel kan voor één regel tijdelijk worden gewijzigd naar **Opslaan in voorraad**.
+- Een normaal artikel kan voor één regel tijdelijk worden gewijzigd naar **Direct consumeren**.
+- Een tijdelijke afwijking geldt alleen voor de betreffende bonregel.
+- Bij een volgende aankoop wordt opnieuw begonnen met de blijvende artikelstandaard.
+- `DIRECT_CONSUMPTION` gebruikt automatisch **Direct / Direct**.
+- `STOCK` vereist een geldige normale locatie-/sublocatiekeuze.
+- De gebruiker kan de afwijking verwijderen en terugkeren naar de artikelstandaard.
 
-### Acceptatie B2
+### Eerste technische slice
 
-1. Een huishoudartikel met standaard `DIRECT_CONSUMPTION` wordt in Uitpakken als **Direct consumeren** getoond.
-2. Locatie en Sublocatie tonen voor die regel **Direct / Direct**.
-3. Een huishoudartikel met standaard `STOCK` blijft **Opslaan in voorraad** tonen.
-4. Een wijziging in B1 wordt na opnieuw openen of verversen in Uitpakken zichtbaar.
-5. Bestaande Uitpakken-functionaliteit blijft verder ongewijzigd.
-6. Een gebruiker uit een ander huishouden kan de artikelstandaard niet uitlezen.
+De centrale frontendlogica voor effectieve verwerking is toegevoegd:
 
-## Vervolg na B2
+```text
+effectieve verwerking = regelafwijking, indien aanwezig
+                        anders artikelstandaard
+```
 
-- B3: tijdelijke afwijking per bonregel zonder wijziging van de artikelstandaard.
+Dezelfde functie wordt later hergebruikt door:
+
+- de Uitpakken-UI;
+- regelvalidatie;
+- de B4-verwerkingsopdracht.
+
+### Acceptatie B3
+
+1. Een regel met standaard `DIRECT_CONSUMPTION` start op **Direct consumeren** en **Direct / Direct**.
+2. De gebruiker kiest voor die regel **Opslaan in voorraad**.
+3. Alleen die regel vraagt daarna om een normale geldige locatie-/sublocatiecombinatie.
+4. De blijvende artikelstandaard blijft `DIRECT_CONSUMPTION`.
+5. Na verwijderen van de afwijking keert de regel terug naar **Direct consumeren** en **Direct / Direct**.
+6. Een `STOCK`-artikel kan tijdelijk op **Direct consumeren** worden gezet.
+7. Na opnieuw openen blijft een opgeslagen regelafwijking voor dezelfde bonregel behouden.
+8. Een nieuwe aankoop van hetzelfde artikel begint weer met de artikelstandaard.
+9. Een gebruiker zonder `unpacking.process` kan geen regelafwijking wijzigen.
+10. Een ander huishouden kan de afwijking niet lezen of wijzigen.
+
+## Vervolg na B3
+
 - B4: atomaire verwerking van ontvangst en directe consumptie met netto voorraad nul.
 
 ## Functionele acceptatie volledige Release B
@@ -119,4 +186,4 @@ Uitpakken leest per gekoppeld huishoudartikel de actuele artikelstandaard uit B1
 
 ## Releasebesluit
 
-B1 heeft een expliciete functionele PO-GO. De volledige Release B blijft in ontwikkeling totdat ook B2, B3 en B4 technisch groen en functioneel geaccepteerd zijn.
+B1 en B2 hebben een expliciete functionele PO-GO. De volledige Release B blijft in ontwikkeling totdat ook B3 en B4 technisch groen en functioneel geaccepteerd zijn.
