@@ -1,3 +1,8 @@
+import {
+  normalizeHouseholdArticleOptionsPayload,
+  shouldNormalizeHouseholdArticleOptions,
+} from '../features/stores/householdArticleOptionAdapter.js'
+
 const LOGIN_MESSAGE_KEY = 'rezzerv_login_message'
 const PLATFORM_SUPERUSER_EMAIL = 'supergebruiker@rezzerv.local'
 const FRONTTEAM_EXTERNAL_DATABASES_PERMISSION = 'frontteam.external_databases.access'
@@ -31,14 +36,11 @@ const NON_VIEWER_HOUSEHOLD_ROLES = new Set([
 
 export function normalizeHouseholdAccessContext(context) {
   if (!context || typeof context !== 'object') return context
-
   const displayRole = normalizeRoleValue(context.display_role)
   const technicalRole = normalizeRoleValue(context.role || context.membership_role)
   const hasNonViewerRole = NON_VIEWER_HOUSEHOLD_ROLES.has(displayRole)
     || NON_VIEWER_HOUSEHOLD_ROLES.has(technicalRole)
-  const canProcessReceipts = Boolean(context.permissions?.['receipts.process'])
-    || hasNonViewerRole
-
+  const canProcessReceipts = Boolean(context.permissions?.['receipts.process']) || hasNonViewerRole
   return {
     ...context,
     is_viewer: hasNonViewerRole ? false : Boolean(context.is_viewer || displayRole === 'viewer' || technicalRole === 'viewer'),
@@ -83,17 +85,9 @@ function removeLegacyAuthStorage() {
   } catch {}
 }
 
-export function getStoredToken() {
-  return ''
-}
-
-export function getAuthHeaders() {
-  return {}
-}
-
-export function readStoredAuthContext() {
-  return currentSessionContext
-}
+export function getStoredToken() { return '' }
+export function getAuthHeaders() { return {} }
+export function readStoredAuthContext() { return currentSessionContext }
 
 export function storeAuthContext(context) {
   currentSessionContext = normalizeSessionContext(context)
@@ -102,19 +96,14 @@ export function storeAuthContext(context) {
 }
 
 export function markAuthCheckedForToken() {}
-
-export function isTokenAlreadyValidated() {
-  return Boolean(currentSessionContext)
-}
+export function isTokenAlreadyValidated() { return Boolean(currentSessionContext) }
 
 export function getLoginMessage() {
   try {
     const value = window.sessionStorage.getItem(LOGIN_MESSAGE_KEY) || ''
     if (value) window.sessionStorage.removeItem(LOGIN_MESSAGE_KEY)
     return value
-  } catch {
-    return ''
-  }
+  } catch { return '' }
 }
 
 export function setLoginMessage(message) {
@@ -150,7 +139,6 @@ export async function fetchAuthContext({ force = false } = {}) {
   removeLegacyAuthStorage()
   if (!force && currentSessionContext) return currentSessionContext
   if (!force && sessionRequest) return sessionRequest
-
   sessionRequest = fetch('/api/session', {
     method: 'GET',
     credentials: 'include',
@@ -167,10 +155,7 @@ export async function fetchAuthContext({ force = false } = {}) {
       }
       return storeAuthContext(data)
     })
-    .finally(() => {
-      sessionRequest = null
-    })
-
+    .finally(() => { sessionRequest = null })
   return sessionRequest
 }
 
@@ -185,6 +170,16 @@ export async function logoutServerSession() {
   } finally {
     clearAuthSession()
   }
+}
+
+function jsonResponseFrom(response, payload) {
+  const headers = new Headers(response.headers)
+  headers.set('Content-Type', 'application/json')
+  return new Response(JSON.stringify(payload), {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
 }
 
 export async function fetchJsonWithAuth(url, options = {}) {
@@ -213,15 +208,15 @@ export async function fetchJsonWithAuth(url, options = {}) {
     try {
       const payload = await response.clone().json()
       const normalizedPayload = normalizeHouseholdAccessContext(payload)
-      if (JSON.stringify(payload) !== JSON.stringify(normalizedPayload)) {
-        const headers = new Headers(response.headers)
-        headers.set('Content-Type', 'application/json')
-        return new Response(JSON.stringify(normalizedPayload), {
-          status: response.status,
-          statusText: response.statusText,
-          headers,
-        })
-      }
+      if (JSON.stringify(payload) !== JSON.stringify(normalizedPayload)) return jsonResponseFrom(response, normalizedPayload)
+    } catch {}
+  }
+
+  if (response.ok && shouldNormalizeHouseholdArticleOptions(url, restOptions.method || 'GET')) {
+    try {
+      const payload = await response.clone().json()
+      const normalizedPayload = normalizeHouseholdArticleOptionsPayload(payload)
+      return jsonResponseFrom(response, normalizedPayload)
     } catch {}
   }
 
@@ -244,11 +239,7 @@ export function isPlatformSuperuserFromContext(context = null) {
 
 export function isFrontteamMemberFromContext(context = null) {
   const source = context || readStoredAuthContext()
-  return Boolean(
-    isPlatformSuperuserFromContext(source)
-    || source?.is_frontteam
-    || source?.permissions?.[FRONTTEAM_EXTERNAL_DATABASES_PERMISSION],
-  )
+  return Boolean(isPlatformSuperuserFromContext(source) || source?.is_frontteam || source?.permissions?.[FRONTTEAM_EXTERNAL_DATABASES_PERMISSION])
 }
 
 export function isHouseholdViewerFromContext(context = null) {
