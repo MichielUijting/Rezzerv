@@ -24,9 +24,9 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 import useBarcodeScanner from '../../lib/useBarcodeScanner.js'
 import BarcodeIdentityField from '../barcodes/BarcodeIdentityField.jsx'
 import BarcodeScannerModal from '../barcodes/BarcodeScannerModal.jsx'
-import InventoryHandlingOverrideSelect from '../receipts/InventoryHandlingOverrideSelect.jsx'
 import {
   DIRECT_CONSUMPTION,
+  STOCK,
   fetchInventoryHandlingByArticleIds,
   fetchInventoryHandlingOverridesByLineIds,
   lineInventoryHandlingPresentation,
@@ -274,7 +274,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     { key: 'select', width: 44 },
     { key: 'bonartikel', width: 360 },
     { key: 'aantal', width: 110 },
-    { key: 'verwerking', width: 250 },
     { key: 'locatie', width: 260 },
     { key: 'gekoppeld', width: 320 },
   ]), [])
@@ -775,7 +774,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     )) || null
   }
 
-  async function handleInventoryHandlingOverrideChange(entry, nextOverride) {
+  async function handleLocationChoice(entry, nextValue) {
     const householdId = String(household?.active_household_id ?? household?.id ?? batch?.household_id ?? '').trim()
     if (!householdId) {
       showUitpakkenFeedback('error', 'Het actieve huishouden kon niet worden vastgesteld.')
@@ -783,37 +782,33 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
 
     const lineId = String(entry?.line?.id || '')
+    const currentLocationId = String(entry?.draft?.locationId || '')
     setBusyLineId(lineId)
     try {
-      const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, nextOverride)
-      setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))
-
-      const defaultHandling = entry.defaultInventoryHandling
-      const presentation = lineInventoryHandlingPresentation(defaultHandling, savedOverride)
-      let options = locationOptions
-      if (presentation.handling === DIRECT_CONSUMPTION && !directLocationOption(options)) {
-        options = await refreshLocationOptions()
-      }
-      const directLocation = directLocationOption(options)
-      const currentLocationId = String(entry.draft?.locationId || '')
-
-      if (presentation.handling === DIRECT_CONSUMPTION) {
-        if (!directLocation) throw new Error('De beschermde locatie Direct / Direct is niet beschikbaar.')
-        if (currentLocationId !== String(directLocation.id)) {
-          await persistLineDraft(entry.line, { locationId: String(directLocation.id) }, {
-            defaultLocationPolicy: 'line_only',
-            suppressSuccessFeedback: true,
-          })
+      if (nextValue === '__standard__') {
+        const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, null)
+        setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))
+        const presentation = lineInventoryHandlingPresentation(entry.defaultInventoryHandling, null)
+        const directLocation = directLocationOption(locationOptions)
+        if (presentation.handling === DIRECT_CONSUMPTION) {
+          if (!directLocation) throw new Error('De beschermde locatie Direct / Direct is niet beschikbaar.')
+          if (currentLocationId !== String(directLocation.id)) {
+            await persistLineDraft(entry.line, { locationId: String(directLocation.id) }, { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true })
+          }
+        } else if (directLocation && currentLocationId === String(directLocation.id)) {
+          await persistLineDraft(entry.line, { locationId: '' }, { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true })
         }
-      } else if (directLocation && currentLocationId === String(directLocation.id)) {
-        await persistLineDraft(entry.line, { locationId: '' }, {
-          defaultLocationPolicy: 'line_only',
-          suppressSuccessFeedback: true,
-        })
+        return
       }
+
+      const selectedLocation = locationOptions.find((location) => String(location.id) === String(nextValue)) || null
+      const isDirect = Boolean(selectedLocation && directLocationOption([selectedLocation]))
+      const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, isDirect ? DIRECT_CONSUMPTION : STOCK)
+      setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))
+      await persistLineDraft(entry.line, { locationId: String(nextValue || '') }, { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true })
     } catch (handlingError) {
-      const message = normalizeErrorMessage(handlingError?.message || handlingError) || 'Verwerking kon niet worden opgeslagen.'
-      showUitpakkenFeedback('error', message, { key: `uitpakken-handling-${lineId}-${Date.now()}` })
+      const message = normalizeErrorMessage(handlingError?.message || handlingError) || 'Locatie kon niet worden opgeslagen.'
+      showUitpakkenFeedback('error', message, { key: `uitpakken-location-handling-${lineId}-${Date.now()}` })
       await refreshInventoryHandling(batch, household).catch(() => null)
     } finally {
       setBusyLineId('')
@@ -1594,7 +1589,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       artikelgroep: (entry) => (
         articleGroupOptions.find((group) => String(group.id) === String(entry.draft.articleGroupId || ''))?.name || ''
       ),
-      verwerking: (entry) => entry.inventoryHandling?.label || '',
       locatie: (entry) => (locationOptions.find((location) => String(location.id) === String(entry.draft.locationId || ''))?.label || ''),
       status: (entry) => entry.statusLabel || '',
     })
@@ -1712,7 +1706,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                 <col style={{ width: `${lineColumnWidths.select}px` }} />
                 <col style={{ width: `${lineColumnWidths.bonartikel}px` }} />
                 <col style={{ width: `${lineColumnWidths.aantal}px` }} />
-                <col style={{ width: `${lineColumnWidths.verwerking}px` }} />
                 <col style={{ width: `${lineColumnWidths.locatie}px` }} />
                 <col style={{ width: `${lineColumnWidths.gekoppeld}px` }} />
               </colgroup>
@@ -1723,7 +1716,6 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', status: 'asc' }))}>Bonartikel</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', verwerking: 'asc', locatie: 'asc', gekoppeld: 'asc' }))}>Aantal</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="verwerking" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'verwerking'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', verwerking: 'asc', locatie: 'asc', gekoppeld: 'asc' }))}>Verwerking</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Locatie</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Mijn artikel</ResizableHeaderCell>
                 </tr>
@@ -1731,14 +1723,13 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                   <th />
                   <th><input className="rz-input rz-inline-input" type="text" placeholder="Filter" value={searchValue} onChange={(event) => setSearchValue(event.target.value)} aria-label="Filter op bonartikel of artikelgroep" /></th>
                   <th />
-                  <th />
                   <th><select className="rz-input rz-inline-input" value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} aria-label="Filter op locatie">{LOCATION_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}</select></th>
                   <th><select className="rz-input rz-inline-input" value={mappingFilter} onChange={(event) => setMappingFilter(event.target.value)} aria-label="Filter op Mijn artikel">{MAPPING_FILTERS.map((filter) => <option key={filter.key} value={filter.key}>{filter.label}</option>)}</select></th>
                 </tr>
               </thead>
               <tbody>
                 {visibleLineUiStates.length === 0 ? (
-                  <tr><td colSpan={6}>Geen open bonregels in deze selectie.</td></tr>
+                  <tr><td colSpan={5}>Geen open bonregels in deze selectie.</td></tr>
                 ) : visibleLineUiStates.map((entry) => {
                   const { line } = entry
                   const selected = entry.isSelected
@@ -1749,32 +1740,16 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                       <td className="rz-store-batch-col-item"><div className="rz-store-primary" style={{ fontWeight: 400 }}>{formatReceiptLineLabel(line.article_name_raw)}</div><span data-testid={`receipt-line-status-${line.id}`} style={{ display: 'none' }}>{entry.statusKey}</span></td>
                       <td className="rz-num rz-store-batch-col-quantity"><div className="rz-store-amount">{formatQuantity(line.quantity_raw, line.unit_raw)}</div></td>
                       <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-                        <InventoryHandlingOverrideSelect
-                          articleDefault={entry.defaultInventoryHandling}
-                          value={entry.inventoryHandlingOverride || ''}
-                          disabled={busyLineId === line.id || isProcessingBatch || isViewer || !entry.draft.articleId}
-                          onChange={(nextOverride) => handleInventoryHandlingOverrideChange(entry, nextOverride)}
-                          data-testid={`receipt-line-handling-select-${line.id}`}
-                        />
-                      </td>
-                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
                         <select
                           className="rz-input rz-inline-input"
                           value={entry.draft.locationId || ''}
-                          disabled={busyLineId === line.id || isProcessingBatch || isViewer || entry.inventoryHandling?.handling === DIRECT_CONSUMPTION}
+                          disabled={busyLineId === line.id || isProcessingBatch || isViewer}
                           aria-label={`Locatie voor ${line.article_name_raw}`}
                           data-testid={`receipt-line-location-select-${line.id}`}
-                          onChange={(event) => {
-                            const nextLocationId = event.target.value
-                            const hasArticle = Boolean(String(entry.draft.articleId || line.matched_household_article_id || '').trim())
-                            if (hasArticle && nextLocationId) {
-                              setPendingDefaultLocationChoice({ lineId: line.id, locationId: nextLocationId })
-                              return
-                            }
-                            persistLineDraft(line, { locationId: nextLocationId }, { defaultLocationPolicy: 'line_only' })
-                          }}
+                          onChange={(event) => handleLocationChoice(entry, event.target.value)}
                         >
                           <option value="">Kies locatie</option>
+                          <option value="__standard__">Standaard gebruiken</option>
                           {locationOptions.map((location) => <option key={location.id} value={location.id}>{location.label}</option>)}
                         </select>
                       </td>

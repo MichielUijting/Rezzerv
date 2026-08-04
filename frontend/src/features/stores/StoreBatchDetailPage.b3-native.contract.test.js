@@ -1,42 +1,19 @@
-import { readFileSync } from 'node:fs'
+import fs from 'node:fs'
+import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const source = readFileSync(new URL('./StoreBatchDetailPage.jsx', import.meta.url), 'utf8')
+const source = fs.readFileSync(path.resolve('src/features/stores/StoreBatchDetailPage.jsx'), 'utf8')
 
-describe('B3 native Uitpakken integration contract', () => {
-  it('renders Verwerking as a native column in the existing Rezzerv table', () => {
-    expect(source).toContain("{ key: 'verwerking', width: 250 }")
-    expect(source).toContain('columnKey="verwerking"')
-    expect(source).toContain('>Verwerking</ResizableHeaderCell>')
-    expect(source).toContain('lineColumnWidths.verwerking')
-    expect(source).toContain('colSpan={6}')
+describe('B3 location-only native contract', () => {
+  it('uses Locatie as the only visible B3 control', () => {
+    expect(source).not.toContain('columnKey=\"verwerking\"')
+    expect(source).not.toContain('<InventoryHandlingOverrideSelect')
+    expect(source).toContain('Standaard gebruiken')
+    expect(source).toContain('handleLocationChoice(entry, event.target.value)')
   })
-
-  it('uses the shared B3 selector and persists changes immediately', () => {
-    expect(source).toContain("import InventoryHandlingOverrideSelect from '../receipts/InventoryHandlingOverrideSelect.jsx'")
-    expect(source).toContain('<InventoryHandlingOverrideSelect')
-    expect(source).toContain('handleInventoryHandlingOverrideChange(entry, nextOverride)')
-    expect(source).toContain('saveInventoryHandlingOverride(householdId, lineId, nextOverride)')
-  })
-
-  it('loads defaults and saved line overrides for the active household', () => {
-    expect(source).toContain('fetchInventoryHandlingByArticleIds(householdId, articleIds)')
-    expect(source).toContain('fetchInventoryHandlingOverridesByLineIds(householdId, lineIds)')
-    expect(source).toContain('inventoryHandlingByArticleId[articleId]')
-    expect(source).toContain('inventoryHandlingOverridesByLineId[String(line.id)]')
-  })
-
-  it('keeps Direct consumption bound to Direct / Direct and locks normal location editing', () => {
-    expect(source).toContain("String(location?.label || '').trim().toLowerCase() === 'direct / direct'")
-    expect(source).toContain('presentation.handling === DIRECT_CONSUMPTION')
-    expect(source).toContain('entry.inventoryHandling?.handling === DIRECT_CONSUMPTION')
-    expect(source).toContain("await persistLineDraft(entry.line, { locationId: '' }")
-  })
-
-  it('does not introduce portal or DOM injection architecture', () => {
-    expect(source).not.toContain('createPortal')
-    expect(source).not.toContain('MutationObserver')
-    expect(source).not.toContain('document.querySelector')
-    expect(source).not.toContain('appendChild(')
+  it('maps Direct / Direct and normal locations to the correct temporary handling', () => {
+    expect(source).toContain('isDirect ? DIRECT_CONSUMPTION : STOCK')
+    expect(source).toContain('saveInventoryHandlingOverride(householdId, lineId, null)')
+    expect(source).toContain("defaultLocationPolicy: 'line_only'")
   })
 })
