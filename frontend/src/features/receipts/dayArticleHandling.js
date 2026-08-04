@@ -11,6 +11,17 @@ export function normalizeInventoryHandling(value) {
     : STOCK
 }
 
+export function normalizeInventoryHandlingOverride(value) {
+  const normalized = String(value || '').trim().toUpperCase()
+  if (normalized === STOCK || normalized === DIRECT_CONSUMPTION) return normalized
+  return null
+}
+
+export function effectiveInventoryHandling(defaultHandling, lineOverride = null) {
+  return normalizeInventoryHandlingOverride(lineOverride)
+    || normalizeInventoryHandling(defaultHandling)
+}
+
 export function inventoryHandlingLabel(value) {
   return normalizeInventoryHandling(value) === DIRECT_CONSUMPTION
     ? 'Direct consumeren'
@@ -32,6 +43,16 @@ export function inventoryHandlingPresentation(value) {
     label: 'Opslaan in voorraad',
     location: null,
     sublocation: null,
+  }
+}
+
+export function lineInventoryHandlingPresentation(defaultHandling, lineOverride = null) {
+  const effectiveHandling = effectiveInventoryHandling(defaultHandling, lineOverride)
+  return {
+    ...inventoryHandlingPresentation(effectiveHandling),
+    defaultHandling: normalizeInventoryHandling(defaultHandling),
+    overrideHandling: normalizeInventoryHandlingOverride(lineOverride),
+    isOverride: normalizeInventoryHandlingOverride(lineOverride) !== null,
   }
 }
 
