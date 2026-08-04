@@ -22,55 +22,7 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply location-only B3 design
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('frontend/src/features/stores/StoreBatchDetailPage.jsx')
-          text = path.read_text(encoding='utf-8')
-
-          def replace_once(old, new, label):
-              global text
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected 1 occurrence, found {count}')
-              text = text.replace(old, new, 1)
-
-          replace_once("import InventoryHandlingOverrideSelect from '../receipts/InventoryHandlingOverrideSelect.jsx'\n", "", 'remove selector import')
-          replace_once("  DIRECT_CONSUMPTION,\n", "  DIRECT_CONSUMPTION,\n  STOCK,\n", 'add STOCK import')
-          replace_once("    { key: 'aantal', width: 110 },\n    { key: 'verwerking', width: 250 },\n    { key: 'locatie', width: 260 },", "    { key: 'aantal', width: 110 },\n    { key: 'locatie', width: 260 },", 'remove verwerking column definition')
-
-          start = text.index('  async function handleInventoryHandlingOverrideChange(entry, nextOverride) {')
-          end = text.index('  async function refreshLocationOptions() {', start)
-          replacement = '''  async function handleLocationChoice(entry, nextValue) {\n    const householdId = String(household?.active_household_id ?? household?.id ?? batch?.household_id ?? '').trim()\n    if (!householdId) {\n      showUitpakkenFeedback('error', 'Het actieve huishouden kon niet worden vastgesteld.')\n      return\n    }\n\n    const lineId = String(entry?.line?.id || '')\n    const currentLocationId = String(entry?.draft?.locationId || '')\n    setBusyLineId(lineId)\n    try {\n      if (nextValue === '__standard__') {\n        const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, null)\n        setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))\n        const presentation = lineInventoryHandlingPresentation(entry.defaultInventoryHandling, null)\n        const directLocation = directLocationOption(locationOptions)\n        if (presentation.handling === DIRECT_CONSUMPTION) {\n          if (!directLocation) throw new Error('De beschermde locatie Direct / Direct is niet beschikbaar.')\n          if (currentLocationId !== String(directLocation.id)) {\n            await persistLineDraft(entry.line, { locationId: String(directLocation.id) }, { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true })\n          }\n        } else if (directLocation && currentLocationId === String(directLocation.id)) {\n          await persistLineDraft(entry.line, { locationId: '' }, { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true })\n        }\n        return\n      }\n\n      const selectedLocation = locationOptions.find((location) => String(location.id) === String(nextValue)) || null\n      const isDirect = Boolean(selectedLocation && directLocationOption([selectedLocation]))\n      const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, isDirect ? DIRECT_CONSUMPTION : STOCK)\n      setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))\n      await persistLineDraft(entry.line, { locationId: String(nextValue || '') }, { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true })\n    } catch (handlingError) {\n      const message = normalizeErrorMessage(handlingError?.message || handlingError) || 'Locatie kon niet worden opgeslagen.'\n      showUitpakkenFeedback('error', message, { key: `uitpakken-location-handling-${lineId}-${Date.now()}` })\n      await refreshInventoryHandling(batch, household).catch(() => null)\n    } finally {\n      setBusyLineId('')\n    }\n  }\n\n'''
-          text = text[:start] + replacement + text[end:]
-
-          replace_once("      verwerking: (entry) => entry.inventoryHandling?.label || '',\n", "", 'remove verwerking sort')
-          replace_once("                <col style={{ width: `${lineColumnWidths.aantal}px` }} />\n                <col style={{ width: `${lineColumnWidths.verwerking}px` }} />\n                <col style={{ width: `${lineColumnWidths.locatie}px` }} />", "                <col style={{ width: `${lineColumnWidths.aantal}px` }} />\n                <col style={{ width: `${lineColumnWidths.locatie}px` }} />", 'remove verwerking colgroup')
-
-          header_start = text.index('                  <ResizableHeaderCell columnKey="verwerking"')
-          header_end = text.index('                  <ResizableHeaderCell columnKey="locatie"', header_start)
-          text = text[:header_start] + text[header_end:]
-
-          replace_once("                  <th />\n                  <th />\n                  <th><select className=\"rz-input rz-inline-input\" value={locationFilter}", "                  <th />\n                  <th><select className=\"rz-input rz-inline-input\" value={locationFilter}", 'remove verwerking filter')
-          replace_once('<tr><td colSpan={6}>Geen open bonregels in deze selectie.</td></tr>', '<tr><td colSpan={5}>Geen open bonregels in deze selectie.</td></tr>', 'restore colspan')
-
-          row_start = text.index('                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>\n                        <InventoryHandlingOverrideSelect')
-          row_end = text.index('                      <td onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>\n                        <select', row_start)
-          text = text[:row_start] + text[row_end:]
-
-          replace_once("                          disabled={busyLineId === line.id || isProcessingBatch || isViewer || entry.inventoryHandling?.handling === DIRECT_CONSUMPTION}", "                          disabled={busyLineId === line.id || isProcessingBatch || isViewer}", 'enable location selector')
-
-          old_change = '''                          onChange={(event) => {\n                            const nextLocationId = event.target.value\n                            const hasArticle = Boolean(String(entry.draft.articleId || line.matched_household_article_id || '').trim())\n                            if (hasArticle && nextLocationId) {\n                              setPendingDefaultLocationChoice({ lineId: line.id, locationId: nextLocationId })\n                              return\n                            }\n                            persistLineDraft(line, { locationId: nextLocationId }, { defaultLocationPolicy: 'line_only' })\n                          }}'''
-          new_change = '''                          onChange={(event) => handleLocationChoice(entry, event.target.value)}'''
-          replace_once(old_change, new_change, 'replace location change handler')
-          replace_once('                          <option value="">Kies locatie</option>\n', '                          <option value="">Kies locatie</option>\n                          <option value="__standard__">Standaard gebruiken</option>\n', 'add standard option')
-
-          path.write_text(text, encoding='utf-8')
-
-          test_path = Path('frontend/src/features/stores/StoreBatchDetailPage.b3-native.contract.test.js')
-          test_path.write_text("""import fs from 'node:fs'\nimport path from 'node:path'\nimport { describe, expect, it } from 'vitest'\n\nconst source = fs.readFileSync(path.resolve('src/features/stores/StoreBatchDetailPage.jsx'), 'utf8')\n\ndescribe('B3 location-only native contract', () => {\n  it('uses Locatie as the only visible B3 control', () => {\n    expect(source).not.toContain('columnKey=\\\"verwerking\\\"')\n    expect(source).not.toContain('<InventoryHandlingOverrideSelect')\n    expect(source).toContain('Standaard gebruiken')\n    expect(source).toContain('handleLocationChoice(entry, event.target.value)')\n  })\n\n  it('maps Direct / Direct and normal locations to the correct temporary handling', () => {\n    expect(source).toContain('isDirect ? DIRECT_CONSUMPTION : STOCK')\n    expect(source).toContain('saveInventoryHandlingOverride(householdId, lineId, null)')\n    expect(source).toContain("defaultLocationPolicy: 'line_only'")\n  })\n})\n""", encoding='utf-8')
-          PY
+        run: python scripts/temp_b3_location_only.py
       - name: Validate frontend
         run: |
           cd frontend
