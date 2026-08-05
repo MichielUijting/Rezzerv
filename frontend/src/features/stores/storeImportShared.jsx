@@ -1,10 +1,9 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Button from '../../ui/Button'
 import demoData from '../../demo-articles.json'
 import { sortOptionObjects } from '../../ui/sorting'
 import { fetchJsonWithAuth, getAuthHeaders } from '../../lib/authSession'
 
-const DIRECT_CONSUMPTION = 'DIRECT_CONSUMPTION'
 
 export function normalizeErrorMessage(value) {
   if (!value) return 'Verzoek mislukt'
@@ -72,107 +71,8 @@ async function requestJson(url, options = {}) {
   return data
 }
 
-function isPurchaseImportBatchRequest(url, options) {
-  const method = String(options?.method || 'GET').toUpperCase()
-  return method === 'GET' && /^\/api\/purchase-import-batches\/[^/?]+(?:\?|$)/.test(String(url || ''))
-}
-
-function directLocationId(spacesData, sublocationsData) {
-  const spaces = Array.isArray(spacesData?.items) ? spacesData.items : []
-  const sublocations = Array.isArray(sublocationsData?.items) ? sublocationsData.items : []
-  const directSpace = spaces.find((space) => (
-    Boolean(space?.active)
-    && String(space?.naam || '').trim().toLocaleLowerCase('nl-NL') === 'direct'
-  ))
-  if (!directSpace?.id) return ''
-  const directSublocation = sublocations.find((sublocation) => (
-    Boolean(sublocation?.active)
-    && String(sublocation?.space_id || '') === String(directSpace.id)
-    && String(sublocation?.naam || '').trim().toLocaleLowerCase('nl-NL') === 'direct'
-  ))
-  return String(directSublocation?.id || directSpace.id || '')
-}
-
-async function addDayArticlePresentation(batch) {
-  const lines = Array.isArray(batch?.lines) ? batch.lines : []
-  const householdId = String(batch?.household_id || '').trim()
-  const articleIds = Array.from(new Set(
-    lines
-      .map((line) => String(line?.matched_household_article_id || '').trim())
-      .filter(Boolean),
-  ))
-  const lineIds = Array.from(new Set(
-    lines
-      .map((line) => String(line?.id || '').trim())
-      .filter(Boolean),
-  ))
-  if (!householdId || articleIds.length === 0) return batch
-
-  try {
-    const [handlingData, overrideData, spacesData, sublocationsData] = await Promise.all([
-      requestJson(
-        `/api/households/${encodeURIComponent(householdId)}/articles/inventory-handling/batch`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ household_article_ids: articleIds }),
-        },
-      ),
-      requestJson(
-        `/api/households/${encodeURIComponent(householdId)}/purchase-import-lines/inventory-handling-overrides/batch`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ purchase_import_line_ids: lineIds }),
-        },
-      ),
-      requestJson('/api/spaces?_day_articles=1'),
-      requestJson('/api/sublocations?_day_articles=1'),
-    ])
-
-    const handlingByArticleId = Object.fromEntries(
-      (Array.isArray(handlingData?.items) ? handlingData.items : []).map((item) => [
-        String(item?.id || ''),
-        String(item?.default_inventory_handling || '').trim().toUpperCase(),
-      ]),
-    )
-    const overrideByLineId = Object.fromEntries(
-      (Array.isArray(overrideData?.items) ? overrideData.items : []).map((item) => [
-        String(item?.purchase_import_line_id || ''),
-        String(item?.inventory_handling_override || '').trim().toUpperCase(),
-      ]),
-    )
-    const protectedDirectLocationId = directLocationId(spacesData, sublocationsData)
-
-    return {
-      ...batch,
-      lines: lines.map((line) => {
-        const articleId = String(line?.matched_household_article_id || '').trim()
-        const lineId = String(line?.id || '').trim()
-        const articleDefault = handlingByArticleId[articleId] || 'STOCK'
-        const lineOverride = overrideByLineId[lineId] || ''
-        const effectiveHandling = lineOverride || articleDefault
-        const isDirect = effectiveHandling === DIRECT_CONSUMPTION
-        if (!isDirect || !protectedDirectLocationId) return line
-        return {
-          ...line,
-          default_inventory_handling: DIRECT_CONSUMPTION,
-          default_inventory_handling_label: 'Direct consumeren',
-          target_location_id: protectedDirectLocationId,
-          suggested_location_id: protectedDirectLocationId,
-          day_article_location_locked: true,
-        }
-      }),
-    }
-  } catch {
-    // B2 is presentatielogica. Een mislukte aanvullende lookup mag de bestaande
-    // Uitpakken-flow niet blokkeren; de oorspronkelijke batch blijft bruikbaar.
-    return batch
-  }
-}
-
 export async function fetchJson(url, options = {}) {
-  const data = await requestJson(url, options)
-  if (!isPurchaseImportBatchRequest(url, options) || !data) return data
-  return addDayArticlePresentation(data)
+  return requestJson(url, options)
 }
 
 export const articleFallbackOptions = sortOptionObjects(demoData.articles.map((article) => ({

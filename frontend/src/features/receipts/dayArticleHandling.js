@@ -56,6 +56,35 @@ export function lineInventoryHandlingPresentation(defaultHandling, lineOverride 
   }
 }
 
+export function resolveEffectiveLineDestination({
+  defaultHandling,
+  lineOverride = null,
+  currentLocationId = '',
+  directLocationId = '',
+}) {
+  const presentation = lineInventoryHandlingPresentation(defaultHandling, lineOverride)
+  const normalizedCurrentLocationId = String(currentLocationId || '')
+  const normalizedDirectLocationId = String(directLocationId || '')
+
+  if (presentation.handling === DIRECT_CONSUMPTION) {
+    return {
+      ...presentation,
+      locationId: normalizedDirectLocationId,
+      requiresLocationChange: Boolean(normalizedDirectLocationId)
+        && normalizedCurrentLocationId !== normalizedDirectLocationId,
+    }
+  }
+
+  const locationId = normalizedCurrentLocationId === normalizedDirectLocationId
+    ? ''
+    : normalizedCurrentLocationId
+  return {
+    ...presentation,
+    locationId,
+    requiresLocationChange: locationId !== normalizedCurrentLocationId,
+  }
+}
+
 async function readJsonResponse(response, fallbackMessage) {
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {

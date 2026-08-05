@@ -30,6 +30,7 @@ import {
   fetchInventoryHandlingByArticleIds,
   fetchInventoryHandlingOverridesByLineIds,
   lineInventoryHandlingPresentation,
+  resolveEffectiveLineDestination,
   saveInventoryHandlingOverride,
 } from '../receipts/dayArticleHandling.js'
 
@@ -236,6 +237,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [locationOptions, setLocationOptions] = useState([])
   const [inventoryHandlingByArticleId, setInventoryHandlingByArticleId] = useState({})
   const [inventoryHandlingOverridesByLineId, setInventoryHandlingOverridesByLineId] = useState({})
+  const handlingReconcileRef = useRef(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -1546,6 +1548,45 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       }
     })
   }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds, inventoryHandlingByArticleId, inventoryHandlingOverridesByLineId])
+
+  useEffect(() => {
+    if (handlingReconcileRef.current || isLoading || busyLineId || isProcessingBatch) return
+    const directLocation = directLocationOption(locationOptions)
+    if (!directLocation?.id) return
+
+    const entry = lineUiStates.find((candidate) => {
+      if (candidate.processingStatus === 'processed') return false
+      const articleId = String(candidate.draft.articleId || candidate.line.matched_household_article_id || '').trim()
+      if (!articleId) return false
+      const resolution = resolveEffectiveLineDestination({
+        defaultHandling: candidate.defaultInventoryHandling,
+        lineOverride: candidate.inventoryHandlingOverride,
+        currentLocationId: candidate.draft.locationId,
+        directLocationId: directLocation.id,
+      })
+      return resolution.requiresLocationChange
+    })
+    if (!entry) return
+
+    const resolution = resolveEffectiveLineDestination({
+      defaultHandling: entry.defaultInventoryHandling,
+      lineOverride: entry.inventoryHandlingOverride,
+      currentLocationId: entry.draft.locationId,
+      directLocationId: directLocation.id,
+    })
+    handlingReconcileRef.current = true
+    persistLineDraft(
+      entry.line,
+      { locationId: resolution.locationId },
+      { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true },
+    ).catch((reconcileError) => {
+      const message = normalizeErrorMessage(reconcileError?.message || reconcileError)
+        || 'De effectieve locatie kon niet worden toegepast.'
+      showUitpakkenFeedback('error', message, { key: `uitpakken-handling-reconcile-${entry.line.id}-${Date.now()}` })
+    }).finally(() => {
+      handlingReconcileRef.current = false
+    })
+  }, [lineUiStates, locationOptions, isLoading, busyLineId, isProcessingBatch])
 
   const summaryCounts = useMemo(() => {
     const counts = {
