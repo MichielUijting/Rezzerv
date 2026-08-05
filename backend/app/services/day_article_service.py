@@ -196,8 +196,20 @@ def record_direct_consumption(conn, *, household_id: str, household_article_id: 
                     "event_type": event_type, "quantity": str(amount),
                     "space_id": location["space_id"], "sublocation_id": location["sublocation_id"],
                     "actor_user_id": str(actor_user_id)})
+    event_rows = conn.execute(text("""
+        SELECT id, event_type
+        FROM day_article_processing_events
+        WHERE household_id = :household_id AND idempotency_key = :idempotency_key
+        ORDER BY CASE event_type WHEN 'RECEIPT' THEN 0 ELSE 1 END
+    """), {
+        "household_id": str(household_id),
+        "idempotency_key": normalized_key,
+    }).mappings().all()
+    event_ids = {str(row.get("event_type") or ""): str(row.get("id") or "") for row in event_rows}
     return {"household_id": str(household_id), "household_article_id": str(household_article_id),
             "article_name": article.get("naam"), "handling": DIRECT_CONSUMPTION,
             "quantity_received": str(amount), "quantity_consumed": str(amount),
             "net_inventory_change": "0", "idempotency_key": normalized_key,
+            "receipt_event_id": event_ids.get("RECEIPT") or None,
+            "direct_consumption_event_id": event_ids.get("DIRECT_CONSUMPTION") or None,
             "idempotent_replay": int(existing or 0) > 0, **location}

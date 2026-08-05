@@ -55,6 +55,11 @@ from app.schemas.receipts import (
 )
 from app.services.testing_service import testing_service
 from app.services.household_context_adapter import household_context_from_runtime_context
+from app.services.day_article_batch_processing_service import (
+    DIRECT_CONSUMPTION as DAY_ARTICLE_DIRECT_CONSUMPTION,
+    process_direct_purchase_import_line,
+    resolve_effective_line_inventory_handling,
+)
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, parse_receipt_content, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
@@ -18553,6 +18558,65 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     )
                     results.append({"line_id": line_id, "line_reference": line_reference, "status": "failed", "error": error})
                     failed_count += 1
+                    continue
+
+                effective_inventory_handling = resolve_effective_line_inventory_handling(
+                    conn,
+                    household_id=str(batch["household_id"]),
+                    household_article_id=str(article_id),
+                    line_id=str(line_id),
+                )
+                if effective_inventory_handling == DAY_ARTICLE_DIRECT_CONSUMPTION:
+                    direct_actor_context = require_household_context(
+                        authorization,
+                        str(batch["household_id"]),
+                    )
+                    direct_result = process_direct_purchase_import_line(
+                        conn,
+                        household_id=str(batch["household_id"]),
+                        household_article_id=str(article_id),
+                        line_id=str(line_id),
+                        quantity=quantity,
+                        actor_user_id=str(
+                            direct_actor_context.get("user_id")
+                            or payload.processed_by
+                            or "ui"
+                        ),
+                    )
+                    direct_event_id = str(
+                        direct_result.get("receipt_event_id")
+                        or direct_result.get("direct_consumption_event_id")
+                        or f"day-article:{line_id}"
+                    )
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE purchase_import_lines
+                            SET processing_status = 'processed',
+                                processed_at = CURRENT_TIMESTAMP,
+                                processed_event_id = :event_id,
+                                processing_error = NULL,
+                                final_location_id = :final_location_id,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = :id
+                            """
+                        ),
+                        {
+                            "event_id": direct_event_id,
+                            "final_location_id": resolved_location["location_id"],
+                            "id": line_id,
+                        },
+                    )
+                    results.append({
+                        "line_id": line_id,
+                        "line_reference": line_reference,
+                        "status": "processed",
+                        "event_id": direct_event_id,
+                        "inventory_mutation_skipped": True,
+                        "direct_consumption": direct_result,
+                        "message": "Ontvangst direct verbruikt; bestaande voorraad ongewijzigd",
+                    })
+                    processed_count += 1
                     continue
 
                 article_name = article["name"]
