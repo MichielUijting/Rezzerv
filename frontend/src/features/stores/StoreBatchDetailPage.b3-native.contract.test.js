@@ -16,4 +16,13 @@ describe('B3 location-only native contract', () => {
     expect(source).toContain('saveInventoryHandlingOverride(householdId, lineId, null)')
     expect(source).toContain("defaultLocationPolicy: 'line_only'")
   })
+  it('stores location and temporary handling as one recoverable user action', () => {
+    expect(source).toContain('async function persistLocationHandlingChoice')
+    expect(source).toContain('previousOverride')
+    expect(source).toContain('previousLocationId')
+    expect(source).toContain('if (overrideSaved)')
+    expect(source).toContain('restoredOverride')
+    expect(source).toContain('await refreshBatch(batch?.batch_id)')
+  })
+
 })

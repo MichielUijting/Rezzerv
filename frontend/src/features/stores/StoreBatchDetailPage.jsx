@@ -776,6 +776,53 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     )) || null
   }
 
+  async function persistLocationHandlingChoice({
+    entry,
+    nextOverride,
+    nextLocationId,
+    previousOverride,
+    previousLocationId,
+  }) {
+    const householdId = String(household?.active_household_id ?? household?.id ?? batch?.household_id ?? '').trim()
+    const lineId = String(entry?.line?.id || '')
+    let overrideSaved = false
+    let locationSaved = false
+
+    try {
+      const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, nextOverride)
+      overrideSaved = true
+      setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))
+
+      await persistLineDraft(
+        entry.line,
+        { locationId: String(nextLocationId || '') },
+        { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true },
+      )
+      locationSaved = true
+      return savedOverride
+    } catch (saveError) {
+      if (locationSaved) {
+        await persistLineDraft(
+          entry.line,
+          { locationId: String(previousLocationId || '') },
+          { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true },
+        ).catch(() => null)
+      }
+      if (overrideSaved) {
+        const restoredOverride = await saveInventoryHandlingOverride(
+          householdId,
+          lineId,
+          previousOverride,
+        ).catch(() => previousOverride)
+        setInventoryHandlingOverridesByLineId((current) => ({
+          ...current,
+          [lineId]: restoredOverride,
+        }))
+      }
+      throw saveError
+    }
+  }
+
   async function handleLocationChoice(entry, nextValue) {
     const householdId = String(household?.active_household_id ?? household?.id ?? batch?.household_id ?? '').trim()
     if (!householdId) {
@@ -784,34 +831,54 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }
 
     const lineId = String(entry?.line?.id || '')
-    const currentLocationId = String(entry?.draft?.locationId || '')
+    const previousOverride = entry.inventoryHandlingOverride || null
+    const previousLocationId = String(entry?.draft?.locationId || '')
+    const directLocation = directLocationOption(locationOptions)
     setBusyLineId(lineId)
+
     try {
       if (nextValue === '__standard__') {
-        const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, null)
-        setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))
-        const presentation = lineInventoryHandlingPresentation(entry.defaultInventoryHandling, null)
-        const directLocation = directLocationOption(locationOptions)
-        if (presentation.handling === DIRECT_CONSUMPTION) {
-          if (!directLocation) throw new Error('De beschermde locatie Direct / Direct is niet beschikbaar.')
-          if (currentLocationId !== String(directLocation.id)) {
-            await persistLineDraft(entry.line, { locationId: String(directLocation.id) }, { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true })
-          }
-        } else if (directLocation && currentLocationId === String(directLocation.id)) {
-          await persistLineDraft(entry.line, { locationId: '' }, { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true })
+        const resolution = resolveEffectiveLineDestination({
+          defaultHandling: entry.defaultInventoryHandling,
+          lineOverride: null,
+          currentLocationId: previousLocationId,
+          directLocationId: directLocation?.id || '',
+        })
+        if (resolution.handling === DIRECT_CONSUMPTION && !directLocation?.id) {
+          throw new Error('De beschermde locatie Direct / Direct is niet beschikbaar.')
         }
+        await persistLocationHandlingChoice({
+          entry,
+          nextOverride: null,
+          nextLocationId: resolution.locationId,
+          previousOverride,
+          previousLocationId,
+        })
         return
       }
 
-      const selectedLocation = locationOptions.find((location) => String(location.id) === String(nextValue)) || null
+      const selectedLocation = locationOptions.find(
+        (location) => String(location.id) === String(nextValue),
+      ) || null
       const isDirect = Boolean(selectedLocation && directLocationOption([selectedLocation]))
-      const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, isDirect ? DIRECT_CONSUMPTION : STOCK)
-      setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))
-      await persistLineDraft(entry.line, { locationId: String(nextValue || '') }, { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true })
+      const nextOverride = isDirect ? DIRECT_CONSUMPTION : STOCK
+
+      if (!isDirect && !selectedLocation) {
+        throw new Error('Kies een geldige locatie en sublocatie.')
+      }
+
+      await persistLocationHandlingChoice({
+        entry,
+        nextOverride,
+        nextLocationId: String(nextValue || ''),
+        previousOverride,
+        previousLocationId,
+      })
     } catch (handlingError) {
       const message = normalizeErrorMessage(handlingError?.message || handlingError) || 'Locatie kon niet worden opgeslagen.'
       showUitpakkenFeedback('error', message, { key: `uitpakken-location-handling-${lineId}-${Date.now()}` })
       await refreshInventoryHandling(batch, household).catch(() => null)
+      await refreshBatch(batch?.batch_id).catch(() => null)
     } finally {
       setBusyLineId('')
     }
