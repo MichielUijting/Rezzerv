@@ -241,8 +241,12 @@ test.describe('Uitpakken frontend-regressie', () => {
 
     page.on('request', (request) => {
       const url = request.url();
+      const isReadOnlyHandlingBatch =
+        /\/articles\/inventory-handling\/batch(?:\?|$)/.test(url)
+        || /\/purchase-import-lines\/inventory-handling-overrides\/batch(?:\?|$)/.test(url);
       if (
-        /inventory|purchase|external-product-links|household-articles|save-household-article/.test(url)
+        !isReadOnlyHandlingBatch
+        && /inventory|purchase|external-product-links|household-articles|save-household-article/.test(url)
         && request.method() !== 'GET'
       ) {
         mutationRequests.push(`${request.method()} ${url}`);
