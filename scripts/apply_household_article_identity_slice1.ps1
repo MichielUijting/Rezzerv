@@ -5,6 +5,10 @@ $Branch = "feature/uitpakken-dagartikelen-release-b"
 $Repo = "C:\Users\Gebruiker\Rezzerv_Github"
 Set-Location $Repo
 
+Write-Host "============================================================"
+Write-Host " HUISHOUDARTIKEL IDENTITEIT SLICE 1"
+Write-Host "============================================================"
+
 if (git status --porcelain) {
     git status --short
     throw "STOP: er staan lokale wijzigingen."
@@ -19,20 +23,39 @@ if ($LASTEXITCODE -ne 0) { throw "Git pull is mislukt." }
 python .\scripts\refactor_household_article_identity_slice1.py
 if ($LASTEXITCODE -ne 0) { throw "De eerste Huishoudartikel-refactorslice kon niet worden toegepast." }
 
-Push-Location frontend
-try {
-    npm run build
-    if ($LASTEXITCODE -ne 0) { throw "Frontendbuild is mislukt." }
+Write-Host ""
+Write-Host "[1/4] Docker-runtime volledig opnieuw opbouwen"
+docker compose down
+if ($LASTEXITCODE -ne 0) { throw "Docker Compose kon niet worden gestopt." }
 
-    npx vitest run `
-        src/features/stores/householdArticleIdentity.single-source.contract.test.js `
-        src/features/stores/householdArticleOptionAdapter.test.js `
-        src/features/stores/StoreBatchDetailPage.b3-native.contract.test.js
-    if ($LASTEXITCODE -ne 0) { throw "Gerichte frontendtests zijn mislukt." }
+docker compose up -d --build --force-recreate --remove-orphans
+if ($LASTEXITCODE -ne 0) { throw "Docker Compose build/start is mislukt." }
+
+Write-Host ""
+Write-Host "[2/4] Backend-health controleren"
+$HealthOk = $false
+for ($Poging = 1; $Poging -le 18; $Poging++) {
+    try {
+        $Health = Invoke-RestMethod -Uri "http://localhost:8011/api/health" -Method Get -TimeoutSec 15
+        $HealthOk = $true
+        break
+    }
+    catch {
+        Start-Sleep -Seconds 10
+    }
 }
-finally {
-    Pop-Location
-}
+if (-not $HealthOk) { throw "Backend-health bleef onbereikbaar." }
+$Health | Format-List
+
+Write-Host ""
+Write-Host "[3/4] Officiele frontend-regressie uitvoeren"
+& .\scripts\run-frontend-regression-report.ps1 -SkipDockerBuild
+if ($LASTEXITCODE -ne 0) { throw "De officiele frontend-regressie is mislukt." }
+
+Write-Host ""
+Write-Host "[4/4] Kassabon-voorraadketen uitvoeren"
+& .\scripts\run-receipt-inventory-chain.ps1
+if ($LASTEXITCODE -ne 0) { throw "De kassabon-voorraadketen is mislukt." }
 
 Remove-Item .\scripts\apply_household_article_identity_slice1.ps1 -Force
 Remove-Item .\scripts\refactor_household_article_identity_slice1.py -Force
