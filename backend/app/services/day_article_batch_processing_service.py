@@ -83,3 +83,34 @@ def process_direct_purchase_import_line(
         "purchase_import_line_id": str(line_id),
         "inventory_mutation_skipped": True,
     }
+
+
+def remove_direct_inventory_artifacts(
+    conn,
+    *,
+    household_id: str,
+    household_article_id: str,
+) -> int:
+    """Remove inventory rows that older B4 code incorrectly stored at Direct / Direct.
+
+    Direct is a processing destination, never a stock-holding location. Any
+    active inventory row there is therefore an invalid artifact.
+    """
+    direct_location = ensure_direct_location(conn, household_id)
+    result = conn.execute(
+        text(
+            """
+            DELETE FROM inventory
+            WHERE household_id = :household_id
+              AND household_article_id = :household_article_id
+              AND (space_id = :space_id OR sublocation_id = :sublocation_id)
+            """
+        ),
+        {
+            "household_id": str(household_id),
+            "household_article_id": str(household_article_id),
+            "space_id": direct_location["space_id"],
+            "sublocation_id": direct_location["sublocation_id"],
+        },
+    )
+    return int(result.rowcount or 0)

@@ -58,6 +58,7 @@ from app.services.household_context_adapter import household_context_from_runtim
 from app.services.day_article_batch_processing_service import (
     DIRECT_CONSUMPTION as DAY_ARTICLE_DIRECT_CONSUMPTION,
     process_direct_purchase_import_line,
+    remove_direct_inventory_artifacts,
     resolve_effective_line_inventory_handling,
 )
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
@@ -18560,6 +18561,9 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     failed_count += 1
                     continue
 
+                article_name = article["name"]
+                note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
+                pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
                 effective_inventory_handling = resolve_effective_line_inventory_handling(
                     conn,
                     household_id=str(batch["household_id"]),
@@ -18567,6 +18571,22 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                     line_id=str(line_id),
                 )
                 if effective_inventory_handling == DAY_ARTICLE_DIRECT_CONSUMPTION:
+                    current_stage = 'direct_purchase_financial_event_write'
+                    direct_purchase_event_id = create_inventory_purchase_event(
+                        conn,
+                        batch["household_id"],
+                        article_id,
+                        article_name,
+                        quantity,
+                        resolved_location,
+                        note,
+                        supplier_name=batch.get("store_name") or batch.get("store_label") or batch.get("store_provider_name") or batch.get("store_provider_code"),
+                        price=float(line.get("line_price_raw")) if line.get("line_price_raw") is not None else None,
+                        currency=line.get("currency_code") or "EUR",
+                        purchase_date=purchase_date,
+                        article_number=line.get("external_article_code"),
+                        barcode=line.get("barcode") or None,
+                    )
                     direct_actor_context = require_household_context(
                         authorization,
                         str(batch["household_id"]),
@@ -18583,10 +18603,16 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                             or "ui"
                         ),
                     )
-                    direct_event_id = str(
-                        direct_result.get("receipt_event_id")
-                        or direct_result.get("direct_consumption_event_id")
-                        or f"day-article:{line_id}"
+                    removed_direct_inventory_rows = remove_direct_inventory_artifacts(
+                        conn,
+                        household_id=str(batch["household_id"]),
+                        household_article_id=str(article_id),
+                    )
+                    sync_household_article_price_metrics(
+                        conn,
+                        batch["household_id"],
+                        article_id,
+                        ensure_household_article_global_product_link(conn, article_id, line.get("barcode") or None),
                     )
                     conn.execute(
                         text(
@@ -18602,26 +18628,40 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                             """
                         ),
                         {
-                            "event_id": direct_event_id,
+                            "event_id": direct_purchase_event_id,
                             "final_location_id": resolved_location["location_id"],
                             "id": line_id,
+                        },
+                    )
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE household_articles
+                            SET article_group_id = :article_group_id,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE id = :article_id
+                              AND household_id = :household_id
+                            """
+                        ),
+                        {
+                            "article_group_id": article_group_id,
+                            "article_id": str(article_id),
+                            "household_id": str(batch["household_id"]),
                         },
                     )
                     results.append({
                         "line_id": line_id,
                         "line_reference": line_reference,
                         "status": "processed",
-                        "event_id": direct_event_id,
+                        "event_id": direct_purchase_event_id,
+                        "financial_purchase_registered": True,
                         "inventory_mutation_skipped": True,
+                        "removed_direct_inventory_rows": removed_direct_inventory_rows,
                         "direct_consumption": direct_result,
-                        "message": "Ontvangst direct verbruikt; bestaande voorraad ongewijzigd",
+                        "message": "Aankoop financieel geregistreerd en direct verbruikt; bestaande voorraad ongewijzigd",
                     })
                     processed_count += 1
                     continue
-
-                article_name = article["name"]
-                note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
-                pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
                 auto_consume_decision = determine_auto_consume_decision(
                     conn,
                     str(batch["household_id"]),
