@@ -37,7 +37,7 @@ function getAuthContext() {
 }
 
 function getActiveHouseholdId() {
-  const householdId = String(getAuthContext()?.active_household_id || '').trim()
+  const householdId = String(getAuthContext()?.active_household_id ?? '').trim()
   if (!householdId) throw new Error('Geen actief huishouden beschikbaar. Log opnieuw in.')
   return householdId
 }
