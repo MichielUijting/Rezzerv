@@ -42,6 +42,22 @@ test.describe('Instellingen Artikelgroepen frontend-regressie', () => {
       });
     });
 
+    await page.route('**/api/households/*/articles/inventory-handling/batch', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ok: true,
+          items: [
+            {
+              id: 'household-article-mosterd',
+              default_inventory_handling: 'STOCK',
+            },
+          ],
+        }),
+      });
+    });
+
     await page.route('**/api/household-articles/household-article-mosterd/article-group', async (route) => {
       assignmentPayload = JSON.parse(route.request().postData() || '{}');
       assignedGroupId = assignmentPayload.article_group_id || null;
@@ -59,31 +75,43 @@ test.describe('Instellingen Artikelgroepen frontend-regressie', () => {
     await page.goto('/instellingen/artikelgroepen');
 
     await expect(page).toHaveURL(/\/instellingen\/artikelgroepen$/);
-    await expect(page.getByTestId('settings-article-groups-page')).toBeVisible();
+    const pageRoot = page.getByTestId('settings-article-groups-page');
+    await expect(pageRoot).toBeVisible();
     await expect(page.getByText(universalArticleName, { exact: true })).toBeVisible();
 
-    await page.getByLabel('Filter op artikel', { exact: true }).fill('dijon');
+    const filterFields = pageRoot.locator('input[placeholder="Filter"]');
+    const articleFilter = filterFields.nth(1);
+    await articleFilter.fill('dijon');
     await expect(page.getByText(universalArticleName, { exact: true })).toBeVisible();
-    await page.getByLabel('Filter op artikel', { exact: true }).fill('');
+    await articleFilter.fill('');
 
-    await page.getByLabel(`Selecteer ${universalArticleName}`, { exact: true }).check();
-    await page.getByRole('button', { name: 'Toewijzen aan artikelgroep', exact: true }).click();
+    const articleRow = pageRoot.locator('tbody tr').filter({
+      hasText: universalArticleName,
+    });
+    await articleRow.locator('input[type="checkbox"]').first().check();
+    await page.getByRole('button', {
+      name: 'Toewijzen aan Artikelgroep',
+      exact: true,
+    }).click();
 
-    const assignDialog = page.getByRole('dialog', { name: 'Toewijzen aan artikelgroep' });
+    const assignDialog = page.getByRole('dialog').filter({
+      hasText: 'Toewijzen aan Artikelgroep',
+    });
     await expect(assignDialog).toBeVisible();
     await assignDialog.locator('select').selectOption('group-sauzen');
-    await assignDialog.getByRole('button', { name: 'Toewijzen', exact: true }).click();
-
-    const confirmDialog = page.getByRole('dialog', { name: 'Bevestiging' });
-    await expect(confirmDialog).toContainText('Sauzen');
-    await confirmDialog.getByRole('button', { name: 'Opslaan', exact: true }).click();
+    await assignDialog.getByRole('button', {
+      name: 'Opslaan',
+      exact: true,
+    }).click();
 
     await expect.poll(() => assignmentPayload).toEqual({
       household_id: String(DEMO_HOUSEHOLD_ID),
       article_group_id: 'group-sauzen',
     });
-    await expect(page.getByText(/1 voorraadartikel toegewezen aan Artikelgroep Sauzen\./)).toBeVisible();
-    await expect(page.getByLabel(`Artikelgroep ${universalArticleName}`, { exact: true })).toHaveValue('group-sauzen');
+    await expect(page.getByText('Geselecteerde huishoudartikelen bijgewerkt.', {
+      exact: true,
+    })).toBeVisible();
+    await expect(articleRow.locator('select')).toHaveValue('group-sauzen');
 
     await expectNoConsoleErrors(consoleErrors);
   });
