@@ -1,8 +1,3 @@
-import {
-  normalizeHouseholdArticleOptionsPayload,
-  shouldNormalizeHouseholdArticleOptions,
-} from '../features/stores/householdArticleOptionAdapter.js'
-
 const LOGIN_MESSAGE_KEY = 'rezzerv_login_message'
 const PLATFORM_SUPERUSER_EMAIL = 'supergebruiker@rezzerv.local'
 const FRONTTEAM_EXTERNAL_DATABASES_PERMISSION = 'frontteam.external_databases.access'
@@ -85,17 +80,9 @@ function removeLegacyAuthStorage() {
   } catch {}
 }
 
-export function getStoredToken() {
-  return ''
-}
-
-export function getAuthHeaders() {
-  return {}
-}
-
-export function readStoredAuthContext() {
-  return currentSessionContext
-}
+export function getStoredToken() { return '' }
+export function getAuthHeaders() { return {} }
+export function readStoredAuthContext() { return currentSessionContext }
 
 export function storeAuthContext(context) {
   currentSessionContext = normalizeSessionContext(context)
@@ -104,19 +91,14 @@ export function storeAuthContext(context) {
 }
 
 export function markAuthCheckedForToken() {}
-
-export function isTokenAlreadyValidated() {
-  return Boolean(currentSessionContext)
-}
+export function isTokenAlreadyValidated() { return Boolean(currentSessionContext) }
 
 export function getLoginMessage() {
   try {
     const value = window.sessionStorage.getItem(LOGIN_MESSAGE_KEY) || ''
     if (value) window.sessionStorage.removeItem(LOGIN_MESSAGE_KEY)
     return value
-  } catch {
-    return ''
-  }
+  } catch { return '' }
 }
 
 export function setLoginMessage(message) {
@@ -153,47 +135,33 @@ export async function fetchAuthContext({ force = false } = {}) {
   if (!force && currentSessionContext) return currentSessionContext
   if (!force && sessionRequest) return sessionRequest
   sessionRequest = fetch('/api/session', {
-    method: 'GET',
-    credentials: 'include',
-    headers: { Accept: 'application/json' },
-    cache: 'no-store',
-  })
-    .then(async (response) => {
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        const message = buildAuthErrorMessage(response.status, data?.detail || 'Je sessie is verlopen. Log opnieuw in.')
-        const error = new Error(message)
-        error.status = response.status
-        throw error
-      }
-      return storeAuthContext(data)
-    })
-    .finally(() => {
-      sessionRequest = null
-    })
+    method: 'GET', credentials: 'include', headers: { Accept: 'application/json' }, cache: 'no-store',
+  }).then(async (response) => {
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const message = buildAuthErrorMessage(response.status, data?.detail || 'Je sessie is verlopen. Log opnieuw in.')
+      const error = new Error(message)
+      error.status = response.status
+      throw error
+    }
+    return storeAuthContext(data)
+  }).finally(() => { sessionRequest = null })
   return sessionRequest
 }
 
 export async function logoutServerSession() {
   try {
     await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
+      method: 'POST', credentials: 'include', headers: { Accept: 'application/json' }, cache: 'no-store',
     })
-  } finally {
-    clearAuthSession()
-  }
+  } finally { clearAuthSession() }
 }
 
 function jsonResponseFrom(response, payload) {
   const headers = new Headers(response.headers)
   headers.set('Content-Type', 'application/json')
   return new Response(JSON.stringify(payload), {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
+    status: response.status, statusText: response.statusText, headers,
   })
 }
 
@@ -206,10 +174,7 @@ export async function fetchJsonWithAuth(url, options = {}) {
   delete mergedHeaders.authorization
 
   const response = await fetch(url, {
-    ...restOptions,
-    credentials: 'include',
-    headers: mergedHeaders,
-    cache,
+    ...restOptions, credentials: 'include', headers: mergedHeaders, cache,
   })
   if (response.status === 401) {
     redirectToLogin('Je sessie is verlopen. Log opnieuw in.')
@@ -228,14 +193,6 @@ export async function fetchJsonWithAuth(url, options = {}) {
       }
     } catch {}
   }
-
-  if (response.ok && shouldNormalizeHouseholdArticleOptions(url, restOptions.method || 'GET')) {
-    try {
-      const payload = await response.clone().json()
-      return jsonResponseFrom(response, normalizeHouseholdArticleOptionsPayload(payload))
-    } catch {}
-  }
-
   return response
 }
 
