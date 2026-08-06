@@ -3,17 +3,28 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 
 from app.services.day_article_service import (
     DIRECT_CONSUMPTION,
     STOCK,
+    ensure_direct_location,
     get_default_inventory_handling,
     record_direct_consumption,
 )
 
 
 def get_line_inventory_handling_override(conn, *, household_id: str, line_id: str) -> str | None:
+    """Return a line override when the Release-B override table is available.
+
+    Older or deliberately minimal databases, including the isolated production
+    chain fixture, may not contain this optional table yet. In that case there
+    is no line-specific override and the caller must fall back to the canonical
+    household-article default.
+    """
+    if "purchase_import_line_inventory_handling_overrides" not in inspect(conn).get_table_names():
+        return None
+
     row = conn.execute(
         text(
             """
