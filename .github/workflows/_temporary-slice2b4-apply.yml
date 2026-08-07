@@ -22,7 +22,6 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
 
           path = Path('backend/app/main.py')
           text = path.read_text(encoding='utf-8')
@@ -44,7 +43,6 @@ jobs:
           if import_block not in text:
               replace_once(marker, import_block + marker, 'canonical inventory service import')
 
-          # Auto-consume: preserve behaviour/order, but select rows by canonical ID instead of name.
           start = text.index('def apply_inventory_consumption(')
           next_def = text.index('\ndef ', start + 10)
           section = text[start:next_def]
@@ -62,27 +60,25 @@ jobs:
               '    safe_location = require_resolved_location(resolved_location)\n',
               1,
           )
-          name_predicate_count = section.count('AND lower(trim(naam)) = lower(trim(:naam))')
-          if name_predicate_count != 1:
-              raise SystemExit(f'auto-consume name predicate: expected 1, found {name_predicate_count}')
+          predicate_count = section.count('AND lower(trim(naam)) = lower(trim(:naam))')
+          if predicate_count != 1:
+              raise SystemExit(f'auto-consume name predicate: expected 1, found {predicate_count}')
           section = section.replace(
               'AND lower(trim(naam)) = lower(trim(:naam))',
               'AND household_article_id = :household_article_id',
               1,
           )
           name_param_count = section.count('"naam": article_name,')
-          if name_param_count != 1:
-              raise SystemExit(f'auto-consume name param: expected 1, found {name_param_count}')
+          if name_param_count != 2:
+              raise SystemExit(f'auto-consume name params: expected 2, found {name_param_count}')
           section = section.replace(
               '"naam": article_name,',
               '"household_article_id": normalized_household_article_id,',
-              1,
           )
-          if 'lower(trim(naam))' in section:
-              raise SystemExit('auto-consume still matches inventory by name')
+          if 'lower(trim(naam))' in section or '"naam": article_name,' in section:
+              raise SystemExit('auto-consume still contains name-based inventory identity')
           text = text[:start] + section + text[next_def:]
 
-          # History diagnostics must use canonical household_article_id and household isolation.
           start = text.index('def count_history_events_for_article(')
           next_def = text.index('\ndef ', start + 10)
           text = text[:start] + '''def count_history_events_for_article(conn, household_id: str, household_article_id: str | None, event_id: str | None = None) -> tuple[int, bool]:
@@ -108,38 +104,18 @@ jobs:
           ''' + text[next_def + 1:]
 
           replacements = [
-              (
-                  'pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)',
-                  'pre_purchase_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))',
-                  'pre-purchase total',
-              ),
-              (
-                  'purchase_inventory_id = apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)',
-                  '''purchase_inventory_id = apply_inventory_purchase_by_identity(
+              ('pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)', 'pre_purchase_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))', 'pre-purchase total'),
+              ('purchase_inventory_id = apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)', '''purchase_inventory_id = apply_inventory_purchase_by_identity(
                               conn,
                               household_id=str(batch["household_id"]),
                               household_article_id=str(article_id),
                               quantity=quantity,
                               space_id=resolved_location.get("space_id"),
                               sublocation_id=resolved_location.get("sublocation_id"),
-                          )''',
-                  'purchase inventory mutation',
-              ),
-              (
-                  'inventory_after_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)',
-                  'inventory_after_purchase_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))',
-                  'post-purchase total',
-              ),
-              (
-                  'history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(article_id), article_name, event_id)',
-                  'history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(batch["household_id"]), str(article_id), event_id)',
-                  'history lookup',
-              ),
-              (
-                  'inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)',
-                  'inventory_after_auto_consume_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))',
-                  'post-consume total',
-              ),
+                          )''', 'purchase inventory mutation'),
+              ('inventory_after_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)', 'inventory_after_purchase_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))', 'post-purchase total'),
+              ('history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(article_id), article_name, event_id)', 'history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(batch["household_id"]), str(article_id), event_id)', 'history lookup'),
+              ('inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)', 'inventory_after_auto_consume_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))', 'post-consume total'),
           ]
           for old, new, label in replacements:
               replace_once(old, new, label)
