@@ -38,7 +38,7 @@ def test_b4_keeps_stable_event_ids_for_idempotent_replay():
     assert 'direct_consumption_event_id' in day_service
 
 
-def test_b4_direct_purchase_keeps_financial_event_but_skips_stock_mutation():
+def test_b4_direct_purchase_keeps_financial_event_but_skips_every_stock_mutator():
     function_start = MAIN_SOURCE.index('def process_purchase_import_batch(')
     direct_start = MAIN_SOURCE.index('if effective_inventory_handling == DAY_ARTICLE_DIRECT_CONSUMPTION:', function_start)
     direct_end = MAIN_SOURCE.index('                auto_consume_decision = determine_auto_consume_decision(', direct_start)
@@ -48,10 +48,17 @@ def test_b4_direct_purchase_keeps_financial_event_but_skips_stock_mutation():
     assert 'currency=line.get("currency_code") or "EUR"' in direct_branch
     assert 'purchase_date=purchase_date' in direct_branch
     assert 'apply_inventory_purchase(' not in direct_branch
+    assert 'apply_inventory_purchase_by_identity(' not in direct_branch
+    assert 'apply_inventory_consumption(' not in direct_branch
+    assert 'apply_inventory_row_consumption(' not in direct_branch
     assert '"financial_purchase_registered": True' in direct_branch
+    assert '"inventory_mutation_skipped": True' in direct_branch
 
 
-def test_b4_removes_obsolete_direct_inventory_artifacts():
+def test_b4_removes_obsolete_direct_inventory_artifacts_only_on_exact_direct_pair():
     assert 'remove_direct_inventory_artifacts' in MAIN_SOURCE
     assert 'DELETE FROM inventory' in SOURCE
     assert 'Direct is a processing destination, never a stock-holding location' in SOURCE
+    assert 'AND space_id = :space_id' in SOURCE
+    assert 'AND sublocation_id = :sublocation_id' in SOURCE
+    assert 'space_id = :space_id OR sublocation_id = :sublocation_id' not in SOURCE
