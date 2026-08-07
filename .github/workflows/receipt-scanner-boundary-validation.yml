@@ -1,0 +1,46 @@
+name: Receipt scanner boundary validation
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate-release-a-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install minimal backend dependencies
+        run: |
+          python -m pip install --quiet \
+            pytest \
+            pydantic==2.12.5
+
+      - name: Compile scanner boundary
+        run: |
+          python -m compileall -q backend/app/integrations/receipt_scanners
+
+      - name: Run Release A contract and gateway tests
+        env:
+          PYTHONPATH: backend
+        run: pytest -q backend/tests/test_receipt_scanner_release_a.py
+
+      - name: Assert no scanner-specific dependency leaks into gateway
+        run: |
+          ! grep -R -E 'paddleocr|tesseract|ocrmypdf|profiles\.' backend/app/integrations/receipt_scanners/gateway.py
+
+      - name: Assert legacy adapter is the only production parser caller behind boundary
+        run: |
+          grep -F 'from app.services.receipt_service import parse_receipt_content' backend/app/integrations/receipt_scanners/adapters/rezzerv_legacy.py
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('backend/app/services/receipt_service.py').read_text(encoding='utf-8')
+          assert text.count('scan_receipt_content_via_gateway(') == 2
+          PY
