@@ -1,3 +1,4 @@
+CLS
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
@@ -14,19 +15,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
-for /f "delims=" %%S in ('docker compose ps --status running --services 2^>nul ^| findstr /x "backend"') do set BACKEND_RUNNING=1
-if not defined BACKEND_RUNNING (
-  echo FOUT: De Rezzerv backendcontainer draait niet.
-  echo Start eerst de normale Rezzerv-omgeving en voer deze controle daarna opnieuw uit.
-  pause
-  exit /b 1
-)
-
-echo [1/3] Runtime-database controleren...
+echo [1/3] Backendservice en runtime-database controleren...
 docker compose exec -T backend python -c "from app.db import get_runtime_datastore_info; import json; info=get_runtime_datastore_info(); print(json.dumps(info, ensure_ascii=False)); assert info.get('datastore') == 'sqlite'; assert info.get('database') == '/app/data/rezzerv.db'"
 if errorlevel 1 (
   echo.
-  echo FOUT: Runtime-database wijkt af van /app/data/rezzerv.db. DRY-RUN GEBLOKKEERD.
+  echo FOUT: De backendservice is niet bereikbaar of de runtime-database wijkt af van /app/data/rezzerv.db.
+  echo DRY-RUN GEBLOKKEERD.
   pause
   exit /b 2
 )
