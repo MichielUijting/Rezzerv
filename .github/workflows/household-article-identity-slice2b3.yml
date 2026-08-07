@@ -1,0 +1,21 @@
+name: Household article identity Slice 2B3
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-resolvers:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run Slice 2B3 resolver contract
+        run: python backend/tests/test_household_article_identity_slice2b3_contract.py
