@@ -15,6 +15,8 @@ EXPECTED_ROUTE_KEYS = {
     ("GET", "/api/household/store-import-settings"),
     ("PUT", "/api/household/store-import-settings"),
     ("GET", "/api/households/{household_id}/almost-out"),
+    ("POST", "/api/households/{household_id}/purchase-import-lines/inventory-handling-overrides/batch"),
+    ("PUT", "/api/households/{household_id}/purchase-import-lines/{line_id}/inventory-handling-override"),
     ("GET", "/api/purchase-import-batches/{batch_id}"),
     ("POST", "/api/purchase-import-batches/{batch_id}/complete-review"),
     ("POST", "/api/purchase-import-batches/{batch_id}/prefill"),
@@ -126,16 +128,16 @@ def main() -> None:
         "unexpected": sorted(actual_keys - EXPECTED_ROUTE_KEYS),
     }
     assert payload["summary"] == {
-        "route_registrations": 23,
+        "route_registrations": 25,
         "reads": 6,
-        "mutations": 17,
+        "mutations": 19,
         "routes_without_auth_marker": 11,
         "mutations_without_auth_marker": 9,
     }, payload["summary"]
 
     assert len(OBJECT_GUARD_KEYS) == 11, OBJECT_GUARD_KEYS
     assert len(PLATFORM_ADMIN_KEYS) == 3, PLATFORM_ADMIN_KEYS
-    assert len(INLINE_KEYS) == 9, INLINE_KEYS
+    assert len(INLINE_KEYS) == 11, INLINE_KEYS
 
     for key in PLATFORM_ADMIN_KEYS:
         assert key in PROTECTED_MUTATIONS, key

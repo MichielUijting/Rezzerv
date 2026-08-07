@@ -31,14 +31,11 @@ const NON_VIEWER_HOUSEHOLD_ROLES = new Set([
 
 export function normalizeHouseholdAccessContext(context) {
   if (!context || typeof context !== 'object') return context
-
   const displayRole = normalizeRoleValue(context.display_role)
   const technicalRole = normalizeRoleValue(context.role || context.membership_role)
   const hasNonViewerRole = NON_VIEWER_HOUSEHOLD_ROLES.has(displayRole)
     || NON_VIEWER_HOUSEHOLD_ROLES.has(technicalRole)
-  const canProcessReceipts = Boolean(context.permissions?.['receipts.process'])
-    || hasNonViewerRole
-
+  const canProcessReceipts = Boolean(context.permissions?.['receipts.process']) || hasNonViewerRole
   return {
     ...context,
     is_viewer: hasNonViewerRole ? false : Boolean(context.is_viewer || displayRole === 'viewer' || technicalRole === 'viewer'),
@@ -86,14 +83,8 @@ function removeLegacyAuthStorage() {
 export function getStoredToken() {
   return ''
 }
-
-export function getAuthHeaders() {
-  return {}
-}
-
-export function readStoredAuthContext() {
-  return currentSessionContext
-}
+export function getAuthHeaders() { return {} }
+export function readStoredAuthContext() { return currentSessionContext }
 
 export function storeAuthContext(context) {
   currentSessionContext = normalizeSessionContext(context)
@@ -102,19 +93,14 @@ export function storeAuthContext(context) {
 }
 
 export function markAuthCheckedForToken() {}
-
-export function isTokenAlreadyValidated() {
-  return Boolean(currentSessionContext)
-}
+export function isTokenAlreadyValidated() { return Boolean(currentSessionContext) }
 
 export function getLoginMessage() {
   try {
     const value = window.sessionStorage.getItem(LOGIN_MESSAGE_KEY) || ''
     if (value) window.sessionStorage.removeItem(LOGIN_MESSAGE_KEY)
     return value
-  } catch {
-    return ''
-  }
+  } catch { return '' }
 }
 
 export function setLoginMessage(message) {
@@ -150,41 +136,35 @@ export async function fetchAuthContext({ force = false } = {}) {
   removeLegacyAuthStorage()
   if (!force && currentSessionContext) return currentSessionContext
   if (!force && sessionRequest) return sessionRequest
-
   sessionRequest = fetch('/api/session', {
-    method: 'GET',
-    credentials: 'include',
-    headers: { Accept: 'application/json' },
-    cache: 'no-store',
-  })
-    .then(async (response) => {
-      const data = await response.json().catch(() => ({}))
-      if (!response.ok) {
-        const message = buildAuthErrorMessage(response.status, data?.detail || 'Je sessie is verlopen. Log opnieuw in.')
-        const error = new Error(message)
-        error.status = response.status
-        throw error
-      }
-      return storeAuthContext(data)
-    })
-    .finally(() => {
-      sessionRequest = null
-    })
-
+    method: 'GET', credentials: 'include', headers: { Accept: 'application/json' }, cache: 'no-store',
+  }).then(async (response) => {
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const message = buildAuthErrorMessage(response.status, data?.detail || 'Je sessie is verlopen. Log opnieuw in.')
+      const error = new Error(message)
+      error.status = response.status
+      throw error
+    }
+    return storeAuthContext(data)
+  }).finally(() => { sessionRequest = null })
   return sessionRequest
 }
 
 export async function logoutServerSession() {
   try {
     await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { Accept: 'application/json' },
-      cache: 'no-store',
+      method: 'POST', credentials: 'include', headers: { Accept: 'application/json' }, cache: 'no-store',
     })
-  } finally {
-    clearAuthSession()
-  }
+  } finally { clearAuthSession() }
+}
+
+function jsonResponseFrom(response, payload) {
+  const headers = new Headers(response.headers)
+  headers.set('Content-Type', 'application/json')
+  return new Response(JSON.stringify(payload), {
+    status: response.status, statusText: response.statusText, headers,
+  })
 }
 
 export async function fetchJsonWithAuth(url, options = {}) {
@@ -196,10 +176,7 @@ export async function fetchJsonWithAuth(url, options = {}) {
   delete mergedHeaders.authorization
 
   const response = await fetch(url, {
-    ...restOptions,
-    credentials: 'include',
-    headers: mergedHeaders,
-    cache,
+    ...restOptions, credentials: 'include', headers: mergedHeaders, cache,
   })
   if (response.status === 401) {
     redirectToLogin('Je sessie is verlopen. Log opnieuw in.')
@@ -214,17 +191,10 @@ export async function fetchJsonWithAuth(url, options = {}) {
       const payload = await response.clone().json()
       const normalizedPayload = normalizeHouseholdAccessContext(payload)
       if (JSON.stringify(payload) !== JSON.stringify(normalizedPayload)) {
-        const headers = new Headers(response.headers)
-        headers.set('Content-Type', 'application/json')
-        return new Response(JSON.stringify(normalizedPayload), {
-          status: response.status,
-          statusText: response.statusText,
-          headers,
-        })
+        return jsonResponseFrom(response, normalizedPayload)
       }
     } catch {}
   }
-
   return response
 }
 

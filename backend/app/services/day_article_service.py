@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import Any
+from typing import Any, Iterable
 
 from sqlalchemy import inspect, text
 
@@ -105,6 +105,46 @@ def get_default_inventory_handling(conn, household_id: str, household_article_id
     return dict(row)
 
 
+def get_default_inventory_handling_batch(
+    conn,
+    household_id: str,
+    household_article_ids: Iterable[str],
+) -> list[dict[str, Any]]:
+    """Return defaults for unique article ids that belong to one household.
+
+    Unknown ids and ids from another household are deliberately omitted. This
+    prevents a batch lookup from becoming an article-existence oracle across
+    household boundaries. The caller can treat omitted ids as unlinked rows.
+    """
+
+    ensure_day_article_schema(conn)
+    normalized_household_id = str(household_id or "").strip()
+    unique_ids = list(dict.fromkeys(
+        str(article_id or "").strip()
+        for article_id in household_article_ids
+        if str(article_id or "").strip()
+    ))
+    if not unique_ids:
+        return []
+
+    results: list[dict[str, Any]] = []
+    for article_id in unique_ids:
+        row = conn.execute(text("""
+            SELECT id, household_id, naam,
+                   COALESCE(default_inventory_handling, 'STOCK') AS default_inventory_handling,
+                   inventory_handling_updated_at, inventory_handling_updated_by_user_id
+            FROM household_articles
+            WHERE id = :article_id AND household_id = :household_id
+            LIMIT 1
+        """), {
+            "article_id": article_id,
+            "household_id": normalized_household_id,
+        }).mappings().first()
+        if row:
+            results.append(dict(row))
+    return results
+
+
 def set_default_inventory_handling(conn, *, household_id: str, household_article_id: str,
                                    handling: str, actor_user_id: str) -> dict[str, Any]:
     normalized = str(handling or "").strip().upper()
@@ -156,8 +196,20 @@ def record_direct_consumption(conn, *, household_id: str, household_article_id: 
                     "event_type": event_type, "quantity": str(amount),
                     "space_id": location["space_id"], "sublocation_id": location["sublocation_id"],
                     "actor_user_id": str(actor_user_id)})
+    event_rows = conn.execute(text("""
+        SELECT id, event_type
+        FROM day_article_processing_events
+        WHERE household_id = :household_id AND idempotency_key = :idempotency_key
+        ORDER BY CASE event_type WHEN 'RECEIPT' THEN 0 ELSE 1 END
+    """), {
+        "household_id": str(household_id),
+        "idempotency_key": normalized_key,
+    }).mappings().all()
+    event_ids = {str(row.get("event_type") or ""): str(row.get("id") or "") for row in event_rows}
     return {"household_id": str(household_id), "household_article_id": str(household_article_id),
             "article_name": article.get("naam"), "handling": DIRECT_CONSUMPTION,
             "quantity_received": str(amount), "quantity_consumed": str(amount),
             "net_inventory_change": "0", "idempotency_key": normalized_key,
+            "receipt_event_id": event_ids.get("RECEIPT") or None,
+            "direct_consumption_event_id": event_ids.get("DIRECT_CONSUMPTION") or None,
             "idempotent_replay": int(existing or 0) > 0, **location}

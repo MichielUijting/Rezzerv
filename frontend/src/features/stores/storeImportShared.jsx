@@ -1,8 +1,9 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Button from '../../ui/Button'
 import demoData from '../../demo-articles.json'
 import { sortOptionObjects } from '../../ui/sorting'
 import { fetchJsonWithAuth, getAuthHeaders } from '../../lib/authSession'
+
 
 export function normalizeErrorMessage(value) {
   if (!value) return 'Verzoek mislukt'
@@ -32,7 +33,7 @@ export function normalizeErrorMessage(value) {
   return 'Verzoek mislukt'
 }
 
-export async function fetchJson(url, options = {}) {
+async function requestJson(url, options = {}) {
   const response = await fetchJsonWithAuth(url, {
     headers: {
       'Content-Type': 'application/json',
@@ -68,6 +69,10 @@ export async function fetchJson(url, options = {}) {
   }
 
   return data
+}
+
+export async function fetchJson(url, options = {}) {
+  return requestJson(url, options)
 }
 
 export const articleFallbackOptions = sortOptionObjects(demoData.articles.map((article) => ({
@@ -380,4 +385,3 @@ const createArticleButtonStyle = {
   fontWeight: 600,
   cursor: 'pointer',
 }
-

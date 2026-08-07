@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useBlocker } from 'react-router-dom'
 import AppShell from '../../app/AppShell'
 import Card from '../../ui/Card'
 import Button from '../../ui/Button'
@@ -7,582 +6,362 @@ import Table from '../../ui/Table'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from '../../ui/resizableTable.jsx'
 import { fetchJsonWithAuth, readStoredAuthContext } from '../../lib/authSession'
 
+const STOCK = 'STOCK'
+const DIRECT_CONSUMPTION = 'DIRECT_CONSUMPTION'
 const UNASSIGNED_LABEL = 'Niet ingedeeld'
-const initialGroupForm = { name: '' }
-const initialGroupFilters = { name: '', articles: '' }
-const initialArticleFilters = { article: '', group: '' }
+const greenCheckboxStyle = { accentColor: '#1A3E2B', width: 16, height: 16 }
+
 const groupTableColumns = [
   { key: 'select', width: 48 },
-  { key: 'name', width: 500 },
-  { key: 'articles', width: 220 },
+  { key: 'name', width: 330 },
+  { key: 'articles', width: 190 },
+  { key: 'handling', width: 180 },
 ]
 const articleTableColumns = [
   { key: 'select', width: 48 },
-  { key: 'article', width: 420 },
-  { key: 'group', width: 320 },
+  { key: 'article', width: 300 },
+  { key: 'group', width: 240 },
+  { key: 'handling', width: 180 },
 ]
 const groupColumnDefaults = Object.fromEntries(groupTableColumns.map(({ key, width }) => [key, width]))
 const articleColumnDefaults = Object.fromEntries(articleTableColumns.map(({ key, width }) => [key, width]))
-const greenCheckboxStyle = { accentColor: '#1A3E2B', width: 16, height: 16 }
+
+function normalizeHandling(value) {
+  return String(value || '').trim().toUpperCase() === DIRECT_CONSUMPTION
+    ? DIRECT_CONSUMPTION
+    : STOCK
+}
+
+function getAuthContext() {
+  return readStoredAuthContext() || {}
+}
 
 function getActiveHouseholdId() {
-  const householdId = String(readStoredAuthContext()?.active_household_id ?? '').trim()
-  if (!householdId) {
-    throw new Error('Geen actief huishouden beschikbaar. Log opnieuw in of selecteer een huishouden.')
-  }
+  const householdId = String(getAuthContext()?.active_household_id ?? '').trim()
+  if (!householdId) throw new Error('Geen actief huishouden beschikbaar. Log opnieuw in.')
   return householdId
 }
 
-function extractErrorMessage(payload, fallback) {
-  if (typeof payload === 'string' && payload.trim()) return payload.trim()
-  if (payload && typeof payload === 'object') {
-    if (typeof payload.detail === 'string' && payload.detail.trim()) return payload.detail.trim()
-    if (typeof payload.error === 'string' && payload.error.trim()) return payload.error.trim()
-    if (typeof payload.message === 'string' && payload.message.trim()) return payload.message.trim()
-  }
-  return fallback
+function canManageDefaults() {
+  const auth = getAuthContext()
+  const displayRole = String(auth?.display_role || '').toLowerCase()
+  const role = String(auth?.role || '').toLowerCase()
+  const permissions = auth?.permissions || {}
+  return Boolean(
+    permissions['articles.manage'] === true
+    || displayRole === 'admin'
+    || role === 'owner'
+    || role === 'admin'
+    || role === 'household.owner'
+    || role === 'household.admin'
+  )
 }
 
 async function requestJson(url, options = {}) {
   const response = await fetchJsonWithAuth(url, options)
   const data = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(extractErrorMessage(data, 'Verzoek mislukt'))
+  if (!response.ok) throw new Error(data?.detail || data?.message || 'Verzoek mislukt')
   return data
 }
 
-function FeedbackOverlay({ type = 'info', message, onClose }) {
-  if (!message) return null
-  const isError = type === 'error'
-  const title = isError ? 'Melding' : 'Bevestiging'
+function FeedbackOverlay({ message, error, onClose }) {
+  if (!message && !error) return null
   return (
     <div className="rz-modal-backdrop" role="presentation">
-      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="article-groups-feedback-title">
-        <h3 id="article-groups-feedback-title" className="rz-modal-title">{title}</h3>
-        <p className="rz-modal-text">{message}</p>
-        <div className="rz-modal-actions">
-          <Button type="button" onClick={onClose}>OK</Button>
-        </div>
+      <div className="rz-modal-card" role="dialog" aria-modal="true">
+        <h3 className="rz-modal-title">{error ? 'Melding' : 'Bevestiging'}</h3>
+        <p className="rz-modal-text">{error || message}</p>
+        <div className="rz-modal-actions"><Button type="button" onClick={onClose}>OK</Button></div>
       </div>
     </div>
   )
 }
 
-function ArticleGroupModal({ open, form, onChange, onClose, onSubmit, busy }) {
+function GroupModal({ open, onClose, onSave, busy }) {
+  const [name, setName] = useState('')
+  useEffect(() => { if (open) setName('') }, [open])
   if (!open) return null
   return (
     <div className="rz-modal-backdrop" role="presentation">
-      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="article-group-modal-title">
-        <h3 id="article-group-modal-title" className="rz-modal-title">Nieuwe Artikelgroep</h3>
-        <div style={{ display: 'grid', gap: 16 }}>
-          <label className="rz-input-field">
-            <div className="rz-label">Artikelgroep naam</div>
-            <input className="rz-input" autoFocus value={form.name} onChange={(event) => onChange({ ...form, name: event.target.value })} placeholder="Bijvoorbeeld: Zuivel" />
-          </label>
-        </div>
-        <div className="rz-modal-actions">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Annuleren</Button>
-          <Button type="button" onClick={onSubmit} disabled={busy}>{busy ? 'Opslaan…' : 'Opslaan'}</Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ActionModal({ open, title, noun, selectedCount, onClose, onDelete, onArchive, busy }) {
-  if (!open) return null
-  return (
-    <div className="rz-modal-backdrop" role="presentation">
-      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="article-group-action-modal-title">
-        <h3 id="article-group-action-modal-title" className="rz-modal-title">{title}</h3>
-        <p className="rz-modal-text">Je hebt {selectedCount} {noun}{selectedCount === 1 ? '' : 'en'} geselecteerd. Kies wat je wilt doen.</p>
-        <div className="rz-modal-actions">
-          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Annuleren</Button>
-          {onArchive ? <Button type="button" variant="secondary" onClick={onArchive} disabled={busy}>{busy ? 'Bezig…' : 'Archiveren'}</Button> : null}
-          <Button type="button" onClick={onDelete} disabled={busy}>{busy ? 'Bezig…' : 'Verwijderen'}</Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function BulkAssignArticleGroupModal({ open, selectedCount, groups, value, onChange, onClose, onApply, busy }) {
-  if (!open) return null
-  return (
-    <div className="rz-modal-backdrop" role="presentation">
-      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="article-group-bulk-assign-title">
-        <h3 id="article-group-bulk-assign-title" className="rz-modal-title">Toewijzen aan artikelgroep</h3>
-        <p className="rz-modal-text">Je wijst {selectedCount} geselecteerde voorraadartikel{selectedCount === 1 ? '' : 'en'} toe aan één Artikelgroep.</p>
+      <div className="rz-modal-card" role="dialog" aria-modal="true">
+        <h3 className="rz-modal-title">Nieuwe Artikelgroep</h3>
         <label className="rz-input-field">
-          <div className="rz-label">Artikelgroep</div>
-          <select className="rz-input" autoFocus value={value} onChange={(event) => onChange(event.target.value)}>
-            <option value="">{UNASSIGNED_LABEL}</option>
-            {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-          </select>
+          <div className="rz-label">Artikelgroepnaam</div>
+          <input className="rz-input" value={name} onChange={(event) => setName(event.target.value)} autoFocus />
         </label>
         <div className="rz-modal-actions">
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Annuleren</Button>
-          <Button type="button" onClick={onApply} disabled={busy}>{busy ? 'Toewijzen…' : 'Toewijzen'}</Button>
+          <Button type="button" onClick={() => onSave(name)} disabled={busy || !name.trim()}>Opslaan</Button>
         </div>
       </div>
     </div>
   )
 }
 
-function PendingChangesModal({ open, onSave, onDiscard, onCancel, busy }) {
+function BulkAssignModal({ open, groups, onClose, onSave, busy }) {
+  const [groupId, setGroupId] = useState('')
+  useEffect(() => { if (open) setGroupId('') }, [open])
   if (!open) return null
   return (
     <div className="rz-modal-backdrop" role="presentation">
-      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="article-group-pending-modal-title">
-        <h3 id="article-group-pending-modal-title" className="rz-modal-title">Wijzigingen bewaren?</h3>
-        <p className="rz-modal-text">Er zijn nog niet-opgeslagen wijzigingen in Artikelgroepen en/of artikelkoppelingen. Kies of je deze wilt opslaan of annuleren.</p>
+      <div className="rz-modal-card" role="dialog" aria-modal="true">
+        <h3 className="rz-modal-title">Toewijzen aan Artikelgroep</h3>
+        <select className="rz-input" value={groupId} onChange={(event) => setGroupId(event.target.value)}>
+          <option value="">{UNASSIGNED_LABEL}</option>
+          {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+        </select>
         <div className="rz-modal-actions">
-          <Button type="button" variant="secondary" onClick={onCancel} disabled={busy}>Terug naar scherm</Button>
-          <Button type="button" variant="secondary" onClick={onDiscard} disabled={busy}>Wijzigingen annuleren</Button>
-          <Button type="button" onClick={onSave} disabled={busy}>{busy ? 'Opslaan…' : 'Wijzigingen opslaan'}</Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>Annuleren</Button>
+          <Button type="button" onClick={() => onSave(groupId)} disabled={busy}>Opslaan</Button>
         </div>
       </div>
     </div>
   )
-}
-
-function BulkAssignConfirmationModal({ open, selectedCount, groupName, onCancel, onSave, busy }) {
-  if (!open) return null
-  return (
-    <div className="rz-modal-backdrop" role="presentation">
-      <div className="rz-modal-card" role="dialog" aria-modal="true" aria-labelledby="article-group-bulk-confirm-title">
-        <h3 id="article-group-bulk-confirm-title" className="rz-modal-title">Bevestiging</h3>
-        <p className="rz-modal-text">
-          {selectedCount} voorraadartikel{selectedCount === 1 ? '' : 'en'} toewijzen aan Artikelgroep {groupName}.
-        </p>
-        <div className="rz-modal-actions">
-          <Button type="button" variant="secondary" onClick={onCancel} disabled={busy}>Annuleren</Button>
-          <Button type="button" onClick={onSave} disabled={busy}>{busy ? 'Opslaan…' : 'Opslaan'}</Button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function groupDraftMapFromItems(items) {
-  return Object.fromEntries(items.map((item) => [String(item.id), { name: String(item.name || '') }]))
-}
-
-function articleDraftMapFromItems(items) {
-  return Object.fromEntries(items.map((item) => [String(item.id), { article_group_id: item.article_group_id ? String(item.article_group_id) : '' }]))
-}
-
-function countArticlesByGroup(items) {
-  return items.reduce((counts, item) => {
-    const key = item.article_group_id ? String(item.article_group_id) : ''
-    counts[key] = (counts[key] || 0) + 1
-    return counts
-  }, {})
-}
-
-function csvEscape(value) {
-  const text = String(value ?? '')
-  if (!text.includes(',') && !text.includes('"') && !text.includes('\n')) return text
-  return `"${text.replace(/"/g, '""')}"`
 }
 
 export default function SettingsArticleGroupsPage() {
   const householdId = useMemo(() => getActiveHouseholdId(), [])
+  const mayManageDefaults = useMemo(() => canManageDefaults(), [])
   const [groups, setGroups] = useState([])
   const [articles, setArticles] = useState([])
-  const [groupDrafts, setGroupDrafts] = useState({})
-  const [articleDrafts, setArticleDrafts] = useState({})
-  const [isLoading, setIsLoading] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
-  const [message, setMessage] = useState('')
-  const [error, setError] = useState('')
-  const [groupModalOpen, setGroupModalOpen] = useState(false)
-  const [groupForm, setGroupForm] = useState(initialGroupForm)
-  const [groupFilters, setGroupFilters] = useState(initialGroupFilters)
-  const [articleFilters, setArticleFilters] = useState(initialArticleFilters)
+  const [defaults, setDefaults] = useState({})
+  const [groupFilter, setGroupFilter] = useState('')
+  const [articleFilter, setArticleFilter] = useState('')
+  const [articleGroupFilter, setArticleGroupFilter] = useState('')
   const [selectedGroupIds, setSelectedGroupIds] = useState([])
   const [selectedArticleIds, setSelectedArticleIds] = useState([])
   const [selectedGroupId, setSelectedGroupId] = useState('')
-  const [showGroupActionModal, setShowGroupActionModal] = useState(false)
-  const [showArticleActionModal, setShowArticleActionModal] = useState(false)
-  const [showAssignArticleGroupModal, setShowAssignArticleGroupModal] = useState(false)
-  const [showBulkAssignConfirmationModal, setShowBulkAssignConfirmationModal] = useState(false)
-  const [bulkAssignGroupId, setBulkAssignGroupId] = useState('')
-  const [showPendingModal, setShowPendingModal] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+  const [groupModalOpen, setGroupModalOpen] = useState(false)
+  const [bulkModalOpen, setBulkModalOpen] = useState(false)
   const { widths: groupColumnWidths, startResize: startGroupResize } = useResizableColumnWidths(groupColumnDefaults)
   const { widths: articleColumnWidths, startResize: startArticleResize } = useResizableColumnWidths(articleColumnDefaults)
 
   async function loadData() {
-    setIsLoading(true)
+    setLoading(true)
     setError('')
     try {
-      const [groupsData, articlesData] = await Promise.all([
+      const [groupData, articleData] = await Promise.all([
         requestJson(`/api/article-groups?household_id=${encodeURIComponent(householdId)}`),
         requestJson(`/api/article-groups/household-articles?household_id=${encodeURIComponent(householdId)}`),
       ])
-      const nextGroups = Array.isArray(groupsData?.items) ? groupsData.items : []
-      const nextArticles = Array.isArray(articlesData?.items) ? articlesData.items : []
+      const nextGroups = Array.isArray(groupData?.items) ? groupData.items : []
+      const nextArticles = Array.isArray(articleData?.items) ? articleData.items : []
+      const batch = await requestJson(
+        `/api/households/${encodeURIComponent(householdId)}/articles/inventory-handling/batch`,
+        { method: 'POST', body: JSON.stringify({ household_article_ids: nextArticles.map((item) => item.id) }) },
+      )
       setGroups(nextGroups)
       setArticles(nextArticles)
-      setGroupDrafts(groupDraftMapFromItems(nextGroups))
-      setArticleDrafts(articleDraftMapFromItems(nextArticles))
-      setSelectedGroupId((current) => current && nextGroups.some((item) => String(item.id) === String(current)) ? current : '')
+      setDefaults(Object.fromEntries(
+        (Array.isArray(batch?.items) ? batch.items : []).map(
+          (item) => [String(item.id), normalizeHandling(item.default_inventory_handling)],
+        ),
+      ))
     } catch (loadError) {
-      setError(loadError?.message || 'Artikelgroepen konden niet worden geladen')
+      setError(loadError?.message || 'Artikelgroepen konden niet worden geladen.')
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  useEffect(() => {
-    loadData()
-  }, [])
+  useEffect(() => { loadData() }, [])
 
-  const sortedGroups = useMemo(() => [...groups].sort((a, b) => String(a?.name || '').localeCompare(String(b?.name || ''), 'nl')), [groups])
-  const groupArticleCounts = useMemo(
-    () => countArticlesByGroup(articles.map((item) => ({
-      ...item,
-      article_group_id: articleDrafts[String(item.id)]?.article_group_id ?? item.article_group_id,
-    }))),
-    [articles, articleDrafts],
+  const sortedGroups = useMemo(
+    () => [...groups].sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'nl')),
+    [groups],
   )
-  const selectedGroup = useMemo(() => sortedGroups.find((item) => String(item.id) === String(selectedGroupId)) || null, [sortedGroups, selectedGroupId])
-
-  const groupDirtyCount = useMemo(() => groups.reduce((count, item) => {
-    const draft = groupDrafts[String(item.id)]
-    if (!draft) return count
-    if (String(draft.name || '').trim() !== String(item.name || '').trim()) return count + 1
-    return count
-  }, 0), [groups, groupDrafts])
-
-  const articleDirtyCount = useMemo(() => articles.reduce((count, item) => {
-    const draft = articleDrafts[String(item.id)]
-    if (!draft) return count
-    if (String(draft.article_group_id || '') !== String(item.article_group_id || '')) return count + 1
-    return count
-  }, 0), [articles, articleDrafts])
-
-  const hasPendingChanges = groupDirtyCount > 0 || articleDirtyCount > 0
-  const blocker = useBlocker(hasPendingChanges)
-
-  useEffect(() => {
-    const handleBeforeUnload = (event) => {
-      if (!hasPendingChanges) return undefined
-      event.preventDefault()
-      event.returnValue = ''
-      return ''
-    }
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [hasPendingChanges])
-
-  useEffect(() => {
-    if (blocker.state === 'blocked') setShowPendingModal(true)
-  }, [blocker.state])
-
-  const filteredGroups = useMemo(() => sortedGroups.filter((item) => {
-    const draft = groupDrafts[String(item.id)] || { name: item.name }
-    const nameOk = !groupFilters.name || String(draft?.name || '').toLowerCase().includes(groupFilters.name.toLowerCase())
-    const countOk = !groupFilters.articles || String(Number(groupArticleCounts[String(item.id)] || 0)).includes(groupFilters.articles)
-    return nameOk && countOk
-  }), [sortedGroups, groupFilters, groupDrafts, groupArticleCounts])
-
+  const articleCounts = useMemo(() => articles.reduce((result, article) => {
+    const key = String(article.article_group_id || '')
+    result[key] = (result[key] || 0) + 1
+    return result
+  }, {}), [articles])
+  const filteredGroups = useMemo(
+    () => sortedGroups.filter((group) => String(group.name || '').toLowerCase().includes(groupFilter.toLowerCase())),
+    [sortedGroups, groupFilter],
+  )
   const visibleArticles = useMemo(() => {
-    if (!selectedGroupId) return articles
-    return articles.filter((item) => String(item.article_group_id || '') === String(selectedGroupId || ''))
-  }, [articles, selectedGroupId])
-
-  const filteredArticles = useMemo(() => {
-    return [...visibleArticles]
-      .sort((a, b) => String(a?.article_name || '').localeCompare(String(b?.article_name || ''), 'nl'))
-      .filter((item) => {
-        const draft = articleDrafts[String(item.id)] || { article_group_id: item.article_group_id || '' }
-        const groupName = draft.article_group_id ? (groups.find((group) => String(group.id) === String(draft.article_group_id))?.name || '') : UNASSIGNED_LABEL
-        const articleOk = !articleFilters.article || String(item?.article_name || '').toLowerCase().includes(articleFilters.article.toLowerCase())
-        const groupOk = !articleFilters.group || String(groupName || '').toLowerCase().includes(articleFilters.group.toLowerCase())
-        return articleOk && groupOk
+    const base = selectedGroupId
+      ? articles.filter((article) => String(article.article_group_id || '') === String(selectedGroupId))
+      : articles
+    return [...base]
+      .sort((a, b) => String(a.article_name || '').localeCompare(String(b.article_name || ''), 'nl'))
+      .filter((article) => {
+        const groupName = article.article_group_id
+          ? String(groups.find((group) => String(group.id) === String(article.article_group_id))?.name || '')
+          : UNASSIGNED_LABEL
+        return String(article.article_name || '').toLowerCase().includes(articleFilter.toLowerCase())
+          && groupName.toLowerCase().includes(articleGroupFilter.toLowerCase())
       })
-  }, [visibleArticles, articleFilters, articleDrafts, groups])
+  }, [articles, groups, selectedGroupId, articleFilter, articleGroupFilter])
 
-  const deletableFilteredGroups = useMemo(
-    () => filteredGroups.filter((item) => Number(groupArticleCounts[String(item.id)] || 0) === 0),
-    [filteredGroups, groupArticleCounts],
+  const selectableVisibleGroupIds = useMemo(
+    () => filteredGroups
+      .filter((group) => Number(articleCounts[String(group.id)] || 0) === 0)
+      .map((group) => String(group.id)),
+    [filteredGroups, articleCounts],
   )
-  const selectedDeletableGroupIds = useMemo(
-    () => selectedGroupIds.filter((id) => Number(groupArticleCounts[String(id)] || 0) === 0),
-    [selectedGroupIds, groupArticleCounts],
+  const visibleArticleIds = useMemo(
+    () => visibleArticles.map((article) => String(article.id)),
+    [visibleArticles],
   )
-  const allFilteredGroupsSelected = deletableFilteredGroups.length > 0 && deletableFilteredGroups.every((item) => selectedGroupIds.includes(String(item.id)))
-  const allFilteredArticlesSelected = filteredArticles.length > 0 && filteredArticles.every((item) => selectedArticleIds.includes(String(item.id)))
+  const allVisibleGroupsSelected = selectableVisibleGroupIds.length > 0
+    && selectableVisibleGroupIds.every((id) => selectedGroupIds.includes(id))
+  const allVisibleArticlesSelected = visibleArticleIds.length > 0
+    && visibleArticleIds.every((id) => selectedArticleIds.includes(id))
 
-  function toggleSelectedGroup(id) {
-    const key = String(id)
-    if (Number(groupArticleCounts[key] || 0) > 0) return
-    setSelectedGroupIds((current) => current.includes(key) ? current.filter((value) => value !== key) : [...current, key])
-  }
-
-  function toggleSelectedArticle(id) {
-    const key = String(id)
-    setSelectedArticleIds((current) => current.includes(key) ? current.filter((value) => value !== key) : [...current, key])
-  }
-
-  function toggleAllFilteredGroups() {
-    if (allFilteredGroupsSelected) {
-      const filteredSet = new Set(deletableFilteredGroups.map((item) => String(item.id)))
-      setSelectedGroupIds((current) => current.filter((id) => !filteredSet.has(id)))
+  function toggleAllVisibleGroups() {
+    const visibleSet = new Set(selectableVisibleGroupIds)
+    if (allVisibleGroupsSelected) {
+      setSelectedGroupIds((current) => current.filter((id) => !visibleSet.has(id)))
       return
     }
-    const merged = new Set(selectedGroupIds.filter((id) => Number(groupArticleCounts[String(id)] || 0) === 0))
-    deletableFilteredGroups.forEach((item) => merged.add(String(item.id)))
-    setSelectedGroupIds(Array.from(merged))
+    setSelectedGroupIds((current) => Array.from(new Set([...current, ...selectableVisibleGroupIds])))
   }
 
-  function toggleAllFilteredArticles() {
-    if (allFilteredArticlesSelected) {
-      const filteredSet = new Set(filteredArticles.map((item) => String(item.id)))
-      setSelectedArticleIds((current) => current.filter((id) => !filteredSet.has(id)))
+  function toggleAllVisibleArticles() {
+    const visibleSet = new Set(visibleArticleIds)
+    if (allVisibleArticlesSelected) {
+      setSelectedArticleIds((current) => current.filter((id) => !visibleSet.has(id)))
       return
     }
-    const merged = new Set(selectedArticleIds)
-    filteredArticles.forEach((item) => merged.add(String(item.id)))
-    setSelectedArticleIds(Array.from(merged))
+    setSelectedArticleIds((current) => Array.from(new Set([...current, ...visibleArticleIds])))
   }
 
-  function openCreateGroup() {
-    setMessage('')
-    setError('')
-    setGroupForm(initialGroupForm)
-    setGroupModalOpen(true)
-  }
-
-  function openBulkAssignArticleGroup() {
-    if (!selectedArticleIds.length) return
-    setMessage('')
-    setError('')
-    const preferredGroupId = selectedGroupId && sortedGroups.some((group) => String(group.id) === String(selectedGroupId)) ? String(selectedGroupId) : ''
-    setBulkAssignGroupId(preferredGroupId)
-    setShowAssignArticleGroupModal(true)
-  }
-
-  function applyBulkAssignArticleGroup() {
-    if (!selectedArticleIds.length) return
-    setShowAssignArticleGroupModal(false)
-    setShowBulkAssignConfirmationModal(true)
-  }
-
-  async function confirmBulkAssignArticleGroup() {
-    if (!selectedArticleIds.length) return
-    setIsSaving(true)
-    setError('')
-    setMessage('')
-    const groupName = bulkAssignGroupId ? (sortedGroups.find((group) => String(group.id) === String(bulkAssignGroupId))?.name || 'gekozen Artikelgroep') : UNASSIGNED_LABEL
+  async function saveHandling(articleId, checked) {
+    const next = checked ? DIRECT_CONSUMPTION : STOCK
+    const previous = defaults[String(articleId)] || STOCK
+    setDefaults((current) => ({ ...current, [String(articleId)]: next }))
     try {
-      for (const id of selectedArticleIds) {
-        await requestJson(`/api/household-articles/${encodeURIComponent(id)}/article-group`, {
-          method: 'PUT',
-          body: JSON.stringify({ household_id: householdId, article_group_id: bulkAssignGroupId || null }),
-        })
-      }
-      const savedCount = selectedArticleIds.length
-      await loadData()
-      setSelectedArticleIds([])
-      setShowBulkAssignConfirmationModal(false)
-      setMessage(`${savedCount} voorraadartikel${savedCount === 1 ? '' : 'en'} toegewezen aan Artikelgroep ${groupName}.`)
+      const saved = await requestJson(
+        `/api/households/${encodeURIComponent(householdId)}/articles/${encodeURIComponent(articleId)}/inventory-handling`,
+        { method: 'PUT', body: JSON.stringify({ default_inventory_handling: next }) },
+      )
+      setDefaults((current) => ({ ...current, [String(articleId)]: normalizeHandling(saved?.default_inventory_handling) }))
     } catch (saveError) {
-      setError(saveError?.message || 'Toewijzen aan Artikelgroep mislukt.')
-    } finally {
-      setIsSaving(false)
+      setDefaults((current) => ({ ...current, [String(articleId)]: previous }))
+      throw saveError
     }
   }
 
-  function updateGroupDraft(id, patch) {
-    const key = String(id)
-    setGroupDrafts((current) => ({ ...current, [key]: { ...(current[key] || {}), ...patch } }))
-  }
-
-  function updateArticleDraft(id, patch) {
-    const key = String(id)
-    setArticleDrafts((current) => ({ ...current, [key]: { ...(current[key] || {}), ...patch } }))
-  }
-
-  function discardPendingChanges() {
-    setGroupDrafts(groupDraftMapFromItems(groups))
-    setArticleDrafts(articleDraftMapFromItems(articles))
-    setMessage('Wijzigingen geannuleerd.')
+  async function setGroupHandling(groupId, checked) {
+    if (!mayManageDefaults) return
+    const groupArticles = articles.filter((article) => String(article.article_group_id || '') === String(groupId))
+    setSaving(true)
     setError('')
-  }
-
-  async function savePendingChanges() {
-    const changedGroups = groups.filter((item) => {
-      const draft = groupDrafts[String(item.id)]
-      return draft && String(draft.name || '').trim() !== String(item.name || '').trim()
-    })
-    const changedArticles = articles.filter((item) => {
-      const draft = articleDrafts[String(item.id)]
-      return draft && String(draft.article_group_id || '') !== String(item.article_group_id || '')
-    })
-
-    for (const item of changedGroups) {
-      const draft = groupDrafts[String(item.id)]
-      if (!String(draft?.name || '').trim()) {
-        setError('Elke Artikelgroep moet een naam hebben voordat je opslaat.')
-        return false
-      }
-    }
-
-    if (!changedGroups.length && !changedArticles.length) {
-      setShowPendingModal(false)
-      return true
-    }
-
-    setIsSaving(true)
-    setError('')
-    setMessage('')
     try {
-      for (const item of changedGroups) {
-        const draft = groupDrafts[String(item.id)]
-        await requestJson(`/api/article-groups/${encodeURIComponent(item.id)}`, {
-          method: 'PUT',
-          body: JSON.stringify({ household_id: householdId, name: String(draft.name || '').trim() }),
-        })
-      }
-      for (const item of changedArticles) {
-        const draft = articleDrafts[String(item.id)]
-        await requestJson(`/api/household-articles/${encodeURIComponent(item.id)}/article-group`, {
-          method: 'PUT',
-          body: JSON.stringify({ household_id: householdId, article_group_id: draft.article_group_id || null }),
-        })
-      }
-      await loadData()
-      setSelectedArticleIds([])
-      setMessage(`${changedGroups.length + changedArticles.length} wijziging${changedGroups.length + changedArticles.length === 1 ? '' : 'en'} opgeslagen.`)
-      setShowPendingModal(false)
-      return true
+      for (const article of groupArticles) await saveHandling(article.id, checked)
     } catch (saveError) {
-      setError(saveError?.message || 'Wijzigingen opslaan mislukt.')
-      return false
+      setError(saveError?.message || 'Directe consumptie van de Artikelgroep kon niet worden opgeslagen.')
+      await loadData()
     } finally {
-      setIsSaving(false)
+      setSaving(false)
     }
   }
 
-  async function handleSaveGroup() {
-    const name = String(groupForm.name || '').trim()
-    if (!name) {
-      setError('Artikelgroepnaam is verplicht.')
-      return
-    }
-    setIsSaving(true)
+  async function setArticleHandling(articleId, checked) {
+    if (!mayManageDefaults) return
+    setSaving(true)
     setError('')
-    setMessage('')
     try {
-      await requestJson('/api/article-groups', { method: 'POST', body: JSON.stringify({ household_id: householdId, name }) })
-      setMessage('Artikelgroep opgeslagen.')
+      await saveHandling(articleId, checked)
+    } catch (saveError) {
+      setError(saveError?.message || 'Directe consumptie kon niet worden opgeslagen.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function saveGroupName(group, name) {
+    const trimmed = String(name || '').trim()
+    if (!trimmed || trimmed === group.name) return
+    setSaving(true)
+    try {
+      await requestJson(`/api/article-groups/${encodeURIComponent(group.id)}`, {
+        method: 'PUT', body: JSON.stringify({ household_id: householdId, name: trimmed }),
+      })
+      setGroups((current) => current.map((item) => String(item.id) === String(group.id) ? { ...item, name: trimmed } : item))
+    } catch (saveError) {
+      setError(saveError?.message || 'Artikelgroepnaam kon niet worden opgeslagen.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function changeArticleGroup(articleId, groupId) {
+    setSaving(true)
+    try {
+      await requestJson(`/api/household-articles/${encodeURIComponent(articleId)}/article-group`, {
+        method: 'PUT', body: JSON.stringify({ household_id: householdId, article_group_id: groupId || null }),
+      })
+      setArticles((current) => current.map((item) => String(item.id) === String(articleId) ? { ...item, article_group_id: groupId || null } : item))
+    } catch (saveError) {
+      setError(saveError?.message || 'Artikelgroep kon niet worden gewijzigd.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function addGroup(name) {
+    setSaving(true)
+    try {
+      await requestJson('/api/article-groups', { method: 'POST', body: JSON.stringify({ household_id: householdId, name: name.trim() }) })
       setGroupModalOpen(false)
       await loadData()
+      setMessage('Artikelgroep toegevoegd.')
     } catch (saveError) {
-      setError(saveError?.message || 'Artikelgroep opslaan mislukt.')
+      setError(saveError?.message || 'Artikelgroep kon niet worden toegevoegd.')
     } finally {
-      setIsSaving(false)
+      setSaving(false)
     }
   }
 
   async function deleteSelectedGroups() {
-    const selectedItems = groups.filter((item) => selectedDeletableGroupIds.includes(String(item.id)))
-    if (!selectedItems.length) return
-    setIsSaving(true)
-    setError('')
-    setMessage('')
-    let deletedCount = 0
-    let deactivatedCount = 0
-    const blocked = []
+    setSaving(true)
     try {
-      for (const item of selectedItems) {
-        try {
-          const result = await requestJson(`/api/article-groups/${encodeURIComponent(item.id)}?household_id=${encodeURIComponent(householdId)}`, { method: 'DELETE' })
-          if (result?.deactivated) deactivatedCount += 1
-          else if (result?.deleted) deletedCount += 1
-          else blocked.push(item.name)
-        } catch {
-          blocked.push(item.name)
-        }
+      for (const groupId of selectedGroupIds) {
+        if (Number(articleCounts[String(groupId)] || 0) > 0) continue
+        await requestJson(`/api/article-groups/${encodeURIComponent(groupId)}?household_id=${encodeURIComponent(householdId)}`, { method: 'DELETE' })
       }
-      await loadData()
       setSelectedGroupIds([])
-      const parts = []
-      if (deletedCount) parts.push(`${deletedCount} Artikelgroep${deletedCount === 1 ? '' : 'en'} verwijderd`)
-      if (deactivatedCount) parts.push(`${deactivatedCount} Artikelgroep${deactivatedCount === 1 ? '' : 'en'} gearchiveerd omdat deze in gebruik was`)
-      if (blocked.length) parts.push(`${blocked.length} Artikelgroep${blocked.length === 1 ? '' : 'en'} niet verwerkt`)
-      if (parts.length) setMessage(`${parts.join('. ')}.`)
-      else setError('Geen Artikelgroepen verwijderd.')
+      await loadData()
+    } catch (saveError) {
+      setError(saveError?.message || 'Artikelgroepen konden niet worden verwijderd.')
     } finally {
-      setIsSaving(false)
-      setShowGroupActionModal(false)
+      setSaving(false)
     }
   }
 
-  function clearSelectedArticleGroups() {
-    if (!selectedArticleIds.length) return
-    selectedArticleIds.forEach((id) => updateArticleDraft(id, { article_group_id: '' }))
-    setShowArticleActionModal(false)
-    setMessage(`${selectedArticleIds.length} artikel${selectedArticleIds.length === 1 ? '' : 'en'} klaargezet als ${UNASSIGNED_LABEL}. Kies Wijzigingen opslaan om te bewaren.`)
+  async function bulkAssign(groupId) {
+    setSaving(true)
+    try {
+      for (const articleId of selectedArticleIds) await changeArticleGroup(articleId, groupId)
+      setBulkModalOpen(false)
+      setSelectedArticleIds([])
+      setMessage('Geselecteerde huishoudartikelen bijgewerkt.')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  function archiveSelectedArticlesNoop() {
-    setShowArticleActionModal(false)
-    clearSelectedArticleGroups()
-  }
-
-  function exportGroupsCsv() {
-    const rows = [['Artikelgroep', 'Aantal artikelen'], ...filteredGroups.map((item) => {
-      const draft = groupDrafts[String(item.id)] || { name: item.name }
-      return [draft.name, Number(groupArticleCounts[String(item.id)] || 0)]
+  function exportArticles() {
+    const rows = [['Artikel', 'Artikelgroep', 'Directe consumptie'], ...visibleArticles.map((article) => {
+      const groupName = article.article_group_id
+        ? groups.find((group) => String(group.id) === String(article.article_group_id))?.name || ''
+        : UNASSIGNED_LABEL
+      const handling = normalizeHandling(defaults[String(article.id)]) === DIRECT_CONSUMPTION ? 'Direct consumeren' : 'Opslaan in voorraad'
+      return [article.article_name || '', groupName, handling]
     })]
-    const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
+    const csv = rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
     const anchor = document.createElement('a')
     anchor.href = url
-    anchor.download = 'rezzerv-artikelgroepen.csv'
-    document.body.appendChild(anchor)
+    anchor.download = 'rezzerv-huishoudartikelen.csv'
     anchor.click()
-    anchor.remove()
     URL.revokeObjectURL(url)
-  }
-
-  function exportArticleLinksCsv() {
-    const rows = [['Artikel', 'Artikelgroep'], ...filteredArticles.map((item) => {
-      const draft = articleDrafts[String(item.id)] || { article_group_id: item.article_group_id || '' }
-      const groupName = draft.article_group_id ? (groups.find((group) => String(group.id) === String(draft.article_group_id))?.name || '') : UNASSIGNED_LABEL
-      return [item.article_name || 'Onbekend artikel', groupName]
-    })]
-    const csv = rows.map((row) => row.map(csvEscape).join(',')).join('\n')
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = 'rezzerv-artikelgroep-koppelingen.csv'
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-    URL.revokeObjectURL(url)
-  }
-
-  async function confirmSaveAndContinue() {
-    const ok = await savePendingChanges()
-    if (!ok) return
-    setShowPendingModal(false)
-    if (blocker.state === 'blocked') blocker.proceed()
-  }
-
-  function confirmDiscardAndContinue() {
-    discardPendingChanges()
-    setShowPendingModal(false)
-    if (blocker.state === 'blocked') blocker.proceed()
-  }
-
-  function cancelPendingDialog() {
-    setShowPendingModal(false)
-    if (blocker.state === 'blocked') blocker.reset()
   }
 
   const groupTableWidth = buildTableWidth(groupColumnWidths)
@@ -592,132 +371,104 @@ export default function SettingsArticleGroupsPage() {
     <AppShell title="Artikelgroepen" showExit={false}>
       <Card className="rz-settings-spaces-card">
         <div style={{ display: 'grid', gap: 24, width: '100%' }} data-testid="settings-article-groups-page">
-          <div>
-            <h2 style={{ margin: 0, fontSize: 20 }}>Beheer Artikelgroepen</h2>
-          </div>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Beheer Artikelgroepen</h2>
 
           <section style={{ display: 'grid', gap: 18 }}>
-            <div style={{ fontWeight: 700, color: '#0f172a' }}>Artikelgroepen</div>
-            <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" tableStyle={{ tableLayout: 'fixed', width: groupTableWidth, minWidth: groupTableWidth }}>
+            <strong>Artikelgroepen</strong>
+            <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" tableStyle={{ tableLayout: 'fixed', width: groupTableWidth, minWidth: groupTableWidth, maxWidth: '100%' }}>
               <colgroup>
                 <col style={{ width: `${groupColumnWidths.select}px` }} />
                 <col style={{ width: `${groupColumnWidths.name}px` }} />
                 <col style={{ width: `${groupColumnWidths.articles}px` }} />
+                <col style={{ width: `${groupColumnWidths.handling}px` }} />
               </colgroup>
               <thead>
                 <tr className="rz-table-header">
                   <ResizableHeaderCell columnKey="select" widths={groupColumnWidths} onStartResize={startGroupResize}>
-                    <input type="checkbox" style={greenCheckboxStyle} checked={allFilteredGroupsSelected} onChange={toggleAllFilteredGroups} aria-label="Selecteer alle zichtbare Artikelgroepen" />
+                    <input type="checkbox" style={greenCheckboxStyle} checked={allVisibleGroupsSelected} disabled={selectableVisibleGroupIds.length === 0} onChange={toggleAllVisibleGroups} aria-label="Selecteer alle zichtbare selecteerbare Artikelgroepen" />
                   </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="name" widths={groupColumnWidths} onStartResize={startGroupResize}>Artikelgroep</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="articles" widths={groupColumnWidths} onStartResize={startGroupResize} className="rz-num">Aantal artikelen</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="handling" widths={groupColumnWidths} onStartResize={startGroupResize}>Directe consumptie</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
-                  <th><input className="rz-input rz-inline-input" value={groupFilters.name} onChange={(event) => setGroupFilters((current) => ({ ...current, name: event.target.value }))} placeholder="Filter" aria-label="Filter op Artikelgroep" /></th>
-                  <th><input className="rz-input rz-inline-input" value={groupFilters.articles} onChange={(event) => setGroupFilters((current) => ({ ...current, articles: event.target.value }))} placeholder="Filter" aria-label="Filter op aantal artikelen" /></th>
+                  <th><input className="rz-input rz-inline-input" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)} placeholder="Filter" /></th>
+                  <th />
+                  <th />
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={3}>Artikelgroepen laden…</td></tr>
-                ) : filteredGroups.length === 0 ? (
-                  <tr><td colSpan={3}>Nog geen Artikelgroepen. Artikelen zonder groep worden getoond als “{UNASSIGNED_LABEL}”.</td></tr>
-                ) : filteredGroups.map((item) => {
-                  const linkedArticleCount = Number(groupArticleCounts[String(item.id)] || 0)
-                  const canDeleteGroup = linkedArticleCount === 0
-                  const selected = canDeleteGroup && selectedGroupIds.includes(String(item.id))
-                  const detailSelected = String(selectedGroupId) === String(item.id)
-                  const draft = groupDrafts[String(item.id)] || { name: item.name }
+                {loading ? <tr><td colSpan={4}>Artikelgroepen laden…</td></tr> : filteredGroups.length === 0 ? <tr><td colSpan={4}>Geen Artikelgroepen gevonden.</td></tr> : filteredGroups.map((group) => {
+                  const groupArticles = articles.filter((article) => String(article.article_group_id || '') === String(group.id))
+                  const directChecked = groupArticles.length > 0 && groupArticles.every((article) => normalizeHandling(defaults[String(article.id)]) === DIRECT_CONSUMPTION)
+                  const deletable = groupArticles.length === 0
                   return (
-                    <tr key={item.id} className={selected || detailSelected ? 'rz-row-selected' : ''} onDoubleClick={() => setSelectedGroupId(String(item.id))} title={canDeleteGroup ? 'Dubbelklik om artikelen van deze Artikelgroep te tonen' : 'Deze Artikelgroep kan niet worden verwijderd zolang er artikelen aan gekoppeld zijn'}>
-                      <td><input type="checkbox" style={greenCheckboxStyle} checked={selected} disabled={!canDeleteGroup} onChange={() => toggleSelectedGroup(item.id)} aria-label={canDeleteGroup ? `Selecteer ${item.name}` : `${item.name} kan niet worden verwijderd; ${linkedArticleCount} artikel${linkedArticleCount === 1 ? '' : 'en'} gekoppeld`} /></td>
-                      <td><input className="rz-input rz-inline-input" value={draft.name} onChange={(event) => updateGroupDraft(item.id, { name: event.target.value })} aria-label={`Artikelgroepnaam ${item.name}`} /></td>
-                      <td className="rz-num">{Number(groupArticleCounts[String(item.id)] || 0)}</td>
+                    <tr key={group.id} className={String(selectedGroupId) === String(group.id) ? 'rz-row-selected' : ''} onDoubleClick={() => setSelectedGroupId(String(group.id))}>
+                      <td><input type="checkbox" style={greenCheckboxStyle} checked={selectedGroupIds.includes(String(group.id))} disabled={!deletable} onChange={() => setSelectedGroupIds((current) => current.includes(String(group.id)) ? current.filter((id) => id !== String(group.id)) : [...current, String(group.id)])} /></td>
+                      <td><input className="rz-input rz-inline-input" defaultValue={group.name} onBlur={(event) => saveGroupName(group, event.target.value)} /></td>
+                      <td className="rz-num">{groupArticles.length}</td>
+                      <td style={{ textAlign: 'center' }}><input type="checkbox" style={greenCheckboxStyle} checked={directChecked} disabled={!mayManageDefaults || saving || groupArticles.length === 0} onChange={(event) => setGroupHandling(group.id, event.target.checked)} aria-label={`Directe consumptie Artikelgroep ${group.name}`} /></td>
                     </tr>
                   )
                 })}
               </tbody>
             </Table>
-            <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-              <Button type="button" variant="secondary" onClick={() => setShowGroupActionModal(true)} disabled={isSaving || selectedDeletableGroupIds.length === 0}>Verwijderen</Button>
-              <Button type="button" onClick={openCreateGroup} disabled={isSaving}>Toevoegen Artikelgroep</Button>
+            <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', gap: 12 }}>
+              <Button type="button" variant="secondary" onClick={deleteSelectedGroups} disabled={saving || selectedGroupIds.length === 0}>Verwijderen</Button>
+              <Button type="button" onClick={() => setGroupModalOpen(true)} disabled={saving}>Toevoegen Artikelgroep</Button>
             </div>
           </section>
 
           <section style={{ display: 'grid', gap: 18 }}>
-            <div style={{ fontWeight: 700, color: '#0f172a' }}>Artikelen{selectedGroup ? ` van ${selectedGroup.name}` : ''}</div>
+            <strong>Huishoudartikelen{selectedGroupId ? ` van ${groups.find((group) => String(group.id) === String(selectedGroupId))?.name || ''}` : ''}</strong>
             <p style={{ margin: 0, color: '#667085' }}>Koppelen is handmatig. Barcodeherkenning, externe databases en Uitpakken wijzigen deze koppeling niet.</p>
-            <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" tableStyle={{ tableLayout: 'fixed', width: articleTableWidth, minWidth: articleTableWidth }}>
+            <Table wrapperClassName="rz-stock-table-wrapper" tableClassName="rz-stock-table" tableStyle={{ tableLayout: 'fixed', width: articleTableWidth, minWidth: articleTableWidth, maxWidth: '100%' }}>
               <colgroup>
                 <col style={{ width: `${articleColumnWidths.select}px` }} />
                 <col style={{ width: `${articleColumnWidths.article}px` }} />
                 <col style={{ width: `${articleColumnWidths.group}px` }} />
+                <col style={{ width: `${articleColumnWidths.handling}px` }} />
               </colgroup>
               <thead>
                 <tr className="rz-table-header">
                   <ResizableHeaderCell columnKey="select" widths={articleColumnWidths} onStartResize={startArticleResize}>
-                    <input type="checkbox" style={greenCheckboxStyle} checked={allFilteredArticlesSelected} onChange={toggleAllFilteredArticles} aria-label="Selecteer alle zichtbare artikelen" />
+                    <input type="checkbox" style={greenCheckboxStyle} checked={allVisibleArticlesSelected} disabled={visibleArticleIds.length === 0} onChange={toggleAllVisibleArticles} aria-label="Selecteer alle zichtbare huishoudartikelen" />
                   </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="article" widths={articleColumnWidths} onStartResize={startArticleResize}>Artikel</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="group" widths={articleColumnWidths} onStartResize={startArticleResize}>Artikelgroep</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="handling" widths={articleColumnWidths} onStartResize={startArticleResize}>Directe consumptie</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
-                  <th><input className="rz-input rz-inline-input" value={articleFilters.article} onChange={(event) => setArticleFilters((current) => ({ ...current, article: event.target.value }))} placeholder="Filter" aria-label="Filter op artikel" /></th>
-                  <th><input className="rz-input rz-inline-input" value={articleFilters.group} onChange={(event) => setArticleFilters((current) => ({ ...current, group: event.target.value }))} placeholder="Filter" aria-label="Filter op Artikelgroep" /></th>
+                  <th><input className="rz-input rz-inline-input" value={articleFilter} onChange={(event) => setArticleFilter(event.target.value)} placeholder="Filter" /></th>
+                  <th><input className="rz-input rz-inline-input" value={articleGroupFilter} onChange={(event) => setArticleGroupFilter(event.target.value)} placeholder="Filter" /></th>
+                  <th />
                 </tr>
               </thead>
               <tbody>
-                {isLoading ? (
-                  <tr><td colSpan={3}>Voorraadartikelen laden…</td></tr>
-                ) : !articles.length ? (
-                  <tr><td colSpan={3}>Geen huishoudelijke voorraadartikelen gevonden.</td></tr>
-                ) : filteredArticles.length === 0 ? (
-                  <tr><td colSpan={3}>Geen voorraadartikelen voor deze selectie.</td></tr>
-                ) : filteredArticles.map((item) => {
-                  const selected = selectedArticleIds.includes(String(item.id))
-                  const draft = articleDrafts[String(item.id)] || { article_group_id: item.article_group_id || '' }
-                  return (
-                    <tr key={item.id} className={selected ? 'rz-row-selected' : ''}>
-                      <td><input type="checkbox" style={greenCheckboxStyle} checked={selected} onChange={() => toggleSelectedArticle(item.id)} aria-label={`Selecteer ${item.article_name || 'Onbekend artikel'}`} /></td>
-                      <td>{item.article_name || 'Onbekend artikel'}</td>
-                      <td>
-                        <select className="rz-input rz-inline-input" value={draft.article_group_id || ''} onChange={(event) => updateArticleDraft(item.id, { article_group_id: event.target.value })} aria-label={`Artikelgroep ${item.article_name || 'Onbekend artikel'}`}>
-                          <option value="">{UNASSIGNED_LABEL}</option>
-                          {sortedGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-                        </select>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {loading ? <tr><td colSpan={4}>Huishoudartikelen laden…</td></tr> : visibleArticles.length === 0 ? <tr><td colSpan={4}>Geen huishoudartikelen gevonden.</td></tr> : visibleArticles.map((article) => (
+                  <tr key={article.id} className={selectedArticleIds.includes(String(article.id)) ? 'rz-row-selected' : ''}>
+                    <td><input type="checkbox" style={greenCheckboxStyle} checked={selectedArticleIds.includes(String(article.id))} onChange={() => setSelectedArticleIds((current) => current.includes(String(article.id)) ? current.filter((id) => id !== String(article.id)) : [...current, String(article.id)])} /></td>
+                    <td>{article.article_name || 'Onbekend artikel'}</td>
+                    <td><select className="rz-input rz-inline-input" value={article.article_group_id || ''} onChange={(event) => changeArticleGroup(article.id, event.target.value)} disabled={saving}><option value="">{UNASSIGNED_LABEL}</option>{sortedGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></td>
+                    <td style={{ textAlign: 'center' }}><input type="checkbox" style={greenCheckboxStyle} checked={normalizeHandling(defaults[String(article.id)]) === DIRECT_CONSUMPTION} disabled={!mayManageDefaults || saving} onChange={(event) => setArticleHandling(article.id, event.target.checked)} aria-label={`Directe consumptie ${article.article_name || 'huishoudartikel'}`} /></td>
+                  </tr>
+                ))}
               </tbody>
             </Table>
             <div className="rz-stock-table-actions" style={{ justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' }}>
-              <Button type="button" variant="secondary" onClick={exportArticleLinksCsv} disabled={isLoading || selectedArticleIds.length === 0 || isSaving}>Exporteren</Button>
-              <Button type="button" variant="secondary" onClick={openBulkAssignArticleGroup} disabled={isLoading || selectedArticleIds.length === 0 || isSaving || sortedGroups.length === 0}>Toewijzen aan artikelgroep</Button>
-              <Button type="button" variant="secondary" onClick={() => setShowArticleActionModal(true)} disabled={isSaving || selectedArticleIds.length === 0}>Verwijderen</Button>
+              <Button type="button" variant="secondary" onClick={exportArticles} disabled={loading}>Exporteren</Button>
+              <Button type="button" variant="secondary" onClick={() => setBulkModalOpen(true)} disabled={saving || selectedArticleIds.length === 0}>Toewijzen aan Artikelgroep</Button>
+              <Button type="button" variant="secondary" onClick={() => bulkAssign('')} disabled={saving || selectedArticleIds.length === 0}>Verwijderen</Button>
             </div>
           </section>
-
         </div>
       </Card>
 
-      <FeedbackOverlay type="error" message={error} onClose={() => setError('')} />
-      <FeedbackOverlay type="success" message={message} onClose={() => setMessage('')} />
-      <ArticleGroupModal open={groupModalOpen} form={groupForm} onChange={setGroupForm} onClose={() => setGroupModalOpen(false)} onSubmit={handleSaveGroup} busy={isSaving} />
-      <ActionModal open={showGroupActionModal} title="Geselecteerde Artikelgroepen verwijderen" noun="Artikelgroep" selectedCount={selectedGroupIds.length} onClose={() => setShowGroupActionModal(false)} onDelete={deleteSelectedGroups} busy={isSaving} />
-      <ActionModal open={showArticleActionModal} title="Geselecteerde artikelkoppelingen verwerken" noun="artikel" selectedCount={selectedArticleIds.length} onClose={() => setShowArticleActionModal(false)} onDelete={clearSelectedArticleGroups} onArchive={archiveSelectedArticlesNoop} busy={isSaving} />
-      <BulkAssignArticleGroupModal open={showAssignArticleGroupModal} selectedCount={selectedArticleIds.length} groups={sortedGroups} value={bulkAssignGroupId} onChange={setBulkAssignGroupId} onClose={() => setShowAssignArticleGroupModal(false)} onApply={applyBulkAssignArticleGroup} busy={isSaving} />
-      <BulkAssignConfirmationModal
-        open={showBulkAssignConfirmationModal}
-        selectedCount={selectedArticleIds.length}
-        groupName={bulkAssignGroupId ? (sortedGroups.find((group) => String(group.id) === String(bulkAssignGroupId))?.name || 'gekozen Artikelgroep') : UNASSIGNED_LABEL}
-        onCancel={() => setShowBulkAssignConfirmationModal(false)}
-        onSave={confirmBulkAssignArticleGroup}
-        busy={isSaving}
-      />
-      <PendingChangesModal open={showPendingModal} onSave={confirmSaveAndContinue} onDiscard={confirmDiscardAndContinue} onCancel={cancelPendingDialog} busy={isSaving} />
+      <FeedbackOverlay message={message} error={error} onClose={() => { setMessage(''); setError('') }} />
+      <GroupModal open={groupModalOpen} onClose={() => setGroupModalOpen(false)} onSave={addGroup} busy={saving} />
+      <BulkAssignModal open={bulkModalOpen} groups={sortedGroups} onClose={() => setBulkModalOpen(false)} onSave={bulkAssign} busy={saving} />
     </AppShell>
   )
 }

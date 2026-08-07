@@ -24,6 +24,15 @@ import { useAppFeedback } from '../../ui/AppFeedbackProvider'
 import useBarcodeScanner from '../../lib/useBarcodeScanner.js'
 import BarcodeIdentityField from '../barcodes/BarcodeIdentityField.jsx'
 import BarcodeScannerModal from '../barcodes/BarcodeScannerModal.jsx'
+import {
+  DIRECT_CONSUMPTION,
+  STOCK,
+  fetchInventoryHandlingByArticleIds,
+  fetchInventoryHandlingOverridesByLineIds,
+  lineInventoryHandlingPresentation,
+  resolveEffectiveLineDestination,
+  saveInventoryHandlingOverride,
+} from '../receipts/dayArticleHandling.js'
 
 const STATUS_FILTERS = [
   { key: 'all', label: 'Alles' },
@@ -226,6 +235,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
   const [newArticleGroupName, setNewArticleGroupName] = useState('')
   const [isCreatingArticleGroup, setIsCreatingArticleGroup] = useState(false)
   const [locationOptions, setLocationOptions] = useState([])
+  const [inventoryHandlingByArticleId, setInventoryHandlingByArticleId] = useState({})
+  const [inventoryHandlingOverridesByLineId, setInventoryHandlingOverridesByLineId] = useState({})
+  const handlingReconcileRef = useRef(false)
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(true)
@@ -723,9 +735,30 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     }))
   }
 
+  async function refreshInventoryHandling(nextBatch = batch, householdData = household) {
+    const householdId = String(householdData?.active_household_id ?? householdData?.id ?? nextBatch?.household_id ?? '').trim()
+    const lines = Array.isArray(nextBatch?.lines) ? nextBatch.lines : []
+    if (!householdId || lines.length === 0) {
+      setInventoryHandlingByArticleId({})
+      setInventoryHandlingOverridesByLineId({})
+      return { defaults: {}, overrides: {} }
+    }
+
+    const articleIds = lines.map((line) => line?.matched_household_article_id).filter(Boolean)
+    const lineIds = lines.map((line) => line?.id).filter(Boolean)
+    const [defaults, overrides] = await Promise.all([
+      fetchInventoryHandlingByArticleIds(householdId, articleIds),
+      fetchInventoryHandlingOverridesByLineIds(householdId, lineIds),
+    ])
+    setInventoryHandlingByArticleId(defaults)
+    setInventoryHandlingOverridesByLineId(overrides)
+    return { defaults, overrides }
+  }
+
   async function refreshBatch(nextBatchId = batchId) {
     const nextBatch = await fetchJson(`/api/purchase-import-batches/${nextBatchId}?_ts=${Date.now()}`)
     setBatch(nextBatch)
+    await refreshInventoryHandling(nextBatch)
     return nextBatch
   }
 
@@ -733,6 +766,122 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
     if (!nextBatchId) return null
     setBatchDiagnostics(null)
     return null
+  }
+
+  function directLocationOption(options = locationOptions) {
+    return (options || []).find((location) => (
+      String(location?.label || '').trim().toLowerCase() === 'direct / direct'
+      || (String(location?.parent_label || '').trim().toLowerCase() === 'direct'
+        && String(location?.sublocation_label || '').trim().toLowerCase() === 'direct')
+    )) || null
+  }
+
+  async function persistLocationHandlingChoice({
+    entry,
+    nextOverride,
+    nextLocationId,
+    previousOverride,
+    previousLocationId,
+  }) {
+    const householdId = String(household?.active_household_id ?? household?.id ?? batch?.household_id ?? '').trim()
+    const lineId = String(entry?.line?.id || '')
+    let overrideSaved = false
+    let locationSaved = false
+
+    try {
+      const savedOverride = await saveInventoryHandlingOverride(householdId, lineId, nextOverride)
+      overrideSaved = true
+      setInventoryHandlingOverridesByLineId((current) => ({ ...current, [lineId]: savedOverride }))
+
+      await persistLineDraft(
+        entry.line,
+        { locationId: String(nextLocationId || '') },
+        { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true },
+      )
+      locationSaved = true
+      return savedOverride
+    } catch (saveError) {
+      if (locationSaved) {
+        await persistLineDraft(
+          entry.line,
+          { locationId: String(previousLocationId || '') },
+          { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true },
+        ).catch(() => null)
+      }
+      if (overrideSaved) {
+        const restoredOverride = await saveInventoryHandlingOverride(
+          householdId,
+          lineId,
+          previousOverride,
+        ).catch(() => previousOverride)
+        setInventoryHandlingOverridesByLineId((current) => ({
+          ...current,
+          [lineId]: restoredOverride,
+        }))
+      }
+      throw saveError
+    }
+  }
+
+  async function handleLocationChoice(entry, nextValue) {
+    const householdId = String(household?.active_household_id ?? household?.id ?? batch?.household_id ?? '').trim()
+    if (!householdId) {
+      showUitpakkenFeedback('error', 'Het actieve huishouden kon niet worden vastgesteld.')
+      return
+    }
+
+    const lineId = String(entry?.line?.id || '')
+    const previousOverride = entry.inventoryHandlingOverride || null
+    const previousLocationId = String(entry?.draft?.locationId || '')
+    const directLocation = directLocationOption(locationOptions)
+    setBusyLineId(lineId)
+
+    try {
+      if (nextValue === '__standard__') {
+        const resolution = resolveEffectiveLineDestination({
+          defaultHandling: entry.defaultInventoryHandling,
+          lineOverride: null,
+          currentLocationId: previousLocationId,
+          directLocationId: directLocation?.id || '',
+        })
+        if (resolution.handling === DIRECT_CONSUMPTION && !directLocation?.id) {
+          throw new Error('De beschermde locatie Direct / Direct is niet beschikbaar.')
+        }
+        await persistLocationHandlingChoice({
+          entry,
+          nextOverride: null,
+          nextLocationId: resolution.locationId,
+          previousOverride,
+          previousLocationId,
+        })
+        return
+      }
+
+      const selectedLocation = locationOptions.find(
+        (location) => String(location.id) === String(nextValue),
+      ) || null
+      const isDirect = Boolean(selectedLocation && directLocationOption([selectedLocation]))
+      const nextOverride = isDirect ? DIRECT_CONSUMPTION : STOCK
+
+      if (!isDirect && !selectedLocation) {
+        throw new Error('Kies een geldige locatie en sublocatie.')
+      }
+
+      await persistLocationHandlingChoice({
+        entry,
+        nextOverride,
+        nextLocationId: String(nextValue || ''),
+        previousOverride,
+        previousLocationId,
+      })
+    } catch (handlingError) {
+      const message = normalizeErrorMessage(handlingError?.message || handlingError) || 'Locatie kon niet worden opgeslagen.'
+      showUitpakkenFeedback('error', message, { key: `uitpakken-location-handling-${lineId}-${Date.now()}` })
+      await refreshInventoryHandling(batch, household).catch(() => null)
+      await refreshBatch(batch?.batch_id).catch(() => null)
+    } finally {
+      setBusyLineId('')
+    }
   }
 
   async function refreshLocationOptions() {
@@ -1122,6 +1271,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       setArticleGroupOptions(sortOptionObjects(Array.isArray(articleGroupsData?.items) ? articleGroupsData.items.filter((group) => String(group?.status || 'active') === 'active') : [], (group) => group?.name || ''))
       setLocationOptions(buildActiveLocationOptions(spacesData, sublocationsData))
       setBatch(loadedBatch)
+      await refreshInventoryHandling(loadedBatch, householdData)
       setBatchDiagnostics(null)
     } catch (err) {
       setError(normalizeErrorMessage(err?.message) || 'De kassabon kon niet worden geladen.')
@@ -1374,6 +1524,11 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
       const processingStatus = line.processing_status || 'pending'
       const reviewDecision = line.review_decision || 'pending'
       const isSelected = selectedSet.has(line.id)
+      const articleId = String(draft.articleId || line.matched_household_article_id || '')
+      const defaultPresentation = inventoryHandlingByArticleId[articleId] || { handling: 'STOCK' }
+      const defaultInventoryHandling = defaultPresentation.handling || 'STOCK'
+      const inventoryHandlingOverride = inventoryHandlingOverridesByLineId[String(line.id)] || null
+      const inventoryHandling = lineInventoryHandlingPresentation(defaultInventoryHandling, inventoryHandlingOverride)
       const selectionState = deriveLineSelectionState({ line, draft, validLocationIds, processingStatus })
       const {
         effectiveArticleId,
@@ -1448,6 +1603,9 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
         statusLabel,
         statusReason,
         mappingState,
+        defaultInventoryHandling,
+        inventoryHandlingOverride,
+        inventoryHandling,
         isReadyForProcessing: isProcessable,
         isSelectionIncomplete: isSelected && !isProcessable && processingStatus !== 'processed',
         searchText: [line.article_name_raw, line.brand_raw, standardProductLabel(line), standardProductDetail(line), line.resolved_household_article_name]
@@ -1456,7 +1614,46 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
           .toLowerCase(),
       }
     })
-  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds])
+  }, [batch?.lines, lineSaveState, lineDrafts, selectedLineIds, validLocationIds, inventoryHandlingByArticleId, inventoryHandlingOverridesByLineId])
+
+  useEffect(() => {
+    if (handlingReconcileRef.current || isLoading || busyLineId || isProcessingBatch) return
+    const directLocation = directLocationOption(locationOptions)
+    if (!directLocation?.id) return
+
+    const entry = lineUiStates.find((candidate) => {
+      if (candidate.processingStatus === 'processed') return false
+      const articleId = String(candidate.draft.articleId || candidate.line.matched_household_article_id || '').trim()
+      if (!articleId) return false
+      const resolution = resolveEffectiveLineDestination({
+        defaultHandling: candidate.defaultInventoryHandling,
+        lineOverride: candidate.inventoryHandlingOverride,
+        currentLocationId: candidate.draft.locationId,
+        directLocationId: directLocation.id,
+      })
+      return resolution.requiresLocationChange
+    })
+    if (!entry) return
+
+    const resolution = resolveEffectiveLineDestination({
+      defaultHandling: entry.defaultInventoryHandling,
+      lineOverride: entry.inventoryHandlingOverride,
+      currentLocationId: entry.draft.locationId,
+      directLocationId: directLocation.id,
+    })
+    handlingReconcileRef.current = true
+    persistLineDraft(
+      entry.line,
+      { locationId: resolution.locationId },
+      { defaultLocationPolicy: 'line_only', suppressSuccessFeedback: true },
+    ).catch((reconcileError) => {
+      const message = normalizeErrorMessage(reconcileError?.message || reconcileError)
+        || 'De effectieve locatie kon niet worden toegepast.'
+      showUitpakkenFeedback('error', message, { key: `uitpakken-handling-reconcile-${entry.line.id}-${Date.now()}` })
+    }).finally(() => {
+      handlingReconcileRef.current = false
+    })
+  }, [lineUiStates, locationOptions, isLoading, busyLineId, isProcessingBatch])
 
   const summaryCounts = useMemo(() => {
     const counts = {
@@ -1626,7 +1823,7 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                     <input type="checkbox" checked={allVisibleSelected} onChange={toggleSelectAllVisible} aria-label="Selecteer alle zichtbare regels" />
                   </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="bonartikel" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-store-batch-col-item" sortable isSorted={tableSort.key === 'bonartikel'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', status: 'asc' }))}>Bonartikel</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Aantal</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="aantal" widths={lineColumnWidths} onStartResize={startLineResize} className="rz-num rz-store-batch-col-quantity" sortable isSorted={tableSort.key === 'aantal'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', verwerking: 'asc', locatie: 'asc', gekoppeld: 'asc' }))}>Aantal</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="locatie" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'locatie'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Locatie</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="gekoppeld" widths={lineColumnWidths} onStartResize={startLineResize} sortable isSorted={tableSort.key === 'gekoppeld'} sortDirection={tableSort.direction} onSort={(key) => setTableSort((current) => nextSortState(current, key, { bonartikel: 'asc', aantal: 'desc', locatie: 'asc', gekoppeld: 'asc' }))}>Mijn artikel</ResizableHeaderCell>
                 </tr>
@@ -1657,17 +1854,10 @@ export function StoreBatchDetailContent({ batchIdOverride = '', embedded = false
                           disabled={busyLineId === line.id || isProcessingBatch || isViewer}
                           aria-label={`Locatie voor ${line.article_name_raw}`}
                           data-testid={`receipt-line-location-select-${line.id}`}
-                          onChange={(event) => {
-                            const nextLocationId = event.target.value
-                            const hasArticle = Boolean(String(entry.draft.articleId || line.matched_household_article_id || '').trim())
-                            if (hasArticle && nextLocationId) {
-                              setPendingDefaultLocationChoice({ lineId: line.id, locationId: nextLocationId })
-                              return
-                            }
-                            persistLineDraft(line, { locationId: nextLocationId }, { defaultLocationPolicy: 'line_only' })
-                          }}
+                          onChange={(event) => handleLocationChoice(entry, event.target.value)}
                         >
                           <option value="">Kies locatie</option>
+                          <option value="__standard__">Standaard gebruiken</option>
                           {locationOptions.map((location) => <option key={location.id} value={location.id}>{location.label}</option>)}
                         </select>
                       </td>

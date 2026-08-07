@@ -1,0 +1,26 @@
+name: Household article identity Slice 2B4
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  canonical-inventory-identity:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Slice 2B4 inventory identity contract
+        run: PYTHONPATH=. python tests/test_household_article_identity_slice2b4_inventory_contract.py
