@@ -19,9 +19,28 @@ jobs:
           ref: feature/uitpakken-dagartikelen-release-b
       - name: Audit identity-sensitive inventory code
         run: |
-          echo '=== get_article_total_quantity callsites ==='
-          rg -n -C 3 'get_article_total_quantity\(' backend/app/main.py || true
-          echo '=== name-based inventory predicates ==='
-          rg -n -C 3 '(inventory.*naam|lower\(trim\(naam\)\)|AND naam = :naam|i\.naam =|naam = :naam)' backend/app/main.py || true
-          echo '=== inventory event article-name predicates ==='
-          rg -n -C 3 '(inventory_events.*article_name|article_name\)\) =|lower\(trim\(article_name\)\))' backend/app/main.py || true
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('backend/app/main.py')
+          lines = path.read_text(encoding='utf-8').splitlines()
+          patterns = {
+              'get_article_total_quantity': re.compile(r'get_article_total_quantity\('),
+              'name_based_inventory': re.compile(r'lower\(trim\(naam\)\)|AND naam = :naam|i\.naam\s*=|naam\s*=\s*:naam'),
+              'name_based_history': re.compile(r'lower\(trim\(article_name\)\)|inventory_events[^\n]*article_name'),
+          }
+          for label, pattern in patterns.items():
+              print(f'=== {label} ===')
+              hits = 0
+              for idx, line in enumerate(lines, start=1):
+                  if not pattern.search(line):
+                      continue
+                  hits += 1
+                  lo = max(1, idx - 3)
+                  hi = min(len(lines), idx + 3)
+                  print(f'--- hit {hits} at line {idx} ---')
+                  for n in range(lo, hi + 1):
+                      print(f'{n}: {lines[n-1]}')
+              print(f'TOTAL {label}={hits}')
+          PY
