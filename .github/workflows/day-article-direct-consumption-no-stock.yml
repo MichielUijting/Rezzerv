@@ -1,0 +1,29 @@
+name: Day article Direct consumption no stock
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  direct-consumption-no-stock:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Direct no-stock behavioral tests
+        run: PYTHONPATH=. pytest -q tests/test_direct_consumption_inventory_cleanup.py
+
+      - name: Run Release B4 direct branch contract
+        run: PYTHONPATH=. pytest -q tests/test_day_article_release_b4_batch_processing_contract.py
