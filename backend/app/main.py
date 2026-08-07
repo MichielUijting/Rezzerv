@@ -7634,10 +7634,6 @@ class UserPrivacySettingsUpdateRequest(BaseModel):
         return normalize_user_privacy_settings_map(self.model_dump())
 
 
-def build_live_article_option_id(article_name: str) -> str:
-    return f"live::{(article_name or '').strip()}"
-
-
 def get_household_article_option_by_id(conn, household_article_id: str | None, household_id: str | None = None):
     normalized_article_id = str(household_article_id or '').strip()
     if not normalized_article_id:
@@ -7669,36 +7665,21 @@ def get_household_article_option_by_id(conn, household_article_id: str | None, h
 
 
 def resolve_household_article_selection_to_id(conn, household_id: str | None, article_selection_id: str | None, *, create_if_missing: bool = False) -> str | None:
+    """Resolve only an existing canonical household_article_id in the same household.
+
+    create_if_missing remains for call compatibility; identity is never created
+    or reconstructed from a name or legacy live:: value.
+    """
     normalized_selection = str(article_selection_id or '').strip()
     normalized_household_id = str(household_id or '').strip()
-    if not normalized_selection:
+    if not normalized_selection or not normalized_household_id:
         return None
-
-    direct_row = get_household_article_option_by_id(conn, normalized_selection, normalized_household_id or None)
-    if direct_row and direct_row.get('id'):
-        return str(direct_row['id'])
-
-    article_option = resolve_review_article_option(conn, normalized_selection, normalized_household_id or None)
-    article_name = str((article_option or {}).get('name') or '').strip()
-    if not article_name or not normalized_household_id:
+    if normalized_selection.startswith('live::'):
         return None
-
-    existing_row = get_household_article_row_by_name(conn, normalized_household_id, article_name)
-    if existing_row and existing_row.get('id'):
-        return str(existing_row.get('id'))
-
-    if not create_if_missing:
+    direct_row = get_household_article_option_by_id(conn, normalized_selection, normalized_household_id)
+    if not direct_row or not direct_row.get('id'):
         return None
-
-    try:
-        return ensure_household_article(
-            conn,
-            normalized_household_id,
-            article_name,
-            consumable=(article_option or {}).get('consumable'),
-        )
-    except Exception:
-        return None
+    return str(direct_row['id'])
 
 
 def _decode_household_article_setting_value(value):
@@ -7917,192 +7898,95 @@ def validate_purchase_import_storage_target_location(conn, line_id: str, target_
     return resolved_location, line_ref
 
 
-def get_store_review_article_options(conn):
-    items = [dict(item) for item in MOCK_ARTICLE_OPTIONS]
-    seen_names = {item["name"].strip().lower() for item in items if item.get("name")}
-
+def get_store_review_article_options(conn, household_id: str | None = None):
+    """Return only canonical household articles for one explicit household."""
+    normalized_household_id = str(household_id or '').strip()
+    if not normalized_household_id:
+        return []
     household_rows = conn.execute(
         text(
             """
             SELECT id, naam AS article_name, consumable, brand_or_maker
             FROM household_articles
-            WHERE trim(COALESCE(naam, '')) <> ''
+            WHERE household_id = :household_id
+              AND trim(COALESCE(naam, '')) <> ''
             ORDER BY lower(naam) ASC, id ASC
             """
-        )
+        ),
+        {"household_id": normalized_household_id},
     ).mappings().all()
     location_defaults_by_article = get_household_article_location_defaults(
-        conn,
-        [str(row.get("id") or "") for row in household_rows],
+        conn, [str(row.get("id") or "") for row in household_rows]
     )
-
+    items = []
     for row in household_rows:
-        article_name = (row["article_name"] or "").strip()
-        if not article_name:
+        article_id = str(row.get("id") or '').strip()
+        article_name = str(row.get("article_name") or '').strip()
+        if not article_id or not article_name:
             continue
-        normalized = article_name.lower()
-        if normalized in seen_names:
-            continue
-        defaults = location_defaults_by_article.get(str(row.get("id") or ""), {})
+        defaults = location_defaults_by_article.get(article_id, {})
         items.append({
-            "id": str(row.get("id")),
+            "id": article_id,
+            "household_article_id": article_id,
             "name": article_name,
             "brand": str(row.get("brand_or_maker") or '').strip(),
             "consumable": bool(row["consumable"]) if row.get("consumable") is not None else infer_consumable_from_name(article_name),
             "default_location_id": defaults.get("default_location_id") or "",
             "default_sublocation_id": defaults.get("default_sublocation_id") or "",
         })
-        seen_names.add(normalized)
-
-    inventory_names = conn.execute(
-        text(
-            """
-            SELECT DISTINCT naam AS article_name
-            FROM inventory
-            WHERE trim(COALESCE(naam, '')) <> ''
-            ORDER BY lower(naam) ASC
-            """
-        )
-    ).mappings().all()
-
-    for row in inventory_names:
-        article_name = (row["article_name"] or "").strip()
-        if not article_name:
-            continue
-        normalized = article_name.lower()
-        if normalized in seen_names:
-            continue
-        items.append({
-            "id": build_live_article_option_id(article_name),
-            "name": article_name,
-            "brand": "",
-            "consumable": infer_consumable_from_name(article_name),
-        })
-        seen_names.add(normalized)
-
     return items
 
 
 def find_generic_existing_article_match(conn, household_id: str | None, article_name: str | None) -> str | None:
+    """Suggestion-only name match; its result is never an article identity."""
     normalized_name = normalize_household_article_name(article_name)
-    if not normalized_name:
+    normalized_household_id = str(household_id or '').strip()
+    if not normalized_name or not normalized_household_id:
         return None
-
     tokens = [part for part in normalized_name.lower().split() if part]
     if len(tokens) < 2:
         return None
-
     generic_candidate = tokens[-1]
     if len(generic_candidate) < 4:
         return None
-
     row = conn.execute(
         text(
             """
-            SELECT article_name
-            FROM (
-                SELECT naam AS article_name FROM household_articles WHERE household_id = :household_id
-                UNION
-                SELECT naam AS article_name FROM inventory WHERE household_id = :household_id
-            ) src
-            WHERE lower(trim(article_name)) = lower(trim(:article_name))
+            SELECT naam AS article_name
+            FROM household_articles
+            WHERE household_id = :household_id
+              AND lower(trim(naam)) = lower(trim(:article_name))
             LIMIT 1
             """
         ),
-        {"household_id": str(household_id or '1'), "article_name": generic_candidate},
+        {"household_id": normalized_household_id, "article_name": generic_candidate},
     ).mappings().first()
-
     if row and row.get("article_name"):
         return str(row["article_name"]).strip()
     return None
 
 
 def resolve_processing_article(conn, household_id: str | None, article: dict | None) -> dict | None:
+    """Return only an existing canonical household article in the same household."""
     if not article:
-        return article
-
-    article_id = str(article.get('id') or '')
-    article_name = str(article.get('name') or '').strip()
-    if not article_name:
-        return article
-
-    # Wanneer een winkelregel aan een mock-artikel als 'Volkoren pasta' is gekoppeld,
-    # maar het huishouden al een generiek bestaand artikel 'Pasta' heeft, willen we de
-    # voorraadmutatie en historie aan dat bestaande artikel hangen. Dat voorkomt dat de
-    # aankoop buiten beeld landt op een nieuw/quasi-los artikel.
-    if article_id.startswith('live::'):
-        return article
-
-    generic_match = find_generic_existing_article_match(conn, household_id, article_name)
-    if generic_match and generic_match.lower() != article_name.lower():
-        consumable = get_article_consumable_state(conn, household_id or '1', build_live_article_option_id(generic_match), generic_match)
-        return {
-            'id': build_live_article_option_id(generic_match),
-            'name': generic_match,
-            'brand': article.get('brand') or '',
-            'consumable': consumable,
-        }
-
-    return article
+        return None
+    normalized_household_id = str(household_id or '').strip()
+    article_id = str(article.get('id') or article.get('household_article_id') or '').strip()
+    if not normalized_household_id or not article_id or article_id.startswith('live::'):
+        return None
+    return get_household_article_option_by_id(conn, article_id, normalized_household_id)
 
 
 def resolve_review_article_option(conn, article_id: str | None, household_id: str | None = None):
-    if not article_id:
+    """Resolve a review selection strictly by canonical household_article_id."""
+    normalized_article_id = str(article_id or '').strip()
+    normalized_household_id = str(household_id or '').strip()
+    if not normalized_article_id or not normalized_household_id:
         return None
-    article_id = str(article_id)
-    if article_id in MOCK_ARTICLE_LOOKUP:
-        return dict(MOCK_ARTICLE_LOOKUP[article_id])
-
-    household_match = get_household_article_option_by_id(conn, article_id, household_id)
-    if household_match:
-        return household_match
-
-    if article_id.startswith("live::"):
-        article_name = article_id.split("::", 1)[1].strip()
-        if article_name:
-            existing_row = get_household_article_row_by_name(conn, household_id or '1', article_name)
-            if existing_row and existing_row.get('id'):
-                return {
-                    "id": str(existing_row.get('id')),
-                    "name": str(existing_row.get('naam') or article_name).strip(),
-                    "brand": str(existing_row.get('brand_or_maker') or '').strip(),
-                    "consumable": bool(existing_row.get('consumable')) if existing_row.get('consumable') is not None else infer_consumable_from_name(article_name),
-                }
-            consumable = get_article_consumable_state(conn, household_id or '1', article_id, article_name)
-            return {"id": article_id, "name": article_name, "brand": "", "consumable": consumable}
+    if normalized_article_id.startswith('live::'):
         return None
+    return get_household_article_option_by_id(conn, normalized_article_id, normalized_household_id)
 
-    inventory_match = conn.execute(
-        text(
-            """
-            SELECT article_name AS naam, consumable
-            FROM (
-                SELECT naam AS article_name, consumable FROM household_articles
-                UNION
-                SELECT naam AS article_name, NULL AS consumable FROM inventory
-            ) src
-            WHERE lower(article_name) = lower(:article_name)
-            LIMIT 1
-            """
-        ),
-        {"article_name": article_id},
-    ).mappings().first()
-    if inventory_match and inventory_match.get("naam"):
-        article_name = inventory_match["naam"].strip()
-        existing_row = get_household_article_row_by_name(conn, household_id or '1', article_name)
-        if existing_row and existing_row.get('id'):
-            return {
-                "id": str(existing_row.get('id')),
-                "name": str(existing_row.get('naam') or article_name).strip(),
-                "brand": str(existing_row.get('brand_or_maker') or '').strip(),
-                "consumable": bool(existing_row.get('consumable')) if existing_row.get('consumable') is not None else infer_consumable_from_name(article_name),
-            }
-        consumable = inventory_match.get("consumable")
-        if consumable is None:
-            consumable = get_article_consumable_state(conn, household_id or '1', build_live_article_option_id(article_name), article_name)
-        return {"id": build_live_article_option_id(article_name), "name": article_name, "brand": "", "consumable": bool(consumable)}
-
-    return None
 
 def utc_now_iso() -> str:
     return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
@@ -14340,8 +14224,8 @@ def ensure_ui_test_seed_data():
                     {
                         'external_line_ref': 'seed-jumbo-1', 'external_article_code': 'JUMBO-SEED-1', 'article_name_raw': 'Magere yoghurt', 'brand_raw': 'Jumbo',
                         'quantity_raw': 1, 'unit_raw': 'liter', 'line_price_raw': 1.59, 'currency_code': 'EUR',
-                        'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': build_live_article_option_id('Melk'),
-                        'target_location_id': kitchen_kast1, 'processing_status': 'pending', 'suggested_household_article_id': build_live_article_option_id('Melk'),
+                        'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': ensure_household_article(conn, 'demo-household', 'Melk'),
+                        'target_location_id': kitchen_kast1, 'processing_status': 'pending', 'suggested_household_article_id': ensure_household_article(conn, 'demo-household', 'Melk'),
                         'suggested_location_id': kitchen_kast1, 'suggestion_confidence': 'high', 'suggestion_reason': 'Automatisch voorbereid ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â niveau Gebalanceerd', 'is_auto_prefilled': 1,
                     },
                     {
@@ -14357,8 +14241,8 @@ def ensure_ui_test_seed_data():
                     {
                         'external_line_ref': 'seed-jumbo-4', 'external_article_code': 'JUMBO-SEED-4', 'article_name_raw': 'Tomaten', 'brand_raw': 'Jumbo',
                         'quantity_raw': 6, 'unit_raw': 'stuks', 'line_price_raw': 2.19, 'currency_code': 'EUR',
-                        'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': build_live_article_option_id('Tomaten'),
-                        'target_location_id': None, 'processing_status': 'pending', 'suggested_household_article_id': build_live_article_option_id('Tomaten'),
+                        'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': ensure_household_article(conn, 'demo-household', 'Tomaten'),
+                        'target_location_id': None, 'processing_status': 'pending', 'suggested_household_article_id': ensure_household_article(conn, 'demo-household', 'Tomaten'),
                         'suggested_location_id': kitchen_koelkast, 'suggestion_confidence': 'medium', 'suggestion_reason': 'Controleer voorstel ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â niveau Gebalanceerd', 'is_auto_prefilled': 0,
                     },
                 ],
@@ -14374,7 +14258,7 @@ def ensure_ui_test_seed_data():
                     {
                         'external_line_ref': 'seed-lidl-1', 'external_article_code': 'LIDL-SEED-1', 'article_name_raw': 'Tuna', 'brand_raw': 'Lidl',
                         'quantity_raw': 1, 'unit_raw': 'blik', 'line_price_raw': 1.89, 'currency_code': 'EUR',
-                        'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': build_live_article_option_id('Tuna'),
+                        'match_status': 'matched', 'review_decision': 'selected', 'matched_household_article_id': ensure_household_article(conn, 'demo-household', 'Tuna'),
                         'target_location_id': berging_boven, 'processing_status': 'processed', 'processed_event_id': None if False else None,
                     },
                 ],
@@ -14855,7 +14739,7 @@ def run_store_process_validation_diagnostic(householdId: str = Query(...)):
         ).mappings().all()
         valid_location_ids = {str(row['id']) for row in location_rows if row['id']}
 
-        article_rows = get_store_review_article_options(conn)
+        article_rows = get_store_review_article_options(conn, effective_household_id)
         valid_article_ids = {str(row['id']) for row in article_rows}
 
         if not batch:
@@ -15229,7 +15113,7 @@ def scan_article_barcode(payload: BarcodeLookupRequest, authorization: Optional[
         catalog_match = barcode_resolution.get('catalog_match') or {}
         if article:
             article_name = str(article.get("naam") or "").strip()
-            article_id = str(article.get("id") or build_live_article_option_id(article_name)).strip()
+            article_id = str(article.get("id") or "").strip()
             product = dict(catalog_match.get('product') or {})
             return {
                 "status": "ok",
@@ -15949,7 +15833,7 @@ def seed_inventory_event(conn, *, article_name: str, quantity: int, old_quantity
             """
         ),
         {
-            'article_id': build_live_article_option_id(article_name),
+            'article_id': ensure_household_article(conn, 'demo-household', article_name),
             'article_name': article_name,
             'location_id': location_id or '',
             'location_label': location_label,
@@ -16223,7 +16107,7 @@ def generate_layer1_receipt_fixture(authorization: Optional[str] = Header(None))
             ),
             {
                 'line_id': str(complete_line['id']),
-                'article_id': build_live_article_option_id('Melk'),
+                'article_id': ensure_household_article(conn, 'demo-household', 'Melk'),
                 'target_location_id': kitchen_kast1,
             },
         )
@@ -16389,7 +16273,7 @@ def generate_receipt_export_fixture(authorization: Optional[str] = Header(None),
                 'unit_raw': 'stuk',
                 'line_price_raw': 9.99,
                 'currency_code': 'EUR',
-                'matched_household_article_id': build_live_article_option_id('Melk'),
+                'matched_household_article_id': ensure_household_article(conn, 'demo-household', 'Melk'),
                 'target_location_id': target_location_id,
                 'suggestion_reason': 'Vaste export-regressiefixture',
             },
@@ -16934,7 +16818,7 @@ def get_purchase_import_batch(batch_id: str):
 def get_store_review_articles(q: Optional[str] = Query(None)):
     query = (q or "").strip().lower()
     with engine.begin() as conn:
-        all_items = get_store_review_article_options(conn)
+        all_items = []
 
     items = []
     for item in all_items:
