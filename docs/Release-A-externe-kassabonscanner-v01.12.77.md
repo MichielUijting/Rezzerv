@@ -1,6 +1,6 @@
 # Release A — externe kassabonscanner / scannerontkoppeling
 
-Status: implementatiebranch
+Status: QA/QC-validatie
 Basis: `Rezzerv-MVP-v01.12.76` / main `be8494ed9840813155deafe3925f87cc4e80f427`
 Nieuwe versie: `Rezzerv-MVP-v01.12.77`
 Categorie: Backend-release
@@ -30,3 +30,10 @@ Release A verandert Docker, poorten en database niet. De actuele compose blijft:
 - frontend host 5174 -> container 80
 - database `sqlite:////app/data/rezzerv.db`
 - mount `./backend/data:/app/data`
+
+## Implementatiestatus
+- Providerboundary en CanonicalReceiptV1 geïmplementeerd.
+- Legacy-adapter en fake provider geïmplementeerd.
+- Productie-ingest en reparse via gateway omgeschakeld met exacte ankerchecks.
+- Eenmalige bootstrap-workflow na geslaagde omschakeling automatisch verwijderd.
+- CI/regressiepoorten lopen op PR #221; merge blijft geblokkeerd tot QA/QC groen is en de PO functioneel accepteert.
