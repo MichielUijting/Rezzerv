@@ -255,7 +255,7 @@ export default function SettingsArticleGroupsPage() {
     try {
       for (const article of groupArticles) await saveHandling(article.id, checked)
     } catch (saveError) {
-      setError(saveError?.message || 'Standaardverwerking van de Artikelgroep kon niet worden opgeslagen.')
+      setError(saveError?.message || 'Directe consumptie van de Artikelgroep kon niet worden opgeslagen.')
       await loadData()
     } finally {
       setSaving(false)
@@ -269,7 +269,7 @@ export default function SettingsArticleGroupsPage() {
     try {
       await saveHandling(articleId, checked)
     } catch (saveError) {
-      setError(saveError?.message || 'Standaardverwerking kon niet worden opgeslagen.')
+      setError(saveError?.message || 'Directe consumptie kon niet worden opgeslagen.')
     } finally {
       setSaving(false)
     }
@@ -348,7 +348,7 @@ export default function SettingsArticleGroupsPage() {
   }
 
   function exportArticles() {
-    const rows = [['Artikel', 'Artikelgroep', 'Standaardverwerking'], ...visibleArticles.map((article) => {
+    const rows = [['Artikel', 'Artikelgroep', 'Directe consumptie'], ...visibleArticles.map((article) => {
       const groupName = article.article_group_id
         ? groups.find((group) => String(group.id) === String(article.article_group_id))?.name || ''
         : UNASSIGNED_LABEL
@@ -389,7 +389,7 @@ export default function SettingsArticleGroupsPage() {
                   </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="name" widths={groupColumnWidths} onStartResize={startGroupResize}>Artikelgroep</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="articles" widths={groupColumnWidths} onStartResize={startGroupResize} className="rz-num">Aantal artikelen</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="handling" widths={groupColumnWidths} onStartResize={startGroupResize}>Standaardverwerking</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="handling" widths={groupColumnWidths} onStartResize={startGroupResize}>Directe consumptie</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
@@ -408,7 +408,7 @@ export default function SettingsArticleGroupsPage() {
                       <td><input type="checkbox" style={greenCheckboxStyle} checked={selectedGroupIds.includes(String(group.id))} disabled={!deletable} onChange={() => setSelectedGroupIds((current) => current.includes(String(group.id)) ? current.filter((id) => id !== String(group.id)) : [...current, String(group.id)])} /></td>
                       <td><input className="rz-input rz-inline-input" defaultValue={group.name} onBlur={(event) => saveGroupName(group, event.target.value)} /></td>
                       <td className="rz-num">{groupArticles.length}</td>
-                      <td style={{ textAlign: 'center' }}><input type="checkbox" style={greenCheckboxStyle} checked={directChecked} disabled={!mayManageDefaults || saving || groupArticles.length === 0} onChange={(event) => setGroupHandling(group.id, event.target.checked)} aria-label={`Standaardverwerking Artikelgroep ${group.name}`} /></td>
+                      <td style={{ textAlign: 'center' }}><input type="checkbox" style={greenCheckboxStyle} checked={directChecked} disabled={!mayManageDefaults || saving || groupArticles.length === 0} onChange={(event) => setGroupHandling(group.id, event.target.checked)} aria-label={`Directe consumptie Artikelgroep ${group.name}`} /></td>
                     </tr>
                   )
                 })}
@@ -437,7 +437,7 @@ export default function SettingsArticleGroupsPage() {
                   </ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="article" widths={articleColumnWidths} onStartResize={startArticleResize}>Artikel</ResizableHeaderCell>
                   <ResizableHeaderCell columnKey="group" widths={articleColumnWidths} onStartResize={startArticleResize}>Artikelgroep</ResizableHeaderCell>
-                  <ResizableHeaderCell columnKey="handling" widths={articleColumnWidths} onStartResize={startArticleResize}>Standaardverwerking</ResizableHeaderCell>
+                  <ResizableHeaderCell columnKey="handling" widths={articleColumnWidths} onStartResize={startArticleResize}>Directe consumptie</ResizableHeaderCell>
                 </tr>
                 <tr className="rz-table-filters">
                   <th />
@@ -452,7 +452,7 @@ export default function SettingsArticleGroupsPage() {
                     <td><input type="checkbox" style={greenCheckboxStyle} checked={selectedArticleIds.includes(String(article.id))} onChange={() => setSelectedArticleIds((current) => current.includes(String(article.id)) ? current.filter((id) => id !== String(article.id)) : [...current, String(article.id)])} /></td>
                     <td>{article.article_name || 'Onbekend artikel'}</td>
                     <td><select className="rz-input rz-inline-input" value={article.article_group_id || ''} onChange={(event) => changeArticleGroup(article.id, event.target.value)} disabled={saving}><option value="">{UNASSIGNED_LABEL}</option>{sortedGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></td>
-                    <td style={{ textAlign: 'center' }}><input type="checkbox" style={greenCheckboxStyle} checked={normalizeHandling(defaults[String(article.id)]) === DIRECT_CONSUMPTION} disabled={!mayManageDefaults || saving} onChange={(event) => setArticleHandling(article.id, event.target.checked)} aria-label={`Standaardverwerking ${article.article_name || 'huishoudartikel'}`} /></td>
+                    <td style={{ textAlign: 'center' }}><input type="checkbox" style={greenCheckboxStyle} checked={normalizeHandling(defaults[String(article.id)]) === DIRECT_CONSUMPTION} disabled={!mayManageDefaults || saving} onChange={(event) => setArticleHandling(article.id, event.target.checked)} aria-label={`Directe consumptie ${article.article_name || 'huishoudartikel'}`} /></td>
                   </tr>
                 ))}
               </tbody>

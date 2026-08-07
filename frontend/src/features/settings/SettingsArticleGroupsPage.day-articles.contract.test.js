@@ -18,9 +18,9 @@ describe('Release B1 native Tabellen', () => {
     expect(routerSource).not.toContain('SettingsArticleGroupsWithInventoryHandling')
   })
 
-  it('rendert Standaardverwerking rechtstreeks in beide Table-componenten', () => {
+  it('rendert Directe consumptie rechtstreeks in beide Table-componenten', () => {
     expect((source.match(/<Table/g) || []).length).toBe(2)
-    expect((source.match(/Standaardverwerking/g) || []).length).toBeGreaterThanOrEqual(2)
+    expect((source.match(/Directe consumptie/g) || []).length).toBeGreaterThanOrEqual(2)
     expect(source).toContain('columnKey="handling"')
     expect(source).toContain('colSpan={4}')
   })
@@ -50,6 +50,6 @@ describe('Release B1 native Tabellen', () => {
   it('slaat standaardverwerking direct op zonder bevestigingsmelding', () => {
     expect(source).not.toContain('huishoudartikel${groupArticles.length === 1')
     expect(source).toContain('for (const article of groupArticles) await saveHandling(article.id, checked)')
-    expect(source).toContain("setError(saveError?.message || 'Standaardverwerking van de Artikelgroep kon niet worden opgeslagen.')")
+    expect(source).toContain("setError(saveError?.message || 'Directe consumptie van de Artikelgroep kon niet worden opgeslagen.')")
   })
 })

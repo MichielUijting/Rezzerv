@@ -112,7 +112,7 @@ export async function fetchInventoryHandlingByArticleIds(householdId, householdA
       body: JSON.stringify({ household_article_ids: uniqueArticleIds }),
     },
   )
-  const data = await readJsonResponse(response, 'Standaardverwerking kon niet worden geladen.')
+  const data = await readJsonResponse(response, 'Directe consumptie kon niet worden geladen.')
 
   return Object.fromEntries(
     (Array.isArray(data?.items) ? data.items : []).map((item) => [
