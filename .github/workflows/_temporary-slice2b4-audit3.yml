@@ -1,0 +1,33 @@
+name: Temporary Slice 2B4 audit 3
+
+on:
+  push:
+    branches:
+      - feature/uitpakken-dagartikelen-release-b
+    paths:
+      - '.github/workflows/_temporary-slice2b4-audit3.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/uitpakken-dagartikelen-release-b
+      - name: Print helper definitions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text=Path('backend/app/main.py').read_text(encoding='utf-8')
+          lines=text.splitlines()
+          needles=['def fetch_inventory_row(', 'def fetch_inventory_row_by_article_and_location(', 'class InventoryEventMutationRequest', 'class InventoryTransferRequest', 'def apply_manual_inventory_adjustment(']
+          for needle in needles:
+              print('===',needle,'===')
+              for i,line in enumerate(lines,1):
+                  if needle in line:
+                      for n in range(i, min(len(lines),i+90)+1): print(f'{n}: {lines[n-1]}')
+                      break
+          PY
