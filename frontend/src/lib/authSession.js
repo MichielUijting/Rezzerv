@@ -80,7 +80,9 @@ function removeLegacyAuthStorage() {
   } catch {}
 }
 
-export function getStoredToken() { return '' }
+export function getStoredToken() {
+  return ''
+}
 export function getAuthHeaders() { return {} }
 export function readStoredAuthContext() { return currentSessionContext }
 
