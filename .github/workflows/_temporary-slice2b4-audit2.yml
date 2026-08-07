@@ -1,0 +1,41 @@
+name: Temporary Slice 2B4 audit 2
+
+on:
+  push:
+    branches:
+      - feature/uitpakken-dagartikelen-release-b
+    paths:
+      - '.github/workflows/_temporary-slice2b4-audit2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/uitpakken-dagartikelen-release-b
+      - name: Print inventory identity callsites
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          lines = Path('backend/app/main.py').read_text(encoding='utf-8').splitlines()
+          patterns = [
+              ('get_article_total_quantity', re.compile(r'get_article_total_quantity\(')),
+              ('inventory_name_predicate', re.compile(r'lower\(trim\(naam\)\)|AND naam = :naam|\bi\.naam\s*=|\bnaam\s*=\s*:naam')),
+              ('history_name_predicate', re.compile(r'lower\(trim\(article_name\)\)')),
+          ]
+          for label, pat in patterns:
+              print(f'=== {label} ===')
+              hits=[]
+              for i,line in enumerate(lines,1):
+                  if pat.search(line): hits.append(i)
+              print('LINES', hits)
+              for i in hits:
+                  print(f'--- {label} line {i} ---')
+                  for n in range(max(1,i-4), min(len(lines),i+4)+1):
+                      print(f'{n}: {lines[n-1]}')
+          PY
