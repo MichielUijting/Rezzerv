@@ -19,10 +19,8 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install backend dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install pytest
+      - name: Install focused test dependencies
+        run: pip install fastapi==0.115.0 sqlalchemy==2.0.36 pytest
 
       - name: Run Direct no-stock behavioral tests
         run: PYTHONPATH=. pytest -q tests/test_direct_consumption_inventory_cleanup.py
