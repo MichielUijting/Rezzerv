@@ -39,7 +39,7 @@ def main() -> int:
               ('ha-b', 'B', 'Mosterd', 'active'),
               ('ha-a-2', 'A', 'Mosterd', 'active')
         """))
-        -- Zelfde naam, andere ID: mag nooit worden samengevoegd.
+        # Zelfde naam, andere ID: mag nooit worden samengevoegd.
         conn.execute(text("""
             INSERT INTO inventory
                 (id, naam, aantal, household_id, household_article_id, space_id, sublocation_id, status)
