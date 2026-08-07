@@ -6511,6 +6511,7 @@ def fetch_inventory_row(conn, *, inventory_id: str, household_id: str):
               i.naam AS article_name,
               i.aantal AS quantity,
               i.household_id,
+              i.household_article_id,
               i.space_id,
               i.sublocation_id,
               COALESCE(i.status, 'active') AS status,
@@ -6532,7 +6533,33 @@ def fetch_inventory_row(conn, *, inventory_id: str, household_id: str):
 
 
 
-def fetch_inventory_row_by_article_and_location(conn, *, household_id: str, article_name: str, resolved_location: dict):
+def resolve_existing_inventory_household_article_id(conn, household_id: str, article_name: str) -> str:
+    normalized_household_id = str(household_id or "").strip()
+    normalized_name = normalize_household_article_name(article_name)
+    if not normalized_household_id or not normalized_name:
+        raise HTTPException(status_code=400, detail="Huishoudartikel-id of artikelnaam ontbreekt")
+    matches = conn.execute(
+        text(
+            """
+            SELECT id
+            FROM household_articles
+            WHERE household_id = :household_id
+              AND lower(trim(COALESCE(custom_name, naam))) = lower(trim(:article_name))
+              AND COALESCE(status, 'active') = 'active'
+            ORDER BY datetime(created_at) ASC, id ASC
+            LIMIT 2
+            """
+        ),
+        {"household_id": normalized_household_id, "article_name": normalized_name},
+    ).scalars().all()
+    if not matches:
+        raise HTTPException(status_code=404, detail="Geen bestaand huishoudartikel gevonden")
+    if len(matches) > 1:
+        raise HTTPException(status_code=409, detail="Meerdere huishoudartikelen met deze naam; gebruik household_article_id")
+    return str(matches[0])
+
+
+def fetch_inventory_row_by_article_and_location(conn, *, household_id: str, household_article_id: str, resolved_location: dict):
     safe_location = require_resolved_location(resolved_location)
     row = conn.execute(
         text(
@@ -6542,6 +6569,7 @@ def fetch_inventory_row_by_article_and_location(conn, *, household_id: str, arti
               i.naam AS article_name,
               i.aantal AS quantity,
               i.household_id,
+              i.household_article_id,
               i.space_id,
               i.sublocation_id,
               COALESCE(i.status, 'active') AS status,
@@ -6551,7 +6579,7 @@ def fetch_inventory_row_by_article_and_location(conn, *, household_id: str, arti
             LEFT JOIN spaces s ON s.id = i.space_id
             LEFT JOIN sublocations sl ON sl.id = i.sublocation_id
             WHERE i.household_id = :household_id
-              AND lower(trim(i.naam)) = lower(trim(:article_name))
+              AND i.household_article_id = :household_article_id
               AND COALESCE(i.space_id, '') = COALESCE(:space_id, '')
               AND COALESCE(i.sublocation_id, '') = COALESCE(:sublocation_id, '')
               AND COALESCE(i.status, 'active') = 'active'
@@ -6560,7 +6588,7 @@ def fetch_inventory_row_by_article_and_location(conn, *, household_id: str, arti
         ),
         {
             "household_id": str(household_id),
-            "article_name": article_name,
+            "household_article_id": str(household_article_id),
             "space_id": safe_location.get('space_id'),
             "sublocation_id": safe_location.get('sublocation_id'),
         },
@@ -8908,22 +8936,6 @@ def build_resolved_location_payload(conn, household_id: str, space_id: str | Non
 
 
 
-def get_article_total_quantity(conn, household_id: str, article_name: str) -> int:
-    row = conn.execute(
-        text(
-            """
-            SELECT COALESCE(SUM(aantal), 0) AS total_quantity
-            FROM inventory
-            WHERE household_id = :household_id
-              AND lower(trim(naam)) = lower(trim(:naam))
-              AND COALESCE(status, 'active') = 'active'
-            """
-        ),
-        {"household_id": str(household_id), "naam": article_name},
-    ).mappings().first()
-    return int(row["total_quantity"] or 0) if row else 0
-
-
 def require_resolved_location(resolved_location: dict | None):
     if not resolved_location:
         raise HTTPException(status_code=400, detail="Geen geldige locatie beschikbaar voor voorraadmutatie")
@@ -9153,7 +9165,18 @@ def apply_manual_inventory_adjustment(
     space_id = safe_location["space_id"]
     sublocation_id = safe_location["sublocation_id"]
 
-    old_total = get_article_total_quantity(conn, household_id, old_article_name)
+    existing_identity = conn.execute(
+        text("SELECT household_article_id FROM inventory WHERE id = :id AND household_id = :household_id LIMIT 1"),
+        {"id": inventory_id, "household_id": str(household_id)},
+    ).scalar()
+    old_household_article_id = str(existing_identity or "").strip()
+    if not old_household_article_id:
+        old_household_article_id = resolve_existing_inventory_household_article_id(conn, household_id, old_article_name)
+        conn.execute(
+            text("UPDATE inventory SET household_article_id = :household_article_id WHERE id = :id AND household_id = :household_id"),
+            {"household_article_id": old_household_article_id, "id": inventory_id, "household_id": str(household_id)},
+        )
+    old_total = get_inventory_total_by_household_article(conn, household_id, old_household_article_id)
     household_article_id = resolve_or_create_inventory_household_article(
         conn,
         household_id=household_id,
@@ -9184,7 +9207,7 @@ def apply_manual_inventory_adjustment(
         },
     )
 
-    new_total = get_article_total_quantity(conn, household_id, new_article_name)
+    new_total = get_inventory_total_by_household_article(conn, household_id, household_article_id)
     delta = int(new_quantity) - int(old_quantity)
     article_id = household_article_id
 
@@ -9416,7 +9439,7 @@ def create_auto_repurchase_event(
     quantity_int = int(quantity)
     if quantity_int <= 0:
         return None
-    old_total = get_article_total_quantity(conn, household_id, article_name)
+    old_total = get_inventory_total_by_household_article(conn, household_id, str(article_id))
     if old_total <= 0:
         return None
     applied_quantity = min(old_total, quantity_int)
@@ -15195,6 +15218,7 @@ def create_manual_purchase(payload: ManualPurchaseCreateRequest, authorization: 
         )
         resolved_location = build_resolved_location_payload(conn, household_id, space_id, sublocation_id)
         article_id = ensure_household_article(conn, household_id, payload.article_name)
+        old_total = get_inventory_total_by_household_article(conn, household_id, str(article_id))
         event_note = build_incidental_purchase_note(
             source_label="Incidentele aankoop handmatig",
             article_name=payload.article_name,
@@ -15215,15 +15239,18 @@ def create_manual_purchase(payload: ManualPurchaseCreateRequest, authorization: 
             quantity=payload.quantity,
             source="manual",
             note=event_note,
-            old_quantity=get_article_total_quantity(conn, household_id, payload.article_name),
-            new_quantity=get_article_total_quantity(conn, household_id, payload.article_name) + int(payload.quantity),
+            old_quantity=old_total,
+            new_quantity=old_total + int(payload.quantity),
             purchase_date=payload.purchase_date,
             supplier_name=payload.supplier,
             article_number=payload.article_number,
             price=payload.price,
             currency=payload.currency,
         )
-        inventory_id = apply_inventory_purchase(conn, household_id, payload.article_name, payload.quantity, resolved_location)
+        inventory_id = apply_inventory_purchase_by_identity(
+            conn, household_id=household_id, household_article_id=str(article_id), quantity=payload.quantity,
+            space_id=resolved_location.get("space_id"), sublocation_id=resolved_location.get("sublocation_id"),
+        )
         sync_household_article_price_metrics(conn, household_id, article_id, ensure_household_article_global_product_link(conn, article_id, None))
         return build_purchase_response_payload(conn, inventory_id=inventory_id, event_id=event_id, household_id=household_id)
 
@@ -15297,7 +15324,7 @@ def create_barcode_purchase(payload: BarcodePurchaseCreateRequest, authorization
             sublocation_name=payload.sublocation_name,
         )
         resolved_location = build_resolved_location_payload(conn, household_id, space_id, sublocation_id)
-        old_total = get_article_total_quantity(conn, household_id, article_name)
+        old_total = get_inventory_total_by_household_article(conn, household_id, str(article_id))
         event_note = build_incidental_purchase_note(
             source_label="Incidentele aankoop barcode",
             article_name=article_name,
@@ -15328,7 +15355,10 @@ def create_barcode_purchase(payload: BarcodePurchaseCreateRequest, authorization
             currency=payload.currency,
             barcode=payload.barcode,
         )
-        inventory_id = apply_inventory_purchase(conn, household_id, article_name, payload.quantity, resolved_location)
+        inventory_id = apply_inventory_purchase_by_identity(
+            conn, household_id=household_id, household_article_id=str(article_id), quantity=payload.quantity,
+            space_id=resolved_location.get("space_id"), sublocation_id=resolved_location.get("sublocation_id"),
+        )
         sync_household_article_price_metrics(conn, household_id, article_id, resolved_global_product_id)
         response = build_purchase_response_payload(conn, inventory_id=inventory_id, event_id=event_id, household_id=household_id)
         response["article"] = {
@@ -15367,8 +15397,8 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
                 sublocation_name=payload.sublocation_name,
             )
             resolved_location = build_resolved_location_payload(conn, household_id, space_id, sublocation_id)
-            old_total = get_article_total_quantity(conn, household_id, article_name)
             article_id = ensure_household_article(conn, household_id, article_name)
+            old_total = get_inventory_total_by_household_article(conn, household_id, str(article_id))
             event_id = create_inventory_event(
                 conn,
                 household_id=household_id,
@@ -15382,7 +15412,10 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
                 source='manual_inventory_api',
                 note=(payload.note or '').strip() or 'Voorraad handmatig toegevoegd via mutatie-endpoint.',
             )
-            inventory_id = apply_inventory_purchase(conn, household_id, article_name, payload.quantity, resolved_location)
+            inventory_id = apply_inventory_purchase_by_identity(
+                conn, household_id=household_id, household_article_id=str(article_id), quantity=payload.quantity,
+                space_id=resolved_location.get("space_id"), sublocation_id=resolved_location.get("sublocation_id"),
+            )
             sync_household_article_price_metrics(conn, household_id, article_id, ensure_household_article_global_product_link(conn, article_id, None))
             return {
                 'status': 'ok',
@@ -15393,6 +15426,11 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
         if payload.inventory_id:
             inventory_row = fetch_inventory_row(conn, inventory_id=payload.inventory_id, household_id=household_id)
             article_name = normalize_household_article_name(inventory_row.get('article_name'))
+            household_article_id = str(inventory_row.get('household_article_id') or '').strip()
+            if not household_article_id:
+                household_article_id = resolve_existing_inventory_household_article_id(conn, household_id, article_name)
+                conn.execute(text("UPDATE inventory SET household_article_id = :household_article_id WHERE id = :id AND household_id = :household_id"), {'household_article_id': household_article_id, 'id': str(inventory_row['id']), 'household_id': household_id})
+                inventory_row['household_article_id'] = household_article_id
             resolved_location = build_location_payload_from_inventory_row(inventory_row)
         else:
             article_name = normalize_household_article_name(payload.article_name)
@@ -15407,14 +15445,15 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
                 sublocation_name=payload.sublocation_name,
             )
             resolved_location = build_resolved_location_payload(conn, household_id, space_id, sublocation_id)
+            household_article_id = resolve_existing_inventory_household_article_id(conn, household_id, article_name)
             inventory_row = fetch_inventory_row_by_article_and_location(
                 conn,
                 household_id=household_id,
-                article_name=article_name,
+                household_article_id=household_article_id,
                 resolved_location=resolved_location,
             )
 
-        old_total = get_article_total_quantity(conn, household_id, article_name)
+        old_total = get_inventory_total_by_household_article(conn, household_id, household_article_id)
         inventory_id = str(inventory_row['id'])
         current_row_quantity = int(inventory_row.get('quantity') or 0)
 
@@ -15432,7 +15471,7 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
             event_id = create_inventory_event(
                 conn,
                 household_id=household_id,
-                article_id=inventory_id,
+                article_id=household_article_id,
                 article_name=article_name,
                 resolved_location=resolved_location,
                 event_type='consume',
@@ -15459,7 +15498,7 @@ def mutate_inventory_event(payload: InventoryEventMutationRequest, authorization
         event_id = create_inventory_event(
             conn,
             household_id=household_id,
-            article_id=inventory_id,
+            article_id=household_article_id,
             article_name=article_name,
             resolved_location=resolved_location,
             event_type='manual_adjustment',
@@ -15487,6 +15526,11 @@ def transfer_inventory(payload: InventoryTransferRequest, authorization: Optiona
         if payload.inventory_id:
             source_row = fetch_inventory_row(conn, inventory_id=payload.inventory_id, household_id=household_id)
             article_name = normalize_household_article_name(source_row.get('article_name'))
+            household_article_id = str(source_row.get('household_article_id') or '').strip()
+            if not household_article_id:
+                household_article_id = resolve_existing_inventory_household_article_id(conn, household_id, article_name)
+                conn.execute(text("UPDATE inventory SET household_article_id = :household_article_id WHERE id = :id AND household_id = :household_id"), {'household_article_id': household_article_id, 'id': str(source_row['id']), 'household_id': household_id})
+                source_row['household_article_id'] = household_article_id
             source_location = build_location_payload_from_inventory_row(source_row)
         else:
             article_name = normalize_household_article_name(payload.article_name)
@@ -15501,10 +15545,11 @@ def transfer_inventory(payload: InventoryTransferRequest, authorization: Optiona
                 sublocation_name=payload.from_sublocation_name,
             )
             source_location = build_resolved_location_payload(conn, household_id, from_space_id, from_sublocation_id)
+            household_article_id = resolve_existing_inventory_household_article_id(conn, household_id, article_name)
             source_row = fetch_inventory_row_by_article_and_location(
                 conn,
                 household_id=household_id,
-                article_name=article_name,
+                household_article_id=household_article_id,
                 resolved_location=source_location,
             )
 
@@ -15527,14 +15572,17 @@ def transfer_inventory(payload: InventoryTransferRequest, authorization: Optiona
         if transfer_quantity > current_source_quantity:
             raise HTTPException(status_code=400, detail="Verplaatsing zou negatieve voorraad veroorzaken")
 
-        old_total = get_article_total_quantity(conn, household_id, article_name)
+        old_total = get_inventory_total_by_household_article(conn, household_id, household_article_id)
         updated_source = apply_inventory_row_consumption(
             conn,
             inventory_id=str(source_row['id']),
             household_id=household_id,
             quantity=transfer_quantity,
         )
-        target_inventory_id = apply_inventory_purchase(conn, household_id, article_name, transfer_quantity, target_location)
+        target_inventory_id = apply_inventory_purchase_by_identity(
+            conn, household_id=household_id, household_article_id=household_article_id, quantity=transfer_quantity,
+            space_id=target_location.get("space_id"), sublocation_id=target_location.get("sublocation_id"),
+        )
         note_prefix = (payload.note or '').strip()
         source_note = f"Verplaatst naar {target_location.get('location_label') or 'doellocatie'}"
         target_note = f"Verplaatst vanuit {source_location.get('location_label') or 'bronlocatie'}"
@@ -15544,7 +15592,7 @@ def transfer_inventory(payload: InventoryTransferRequest, authorization: Optiona
         source_event_id = create_inventory_event(
             conn,
             household_id=household_id,
-            article_id=str(source_row['id']),
+            article_id=household_article_id,
             article_name=article_name,
             resolved_location=source_location,
             event_type='transfer_out',
@@ -15557,7 +15605,7 @@ def transfer_inventory(payload: InventoryTransferRequest, authorization: Optiona
         target_event_id = create_inventory_event(
             conn,
             household_id=household_id,
-            article_id=str(target_inventory_id),
+            article_id=household_article_id,
             article_name=article_name,
             resolved_location=target_location,
             event_type='transfer_in',
