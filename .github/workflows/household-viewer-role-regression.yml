@@ -1,0 +1,23 @@
+name: Household viewer role regression
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/lib/authSession.js'
+      - 'frontend/tests/household-viewer-role-regression.mjs'
+      - '.github/workflows/household-viewer-role-regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  household-viewer-role-regression:
+    name: Household role reconciliation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run regression
+        run: node frontend/tests/household-viewer-role-regression.mjs

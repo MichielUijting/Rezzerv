@@ -1,0 +1,30 @@
+name: Uitpakken dagartikelen Release A
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/day_article_service.py'
+      - 'backend/app/api/day_article_routes.py'
+      - 'backend/app/api/router.py'
+      - 'backend/tests/day_article_release_a_selftest.py'
+      - '.github/workflows/uitpakken-dagartikelen-release-a.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  day-article-release-a:
+    name: Dagartikelen backend selftest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build backend
+        run: docker compose build backend
+      - name: Run Release A selftest
+        run: |
+          docker compose run --rm --no-deps \
+            -e PYTHONPATH=/app \
+            backend python /app/tests/day_article_release_a_selftest.py
