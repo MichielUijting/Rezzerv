@@ -1,0 +1,79 @@
+name: Temporary Slice 2B4 follow-up fix
+
+on:
+  push:
+    branches:
+      - feature/uitpakken-dagartikelen-release-b
+    paths:
+      - '.github/workflows/_temporary-slice2b4-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix-slice2b4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/uitpakken-dagartikelen-release-b
+          fetch-depth: 0
+      - name: Apply guarded fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          text = path.read_text(encoding='utf-8')
+
+          # Fix the second auto-consume branch: ID param and predicate must agree.
+          start = text.index('def apply_inventory_consumption(')
+          end = text.index('\ndef ', start + 10)
+          section = text[start:end]
+          old = 'AND naam = :naam'
+          if section.count(old) != 1:
+              raise SystemExit(f'expected one remaining name predicate in apply_inventory_consumption, found {section.count(old)}')
+          section = section.replace(old, 'AND household_article_id = :household_article_id', 1)
+          if 'AND naam = :naam' in section or 'lower(trim(naam))' in section:
+              raise SystemExit('name-based inventory identity remains in apply_inventory_consumption')
+          text = text[:start] + section + text[end:]
+
+          # Purchase event totals are diagnostic/history values and must use the same canonical identity.
+          old_total = 'old_total = get_article_total_quantity(conn, household_id, article_name)'
+          function_start = text.index('def create_inventory_purchase_event(')
+          function_end = text.index('\ndef ', function_start + 10)
+          event_section = text[function_start:function_end]
+          if event_section.count(old_total) != 1:
+              raise SystemExit(f'create_inventory_purchase_event old total: expected 1, found {event_section.count(old_total)}')
+          event_section = event_section.replace(
+              old_total,
+              'old_total = get_inventory_total_by_household_article(conn, household_id, str(article_id))',
+              1,
+          )
+          text = text[:function_start] + event_section + text[function_end:]
+
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Validate and commit
+        run: |
+          python -m py_compile backend/app/main.py
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('backend/app/main.py').read_text(encoding='utf-8')
+          start = text.index('def apply_inventory_consumption(')
+          end = text.index('\ndef ', start + 10)
+          section = text[start:end]
+          assert 'AND naam = :naam' not in section
+          assert 'lower(trim(naam))' not in section
+          assert section.count('household_article_id = :household_article_id') >= 2
+          start = text.index('def create_inventory_purchase_event(')
+          end = text.index('\ndef ', start + 10)
+          assert 'get_inventory_total_by_household_article' in text[start:end]
+          print('SLICE2B4_MAIN_IDENTITY_GUARD=PASS')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/main.py
+          git diff --cached --check
+          git commit -m "fix: complete canonical inventory predicates slice 2B4"
+          git push origin HEAD:feature/uitpakken-dagartikelen-release-b
