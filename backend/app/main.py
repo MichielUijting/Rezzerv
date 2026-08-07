@@ -9254,7 +9254,7 @@ def apply_manual_inventory_adjustment(
 
 
 def create_inventory_purchase_event(conn, household_id: str, article_id: str, article_name: str, quantity: float, resolved_location: dict, note: str, *, supplier_name: str | None = None, price: float | None = None, currency: str | None = None, purchase_date: str | None = None, article_number: str | None = None, barcode: str | None = None):
-    old_total = get_article_total_quantity(conn, household_id, article_name)
+    old_total = get_inventory_total_by_household_article(conn, household_id, str(article_id))
     projected_new_total = old_total + int(quantity)
     return create_inventory_event(
         conn,
@@ -9370,7 +9370,7 @@ def apply_inventory_consumption(
             SELECT id, aantal
             FROM inventory
             WHERE household_id = :household_id
-              AND naam = :naam
+              AND household_article_id = :household_article_id
               AND COALESCE(space_id, '') = COALESCE(:space_id, '')
               AND COALESCE(sublocation_id, '') = COALESCE(:sublocation_id, '')
             """
