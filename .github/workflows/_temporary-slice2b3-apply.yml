@@ -1,0 +1,93 @@
+name: Temporary Slice 2B3 guarded patch
+
+on:
+  push:
+    branches:
+      - feature/uitpakken-dagartikelen-release-b
+    paths:
+      - '.github/workflows/_temporary-slice2b3-apply.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-slice2b3:
+    if: github.event.head_commit.message == 'chore: apply guarded Slice 2B3 resolver patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/uitpakken-dagartikelen-release-b
+          fetch-depth: 0
+      - name: Apply guarded source patch
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path('backend/app/main.py')
+          text = path.read_text(encoding='utf-8')
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly 1 match, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              '''def build_live_article_option_id(article_name: str) -> str:\n    return f"live::{(article_name or '').strip()}"\n\n\n''',
+              '',
+              'remove build_live_article_option_id',
+          )
+
+          start = text.index('def resolve_household_article_selection_to_id(')
+          end = text.index('def _decode_household_article_setting_value', start)
+          old = text[start:end]
+          new = '''def resolve_household_article_selection_to_id(conn, household_id: str | None, article_selection_id: str | None, *, create_if_missing: bool = False) -> str | None:\n    """Resolve only an existing canonical household_article_id in the same household.\n\n    create_if_missing is retained for call compatibility only; Slice 2B3 deliberately\n    forbids creating or resolving identity from names or legacy live:: values.\n    """\n    normalized_selection = str(article_selection_id or '').strip()\n    normalized_household_id = str(household_id or '').strip()\n    if not normalized_selection or not normalized_household_id:\n        return None\n    if normalized_selection.startswith('live::'):\n        return None\n\n    direct_row = get_household_article_option_by_id(conn, normalized_selection, normalized_household_id)\n    if not direct_row or not direct_row.get('id'):\n        return None\n    return str(direct_row['id'])\n\n\n'''
+          text = text[:start] + new + text[end:]
+
+          start = text.index('def get_store_review_article_options(')
+          end = text.index('def utc_now_iso()', start)
+          new = '''def get_store_review_article_options(conn, household_id: str | None = None):\n    """Legacy internal option helper, canonicalized for Slice 2B3.\n\n    It returns only real household_articles for the explicitly supplied household.\n    No mock options, inventory-name identities or generated live:: IDs are allowed.\n    """\n    normalized_household_id = str(household_id or '').strip()\n    if not normalized_household_id:\n        return []\n\n    household_rows = conn.execute(\n        text(\n            """\n            SELECT id, naam AS article_name, consumable, brand_or_maker\n            FROM household_articles\n            WHERE household_id = :household_id\n              AND trim(COALESCE(naam, '')) <> ''\n            ORDER BY lower(naam) ASC, id ASC\n            """\n        ),\n        {"household_id": normalized_household_id},\n    ).mappings().all()\n    location_defaults_by_article = get_household_article_location_defaults(\n        conn,\n        [str(row.get("id") or "") for row in household_rows],\n    )\n\n    items = []\n    for row in household_rows:\n        article_id = str(row.get("id") or '').strip()\n        article_name = str(row.get("article_name") or '').strip()\n        if not article_id or not article_name:\n            continue\n        defaults = location_defaults_by_article.get(article_id, {})\n        items.append({\n            "id": article_id,\n            "household_article_id": article_id,\n            "name": article_name,\n            "brand": str(row.get("brand_or_maker") or '').strip(),\n            "consumable": bool(row["consumable"]) if row.get("consumable") is not None else infer_consumable_from_name(article_name),\n            "default_location_id": defaults.get("default_location_id") or "",\n            "default_sublocation_id": defaults.get("default_sublocation_id") or "",\n        })\n    return items\n\n\ndef find_generic_existing_article_match(conn, household_id: str | None, article_name: str | None) -> str | None:\n    """Suggestion-only generic name match. Never use its result as article identity."""\n    normalized_name = normalize_household_article_name(article_name)\n    normalized_household_id = str(household_id or '').strip()\n    if not normalized_name or not normalized_household_id:\n        return None\n\n    tokens = [part for part in normalized_name.lower().split() if part]\n    if len(tokens) < 2:\n        return None\n    generic_candidate = tokens[-1]\n    if len(generic_candidate) < 4:\n        return None\n\n    row = conn.execute(\n        text(\n            """\n            SELECT naam AS article_name\n            FROM household_articles\n            WHERE household_id = :household_id\n              AND lower(trim(naam)) = lower(trim(:article_name))\n            LIMIT 1\n            """\n        ),\n        {"household_id": normalized_household_id, "article_name": generic_candidate},\n    ).mappings().first()\n    if row and row.get("article_name"):\n        return str(row["article_name"]).strip()\n    return None\n\n\ndef resolve_processing_article(conn, household_id: str | None, article: dict | None) -> dict | None:\n    """Return only an existing canonical household article for the same household."""\n    if not article:\n        return None\n    normalized_household_id = str(household_id or '').strip()\n    article_id = str(article.get('id') or article.get('household_article_id') or '').strip()\n    if not normalized_household_id or not article_id or article_id.startswith('live::'):\n        return None\n    return get_household_article_option_by_id(conn, article_id, normalized_household_id)\n\n\ndef resolve_review_article_option(conn, article_id: str | None, household_id: str | None = None):\n    """Resolve a review selection strictly by canonical household_article_id."""\n    normalized_article_id = str(article_id or '').strip()\n    normalized_household_id = str(household_id or '').strip()\n    if not normalized_article_id or not normalized_household_id:\n        return None\n    if normalized_article_id.startswith('live::'):\n        return None\n    return get_household_article_option_by_id(conn, normalized_article_id, normalized_household_id)\n\n'''
+          text = text[:start] + new + text[end:]
+
+          # Internal validation must use the active household when constructing valid IDs.
+          old_call = 'article_rows = get_store_review_article_options(conn)\n        valid_article_ids = {str(row[\'id\']) for row in article_rows}'
+          new_call = 'article_rows = get_store_review_article_options(conn, effective_household_id)\n        valid_article_ids = {str(row[\'id\']) for row in article_rows}'
+          if text.count(old_call) != 1:
+              raise SystemExit(f'household-scoped option validation: expected 1 match, found {text.count(old_call)}')
+          text = text.replace(old_call, new_call, 1)
+
+          # The shadowed legacy HTTP route must not expose cross-household data when invoked directly.
+          legacy_call = 'all_items = get_store_review_article_options(conn)'
+          if text.count(legacy_call) != 1:
+              raise SystemExit(f'legacy route option call: expected 1 match, found {text.count(legacy_call)}')
+          text = text.replace(legacy_call, 'all_items = []', 1)
+
+          # Canonicalize legacy/dev fixture references without generating synthetic identities.
+          replacements = {
+              "build_live_article_option_id('Melk')": "ensure_household_article(conn, 'demo-household', 'Melk')",
+              "build_live_article_option_id('Tomaten')": "ensure_household_article(conn, 'demo-household', 'Tomaten')",
+              "build_live_article_option_id('Tuna')": "ensure_household_article(conn, 'demo-household', 'Tuna')",
+              'str(article.get("id") or build_live_article_option_id(article_name)).strip()': 'str(article.get("id") or "").strip()',
+              "build_live_article_option_id(article_name)": "ensure_household_article(conn, 'demo-household', article_name)",
+          }
+          for old_value, new_value in replacements.items():
+              text = text.replace(old_value, new_value)
+
+          if 'build_live_article_option_id' in text:
+              raise SystemExit('build_live_article_option_id still present after Slice 2B3 patch')
+
+          path.write_text(text, encoding='utf-8')
+      - name: Validate Python syntax and Slice 2B3 invariants
+        run: |
+          python -m py_compile backend/app/main.py
+          ! grep -R "build_live_article_option_id" backend/app/main.py
+      - name: Commit Slice 2B3 source patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/main.py
+          git diff --cached --check
+          git commit -m "refactor: canonicalize household article resolvers slice 2B3"
+          git push origin HEAD:feature/uitpakken-dagartikelen-release-b
