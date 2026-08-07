@@ -26,6 +26,11 @@ def _split_purchase_at(value: str | None) -> tuple[date | None, time | None]:
     raw = str(value or "").strip()
     if not raw:
         return None, None
+    if len(raw) == 10:
+        try:
+            return date.fromisoformat(raw), None
+        except Exception:
+            pass
     try:
         parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
         return parsed.date(), parsed.timetz().replace(tzinfo=None)
