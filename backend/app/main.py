@@ -61,6 +61,10 @@ from app.services.day_article_batch_processing_service import (
     remove_direct_inventory_artifacts,
     resolve_effective_line_inventory_handling,
 )
+from app.services.canonical_inventory_identity_service import (
+    apply_inventory_purchase_by_identity,
+    get_inventory_total_by_household_article,
+)
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, parse_receipt_content, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
@@ -9280,10 +9284,14 @@ def apply_inventory_consumption(
     quantity: float,
     resolved_location: dict,
     *,
+    household_article_id: str | None = None,
     mode: str = ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY,
     protected_quantity_on_purchase_row: int = 0,
     protected_purchase_inventory_id: str | None = None,
 ):
+    normalized_household_article_id = str(household_article_id or "").strip()
+    if not normalized_household_article_id:
+        raise HTTPException(status_code=400, detail="household_article_id is verplicht voor voorraadverbruik")
     safe_location = require_resolved_location(resolved_location)
     space_id = safe_location["space_id"]
     sublocation_id = safe_location["sublocation_id"]
@@ -9306,13 +9314,13 @@ def apply_inventory_consumption(
                        END AS is_purchase_row
                 FROM inventory
                 WHERE household_id = :household_id
-                  AND lower(trim(naam)) = lower(trim(:naam))
+                  AND household_article_id = :household_article_id
                 ORDER BY is_purchase_row ASC, aantal ASC, id ASC
                 """
             ),
             {
                 "household_id": household_id,
-                "naam": article_name,
+                "household_article_id": normalized_household_article_id,
                 "space_id": space_id,
                 "sublocation_id": sublocation_id,
                 "protected_purchase_inventory_id": str(protected_purchase_inventory_id) if protected_purchase_inventory_id else None,
@@ -9369,7 +9377,7 @@ def apply_inventory_consumption(
         ),
         {
             "household_id": household_id,
-            "naam": article_name,
+            "household_article_id": normalized_household_article_id,
             "space_id": space_id,
             "sublocation_id": sublocation_id,
         },
@@ -17994,25 +18002,25 @@ def classify_article_resolution(original_article_id: str | None, original_articl
     return 'bestaand huishoudartikel'
 
 
-def count_history_events_for_article(conn, article_id: str | None, article_name: str | None, event_id: str | None = None) -> tuple[int, bool]:
-    resolved_id = str(article_id or '').strip()
-    resolved_name = normalize_household_article_name(article_name)
-    if not resolved_name:
+def count_history_events_for_article(conn, household_id: str, household_article_id: str | None, event_id: str | None = None) -> tuple[int, bool]:
+    resolved_household_id = str(household_id or '').strip()
+    resolved_article_id = str(household_article_id or '').strip()
+    if not resolved_household_id or not resolved_article_id:
         return 0, False
     rows = conn.execute(
         text(
             """
             SELECT id
             FROM inventory_events
-            WHERE (article_id = :article_id OR lower(trim(article_name)) = lower(trim(:article_name)))
+            WHERE household_id = :household_id
+              AND household_article_id = :household_article_id
             ORDER BY datetime(created_at) DESC, id DESC
             """
         ),
-        {"article_id": resolved_id, "article_name": resolved_name},
+        {"household_id": resolved_household_id, "household_article_id": resolved_article_id},
     ).mappings().all()
     ids = [str(row['id']) for row in rows]
     return len(ids), bool(event_id and str(event_id) in ids)
-
 
 def build_purchase_import_line_diagnostic(
     *,
@@ -18447,7 +18455,7 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
 
                 article_name = article["name"]
                 note = build_store_import_note(batch["store_provider_code"], batch_id, line_id, line["article_name_raw"])
-                pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
+                pre_purchase_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))
                 effective_inventory_handling = resolve_effective_line_inventory_handling(
                     conn,
                     household_id=str(batch["household_id"]),
@@ -18584,11 +18592,18 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                         article_number=line.get("external_article_code"),
                         barcode=line.get("barcode") or None,
                     )
-                    purchase_inventory_id = apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)
+                    purchase_inventory_id = apply_inventory_purchase_by_identity(
+                    conn,
+                    household_id=str(batch["household_id"]),
+                    household_article_id=str(article_id),
+                    quantity=quantity,
+                    space_id=resolved_location.get("space_id"),
+                    sublocation_id=resolved_location.get("sublocation_id"),
+                )
                     sync_household_article_price_metrics(conn, batch["household_id"], article_id, ensure_household_article_global_product_link(conn, article_id, line.get("barcode") or None))
-                    inventory_after_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)
+                    inventory_after_purchase_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))
                     current_stage = 'history_lookup'
-                    history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(article_id), article_name, event_id)
+                    history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(batch["household_id"]), str(article_id), event_id)
                     current_stage = 'auto_consume_decision'
                     applied_deduction_quantity = 0
                     if should_auto_consume:
@@ -18608,12 +18623,13 @@ def process_purchase_import_batch(batch_id: str, payload: ProcessBatchRequest, a
                             article_name,
                             requested_deduction_quantity,
                             resolved_location,
+                            household_article_id=str(article_id),
                             mode=effective_mode,
                             protected_quantity_on_purchase_row=int(quantity),
                             protected_purchase_inventory_id=purchase_inventory_id,
                         )
                         applied_deduction_quantity = int(consumption_result.get("applied_quantity") or 0)
-                    inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)
+                    inventory_after_auto_consume_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))
                 except Exception as exc:
                     detail_parts = [
                         f'exception_type={exc.__class__.__name__}',
