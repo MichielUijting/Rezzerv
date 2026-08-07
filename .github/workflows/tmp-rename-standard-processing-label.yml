@@ -1,0 +1,70 @@
+name: Temporary rename Standard processing label
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rename-label:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/uitpakken-dagartikelen-release-b
+
+      - name: Replace visible frontend terminology only
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          root = Path('frontend/src')
+          changed = []
+          old = 'Standaardverwerking'
+          new = 'Directe consumptie'
+          for path in root.rglob('*'):
+              if not path.is_file() or path.suffix.lower() not in {'.js', '.jsx', '.ts', '.tsx'}:
+                  continue
+              text = path.read_text(encoding='utf-8')
+              if old not in text:
+                  continue
+              updated = text.replace(old, new)
+              path.write_text(updated, encoding='utf-8')
+              changed.append(str(path))
+
+          if not changed:
+              raise SystemExit('Geen frontendvoorkomens van Standaardverwerking gevonden')
+
+          print('Gewijzigde bestanden:')
+          for path in changed:
+              print(path)
+
+          # Guard: backend/domain identifiers and enum values must not be altered.
+          for path in changed:
+              text = Path(path).read_text(encoding='utf-8')
+              if 'Standaardverwerking' in text:
+                  raise SystemExit(f'Oude zichtbare term resteert in {path}')
+          PY
+
+      - name: Guard no backend changes
+        shell: bash
+        run: |
+          if ! git diff --quiet -- backend; then
+            echo 'Backend wijzigde onverwacht.'
+            git diff -- backend
+            exit 1
+          fi
+          git diff --check
+          git diff -- frontend/src
+
+      - name: Commit terminology-only change
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src
+          git commit -m 'fix(ui): rename Standaardverwerking to Directe consumptie'
+          git push origin HEAD:feature/uitpakken-dagartikelen-release-b
