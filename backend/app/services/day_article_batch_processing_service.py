@@ -104,8 +104,9 @@ def remove_direct_inventory_artifacts(
 ) -> int:
     """Remove inventory rows that older B4 code incorrectly stored at Direct / Direct.
 
-    Direct is a processing destination, never a stock-holding location. Any
-    active inventory row there is therefore an invalid artifact.
+    Direct is a processing destination, never a stock-holding location. Only
+    the exact protected Direct / Direct pair is removed; physical stock rows at
+    every other location remain untouched.
     """
     direct_location = ensure_direct_location(conn, household_id)
     result = conn.execute(
@@ -114,7 +115,8 @@ def remove_direct_inventory_artifacts(
             DELETE FROM inventory
             WHERE household_id = :household_id
               AND household_article_id = :household_article_id
-              AND (space_id = :space_id OR sublocation_id = :sublocation_id)
+              AND space_id = :space_id
+              AND sublocation_id = :sublocation_id
             """
         ),
         {
