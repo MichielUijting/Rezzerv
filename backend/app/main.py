@@ -16870,7 +16870,6 @@ def get_purchase_import_batch(batch_id: str):
     return batch_result
 
 
-@app.get("/api/store-review-articles")
 def get_store_review_articles(q: Optional[str] = Query(None)):
     query = (q or "").strip().lower()
     with engine.begin() as conn:
