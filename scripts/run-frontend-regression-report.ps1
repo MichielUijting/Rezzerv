@@ -171,6 +171,28 @@ finally {
     Write-Host "`n=== Fixture-cleanup overgeslagen: fixtures niet voorbereid ===" -ForegroundColor DarkGray
   }
 
+  try {
+    Write-Host "`n=== Playwright-testartefacten opruimen ===" -ForegroundColor Cyan
+    $playwrightArtifacts = @(
+      (Join-Path $repoRoot "frontend\playwright-report"),
+      (Join-Path $repoRoot "frontend\playwright"),
+      (Join-Path $repoRoot "frontend\test-results")
+    )
+
+    foreach ($artifactPath in $playwrightArtifacts) {
+      if (Test-Path $artifactPath) {
+        Remove-Item -Recurse -Force $artifactPath
+        Write-Host "Verwijderd: $artifactPath" -ForegroundColor DarkGray
+      }
+    }
+  }
+  catch {
+    Write-Host "Opruimen van Playwright-testartefacten faalde: $($_.Exception.Message)" -ForegroundColor Red
+    if (-not $runFailed) {
+      throw
+    }
+  }
+
   $testAdminPassword = $null
   Pop-Location
 }
