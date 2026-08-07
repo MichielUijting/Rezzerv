@@ -1,6 +1,7 @@
 name: Temporary rename Standard processing label
 
 on:
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -8,6 +9,7 @@ permissions:
 
 jobs:
   rename-label:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -31,8 +33,7 @@ jobs:
               text = path.read_text(encoding='utf-8')
               if old not in text:
                   continue
-              updated = text.replace(old, new)
-              path.write_text(updated, encoding='utf-8')
+              path.write_text(text.replace(old, new), encoding='utf-8')
               changed.append(str(path))
 
           if not changed:
@@ -41,20 +42,18 @@ jobs:
           print('Gewijzigde bestanden:')
           for path in changed:
               print(path)
-
-          # Guard: backend/domain identifiers and enum values must not be altered.
-          for path in changed:
-              text = Path(path).read_text(encoding='utf-8')
-              if 'Standaardverwerking' in text:
-                  raise SystemExit(f'Oude zichtbare term resteert in {path}')
           PY
 
-      - name: Guard no backend changes
+      - name: Guard terminology-only change
         shell: bash
         run: |
           if ! git diff --quiet -- backend; then
             echo 'Backend wijzigde onverwacht.'
             git diff -- backend
+            exit 1
+          fi
+          if grep -R --include='*.js' --include='*.jsx' --include='*.ts' --include='*.tsx' -n 'Standaardverwerking' frontend/src; then
+            echo 'Oude zichtbare term resteert in frontend/src.'
             exit 1
           fi
           git diff --check
