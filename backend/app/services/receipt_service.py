@@ -106,6 +106,10 @@ from app.receipt_ingestion.service_parts.text_extraction import (
     _preprocess_pdf_text,
 )
 from app.services.receipt_status_baseline_service import STATUS_LABELS
+from app.integrations.receipt_scanners.runtime import (
+    scan_receipt_content_via_gateway,
+    validate_receipt_scanner_configuration,
+)
 from app.receipt_ingestion.service_parts.image_ocr_flow import (
     _ocr_image_text_with_paddle,
     get_last_paddle_bbox_payload,
@@ -204,6 +208,7 @@ IGNORED_LINE_MARKERS = {
 
 
 LOGGER = logging.getLogger(__name__)
+validate_receipt_scanner_configuration()
 _PADDLE_OCR_INSTANCE = None
 
 
@@ -2010,7 +2015,7 @@ def ingest_receipt(engine, receipt_storage_root: Path, household_id: str, filena
         if duplicate:
             return _build_duplicate_receipt_response(duplicate)
 
-    parse_result = parse_receipt_content(file_bytes, filename, detected_mime)
+    parse_result = scan_receipt_content_via_gateway(file_bytes, filename, detected_mime)
     if reject_non_receipt and not parse_result.is_receipt:
         raise ValueError('Gedeelde inhoud is niet als bruikbare kassabon herkend.')
     parse_fingerprint = build_receipt_fingerprint_from_parse_result(parse_result) if parse_result.is_receipt else ''
@@ -2247,7 +2252,7 @@ def reparse_receipt(engine, receipt_storage_root: Path, receipt_table_id: str) -
         }
 
     parse_bytes, parse_filename, parse_mime_type = _resolve_reparse_source_payload(dict(record), file_bytes)
-    parse_result = parse_receipt_content(parse_bytes, parse_filename, parse_mime_type)
+    parse_result = scan_receipt_content_via_gateway(parse_bytes, parse_filename, parse_mime_type)
     existing_header = dict(record)
     preserved_store_name = parse_result.store_name or existing_header.get('existing_store_name')
     preserved_store_branch = parse_result.store_branch if parse_result.store_branch not in (None, '') else existing_header.get('existing_store_branch')
