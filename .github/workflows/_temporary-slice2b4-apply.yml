@@ -43,6 +43,7 @@ jobs:
           if import_block not in text:
               replace_once(marker, import_block + marker, 'canonical inventory service import')
 
+          # Canonicalize auto-consume stock selection without changing its ordering/quantity logic.
           start = text.index('def apply_inventory_consumption(')
           next_def = text.index('\ndef ', start + 10)
           section = text[start:next_def]
@@ -79,6 +80,7 @@ jobs:
               raise SystemExit('auto-consume still contains name-based inventory identity')
           text = text[:start] + section + text[next_def:]
 
+          # History diagnostics are household + canonical household article only.
           start = text.index('def count_history_events_for_article(')
           next_def = text.index('\ndef ', start + 10)
           text = text[:start] + '''def count_history_events_for_article(conn, household_id: str, household_article_id: str | None, event_id: str | None = None) -> tuple[int, bool]:
@@ -120,14 +122,16 @@ jobs:
           for old, new, label in replacements:
               replace_once(old, new, label)
 
-          consumption_anchor = '''                            requested_deduction_quantity,
-                              resolved_location,
-                              mode=effective_mode,'''
-          consumption_replacement = '''                            requested_deduction_quantity,
-                              resolved_location,
-                              household_article_id=str(article_id),
-                              mode=effective_mode,'''
-          replace_once(consumption_anchor, consumption_replacement, 'auto-consume canonical id call')
+          # Insert the canonical ID argument by position inside the one production call.
+          process_start = text.index('def process_purchase_import_batch(')
+          call_start = text.index('consumption_result = apply_inventory_consumption(', process_start)
+          call_end = text.index(')', call_start)
+          call_section = text[call_start:call_end]
+          if 'household_article_id=str(article_id)' not in call_section:
+              mode_pos = text.index('mode=effective_mode,', call_start, call_end)
+              line_start = text.rfind('\n', call_start, mode_pos) + 1
+              indentation = text[line_start:mode_pos]
+              text = text[:line_start] + indentation + 'household_article_id=str(article_id),\n' + text[line_start:]
 
           path.write_text(text, encoding='utf-8')
           PY
@@ -136,6 +140,7 @@ jobs:
           python -m py_compile backend/app/main.py backend/app/services/canonical_inventory_identity_service.py backend/tests/test_household_article_identity_slice2b4_inventory_contract.py
           grep -q "get_inventory_total_by_household_article" backend/app/main.py
           grep -q "household_article_id = :household_article_id" backend/app/main.py
+          grep -q "household_article_id=str(article_id)" backend/app/main.py
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add backend/app/main.py
