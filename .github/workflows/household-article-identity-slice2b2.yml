@@ -1,0 +1,26 @@
+name: Household article identity Slice 2B2
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  canonical-store-review-articles:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run canonical article option contract
+        run: PYTHONPATH=. python tests/test_store_review_articles_canonical_contract_selftest.py
