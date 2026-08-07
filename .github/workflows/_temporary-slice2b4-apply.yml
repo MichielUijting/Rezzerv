@@ -1,0 +1,168 @@
+name: Temporary Slice 2B4 guarded patch
+
+on:
+  push:
+    branches:
+      - feature/uitpakken-dagartikelen-release-b
+    paths:
+      - '.github/workflows/_temporary-slice2b4-apply.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-slice2b4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/uitpakken-dagartikelen-release-b
+          fetch-depth: 0
+      - name: Apply guarded source patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('backend/app/main.py')
+          text = path.read_text(encoding='utf-8')
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, found {count}')
+              text = text.replace(old, new, 1)
+
+          marker = 'from app.testing.almost_out_self_test import run_almost_out_backend_self_test\n'
+          import_block = (
+              'from app.services.canonical_inventory_identity_service import (\n'
+              '    apply_inventory_purchase_by_identity,\n'
+              '    get_inventory_total_by_household_article,\n'
+              ')\n'
+          )
+          if import_block not in text:
+              replace_once(marker, import_block + marker, 'canonical inventory service import')
+
+          # Auto-consume: preserve behaviour/order, but select rows by canonical ID instead of name.
+          start = text.index('def apply_inventory_consumption(')
+          next_def = text.index('\ndef ', start + 10)
+          section = text[start:next_def]
+          if 'household_article_id: str | None = None' not in section:
+              section = section.replace(
+                  '    *,\n    mode: str = ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY,',
+                  '    *,\n    household_article_id: str | None = None,\n    mode: str = ARTICLE_AUTO_CONSUME_PURCHASED_QUANTITY,',
+                  1,
+              )
+          section = section.replace(
+              '    safe_location = require_resolved_location(resolved_location)\n',
+              '    normalized_household_article_id = str(household_article_id or "").strip()\n'
+              '    if not normalized_household_article_id:\n'
+              '        raise HTTPException(status_code=400, detail="household_article_id is verplicht voor voorraadverbruik")\n'
+              '    safe_location = require_resolved_location(resolved_location)\n',
+              1,
+          )
+          name_predicate_count = section.count('AND lower(trim(naam)) = lower(trim(:naam))')
+          if name_predicate_count != 1:
+              raise SystemExit(f'auto-consume name predicate: expected 1, found {name_predicate_count}')
+          section = section.replace(
+              'AND lower(trim(naam)) = lower(trim(:naam))',
+              'AND household_article_id = :household_article_id',
+              1,
+          )
+          name_param_count = section.count('"naam": article_name,')
+          if name_param_count != 1:
+              raise SystemExit(f'auto-consume name param: expected 1, found {name_param_count}')
+          section = section.replace(
+              '"naam": article_name,',
+              '"household_article_id": normalized_household_article_id,',
+              1,
+          )
+          if 'lower(trim(naam))' in section:
+              raise SystemExit('auto-consume still matches inventory by name')
+          text = text[:start] + section + text[next_def:]
+
+          # History diagnostics must use canonical household_article_id and household isolation.
+          start = text.index('def count_history_events_for_article(')
+          next_def = text.index('\ndef ', start + 10)
+          text = text[:start] + '''def count_history_events_for_article(conn, household_id: str, household_article_id: str | None, event_id: str | None = None) -> tuple[int, bool]:
+              resolved_household_id = str(household_id or '').strip()
+              resolved_article_id = str(household_article_id or '').strip()
+              if not resolved_household_id or not resolved_article_id:
+                  return 0, False
+              rows = conn.execute(
+                  text(
+                      """
+                      SELECT id
+                      FROM inventory_events
+                      WHERE household_id = :household_id
+                        AND household_article_id = :household_article_id
+                      ORDER BY datetime(created_at) DESC, id DESC
+                      """
+                  ),
+                  {"household_id": resolved_household_id, "household_article_id": resolved_article_id},
+              ).mappings().all()
+              ids = [str(row['id']) for row in rows]
+              return len(ids), bool(event_id and str(event_id) in ids)
+
+          ''' + text[next_def + 1:]
+
+          replacements = [
+              (
+                  'pre_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)',
+                  'pre_purchase_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))',
+                  'pre-purchase total',
+              ),
+              (
+                  'purchase_inventory_id = apply_inventory_purchase(conn, batch["household_id"], article_name, quantity, resolved_location)',
+                  '''purchase_inventory_id = apply_inventory_purchase_by_identity(
+                              conn,
+                              household_id=str(batch["household_id"]),
+                              household_article_id=str(article_id),
+                              quantity=quantity,
+                              space_id=resolved_location.get("space_id"),
+                              sublocation_id=resolved_location.get("sublocation_id"),
+                          )''',
+                  'purchase inventory mutation',
+              ),
+              (
+                  'inventory_after_purchase_total = get_article_total_quantity(conn, batch["household_id"], article_name)',
+                  'inventory_after_purchase_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))',
+                  'post-purchase total',
+              ),
+              (
+                  'history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(article_id), article_name, event_id)',
+                  'history_lookup_result_count, history_contains_purchase_event = count_history_events_for_article(conn, str(batch["household_id"]), str(article_id), event_id)',
+                  'history lookup',
+              ),
+              (
+                  'inventory_after_auto_consume_total = get_article_total_quantity(conn, batch["household_id"], article_name)',
+                  'inventory_after_auto_consume_total = get_inventory_total_by_household_article(conn, batch["household_id"], str(article_id))',
+                  'post-consume total',
+              ),
+          ]
+          for old, new, label in replacements:
+              replace_once(old, new, label)
+
+          consumption_anchor = '''                            requested_deduction_quantity,
+                              resolved_location,
+                              mode=effective_mode,'''
+          consumption_replacement = '''                            requested_deduction_quantity,
+                              resolved_location,
+                              household_article_id=str(article_id),
+                              mode=effective_mode,'''
+          replace_once(consumption_anchor, consumption_replacement, 'auto-consume canonical id call')
+
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Validate and commit
+        run: |
+          python -m py_compile backend/app/main.py backend/app/services/canonical_inventory_identity_service.py backend/tests/test_household_article_identity_slice2b4_inventory_contract.py
+          grep -q "get_inventory_total_by_household_article" backend/app/main.py
+          grep -q "household_article_id = :household_article_id" backend/app/main.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/main.py
+          git diff --cached --check
+          git commit -m "refactor: canonicalize unpack inventory identity slice 2B4"
+          git push origin HEAD:feature/uitpakken-dagartikelen-release-b
