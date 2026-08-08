@@ -67,6 +67,10 @@ from app.services.canonical_inventory_identity_service import (
 )
 from app.testing.almost_out_self_test import run_almost_out_backend_self_test
 from app.services.receipt_service import dedupe_receipts_for_household, ensure_default_receipt_sources, ensure_share_receipt_source, ingest_receipt, parse_receipt_content, repair_receipts_for_household, reparse_receipt, scan_receipt_source, serialize_receipt_row
+from app.services.receipt_inventory_lifecycle_service import (
+    remove_receipt_inventory_events,
+    retime_receipt_inventory_events,
+)
 from app.domains.receipts.image.receipt_photo_normalizer import ReceiptPhotoNormalizer
 import tempfile
 import cv2
@@ -12029,6 +12033,12 @@ def delete_receipts(payload: ReceiptDeleteRequest, authorization: Optional[str] 
         raw_ids = [str(row['raw_receipt_id']) for row in rows if row.get('raw_receipt_id')]
         receipt_params = {f"rid_{idx}": value for idx, value in enumerate(deleted_receipt_ids)}
         receipt_placeholders = ", ".join([f":rid_{idx}" for idx, _ in enumerate(deleted_receipt_ids)])
+        for row in rows:
+            remove_receipt_inventory_events(
+                conn,
+                receipt_table_id=str(row['receipt_table_id']),
+                household_id=str(row.get('household_id') or ''),
+            )
         conn.execute(text(f"UPDATE receipt_tables SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id IN ({receipt_placeholders})"), receipt_params)
         if raw_ids:
             raw_params = {f"raw_{idx}": value for idx, value in enumerate(raw_ids)}
@@ -12954,6 +12964,13 @@ def update_receipt_header(receipt_table_id: str, payload: ReceiptHeaderUpdateReq
             """),
             {**values, 'id': receipt_table_id, 'user_email': str(context.get('email') or '').strip().lower()},
         )
+        if payload.purchase_at is not None and str(values.get('purchase_at') or '') != str(current.get('purchase_at') or ''):
+            retime_receipt_inventory_events(
+                conn,
+                receipt_table_id=receipt_table_id,
+                purchase_at=values.get('purchase_at'),
+                household_id=str(context.get('active_household_id') or ''),
+            )
         recompute_receipt_review_state(conn, receipt_table_id)
     return get_receipt_detail(receipt_table_id, authorization)
 
@@ -13014,7 +13031,7 @@ def update_receipt_line(receipt_table_id: str, line_id: str, payload: ReceiptLin
         recompute_receipt_review_state(conn, receipt_table_id)
         receipt_header = conn.execute(
             text("""
-            SELECT id AS receipt_table_id, household_id, store_name, store_branch, purchase_at, created_at, currency
+            SELECT id AS receipt_table_id, household_id, store_name, store_branch, purchase_at, created_at, approved_at, currency
             FROM receipt_tables
             WHERE id = :id
             LIMIT 1
@@ -13237,9 +13254,50 @@ def approve_receipt_table(receipt_table_id: str, authorization: Optional[str] = 
 def reparse_receipt_table(receipt_table_id: str, authorization: Optional[str] = Header(None)):
     with engine.begin() as conn:
         require_entity_household_access(conn, "receipt_tables", receipt_table_id, authorization, admin_only=True)
+        receipt_owner = conn.execute(
+            text("SELECT household_id FROM receipt_tables WHERE id = :id LIMIT 1"),
+            {'id': receipt_table_id},
+        ).mappings().first()
     result = reparse_receipt(engine, RECEIPT_STORAGE_ROOT, receipt_table_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Receipt table niet gevonden")
+    if not result.get('deleted') and str(result.get('parse_status') or '') != 'skipped_deleted_or_archived':
+        with engine.begin() as conn:
+            lifecycle_result = remove_receipt_inventory_events(
+                conn,
+                receipt_table_id=receipt_table_id,
+                household_id=str((receipt_owner or {}).get('household_id') or ''),
+            )
+            batch_rows = conn.execute(
+                text("SELECT id FROM purchase_import_batches WHERE source_type = 'receipt' AND source_reference = :source_reference"),
+                {'source_reference': f'receipt:{receipt_table_id}'},
+            ).mappings().all()
+            batch_ids = [str(row['id']) for row in batch_rows if row.get('id')]
+            if batch_ids:
+                conn.execute(
+                    text("DELETE FROM purchase_import_lines WHERE batch_id IN :ids").bindparams(bindparam('ids', expanding=True)),
+                    {'ids': batch_ids},
+                )
+                conn.execute(
+                    text("DELETE FROM purchase_import_batches WHERE id IN :ids").bindparams(bindparam('ids', expanding=True)),
+                    {'ids': batch_ids},
+                )
+            receipt_header = conn.execute(
+                text("""
+                SELECT id AS receipt_table_id, household_id, store_name, store_branch, purchase_at, created_at, currency
+                FROM receipt_tables
+                WHERE id = :id AND deleted_at IS NULL
+                LIMIT 1
+                """),
+                {'id': receipt_table_id},
+            ).mappings().first()
+            if receipt_header:
+                ensure_unpack_batch_for_receipt(conn, dict(receipt_header))
+        result['inventory_lifecycle'] = {
+            **lifecycle_result,
+            'recreated_unpack_batch': bool(receipt_header),
+            'requires_reunpack': bool(lifecycle_result.get('removed_event_count')),
+        }
     return result
 
 
