@@ -15,6 +15,7 @@ import app.main as legacy_main
 from app.main import app
 from app.api.server_session_routes import create_server_session_router
 from app.api.superuser_routes import create_superuser_router
+from app.api.superuser_household_routes import create_superuser_household_router
 from app.api.support_broadcast_routes import router as support_broadcast_router
 from app.services.authorization_ui_fixture_provisioning import (
     ensure_authorization_ui_fixture_member,
@@ -66,10 +67,6 @@ def activate_server_side_route_context() -> None:
     legacy_main.get_request_household_id = request_household_id_from_session
     legacy_main.require_platform_admin_user = require_platform_admin_from_session
 
-    # The existing support-message router originally admitted only household
-    # administrators. Rezzerv's functional contract allows every authenticated
-    # active household member to contact the superuser and continue that
-    # conversation. Platform support routes keep their platform permission gate.
     from app.api import support_message_routes
     support_message_routes._household_actor = household_support_actor
 
@@ -94,6 +91,7 @@ def activate_server_side_session_routes() -> None:
     ]
     app.include_router(create_server_session_router(legacy_main.engine))
     app.include_router(create_superuser_router(legacy_main.engine))
+    app.include_router(create_superuser_household_router(legacy_main.engine))
     app.include_router(support_broadcast_router)
 
     registered = {
