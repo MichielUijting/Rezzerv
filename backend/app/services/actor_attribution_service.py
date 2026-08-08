@@ -5,7 +5,7 @@ from contextvars import ContextVar
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import event, text
+from sqlalchemy import event, inspect, text
 from sqlalchemy.engine import Connection, Engine
 
 
@@ -68,16 +68,11 @@ def ensure_actor_attribution_schema(conn: Connection) -> None:
 def backfill_actor_attributions_from_audit(conn: Connection) -> int:
     """Backfill only when the existing audit log names the exact domain object.
 
-    This deliberately refuses heuristic attribution. Historical rows that cannot
-    be tied to an exact object id remain unattributed.
+    Historical rows without an exact audited object id deliberately remain
+    unattributed; S2 never guesses which household member performed an action.
     """
     ensure_actor_attribution_schema(conn)
-    audit_exists = conn.execute(text("""
-        SELECT 1 FROM sqlite_master
-        WHERE type='table' AND name='auth_audit_log'
-        LIMIT 1
-    """)).first()
-    if not audit_exists:
+    if "auth_audit_log" not in set(inspect(conn).get_table_names()):
         return 0
 
     object_type_map = {
