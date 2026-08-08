@@ -30,12 +30,14 @@ import CatalogGpcActionPage from '../../features/catalog/CatalogGpcActionPage.js
 import HouseholdSupportPage from '../../features/support/HouseholdSupportPage.jsx'
 import PlatformSupportPage from '../../features/support/PlatformSupportPage.jsx'
 import ShoppingPage from '../../features/shopping/ShoppingPage.jsx'
+import SuperuserDashboardPage from '../../features/superuser/SuperuserDashboardPage.jsx'
 import { clearAuthSession } from '../../lib/authSession.js'
 import AuthGuard from './AuthGuard'
 import AdminGuard from './AdminGuard'
 import FrontteamGuard from './FrontteamGuard'
 import PermissionGuard from './PermissionGuard'
 import SettingsGuard from './SettingsGuard'
+import SuperuserGuard from './SuperuserGuard.jsx'
 
 function LoginRoute() {
   const navigate = useNavigate()
@@ -85,12 +87,17 @@ function ProtectedSettings({ children, allowViewer = true }) {
   return <AuthGuard><SettingsGuard allowViewer={allowViewer}>{children}</SettingsGuard></AuthGuard>
 }
 
+function ProtectedSuperuser({ children }) {
+  return <AuthGuard><SuperuserGuard>{children}</SuperuserGuard></AuthGuard>
+}
+
 const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
   { path: '/reset-session', element: <ResetSessionRoute /> },
   { path: '/', element: <Navigate to="/login" replace /> },
   { path: '/home', element: <Protected><HomePage /></Protected> },
   { path: '/meldingen', element: <Protected><HouseholdSupportPage /></Protected> },
+  { path: '/superuser', element: <ProtectedSuperuser><SuperuserDashboardPage /></ProtectedSuperuser> },
   { path: '/superuser/meldingen', element: <ProtectedPermission permission="platform.support_access.read" message="Alleen de superuser kan alle meldingen bekijken."><PlatformSupportPage /></ProtectedPermission> },
   { path: '/voorraad', element: <Protected><Voorraad /></Protected> },
   { path: '/bijna-op', element: <Protected><AlmostOutPage /></Protected> },
