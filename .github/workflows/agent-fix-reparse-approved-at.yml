@@ -1,0 +1,41 @@
+name: Agent fix reparse approved_at
+
+on:
+  push:
+    branches:
+      - agent/chronological-inventory-processing
+    paths:
+      - .github/agent-patches/fix_reparse_approved_at.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/chronological-inventory-processing
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply fix
+        run: python .github/agent-patches/fix_reparse_approved_at.py
+      - name: Validate
+        run: |
+          python -m py_compile backend/app/main.py
+          python -m pytest backend/tests/test_receipt_inventory_lifecycle_route_wiring.py -q
+          git diff --check
+      - name: Commit fix
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/app/main.py backend/tests/test_receipt_inventory_lifecycle_route_wiring.py
+          git commit -m "fix: preserve approval when rebuilding receipt unpack batch"
+          git push origin HEAD:agent/chronological-inventory-processing
