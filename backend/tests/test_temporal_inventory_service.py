@@ -3,11 +3,13 @@ from decimal import Decimal
 
 from sqlalchemy import create_engine, text
 
+from app.services.canonical_inventory_identity_service import apply_inventory_purchase_by_identity
 from app.services.temporal_inventory_service import (
     TemporalInventoryEvent,
     ensure_temporal_inventory_schema,
     insert_temporal_event,
     ordered_events,
+    reconcile_inventory_total,
     replay_article,
 )
 
@@ -149,3 +151,147 @@ def test_existing_purchase_date_is_backfilled_as_effective_time():
     assert str(row["recorded_at"]).startswith("2026-08-08")
     assert row["effective_at_precision"] == "date"
     assert int(row["event_priority"]) == 10
+
+
+def test_legacy_dutch_date_is_normalized_for_temporal_ordering():
+    conn = _connection()
+    conn.execute(text(
+        """
+        INSERT INTO inventory_events (
+            id, household_id, article_id, household_article_id, article_name,
+            event_type, quantity, source, purchase_date, created_at
+        ) VALUES (
+            'legacy-nl', 'H1', 'A1', 'A1', 'Melk', 'purchase', 2,
+            'legacy', '02-08-2026', '2026-08-08 12:00:00'
+        )
+        """
+    ))
+    ensure_temporal_inventory_schema(conn)
+    row = conn.execute(text(
+        "SELECT effective_at, effective_at_precision FROM inventory_events WHERE id='legacy-nl'"
+    )).mappings().one()
+    assert str(row["effective_at"]).startswith("2026-08-02T00:00:00")
+    assert row["effective_at_precision"] == "date"
+
+
+def test_canonical_purchase_flow_reconciles_visible_stock_after_late_receipt():
+    conn = _connection()
+    conn.execute(text(
+        """
+        CREATE TABLE household_articles (
+            id TEXT PRIMARY KEY,
+            household_id TEXT NOT NULL,
+            naam TEXT NOT NULL,
+            status TEXT DEFAULT 'active'
+        )
+        """
+    ))
+    conn.execute(text(
+        """
+        CREATE TABLE inventory (
+            id TEXT PRIMARY KEY,
+            naam TEXT NOT NULL,
+            aantal INTEGER NOT NULL,
+            household_id TEXT NOT NULL,
+            household_article_id TEXT,
+            space_id TEXT,
+            sublocation_id TEXT,
+            status TEXT DEFAULT 'active',
+            updated_at TEXT
+        )
+        """
+    ))
+    conn.execute(text("INSERT INTO household_articles (id, household_id, naam) VALUES ('A1','H1','Melk')"))
+    conn.execute(text(
+        "INSERT INTO inventory (id, naam, aantal, household_id, household_article_id, space_id, status) "
+        "VALUES ('I1','Melk',1,'H1','A1','S1','active')"
+    ))
+
+    # The database already reflects a newer purchase (+2) followed by consumption (-1).
+    conn.execute(text(
+        """
+        INSERT INTO inventory_events (
+            id, household_id, article_id, household_article_id, article_name,
+            event_type, quantity, source, purchase_date, created_at
+        ) VALUES
+            ('newer', 'H1', 'A1', 'A1', 'Melk', 'purchase', 2, 'receipt', '06-08-2026', '2026-08-06 12:00:00'),
+            ('consume', 'H1', 'A1', 'A1', 'Melk', 'consume', 1, 'usage', NULL, '2026-08-07 08:00:00')
+        """
+    ))
+
+    # A receipt dated 4 August is read on 8 August. The event is recorded first,
+    # exactly as the current Uitpakken flow does, then the normal inventory mutation runs.
+    conn.execute(text(
+        """
+        INSERT INTO inventory_events (
+            id, household_id, article_id, household_article_id, article_name,
+            event_type, quantity, source, purchase_date, created_at
+        ) VALUES (
+            'late-old', 'H1', 'A1', 'A1', 'Melk', 'purchase', 3,
+            'receipt', '04-08-2026', '2026-08-08 09:00:00'
+        )
+        """
+    ))
+    inventory_id = apply_inventory_purchase_by_identity(
+        conn,
+        household_id='H1',
+        household_article_id='A1',
+        quantity=3,
+        space_id='S1',
+        sublocation_id=None,
+    )
+    assert inventory_id == 'I1'
+
+    visible_total = conn.execute(text(
+        "SELECT SUM(aantal) FROM inventory WHERE household_id='H1' AND household_article_id='A1'"
+    )).scalar()
+    assert int(visible_total) == 4
+
+    rows = conn.execute(text(
+        """
+        SELECT id, old_quantity, new_quantity
+        FROM inventory_events
+        WHERE household_id='H1'
+        ORDER BY datetime(effective_at), event_priority, id
+        """
+    )).mappings().all()
+    assert [(row['id'], int(row['old_quantity']), int(row['new_quantity'])) for row in rows] == [
+        ('late-old', 0, 3),
+        ('newer', 3, 5),
+        ('consume', 5, 4),
+    ]
+
+
+def test_reconcile_repairs_projection_even_when_import_side_effect_was_wrong():
+    conn = _connection()
+    conn.execute(text(
+        """
+        CREATE TABLE inventory (
+            id TEXT PRIMARY KEY,
+            naam TEXT NOT NULL,
+            aantal INTEGER NOT NULL,
+            household_id TEXT NOT NULL,
+            household_article_id TEXT,
+            space_id TEXT,
+            sublocation_id TEXT,
+            status TEXT DEFAULT 'active',
+            updated_at TEXT
+        )
+        """
+    ))
+    conn.execute(text(
+        "INSERT INTO inventory (id, naam, aantal, household_id, household_article_id, space_id, status) "
+        "VALUES ('I1','Melk',99,'H1','A1','S1','active')"
+    ))
+    ensure_temporal_inventory_schema(conn)
+    insert_temporal_event(conn, _event("2026-08-01T10:00:00+00:00", "3", ref="A"))
+    insert_temporal_event(conn, _event("2026-08-03T10:00:00+00:00", "1", event_type="consume", ref="B"))
+
+    report = reconcile_inventory_total(
+        conn,
+        household_id='H1',
+        household_article_id='A1',
+        preferred_inventory_id='I1',
+    )
+    assert report['current_quantity'] == Decimal('2')
+    assert int(conn.execute(text("SELECT aantal FROM inventory WHERE id='I1'")).scalar()) == 2
