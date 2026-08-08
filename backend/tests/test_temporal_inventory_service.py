@@ -174,8 +174,7 @@ def test_legacy_dutch_date_is_normalized_for_temporal_ordering():
     assert row["effective_at_precision"] == "date"
 
 
-def test_canonical_purchase_flow_reconciles_visible_stock_after_late_receipt():
-    conn = _connection()
+def _create_projection_tables(conn):
     conn.execute(text(
         """
         CREATE TABLE household_articles (
@@ -202,6 +201,11 @@ def test_canonical_purchase_flow_reconciles_visible_stock_after_late_receipt():
         """
     ))
     conn.execute(text("INSERT INTO household_articles (id, household_id, naam) VALUES ('A1','H1','Melk')"))
+
+
+def test_canonical_purchase_flow_reconciles_visible_stock_after_late_receipt():
+    conn = _connection()
+    _create_projection_tables(conn)
     conn.execute(text(
         "INSERT INTO inventory (id, naam, aantal, household_id, household_article_id, space_id, status) "
         "VALUES ('I1','Melk',1,'H1','A1','S1','active')"
@@ -219,8 +223,6 @@ def test_canonical_purchase_flow_reconciles_visible_stock_after_late_receipt():
         """
     ))
 
-    # A receipt dated 4 August is read on 8 August. The event is recorded first,
-    # exactly as the current Uitpakken flow does, then the normal inventory mutation runs.
     conn.execute(text(
         """
         INSERT INTO inventory_events (
@@ -295,3 +297,100 @@ def test_reconcile_repairs_projection_even_when_import_side_effect_was_wrong():
     )
     assert report['current_quantity'] == Decimal('2')
     assert int(conn.execute(text("SELECT aantal FROM inventory WHERE id='I1'")).scalar()) == 2
+
+
+def test_unpacking_uses_exact_receipt_purchase_time_not_batch_date_label():
+    conn = _connection()
+    _create_projection_tables(conn)
+    conn.execute(text(
+        "INSERT INTO inventory (id, naam, aantal, household_id, household_article_id, space_id, status) "
+        "VALUES ('I1','Melk',0,'H1','A1','S1','active')"
+    ))
+    conn.execute(text(
+        """
+        CREATE TABLE receipt_tables (
+            id TEXT PRIMARY KEY,
+            household_id TEXT NOT NULL,
+            purchase_at TEXT,
+            purchase_at_source TEXT
+        )
+        """
+    ))
+    conn.execute(text(
+        """
+        CREATE TABLE purchase_import_batches (
+            id TEXT PRIMARY KEY,
+            household_id TEXT NOT NULL,
+            source_type TEXT,
+            source_reference TEXT,
+            created_at TEXT
+        )
+        """
+    ))
+    conn.execute(text(
+        """
+        CREATE TABLE purchase_import_lines (
+            id TEXT PRIMARY KEY,
+            batch_id TEXT NOT NULL,
+            matched_household_article_id TEXT,
+            target_location_id TEXT,
+            quantity_raw NUMERIC,
+            processing_status TEXT,
+            ui_sort_order INTEGER,
+            created_at TEXT,
+            updated_at TEXT
+        )
+        """
+    ))
+    conn.execute(text(
+        "INSERT INTO receipt_tables (id, household_id, purchase_at, purchase_at_source) "
+        "VALUES ('R1','H1','2026-08-04T18:21:37','detected')"
+    ))
+    conn.execute(text(
+        "INSERT INTO purchase_import_batches (id, household_id, source_type, source_reference, created_at) "
+        "VALUES ('B1','H1','receipt','receipt:R1','2026-08-08 09:00:00')"
+    ))
+    conn.execute(text(
+        """
+        INSERT INTO purchase_import_lines (
+            id, batch_id, matched_household_article_id, target_location_id,
+            quantity_raw, processing_status, ui_sort_order, created_at, updated_at
+        ) VALUES (
+            'L1','B1','A1','S1',3,'pending',0,'2026-08-08 09:00:00','2026-08-08 09:00:00'
+        )
+        """
+    ))
+    # Existing Uitpakken behavior: event gets only a date label first.
+    conn.execute(text(
+        """
+        INSERT INTO inventory_events (
+            id, household_id, article_id, household_article_id, article_name, location_id,
+            event_type, quantity, source, purchase_date, created_at
+        ) VALUES (
+            'E1','H1','A1','A1','Melk','S1','purchase',3,'store_import','2026-08-04','2026-08-08 09:00:01'
+        )
+        """
+    ))
+
+    apply_inventory_purchase_by_identity(
+        conn,
+        household_id='H1',
+        household_article_id='A1',
+        quantity=3,
+        space_id='S1',
+        sublocation_id=None,
+    )
+
+    event = conn.execute(text(
+        """
+        SELECT effective_at, effective_at_precision, source_reference, source_line_id,
+               old_quantity, new_quantity
+        FROM inventory_events WHERE id='E1'
+        """
+    )).mappings().one()
+    assert str(event['effective_at']).startswith('2026-08-04T18:21:37')
+    assert event['effective_at_precision'] == 'datetime'
+    assert event['source_reference'] == 'receipt:R1'
+    assert event['source_line_id'] == 'L1'
+    assert int(event['old_quantity']) == 0
+    assert int(event['new_quantity']) == 3
