@@ -13031,7 +13031,7 @@ def update_receipt_line(receipt_table_id: str, line_id: str, payload: ReceiptLin
         recompute_receipt_review_state(conn, receipt_table_id)
         receipt_header = conn.execute(
             text("""
-            SELECT id AS receipt_table_id, household_id, store_name, store_branch, purchase_at, created_at, currency
+            SELECT id AS receipt_table_id, household_id, store_name, store_branch, purchase_at, created_at, approved_at, currency
             FROM receipt_tables
             WHERE id = :id
             LIMIT 1

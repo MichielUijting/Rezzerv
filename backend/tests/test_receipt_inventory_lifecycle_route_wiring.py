@@ -33,4 +33,5 @@ def test_receipt_reparse_clears_old_inventory_effect_and_rebuilds_unpack_batch()
     assert "DELETE FROM purchase_import_lines" in route
     assert "DELETE FROM purchase_import_batches" in route
     assert "ensure_unpack_batch_for_receipt(" in route
+    assert "approved_at, currency" in route
     assert "'requires_reunpack': bool(lifecycle_result.get('removed_event_count'))" in route
