@@ -19,6 +19,8 @@ def _engine():
                 article_id TEXT NOT NULL,
                 household_article_id TEXT,
                 article_name TEXT,
+                location_id TEXT,
+                location_label TEXT,
                 event_type TEXT NOT NULL,
                 quantity NUMERIC NOT NULL,
                 old_quantity NUMERIC NOT NULL DEFAULT 0,
