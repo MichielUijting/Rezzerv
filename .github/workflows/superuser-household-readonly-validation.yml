@@ -5,8 +5,11 @@ on:
     branches: [main]
     paths:
       - 'backend/app/api/superuser_household_routes.py'
+      - 'backend/app/services/actor_attribution_service.py'
+      - 'backend/app/services/session_request_context.py'
       - 'backend/app/session_entrypoint.py'
       - 'backend/tests/test_superuser_household_readonly.py'
+      - 'backend/tests/test_actor_attribution_service.py'
       - 'frontend/src/features/superuser/SuperuserDashboardPage.jsx'
       - '.github/workflows/superuser-household-readonly-validation.yml'
   workflow_dispatch:
@@ -25,9 +28,14 @@ jobs:
         run: |
           python -m compileall -q \
             backend/app/api/superuser_household_routes.py \
+            backend/app/services/actor_attribution_service.py \
+            backend/app/services/session_request_context.py \
             backend/app/session_entrypoint.py \
-            backend/tests/test_superuser_household_readonly.py
-      - name: Validate S2 read-only contract
+            backend/tests/test_superuser_household_readonly.py \
+            backend/tests/test_actor_attribution_service.py
+      - name: Validate S2 read-only and actor-attribution contract
         env:
           PYTHONPATH: backend
-        run: pytest -q backend/tests/test_superuser_household_readonly.py
+        run: pytest -q \
+          backend/tests/test_superuser_household_readonly.py \
+          backend/tests/test_actor_attribution_service.py
