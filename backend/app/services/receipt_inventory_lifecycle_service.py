@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import text
 
 from app.services.temporal_inventory_service import (
     ensure_temporal_inventory_schema,
-    replay_inventory_events,
+    reconcile_inventory_total,
 )
 
 
@@ -15,77 +14,26 @@ def _receipt_source_reference(receipt_table_id: str) -> str:
     return f"receipt:{str(receipt_table_id).strip()}"
 
 
-def _event_quantity(row: dict[str, Any]) -> Decimal:
-    old_quantity = Decimal(str(row.get("old_quantity") or 0))
-    new_quantity = Decimal(str(row.get("new_quantity") or 0))
-    return new_quantity - old_quantity
-
-
-def _reconcile_article_projection(conn, *, household_id: str, article_id: str) -> None:
-    replay = replay_inventory_events(conn, household_id=household_id, article_id=article_id)
-    target_quantity = Decimal(str(replay.get("final_quantity") or 0))
-
-    current_quantity = conn.execute(
-        text(
-            """
-            SELECT COALESCE(SUM(CAST(quantity AS NUMERIC)), 0)
-            FROM inventory_location_quantities
-            WHERE household_id = :household_id
-              AND article_id = :article_id
-            """
-        ),
-        {"household_id": household_id, "article_id": article_id},
-    ).scalar()
-    current_quantity = Decimal(str(current_quantity or 0))
-    delta = target_quantity - current_quantity
-    if delta == 0:
-        return
-
-    location_row = conn.execute(
-        text(
-            """
-            SELECT location_id, quantity
-            FROM inventory_location_quantities
-            WHERE household_id = :household_id
-              AND article_id = :article_id
-            ORDER BY CASE WHEN CAST(quantity AS NUMERIC) > 0 THEN 0 ELSE 1 END,
-                     location_id
-            LIMIT 1
-            """
-        ),
-        {"household_id": household_id, "article_id": article_id},
-    ).mappings().first()
-    if not location_row:
-        # No location projection exists. The normal unpacking flow creates it;
-        # lifecycle replay must not invent a household location silently.
-        return
-
-    conn.execute(
-        text(
-            """
-            UPDATE inventory_location_quantities
-            SET quantity = CAST(quantity AS NUMERIC) + :delta,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE household_id = :household_id
-              AND article_id = :article_id
-              AND location_id = :location_id
-            """
-        ),
-        {
-            "delta": float(delta),
-            "household_id": household_id,
-            "article_id": article_id,
-            "location_id": location_row["location_id"],
-        },
+def _reconcile_article_projection(conn, *, household_id: str, household_article_id: str) -> None:
+    """Replay the canonical ledger and reconcile the production inventory projection."""
+    reconcile_inventory_total(
+        conn,
+        household_id=household_id,
+        household_article_id=household_article_id,
     )
 
 
-def remove_receipt_inventory_events(conn, *, receipt_table_id: str, household_id: str | None = None) -> dict[str, Any]:
+def remove_receipt_inventory_events(
+    conn,
+    *,
+    receipt_table_id: str,
+    household_id: str | None = None,
+) -> dict[str, Any]:
     """Remove inventory effects of an already unpacked receipt and replay affected articles.
 
     This is intentionally source-based. A receipt can have been imported at any time;
     deleting it removes the events tied to its stable receipt source reference and then
-    rebuilds the chronological projection for every affected article.
+    rebuilds the chronological projection for every affected household article.
     """
     ensure_temporal_inventory_schema(conn)
     source_reference = _receipt_source_reference(receipt_table_id)
@@ -98,16 +46,24 @@ def remove_receipt_inventory_events(conn, *, receipt_table_id: str, household_id
     rows = conn.execute(
         text(
             f"""
-            SELECT id, household_id, article_id, old_quantity, new_quantity
+            SELECT id,
+                   household_id,
+                   COALESCE(household_article_id, article_id) AS household_article_id
             FROM inventory_events
             WHERE source_reference = :source_reference
               {household_clause}
-            ORDER BY article_id, id
+            ORDER BY household_article_id, id
             """
         ),
         params,
     ).mappings().all()
-    affected = sorted({(str(row["household_id"]), str(row["article_id"])) for row in rows})
+    affected = sorted(
+        {
+            (str(row["household_id"]), str(row["household_article_id"]))
+            for row in rows
+            if row.get("household_article_id") not in (None, "")
+        }
+    )
 
     conn.execute(
         text(
@@ -120,17 +76,17 @@ def remove_receipt_inventory_events(conn, *, receipt_table_id: str, household_id
         params,
     )
 
-    for affected_household_id, article_id in affected:
+    for affected_household_id, household_article_id in affected:
         _reconcile_article_projection(
             conn,
             household_id=affected_household_id,
-            article_id=article_id,
+            household_article_id=household_article_id,
         )
 
     return {
         "receipt_table_id": receipt_table_id,
         "removed_event_count": len(rows),
-        "affected_articles": [article_id for _, article_id in affected],
+        "affected_articles": [household_article_id for _, household_article_id in affected],
     }
 
 
@@ -144,7 +100,11 @@ def retime_receipt_inventory_events(
     """Move existing unpacked receipt events to a corrected receipt timestamp and replay."""
     ensure_temporal_inventory_schema(conn)
     if purchase_at in (None, ""):
-        return {"receipt_table_id": receipt_table_id, "updated_event_count": 0, "affected_articles": []}
+        return {
+            "receipt_table_id": receipt_table_id,
+            "updated_event_count": 0,
+            "affected_articles": [],
+        }
 
     source_reference = _receipt_source_reference(receipt_table_id)
     params: dict[str, Any] = {
@@ -159,7 +119,8 @@ def retime_receipt_inventory_events(
     rows = conn.execute(
         text(
             f"""
-            SELECT household_id, article_id
+            SELECT household_id,
+                   COALESCE(household_article_id, article_id) AS household_article_id
             FROM inventory_events
             WHERE source_reference = :source_reference
               {household_clause}
@@ -167,7 +128,13 @@ def retime_receipt_inventory_events(
         ),
         params,
     ).mappings().all()
-    affected = sorted({(str(row["household_id"]), str(row["article_id"])) for row in rows})
+    affected = sorted(
+        {
+            (str(row["household_id"]), str(row["household_article_id"]))
+            for row in rows
+            if row.get("household_article_id") not in (None, "")
+        }
+    )
 
     precision = "datetime" if ("T" in str(purchase_at) or " " in str(purchase_at).strip()) else "date"
     conn.execute(
@@ -188,15 +155,15 @@ def retime_receipt_inventory_events(
         {**params, "precision": precision},
     )
 
-    for affected_household_id, article_id in affected:
+    for affected_household_id, household_article_id in affected:
         _reconcile_article_projection(
             conn,
             household_id=affected_household_id,
-            article_id=article_id,
+            household_article_id=household_article_id,
         )
 
     return {
         "receipt_table_id": receipt_table_id,
         "updated_event_count": len(rows),
-        "affected_articles": [article_id for _, article_id in affected],
+        "affected_articles": [household_article_id for _, household_article_id in affected],
     }
