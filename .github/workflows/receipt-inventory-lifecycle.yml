@@ -1,0 +1,26 @@
+name: Receipt inventory lifecycle validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/receipt_inventory_lifecycle_service.py'
+      - 'backend/app/services/temporal_inventory_service.py'
+      - 'backend/tests/test_receipt_inventory_lifecycle_service.py'
+      - '.github/workflows/receipt-inventory-lifecycle.yml'
+  workflow_dispatch:
+
+jobs:
+  lifecycle:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: pip install pytest sqlalchemy
+      - name: Validate correction deletion and replay
+        run: pytest -q tests/test_receipt_inventory_lifecycle_service.py
