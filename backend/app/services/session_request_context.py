@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import HTTPException, Request
 
 from app.db import engine
+from app.services.actor_attribution_service import bind_current_actor, clear_current_actor
 from app.services.server_session_service import (
     SESSION_COOKIE_NAME,
     ServerSessionContext,
@@ -28,17 +29,21 @@ _raw_session_cookie: ContextVar[str | None] = ContextVar(
 
 def bind_request_session(request: Request) -> Token:
     """Bind only the opaque cookie value for the lifetime of one request."""
+    clear_current_actor()
     return _raw_session_cookie.set(request.cookies.get(SESSION_COOKIE_NAME))
 
 
 def reset_request_session(token: Token) -> None:
+    clear_current_actor()
     _raw_session_cookie.reset(token)
 
 
 def resolve_current_server_session() -> ServerSessionContext:
     raw_session_id = _raw_session_cookie.get()
     with engine.begin() as conn:
-        return resolve_server_session(conn, raw_session_id)
+        context = resolve_server_session(conn, raw_session_id)
+    bind_current_actor(context.user_id, context.active_household_id)
+    return context
 
 
 def legacy_display_role_from_canonical_role(role: str | None) -> str:
