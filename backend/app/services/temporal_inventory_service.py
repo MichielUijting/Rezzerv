@@ -230,12 +230,7 @@ def replay_running_balances(events: Iterable[dict]) -> list[dict]:
 
 
 def replay_article(conn, *, household_id: str, household_article_id: str) -> dict:
-    """Recompute event balances in chronological order and project the current total.
-
-    Location-level projection is intentionally left to the existing inventory mutation
-    layer in this first implementation slice. This function establishes the ordering
-    authority and correct historical running balances without changing UI behavior.
-    """
+    """Recompute event balances in chronological order."""
     events = ordered_events(
         conn,
         household_id=household_id,
@@ -267,4 +262,92 @@ def replay_article(conn, *, household_id: str, household_article_id: str) -> dic
         "current_quantity": current_quantity,
         "first_effective_at": replayed[0].get("effective_at") if replayed else None,
         "last_effective_at": replayed[-1].get("effective_at") if replayed else None,
+    }
+
+
+def reconcile_inventory_total(
+    conn,
+    *,
+    household_id: str,
+    household_article_id: str,
+    preferred_inventory_id: str | None = None,
+) -> dict:
+    """Make the current inventory projection equal the chronological ledger total.
+
+    The existing location rows remain intact. Any difference between the current
+    projection and the replayed ledger total is applied to the preferred row (normally
+    the row touched by the current purchase), or otherwise to the first active row.
+    This makes current stock import-order invariant without introducing a second stock
+    representation.
+    """
+    replay = replay_article(
+        conn,
+        household_id=str(household_id),
+        household_article_id=str(household_article_id),
+    )
+    expected = Decimal(str(replay["current_quantity"] or 0))
+    current = Decimal(str(conn.execute(text(
+        """
+        SELECT COALESCE(SUM(aantal), 0)
+        FROM inventory
+        WHERE household_id = :household_id
+          AND household_article_id = :household_article_id
+          AND COALESCE(status, 'active') = 'active'
+        """
+    ), {
+        "household_id": str(household_id),
+        "household_article_id": str(household_article_id),
+    }).scalar() or 0))
+    delta = expected - current
+
+    target_id = _normalize_text(preferred_inventory_id)
+    if target_id:
+        target_exists = conn.execute(text(
+            """
+            SELECT id FROM inventory
+            WHERE id = :id
+              AND household_id = :household_id
+              AND household_article_id = :household_article_id
+              AND COALESCE(status, 'active') = 'active'
+            LIMIT 1
+            """
+        ), {
+            "id": target_id,
+            "household_id": str(household_id),
+            "household_article_id": str(household_article_id),
+        }).scalar()
+        if not target_exists:
+            target_id = None
+
+    if not target_id:
+        target_id = conn.execute(text(
+            """
+            SELECT id FROM inventory
+            WHERE household_id = :household_id
+              AND household_article_id = :household_article_id
+              AND COALESCE(status, 'active') = 'active'
+            ORDER BY id ASC
+            LIMIT 1
+            """
+        ), {
+            "household_id": str(household_id),
+            "household_article_id": str(household_article_id),
+        }).scalar()
+
+    if delta != 0 and target_id:
+        conn.execute(text(
+            """
+            UPDATE inventory
+            SET aantal = COALESCE(aantal, 0) + :delta,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+            """
+        ), {"id": str(target_id), "delta": int(delta)})
+
+    return {
+        **replay,
+        "projected_before": current,
+        "projection_delta": delta,
+        "projected_after": expected if target_id or delta == 0 else current,
+        "target_inventory_id": str(target_id) if target_id else None,
     }
