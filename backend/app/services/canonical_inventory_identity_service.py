@@ -2,6 +2,10 @@
 
 Inventory identity is household_id + household_article_id + location.
 The inventory.naam column is maintained only as a presentation/snapshot value.
+
+From v01.12.78 the current inventory projection is reconciled with the existing
+inventory_events ledger after a purchase mutation. This keeps the visible stock
+independent from receipt import order while preserving the existing location model.
 """
 
 from __future__ import annotations
@@ -10,6 +14,8 @@ import uuid
 
 from fastapi import HTTPException
 from sqlalchemy import text
+
+from app.services.temporal_inventory_service import reconcile_inventory_total
 
 
 def _normalize(value: object | None) -> str:
@@ -61,6 +67,43 @@ def get_inventory_total_by_household_article(conn, household_id: str, household_
         },
     ).mappings().first()
     return int((row or {}).get("total_quantity") or 0)
+
+
+def _temporal_ledger_available_for_article(conn, household_id: str, household_article_id: str) -> bool:
+    table_exists = conn.execute(text(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='inventory_events' LIMIT 1"
+    )).scalar()
+    if not table_exists:
+        return False
+    columns = {str(row[1]) for row in conn.execute(text("PRAGMA table_info(inventory_events)")).fetchall()}
+    if "household_article_id" not in columns:
+        return False
+    event_exists = conn.execute(text(
+        """
+        SELECT 1
+        FROM inventory_events
+        WHERE household_id = :household_id
+          AND household_article_id = :household_article_id
+        LIMIT 1
+        """
+    ), {
+        "household_id": str(household_id),
+        "household_article_id": str(household_article_id),
+    }).scalar()
+    return bool(event_exists)
+
+
+def _reconcile_if_temporal_event_exists(conn, *, household_id: str, household_article_id: str, inventory_id: str) -> None:
+    # Some deliberately minimal isolated tests do not create inventory_events.
+    # Preserve their legacy mutation behavior; production receipt/unpacking flows do.
+    if not _temporal_ledger_available_for_article(conn, household_id, household_article_id):
+        return
+    reconcile_inventory_total(
+        conn,
+        household_id=str(household_id),
+        household_article_id=str(household_article_id),
+        preferred_inventory_id=str(inventory_id),
+    )
 
 
 def apply_inventory_purchase_by_identity(
@@ -128,6 +171,12 @@ def apply_inventory_purchase_by_identity(
                 "quantity": quantity_value,
             },
         )
+        _reconcile_if_temporal_event_exists(
+            conn,
+            household_id=normalized_household_id,
+            household_article_id=normalized_article_id,
+            inventory_id=inventory_id,
+        )
         return inventory_id
 
     inventory_id = uuid.uuid4().hex
@@ -152,5 +201,11 @@ def apply_inventory_purchase_by_identity(
             "space_id": normalized_space_id,
             "sublocation_id": normalized_sublocation_id,
         },
+    )
+    _reconcile_if_temporal_event_exists(
+        conn,
+        household_id=normalized_household_id,
+        household_article_id=normalized_article_id,
+        inventory_id=inventory_id,
     )
     return inventory_id
