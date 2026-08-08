@@ -71,8 +71,9 @@ def ensure_temporal_inventory_schema(conn) -> None:
         if column not in columns:
             conn.execute(text(f"ALTER TABLE inventory_events ADD COLUMN {column} {sql_type}"))
 
-    # Existing rows retain their historical meaning as closely as possible:
-    # explicit purchase_date wins; otherwise created_at is the best available fact.
+    # Existing rows retain their historical meaning as closely as possible.
+    # purchase_date wins over created_at. Both YYYY-MM-DD and DD-MM-YYYY are
+    # normalized because both forms exist in older fixtures/import paths.
     conn.execute(text(
         """
         UPDATE inventory_events
@@ -81,7 +82,14 @@ def ensure_temporal_inventory_schema(conn) -> None:
                 CASE
                     WHEN COALESCE(trim(purchase_date), '') <> '' THEN
                         CASE
-                            WHEN length(trim(purchase_date)) = 10 THEN trim(purchase_date) || 'T00:00:00+00:00'
+                            WHEN length(trim(purchase_date)) = 10
+                                 AND substr(trim(purchase_date), 5, 1) = '-'
+                                THEN trim(purchase_date) || 'T00:00:00+00:00'
+                            WHEN length(trim(purchase_date)) = 10
+                                 AND substr(trim(purchase_date), 3, 1) = '-'
+                                THEN substr(trim(purchase_date), 7, 4) || '-' ||
+                                     substr(trim(purchase_date), 4, 2) || '-' ||
+                                     substr(trim(purchase_date), 1, 2) || 'T00:00:00+00:00'
                             ELSE trim(purchase_date)
                         END
                     ELSE created_at
@@ -89,8 +97,9 @@ def ensure_temporal_inventory_schema(conn) -> None:
             ),
             recorded_at = COALESCE(NULLIF(trim(recorded_at), ''), created_at),
             effective_at_precision = CASE
+                WHEN COALESCE(trim(purchase_date), '') <> ''
+                     AND length(trim(purchase_date)) = 10 THEN 'date'
                 WHEN COALESCE(trim(effective_at_precision), '') <> '' THEN effective_at_precision
-                WHEN COALESCE(trim(purchase_date), '') <> '' AND length(trim(purchase_date)) = 10 THEN 'date'
                 ELSE 'datetime'
             END,
             event_priority = CASE lower(COALESCE(event_type, ''))
@@ -209,7 +218,6 @@ def event_delta(event_type: str, quantity: Decimal) -> Decimal:
         return magnitude
     if normalized in {"consume", "transfer_out"}:
         return -abs(magnitude)
-    # adjustments are signed by definition.
     if normalized == "adjustment":
         return magnitude
     return magnitude
@@ -272,14 +280,7 @@ def reconcile_inventory_total(
     household_article_id: str,
     preferred_inventory_id: str | None = None,
 ) -> dict:
-    """Make the current inventory projection equal the chronological ledger total.
-
-    The existing location rows remain intact. Any difference between the current
-    projection and the replayed ledger total is applied to the preferred row (normally
-    the row touched by the current purchase), or otherwise to the first active row.
-    This makes current stock import-order invariant without introducing a second stock
-    representation.
-    """
+    """Make the current inventory projection equal the chronological ledger total."""
     replay = replay_article(
         conn,
         household_id=str(household_id),
