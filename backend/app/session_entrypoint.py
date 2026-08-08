@@ -17,6 +17,7 @@ from app.api.server_session_routes import create_server_session_router
 from app.api.superuser_routes import create_superuser_router
 from app.api.superuser_household_routes import create_superuser_household_router
 from app.api.support_broadcast_routes import router as support_broadcast_router
+from app.services.actor_attribution_service import install_actor_attribution_tracking
 from app.services.authorization_ui_fixture_provisioning import (
     ensure_authorization_ui_fixture_member,
 )
@@ -126,5 +127,6 @@ with legacy_main.engine.begin() as provisioning_conn:
     ensure_system_superuser_for_session_runtime(provisioning_conn)
     ensure_authorization_ui_fixture_member(provisioning_conn)
 
+install_actor_attribution_tracking(legacy_main.engine)
 activate_server_side_route_context()
 activate_server_side_session_routes()
