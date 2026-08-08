@@ -29,9 +29,10 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
 
 COPY app ./app
 COPY receipt_ingestion ./receipt_ingestion
+COPY tests ./tests
 COPY sitecustomize.py ./sitecustomize.py
 COPY VERSION.txt ./VERSION.txt
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.session_entrypoint:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -1,0 +1,108 @@
+name: GPC catalog validation
+
+on:
+  pull_request:
+    paths:
+      - "backend/app/services/gpc_catalog_service.py"
+      - "backend/app/cli/import_gpc_catalog.py"
+      - "backend/tests/test_gpc_catalog_service.py"
+      - ".github/workflows/gpc-catalog-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Keep this validation isolated from the runtime database.
+jobs:
+  validate-gpc-catalog:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      PYTHONPATH: .
+      DATABASE_URL: sqlite:////tmp/rezzerv-gpc-pytest.db
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install minimal dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install sqlalchemy==2.0.36 pytest
+
+      - name: Compile GPC modules
+        run: |
+          python -m py_compile app/services/gpc_catalog_service.py
+          python -m py_compile app/cli/import_gpc_catalog.py
+          python -m py_compile tests/test_gpc_catalog_service.py
+
+      - name: Run focused GPC tests
+        run: python -m pytest -q tests/test_gpc_catalog_service.py
+
+      - name: Run isolated CLI import
+        env:
+          DATABASE_URL: sqlite:////tmp/rezzerv-gpc-validation.db
+        run: |
+          mkdir -p /tmp/gpc-validation
+          cat > /tmp/gpc-validation/nl-v-ci.xml <<'XML'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <schema>
+            <segment code="50000000" text="Voedingsmiddelen/Dranken/Tabak">
+              <family code="50100000" text="Groenten/Noten/Zaden">
+                <class code="50101700" text="Groenten - Onbewerkt">
+                  <brick code="10006144" text="Mosterdblad">
+                    <attType code="20000794" text="Teeltmethode">
+                      <attValue code="30002654" text="Conventioneel" />
+                    </attType>
+                  </brick>
+                </class>
+              </family>
+            </segment>
+          </schema>
+          XML
+          python -m app.cli.import_gpc_catalog /tmp/gpc-validation/nl-v-ci.xml --language nl --source-version ci > /tmp/gpc-validation/import-result.json
+
+      - name: Verify isolated database and audit record
+        run: |
+          python - <<'PY'
+          import json
+          import sqlite3
+          from pathlib import Path
+
+          db_path = Path('/tmp/rezzerv-gpc-validation.db')
+          result_path = Path('/tmp/gpc-validation/import-result.json')
+          assert db_path.is_file(), 'Geïsoleerde Rezzerv-testdatabase ontbreekt'
+          result = json.loads(result_path.read_text(encoding='utf-8'))
+          assert result['status'] == 'success'
+          assert result['datastore']['datastore'] == 'sqlite'
+          assert result['import']['language_code'] == 'nl'
+          assert result['import']['counts']['bricks'] == 1
+
+          with sqlite3.connect(db_path) as conn:
+              brick = conn.execute(
+                  "SELECT description, class_code FROM gpc_bricks WHERE brick_code = ?",
+                  ('10006144',),
+              ).fetchone()
+              audit = conn.execute(
+                  "SELECT language_code, source_version, status FROM gpc_import_runs ORDER BY id DESC LIMIT 1"
+              ).fetchone()
+
+          assert brick == ('Mosterdblad', '50101700')
+          assert audit == ('nl', 'ci', 'success')
+          PY
+
+      - name: Upload validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpc-catalog-validation-evidence
+          path: |
+            /tmp/gpc-validation/import-result.json
+            /tmp/rezzerv-gpc-validation.db
+          if-no-files-found: error

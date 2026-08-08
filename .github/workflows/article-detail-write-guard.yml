@@ -1,0 +1,39 @@
+name: Article detail write guard
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate-article-detail-write-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer minimale backend-afhankelijkheden
+        run: |
+          python -m pip install --quiet \
+            fastapi==0.115.0 \
+            httpx==0.27.2
+
+      - name: Compileer gewijzigde modules
+        run: |
+          python -m py_compile \
+            backend/app/services/article_detail_write_guard.py \
+            backend/app/services/product_enrichment_write_guard.py \
+            backend/app/testing/article_detail_write_guard_contract.py
+
+      - name: Voer artikeldetail-schrijfcontract uit
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m app.testing.article_detail_write_guard_contract | tee article-detail-write-guard.log
+          grep -F 'ARTICLE_DETAIL_WRITE_GUARD_GREEN' article-detail-write-guard.log

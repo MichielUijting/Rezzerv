@@ -12,7 +12,8 @@
         "test:e2e:headed": "playwright test --headed",
         "test:e2e:report": "playwright show-report",
         "guard:ssot": "python ../tools/check_r7c22_ssot_release_guard.py",
-        "regression": "cd .. && backend\\.venv\\Scripts\\python.exe tools\\r7c33_receipt_validation_runner.py"
+        "regression": "cd .. && backend\\.venv\\Scripts\\python.exe tools\\r7c33_receipt_validation_runner.py",
+        "test:e2e:frontend-regression": "playwright test tests/e2e/kassa.frontend-regression.spec.js tests/e2e/uitpakken.frontend-regression.spec.js tests/e2e/external-databases.frontend-regression.spec.js tests/e2e/external-databases-off.frontend-regression.spec.js tests/e2e/external-databases-unlink.frontend-regression.spec.js tests/e2e/external-databases-known-gtin.frontend-regression.spec.js tests/e2e/external-databases-no-redundant-buttons.frontend-regression.spec.js tests/e2e/product-groups.frontend-regression.spec.js tests/e2e/settings-article-groups.frontend-regression.spec.js tests/e2e/article-detail.frontend-regression.spec.js"
     },
     "dependencies": {
         "@zxing/browser": "^0.1.5",

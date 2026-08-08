@@ -1,0 +1,36 @@
+name: Receipt Resend inbound source household guard
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/services/receipt_resend_inbound_source_household_guard.py'
+      - 'backend/app/services/receipt_resend_webhook_guard.py'
+      - 'backend/app/testing/receipt_resend_inbound_source_household_guard_contract.py'
+      - '.github/workflows/receipt-resend-inbound-source-household-guard.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-receipt-resend-inbound-source-household-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer minimale backend-afhankelijkheden
+        run: python -m pip install --disable-pip-version-check fastapi sqlalchemy httpx
+
+      - name: Compileer gewijzigde modules
+        run: |
+          python -m py_compile backend/app/services/receipt_resend_inbound_source_household_guard.py
+          python -m py_compile backend/app/services/receipt_resend_webhook_guard.py
+          python -m py_compile backend/app/testing/receipt_resend_inbound_source_household_guard_contract.py
+
+      - name: Voer HTTP-bron-huishoudcontract uit
+        env:
+          PYTHONPATH: backend
+        run: python backend/app/testing/receipt_resend_inbound_source_household_guard_contract.py

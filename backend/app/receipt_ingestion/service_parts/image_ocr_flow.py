@@ -23,6 +23,8 @@ from pathlib import Path
 from statistics import median
 from typing import Any
 
+from app.receipt_ingestion.service_parts.ah_photo_bbox_article_reconstruction import apply_ah_photo_bbox_article_reconstruction
+from app.receipt_ingestion.service_parts.generic_receipt_layout_reconstruction import apply_generic_receipt_layout_reconstruction
 from app.receipt_ingestion.service_parts.plus_photo_line_grouping_fallback import apply_plus_photo_line_grouping_fallback
 from app.receipt_ingestion.service_parts.plus_photo_preprocessed_fallback_ocr import guarded_plus_preprocessed_ocr_fallback
 from app.receipt_ingestion.service_parts.text_extraction import _normalize_text_lines
@@ -39,6 +41,25 @@ except Exception:  # pragma: no cover
 
 LOGGER = logging.getLogger(__name__)
 _PADDLE_OCR_INSTANCE = None
+_LAST_PADDLE_BBOX_PAYLOAD: dict[str, dict[str, Any]] = {}
+
+
+def get_last_paddle_bbox_payload(filename: str | None) -> dict[str, Any] | None:
+    """Return last Paddle OCR texts/boxes captured for this filename.
+
+    Runtime Type: internal cache.
+    This does not run OCR and does not modify parser decisions.
+    """
+    if not filename:
+        return None
+    return _LAST_PADDLE_BBOX_PAYLOAD.get(str(filename))
+
+
+_PLUS_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff'}
+_PLUS_ROW_STOP_TOKENS = ('subtotaal', 'totaal', 'btw', 'pin', 'contactless', 'contactiess', 'transactie', 'wisselgeld')
+_PLUS_ROW_DISCOUNT_TOKENS = ('actie', 'korting', 'voordeel', 'plus geeft')
+_PLUS_AMOUNT_TOKEN_RE = re.compile(r'(?<!\d)(?:[€CE£]?-?\d{1,6}(?:[\.,]\s?\d{2})|0[\.,]\s?25)(?!\d)', re.IGNORECASE)
+_PLUS_QTY_TOKEN_RE = re.compile(r'(?<![A-Za-z0-9])\d{1,3}\s*[xX]\b')
 
 
 def _get_paddle_ocr():
@@ -184,59 +205,91 @@ def _normalize_paddle_collection(value: Any) -> list[Any]:
         return [value]
 
 
-def _plus_safe_rotation_grouped_lines_rescue(filename: str, lines: list[str]) -> list[str] | None:
-    """Guarded PLUS safe-rotation rescue when y-line grouping shifts amounts upward.
-
-    This does not use receipt ids or filenames. It activates only for PLUS image OCR
-    output with PLUSPunten, the characteristic safe-rotation grouped article block,
-    subtotal 14,08 and total 14,36. The resulting parser input contains only the
-    article block plus receipt totals/corrections, so payment text such as
-    Contactless cannot become a product line.
-    """
+def _is_plus_image_line_set(filename: str, lines: list[str]) -> bool:
     suffix = Path(filename or '').suffix.lower()
-    if suffix not in {'.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff'}:
-        return None
-    normalized = [re.sub(r'\s+', ' ', str(line or '')).strip() for line in lines if str(line or '').strip()]
-    lowered = [line.lower() for line in normalized]
-    if not any(line == 'plus' or line.startswith('plus ') for line in lowered[:20]):
-        return None
-    if not any('pluspunten' in line or 'piuspunten' in line for line in lowered):
-        return None
-    if not any('apple quinoa' in line and 'groente ringen' in line and '1,49' in line for line in lowered):
-        return None
-    if not any('subtotaal' in line and '1,15' in line for line in lowered):
-        return None
-    if not any('e14,08' in line.replace(' ', '') or '14,08' in line for line in lowered):
-        return None
-    if not any('14,36' in line and ('totaal' in line or 'totaals' in line) for line in lowered):
-        return None
+    if suffix not in _PLUS_IMAGE_EXTENSIONS:
+        return False
+    head = ' '.join(str(line or '').lower() for line in lines[:20])
+    return 'plus' in head or 'pluspunten' in head or 'piuspunten' in head
 
-    header = []
-    for line in normalized[:8]:
-        if 'contactless' in line.lower():
-            continue
-        header.append(line)
-    if not any(line.lower() == 'plus' for line in header):
-        header.insert(0, 'PLUS')
 
-    # R9-38B14g:
-    # The safe-rotation OCR total line can be polluted, e.g.
-    # 'Totaalsod boowdnist Inuelanebrrs £14,36'. The rescue has already
-    # validated subtotal/product sum and PLUSPunten-to-total math, so emit
-    # canonical footer lines that the generic total parser can recognize.
-    pluspunten_line = '14X PLUSPunten DIGITAAL €0,28'
-    total_line = 'Totaal €14,36'
-    article_lines = [
-        'BIO DADELTJES 3,29',
-        'DKK RIUSTWAFEL 1,89',
-        'LAMA PUFFS PIZZA 1,49',
-        'MELTY VEGGIE STICKS 1,29',
-        '4+ CARROTS, APPLES + 1,99',
-        'APPLE PEACH MANGO 1,49',
-        'APPLE QUINOA 1,49',
-        'GROENTE RINGEN +12M 1,15',
+def _clean_plus_amount_token(value: str) -> str:
+    token = re.sub(r'\s+', '', str(value or '').strip())
+    token = token.replace('£', '€')
+    token = re.sub(r'^(?=[0-9])', '', token)
+    return token
+
+
+def _split_plus_parallel_qty_line(line: str) -> list[str] | None:
+    normalized = re.sub(r'\b0[\.,]\s+25\b', '0,25', re.sub(r'\s+', ' ', str(line or '')).strip())
+    lowered = normalized.lower()
+    if any(token in lowered for token in _PLUS_ROW_STOP_TOKENS + _PLUS_ROW_DISCOUNT_TOKENS):
+        return None
+    amount_matches = list(_PLUS_AMOUNT_TOKEN_RE.finditer(normalized))
+    if len(amount_matches) < 4:
+        return None
+    first_amount = amount_matches[0]
+    label_part = normalized[:first_amount.start()].strip(' .:-')
+    qty_matches = list(_PLUS_QTY_TOKEN_RE.finditer(label_part))
+    if len(qty_matches) < 2:
+        return None
+    labels: list[str] = []
+    for index, qty_match in enumerate(qty_matches):
+        start = qty_match.start()
+        end = qty_matches[index + 1].start() if index + 1 < len(qty_matches) else len(label_part)
+        label = re.sub(r'\s+', ' ', label_part[start:end]).strip(' .:-')
+        if label:
+            labels.append(label)
+    if len(labels) < 2:
+        return None
+    if len(amount_matches) < len(labels) * 2:
+        return None
+    amounts = [_clean_plus_amount_token(match.group(0)) for match in amount_matches]
+    rows: list[str] = []
+    for index, label in enumerate(labels):
+        unit = amounts[index]
+        total = amounts[index + len(labels)]
+        rows.append(f'{label} {unit} {total}')
+    return rows if len(rows) >= 2 else None
+
+
+def _split_plus_statiegeld_line(line: str) -> list[str] | None:
+    normalized = re.sub(r'\b0[\.,]\s+25\b', '0,25', re.sub(r'\s+', ' ', str(line or '')).strip())
+    if 'statiegeld' not in normalized.lower():
+        return None
+    match = re.match(
+        r'^(?P<label>.*?\b\d{1,3}\s*[xX]\b.*?)\s+'
+        r'(?P<unit>[€CE£]?\d{1,6}[\.,]\d{2})\s+'
+        r'Statiegeld\s+'
+        r'(?P<total>[€CE£]?\d{1,6}[\.,]\d{2})\s+'
+        r'(?P<deposit>[€CE£]?0[\.,]\d{2})$',
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+    label = re.sub(r'\s+', ' ', match.group('label')).strip(' .:-')
+    if not label:
+        return None
+    return [
+        f"{label} {_clean_plus_amount_token(match.group('unit'))} {_clean_plus_amount_token(match.group('total'))}",
+        f"Statiegeld {_clean_plus_amount_token(match.group('deposit'))}",
     ]
-    return header + article_lines + ['Subtotaal €14,08', pluspunten_line, total_line]
+
+
+def _apply_plus_merged_text_line_split(filename: str, lines: list[str]) -> list[str]:
+    if not lines or not _is_plus_image_line_set(filename, lines):
+        return lines
+    expanded: list[str] = []
+    changed = False
+    for line in lines:
+        split_rows = _split_plus_statiegeld_line(line) or _split_plus_parallel_qty_line(line)
+        if split_rows:
+            expanded.extend(split_rows)
+            changed = True
+        else:
+            expanded.append(line)
+    return expanded if changed else lines
 
 
 def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[str], float | None]:
@@ -276,7 +329,16 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
                 continue
         boxes.extend(current_boxes[: len(normalized_texts)])
 
+    # PLUS-01L-c bbox payload cache:
+    # Store Paddle texts/boxes so receipt_service can build a structured PLUS result
+    # without running OCR again and without forcing bbox rows through text parsing.
+    _LAST_PADDLE_BBOX_PAYLOAD[str(filename)] = {
+        'texts': list(texts),
+        'boxes': list(boxes),
+    }
+
     line_candidates = _group_paddle_texts_to_lines(texts, boxes if boxes else None)
+    line_candidates = _apply_plus_merged_text_line_split(filename, line_candidates)
     plus_fallback_lines = apply_plus_photo_line_grouping_fallback(
         filename=filename,
         texts=texts,
@@ -286,62 +348,111 @@ def _ocr_image_text_with_paddle(file_bytes: bytes, filename: str) -> tuple[list[
     if plus_fallback_lines is not None:
         line_candidates = plus_fallback_lines
     else:
-        plus_safe_rotation_rescue_lines = _plus_safe_rotation_grouped_lines_rescue(filename, line_candidates)
-        if plus_safe_rotation_rescue_lines is not None:
-            line_candidates = plus_safe_rotation_rescue_lines
+        ah_bbox_lines = apply_ah_photo_bbox_article_reconstruction(
+            filename=filename,
+            texts=texts,
+            boxes=boxes,
+            current_lines=line_candidates,
+        )
+        if ah_bbox_lines is not None:
+            line_candidates = ah_bbox_lines
         else:
-            preprocessed_result = guarded_plus_preprocessed_ocr_fallback(
-                model=model,
-                file_bytes=file_bytes,
+            generic_layout_lines = apply_generic_receipt_layout_reconstruction(
                 filename=filename,
-                runtime_texts=texts,
-                runtime_boxes=boxes,
-                runtime_lines=line_candidates,
+                texts=texts,
+                boxes=boxes,
+                current_lines=line_candidates,
             )
-            if preprocessed_result.get('fallback_lines'):
-                line_candidates = list(preprocessed_result['fallback_lines'])
-                pre_scores = preprocessed_result.get('preprocessed_scores') or []
-                if pre_scores:
-                    scores = [float(score) for score in pre_scores]
+            if generic_layout_lines is not None:
+                line_candidates = generic_layout_lines
+            else:
+                preprocessed_result = guarded_plus_preprocessed_ocr_fallback(
+                    model=model,
+                    file_bytes=file_bytes,
+                    filename=filename,
+                    runtime_texts=texts,
+                    runtime_boxes=boxes,
+                    runtime_lines=line_candidates,
+                )
+                if preprocessed_result.get('fallback_lines'):
+                    line_candidates = list(preprocessed_result['fallback_lines'])
+                    pre_scores = preprocessed_result.get('preprocessed_scores') or []
+                    if pre_scores:
+                        scores = [float(score) for score in pre_scores]
     confidence = round(sum(scores) / len(scores), 4) if scores else None
     return line_candidates, confidence
 
 
-def warm_receipt_ocr_runtime() -> dict[str, Any]:
-    """Warm OCR dependencies before the first user upload."""
-    result: dict[str, Any] = {"warmup": "receipt_ocr_runtime"}
-    if str(os.getenv("REZZERV_RECEIPT_STARTUP_OCR_WARMUP", "false") or "false").strip().lower() not in {"1", "true", "yes", "on"}:
-        result["paddle"] = "skipped"
-        result["reason"] = "startup_ocr_warmup_disabled"
-        return result
-    try:
-        if Image is None:
-            result["paddle"] = "pillow_unavailable"
-            return result
-        sample = Image.new("RGB", (320, 220), "white")
-        buffer = io.BytesIO()
-        sample.save(buffer, format="PNG")
-        paddle_lines, _ = _ocr_image_text_with_paddle(buffer.getvalue(), "warmup.png")
-        result["paddle"] = "ok" if paddle_lines is not None else "no_lines"
-    except Exception as exc:
-        result["paddle"] = f"failed:{type(exc).__name__}"
-    return result
-
-
 def _ocr_image_text_with_tesseract(file_bytes: bytes, filename: str) -> tuple[list[str], float | None]:
-    suffix = Path(filename).suffix.lower() or '.png'
-    language = 'nld+eng'
-    try:
-        with tempfile.TemporaryDirectory(prefix='rezzerv-tesseract-') as temp_dir:
-            image_path = Path(temp_dir) / f'image{suffix}'
-            image_path.write_bytes(file_bytes)
-            command = ['tesseract', str(image_path), 'stdout', '-l', language, '--psm', '6']
-            completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=90)
-            if completed.returncode != 0:
-                LOGGER.warning('Tesseract verwerking mislukt voor %s: %s', filename, (completed.stderr or '').strip())
-                return [], None
-            text_output = completed.stdout or ''
-            return _normalize_text_lines(text_output), None
-    except Exception as exc:  # pragma: no cover - runtime dependency
-        LOGGER.warning('Tesseract fallback mislukt voor %s: %s', exc)
+    if Image is None:
         return [], None
+    try:
+        image = Image.open(io.BytesIO(file_bytes))
+    except Exception:
+        return [], None
+    with tempfile.TemporaryDirectory(prefix='rezzerv-tesseract-') as temp_dir:
+        image_path = Path(temp_dir) / 'receipt.png'
+        image.save(image_path)
+        base_path = Path(temp_dir) / 'out'
+        cmd = [
+            'tesseract',
+            str(image_path),
+            str(base_path),
+            '-l',
+            os.getenv('TESSERACT_LANG', 'nld+eng'),
+            '--psm',
+            '6',
+            'tsv',
+        ]
+        try:
+            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
+        except Exception:
+            return [], None
+        tsv_path = base_path.with_suffix('.tsv')
+        if not tsv_path.exists():
+            return [], None
+        rows = tsv_path.read_text(encoding='utf-8', errors='ignore').splitlines()
+
+    grouped: dict[tuple[str, str, str], list[tuple[int, str]]] = {}
+    confidences: list[float] = []
+    for raw in rows[1:]:
+        parts = raw.split('\t')
+        if len(parts) < 12:
+            continue
+        conf_raw = parts[10]
+        text = parts[11].strip()
+        if not text:
+            continue
+        try:
+            conf = float(conf_raw)
+            if conf >= 0:
+                confidences.append(conf / 100.0)
+        except ValueError:
+            pass
+        key = (parts[1], parts[2], parts[4])
+        try:
+            left = int(parts[6])
+        except ValueError:
+            left = len(grouped.get(key, []))
+        grouped.setdefault(key, []).append((left, text))
+
+    lines: list[str] = []
+    for key in sorted(grouped.keys(), key=lambda item: tuple(int(x) if str(x).isdigit() else 0 for x in item)):
+        words = [text for _, text in sorted(grouped[key], key=lambda item: item[0])]
+        line = re.sub(r'\s+', ' ', ' '.join(words)).strip()
+        if line:
+            lines.append(line)
+    return lines, round(sum(confidences) / len(confidences), 4) if confidences else None
+
+
+def warm_receipt_ocr_runtime() -> dict[str, bool]:
+    """Best-effort warm-up for heavy OCR runtimes after backend startup.
+
+    Keeps the existing lazy path intact: failures are reported but never block
+    application startup.
+    """
+    paddle_ready = _get_paddle_ocr() is not None
+    return {
+        'paddle_ready': bool(paddle_ready),
+        'tesseract_ready': Image is not None,
+    }

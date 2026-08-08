@@ -1,14 +1,8 @@
+import { fetchJsonWithAuth } from '../../lib/authSession'
+
 const DEBUG_BUTTON_ID = 'rezzerv-download-debug-json-button'
 const DEBUG_PATCH_MARKER = '__rezzervReceiptDebugExportPatchInstalled'
 const ACTIVE_RECEIPT_KEY = 'rezzerv_active_receipt_table_id'
-
-function getToken() {
-  try {
-    return window.localStorage.getItem('rezzerv_token') || ''
-  } catch {
-    return ''
-  }
-}
 
 function rememberReceiptIdFromUrl(input) {
   const url = typeof input === 'string' ? input : String(input?.url || '')
@@ -63,14 +57,13 @@ async function downloadDebugJson(button) {
     window.alert('Selecteer eerst een kassabon. Open daarna opnieuw Download debug JSON.')
     return
   }
-  const token = getToken()
   const previousText = button.textContent
   button.disabled = true
   button.textContent = 'Debug downloaden…'
   try {
-    const response = await fetch(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {
+    const response = await fetchJsonWithAuth(`/api/receipts/${encodeURIComponent(receiptId)}/debug-export`, {
       method: 'GET',
-      headers: token ? { Authorization: `Bearer ${token}`, Accept: 'application/json' } : { Accept: 'application/json' },
+      headers: { Accept: 'application/json' },
     })
     const bodyText = await response.text()
     if (!response.ok) {

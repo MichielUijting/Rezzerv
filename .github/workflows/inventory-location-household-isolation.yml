@@ -1,0 +1,39 @@
+name: Inventory location household isolation
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate-inventory-location-household-isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer minimale backend-afhankelijkheden
+        run: |
+          python -m pip install --quiet \
+            fastapi==0.115.0 \
+            sqlalchemy==2.0.36
+
+      - name: Compileer gewijzigde modules
+        run: |
+          python -m py_compile \
+            backend/app/__init__.py \
+            backend/app/services/inventory_location_household_patch.py \
+            backend/app/testing/inventory_location_household_isolation_contract.py
+
+      - name: Voer A-B-locatie-isolatiecontract uit
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m app.testing.inventory_location_household_isolation_contract | tee inventory-location-isolation.log
+          grep -F 'INVENTORY_LOCATION_HOUSEHOLD_ISOLATION_GREEN' inventory-location-isolation.log

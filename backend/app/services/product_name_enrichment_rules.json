@@ -1,0 +1,58 @@
+[
+  {
+    "match_type": "exact_normalized_label",
+    "label": "AH GRF ROOKV",
+    "suggested_product_name": "Albert Heijn grove rookworst",
+    "source": "curated_receipt_label_mapping",
+    "confidence": "high"
+  },
+  {
+    "match_type": "exact_normalized_label",
+    "label": "T SOEPGR BASIS",
+    "suggested_product_name": "Soepgroente basis",
+    "source": "curated_receipt_label_mapping",
+    "confidence": "medium"
+  },
+  {
+    "match_type": "exact_normalized_label",
+    "label": "KASTANJE CHAMPIG",
+    "suggested_product_name": "Kastanjechampignons",
+    "source": "curated_receipt_label_mapping",
+    "confidence": "high"
+  },
+  {
+    "match_type": "exact_normalized_label",
+    "label": "BIO RODE BIET VACUM",
+    "suggested_product_name": "Biologische rode biet vacuüm",
+    "source": "curated_receipt_label_mapping",
+    "confidence": "high"
+  },
+  {
+    "match_type": "exact_normalized_label",
+    "label": "KIPBLOKJE DIJFIL 350",
+    "suggested_product_name": "Kipdijfiletblokjes 350 g",
+    "source": "curated_receipt_label_mapping",
+    "confidence": "high"
+  },
+  {
+    "match_type": "exact_normalized_label",
+    "label": "KIPDIJ REEPJE 400",
+    "suggested_product_name": "Kipdijreepjes 400 g",
+    "source": "curated_receipt_label_mapping",
+    "confidence": "high"
+  },
+  {
+    "match_type": "exact_normalized_label",
+    "label": "AH HV MELK",
+    "suggested_product_name": "Albert Heijn halfvolle melk",
+    "source": "curated_receipt_label_mapping",
+    "confidence": "high"
+  },
+  {
+    "match_type": "exact_normalized_label",
+    "label": "GOUDSE KAAS 48U GESN.JONG",
+    "suggested_product_name": "Goudse kaas 48+ gesneden jong",
+    "source": "curated_receipt_label_mapping",
+    "confidence": "medium"
+  }
+]

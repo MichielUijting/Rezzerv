@@ -18,9 +18,16 @@ export default function ReceiptsPage() {
 
   useDismissOnComponentClick([() => setError('')], Boolean(error))
   const [selectedBatchIds, setSelectedBatchIds] = useState([])
-  const [openedBatchId, setOpenedBatchId] = useState('')
+  const [openedBatchId, setOpenedBatchId] = useState(() => (
+    new URLSearchParams(window.location.search).get('batch') || ''
+  ))
   const [tableSort, setTableSort] = useState({ key: 'datum', direction: 'desc' })
   const location = useLocation()
+
+  useEffect(() => {
+    const requestedBatchId = new URLSearchParams(location.search).get('batch') || ''
+    setOpenedBatchId(requestedBatchId)
+  }, [location.search])
   const receiptsTableColumns = useMemo(() => ([
     { key: 'select', width: 44 },
     { key: 'winkel', width: 260 },
@@ -38,10 +45,7 @@ export default function ReceiptsPage() {
       setIsLoading(true)
       setError('')
       try {
-        const token = localStorage.getItem('rezzerv_token')
-        const householdData = await fetchJson('/api/household', {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        })
+        const householdData = await fetchJson('/api/household')
         if (cancelled) return
 
         const unpackData = await fetchJson(`/api/unpack-start-batches?householdId=${encodeURIComponent(householdData.id)}`)
@@ -84,17 +88,20 @@ export default function ReceiptsPage() {
   }, [batches, filters, tableSort])
 
   useEffect(() => {
+    if (isLoading) return
+
     if (!listItems.length) {
       setSelectedBatchIds([])
       setOpenedBatchId('')
       return
     }
+
     const visibleIds = new Set(listItems.map((item) => item.batch_id))
     setSelectedBatchIds((current) => current.filter((id) => visibleIds.has(id)))
     if (openedBatchId && !visibleIds.has(openedBatchId)) {
       setOpenedBatchId('')
     }
-  }, [listItems, openedBatchId])
+  }, [isLoading, listItems, openedBatchId])
 
   function handleFilterChange(key, value) {
     setFilters((current) => ({ ...current, [key]: value }))

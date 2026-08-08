@@ -1,0 +1,44 @@
+name: M2C2n household fallback audit
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  audit-household-fallbacks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Genereer fallbackaudit
+        run: |
+          mkdir -p household-fallback-audit-output
+          python backend/app/testing/household_fallback_audit.py \
+            --root . \
+            --output household-fallback-audit-output/M2C2N-HOUSEHOLD-FALLBACK-AUDIT.json \
+            | tee household-fallback-audit.log
+          grep -F 'M2C2N_HOUSEHOLD_FALLBACK_AUDIT_GREEN' household-fallback-audit.log
+          test -s household-fallback-audit-output/M2C2N-HOUSEHOLD-FALLBACK-AUDIT.json
+
+      - name: Controleer volledige fallbackclassificatie
+        env:
+          PYTHONPATH: backend
+        run: |
+          python -m app.testing.household_fallback_contract \
+            | tee household-fallback-contract.log
+          grep -F 'M2C2N_HOUSEHOLD_FALLBACK_CONTRACT_GREEN' household-fallback-contract.log
+
+      - name: Publiceer fallbackaudit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m2c2n-household-fallback-audit
+          path: |
+            household-fallback-audit-output/M2C2N-HOUSEHOLD-FALLBACK-AUDIT.json
+            household-fallback-audit.log
+            household-fallback-contract.log
+          if-no-files-found: error
+          retention-days: 30

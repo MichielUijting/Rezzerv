@@ -1,0 +1,219 @@
+name: Receipt inventory chain validation
+
+on:
+  push:
+    branches:
+      - m2c2m-ketentest-receipt-inventory-step1
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate-isolated-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compile geïsoleerde ketentestmodules
+        run: |
+          python -m py_compile \
+            backend/app/testing/receipt_inventory_chain_contract.py \
+            backend/app/testing/receipt_inventory_chain_test_db.py \
+            backend/app/testing/receipt_inventory_chain_step3.py \
+            backend/app/testing/receipt_inventory_chain_step4.py
+
+      - name: Valideer testcontract
+        run: python -m backend.app.testing.receipt_inventory_chain_contract
+
+      - name: Valideer geïsoleerde testdatabase direct
+        run: python -m backend.app.testing.receipt_inventory_chain_test_db
+
+      - name: Voer ketenstap 3 direct uit
+        run: python -m backend.app.testing.receipt_inventory_chain_step3
+
+      - name: Voer aanvullende geïsoleerde ketenvalidatie uit
+        run: python -m backend.app.testing.receipt_inventory_chain_step4
+
+  validate-production-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer minimale backend-afhankelijkheden
+        run: |
+          python -m pip install --quiet \
+            fastapi==0.115.0 \
+            sqlalchemy==2.0.36 \
+            pydantic==2.12.5 \
+            python-multipart==0.0.20 \
+            pypdf==5.4.0 \
+            Pillow \
+            beautifulsoup4==4.12.3 \
+            opencv-python-headless
+
+      - name: Compile productie-ketentest
+        run: python -m py_compile backend/app/testing/receipt_inventory_production_chain.py
+
+      - name: Voer productie-keten uit en bewaar uitvoer
+        id: production_chain
+        continue-on-error: true
+        env:
+          PYTHONPATH: backend
+          RECEIPT_STORAGE_ROOT: ${{ runner.temp }}/rezzerv-receipts
+        run: |
+          set +e
+          python backend/app/testing/receipt_inventory_production_chain.py > production-chain.log 2>&1
+          exit_code=$?
+          echo "$exit_code" > production-chain.exitcode
+          cat production-chain.log
+          exit "$exit_code"
+
+      - name: Upload productie-ketendiagnose
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: receipt-inventory-production-chain-diagnostic
+          path: |
+            production-chain.log
+            production-chain.exitcode
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Blokkeer bij rode productie-keten
+        if: always()
+        run: |
+          test -f production-chain.exitcode
+          test "$(cat production-chain.exitcode)" = "0"
+
+  validate-regression-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Compileer volledige backend
+        run: python -m compileall -q backend/app
+
+      - name: Valideer SSOT-releaseguard
+        run: python tools/check_r7c22_ssot_release_guard.py
+
+      - name: 10.1 Controleer Docker-versie
+        run: docker version
+
+      - name: 10.2 Controleer Docker Compose-versie
+        run: docker compose version
+
+      - name: 10.3 Valideer Compose-configuratie
+        run: docker compose config --quiet
+
+      - name: 10.4 Controleer vastgelegde frontend-toolchain
+        run: |
+          grep -F 'FROM node:18-alpine AS build' frontend/Dockerfile
+          grep -F 'RUN node ./node_modules/vite/bin/vite.js build' frontend/Dockerfile
+
+      - name: 10.5 Maak schone Docker-builder beschikbaar
+        uses: docker/setup-buildx-action@v3
+
+      - name: 10.6 Bouw frontend-image en bewaar log
+        id: frontend_docker_build
+        continue-on-error: true
+        env:
+          REZZERV_VERSION: ${{ github.sha }}
+        run: |
+          set +e
+          timeout 600s docker compose build --no-cache --progress plain frontend > frontend-docker-build.log 2>&1
+          exit_code=$?
+          echo "$exit_code" > frontend-docker-build.exitcode
+          cat frontend-docker-build.log
+          exit "$exit_code"
+
+      - name: 10.7 Controleer gebouwde frontend-image
+        id: frontend_image_check
+        continue-on-error: true
+        if: always()
+        run: |
+          set +e
+          image_id=$(docker image ls --format '{{.ID}} {{.Repository}}' | awk '$2 ~ /-frontend$/ {print $1; exit}')
+          test -n "$image_id"
+          image_exit=$?
+          if [ "$image_exit" -eq 0 ]; then
+            docker image inspect "$image_id" --format '{{.Id}} {{.Config.ExposedPorts}}'
+            image_exit=$?
+          fi
+          echo "$image_exit" > frontend-image-check.exitcode
+          exit "$image_exit"
+
+      - name: 10.8 Upload Docker-builddiagnose
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-docker-build-diagnostic
+          path: |
+            frontend-docker-build.log
+            frontend-docker-build.exitcode
+            frontend-image-check.exitcode
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: 10.9 Blokkeer bij rode Docker-build
+        if: always()
+        run: |
+          test -f frontend-docker-build.exitcode
+          test -f frontend-image-check.exitcode
+          test "$(cat frontend-docker-build.exitcode)" = "0"
+          test "$(cat frontend-image-check.exitcode)" = "0"
+
+      - name: 11.1 Start gebouwde frontendcontainer
+        run: docker compose up -d --no-deps frontend
+
+      - name: 11.2 Controleer containerstatus
+        run: |
+          container_id=$(docker compose ps -q frontend)
+          test -n "$container_id"
+          test "$(docker inspect -f '{{.State.Running}}' "$container_id")" = "true"
+
+      - name: 11.3 Controleer Nginx-output
+        run: |
+          container_id=$(docker compose ps -q frontend)
+          docker exec "$container_id" test -f /usr/share/nginx/html/index.html
+          docker exec "$container_id" sh -c 'test -n "$(find /usr/share/nginx/html/assets -maxdepth 1 -type f | head -n 1)"'
+
+      - name: 11.4 Bewaar containerdiagnose
+        if: always()
+        run: |
+          docker compose ps > frontend-container-status.log 2>&1 || true
+          docker compose logs frontend > frontend-container.log 2>&1 || true
+
+      - name: 11.5 Upload containerdiagnose
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-container-diagnostic
+          path: |
+            frontend-container-status.log
+            frontend-container.log
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: 11.6 Ruim Docker-runtime op
+        if: always()
+        run: docker compose down --remove-orphans

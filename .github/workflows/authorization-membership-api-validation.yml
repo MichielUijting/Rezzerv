@@ -1,0 +1,37 @@
+name: Authorization membership API validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/authorization_membership_routes.py'
+      - 'backend/app/api/product_inventory_group_routes.py'
+      - 'backend/tests/test_authorization_membership_routes.py'
+      - 'backend/app/services/authorization_foundation_service.py'
+      - 'backend/app/services/authorization_membership_service.py'
+      - '.github/workflows/authorization-membership-api-validation.yml'
+
+jobs:
+  authorization-membership-api:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:///./authorization-membership-api-ci.db
+      SQLITE_RUNTIME_VOLUME: github_actions_workspace
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run authorization contract tests
+        run: |
+          python -m pytest -q \
+            tests/test_authorization_foundation_contract.py \
+            tests/test_authorization_membership_service.py \
+            tests/test_authorization_membership_routes.py

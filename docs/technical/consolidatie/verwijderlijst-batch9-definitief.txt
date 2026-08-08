@@ -1,0 +1,3 @@
+﻿tools/cleanup_legacy_patch_tools.py
+tools/cleanup_reports_tmp.py
+tools/cleanup_root_debug_scripts.py

@@ -1,89 +1,105 @@
-const AUTH_CONTEXT_KEY = 'rezzerv_auth_context'
-const AUTH_CHECKED_TOKEN_KEY = 'rezzerv_auth_checked_token'
 const LOGIN_MESSAGE_KEY = 'rezzerv_login_message'
+const FRONTTEAM_EXTERNAL_DATABASES_PERMISSION = 'frontteam.external_databases.access'
+
+let currentSessionContext = null
+let sessionRequest = null
 
 function safeWindow() {
   return typeof window !== 'undefined' ? window : null
 }
 
+function normalizeRoleValue(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+const NON_VIEWER_HOUSEHOLD_ROLES = new Set([
+  'admin',
+  'owner',
+  'lid',
+  'member',
+  'advanced_member',
+  'geavanceerd lid',
+  'frontteam',
+  'frontteamlid',
+  'household.admin',
+  'household.owner',
+  'household.member',
+  'household.advanced_member',
+  'household.frontteam',
+])
+
+export function normalizeHouseholdAccessContext(context) {
+  if (!context || typeof context !== 'object') return context
+  const displayRole = normalizeRoleValue(context.display_role)
+  const technicalRole = normalizeRoleValue(context.role || context.membership_role)
+  const hasNonViewerRole = NON_VIEWER_HOUSEHOLD_ROLES.has(displayRole)
+    || NON_VIEWER_HOUSEHOLD_ROLES.has(technicalRole)
+  const canProcessReceipts = Boolean(context.permissions?.['receipts.process']) || hasNonViewerRole
+  return {
+    ...context,
+    is_viewer: hasNonViewerRole ? false : Boolean(context.is_viewer || displayRole === 'viewer' || technicalRole === 'viewer'),
+    can_process_receipts: canProcessReceipts,
+  }
+}
+
+function normalizeSessionContext(context) {
+  if (!context || typeof context !== 'object') return null
+  const normalizedHouseholdContext = normalizeHouseholdAccessContext(context)
+  return {
+    user_id: normalizedHouseholdContext.user_id || normalizedHouseholdContext.user?.id || '',
+    email: normalizedHouseholdContext.email || normalizedHouseholdContext.user?.email || '',
+    active_household_id: normalizedHouseholdContext.active_household_id ?? '',
+    active_household_name: normalizedHouseholdContext.active_household_name || '',
+    role: normalizedHouseholdContext.role || '',
+    display_role: normalizedHouseholdContext.display_role || normalizedHouseholdContext.role || '',
+    membership_count: Number(normalizedHouseholdContext.membership_count || 0),
+    can_switch_households: Boolean(normalizedHouseholdContext.can_switch_households),
+    memberships: Array.isArray(normalizedHouseholdContext.memberships) ? normalizedHouseholdContext.memberships : [],
+    permissions: normalizedHouseholdContext.permissions && typeof normalizedHouseholdContext.permissions === 'object' ? normalizedHouseholdContext.permissions : {},
+    member_permission_policies: normalizedHouseholdContext.member_permission_policies && typeof normalizedHouseholdContext.member_permission_policies === 'object' ? normalizedHouseholdContext.member_permission_policies : {},
+    supported_permissions: Array.isArray(normalizedHouseholdContext.supported_permissions) ? normalizedHouseholdContext.supported_permissions : [],
+    can_manage_member_permissions: Boolean(normalizedHouseholdContext.can_manage_member_permissions),
+    can_manage_members: Boolean(normalizedHouseholdContext.can_manage_members),
+    is_viewer: Boolean(normalizedHouseholdContext.is_viewer),
+    can_process_receipts: Boolean(normalizedHouseholdContext.can_process_receipts),
+    is_frontteam: Boolean(normalizedHouseholdContext.is_frontteam || normalizedHouseholdContext.is_frontteam_member),
+    is_platform_superuser: Boolean(normalizedHouseholdContext.is_platform_superuser),
+  }
+}
+
+function removeLegacyAuthStorage() {
+  try {
+    window.localStorage.removeItem('rezzerv_token')
+    window.localStorage.removeItem('rezzerv_user_email')
+    window.localStorage.removeItem('rezzerv_household_name')
+    window.localStorage.removeItem('rezzerv_auth_context')
+  } catch {}
+  try {
+    window.sessionStorage.removeItem('rezzerv_auth_checked_token')
+  } catch {}
+}
+
 export function getStoredToken() {
-  try {
-    return window.localStorage.getItem('rezzerv_token') || ''
-  } catch {
-    return ''
-  }
+  return ''
 }
-
-export function getAuthHeaders() {
-  const token = getStoredToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-export function readStoredAuthContext() {
-  try {
-    const raw = window.localStorage.getItem(AUTH_CONTEXT_KEY)
-    if (!raw) return null
-    const parsed = JSON.parse(raw)
-    return parsed && typeof parsed === 'object' ? parsed : null
-  } catch {
-    return null
-  }
-}
+export function getAuthHeaders() { return {} }
+export function readStoredAuthContext() { return currentSessionContext }
 
 export function storeAuthContext(context) {
-  if (!context || typeof context !== 'object') return null
-  const normalized = {
-    user_id: context.user_id || '',
-    email: context.email || '',
-    active_household_id: context.active_household_id || '',
-    active_household_name: context.active_household_name || '',
-    role: context.role || '',
-    display_role: context.display_role || '',
-    membership_count: Number(context.membership_count || 0),
-    can_switch_households: Boolean(context.can_switch_households),
-    memberships: Array.isArray(context.memberships) ? context.memberships : [],
-    permissions: context.permissions && typeof context.permissions === 'object' ? context.permissions : {},
-    member_permission_policies: context.member_permission_policies && typeof context.member_permission_policies === 'object' ? context.member_permission_policies : {},
-    supported_permissions: Array.isArray(context.supported_permissions) ? context.supported_permissions : [],
-    can_manage_member_permissions: Boolean(context.can_manage_member_permissions),
-    can_manage_members: Boolean(context.can_manage_members),
-    is_viewer: Boolean(context.is_viewer),
-  }
-  try {
-    window.localStorage.setItem(AUTH_CONTEXT_KEY, JSON.stringify(normalized))
-    if (normalized.email) window.localStorage.setItem('rezzerv_user_email', normalized.email)
-    if (normalized.active_household_name) window.localStorage.setItem('rezzerv_household_name', normalized.active_household_name)
-  } catch {}
-  return normalized
+  currentSessionContext = normalizeSessionContext(context)
+  removeLegacyAuthStorage()
+  return currentSessionContext
 }
 
-export function markAuthCheckedForToken(token) {
-  try {
-    if (!token) {
-      window.sessionStorage.removeItem(AUTH_CHECKED_TOKEN_KEY)
-      return
-    }
-    window.sessionStorage.setItem(AUTH_CHECKED_TOKEN_KEY, token)
-  } catch {}
-}
-
-export function isTokenAlreadyValidated(token) {
-  if (!token) return false
-  try {
-    return window.sessionStorage.getItem(AUTH_CHECKED_TOKEN_KEY) === token
-  } catch {
-    return false
-  }
-}
+export function markAuthCheckedForToken() {}
+export function isTokenAlreadyValidated() { return Boolean(currentSessionContext) }
 
 export function getLoginMessage() {
   try {
     const value = window.sessionStorage.getItem(LOGIN_MESSAGE_KEY) || ''
     if (value) window.sessionStorage.removeItem(LOGIN_MESSAGE_KEY)
     return value
-  } catch {
-    return ''
-  }
+  } catch { return '' }
 }
 
 export function setLoginMessage(message) {
@@ -97,15 +113,9 @@ export function setLoginMessage(message) {
 }
 
 export function clearAuthSession(message = '') {
-  try {
-    window.localStorage.removeItem('rezzerv_token')
-    window.localStorage.removeItem('rezzerv_user_email')
-    window.localStorage.removeItem('rezzerv_household_name')
-    window.localStorage.removeItem(AUTH_CONTEXT_KEY)
-  } catch {}
-  try {
-    window.sessionStorage.removeItem(AUTH_CHECKED_TOKEN_KEY)
-  } catch {}
+  currentSessionContext = null
+  sessionRequest = null
+  removeLegacyAuthStorage()
   setLoginMessage(message)
 }
 
@@ -121,43 +131,51 @@ function buildAuthErrorMessage(status, fallback) {
   return fallback || 'Verzoek mislukt.'
 }
 
-export async function fetchAuthContext() {
-  const token = getStoredToken()
-  if (!token) throw new Error('Geen actieve sessie')
-  const response = await fetch('/api/auth/context', {
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    cache: 'no-store',
+export async function fetchAuthContext({ force = false } = {}) {
+  removeLegacyAuthStorage()
+  if (!force && currentSessionContext) return currentSessionContext
+  if (!force && sessionRequest) return sessionRequest
+  sessionRequest = fetch('/api/session', {
+    method: 'GET', credentials: 'include', headers: { Accept: 'application/json' }, cache: 'no-store',
+  }).then(async (response) => {
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) {
+      const message = buildAuthErrorMessage(response.status, data?.detail || 'Je sessie is verlopen. Log opnieuw in.')
+      const error = new Error(message)
+      error.status = response.status
+      throw error
+    }
+    return storeAuthContext(data)
+  }).finally(() => { sessionRequest = null })
+  return sessionRequest
+}
+
+export async function logoutServerSession() {
+  try {
+    await fetch('/api/auth/logout', {
+      method: 'POST', credentials: 'include', headers: { Accept: 'application/json' }, cache: 'no-store',
+    })
+  } finally { clearAuthSession() }
+}
+
+function jsonResponseFrom(response, payload) {
+  const headers = new Headers(response.headers)
+  headers.set('Content-Type', 'application/json')
+  return new Response(JSON.stringify(payload), {
+    status: response.status, statusText: response.statusText, headers,
   })
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const message = buildAuthErrorMessage(response.status, data?.detail || 'Je sessie is verlopen. Log opnieuw in.')
-    const error = new Error(message)
-    error.status = response.status
-    throw error
-  }
-  const stored = storeAuthContext(data)
-  markAuthCheckedForToken(token)
-  return stored
 }
 
 export async function fetchJsonWithAuth(url, options = {}) {
   const { headers: optionHeaders = {}, cache = 'no-store', ...restOptions } = options
-  const mergedHeaders = {
-    'Content-Type': 'application/json',
-    ...optionHeaders,
-  }
-  const authHeaders = getAuthHeaders()
-  if (!mergedHeaders.Authorization && authHeaders.Authorization) {
-    mergedHeaders.Authorization = authHeaders.Authorization
-  }
+  const mergedHeaders = { ...optionHeaders }
+  const hasBody = restOptions.body !== undefined && restOptions.body !== null
+  if (hasBody && !mergedHeaders['Content-Type']) mergedHeaders['Content-Type'] = 'application/json'
+  delete mergedHeaders.Authorization
+  delete mergedHeaders.authorization
 
   const response = await fetch(url, {
-    ...restOptions,
-    headers: mergedHeaders,
-    cache,
+    ...restOptions, credentials: 'include', headers: mergedHeaders, cache,
   })
   if (response.status === 401) {
     redirectToLogin('Je sessie is verlopen. Log opnieuw in.')
@@ -165,17 +183,45 @@ export async function fetchJsonWithAuth(url, options = {}) {
     error.status = 401
     throw error
   }
+
+  const normalizedUrl = String(url || '').split('?')[0]
+  if (response.ok && normalizedUrl === '/api/household') {
+    try {
+      const payload = await response.clone().json()
+      const normalizedPayload = normalizeHouseholdAccessContext(payload)
+      if (JSON.stringify(payload) !== JSON.stringify(normalizedPayload)) {
+        return jsonResponseFrom(response, normalizedPayload)
+      }
+    } catch {}
+  }
   return response
 }
 
 export function isHouseholdAdminFromContext(context = null) {
   const source = context || readStoredAuthContext()
-  return String(source?.display_role || '').trim().toLowerCase() === 'admin'
+  return Boolean(source?.permissions?.['admin.access']) || [
+    'admin', 'owner', 'frontteam', 'frontteamlid',
+    'household.admin', 'household.owner', 'household.frontteam',
+  ].includes(String(source?.display_role || source?.role || '').trim().toLowerCase())
+}
+
+export function isPlatformSuperuserFromContext(context = null) {
+  const source = context || readStoredAuthContext()
+  return Boolean(source?.is_platform_superuser)
+}
+
+export function isFrontteamMemberFromContext(context = null) {
+  const source = context || readStoredAuthContext()
+  return Boolean(
+    isPlatformSuperuserFromContext(source)
+    || source?.is_frontteam
+    || source?.permissions?.[FRONTTEAM_EXTERNAL_DATABASES_PERMISSION],
+  )
 }
 
 export function isHouseholdViewerFromContext(context = null) {
-  const source = context || readStoredAuthContext()
-  return String(source?.display_role || '').trim().toLowerCase() === 'viewer'
+  const source = normalizeHouseholdAccessContext(context || readStoredAuthContext())
+  return Boolean(source?.is_viewer)
 }
 
 export function canCurrentUserPerform(permissionKey, context = null) {

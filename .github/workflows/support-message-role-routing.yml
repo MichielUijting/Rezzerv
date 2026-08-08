@@ -1,0 +1,22 @@
+name: Support message role routing
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/features/home/HomePage.jsx'
+      - 'frontend/src/features/support/**'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - 'frontend/tests/support_message_role_routing_audit.py'
+      - '.github/workflows/support-message-role-routing.yml'
+  workflow_dispatch:
+
+jobs:
+  support-message-role-routing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Audit household and superuser Meldingen routing
+        run: python frontend/tests/support_message_role_routing_audit.py

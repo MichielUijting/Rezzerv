@@ -114,9 +114,9 @@ def run_smoke() -> dict[str, Any]:
 
             line_before = fetch_one(db.conn, "select * from purchase_import_lines where id = ?", (LINE_PASTA_ID,))
             if line_before and line_before.get("matched_household_article_id") is not None:
-                results.append(passed_result("U-SM-03", "smokeregel heeft gekoppeld Mijn artikel", {"line_id": LINE_PASTA_ID, "article_id": line_before.get("matched_household_article_id")}))
+                results.append(passed_result("U-SM-03", "smokeregel heeft gekoppeld huishoudelijk artikel", {"line_id": LINE_PASTA_ID, "article_id": line_before.get("matched_household_article_id")}))
             else:
-                results.append(failed_result("U-SM-03", "smokeregel heeft gekoppeld Mijn artikel", "matched_household_article_id ontbreekt"))
+                results.append(failed_result("U-SM-03", "smokeregel heeft gekoppeld huishoudelijk artikel", "matched_household_article_id ontbreekt"))
 
             assigned = assign_target_location(
                 db.conn,

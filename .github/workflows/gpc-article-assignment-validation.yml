@@ -1,0 +1,49 @@
+name: GPC catalog assignment validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/api/catalog_gpc_routes.py'
+      - 'backend/app/api/catalog_routes.py'
+      - 'backend/app/services/article_detail_write_guard.py'
+      - 'backend/tests/test_gpc_article_assignment_contract.py'
+      - 'frontend/src/features/catalog/CatalogGpcFrame.jsx'
+      - 'frontend/src/features/catalog/CatalogGpcClassificationPage.jsx'
+      - 'frontend/src/features/catalog/CatalogDetailPageV2.jsx'
+      - 'frontend/src/features/catalog/catalog.css'
+      - 'frontend/src/app/router/AppRouter.jsx'
+      - '.github/workflows/gpc-article-assignment-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-gpc-catalog-assignment:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: sqlite:////tmp/rezzerv-gpc-validation.db
+      SQLITE_RUNTIME_VOLUME: github-actions-tmp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install focused backend test dependencies
+        run: python -m pip install --quiet pytest fastapi==0.115.0 sqlalchemy==2.0.36 pydantic==2.12.5
+      - name: Compile backend modules
+        run: |
+          python -m py_compile \
+            backend/app/api/catalog_gpc_routes.py \
+            backend/app/api/catalog_routes.py \
+            backend/app/services/article_detail_write_guard.py
+      - name: Run runtime router and catalog contract tests
+        run: python -m pytest -q backend/tests/test_gpc_article_assignment_contract.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build

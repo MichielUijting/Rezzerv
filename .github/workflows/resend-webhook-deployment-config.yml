@@ -1,0 +1,45 @@
+name: Resend webhook deployment config
+
+on:
+  pull_request:
+    paths:
+      - 'docker-compose.yml'
+      - 'docs/deployment/RESEND-WEBHOOK.md'
+      - '.github/workflows/resend-webhook-deployment-config.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-resend-webhook-deployment-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Controleer Compose-doorgifte
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'REZZERV_RESEND_WEBHOOK_SECRET: ${REZZERV_RESEND_WEBHOOK_SECRET:-}' docker-compose.yml
+
+      - name: Controleer deploymentdocumentatie
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'REZZERV_RESEND_WEBHOOK_SECRET' docs/deployment/RESEND-WEBHOOK.md
+          grep -F 'POST /api/receipts/inbound' docs/deployment/RESEND-WEBHOOK.md
+          grep -F 'faalt dan bewust gesloten met HTTP 503' docs/deployment/RESEND-WEBHOOK.md
+
+      - name: Blokkeer vastgelegde echte signing secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RInE --exclude='RESEND-WEBHOOK.md' --exclude='resend-webhook-deployment-config.yml' 'REZZERV_RESEND_WEBHOOK_SECRET:[[:space:]]*whsec_[A-Za-z0-9+/=_-]{8,}|REZZERV_RESEND_WEBHOOK_SECRET=whsec_[A-Za-z0-9+/=_-]{8,}' .; then
+            echo 'Een mogelijke echte Resend signing secret staat in de repository.' >&2
+            exit 1
+          fi
+
+      - name: Valideer Docker Compose-configuratie
+        shell: bash
+        env:
+          REZZERV_RESEND_WEBHOOK_SECRET: test-only-not-a-secret
+        run: docker compose config --quiet

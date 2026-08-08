@@ -1,0 +1,33 @@
+name: M2C2n final closure
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate-final-closure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Controleer M2C2n eindstatus
+        run: |
+          python backend/app/testing/m2c2n_final_closure_contract.py \
+            | tee m2c2n-final-closure.log
+          grep -F 'M2C2N_FINAL_CLOSURE_GREEN' m2c2n-final-closure.log
+
+      - name: Publiceer eindcontrole
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: m2c2n-final-closure
+          path: |
+            docs/quality/M2C2N-FINAL-REPORT.md
+            docs/quality/M2C2N-CLOSURE-MATRIX.md
+            docs/quality/M2C2N-ROUTE-CATALOG-BASELINE.json
+            m2c2n-final-closure.log
+          if-no-files-found: error
+          retention-days: 90

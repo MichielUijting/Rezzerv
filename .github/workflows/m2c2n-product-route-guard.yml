@@ -1,0 +1,30 @@
+name: M2C2n product route household guard
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  validate-product-route-household-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Installeer minimale backend-afhankelijkheden
+        run: pip install fastapi sqlalchemy
+
+      - name: Compileer guard en contract
+        run: python -m compileall backend/app/services/product_route_household_guard.py backend/app/testing/product_route_household_guard_contract.py
+
+      - name: Voer volledig productroutecontract uit
+        env:
+          PYTHONPATH: backend
+        run: python -m app.testing.product_route_household_guard_contract

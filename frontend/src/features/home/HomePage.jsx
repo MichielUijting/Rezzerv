@@ -2,58 +2,83 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import Card from '../../ui/Card.jsx'
-import { readStoredAuthContext, isHouseholdViewerFromContext } from '../../lib/authSession.js'
+import {
+  fetchAuthContext,
+  isFrontteamMemberFromContext,
+  isHouseholdAdminFromContext,
+  isPlatformSuperuserFromContext,
+  readStoredAuthContext,
+} from '../../lib/authSession.js'
 
 const tiles = [
+  { key: 'meldingen', label: 'Meldingen', icon: '✉️' },
   { key: 'bijna-op', label: 'Bijna op', icon: '📉' },
   { key: 'winkelen', label: 'Winkelen', icon: '🛒' },
   { key: 'prognoses', label: 'Prognoses', icon: '📊' },
   { key: 'uitlenen', label: 'Uitlenen', icon: '🔁' },
   { key: 'voorraad', label: 'Voorraad', icon: '📦' },
+  { key: 'productgroepen', label: 'Productgroepen', icon: '🧩' },
   { key: 'kassabonnen', label: 'Uitpakken', icon: '🧾' },
   { key: 'kassa', label: 'Kassa', icon: '🧾' },
+  { key: 'spaartegoeden', label: 'Spaartegoeden', icon: '🪙' },
   { key: 'externe-databases', label: 'Externe databases', icon: '🗄️' },
+  { key: 'catalogus', label: 'Catalogus', icon: 'CAT' },
   { key: 'klantkaarten', label: 'Klantkaarten', icon: '💳' },
   { key: 'recepten', label: 'Recepten', icon: '🍳' },
   { key: 'bestellen', label: 'Bestellen', icon: '📋' },
   { key: 'verlengen', label: 'Verlengen', icon: '⏳' },
   { key: 'instellingen', label: 'Instellingen', icon: '⚙️' },
   { key: 'admin', label: 'Admin', icon: '🛠️' },
+  { key: 'superuser', label: 'Superuser', icon: '🛡️' },
 ]
+
+function visibilityFromContext(context) {
+  return {
+    canOpenAdmin: isHouseholdAdminFromContext(context),
+    canOpenExternalDatabases: isFrontteamMemberFromContext(context),
+    isPlatformSuperuser: isPlatformSuperuserFromContext(context),
+  }
+}
 
 export default function HomePage() {
   const navigate = useNavigate()
-  const storedContext = readStoredAuthContext()
-  const [householdName, setHouseholdName] = useState(storedContext?.active_household_name || '')
-  const [isHouseholdAdmin, setIsHouseholdAdmin] = useState(String(storedContext?.display_role || '').toLowerCase() === 'admin')
-  const [isViewer, setIsViewer] = useState(isHouseholdViewerFromContext(storedContext))
+  const [visibility, setVisibility] = useState(() =>
+    visibilityFromContext(readStoredAuthContext()),
+  )
 
   useEffect(() => {
-    const token = localStorage.getItem('rezzerv_token')
-    if (!token) return
-    fetch('/api/household', { headers: { Authorization: `Bearer ${token}` } })
-      .then(async (res) => {
-        if (!res.ok) throw new Error('Huishouden niet beschikbaar')
-        return res.json()
-      })
-      .then((data) => {
-        const name = data?.naam || 'Mijn huishouden'
-        setHouseholdName(name)
-        setIsHouseholdAdmin(Boolean(data?.is_household_admin))
-        setIsViewer(Boolean(data?.is_viewer))
-        localStorage.setItem('rezzerv_household_name', name)
+    let cancelled = false
+    fetchAuthContext()
+      .then((context) => {
+        if (!cancelled) setVisibility(visibilityFromContext(context))
       })
       .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   function openTile(key) {
+    if (key === 'meldingen') navigate(visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen')
     if (key === 'bijna-op') navigate('/bijna-op')
+    if (key === 'winkelen') navigate('/winkelen')
     if (key === 'voorraad') navigate('/voorraad')
+    if (key === 'productgroepen') navigate('/productgroepen')
     if (key === 'kassabonnen') navigate('/kassabonnen')
     if (key === 'kassa') navigate('/kassa')
+    if (key === 'spaartegoeden') navigate('/spaartegoeden')
     if (key === 'externe-databases') navigate('/externe-databases')
+    if (key === 'catalogus') navigate('/catalogus')
     if (key === 'instellingen') navigate('/instellingen')
     if (key === 'admin') navigate('/admin')
+    if (key === 'superuser') navigate('/superuser')
+  }
+
+  function isVisible(tile) {
+    if (tile.key === 'admin') return visibility.canOpenAdmin
+    if (tile.key === 'externe-databases') return visibility.canOpenExternalDatabases
+    if (tile.key === 'superuser') return visibility.isPlatformSuperuser
+    return true
   }
 
   return (
@@ -63,8 +88,8 @@ export default function HomePage() {
         <div className="rz-content-inner">
           <Card className="rz-card-home">
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
-              {tiles.filter((tile) => tile.key !== "admin" || isHouseholdAdmin).map((t) => {
-                const clickable = ['bijna-op', 'voorraad', 'kassabonnen', 'kassa', 'externe-databases', 'instellingen', 'admin'].includes(t.key)
+              {tiles.filter(isVisible).map((t) => {
+                const clickable = ['meldingen', 'bijna-op', 'winkelen', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus', 'superuser'].includes(t.key)
                 return (
                   <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
                     <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>

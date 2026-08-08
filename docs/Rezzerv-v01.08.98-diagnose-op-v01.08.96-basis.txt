@@ -1,3 +1,0 @@
-Basis: v01.08.96 met behoud van 3-keuze-instelling.
-Toegevoegd: diagnose op actieve winkelimportpad in backend main.py.
-Geen frontend-regressie naar checkbox.

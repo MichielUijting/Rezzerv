@@ -1,0 +1,42 @@
+{
+  "metadata_tokens": [
+    "zegel",
+    "zegels",
+    "koopzegel",
+    "koopzegels",
+    "pluspunten",
+    "pluspunt",
+    "spaar",
+    "spaarkaart",
+    "bonuskaart",
+    "klantnummer",
+    "klant:",
+    "digitale zegels",
+    "digitale spaarkaart",
+    "campagne",
+    "punten saldo",
+    "saldo punten",
+    "plus punten",
+    "persoonlijke bonus"
+  ],
+  "priced_tokens": [
+    "zegel",
+    "zegels",
+    "koopzegel",
+    "koopzegels",
+    "pluspunten",
+    "pluspunt"
+  ],
+  "value_label_patterns": [
+    "koopzegels?(?:\\s+premium)?",
+    "pluspunten?"
+  ],
+  "non_product_label_tokens": [
+    "koopzegel",
+    "koopzegels",
+    "zegel",
+    "zegels",
+    "punten",
+    "saldo"
+  ]
+}

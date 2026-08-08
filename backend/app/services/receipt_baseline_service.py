@@ -203,7 +203,19 @@ def run_receipt_parsing_baseline_suite(mode: str = 'raw') -> list[dict[str, Any]
         expected_line_count = int(case.get('line_item_count') or 0)
         found_line_count = len(parsed.lines or [])
         expected_discount_total = sum((Decimal(str(item.get('amount_eur') or 0)) for item in case.get('discount_lines') or []), Decimal('0.00')).quantize(Decimal('0.01'))
-        found_discount_total = parsed.discount_total.quantize(Decimal('0.01')) if parsed.discount_total is not None else Decimal('0.00')
+        line_discount_total = sum(
+            (
+                Decimal(str(line.get('discount_amount') or 0))
+                for line in (parsed.lines or [])
+                if isinstance(line, dict)
+            ),
+            Decimal('0.00'),
+        ).quantize(Decimal('0.01'))
+        found_discount_total = (
+            parsed.discount_total.quantize(Decimal('0.01'))
+            if parsed.discount_total is not None
+            else line_discount_total
+        )
 
         store_match = bool(found_store) and expected_store.lower() in found_store.lower()
         dt_match = expected_dt == found_dt

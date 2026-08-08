@@ -1,0 +1,41 @@
+name: Support message documentation contract
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/features/support/**'
+      - 'frontend/src/features/home/HomePage.jsx'
+      - 'frontend/src/app/router/**'
+      - 'frontend/src/ui/AppFeedbackProvider.jsx'
+      - 'frontend/tests/support_message_*.py'
+      - 'backend/app/api/support_*'
+      - 'backend/app/services/support_message_service.py'
+      - 'backend/app/session_entrypoint.py'
+      - 'docs/features/MELDINGEN-FUNCTIONEEL-ONTWERP-v1.0.md'
+      - 'docs/testing/MELDINGEN-REGRESSIEPROTOCOL-v1.0.md'
+      - '.github/workflows/support-message-documentation-contract.yml'
+  workflow_dispatch:
+
+jobs:
+  documentation-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Meldingen documentation contract
+        run: python frontend/tests/support_message_documentation_contract.py
+
+      - name: Validate role routing
+        run: python frontend/tests/support_message_role_routing_audit.py
+
+      - name: Validate UI improvements
+        run: python frontend/tests/support_message_improvements_audit.py
+
+      - name: Validate superuser broadcast
+        run: python frontend/tests/support_message_broadcast_audit.py

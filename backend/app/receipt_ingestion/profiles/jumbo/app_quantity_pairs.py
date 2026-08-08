@@ -5,8 +5,8 @@ Technical Design Reference:
 - Runtime Type: production
 - Used By: see docs/technical/PYTHON-MODULE-CATALOG.md
 - Depends On: see generated inventory
-- Reads Data: see generated inventory
-- Writes Data: see generated inventory
+- Reads Data: managed dictionary data
+- Writes Data: no
 - Status Authority: no
 - Refactor Status: classify
 """
@@ -17,6 +17,8 @@ import re
 from decimal import Decimal
 from typing import Any, Callable
 
+from app.receipt_ingestion.spaarzegels_terms import contains_spaarzegels_metadata_token, contains_spaarzegels_non_product_token
+
 JUMBO_APP_QUANTITY_DETAIL_RE = re.compile(
     r"^\s*(?P<qty>\d+(?:[\.,]\d+)?)\s*[xX]\s*(?P<amount1>-?\d{1,6}(?:[\.,]\d{2}))"
     r"(?:\s+(?P<amount2>-?\d{1,6}(?:[\.,]\d{2})))?(?:\s+(?:EUR|[A-Z]{1,3}))?\s*$",
@@ -24,22 +26,11 @@ JUMBO_APP_QUANTITY_DETAIL_RE = re.compile(
 )
 
 _JUMBO_NON_PRODUCT_LABEL_TOKENS = (
-    "koopzegel",
-    "koopzegels",
-    "zegel",
-    "zegels",
-    "punten",
-    "saldo",
     "totaal",
     "btw",
     "korting",
     "bankpas",
     "betaling",
-)
-
-_JUMBO_SAVINGS_LABEL_RE = re.compile(
-    r"\b(?:koopzegel|koopzegels|zegel|zegels)\b",
-    re.IGNORECASE,
 )
 
 
@@ -72,6 +63,8 @@ def looks_like_safe_jumbo_app_pair_label(
         return False
     if any(token in lowered for token in _JUMBO_NON_PRODUCT_LABEL_TOKENS):
         return False
+    if contains_spaarzegels_non_product_token(lowered):
+        return False
     if looks_like_non_product_receipt_label and looks_like_non_product_receipt_label(label):
         return False
     return True
@@ -81,7 +74,7 @@ def looks_like_jumbo_app_savings_pair_label(value: str | None) -> bool:
     label = normalize_jumbo_app_label(value)
     if len(label) < 3:
         return False
-    return bool(_JUMBO_SAVINGS_LABEL_RE.search(label))
+    return bool(contains_spaarzegels_metadata_token(label))
 
 
 def _decimal(value: str | None) -> Decimal | None:

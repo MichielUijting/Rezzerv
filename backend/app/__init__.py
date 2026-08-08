@@ -29,16 +29,6 @@ def _install_when_ready() -> None:
             except Exception:
                 pass
             try:
-                from .testing_receipt_line_diagnosis_routes import install_receipt_line_diagnosis_routes
-                install_receipt_line_diagnosis_routes(module.app, module.engine)
-            except Exception:
-                pass
-            try:
-                from .receipt_recompute_policy_patch import install_recompute_policy_patch
-                install_recompute_policy_patch(module)
-            except Exception:
-                pass
-            try:
                 from .services.receipt_parser_quality_patch import install_parser_quality_patch
                 install_parser_quality_patch(module)
             except Exception:
@@ -62,4 +52,192 @@ def _install_when_ready() -> None:
         time.sleep(0.1)
 
 
+def _install_inventory_location_patch_when_ready() -> None:
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, '_dev_resolve_space_id')
+            and hasattr(module, '_dev_resolve_sublocation_id')
+        ):
+            try:
+                from .services.inventory_location_household_patch import (
+                    install_inventory_location_household_patch,
+                )
+                install_inventory_location_household_patch(module)
+            except Exception:
+                pass
+            return
+        time.sleep(0.1)
+
+
+def _install_unpacking_location_patch_when_ready() -> None:
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, 'validate_purchase_import_target_location')
+            and hasattr(module, 'resolve_space_and_sublocation_ids')
+        ):
+            try:
+                from .services.unpacking_household_location_patch import (
+                    install_unpacking_household_location_patch,
+                )
+                install_unpacking_household_location_patch(module)
+            except Exception:
+                pass
+            return
+        time.sleep(0.1)
+
+
+def _install_unpacking_object_guard_when_ready() -> None:
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, 'app')
+            and hasattr(module, 'engine')
+            and hasattr(module, 'require_household_context')
+            and hasattr(module, 'require_inventory_write_context')
+        ):
+            try:
+                from .services.unpacking_household_object_guard import (
+                    install_unpacking_household_object_guard,
+                )
+                install_unpacking_household_object_guard(module)
+            except Exception:
+                pass
+            return
+        time.sleep(0.1)
+
+
+def _install_product_enrichment_write_guard_when_ready() -> None:
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, 'app')
+            and hasattr(module, 'require_inventory_write_context')
+        ):
+            try:
+                from .services.product_enrichment_write_guard import (
+                    install_product_enrichment_write_guard,
+                )
+                install_product_enrichment_write_guard(module)
+            except Exception:
+                pass
+            return
+        time.sleep(0.1)
+
+
+def _install_receipt_share_import_guard_when_ready() -> None:
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, 'app')
+            and hasattr(module, 'require_household_context')
+        ):
+            try:
+                from .services.receipt_share_import_household_guard import (
+                    install_receipt_share_import_household_guard,
+                )
+                install_receipt_share_import_household_guard(module)
+            except Exception:
+                pass
+            return
+        time.sleep(0.1)
+
+
+def _install_receipt_admin_guard_when_ready() -> None:
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, 'app')
+            and hasattr(module, 'require_platform_admin_user')
+        ):
+            try:
+                from .services.receipt_admin_household_guard import (
+                    install_receipt_admin_household_guard,
+                )
+                install_receipt_admin_household_guard(module)
+            except Exception:
+                pass
+            return
+        time.sleep(0.1)
+
+
+def _install_receipt_gmail_oauth_guard_when_ready() -> None:
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, 'app')
+            and hasattr(module, 'require_household_admin_context')
+            and hasattr(module, 'verify_gmail_state')
+        ):
+            try:
+                from .services.receipt_gmail_oauth_household_guard import (
+                    install_receipt_gmail_oauth_household_guard,
+                )
+                install_receipt_gmail_oauth_household_guard(module)
+            except Exception:
+                pass
+            return
+        time.sleep(0.1)
+
+
+def _install_receipt_resend_webhook_guard_when_ready() -> None:
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, 'app')
+            and hasattr(module, 'engine')
+            and hasattr(module, 'text')
+        ):
+            try:
+                from .services.receipt_resend_webhook_guard import (
+                    install_receipt_resend_webhook_guard,
+                )
+                install_receipt_resend_webhook_guard(module)
+            except Exception:
+                pass
+            return
+        time.sleep(0.1)
+
+
 threading.Thread(target=_install_when_ready, daemon=True).start()
+threading.Thread(
+    target=_install_inventory_location_patch_when_ready,
+    daemon=True,
+).start()
+threading.Thread(
+    target=_install_unpacking_location_patch_when_ready,
+    daemon=True,
+).start()
+threading.Thread(
+    target=_install_unpacking_object_guard_when_ready,
+    daemon=True,
+).start()
+threading.Thread(
+    target=_install_product_enrichment_write_guard_when_ready,
+    daemon=True,
+).start()
+threading.Thread(
+    target=_install_receipt_share_import_guard_when_ready,
+    daemon=True,
+).start()
+threading.Thread(
+    target=_install_receipt_admin_guard_when_ready,
+    daemon=True,
+).start()
+threading.Thread(
+    target=_install_receipt_gmail_oauth_guard_when_ready,
+    daemon=True,
+).start()
+threading.Thread(
+    target=_install_receipt_resend_webhook_guard_when_ready,
+    daemon=True,
+).start()

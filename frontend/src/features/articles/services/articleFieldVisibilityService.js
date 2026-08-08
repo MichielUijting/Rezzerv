@@ -1,4 +1,5 @@
 import { API_BASE_URL } from '../../../lib/apiClient'
+import { fetchJsonWithAuth } from '../../../lib/authSession'
 
 const ENDPOINT = `${API_BASE_URL}/api/settings/article-field-visibility`
 const STORAGE_KEY = 'rezzerv_article_field_visibility'
@@ -43,17 +44,11 @@ function saveLocalFallback(map) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeArticleFieldVisibility(map)))
 }
 
-function getAuthHeaders() {
-  const token = window.localStorage.getItem('rezzerv_token') || ''
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
 export async function fetchArticleFieldVisibility() {
   try {
-    const response = await fetch(ENDPOINT, {
+    const response = await fetchJsonWithAuth(ENDPOINT, {
       method: 'GET',
-      headers: { Accept: 'application/json', ...getAuthHeaders() },
-      credentials: 'include',
+      headers: { Accept: 'application/json' },
     })
     if (!response.ok) {
       const data = await parseResponse(response).catch(() => null)
@@ -78,10 +73,9 @@ export async function fetchArticleFieldVisibility() {
 export async function saveArticleFieldVisibility(visibilityMap) {
   const normalized = normalizeArticleFieldVisibility(visibilityMap)
   try {
-    const response = await fetch(ENDPOINT, {
+    const response = await fetchJsonWithAuth(ENDPOINT, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json', ...getAuthHeaders() },
-      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(normalized),
     })
     if (!response.ok) {

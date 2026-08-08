@@ -1,0 +1,104 @@
+.rz-authorization-page {
+  display: grid;
+  gap: 20px;
+}
+
+.rz-authorization-header {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.rz-authorization-header h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.rz-authorization-header p,
+.rz-authorization-explanation {
+  margin: 0;
+  color: #667085;
+}
+
+.rz-authorization-explanation {
+  margin-bottom: 16px;
+}
+
+.rz-authorization-loading {
+  padding: 24px 0;
+}
+
+.rz-authorization-matrix-wrap {
+  overflow-x: auto;
+  border: 1px solid #dfe4ea;
+  border-radius: 12px;
+}
+
+.rz-authorization-matrix {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.rz-authorization-matrix th,
+.rz-authorization-matrix td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+}
+
+.rz-authorization-matrix thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #f3f4f6;
+  text-align: center;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rz-authorization-matrix thead th:first-child,
+.rz-authorization-matrix tbody th {
+  text-align: left;
+}
+
+.rz-authorization-matrix tbody th {
+  min-width: 280px;
+  font-weight: 500;
+  background: #ffffff;
+}
+
+.rz-authorization-matrix td {
+  min-width: 120px;
+  text-align: center;
+}
+
+.rz-authorization-matrix tr:last-child th,
+.rz-authorization-matrix tr:last-child td {
+  border-bottom: 0;
+}
+
+.rz-authorization-matrix th:last-child,
+.rz-authorization-matrix td:last-child {
+  border-right: 0;
+}
+
+.rz-authorization-matrix input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #0f5b32;
+  cursor: default;
+}
+
+@media (max-width: 720px) {
+  .rz-authorization-matrix {
+    min-width: 700px;
+  }
+
+  .rz-authorization-matrix th,
+  .rz-authorization-matrix td {
+    padding: 10px;
+  }
+}

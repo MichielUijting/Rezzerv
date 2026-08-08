@@ -1,5 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
 import AppShell from '../../app/AppShell'
 import ScreenCard from '../../ui/ScreenCard'
 import Table from '../../ui/Table'
@@ -26,16 +25,6 @@ function StatusBadge({ status }) {
   return <span className="rz-inline-feedback rz-external-databases-status">{label}</span>
 }
 
-function OverviewTile({ title, value, helper }) {
-  return (
-    <div className="rz-external-databases-summary-card">
-      <div className="rz-external-databases-summary-label">{title}</div>
-      <div className="rz-external-databases-summary-value">{value}</div>
-      {helper ? <div className="rz-external-databases-summary-helper">{helper}</div> : null}
-    </div>
-  )
-}
-
 function ErrorOverlay({ message, onClose }) {
   if (!message) return null
   return (
@@ -52,7 +41,6 @@ function ErrorOverlay({ message, onClose }) {
 }
 
 export default function ExternalDatabasesPage() {
-  const navigate = useNavigate()
   const [summary, setSummary] = useState(null)
   const [retailers, setRetailers] = useState([])
   const [receiptLineText, setReceiptLineText] = useState('Mexicaanse kruidenm.')
@@ -157,12 +145,12 @@ export default function ExternalDatabasesPage() {
   }
 
   const candidates = Array.isArray(matchResult?.candidates) ? matchResult.candidates : []
+  const offQueryTerms = Array.isArray(matchResult?.off_query_terms) ? matchResult.off_query_terms : []
 
   function renderTabContent(tab) {
     if (tab === TAB_LABELS.overzicht) {
       return (
         <div className="rz-external-databases-overview">
-          {isLoadingConfig ? <div>Externe databases worden geladen...</div> : null}
           <ReceiptItemsOverview onError={setError} onMessage={setError} />
         </div>
       )
@@ -171,6 +159,10 @@ export default function ExternalDatabasesPage() {
     if (tab === TAB_LABELS.test) {
       return (
         <div className="rz-external-databases-test">
+          <div className="rz-external-databases-section-header">
+            <h3>Lidl-kandidaatpreview</h3>
+            <span className="rz-external-databases-muted">Preview-only: geen artikelgroep, product of voorraadmutatie.</span>
+          </div>
           <form onSubmit={testCandidateMatch} className="rz-external-databases-form">
             <div className="rz-external-databases-form-grid">
               <label className="rz-input-field">
@@ -194,10 +186,22 @@ export default function ExternalDatabasesPage() {
               <Button type="button" variant="secondary" disabled={isSaving || !candidates.length} onClick={saveCandidateMatches}>{isSaving ? 'Opslaan...' : 'Kandidaten opslaan'}</Button>
             </div>
           </form>
-          <div className="rz-external-databases-muted">Drempel probable_candidate: {formatScore(selectedRetailerConfig?.probable_candidate_threshold)}. Deze opslag maakt geen Mijn artikel, global_product of voorraadmutatie aan.</div>
+          <div className="rz-external-databases-muted">Drempel probable_candidate: {formatScore(selectedRetailerConfig?.probable_candidate_threshold)}. Deze opslag maakt geen artikelgroep, global_product of voorraadmutatie aan.</div>
+          {matchResult ? (
+            <div className="rz-external-databases-preview-meta" data-testid="external-database-preview-meta">
+              <span>Bron: {matchResult.candidate_source || '-'}</span>
+              <span>Taxonomiepreview: {matchResult.uses_retailer_taxonomy_preview ? 'ja' : 'nee'}</span>
+              <span>Productmutatie: nee</span>
+            </div>
+          ) : null}
+          {offQueryTerms.length ? (
+            <div className="rz-external-databases-off-terms" data-testid="external-database-off-query-terms">
+              <strong>OFF-zoektermen:</strong> {offQueryTerms.join(', ')}
+            </div>
+          ) : null}
           {saveResult ? <div className="rz-inline-feedback rz-inline-feedback--success">Kandidaten opgeslagen: {saveResult.saved_count ?? 0} nieuw, {saveResult.updated_count ?? 0} bijgewerkt, {saveResult.skipped_count ?? 0} overgeslagen.</div> : null}
           {matchResult ? (
-            <Table dataTestId="external-database-candidates-table" tableClassName="rz-external-databases-table">
+            <Table dataTestId="external-database-candidates-table" tableClassName="rz-external-databases-table" resizableColumns>
               <colgroup><col className="rz-external-databases-col-candidate" /><col className="rz-external-databases-col-brand" /><col className="rz-external-databases-col-code" /><col className="rz-external-databases-col-variant" /><col className="rz-external-databases-col-score" /><col className="rz-external-databases-col-status" /></colgroup>
               <thead><tr className="rz-table-header"><th>Kandidaat</th><th>Merk</th><th>Artikelnummer</th><th>Variant</th><th className="rz-num">Score</th><th>Status</th></tr></thead>
               <tbody>{candidates.length ? candidates.map((candidate) => <tr key={`${candidate.candidate_name}-${candidate.retailer_article_number}-${candidate.variant}`}><td>{candidate.candidate_name}</td><td>{candidate.candidate_brand}</td><td>{candidate.retailer_article_number}</td><td>{candidate.variant || '-'}</td><td className="rz-num">{formatScore(candidate.score)}</td><td><StatusBadge status={candidate.candidate_status} /></td></tr>) : <tr><td colSpan="6">Geen kandidaten gevonden boven de drempel.</td></tr>}</tbody>
@@ -208,7 +212,7 @@ export default function ExternalDatabasesPage() {
     }
 
     return (
-      <Table dataTestId="external-database-retailers-table" tableClassName="rz-external-databases-retailer-table">
+      <Table dataTestId="external-database-retailers-table" tableClassName="rz-external-databases-retailer-table" resizableColumns>
         <colgroup><col className="rz-external-databases-col-retailer" /><col className="rz-external-databases-col-retailer-status" /><col className="rz-external-databases-col-retailer-threshold" /><col className="rz-external-databases-col-retailer-examples" /></colgroup>
         <thead><tr className="rz-table-header"><th>Winkelketen</th><th>Status</th><th className="rz-num">Drempel</th><th>Voorbeelden</th></tr></thead>
         <tbody>{retailers.length ? retailers.map((retailer) => <tr key={retailer.retailer_code}><td>{retailer.retailer_name}</td><td>{retailer.status}</td><td className="rz-num">{formatScore(retailer.probable_candidate_threshold)}</td><td>{(retailer.supported_examples || []).join(', ')}</td></tr>) : <tr><td colSpan="4">Geen winkelketens gevonden.</td></tr>}</tbody>
@@ -224,9 +228,8 @@ export default function ExternalDatabasesPage() {
             <div className="rz-external-databases-header">
               <div className="rz-external-databases-title-group">
                 <h2 className="rz-external-databases-title">Externe databases</h2>
-                <p className="rz-external-databases-subtitle">Eerste versie voor externe productkandidaten. Deze preview maakt geen Mijn artikel, product of voorraadmutatie aan.</p>
+                <p className="rz-external-databases-subtitle">Eerste versie voor externe productkandidaten. Deze preview maakt geen artikelgroep, product of voorraadmutatie aan.</p>
               </div>
-              <Button variant="primary" type="button" onClick={() => navigate('/home')}>Terug</Button>
             </div>
             {renderTabContent(TAB_LABELS.overzicht)}
           </div>
@@ -236,5 +239,3 @@ export default function ExternalDatabasesPage() {
     </AppShell>
   )
 }
-
-
