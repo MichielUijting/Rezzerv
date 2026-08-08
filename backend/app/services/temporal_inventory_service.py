@@ -74,6 +74,8 @@ def ensure_temporal_inventory_schema(conn) -> None:
     # Existing rows retain their historical meaning as closely as possible.
     # purchase_date wins over created_at. Both YYYY-MM-DD and DD-MM-YYYY are
     # normalized because both forms exist in older fixtures/import paths.
+    # Once an event has been linked back to its authoritative source, its
+    # hydrated precision must not be downgraded by a later idempotent schema pass.
     conn.execute(text(
         """
         UPDATE inventory_events
@@ -97,6 +99,8 @@ def ensure_temporal_inventory_schema(conn) -> None:
             ),
             recorded_at = COALESCE(NULLIF(trim(recorded_at), ''), created_at),
             effective_at_precision = CASE
+                WHEN COALESCE(trim(source_reference), '') <> ''
+                    THEN COALESCE(NULLIF(trim(effective_at_precision), ''), 'datetime')
                 WHEN COALESCE(trim(purchase_date), '') <> ''
                      AND length(trim(purchase_date)) = 10 THEN 'date'
                 WHEN COALESCE(trim(effective_at_precision), '') <> '' THEN effective_at_precision
