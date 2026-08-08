@@ -21,6 +21,10 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install test dependencies
-        run: pip install pytest sqlalchemy
+        run: python -m pip install --quiet pytest sqlalchemy
+      - name: Compile lifecycle services and tests
+        run: python -m compileall -q app/services/receipt_inventory_lifecycle_service.py app/services/temporal_inventory_service.py tests/test_receipt_inventory_lifecycle_service.py
       - name: Validate correction deletion and replay
-        run: pytest -q tests/test_receipt_inventory_lifecycle_service.py
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q tests/test_receipt_inventory_lifecycle_service.py
