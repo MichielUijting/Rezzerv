@@ -47,7 +47,7 @@ def test_s2_frontend_uses_canonical_table_and_double_click_inspector():
         assert label in source
 
 
-def test_s2_all_users_are_selected_by_default_and_selection_filters_details():
+def test_s2_all_users_are_selected_by_default_and_selection_strictly_filters_details():
     source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
     users_heading = source.index('>Gebruikers</h2>')
     detail_tabs = source.index('HOUSEHOLD_SCREENS.map')
@@ -60,7 +60,10 @@ def test_s2_all_users_are_selected_by_default_and_selection_filters_details():
     assert "toggleUser" in source
     assert "allUsersSelected" in source
     assert "selectedUserIds" in source
-    assert "Huishoudbrede regels blijven zichtbaar" in source
+    assert "if (selectedMembers.length === 0) return []" in source
+    assert "if (!rowUserId) return false" in source
+    assert "Regels zonder gebruikerskoppeling worden bij een gedeeltelijke selectie niet getoond" in source
+    assert "Huishoudbrede regels blijven zichtbaar" not in source
     assert "Selecteer eerst een gebruiker" not in source
     assert "Terug naar huishoudens" not in source
     assert "handleTopTabChange" in source
