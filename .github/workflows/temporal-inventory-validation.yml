@@ -6,7 +6,9 @@ on:
     paths:
       - 'backend/app/services/temporal_inventory_service.py'
       - 'backend/app/services/canonical_inventory_identity_service.py'
+      - 'backend/app/integrations/receipt_scanners/**'
       - 'backend/tests/test_temporal_inventory_service.py'
+      - 'backend/tests/test_receipt_scanner_temporal_inventory_e2e.py'
       - '.github/workflows/temporal-inventory-validation.yml'
 
 jobs:
@@ -18,10 +20,18 @@ jobs:
         with:
           python-version: '3.12'
       - name: Install minimal dependencies
-        run: python -m pip install --quiet pytest sqlalchemy fastapi
-      - name: Compile temporal inventory services
-        run: python -m compileall -q backend/app/services/temporal_inventory_service.py backend/app/services/canonical_inventory_identity_service.py backend/tests/test_temporal_inventory_service.py
-      - name: Prove import-order invariance and projection repair
+        run: python -m pip install --quiet pytest sqlalchemy fastapi pydantic
+      - name: Compile temporal inventory and scanner-boundary tests
+        run: >-
+          python -m compileall -q
+          backend/app/services/temporal_inventory_service.py
+          backend/app/services/canonical_inventory_identity_service.py
+          backend/tests/test_temporal_inventory_service.py
+          backend/tests/test_receipt_scanner_temporal_inventory_e2e.py
+      - name: Prove import-order invariance projection repair and scanner-boundary chronology
         env:
           PYTHONPATH: backend
-        run: pytest -q backend/tests/test_temporal_inventory_service.py
+        run: >-
+          pytest -q
+          backend/tests/test_temporal_inventory_service.py
+          backend/tests/test_receipt_scanner_temporal_inventory_e2e.py
