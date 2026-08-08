@@ -65,7 +65,9 @@ function Diagnostics({ data, selectionLabel }) {
   ]
   return (
     <div>
-      <p style={{ marginTop: 0 }}>Gebruikersfilter: <strong>{selectionLabel}</strong>. Diagnosecijfers blijven huishoudbreed waar Rezzerv de betreffende data op huishoudniveau bewaart.</p>
+      <p style={{ marginTop: 0 }}>
+        Gebruikersfilter: <strong>{selectionLabel}</strong>. Diagnosecijfers zijn huishoudbreed en worden niet als gebruikersspecifiek gepresenteerd.
+      </p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 18 }}>
         {cards.map(([label, value]) => (
           <div key={label} style={{ border: '1px solid #d4ddd4', borderRadius: 6, padding: 12 }}>
@@ -131,7 +133,12 @@ function HouseholdInspector({ householdId }) {
   const allMemberKeys = useMemo(() => members.map((member, index) => memberKey(member, index)), [members])
   const allUsersSelected = allMemberKeys.length > 0 && allMemberKeys.every((key) => selectedUserKeys.includes(key))
   const selectedUserIds = useMemo(
-    () => new Set(members.filter((member, index) => selectedUserKeys.includes(memberKey(member, index))).map((member) => String(member?.user_id || '')).filter(Boolean)),
+    () => new Set(
+      members
+        .filter((member, index) => selectedUserKeys.includes(memberKey(member, index)))
+        .map((member) => String(member?.user_id || ''))
+        .filter(Boolean)
+    ),
     [members, selectedUserKeys]
   )
   const selectedMembers = useMemo(
@@ -147,12 +154,13 @@ function HouseholdInspector({ householdId }) {
   const visibleRows = useMemo(() => {
     const rows = screenData?.rows || []
     if (allUsersSelected) return rows
+    if (selectedMembers.length === 0) return []
     return rows.filter((row) => {
       const rowUserId = row?.user_id == null ? '' : String(row.user_id)
-      if (!rowUserId) return true
+      if (!rowUserId) return false
       return selectedUserIds.has(rowUserId)
     })
-  }, [screenData, allUsersSelected, selectedUserIds])
+  }, [screenData, allUsersSelected, selectedMembers.length, selectedUserIds])
 
   function toggleUser(key) {
     setSelectedUserKeys((current) => current.includes(key)
@@ -212,7 +220,12 @@ function HouseholdInspector({ householdId }) {
         <p>Gegevens worden geladen…</p>
       ) : (
         <>
-          <p style={{ marginTop: 0 }}>Gebruikersfilter: <strong>{selectionLabel}</strong>. Huishoudbrede regels blijven zichtbaar.</p>
+          <p style={{ marginTop: 0 }}>
+            Gebruikersfilter: <strong>{selectionLabel}</strong>.
+            {!allUsersSelected && selectedMembers.length > 0
+              ? ' Regels zonder gebruikerskoppeling worden bij een gedeeltelijke selectie niet getoond.'
+              : ''}
+          </p>
           <ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} />
         </>
       )}
