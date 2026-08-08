@@ -47,7 +47,7 @@ def test_s2_frontend_uses_canonical_table_and_double_click_inspector():
         assert label in source
 
 
-def test_s2_all_users_are_selected_by_default_and_selection_strictly_filters_details():
+def test_s2_all_users_are_selected_by_default_and_selection_uses_actor_identity():
     source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
     users_heading = source.index('>Gebruikers</h2>')
     detail_tabs = source.index('HOUSEHOLD_SCREENS.map')
@@ -61,13 +61,38 @@ def test_s2_all_users_are_selected_by_default_and_selection_strictly_filters_det
     assert "allUsersSelected" in source
     assert "selectedUserIds" in source
     assert "if (selectedMembers.length === 0) return []" in source
+    assert "row?.actor_user_id" in source
     assert "if (!rowUserId) return false" in source
-    assert "Regels zonder gebruikerskoppeling worden bij een gedeeltelijke selectie niet getoond" in source
-    assert "Huishoudbrede regels blijven zichtbaar" not in source
+    assert "Niet-herleidbare historische regels" in source
     assert "Selecteer eerst een gebruiker" not in source
     assert "Terug naar huishoudens" not in source
     assert "handleTopTabChange" in source
     assert "if (tab === 'Huishoudens') setSelectedHouseholdId(null)" in source
+
+
+def test_s2_actor_attribution_is_bound_from_authoritative_server_session():
+    context_source = _read("backend/app/services/session_request_context.py")
+    entrypoint_source = _read("backend/app/session_entrypoint.py")
+    attribution_source = _read("backend/app/services/actor_attribution_service.py")
+    assert "bind_current_actor(context.user_id, context.active_household_id)" in context_source
+    assert "clear_current_actor()" in context_source
+    assert "install_actor_attribution_tracking(legacy_main.engine)" in entrypoint_source
+    assert '"receipt_tables": "receipt"' in attribution_source
+    assert '"purchase_import_batches": "unpack_batch"' in attribution_source
+    assert '"inventory_events": "inventory_event"' in attribution_source
+    assert "actor_object_attributions" in attribution_source
+    assert "auth_audit_log" in attribution_source
+
+
+def test_s2_backend_projects_actor_for_receipt_unpacking_and_inventory_events():
+    source = _read("backend/app/api/superuser_household_routes.py")
+    assert "def _actor_rows" in source
+    assert "a.actor_user_id AS actor_user_id" in source
+    assert 'conn, "receipt_tables", "receipt"' in source
+    assert 'conn, "purchase_import_batches", "unpack_batch"' in source
+    assert 'conn, "inventory_events", "inventory_event"' in source
+    assert "CAST(a.actor_user_id AS TEXT)=:user_id" in source
+    assert "ensure_actor_attribution_schema" in source
 
 
 def test_s2_backend_selected_user_filter_remains_defensive_and_read_only():
@@ -75,7 +100,7 @@ def test_s2_backend_selected_user_filter_remains_defensive_and_read_only():
     assert "def _member_exists" in source
     assert "user_id: str | None = Query(default=None)" in source
     assert "Gebruiker behoort niet tot dit huishouden" in source
-    assert 'if user_id and "user_id" in cols:' in source
+    assert 'if user_id and "user_id" not in cols:' in source
     assert 'params["user_id"] = user_id' in source
 
 
