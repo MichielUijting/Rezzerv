@@ -1,5 +1,6 @@
 from pathlib import Path
 
+# One-shot guarded patch: preserve approval state when rebuilding an unpack batch after reparse.
 MAIN = Path('backend/app/main.py')
 TEST = Path('backend/tests/test_receipt_inventory_lifecycle_route_wiring.py')
 
