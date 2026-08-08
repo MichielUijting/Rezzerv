@@ -36,6 +36,7 @@ jobs:
       - name: Validate S2 read-only and actor-attribution contract
         env:
           PYTHONPATH: backend
-        run: pytest -q \
-          backend/tests/test_superuser_household_readonly.py \
-          backend/tests/test_actor_attribution_service.py
+        run: |
+          pytest -q \
+            backend/tests/test_superuser_household_readonly.py \
+            backend/tests/test_actor_attribution_service.py
