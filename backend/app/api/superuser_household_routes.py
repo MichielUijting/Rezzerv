@@ -76,21 +76,21 @@ def _scalar(conn: Connection, sql: str, params: dict[str, Any]) -> int:
         return 0
 
 
-def _table_household_count(conn: Connection, table: str, household_id: str) -> int:
+def _table_household_count(conn: Connection, table: str, household_id: str, *, household_column: str = "household_id") -> int:
     cols = _columns(conn, table)
-    if "household_id" not in cols:
+    if household_column not in cols:
         return 0
-    return _scalar(conn, f"SELECT COUNT(*) FROM {table} WHERE CAST(household_id AS TEXT)=:household_id", {"household_id": household_id})
+    return _scalar(conn, f"SELECT COUNT(*) FROM {table} WHERE CAST({household_column} AS TEXT)=:household_id", {"household_id": household_id})
 
 
-def _latest_value(conn: Connection, table: str, household_id: str, candidates: tuple[str, ...]) -> Any:
+def _latest_value(conn: Connection, table: str, household_id: str, candidates: tuple[str, ...], *, household_column: str = "household_id") -> Any:
     cols = _columns(conn, table)
-    if "household_id" not in cols:
+    if household_column not in cols:
         return None
     col = _pick(cols, *candidates)
     if not col:
         return None
-    return conn.execute(text(f"SELECT MAX({col}) FROM {table} WHERE CAST(household_id AS TEXT)=:household_id"), {"household_id": household_id}).scalar()
+    return conn.execute(text(f"SELECT MAX({col}) FROM {table} WHERE CAST({household_column} AS TEXT)=:household_id"), {"household_id": household_id}).scalar()
 
 
 def _members(conn: Connection, household_id: str, limit: int = 50) -> list[dict[str, Any]]:
@@ -158,7 +158,7 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
             context = _require_superuser(conn, request.cookies.get(SESSION_COOKIE_NAME))
             id_col, name_col, status_col, created_col = _household_identity_columns(conn)
             select_parts = [f"CAST({id_col} AS TEXT) AS household_id"]
-            select_parts.append(f"{name_col} AS name" if name_col else "CAST(%s AS TEXT) AS name" % id_col)
+            select_parts.append(f"{name_col} AS name" if name_col else f"CAST({id_col} AS TEXT) AS name")
             select_parts.append(f"{status_col} AS status" if status_col else "'active' AS status")
             if created_col:
                 select_parts.append(f"{created_col} AS created_at")
@@ -182,7 +182,7 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
                 item = dict(row)
                 item["member_count"] = _table_household_count(conn, "household_memberships", hid)
                 item["receipt_count"] = _table_household_count(conn, "receipt_tables", hid)
-                item["last_active_at"] = _latest_value(conn, "server_sessions", hid, ("updated_at", "issued_at", "created_at"))
+                item["last_active_at"] = _latest_value(conn, "server_sessions", hid, ("updated_at", "issued_at", "created_at"), household_column="active_household_id")
                 result.append(item)
             _audit_view(conn, context=context, household_id="platform", action="superuser.households.searched", object_type="household_search", object_id=query or "all", metadata={"query": query, "status": normalized_status, "result_count": len(result)})
         return {"access": "read_only", "items": result, "total": len(result)}
@@ -196,8 +196,10 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
             id_col, name_col, status_col, created_col = _household_identity_columns(conn)
             selected = [f"CAST({id_col} AS TEXT) AS household_id"]
             selected.append(f"{name_col} AS name" if name_col else f"CAST({id_col} AS TEXT) AS name")
-            if status_col: selected.append(f"{status_col} AS status")
-            if created_col: selected.append(f"{created_col} AS created_at")
+            if status_col:
+                selected.append(f"{status_col} AS status")
+            if created_col:
+                selected.append(f"{created_col} AS created_at")
             household = dict(conn.execute(text(f"SELECT {', '.join(selected)} FROM household_registry WHERE CAST({id_col} AS TEXT)=:id LIMIT 1"), {"id": household_id}).mappings().first() or {})
             payload = {"access": "read_only", "household": household, "members": _members(conn, household_id), "diagnostics": _diagnostics(conn, household_id), "screens": list(SCREEN_KEYS)}
             _audit_view(conn, context=context, household_id=household_id, action="superuser.household.viewed", object_type="household", metadata={"view": "overview"})
