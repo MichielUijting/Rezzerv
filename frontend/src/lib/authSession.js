@@ -1,5 +1,4 @@
 const LOGIN_MESSAGE_KEY = 'rezzerv_login_message'
-const PLATFORM_SUPERUSER_EMAIL = 'supergebruiker@rezzerv.local'
 const FRONTTEAM_EXTERNAL_DATABASES_PERMISSION = 'frontteam.external_databases.access'
 
 let currentSessionContext = null
@@ -209,7 +208,6 @@ export function isHouseholdAdminFromContext(context = null) {
 export function isPlatformSuperuserFromContext(context = null) {
   const source = context || readStoredAuthContext()
   return Boolean(source?.is_platform_superuser)
-    || String(source?.email || '').trim().toLowerCase() === PLATFORM_SUPERUSER_EMAIL
 }
 
 export function isFrontteamMemberFromContext(context = null) {
