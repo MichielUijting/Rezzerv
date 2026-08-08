@@ -29,6 +29,7 @@ const tiles = [
   { key: 'verlengen', label: 'Verlengen', icon: '⏳' },
   { key: 'instellingen', label: 'Instellingen', icon: '⚙️' },
   { key: 'admin', label: 'Admin', icon: '🛠️' },
+  { key: 'superuser', label: 'Superuser', icon: '🛡️' },
 ]
 
 function visibilityFromContext(context) {
@@ -70,11 +71,13 @@ export default function HomePage() {
     if (key === 'catalogus') navigate('/catalogus')
     if (key === 'instellingen') navigate('/instellingen')
     if (key === 'admin') navigate('/admin')
+    if (key === 'superuser') navigate('/superuser')
   }
 
   function isVisible(tile) {
     if (tile.key === 'admin') return visibility.canOpenAdmin
     if (tile.key === 'externe-databases') return visibility.canOpenExternalDatabases
+    if (tile.key === 'superuser') return visibility.isPlatformSuperuser
     return true
   }
 
@@ -86,7 +89,7 @@ export default function HomePage() {
           <Card className="rz-card-home">
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
               {tiles.filter(isVisible).map((t) => {
-                const clickable = ['meldingen', 'bijna-op', 'winkelen', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus'].includes(t.key)
+                const clickable = ['meldingen', 'bijna-op', 'winkelen', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus', 'superuser'].includes(t.key)
                 return (
                   <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
                     <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>
