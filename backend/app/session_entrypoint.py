@@ -14,6 +14,7 @@ from fastapi.routing import APIRoute
 import app.main as legacy_main
 from app.main import app
 from app.api.server_session_routes import create_server_session_router
+from app.api.superuser_routes import create_superuser_router
 from app.api.support_broadcast_routes import router as support_broadcast_router
 from app.services.authorization_ui_fixture_provisioning import (
     ensure_authorization_ui_fixture_member,
@@ -92,6 +93,7 @@ def activate_server_side_session_routes() -> None:
         route for route in app.router.routes if not _is_replaced_session_route(route)
     ]
     app.include_router(create_server_session_router(legacy_main.engine))
+    app.include_router(create_superuser_router(legacy_main.engine))
     app.include_router(support_broadcast_router)
 
     registered = {
