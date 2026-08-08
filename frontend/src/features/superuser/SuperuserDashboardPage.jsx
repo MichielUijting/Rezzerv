@@ -3,6 +3,7 @@ import Header from '../../ui/Header.jsx'
 import ScreenCard from '../../ui/ScreenCard.jsx'
 import Tabs from '../../ui/Tabs.jsx'
 import Button from '../../ui/Button.jsx'
+import DataTable from '../../ui/DataTable.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
 const TABS = ['Overzicht', 'Huishoudens', 'Gebruik', 'Kassabonnen', 'Systeem']
@@ -20,24 +21,33 @@ function EmptySection({ title }) {
   )
 }
 
-function ReadOnlyTable({ rows }) {
+function ReadOnlyTable({ rows, dataTestId }) {
   const columns = useMemo(() => {
     const keys = []
-    for (const row of rows || []) for (const key of Object.keys(row || {})) if (!keys.includes(key)) keys.push(key)
-    return keys
+    for (const row of rows || []) {
+      for (const key of Object.keys(row || {})) {
+        if (!keys.includes(key)) keys.push(key)
+      }
+    }
+    return keys.map((key, index) => ({
+      key,
+      header: key.replaceAll('_', ' '),
+      width: index === 0 ? 190 : 145,
+      sortable: true,
+      filterable: true,
+      filterPlaceholder: index === 0 ? 'Zoek' : 'Filter',
+      getValue: (row) => row?.[key] == null ? '' : String(row[key]),
+    }))
   }, [rows])
-  if (!rows?.length) return <p>Geen gegevens beschikbaar voor dit huishouden in dit onderdeel.</p>
+
   return (
-    <div style={{ overflowX: 'auto' }}>
-      <table className="rz-table" style={{ width: '100%' }}>
-        <thead><tr>{columns.map((key) => <th key={key}>{key.replaceAll('_', ' ')}</th>)}</tr></thead>
-        <tbody>{rows.map((row, index) => (
-          <tr key={row.id || `${index}`}>
-            {columns.map((key) => <td key={key}>{row?.[key] == null ? '' : String(row[key])}</td>)}
-          </tr>
-        ))}</tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={columns}
+      data={rows || []}
+      dataTestId={dataTestId}
+      emptyMessage="Geen gegevens beschikbaar voor dit huishouden in dit onderdeel."
+      defaultSort={columns[0] ? { key: columns[0].key, direction: 'asc' } : null}
+    />
   )
 }
 
@@ -113,49 +123,83 @@ function HouseholdInspector({ householdId, onBack }) {
         ))}
       </div>
       <h2 style={{ fontSize: 20 }}>{HOUSEHOLD_SCREENS.find(([key]) => key === screen)?.[1]}</h2>
-      {screen === 'diagnose' ? <Diagnostics data={overview.diagnostics} /> : !screenData ? <p>Gegevens worden geladen…</p> : <ReadOnlyTable rows={screenData.rows || []} />}
+      {screen === 'diagnose' ? <Diagnostics data={overview.diagnostics} /> : !screenData ? <p>Gegevens worden geladen…</p> : <ReadOnlyTable rows={screenData.rows || []} dataTestId={`superuser-${screen}-table`} />}
       <h3 style={{ marginTop: 24 }}>Gebruikers</h3>
-      <ReadOnlyTable rows={overview.members || []} />
+      <ReadOnlyTable rows={overview.members || []} dataTestId="superuser-household-members-table" />
     </section>
   )
 }
 
 function HouseholdsSection() {
-  const [query, setQuery] = useState('')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [selectedId, setSelectedId] = useState(null)
 
-  async function loadHouseholds(search = query) {
+  async function loadHouseholds() {
     setLoading(true); setError('')
     try {
-      const response = await fetchJsonWithAuth(`/api/superuser/households?q=${encodeURIComponent(search || '')}`)
+      const response = await fetchJsonWithAuth('/api/superuser/households')
       const payload = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(payload?.detail || 'Huishoudens konden niet worden geladen.')
       setItems(payload.items || [])
     } catch (e) { setError(String(e?.message || e)) } finally { setLoading(false) }
   }
 
-  useEffect(() => { loadHouseholds('') }, [])
+  useEffect(() => { loadHouseholds() }, [])
+
+  const columns = useMemo(() => [
+    {
+      key: 'name', header: 'Huishouden', width: 250, sortable: true, filterable: true,
+      filterPlaceholder: 'Zoek', getValue: (row) => row.name || row.household_id || '',
+    },
+    {
+      key: 'member_count', header: 'Gebruikers', width: 120, sortable: true, align: 'right',
+      getValue: (row) => row.member_count ?? 0,
+    },
+    {
+      key: 'last_active_at', header: 'Laatst actief', width: 190, sortable: true, filterable: true,
+      filterPlaceholder: 'Filter', getValue: (row) => row.last_active_at ? String(row.last_active_at) : '—',
+    },
+    {
+      key: 'receipt_count', header: 'Bonnen', width: 110, sortable: true, align: 'right',
+      getValue: (row) => row.receipt_count ?? 0,
+    },
+    {
+      key: 'status', header: 'Status', width: 130, sortable: true, filterable: true,
+      filterPlaceholder: 'Filter', getValue: (row) => row.status || 'active',
+    },
+  ], [])
+
   if (selectedId) return <HouseholdInspector householdId={selectedId} onBack={() => setSelectedId(null)} />
 
   return (
     <section aria-label="Huishoudens" data-testid="superuser-households">
       <h2 style={{ marginTop: 0, fontSize: 20 }}>Huishoudens</h2>
-      <form onSubmit={(e) => { e.preventDefault(); loadHouseholds(query) }} style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        <input className="rz-input" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Zoek huishouden of ID" aria-label="Zoek huishouden" />
-        <Button type="submit">Zoeken</Button>
-      </form>
+      <p style={{ marginTop: 0 }}>Dubbelklik op een huishouden om het alleen-lezen te bekijken.</p>
       {error && <div role="alert">{error}</div>}
       {loading ? <p>Huishoudens worden geladen…</p> : (
-        <div style={{ overflowX: 'auto' }}><table className="rz-table" style={{ width: '100%' }}>
-          <thead><tr><th>Huishouden</th><th>Gebruikers</th><th>Laatst actief</th><th>Bonnen</th><th>Status</th><th></th></tr></thead>
-          <tbody>{items.map((item) => <tr key={item.household_id}>
-            <td>{item.name || item.household_id}</td><td>{item.member_count ?? 0}</td><td>{item.last_active_at ? String(item.last_active_at) : '—'}</td><td>{item.receipt_count ?? 0}</td><td>{item.status || 'active'}</td>
-            <td><Button onClick={() => setSelectedId(item.household_id)}>Bekijken</Button></td>
-          </tr>)}</tbody>
-        </table></div>
+        <DataTable
+          columns={columns}
+          data={items}
+          dataTestId="superuser-households-table"
+          getRowKey={(row) => row.household_id}
+          defaultSort={{ key: 'name', direction: 'asc' }}
+          emptyMessage="Geen huishoudens gevonden."
+          renderRow={(item) => (
+            <tr
+              key={item.household_id}
+              onDoubleClick={() => setSelectedId(item.household_id)}
+              title="Dubbelklik om dit huishouden alleen-lezen te bekijken"
+            >
+              {columns.map((column) => (
+                <td key={column.key} className={column.align === 'right' ? 'rz-num' : ''}>
+                  {String(column.getValue(item) ?? '')}
+                </td>
+              ))}
+            </tr>
+          )}
+        />
       )}
     </section>
   )
