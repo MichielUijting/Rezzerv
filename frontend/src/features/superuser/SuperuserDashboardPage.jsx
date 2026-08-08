@@ -44,13 +44,17 @@ function ReadOnlyTable({ rows, dataTestId }) {
       columns={columns}
       data={rows || []}
       dataTestId={dataTestId}
-      emptyMessage="Geen gegevens beschikbaar voor dit huishouden in dit onderdeel."
+      emptyMessage="Geen gegevens beschikbaar voor de geselecteerde gebruikers in dit onderdeel."
       defaultSort={columns[0] ? { key: columns[0].key, direction: 'asc' } : null}
     />
   )
 }
 
-function Diagnostics({ data, selectedUserLabel }) {
+function memberKey(member, index = 0) {
+  return String(member?.user_id || member?.email || `member-${index}`)
+}
+
+function Diagnostics({ data, selectionLabel }) {
   const d = data || {}
   const cards = [
     ['Kassabonnen', d.receipt_count ?? 0],
@@ -61,7 +65,7 @@ function Diagnostics({ data, selectedUserLabel }) {
   ]
   return (
     <div>
-      {selectedUserLabel ? <p style={{ marginTop: 0 }}>Geselecteerde gebruiker: <strong>{selectedUserLabel}</strong>. Diagnosecijfers zijn huishoudbreed waar Rezzerv de betreffende data op huishoudniveau bewaart.</p> : null}
+      <p style={{ marginTop: 0 }}>Gebruikersfilter: <strong>{selectionLabel}</strong>. Diagnosecijfers blijven huishoudbreed waar Rezzerv de betreffende data op huishoudniveau bewaart.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 18 }}>
         {cards.map(([label, value]) => (
           <div key={label} style={{ border: '1px solid #d4ddd4', borderRadius: 6, padding: 12 }}>
@@ -78,7 +82,7 @@ function Diagnostics({ data, selectedUserLabel }) {
 
 function HouseholdInspector({ householdId }) {
   const [overview, setOverview] = useState(null)
-  const [selectedUserId, setSelectedUserId] = useState('')
+  const [selectedUserKeys, setSelectedUserKeys] = useState([])
   const [screen, setScreen] = useState('diagnose')
   const [screenData, setScreenData] = useState(null)
   const [error, setError] = useState('')
@@ -90,9 +94,9 @@ function HouseholdInspector({ householdId }) {
         const payload = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(payload?.detail || 'Huishouden kon niet worden geopend.')
         if (!cancelled) {
+          const members = payload.members || []
           setOverview(payload)
-          const firstUser = (payload.members || []).find((member) => member?.user_id)
-          setSelectedUserId(firstUser?.user_id ? String(firstUser.user_id) : '')
+          setSelectedUserKeys(members.map((member, index) => memberKey(member, index)))
         }
       })
       .catch((e) => { if (!cancelled) setError(String(e?.message || e)) })
@@ -106,8 +110,7 @@ function HouseholdInspector({ householdId }) {
       setScreenData({ diagnostics: overview.diagnostics, rows: [] })
       return () => {}
     }
-    const userQuery = selectedUserId ? `?user_id=${encodeURIComponent(selectedUserId)}` : ''
-    fetchJsonWithAuth(`/api/superuser/households/${encodeURIComponent(householdId)}/screens/${screen}${userQuery}`)
+    fetchJsonWithAuth(`/api/superuser/households/${encodeURIComponent(householdId)}/screens/${screen}`)
       .then(async (response) => {
         const payload = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(payload?.detail || 'Read-only scherm kon niet worden geladen.')
@@ -115,7 +118,7 @@ function HouseholdInspector({ householdId }) {
       })
       .catch((e) => { if (!cancelled) setError(String(e?.message || e)) })
     return () => { cancelled = true }
-  }, [householdId, overview, screen, selectedUserId])
+  }, [householdId, overview, screen])
 
   const memberColumns = useMemo(() => [
     { key: 'selection', header: 'Selectie', width: 82, sortable: false, filterable: false, className: 'rz-center' },
@@ -124,12 +127,42 @@ function HouseholdInspector({ householdId }) {
     { key: 'status', header: 'Status', width: 130, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.status || '' },
   ], [])
 
+  const members = overview?.members || []
+  const allMemberKeys = useMemo(() => members.map((member, index) => memberKey(member, index)), [members])
+  const allUsersSelected = allMemberKeys.length > 0 && allMemberKeys.every((key) => selectedUserKeys.includes(key))
+  const selectedUserIds = useMemo(
+    () => new Set(members.filter((member, index) => selectedUserKeys.includes(memberKey(member, index))).map((member) => String(member?.user_id || '')).filter(Boolean)),
+    [members, selectedUserKeys]
+  )
+  const selectedMembers = useMemo(
+    () => members.filter((member, index) => selectedUserKeys.includes(memberKey(member, index))),
+    [members, selectedUserKeys]
+  )
+  const selectionLabel = allUsersSelected
+    ? 'alle gebruikers'
+    : selectedMembers.length === 0
+      ? 'geen gebruikers geselecteerd'
+      : selectedMembers.map((member) => member.email || member.user_id || 'Onbekende gebruiker').join(', ')
+
+  const visibleRows = useMemo(() => {
+    const rows = screenData?.rows || []
+    if (allUsersSelected) return rows
+    return rows.filter((row) => {
+      const rowUserId = row?.user_id == null ? '' : String(row.user_id)
+      if (!rowUserId) return true
+      return selectedUserIds.has(rowUserId)
+    })
+  }, [screenData, allUsersSelected, selectedUserIds])
+
+  function toggleUser(key) {
+    setSelectedUserKeys((current) => current.includes(key)
+      ? current.filter((item) => item !== key)
+      : [...current, key])
+  }
+
   if (error) return <div role="alert">{error}</div>
   if (!overview) return <div role="status">Huishouden wordt geladen…</div>
   const name = overview.household?.name || overview.household?.household_id || householdId
-  const members = overview.members || []
-  const selectedMember = members.find((member) => String(member?.user_id || '') === selectedUserId) || null
-  const selectedUserLabel = selectedMember?.email || selectedMember?.user_id || ''
 
   return (
     <section data-testid="superuser-household-inspector">
@@ -138,26 +171,25 @@ function HouseholdInspector({ householdId }) {
       </div>
 
       <h2 style={{ fontSize: 20, marginBottom: 8 }}>Gebruikers</h2>
-      <p style={{ marginTop: 0 }}>Selecteer één gebruiker om de details daaronder in die gebruikerscontext te bekijken.</p>
+      <p style={{ marginTop: 0 }}>Alle gebruikers zijn standaard geselecteerd. Vink gebruikers uit of weer aan om de details daaronder te filteren.</p>
       <DataTable
         columns={memberColumns}
         data={members}
         dataTestId="superuser-household-members-table"
-        getRowKey={(row, index) => row.user_id || row.email || index}
+        getRowKey={(row, index) => memberKey(row, index)}
         defaultSort={{ key: 'email', direction: 'asc' }}
         emptyMessage="Geen gebruikers gevonden voor dit huishouden."
         renderRow={(member, index) => {
-          const memberId = member?.user_id ? String(member.user_id) : ''
-          const checked = Boolean(memberId && selectedUserId === memberId)
+          const key = memberKey(member, index)
+          const checked = selectedUserKeys.includes(key)
           return (
-            <tr key={memberId || member.email || index}>
+            <tr key={key}>
               <td className="rz-center">
                 <input
                   type="checkbox"
                   checked={checked}
-                  disabled={!memberId}
-                  onChange={() => setSelectedUserId(memberId)}
-                  aria-label={`Selecteer gebruiker ${member.email || memberId || index + 1}`}
+                  onChange={() => toggleUser(key)}
+                  aria-label={`Toon details voor gebruiker ${member.email || member.user_id || index + 1}`}
                 />
               </td>
               <td>{member.email || member.user_id || ''}</td>
@@ -173,18 +205,16 @@ function HouseholdInspector({ householdId }) {
           <button key={key} type="button" className={screen === key ? 'rz-tab rz-tab-active' : 'rz-tab'} onClick={() => setScreen(key)}>{label}</button>
         ))}
       </div>
-      <h2 style={{ fontSize: 20 }}>
-        {HOUSEHOLD_SCREENS.find(([key]) => key === screen)?.[1]}
-        {selectedUserLabel ? ` — ${selectedUserLabel}` : ''}
-      </h2>
-      {!selectedUserId && members.length > 0 ? (
-        <p>Selecteer eerst een gebruiker in de tabel hierboven.</p>
-      ) : screen === 'diagnose' ? (
-        <Diagnostics data={overview.diagnostics} selectedUserLabel={selectedUserLabel} />
+      <h2 style={{ fontSize: 20 }}>{HOUSEHOLD_SCREENS.find(([key]) => key === screen)?.[1]}</h2>
+      {screen === 'diagnose' ? (
+        <Diagnostics data={overview.diagnostics} selectionLabel={selectionLabel} />
       ) : !screenData ? (
         <p>Gegevens worden geladen…</p>
       ) : (
-        <ReadOnlyTable rows={screenData.rows || []} dataTestId={`superuser-${screen}-table`} />
+        <>
+          <p style={{ marginTop: 0 }}>Gebruikersfilter: <strong>{selectionLabel}</strong>. Huishoudbrede regels blijven zichtbaar.</p>
+          <ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} />
+        </>
       )}
     </section>
   )
