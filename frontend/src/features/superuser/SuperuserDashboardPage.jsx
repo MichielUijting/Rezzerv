@@ -46,7 +46,7 @@ function Diagnostics({ data, selectionLabel }) {
   const cards = [
     ['Kassabonnen', d.receipt_count ?? 0], ['Voorraadregels', d.inventory_count ?? 0],
     ['Voorraadevents', d.inventory_event_count ?? 0], ['Uitpakbatches', d.unpack_batch_count ?? 0],
-    ['Negatieve voorraad', d.negative_inventory_count ?? 0],
+    ['Actorattributies', d.actor_attribution_count ?? 0], ['Negatieve voorraad', d.negative_inventory_count ?? 0],
   ]
   return (
     <div>
@@ -120,7 +120,7 @@ function HouseholdInspector({ householdId }) {
     if (allUsersSelected) return rows
     if (selectedMembers.length === 0) return []
     return rows.filter((row) => {
-      const rowUserId = row?.user_id == null ? '' : String(row.user_id)
+      const rowUserId = row?.actor_user_id == null ? (row?.user_id == null ? '' : String(row.user_id)) : String(row.actor_user_id)
       if (!rowUserId) return false
       return selectedUserIds.has(rowUserId)
     })
@@ -156,7 +156,7 @@ function HouseholdInspector({ householdId }) {
         {HOUSEHOLD_SCREENS.map(([key, label]) => <button key={key} type="button" className={screen === key ? 'rz-tab rz-tab-active' : 'rz-tab'} onClick={() => setScreen(key)}>{label}</button>)}
       </div>
       <h2 style={{ fontSize: 20 }}>{HOUSEHOLD_SCREENS.find(([key]) => key === screen)?.[1]}</h2>
-      {screen === 'diagnose' ? <Diagnostics data={overview.diagnostics} selectionLabel={selectionLabel} /> : !screenData ? <p>Gegevens worden geladen…</p> : <><p style={{ marginTop: 0 }}>Gebruikersfilter: <strong>{selectionLabel}</strong>.{!allUsersSelected && selectedMembers.length > 0 ? ' Regels zonder gebruikerskoppeling worden bij een gedeeltelijke selectie niet getoond.' : ''}</p><ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} /></>}
+      {screen === 'diagnose' ? <Diagnostics data={overview.diagnostics} selectionLabel={selectionLabel} /> : !screenData ? <p>Gegevens worden geladen…</p> : <><p style={{ marginTop: 0 }}>Gebruikersfilter: <strong>{selectionLabel}</strong>.{!allUsersSelected && selectedMembers.length > 0 ? ' Niet-herleidbare historische regels worden bij een gedeeltelijke selectie niet getoond.' : ''}</p><ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} /></>}
     </section>
   )
 }
