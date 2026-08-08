@@ -30,6 +30,7 @@ def test_every_household_inspection_is_audited():
     assert "superuser.households.searched" in source
     assert "superuser.household.viewed" in source
     assert "superuser.household.screen_viewed" in source
+    assert "selected_user_id" in source
     assert "write_authorization_audit" in source
 
 
@@ -42,10 +43,32 @@ def test_s2_frontend_uses_canonical_table_and_double_click_inspector():
     assert "onDoubleClick" in source
     assert "Dubbelklik op een huishouden" in source
     assert ">Bekijken<" not in source
-    assert "Terug naar huishoudens" in source
     assert "Alleen lezen" in source
     for label in ("Start", "Kassa", "Uitpakken", "Voorraad", "Bijna op", "Winkelen", "Prognoses", "Diagnose"):
         assert label in source
+
+
+def test_s2_user_selection_precedes_detail_and_has_no_back_button():
+    source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
+    users_heading = source.index('>Gebruikers</h2>')
+    detail_tabs = source.index('HOUSEHOLD_SCREENS.map')
+    assert users_heading < detail_tabs
+    assert "key: 'selection', header: 'Selectie'" in source
+    assert 'type="checkbox"' in source
+    assert "setSelectedUserId" in source
+    assert "?user_id=" in source
+    assert "Terug naar huishoudens" not in source
+    assert "handleTopTabChange" in source
+    assert "if (tab === 'Huishoudens') setSelectedHouseholdId(null)" in source
+
+
+def test_s2_backend_validates_selected_user_and_only_filters_when_supported():
+    source = _read("backend/app/api/superuser_household_routes.py")
+    assert "def _member_exists" in source
+    assert "user_id: str | None = Query(default=None)" in source
+    assert "Gebruiker behoort niet tot dit huishouden" in source
+    assert 'if user_id and "user_id" in cols:' in source
+    assert 'params["user_id"] = user_id' in source
 
 
 def test_s2_routes_are_registered_in_server_session_runtime():
