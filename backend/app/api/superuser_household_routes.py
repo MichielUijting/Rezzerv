@@ -55,6 +55,18 @@ def _household_exists(conn: Connection, household_id: str) -> bool:
     return bool(conn.execute(text(f"SELECT 1 FROM household_registry WHERE CAST({id_col} AS TEXT)=:id LIMIT 1"), {"id": str(household_id)}).first())
 
 
+def _member_exists(conn: Connection, household_id: str, user_id: str) -> bool:
+    cols = _columns(conn, "household_memberships")
+    if "household_id" not in cols or "user_id" not in cols:
+        return False
+    return bool(conn.execute(text("""
+        SELECT 1 FROM household_memberships
+        WHERE CAST(household_id AS TEXT)=:household_id
+          AND CAST(user_id AS TEXT)=:user_id
+        LIMIT 1
+    """), {"household_id": household_id, "user_id": user_id}).first())
+
+
 def _audit_view(conn: Connection, *, context, household_id: str, action: str, object_type: str, object_id: str | None = None, metadata: dict[str, Any] | None = None) -> None:
     write_authorization_audit(
         conn,
@@ -111,7 +123,17 @@ def _members(conn: Connection, household_id: str, limit: int = 50) -> list[dict[
     return [{key: row.get(key) for key in aliases} for row in rows]
 
 
-def _safe_rows(conn: Connection, table: str, household_id: str, preferred: tuple[str, ...], *, where: str = "", order_candidates: tuple[str, ...] = ("updated_at", "created_at"), limit: int = 100) -> list[dict[str, Any]]:
+def _safe_rows(
+    conn: Connection,
+    table: str,
+    household_id: str,
+    preferred: tuple[str, ...],
+    *,
+    where: str = "",
+    order_candidates: tuple[str, ...] = ("updated_at", "created_at"),
+    limit: int = 100,
+    user_id: str | None = None,
+) -> list[dict[str, Any]]:
     cols = _columns(conn, table)
     if "household_id" not in cols:
         return []
@@ -120,8 +142,17 @@ def _safe_rows(conn: Connection, table: str, household_id: str, preferred: tuple
         return []
     order_col = _pick(cols, *order_candidates)
     order_sql = f" ORDER BY {order_col} DESC" if order_col else ""
-    where_sql = f" AND ({where})" if where else ""
-    rows = conn.execute(text(f"SELECT {', '.join(selected)} FROM {table} WHERE CAST(household_id AS TEXT)=:household_id{where_sql}{order_sql} LIMIT :limit"), {"household_id": household_id, "limit": limit}).mappings().all()
+    clauses = ["CAST(household_id AS TEXT)=:household_id"]
+    params: dict[str, Any] = {"household_id": household_id, "limit": limit}
+    if where:
+        clauses.append(f"({where})")
+    if user_id and "user_id" in cols:
+        clauses.append("CAST(user_id AS TEXT)=:user_id")
+        params["user_id"] = user_id
+    rows = conn.execute(
+        text(f"SELECT {', '.join(selected)} FROM {table} WHERE {' AND '.join(clauses)}{order_sql} LIMIT :limit"),
+        params,
+    ).mappings().all()
     return [dict(row) for row in rows]
 
 
@@ -206,34 +237,45 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
         return payload
 
     @router.get("/api/superuser/households/{household_id}/screens/{screen_key}")
-    def household_screen(household_id: str, screen_key: str, request: Request):
+    def household_screen(household_id: str, screen_key: str, request: Request, user_id: str | None = Query(default=None)):
         key = str(screen_key or "").strip().lower()
+        selected_user_id = str(user_id or "").strip() or None
         if key not in SCREEN_KEYS:
             raise HTTPException(status_code=404, detail="Onbekend read-only Rezzerv-scherm")
         with engine.begin() as conn:
             context = _require_superuser(conn, request.cookies.get(SESSION_COOKIE_NAME))
             if not _household_exists(conn, household_id):
                 raise HTTPException(status_code=404, detail="Huishouden niet gevonden")
+            if selected_user_id and not _member_exists(conn, household_id, selected_user_id):
+                raise HTTPException(status_code=404, detail="Gebruiker behoort niet tot dit huishouden")
             if key == "voorraad":
-                rows = _safe_rows(conn, "inventory", household_id, ("id", "naam", "aantal", "household_article_id", "space_id", "sublocation_id", "status", "updated_at"))
+                rows = _safe_rows(conn, "inventory", household_id, ("id", "naam", "aantal", "household_article_id", "space_id", "sublocation_id", "status", "updated_at", "user_id"), user_id=selected_user_id)
             elif key == "bijna_op":
                 cols = _columns(conn, "inventory")
                 where = "COALESCE(aantal,0) <= 1" if "aantal" in cols else ""
-                rows = _safe_rows(conn, "inventory", household_id, ("id", "naam", "aantal", "household_article_id", "status", "updated_at"), where=where)
+                rows = _safe_rows(conn, "inventory", household_id, ("id", "naam", "aantal", "household_article_id", "status", "updated_at", "user_id"), where=where, user_id=selected_user_id)
             elif key == "kassa":
-                rows = _safe_rows(conn, "receipt_tables", household_id, ("id", "retailer", "winkel", "purchase_at", "purchase_date", "status", "source", "imported_at", "created_at"), order_candidates=("purchase_at", "imported_at", "created_at"))
+                rows = _safe_rows(conn, "receipt_tables", household_id, ("id", "retailer", "winkel", "purchase_at", "purchase_date", "status", "source", "imported_at", "created_at", "user_id"), order_candidates=("purchase_at", "imported_at", "created_at"), user_id=selected_user_id)
             elif key == "uitpakken":
-                rows = _safe_rows(conn, "purchase_import_batches", household_id, ("id", "receipt_table_id", "status", "purchase_date", "approved_at", "processed_at", "updated_at", "created_at"))
+                rows = _safe_rows(conn, "purchase_import_batches", household_id, ("id", "receipt_table_id", "status", "purchase_date", "approved_at", "processed_at", "updated_at", "created_at", "user_id"), user_id=selected_user_id)
             elif key == "winkelen":
                 table = next((t for t in ("shopping_list", "shopping_list_items", "inkooplijst") if _columns(conn, t)), "")
-                rows = _safe_rows(conn, table, household_id, ("id", "naam", "name", "artikel", "quantity", "aantal", "status", "updated_at", "created_at")) if table else []
+                rows = _safe_rows(conn, table, household_id, ("id", "naam", "name", "artikel", "quantity", "aantal", "status", "updated_at", "created_at", "user_id"), user_id=selected_user_id) if table else []
             elif key == "prognoses":
                 table = next((t for t in ("forecasts", "prognoses", "purchase_forecasts") if _columns(conn, t)), "")
-                rows = _safe_rows(conn, table, household_id, ("id", "household_article_id", "article_name", "forecast", "quantity", "period", "updated_at", "created_at")) if table else []
+                rows = _safe_rows(conn, table, household_id, ("id", "household_article_id", "article_name", "forecast", "quantity", "period", "updated_at", "created_at", "user_id"), user_id=selected_user_id) if table else []
             else:
                 rows = []
             diagnostics = _diagnostics(conn, household_id)
-            _audit_view(conn, context=context, household_id=household_id, action="superuser.household.screen_viewed", object_type="household_screen", object_id=key, metadata={"screen": key, "row_count": len(rows)})
-        return {"access": "read_only", "household_id": household_id, "screen": key, "rows": rows, "diagnostics": diagnostics}
+            _audit_view(
+                conn,
+                context=context,
+                household_id=household_id,
+                action="superuser.household.screen_viewed",
+                object_type="household_screen",
+                object_id=key,
+                metadata={"screen": key, "row_count": len(rows), "selected_user_id": selected_user_id},
+            )
+        return {"access": "read_only", "household_id": household_id, "selected_user_id": selected_user_id, "screen": key, "rows": rows, "diagnostics": diagnostics}
 
     return router
