@@ -12,6 +12,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, Engine
 
+from app.services.actor_attribution_service import ensure_actor_attribution_schema
 from app.services.authorization_foundation_service import ensure_authorization_foundation, write_authorization_audit
 from app.services.server_session_service import SESSION_COOKIE_NAME, resolve_server_session
 
@@ -140,19 +141,69 @@ def _safe_rows(
     selected = [c for c in preferred if c in cols]
     if not selected:
         return []
+    if user_id and "user_id" not in cols:
+        return []
     order_col = _pick(cols, *order_candidates)
     order_sql = f" ORDER BY {order_col} DESC" if order_col else ""
     clauses = ["CAST(household_id AS TEXT)=:household_id"]
     params: dict[str, Any] = {"household_id": household_id, "limit": limit}
     if where:
         clauses.append(f"({where})")
-    if user_id and "user_id" in cols:
+    if user_id:
         clauses.append("CAST(user_id AS TEXT)=:user_id")
         params["user_id"] = user_id
     rows = conn.execute(
         text(f"SELECT {', '.join(selected)} FROM {table} WHERE {' AND '.join(clauses)}{order_sql} LIMIT :limit"),
         params,
     ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+def _actor_rows(
+    conn: Connection,
+    table: str,
+    object_type: str,
+    household_id: str,
+    preferred: tuple[str, ...],
+    *,
+    order_candidates: tuple[str, ...] = ("updated_at", "created_at"),
+    limit: int = 100,
+    user_id: str | None = None,
+) -> list[dict[str, Any]]:
+    ensure_actor_attribution_schema(conn)
+    cols = _columns(conn, table)
+    if "household_id" not in cols or "id" not in cols:
+        return []
+    selected = [c for c in preferred if c in cols]
+    if not selected:
+        return []
+    selected_sql = [f"t.{c} AS {c}" for c in selected]
+    selected_sql.extend([
+        "a.actor_user_id AS actor_user_id",
+        "a.attribution_source AS actor_attribution_source",
+    ])
+    order_col = _pick(cols, *order_candidates)
+    order_sql = f" ORDER BY t.{order_col} DESC" if order_col else ""
+    clauses = ["CAST(t.household_id AS TEXT)=:household_id"]
+    params: dict[str, Any] = {
+        "household_id": household_id,
+        "object_type": object_type,
+        "limit": limit,
+    }
+    if user_id:
+        clauses.append("CAST(a.actor_user_id AS TEXT)=:user_id")
+        params["user_id"] = user_id
+    rows = conn.execute(text(f"""
+        SELECT {', '.join(selected_sql)}
+        FROM {table} t
+        LEFT JOIN actor_object_attributions a
+          ON a.object_type = :object_type
+         AND CAST(a.object_id AS TEXT) = CAST(t.id AS TEXT)
+         AND CAST(a.household_id AS TEXT) = CAST(t.household_id AS TEXT)
+        WHERE {' AND '.join(clauses)}
+        {order_sql}
+        LIMIT :limit
+    """), params).mappings().all()
     return [dict(row) for row in rows]
 
 
@@ -165,6 +216,7 @@ def _diagnostics(conn: Connection, household_id: str) -> dict[str, Any]:
     inventory_count = _table_household_count(conn, "inventory", household_id)
     event_count = _table_household_count(conn, "inventory_events", household_id)
     unpack_count = _table_household_count(conn, "purchase_import_batches", household_id)
+    attributed_count = _table_household_count(conn, "actor_object_attributions", household_id)
     flags = []
     if negative_count:
         flags.append({"severity": "warning", "code": "negative_inventory", "label": f"{negative_count} voorraadregel(s) met negatieve voorraad"})
@@ -173,6 +225,7 @@ def _diagnostics(conn: Connection, household_id: str) -> dict[str, Any]:
         "inventory_count": inventory_count,
         "inventory_event_count": event_count,
         "unpack_batch_count": unpack_count,
+        "actor_attribution_count": attributed_count,
         "negative_inventory_count": negative_count,
         "last_receipt_at": _latest_value(conn, "receipt_tables", household_id, ("purchase_at", "imported_at", "created_at")),
         "last_inventory_event_at": _latest_value(conn, "inventory_events", household_id, ("effective_at", "recorded_at", "created_at")),
@@ -224,6 +277,7 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
             context = _require_superuser(conn, request.cookies.get(SESSION_COOKIE_NAME))
             if not _household_exists(conn, household_id):
                 raise HTTPException(status_code=404, detail="Huishouden niet gevonden")
+            ensure_actor_attribution_schema(conn)
             id_col, name_col, status_col, created_col = _household_identity_columns(conn)
             selected = [f"CAST({id_col} AS TEXT) AS household_id"]
             selected.append(f"{name_col} AS name" if name_col else f"CAST({id_col} AS TEXT) AS name")
@@ -249,15 +303,27 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
             if selected_user_id and not _member_exists(conn, household_id, selected_user_id):
                 raise HTTPException(status_code=404, detail="Gebruiker behoort niet tot dit huishouden")
             if key == "voorraad":
-                rows = _safe_rows(conn, "inventory", household_id, ("id", "naam", "aantal", "household_article_id", "space_id", "sublocation_id", "status", "updated_at", "user_id"), user_id=selected_user_id)
+                rows = _actor_rows(
+                    conn, "inventory_events", "inventory_event", household_id,
+                    ("id", "article_id", "household_article_id", "article_name", "location_id", "location_label", "event_type", "quantity", "old_quantity", "new_quantity", "source", "note", "effective_at", "recorded_at", "created_at"),
+                    order_candidates=("effective_at", "recorded_at", "created_at"), user_id=selected_user_id,
+                )
             elif key == "bijna_op":
                 cols = _columns(conn, "inventory")
                 where = "COALESCE(aantal,0) <= 1" if "aantal" in cols else ""
                 rows = _safe_rows(conn, "inventory", household_id, ("id", "naam", "aantal", "household_article_id", "status", "updated_at", "user_id"), where=where, user_id=selected_user_id)
             elif key == "kassa":
-                rows = _safe_rows(conn, "receipt_tables", household_id, ("id", "retailer", "winkel", "purchase_at", "purchase_date", "status", "source", "imported_at", "created_at", "user_id"), order_candidates=("purchase_at", "imported_at", "created_at"), user_id=selected_user_id)
+                rows = _actor_rows(
+                    conn, "receipt_tables", "receipt", household_id,
+                    ("id", "retailer", "winkel", "purchase_at", "purchase_date", "status", "source", "imported_at", "created_at"),
+                    order_candidates=("purchase_at", "imported_at", "created_at"), user_id=selected_user_id,
+                )
             elif key == "uitpakken":
-                rows = _safe_rows(conn, "purchase_import_batches", household_id, ("id", "receipt_table_id", "status", "purchase_date", "approved_at", "processed_at", "updated_at", "created_at", "user_id"), user_id=selected_user_id)
+                rows = _actor_rows(
+                    conn, "purchase_import_batches", "unpack_batch", household_id,
+                    ("id", "receipt_table_id", "source_reference", "status", "import_status", "purchase_date", "approved_at", "processed_at", "updated_at", "created_at"),
+                    user_id=selected_user_id,
+                )
             elif key == "winkelen":
                 table = next((t for t in ("shopping_list", "shopping_list_items", "inkooplijst") if _columns(conn, t)), "")
                 rows = _safe_rows(conn, table, household_id, ("id", "naam", "name", "artikel", "quantity", "aantal", "status", "updated_at", "created_at", "user_id"), user_id=selected_user_id) if table else []
