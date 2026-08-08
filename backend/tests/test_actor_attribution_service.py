@@ -5,6 +5,7 @@ from app.services.actor_attribution_service import (
     clear_current_actor,
     install_actor_attribution_tracking,
 )
+from app.api.superuser_household_routes import _actor_rows
 
 
 def test_two_users_are_attributed_to_their_own_receipts_unpack_batches_and_inventory_events():
@@ -64,3 +65,27 @@ def test_two_users_are_attributed_to_their_own_receipts_unpack_batches_and_inven
         ("inventory_event", "event-a", "user-a"),
         ("inventory_event", "event-b", "user-b"),
     }
+
+
+def test_actor_projection_returns_only_selected_users_objects():
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE receipt_tables (id TEXT PRIMARY KEY, household_id TEXT NOT NULL, created_at TEXT)"))
+    install_actor_attribution_tracking(engine)
+
+    bind_current_actor("user-a", "household-1")
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO receipt_tables(id, household_id, created_at) VALUES (:id, :household_id, CURRENT_TIMESTAMP)"), {"id": "receipt-a", "household_id": "household-1"})
+    bind_current_actor("user-b", "household-1")
+    with engine.begin() as conn:
+        conn.execute(text("INSERT INTO receipt_tables(id, household_id, created_at) VALUES (:id, :household_id, CURRENT_TIMESTAMP)"), {"id": "receipt-b", "household_id": "household-1"})
+    clear_current_actor()
+
+    with engine.begin() as conn:
+        all_rows = _actor_rows(conn, "receipt_tables", "receipt", "household-1", ("id", "created_at"))
+        user_a_rows = _actor_rows(conn, "receipt_tables", "receipt", "household-1", ("id", "created_at"), user_id="user-a")
+        user_b_rows = _actor_rows(conn, "receipt_tables", "receipt", "household-1", ("id", "created_at"), user_id="user-b")
+
+    assert {row["id"] for row in all_rows} == {"receipt-a", "receipt-b"}
+    assert [(row["id"], row["actor_user_id"]) for row in user_a_rows] == [("receipt-a", "user-a")]
+    assert [(row["id"], row["actor_user_id"]) for row in user_b_rows] == [("receipt-b", "user-b")]
