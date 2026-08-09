@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import re
 from contextvars import ContextVar
 from datetime import datetime, timezone
@@ -26,6 +28,10 @@ TRACKED_TABLES = {
 }
 
 _INSERT_RE = re.compile(r"^\s*insert\s+into\s+([\w\"\.]+)", re.IGNORECASE)
+_INSERT_VALUES_RE = re.compile(
+    r"^\s*insert\s+into\s+[\w\"\.]+\s*\((?P<columns>.*?)\)\s*values\s*\((?P<values>.*?)\)",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def bind_current_actor(user_id: str | None, household_id: str | None) -> None:
@@ -114,7 +120,9 @@ def backfill_actor_attributions_from_audit(conn: Connection) -> int:
 def _compiled_parameter_sets(context: Any, parameters: Any) -> list[dict[str, Any]]:
     compiled = getattr(context, "compiled_parameters", None)
     if isinstance(compiled, list):
-        return [item for item in compiled if isinstance(item, dict)]
+        useful = [item for item in compiled if isinstance(item, dict) and item]
+        if useful:
+            return useful
     if isinstance(parameters, dict):
         return [parameters]
     if isinstance(parameters, (list, tuple)) and parameters and isinstance(parameters[0], dict):
@@ -128,6 +136,57 @@ def _normalize_table_name(statement: str) -> str | None:
         return None
     raw = match.group(1).replace('"', "")
     return raw.rsplit(".", 1)[-1].lower()
+
+
+def _split_sql_csv(value: str) -> list[str]:
+    reader = csv.reader(
+        io.StringIO(value),
+        delimiter=",",
+        quotechar="'",
+        skipinitialspace=True,
+    )
+    try:
+        return [part.strip() for part in next(reader)]
+    except (StopIteration, csv.Error):
+        return []
+
+
+def _literal_insert_params(statement: str) -> dict[str, Any]:
+    """Recover identity fields from simple literal INSERT statements.
+
+    Production writes normally use bound parameters, but diagnostics and
+    regression paths may emit literal SQL. Actor attribution must not silently
+    disappear merely because the same INSERT was expressed without bind params.
+    Only plain VALUES inserts are handled; expressions fall back to the bound
+    actor household and are never guessed.
+    """
+    match = _INSERT_VALUES_RE.match(str(statement or ""))
+    if not match:
+        return {}
+    columns = [part.strip().strip('"').lower() for part in _split_sql_csv(match.group("columns"))]
+    values = _split_sql_csv(match.group("values"))
+    if not columns or len(columns) != len(values):
+        return {}
+
+    recovered: dict[str, Any] = {}
+    for column, raw_value in zip(columns, values):
+        if column not in {"id", "event_id", "batch_id", "receipt_table_id", "household_id"}:
+            continue
+        token = raw_value.strip()
+        if token.startswith(":") or token == "?" or re.match(r"^\$\d+$", token):
+            continue
+        if token.upper() == "NULL" or "(" in token or ")" in token:
+            continue
+        recovered[column] = token.strip("'\"")
+    return recovered
+
+
+def _parameter_sets(context: Any, parameters: Any, statement: str) -> list[dict[str, Any]]:
+    bound = _compiled_parameter_sets(context, parameters)
+    if bound:
+        return bound
+    literal = _literal_insert_params(statement)
+    return [literal] if literal else []
 
 
 def _extract_object_id(params: dict[str, Any]) -> str | None:
@@ -180,6 +239,34 @@ def _record_attribution(
         _ATTRIBUTION_WRITE_GUARD.reset(guard)
 
 
+def attribute_current_actor_object(
+    connection: Connection,
+    *,
+    object_type: str,
+    object_id: str,
+    household_id: str | None = None,
+) -> bool:
+    """Explicitly attribute a domain object to the actor bound to this request.
+
+    This is the deterministic integration point for domain services that know
+    the newly-created object id. The SQL hook remains a compatibility safety net.
+    """
+    actor_user_id = current_actor_user_id()
+    effective_household_id = str(household_id or current_actor_household_id() or "").strip()
+    effective_object_id = str(object_id or "").strip()
+    if not actor_user_id or not effective_household_id or not effective_object_id:
+        return False
+    ensure_actor_attribution_schema(connection)
+    _record_attribution(
+        connection,
+        object_type=str(object_type),
+        object_id=effective_object_id,
+        household_id=effective_household_id,
+        actor_user_id=actor_user_id,
+    )
+    return True
+
+
 def _after_cursor_execute(
     connection: Connection,
     _cursor,
@@ -198,7 +285,7 @@ def _after_cursor_execute(
     if not object_type:
         return
 
-    for params in _compiled_parameter_sets(context, parameters):
+    for params in _parameter_sets(context, parameters, statement):
         object_id = _extract_object_id(params)
         household_id = _extract_household_id(params)
         if not object_id or not household_id:
