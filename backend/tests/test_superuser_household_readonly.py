@@ -47,7 +47,7 @@ def test_s2_frontend_uses_canonical_table_and_double_click_inspector():
         assert label in source
 
 
-def test_s2_all_users_are_selected_by_default_and_selection_uses_actor_identity():
+def test_s2_default_selection_includes_users_and_unattributed_category():
     source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
     users_heading = source.index('>Gebruikers</h2>')
     detail_tabs = source.index('HOUSEHOLD_SCREENS.map')
@@ -56,18 +56,31 @@ def test_s2_all_users_are_selected_by_default_and_selection_uses_actor_identity(
     assert 'type="checkbox"' in source
     assert "selectedUserKeys" in source
     assert "setSelectedUserKeys(members.map" in source
-    assert "Alle gebruikers zijn standaard geselecteerd" in source
+    assert "includeUnattributed" in source
+    assert "setIncludeUnattributed(true)" in source
+    assert "Alle gebruikers én niet-herleidbare items zijn standaard geselecteerd" in source
+    assert "Niet aan gebruiker herleidbaar" in source
+    assert "Toon items die niet aan een gebruiker herleidbaar zijn" in source
     assert "toggleUser" in source
     assert "allUsersSelected" in source
+    assert "fullSelection" in source
     assert "selectedUserIds" in source
-    assert "if (selectedMembers.length === 0) return []" in source
-    assert "row?.actor_user_id" in source
-    assert "if (!rowUserId) return false" in source
-    assert "Niet-herleidbare historische regels" in source
-    assert "Selecteer eerst een gebruiker" not in source
+    assert "if (!actorUserId) return includeUnattributed" in source
+    assert "return selectedUserIds.has(actorUserId)" in source
     assert "Terug naar huishoudens" not in source
     assert "handleTopTabChange" in source
     assert "if (tab === 'Huishoudens') setSelectedHouseholdId(null)" in source
+
+
+def test_s2_diagnose_shows_attribution_coverage_for_real_household_data():
+    source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
+    assert "ATTRIBUTION_DIAGNOSTIC_SCREENS" in source
+    assert "Gebruikersherkomst" in source
+    assert "Met gebruiker" in source
+    assert "Niet herleidbaar" in source
+    assert "superuser-attribution-diagnostics-table" in source
+    assert "met_gebruiker: metGebruiker" in source
+    assert "niet_herleidbaar: rows.length - metGebruiker" in source
 
 
 def test_s2_actor_attribution_is_bound_from_authoritative_server_session():
