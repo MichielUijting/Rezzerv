@@ -4,6 +4,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'backend/VERSION.txt'
       - 'backend/app/api/superuser_household_routes.py'
       - 'backend/app/services/actor_attribution_service.py'
       - 'backend/app/services/session_request_context.py'
@@ -11,6 +12,8 @@ on:
       - 'backend/tests/test_superuser_household_readonly.py'
       - 'backend/tests/test_actor_attribution_service.py'
       - 'backend/tests/test_household_zero_superuser_user_filter_regression.py'
+      - 'frontend/nginx.conf'
+      - 'frontend/public/version.json'
       - 'frontend/src/features/superuser/SuperuserDashboardPage.jsx'
       - '.github/workflows/superuser-household-readonly-validation.yml'
   workflow_dispatch:
@@ -35,7 +38,7 @@ jobs:
             backend/tests/test_superuser_household_readonly.py \
             backend/tests/test_actor_attribution_service.py \
             backend/tests/test_household_zero_superuser_user_filter_regression.py
-      - name: Validate S2 read-only, actor attribution and Household 0 user filtering
+      - name: Validate S2 read-only, actor attribution, Household 0 user filtering and frontend freshness
         env:
           PYTHONPATH: backend
         run: |
