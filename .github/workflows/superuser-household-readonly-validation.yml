@@ -10,6 +10,7 @@ on:
       - 'backend/app/session_entrypoint.py'
       - 'backend/tests/test_superuser_household_readonly.py'
       - 'backend/tests/test_actor_attribution_service.py'
+      - 'backend/tests/test_household_zero_superuser_user_filter_regression.py'
       - 'frontend/src/features/superuser/SuperuserDashboardPage.jsx'
       - '.github/workflows/superuser-household-readonly-validation.yml'
   workflow_dispatch:
@@ -32,11 +33,13 @@ jobs:
             backend/app/services/session_request_context.py \
             backend/app/session_entrypoint.py \
             backend/tests/test_superuser_household_readonly.py \
-            backend/tests/test_actor_attribution_service.py
-      - name: Validate S2 read-only and actor-attribution contract
+            backend/tests/test_actor_attribution_service.py \
+            backend/tests/test_household_zero_superuser_user_filter_regression.py
+      - name: Validate S2 read-only, actor attribution and Household 0 user filtering
         env:
           PYTHONPATH: backend
         run: |
           pytest -q \
             backend/tests/test_superuser_household_readonly.py \
-            backend/tests/test_actor_attribution_service.py
+            backend/tests/test_actor_attribution_service.py \
+            backend/tests/test_household_zero_superuser_user_filter_regression.py
