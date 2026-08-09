@@ -8,6 +8,8 @@ existing implementation and order.
 
 from __future__ import annotations
 
+from contextvars import ContextVar
+
 from fastapi import Request
 from fastapi.routing import APIRoute
 
@@ -49,6 +51,27 @@ ADMIN_ONLY_RUNTIME_PATHS = {
     ("/api/testing/fixtures/receipt-export/generate", "POST"),
 }
 
+MANUAL_RECEIPT_IMPORT_ROUTE = ("/api/receipts/import", "POST")
+_manual_receipt_import_context: ContextVar[bool] = ContextVar(
+    "rezzerv_manual_receipt_import_context",
+    default=False,
+)
+_original_import_uploaded_receipt_payload = legacy_main.import_uploaded_receipt_payload
+
+
+def _import_uploaded_receipt_payload_with_manual_review_fallback(*args, **kwargs):
+    """Persist a reviewable receipt row when a manual Kassa upload is not classified.
+
+    The raw file has already been accepted by the manual import endpoint. For this
+    route only, a negative receipt classification must therefore result in a
+    receipt_tables row that remains visible as 'Controle nodig' instead of leaving
+    only an orphan raw upload. Other ingestion paths keep their existing policy.
+    """
+
+    if _manual_receipt_import_context.get():
+        kwargs["create_failed_receipt_table"] = True
+    return _original_import_uploaded_receipt_payload(*args, **kwargs)
+
 
 def _is_replaced_session_route(route) -> bool:
     if not isinstance(route, APIRoute):
@@ -69,6 +92,7 @@ def activate_server_side_route_context() -> None:
     legacy_main.resolve_authorized_household_id = authorized_household_id_from_session
     legacy_main.get_request_household_id = request_household_id_from_session
     legacy_main.require_platform_admin_user = require_platform_admin_from_session
+    legacy_main.import_uploaded_receipt_payload = _import_uploaded_receipt_payload_with_manual_review_fallback
 
     from app.api import support_message_routes
     support_message_routes._household_actor = household_support_actor
@@ -77,15 +101,19 @@ def activate_server_side_route_context() -> None:
 @app.middleware("http")
 async def server_session_request_context(request: Request, call_next):
     token = bind_request_session(request)
+    route_key = (request.url.path, request.method.upper())
+    manual_receipt_token = _manual_receipt_import_context.set(
+        route_key == MANUAL_RECEIPT_IMPORT_ROUTE
+    )
     try:
         # Bind the canonical actor before any route/service can write domain data.
         # Public requests without a valid server session remain unattributed.
         bind_current_actor_from_request_session_if_available()
-        route_key = (request.url.path, request.method.upper())
         if route_key in ADMIN_ONLY_RUNTIME_PATHS:
             require_platform_admin_from_session(None)
         return await call_next(request)
     finally:
+        _manual_receipt_import_context.reset(manual_receipt_token)
         reset_request_session(token)
 
 
