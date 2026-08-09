@@ -46,6 +46,28 @@ def resolve_current_server_session() -> ServerSessionContext:
     return context
 
 
+def bind_current_actor_from_request_session_if_available() -> ServerSessionContext | None:
+    """Eagerly bind the canonical actor for every authenticated request.
+
+    Actor provenance must not depend on whether a legacy route happens to call a
+    particular authorization helper before performing a domain write. A valid
+    server session therefore binds its canonical ``app_users.id`` at middleware
+    entry. Public/unauthenticated requests keep an empty actor context.
+    """
+    raw_session_id = _raw_session_cookie.get()
+    if not raw_session_id:
+        clear_current_actor()
+        return None
+    try:
+        with engine.begin() as conn:
+            context = resolve_server_session(conn, raw_session_id)
+    except HTTPException:
+        clear_current_actor()
+        return None
+    bind_current_actor(context.user_id, context.active_household_id)
+    return context
+
+
 def legacy_display_role_from_canonical_role(role: str | None) -> str:
     """Translate canonical server-session roles for still-active legacy guards.
 
