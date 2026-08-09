@@ -47,26 +47,24 @@ def test_s2_frontend_uses_canonical_table_and_double_click_inspector():
         assert label in source
 
 
-def test_s2_default_selection_includes_users_and_unattributed_category():
+def test_s2_selection_table_contains_unattributed_as_third_category():
     source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
     users_heading = source.index('>Gebruikers</h2>')
     detail_tabs = source.index('HOUSEHOLD_SCREENS.map')
     assert users_heading < detail_tabs
     assert "key: 'selection', header: 'Selectie'" in source
     assert 'type="checkbox"' in source
-    assert "selectedUserKeys" in source
-    assert "setSelectedUserKeys(members.map" in source
-    assert "includeUnattributed" in source
-    assert "setIncludeUnattributed(true)" in source
-    assert "Alle gebruikers én niet-herleidbare items zijn standaard geselecteerd" in source
-    assert "Niet aan gebruiker herleidbaar" in source
-    assert "Toon items die niet aan een gebruiker herleidbaar zijn" in source
-    assert "toggleUser" in source
-    assert "allUsersSelected" in source
-    assert "fullSelection" in source
-    assert "selectedUserIds" in source
+    assert "UNATTRIBUTED_KEY = '__unattributed__'" in source
+    assert "selectionRows" in source
+    assert "email: 'Niet aan gebruiker herleidbaar'" in source
+    assert "data={selectionRows}" in source
+    assert "setSelectedUserKeys([...members.map" in source
+    assert "UNATTRIBUTED_KEY])" in source
+    assert "const includeUnattributed = selectedUserKeys.includes(UNATTRIBUTED_KEY)" in source
     assert "if (!actorUserId) return includeUnattributed" in source
     assert "return selectedUserIds.has(actorUserId)" in source
+    assert "setIncludeUnattributed" not in source
+    assert "Toon items die niet aan een gebruiker herleidbaar zijn" not in source
     assert "Terug naar huishoudens" not in source
     assert "handleTopTabChange" in source
     assert "if (tab === 'Huishoudens') setSelectedHouseholdId(null)" in source
