@@ -10,6 +10,9 @@ const HOUSEHOLD_SCREENS = [
   ['start', 'Start'], ['kassa', 'Kassa'], ['uitpakken', 'Uitpakken'], ['voorraad', 'Voorraad'],
   ['bijna_op', 'Bijna op'], ['winkelen', 'Winkelen'], ['prognoses', 'Prognoses'], ['diagnose', 'Diagnose'],
 ]
+const ATTRIBUTION_DIAGNOSTIC_SCREENS = [
+  ['kassa', 'Kassa'], ['uitpakken', 'Uitpakken'], ['voorraad', 'Voorraadmutaties'],
+]
 
 function EmptySection({ title }) {
   return (
@@ -34,26 +37,48 @@ function ReadOnlyTable({ rows, dataTestId }) {
       getValue: (row) => row?.[key] == null ? '' : String(row[key]),
     }))
   }, [rows])
-  return <DataTable columns={columns} data={rows || []} dataTestId={dataTestId} emptyMessage="Geen gegevens beschikbaar voor de geselecteerde gebruikers in dit onderdeel." defaultSort={columns[0] ? { key: columns[0].key, direction: 'asc' } : null} />
+  return <DataTable columns={columns} data={rows || []} dataTestId={dataTestId} emptyMessage="Geen gegevens beschikbaar voor de geselecteerde categorieën in dit onderdeel." defaultSort={columns[0] ? { key: columns[0].key, direction: 'asc' } : null} />
 }
 
 function memberKey(member, index = 0) {
   return String(member?.user_id || member?.email || `member-${index}`)
 }
 
-function Diagnostics({ data, selectionLabel }) {
+function rowActorUserId(row) {
+  if (row?.actor_user_id != null && String(row.actor_user_id).trim()) return String(row.actor_user_id)
+  if (row?.user_id != null && String(row.user_id).trim()) return String(row.user_id)
+  return ''
+}
+
+function Diagnostics({ data, selectionLabel, attributionSummary }) {
   const d = data || {}
   const cards = [
     ['Kassabonnen', d.receipt_count ?? 0], ['Voorraadregels', d.inventory_count ?? 0],
     ['Voorraadevents', d.inventory_event_count ?? 0], ['Uitpakbatches', d.unpack_batch_count ?? 0],
     ['Actorattributies', d.actor_attribution_count ?? 0], ['Negatieve voorraad', d.negative_inventory_count ?? 0],
   ]
+  const attributionColumns = useMemo(() => [
+    { key: 'onderdeel', header: 'Onderdeel', width: 220, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.onderdeel },
+    { key: 'totaal', header: 'Totaal', width: 110, sortable: true, align: 'right', getValue: (row) => row.totaal },
+    { key: 'met_gebruiker', header: 'Met gebruiker', width: 140, sortable: true, align: 'right', getValue: (row) => row.met_gebruiker },
+    { key: 'niet_herleidbaar', header: 'Niet herleidbaar', width: 150, sortable: true, align: 'right', getValue: (row) => row.niet_herleidbaar },
+  ], [])
   return (
     <div>
       <p style={{ marginTop: 0 }}>Gebruikersfilter: <strong>{selectionLabel}</strong>. Diagnosecijfers zijn huishoudbreed en worden niet als gebruikersspecifiek gepresenteerd.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 18 }}>
         {cards.map(([label, value]) => <div key={label} style={{ border: '1px solid #d4ddd4', borderRadius: 6, padding: 12 }}><div style={{ fontSize: 13 }}>{label}</div><div style={{ fontSize: 24 }}>{value}</div></div>)}
       </div>
+      <h3 style={{ fontSize: 17, marginBottom: 8 }}>Gebruikersherkomst</h3>
+      <p style={{ marginTop: 0 }}>Deze tabel laat zien hoeveel verwerkingen wel en niet aan een gebruiker kunnen worden herleid.</p>
+      <DataTable
+        columns={attributionColumns}
+        data={attributionSummary || []}
+        dataTestId="superuser-attribution-diagnostics-table"
+        getRowKey={(row) => row.key}
+        defaultSort={{ key: 'onderdeel', direction: 'asc' }}
+        emptyMessage="Gebruikersherkomst wordt geladen of is niet beschikbaar."
+      />
       <p><strong>Laatste kassabon:</strong> {d.last_receipt_at ? String(d.last_receipt_at) : '—'}</p>
       <p><strong>Laatste voorraadmutatie:</strong> {d.last_inventory_event_at ? String(d.last_inventory_event_at) : '—'}</p>
       {(d.flags || []).length > 0 && <div>{d.flags.map((flag) => <p key={flag.code}>⚠ {flag.label}</p>)}</div>}
@@ -64,6 +89,8 @@ function Diagnostics({ data, selectionLabel }) {
 function HouseholdInspector({ householdId }) {
   const [overview, setOverview] = useState(null)
   const [selectedUserKeys, setSelectedUserKeys] = useState([])
+  const [includeUnattributed, setIncludeUnattributed] = useState(true)
+  const [attributionSummary, setAttributionSummary] = useState([])
   const [screen, setScreen] = useState('diagnose')
   const [screenData, setScreenData] = useState(null)
   const [error, setError] = useState('')
@@ -78,11 +105,34 @@ function HouseholdInspector({ householdId }) {
           const members = payload.members || []
           setOverview(payload)
           setSelectedUserKeys(members.map((member, index) => memberKey(member, index)))
+          setIncludeUnattributed(true)
         }
       })
       .catch((e) => { if (!cancelled) setError(String(e?.message || e)) })
     return () => { cancelled = true }
   }, [householdId])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!overview) return () => {}
+    Promise.all(ATTRIBUTION_DIAGNOSTIC_SCREENS.map(async ([key, label]) => {
+      const response = await fetchJsonWithAuth(`/api/superuser/households/${encodeURIComponent(householdId)}/screens/${key}`)
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload?.detail || `Diagnose voor ${label} kon niet worden geladen.`)
+      const rows = payload.rows || []
+      const metGebruiker = rows.filter((row) => Boolean(rowActorUserId(row))).length
+      return {
+        key,
+        onderdeel: label,
+        totaal: rows.length,
+        met_gebruiker: metGebruiker,
+        niet_herleidbaar: rows.length - metGebruiker,
+      }
+    }))
+      .then((rows) => { if (!cancelled) setAttributionSummary(rows) })
+      .catch(() => { if (!cancelled) setAttributionSummary([]) })
+    return () => { cancelled = true }
+  }, [householdId, overview])
 
   useEffect(() => {
     let cancelled = false
@@ -111,20 +161,24 @@ function HouseholdInspector({ householdId }) {
   const members = overview?.members || []
   const allMemberKeys = useMemo(() => members.map((member, index) => memberKey(member, index)), [members])
   const allUsersSelected = allMemberKeys.length > 0 && allMemberKeys.every((key) => selectedUserKeys.includes(key))
+  const fullSelection = allUsersSelected && includeUnattributed
   const selectedUserIds = useMemo(() => new Set(members.filter((member, index) => selectedUserKeys.includes(memberKey(member, index))).map((member) => String(member?.user_id || '')).filter(Boolean)), [members, selectedUserKeys])
   const selectedMembers = useMemo(() => members.filter((member, index) => selectedUserKeys.includes(memberKey(member, index))), [members, selectedUserKeys])
-  const selectionLabel = allUsersSelected ? 'alle gebruikers' : selectedMembers.length === 0 ? 'geen gebruikers geselecteerd' : selectedMembers.map((member) => member.email || member.user_id || 'Onbekende gebruiker').join(', ')
+  const selectionParts = []
+  if (allUsersSelected) selectionParts.push('alle gebruikers')
+  else if (selectedMembers.length > 0) selectionParts.push(selectedMembers.map((member) => member.email || member.user_id || 'Onbekende gebruiker').join(', '))
+  if (includeUnattributed) selectionParts.push('niet aan gebruiker herleidbaar')
+  const selectionLabel = selectionParts.length > 0 ? selectionParts.join(' + ') : 'geen categorie geselecteerd'
 
   const visibleRows = useMemo(() => {
     const rows = screenData?.rows || []
-    if (allUsersSelected) return rows
-    if (selectedMembers.length === 0) return []
+    if (fullSelection) return rows
     return rows.filter((row) => {
-      const rowUserId = row?.actor_user_id == null ? (row?.user_id == null ? '' : String(row.user_id)) : String(row.actor_user_id)
-      if (!rowUserId) return false
-      return selectedUserIds.has(rowUserId)
+      const actorUserId = rowActorUserId(row)
+      if (!actorUserId) return includeUnattributed
+      return selectedUserIds.has(actorUserId)
     })
-  }, [screenData, allUsersSelected, selectedMembers.length, selectedUserIds])
+  }, [screenData, fullSelection, includeUnattributed, selectedUserIds])
 
   function toggleUser(key) {
     setSelectedUserKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
@@ -138,7 +192,7 @@ function HouseholdInspector({ householdId }) {
     <section data-testid="superuser-household-inspector">
       <div style={{ border: '1px solid #d4ddd4', background: '#f7faf7', padding: 12, borderRadius: 6, marginBottom: 14 }}><strong>Superuser — Huishouden {name} — Alleen lezen</strong></div>
       <h2 style={{ fontSize: 20, marginBottom: 8 }}>Gebruikers</h2>
-      <p style={{ marginTop: 0 }}>Alle gebruikers zijn standaard geselecteerd. Vink gebruikers uit of weer aan om de details daaronder te filteren.</p>
+      <p style={{ marginTop: 0 }}>Alle gebruikers én niet-herleidbare items zijn standaard geselecteerd. Vink categorieën uit of weer aan om de details daaronder te filteren.</p>
       <DataTable
         columns={memberColumns}
         data={members}
@@ -152,11 +206,22 @@ function HouseholdInspector({ householdId }) {
           return <tr key={key}><td className="rz-center"><input type="checkbox" checked={checked} onChange={() => toggleUser(key)} aria-label={`Toon details voor gebruiker ${member.email || member.user_id || index + 1}`} /></td><td>{member.email || member.user_id || ''}</td><td>{member.role || ''}</td><td>{member.status || ''}</td></tr>
         }}
       />
+      <div style={{ marginTop: 10, padding: '10px 12px', border: '1px solid #d4ddd4', borderRadius: 6, background: '#f7faf7' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <input
+            type="checkbox"
+            checked={includeUnattributed}
+            onChange={(event) => setIncludeUnattributed(event.target.checked)}
+            aria-label="Toon items die niet aan een gebruiker herleidbaar zijn"
+          />
+          <span><strong>Niet aan gebruiker herleidbaar</strong> — toon historische of huishoudbrede items waarvoor geen betrouwbare uitvoerende gebruiker is vastgelegd.</span>
+        </label>
+      </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 24, marginBottom: 18 }}>
         {HOUSEHOLD_SCREENS.map(([key, label]) => <button key={key} type="button" className={screen === key ? 'rz-tab rz-tab-active' : 'rz-tab'} onClick={() => setScreen(key)}>{label}</button>)}
       </div>
       <h2 style={{ fontSize: 20 }}>{HOUSEHOLD_SCREENS.find(([key]) => key === screen)?.[1]}</h2>
-      {screen === 'diagnose' ? <Diagnostics data={overview.diagnostics} selectionLabel={selectionLabel} /> : !screenData ? <p>Gegevens worden geladen…</p> : <><p style={{ marginTop: 0 }}>Gebruikersfilter: <strong>{selectionLabel}</strong>.{!allUsersSelected && selectedMembers.length > 0 ? ' Niet-herleidbare historische regels worden bij een gedeeltelijke selectie niet getoond.' : ''}</p><ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} /></>}
+      {screen === 'diagnose' ? <Diagnostics data={overview.diagnostics} selectionLabel={selectionLabel} attributionSummary={attributionSummary} /> : !screenData ? <p>Gegevens worden geladen…</p> : <><p style={{ marginTop: 0 }}>Filter: <strong>{selectionLabel}</strong>.</p><ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} /></>}
     </section>
   )
 }
