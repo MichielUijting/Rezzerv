@@ -13,14 +13,10 @@ const HOUSEHOLD_SCREENS = [
 const ATTRIBUTION_DIAGNOSTIC_SCREENS = [
   ['kassa', 'Kassa'], ['uitpakken', 'Uitpakken'], ['voorraad', 'Voorraadmutaties'],
 ]
+const UNATTRIBUTED_KEY = '__unattributed__'
 
 function EmptySection({ title }) {
-  return (
-    <section aria-label={title}>
-      <h2 style={{ marginTop: 0, fontSize: 20 }}>{title}</h2>
-      <p style={{ marginBottom: 0 }}>Dit onderdeel volgt in een volgende Superuser-release.</p>
-    </section>
-  )
+  return <section aria-label={title}><h2 style={{ marginTop: 0, fontSize: 20 }}>{title}</h2><p style={{ marginBottom: 0 }}>Dit onderdeel volgt in een volgende Superuser-release.</p></section>
 }
 
 function ReadOnlyTable({ rows, dataTestId }) {
@@ -41,7 +37,7 @@ function ReadOnlyTable({ rows, dataTestId }) {
 }
 
 function memberKey(member, index = 0) {
-  return String(member?.user_id || member?.email || `member-${index}`)
+  return String(member?.selection_key || member?.user_id || member?.email || `member-${index}`)
 }
 
 function rowActorUserId(row) {
@@ -57,7 +53,7 @@ function Diagnostics({ data, selectionLabel, attributionSummary }) {
     ['Voorraadevents', d.inventory_event_count ?? 0], ['Uitpakbatches', d.unpack_batch_count ?? 0],
     ['Actorattributies', d.actor_attribution_count ?? 0], ['Negatieve voorraad', d.negative_inventory_count ?? 0],
   ]
-  const attributionColumns = useMemo(() => [
+  const columns = useMemo(() => [
     { key: 'onderdeel', header: 'Onderdeel', width: 220, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.onderdeel },
     { key: 'totaal', header: 'Totaal', width: 110, sortable: true, align: 'right', getValue: (row) => row.totaal },
     { key: 'met_gebruiker', header: 'Met gebruiker', width: 140, sortable: true, align: 'right', getValue: (row) => row.met_gebruiker },
@@ -71,14 +67,7 @@ function Diagnostics({ data, selectionLabel, attributionSummary }) {
       </div>
       <h3 style={{ fontSize: 17, marginBottom: 8 }}>Gebruikersherkomst</h3>
       <p style={{ marginTop: 0 }}>Deze tabel laat zien hoeveel verwerkingen wel en niet aan een gebruiker kunnen worden herleid.</p>
-      <DataTable
-        columns={attributionColumns}
-        data={attributionSummary || []}
-        dataTestId="superuser-attribution-diagnostics-table"
-        getRowKey={(row) => row.key}
-        defaultSort={{ key: 'onderdeel', direction: 'asc' }}
-        emptyMessage="Gebruikersherkomst wordt geladen of is niet beschikbaar."
-      />
+      <DataTable columns={columns} data={attributionSummary || []} dataTestId="superuser-attribution-diagnostics-table" getRowKey={(row) => row.key} defaultSort={{ key: 'onderdeel', direction: 'asc' }} emptyMessage="Gebruikersherkomst wordt geladen of is niet beschikbaar." />
       <p><strong>Laatste kassabon:</strong> {d.last_receipt_at ? String(d.last_receipt_at) : '—'}</p>
       <p><strong>Laatste voorraadmutatie:</strong> {d.last_inventory_event_at ? String(d.last_inventory_event_at) : '—'}</p>
       {(d.flags || []).length > 0 && <div>{d.flags.map((flag) => <p key={flag.code}>⚠ {flag.label}</p>)}</div>}
@@ -89,7 +78,6 @@ function Diagnostics({ data, selectionLabel, attributionSummary }) {
 function HouseholdInspector({ householdId }) {
   const [overview, setOverview] = useState(null)
   const [selectedUserKeys, setSelectedUserKeys] = useState([])
-  const [includeUnattributed, setIncludeUnattributed] = useState(true)
   const [attributionSummary, setAttributionSummary] = useState([])
   const [screen, setScreen] = useState('diagnose')
   const [screenData, setScreenData] = useState(null)
@@ -101,12 +89,10 @@ function HouseholdInspector({ householdId }) {
       .then(async (response) => {
         const payload = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(payload?.detail || 'Huishouden kon niet worden geopend.')
-        if (!cancelled) {
-          const members = payload.members || []
-          setOverview(payload)
-          setSelectedUserKeys(members.map((member, index) => memberKey(member, index)))
-          setIncludeUnattributed(true)
-        }
+        if (cancelled) return
+        const members = payload.members || []
+        setOverview(payload)
+        setSelectedUserKeys([...members.map((member, index) => memberKey(member, index)), UNATTRIBUTED_KEY])
       })
       .catch((e) => { if (!cancelled) setError(String(e?.message || e)) })
     return () => { cancelled = true }
@@ -121,13 +107,7 @@ function HouseholdInspector({ householdId }) {
       if (!response.ok) throw new Error(payload?.detail || `Diagnose voor ${label} kon niet worden geladen.`)
       const rows = payload.rows || []
       const metGebruiker = rows.filter((row) => Boolean(rowActorUserId(row))).length
-      return {
-        key,
-        onderdeel: label,
-        totaal: rows.length,
-        met_gebruiker: metGebruiker,
-        niet_herleidbaar: rows.length - metGebruiker,
-      }
+      return { key, onderdeel: label, totaal: rows.length, met_gebruiker: metGebruiker, niet_herleidbaar: rows.length - metGebruiker }
     }))
       .then((rows) => { if (!cancelled) setAttributionSummary(rows) })
       .catch(() => { if (!cancelled) setAttributionSummary([]) })
@@ -153,16 +133,26 @@ function HouseholdInspector({ householdId }) {
 
   const memberColumns = useMemo(() => [
     { key: 'selection', header: 'Selectie', width: 82, sortable: false, filterable: false, className: 'rz-center' },
-    { key: 'email', header: 'Gebruiker', width: 260, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.email || row.user_id || '' },
+    { key: 'email', header: 'Gebruiker', width: 300, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.email || row.user_id || '' },
     { key: 'role', header: 'Rol', width: 150, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.role || '' },
     { key: 'status', header: 'Status', width: 130, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.status || '' },
   ], [])
 
   const members = overview?.members || []
-  const allMemberKeys = useMemo(() => members.map((member, index) => memberKey(member, index)), [members])
-  const allUsersSelected = allMemberKeys.length > 0 && allMemberKeys.every((key) => selectedUserKeys.includes(key))
+  const selectionRows = useMemo(() => [
+    ...members,
+    { selection_key: UNATTRIBUTED_KEY, email: 'Niet aan gebruiker herleidbaar', role: '—', status: '—', unattributed: true },
+  ], [members])
+  const realMemberKeys = useMemo(() => members.map((member, index) => memberKey(member, index)), [members])
+  const allUsersSelected = realMemberKeys.length > 0 && realMemberKeys.every((key) => selectedUserKeys.includes(key))
+  const includeUnattributed = selectedUserKeys.includes(UNATTRIBUTED_KEY)
   const fullSelection = allUsersSelected && includeUnattributed
-  const selectedUserIds = useMemo(() => new Set(members.filter((member, index) => selectedUserKeys.includes(memberKey(member, index))).map((member) => String(member?.user_id || '')).filter(Boolean)), [members, selectedUserKeys])
+  const selectedUserIds = useMemo(() => new Set(
+    members
+      .filter((member, index) => selectedUserKeys.includes(memberKey(member, index)))
+      .map((member) => String(member?.user_id || ''))
+      .filter(Boolean)
+  ), [members, selectedUserKeys])
   const selectedMembers = useMemo(() => members.filter((member, index) => selectedUserKeys.includes(memberKey(member, index))), [members, selectedUserKeys])
   const selectionParts = []
   if (allUsersSelected) selectionParts.push('alle gebruikers')
@@ -192,10 +182,9 @@ function HouseholdInspector({ householdId }) {
     <section data-testid="superuser-household-inspector">
       <div style={{ border: '1px solid #d4ddd4', background: '#f7faf7', padding: 12, borderRadius: 6, marginBottom: 14 }}><strong>Superuser — Huishouden {name} — Alleen lezen</strong></div>
       <h2 style={{ fontSize: 20, marginBottom: 8 }}>Gebruikers</h2>
-      <p style={{ marginTop: 0 }}>Alle gebruikers én niet-herleidbare items zijn standaard geselecteerd. Vink categorieën uit of weer aan om de details daaronder te filteren.</p>
       <DataTable
         columns={memberColumns}
-        data={members}
+        data={selectionRows}
         dataTestId="superuser-household-members-table"
         getRowKey={(row, index) => memberKey(row, index)}
         defaultSort={{ key: 'email', direction: 'asc' }}
@@ -203,20 +192,9 @@ function HouseholdInspector({ householdId }) {
         renderRow={(member, index) => {
           const key = memberKey(member, index)
           const checked = selectedUserKeys.includes(key)
-          return <tr key={key}><td className="rz-center"><input type="checkbox" checked={checked} onChange={() => toggleUser(key)} aria-label={`Toon details voor gebruiker ${member.email || member.user_id || index + 1}`} /></td><td>{member.email || member.user_id || ''}</td><td>{member.role || ''}</td><td>{member.status || ''}</td></tr>
+          return <tr key={key}><td className="rz-center"><input type="checkbox" checked={checked} onChange={() => toggleUser(key)} aria-label={`Toon details voor ${member.email || member.user_id || index + 1}`} /></td><td>{member.email || member.user_id || ''}</td><td>{member.role || ''}</td><td>{member.status || ''}</td></tr>
         }}
       />
-      <div style={{ marginTop: 10, padding: '10px 12px', border: '1px solid #d4ddd4', borderRadius: 6, background: '#f7faf7' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <input
-            type="checkbox"
-            checked={includeUnattributed}
-            onChange={(event) => setIncludeUnattributed(event.target.checked)}
-            aria-label="Toon items die niet aan een gebruiker herleidbaar zijn"
-          />
-          <span><strong>Niet aan gebruiker herleidbaar</strong> — toon historische of huishoudbrede items waarvoor geen betrouwbare uitvoerende gebruiker is vastgelegd.</span>
-        </label>
-      </div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 24, marginBottom: 18 }}>
         {HOUSEHOLD_SCREENS.map(([key, label]) => <button key={key} type="button" className={screen === key ? 'rz-tab rz-tab-active' : 'rz-tab'} onClick={() => setScreen(key)}>{label}</button>)}
       </div>
@@ -230,16 +208,21 @@ function HouseholdsSection({ selectedId, onSelectHousehold }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  async function loadHouseholds() {
-    setLoading(true); setError('')
-    try {
-      const response = await fetchJsonWithAuth('/api/superuser/households')
-      const payload = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(payload?.detail || 'Huishoudens konden niet worden geladen.')
-      setItems(payload.items || [])
-    } catch (e) { setError(String(e?.message || e)) } finally { setLoading(false) }
-  }
-  useEffect(() => { loadHouseholds() }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetchJsonWithAuth('/api/superuser/households')
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload?.detail || 'Huishoudens konden niet worden geladen.')
+        if (!cancelled) setItems(payload.items || [])
+      })
+      .catch((e) => { if (!cancelled) setError(String(e?.message || e)) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
   const columns = useMemo(() => [
     { key: 'name', header: 'Huishouden', width: 250, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.name || row.household_id || '' },
     { key: 'member_count', header: 'Gebruikers', width: 120, sortable: true, align: 'right', getValue: (row) => row.member_count ?? 0 },
@@ -247,6 +230,7 @@ function HouseholdsSection({ selectedId, onSelectHousehold }) {
     { key: 'receipt_count', header: 'Bonnen', width: 110, sortable: true, align: 'right', getValue: (row) => row.receipt_count ?? 0 },
     { key: 'status', header: 'Status', width: 130, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.status || 'active' },
   ], [])
+
   if (selectedId) return <HouseholdInspector householdId={selectedId} />
   return (
     <section aria-label="Huishoudens" data-testid="superuser-households">
@@ -263,26 +247,36 @@ export default function SuperuserDashboardPage() {
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('Overzicht')
   const [selectedHouseholdId, setSelectedHouseholdId] = useState(null)
+
   useEffect(() => {
     let cancelled = false
-    async function bootstrap() {
-      try {
-        const response = await fetchJsonWithAuth('/api/superuser/bootstrap')
+    fetchJsonWithAuth('/api/superuser/bootstrap')
+      .then(async (response) => {
         const payload = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(payload?.detail || 'Superuser-toegang kon niet worden gevalideerd.')
         if (cancelled) return
         setAccess(payload)
         await fetchJsonWithAuth('/api/superuser/audit/open', { method: 'POST' })
-      } catch (nextError) { if (!cancelled) setError(String(nextError?.message || nextError || 'Superuser-toegang mislukt.')) }
-    }
-    bootstrap(); return () => { cancelled = true }
+      })
+      .catch((e) => { if (!cancelled) setError(String(e?.message || e || 'Superuser-toegang mislukt.')) })
+    return () => { cancelled = true }
   }, [])
-  function handleTopTabChange(tab) { setActiveTab(tab); if (tab === 'Huishoudens') setSelectedHouseholdId(null) }
+
+  function handleTopTabChange(tab) {
+    setActiveTab(tab)
+    if (tab === 'Huishoudens') setSelectedHouseholdId(null)
+  }
+
   return (
     <div className="rz-screen" data-testid="superuser-dashboard">
       <Header title="Rezzerv Beheercentrum" />
       <div className="rz-content"><div className="rz-content-inner"><ScreenCard fullWidth>
-        {error ? <div role="alert">{error}</div> : !access ? <div role="status">Superuser-toegang wordt gecontroleerd…</div> : <><div role="status" aria-label="Superuser alleen-lezen status" style={{ marginBottom: 16, padding: '10px 12px', border: '1px solid #d4ddd4', borderRadius: 6, background: '#f7faf7' }}><strong>Superuser</strong> — beheercentrum. Toegang: <strong>alleen lezen</strong>.</div><Tabs tabs={Array.isArray(access.tabs) ? access.tabs : TABS} activeTab={activeTab} onTabChange={handleTopTabChange}>{(tab) => tab === 'Huishoudens' ? <HouseholdsSection selectedId={selectedHouseholdId} onSelectHousehold={setSelectedHouseholdId} /> : <EmptySection title={tab} />}</Tabs></>}
+        {error ? <div role="alert">{error}</div> : !access ? <div role="status">Superuser-toegang wordt gecontroleerd…</div> : <>
+          <div role="status" aria-label="Superuser alleen-lezen status" style={{ marginBottom: 16, padding: '10px 12px', border: '1px solid #d4ddd4', borderRadius: 6, background: '#f7faf7' }}><strong>Superuser</strong> — beheercentrum. Toegang: <strong>alleen lezen</strong>.</div>
+          <Tabs tabs={Array.isArray(access.tabs) ? access.tabs : TABS} activeTab={activeTab} onTabChange={handleTopTabChange}>
+            {(tab) => tab === 'Huishoudens' ? <HouseholdsSection selectedId={selectedHouseholdId} onSelectHousehold={setSelectedHouseholdId} /> : <EmptySection title={tab} />}
+          </Tabs>
+        </>}
       </ScreenCard></div></div>
     </div>
   )
