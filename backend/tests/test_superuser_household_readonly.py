@@ -87,8 +87,8 @@ def test_s2_frontend_never_serves_stale_html_shell():
     backend_version = _read("backend/VERSION.txt")
     assert "location = /index.html" in nginx
     assert 'Cache-Control "no-cache, no-store, must-revalidate"' in nginx
-    assert "Rezzerv-MVP-v01.12.82" in version
-    assert "Rezzerv-MVP-v01.12.82" in backend_version
+    assert "Rezzerv-MVP-v01.12.83" in version
+    assert "Rezzerv-MVP-v01.12.83" in backend_version
 
 
 def test_s2_actor_attribution_is_bound_from_authoritative_server_session():
