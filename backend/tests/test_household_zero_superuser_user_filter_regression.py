@@ -134,17 +134,30 @@ def _project(conn, table: str, object_type: str, preferred, user_id=None):
     )
 
 
+def _visible_rows(all_rows, selected_user_ids, include_unattributed):
+    visible = []
+    for row in all_rows:
+        actor_user_id = str(row.get("actor_user_id") or "")
+        if actor_user_id:
+            if actor_user_id in selected_user_ids:
+                visible.append(row)
+        elif include_unattributed:
+            visible.append(row)
+    return visible
+
+
 def test_household_zero_superuser_filter_exact_po_scenario():
     """Regressietest voor de PO-selectie in Superuser > Huishoudens > Huishouden 0.
 
     Scenario:
     - admin en lid voeren ieder een eigen kassabon-, uitpak- en voorraadhandeling uit;
-    - alle gebruikers geselecteerd toont de volledige Huishouden-0-projectie;
+    - historische regels hebben bewust geen gebruikersherkomst;
+    - alle gebruikers + niet-herleidbaar toont de volledige Huishouden-0-projectie;
     - alleen admin toont uitsluitend admins geattribueerde handelingen;
     - alleen lid toont uitsluitend lids geattribueerde handelingen;
-    - admin + lid samen is exact de som van beide geattribueerde subsets;
-    - geen selectie levert vanuit de UI-contractregel geen detailregels op;
-    - historische niet-herleidbare regels blijven alleen in de volledige projectie zichtbaar.
+    - alleen niet-herleidbaar toont uitsluitend historische regels zonder actor;
+    - admin + niet-herleidbaar combineert exact die twee categorieën;
+    - geen selectie levert geen detailregels op.
     """
     engine = create_engine("sqlite:///:memory:")
     _create_household_zero_domain_tables(engine)
@@ -162,6 +175,7 @@ def test_household_zero_superuser_filter_exact_po_scenario():
             {"hh0-receipt-admin", "hh0-receipt-lid", "hh0-receipt-history"},
             "hh0-receipt-admin",
             "hh0-receipt-lid",
+            "hh0-receipt-history",
         ),
         (
             "purchase_import_batches",
@@ -170,6 +184,7 @@ def test_household_zero_superuser_filter_exact_po_scenario():
             {"hh0-batch-admin", "hh0-batch-lid", "hh0-batch-history"},
             "hh0-batch-admin",
             "hh0-batch-lid",
+            "hh0-batch-history",
         ),
         (
             "inventory_events",
@@ -178,11 +193,12 @@ def test_household_zero_superuser_filter_exact_po_scenario():
             {"hh0-event-admin", "hh0-event-lid", "hh0-event-history"},
             "hh0-event-admin",
             "hh0-event-lid",
+            "hh0-event-history",
         ),
     )
 
     with engine.begin() as conn:
-        for table, object_type, preferred, expected_all, expected_admin, expected_lid in domains:
+        for table, object_type, preferred, expected_all, expected_admin, expected_lid, expected_history in domains:
             all_rows = _project(conn, table, object_type, preferred)
             admin_rows = _project(conn, table, object_type, preferred, ADMIN_USER_ID)
             lid_rows = _project(conn, table, object_type, preferred, MEMBER_USER_ID)
@@ -197,19 +213,29 @@ def test_household_zero_superuser_filter_exact_po_scenario():
             assert {row["actor_user_id"] for row in admin_rows} == {ADMIN_USER_ID}
             assert {row["actor_user_id"] for row in lid_rows} == {MEMBER_USER_ID}
 
-            # A+B: de gecombineerde geselecteerde gebruikers leveren exact beide
-            # geattribueerde regels op, maar niet de historische onbekende regel.
-            combined_ids = admin_ids | lid_ids
-            assert combined_ids == {expected_admin, expected_lid}
-            assert combined_ids < all_ids
+            full_visible = _visible_rows(all_rows, {ADMIN_USER_ID, MEMBER_USER_ID}, True)
+            assert {row["id"] for row in full_visible} == expected_all
 
-            # Geen gebruikers geselecteerd: dit is het productie-UI-contract.
-            selected_user_ids = set()
-            visible_rows = [
-                row for row in all_rows
-                if str(row.get("actor_user_id") or "") in selected_user_ids
-            ]
-            assert visible_rows == []
+            only_admin = _visible_rows(all_rows, {ADMIN_USER_ID}, False)
+            assert {row["id"] for row in only_admin} == {expected_admin}
+
+            only_lid = _visible_rows(all_rows, {MEMBER_USER_ID}, False)
+            assert {row["id"] for row in only_lid} == {expected_lid}
+
+            only_unattributed = _visible_rows(all_rows, set(), True)
+            assert {row["id"] for row in only_unattributed} == {expected_history}
+            assert all(not row.get("actor_user_id") for row in only_unattributed)
+
+            admin_plus_unattributed = _visible_rows(all_rows, {ADMIN_USER_ID}, True)
+            assert {row["id"] for row in admin_plus_unattributed} == {expected_admin, expected_history}
+
+            nothing_selected = _visible_rows(all_rows, set(), False)
+            assert nothing_selected == []
+
+            attributed_count = sum(1 for row in all_rows if row.get("actor_user_id"))
+            unattributed_count = len(all_rows) - attributed_count
+            assert attributed_count == 2
+            assert unattributed_count == 1
 
     with engine.begin() as conn:
         attribution_rows = conn.execute(text("""
