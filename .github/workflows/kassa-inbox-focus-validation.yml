@@ -1,0 +1,25 @@
+name: Kassa inbox focus validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'frontend/src/main.jsx'
+      - 'frontend/src/features/receipts/KassaPage.jsx'
+      - 'frontend/src/features/receipts/kassaInboxFocusRuntime.js'
+      - 'backend/tests/test_kassa_inbox_focus_contract.py'
+      - '.github/workflows/kassa-inbox-focus-validation.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-kassa-inbox-focus:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pytest
+        run: python -m pip install --quiet pytest
+      - name: Validate imported receipt visibility contract
+        run: pytest -q backend/tests/test_kassa_inbox_focus_contract.py
