@@ -21,8 +21,10 @@ from app.services.actor_attribution_service import install_actor_attribution_tra
 from app.services.authorization_ui_fixture_provisioning import (
     ensure_authorization_ui_fixture_member,
 )
+from app.services.membership_user_identity_service import backfill_membership_user_ids
 from app.services.session_request_context import (
     authorized_household_id_from_session,
+    bind_current_actor_from_request_session_if_available,
     bind_request_session,
     household_context_from_session,
     legacy_user_payload_from_session,
@@ -76,6 +78,9 @@ def activate_server_side_route_context() -> None:
 async def server_session_request_context(request: Request, call_next):
     token = bind_request_session(request)
     try:
+        # Bind the canonical actor before any route/service can write domain data.
+        # Public requests without a valid server session remain unattributed.
+        bind_current_actor_from_request_session_if_available()
         route_key = (request.url.path, request.method.upper())
         if route_key in ADMIN_ONLY_RUNTIME_PATHS:
             require_platform_admin_from_session(None)
@@ -126,6 +131,7 @@ def activate_server_side_session_routes() -> None:
 with legacy_main.engine.begin() as provisioning_conn:
     ensure_system_superuser_for_session_runtime(provisioning_conn)
     ensure_authorization_ui_fixture_member(provisioning_conn)
+    backfill_membership_user_ids(provisioning_conn)
 
 install_actor_attribution_tracking(legacy_main.engine)
 activate_server_side_route_context()
