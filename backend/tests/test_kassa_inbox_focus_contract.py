@@ -34,3 +34,14 @@ def test_upload_fallback_remains_available_during_new_to_inbox_transition():
     # /kassa/nieuw terug navigeert naar /kassa. Daarmee blijven fallbackrecord,
     # geopende detailbon en receiptInboxFocusId onderdeel van dezelfde state.
     assert "'/kassa/*'" in router
+
+
+def test_manual_kassa_upload_persists_unclassified_receipt_for_review():
+    session_entrypoint = (ROOT / "backend/app/session_entrypoint.py").read_text(encoding="utf-8")
+    assert 'MANUAL_RECEIPT_IMPORT_ROUTE = ("/api/receipts/import", "POST")' in session_entrypoint
+    assert "_manual_receipt_import_context" in session_entrypoint
+    assert 'kwargs["create_failed_receipt_table"] = True' in session_entrypoint
+    assert "legacy_main.import_uploaded_receipt_payload = _import_uploaded_receipt_payload_with_manual_review_fallback" in session_entrypoint
+    # De fallback is alleen actief binnen de request-context van de handmatige
+    # Kassa-upload; andere importkanalen behouden hun bestaande beleid.
+    assert "route_key == MANUAL_RECEIPT_IMPORT_ROUTE" in session_entrypoint
