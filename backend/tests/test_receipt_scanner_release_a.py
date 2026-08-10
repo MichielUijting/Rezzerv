@@ -4,6 +4,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
+from sqlalchemy import create_engine, text
 
 from app.integrations.receipt_scanners.adapters.fake_test_provider import FakeScannerProvider
 from app.integrations.receipt_scanners.adapters.rezzerv_legacy import RezzervLegacyScannerAdapter
@@ -32,11 +33,11 @@ def _legacy_result() -> ReceiptParseResult:
         lines=[{
             "raw_label": "2 MELK HALF VOL 1L 2,78",
             "normalized_label": "Melk halfvol 1L",
-            "quantity": Decimal("2"),
+            "quantity": 2.0,
             "unit": "piece",
-            "unit_price": Decimal("1.39"),
-            "line_total": Decimal("2.78"),
-            "discount_amount": Decimal("0.00"),
+            "unit_price": 1.39,
+            "line_total": 2.78,
+            "discount_amount": 0.0,
             "barcode": None,
             "confidence_score": 0.96,
         }],
@@ -89,6 +90,10 @@ def test_legacy_adapter_roundtrip_preserves_existing_receipt_dto_semantics():
     assert actual.currency == expected.currency
     assert actual.lines == expected.lines
     assert actual.parser_diagnostics == expected.parser_diagnostics
+    assert isinstance(actual.lines[0]["quantity"], float)
+    assert isinstance(actual.lines[0]["unit_price"], float)
+    assert isinstance(actual.lines[0]["line_total"], float)
+    assert isinstance(actual.lines[0]["discount_amount"], float)
 
 
 def test_legacy_adapter_preserves_review_needed_receipt_without_total():
@@ -105,11 +110,11 @@ def test_legacy_adapter_preserves_review_needed_receipt_without_total():
         lines=[{
             "raw_label": "TOMATEN 2,99",
             "normalized_label": "Tomaten",
-            "quantity": Decimal("1"),
+            "quantity": 1.0,
             "unit": "piece",
-            "unit_price": Decimal("2.99"),
-            "line_total": Decimal("2.99"),
-            "discount_amount": Decimal("0.00"),
+            "unit_price": 2.99,
+            "line_total": 2.99,
+            "discount_amount": 0.0,
             "barcode": None,
             "confidence_score": 0.75,
         }],
@@ -122,6 +127,7 @@ def test_legacy_adapter_preserves_review_needed_receipt_without_total():
     assert actual.parse_status == "review_needed"
     assert actual.total_amount is None
     assert len(actual.lines or []) == 1
+    assert isinstance(actual.lines[0]["unit_price"], float)
 
 
 def test_legacy_adapter_preserves_parsed_receipt_without_article_lines():
@@ -165,6 +171,63 @@ def test_contract_still_rejects_incomplete_receipt_when_review_is_not_required()
     }
     with pytest.raises(Exception):
         CanonicalReceiptV1.model_validate(payload)
+
+
+def test_external_provider_canonical_line_numbers_are_sqlite_persistable():
+    canonical = CanonicalReceiptV1(
+        scan_id="rscan_external_persistence",
+        provider={"code": "external-test", "job_id": "job-1", "result_id": "result-1"},
+        status="completed",
+        document={"sha256": "e" * 64, "mime_type": "image/jpeg", "page_count": 1},
+        receipt={
+            "store": {"name": "External Store"},
+            "transaction": {"purchase_date": "2026-08-10", "currency": "EUR"},
+            "totals": {"grand_total": "8.98"},
+            "lines": [{
+                "line_number": 1,
+                "line_type": "product",
+                "raw_text": "2 FAIRTRADE CHENIN BL 8,98",
+                "description": "Fairtrade Chenin Bl",
+                "quantity": "2",
+                "unit_price": "4.49",
+                "line_total": "8.98",
+                "discount_amount": "0.00",
+            }],
+            "warnings": [],
+        },
+        quality={"overall_confidence": 0.95, "requires_review": False},
+    )
+    normalized = canonical_to_receipt_parse_result(canonical)
+    line = normalized.lines[0]
+    assert line["quantity"] == 2.0
+    assert line["unit_price"] == 4.49
+    assert line["line_total"] == 8.98
+    assert line["discount_amount"] == 0.0
+    assert all(
+        value is None or isinstance(value, float)
+        for value in (line["quantity"], line["unit_price"], line["line_total"], line["discount_amount"])
+    )
+
+    engine = create_engine("sqlite:///:memory:")
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE receipt_line (quantity REAL, unit_price REAL, line_total REAL, discount_amount REAL)"))
+        conn.execute(
+            text(
+                "INSERT INTO receipt_line (quantity, unit_price, line_total, discount_amount) "
+                "VALUES (:quantity, :unit_price, :line_total, :discount_amount)"
+            ),
+            {
+                "quantity": line["quantity"],
+                "unit_price": line["unit_price"],
+                "line_total": line["line_total"],
+                "discount_amount": line["discount_amount"],
+            },
+        )
+        persisted = conn.execute(text("SELECT quantity, unit_price, line_total, discount_amount FROM receipt_line")).mappings().one()
+    assert persisted["quantity"] == 2.0
+    assert persisted["unit_price"] == 4.49
+    assert persisted["line_total"] == 8.98
+    assert persisted["discount_amount"] == 0.0
 
 
 def test_legacy_failed_result_stays_failed_without_persistable_receipt_payload():
