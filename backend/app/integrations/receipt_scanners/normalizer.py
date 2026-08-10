@@ -17,6 +17,22 @@ def _to_decimal(value: Any) -> Decimal | None:
     return Decimal(str(value))
 
 
+def _to_legacy_line_number(value: Any) -> float | None:
+    """Restore the pre-scanner ReceiptParseResult line-number contract.
+
+    Canonical scanner observations intentionally retain Decimal precision. The
+    existing Rezzerv parser/persistence boundary, however, historically exposes
+    numeric receipt-line fields as ordinary Python floats. Returning Decimal
+    values here breaks the unchanged SQLite text() inserts in receipt_service.
+
+    Keep this conversion at the canonical -> Rezzerv DTO boundary so external
+    scanner providers can continue to use the provider-neutral Decimal contract.
+    """
+    if value is None or value == "":
+        return None
+    return float(Decimal(str(value)))
+
+
 def _purchase_at_from_canonical(value: CanonicalReceiptV1) -> str | None:
     if value.receipt is None:
         return None
@@ -61,11 +77,11 @@ def canonical_to_receipt_parse_result(value: CanonicalReceiptV1) -> ReceiptParse
         lines.append({
             "raw_label": line.raw_text,
             "normalized_label": line.description or line.raw_text,
-            "quantity": _to_decimal(line.quantity),
+            "quantity": _to_legacy_line_number(line.quantity),
             "unit": line.unit,
-            "unit_price": _to_decimal(line.unit_price),
-            "line_total": _to_decimal(line.line_total),
-            "discount_amount": _to_decimal(line.discount_amount),
+            "unit_price": _to_legacy_line_number(line.unit_price),
+            "line_total": _to_legacy_line_number(line.line_total),
+            "discount_amount": _to_legacy_line_number(line.discount_amount),
             "barcode": barcode,
             "confidence_score": line_confidence,
         })
