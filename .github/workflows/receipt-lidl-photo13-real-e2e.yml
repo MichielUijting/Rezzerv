@@ -1,0 +1,42 @@
+name: Receipt Lidl photo 13 real E2E
+
+on:
+  push:
+    branches:
+      - fix/receipt-scanner-legacy-equivalence-v01.12.85
+    paths:
+      - backend/tests/fixtures/lidl_photo_13.jpeg
+  pull_request:
+    branches:
+      - main
+    paths:
+      - backend/tests/lidl_photo13_real_e2e.py
+      - backend/tests/fixtures/lidl_photo_13.jpeg
+      - backend/app/receipt_ingestion/**
+      - backend/app/services/receipt_service.py
+      - .github/workflows/receipt-lidl-photo13-real-e2e.yml
+  workflow_dispatch:
+
+jobs:
+  real-lidl-photo-13:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify exact PO fixture checksum
+        run: |
+          test -f backend/tests/fixtures/lidl_photo_13.jpeg
+          echo '52a645b56b90037c34a54e61afc594c591874d5b8f9e5e3632332a80ecd5013b  backend/tests/fixtures/lidl_photo_13.jpeg' | sha256sum -c -
+
+      - name: Build production backend OCR image
+        run: docker build --no-cache -t rezzerv-lidl13-e2e ./backend
+
+      - name: Run real Lidl photo 13 production import chain
+        run: |
+          docker run --rm \
+            -e DATABASE_URL=sqlite:////tmp/rezzerv-lidl13.sqlite \
+            -e RECEIPT_STORAGE_ROOT=/tmp/rezzerv-receipts \
+            rezzerv-lidl13-e2e \
+            python /app/tests/lidl_photo13_real_e2e.py
