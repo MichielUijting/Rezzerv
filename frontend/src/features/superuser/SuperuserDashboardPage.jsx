@@ -1,18 +1,243 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Header from '../../ui/Header.jsx'
 import ScreenCard from '../../ui/ScreenCard.jsx'
 import Tabs from '../../ui/Tabs.jsx'
+import DataTable from '../../ui/DataTable.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
 const TABS = ['Overzicht', 'Huishoudens', 'Gebruik', 'Kassabonnen', 'Systeem']
+const HOUSEHOLD_SCREENS = [
+  ['start', 'Start'], ['kassa', 'Kassa'], ['uitpakken', 'Uitpakken'], ['voorraad', 'Voorraad'],
+  ['bijna_op', 'Bijna op'], ['winkelen', 'Winkelen'], ['prognoses', 'Prognoses'], ['diagnose', 'Diagnose'],
+]
+const ATTRIBUTION_DIAGNOSTIC_SCREENS = [
+  ['kassa', 'Kassa'], ['uitpakken', 'Uitpakken'], ['voorraad', 'Voorraadmutaties'],
+]
+const UNATTRIBUTED_KEY = '__unattributed__'
 
 function EmptySection({ title }) {
+  return <section aria-label={title}><h2 style={{ marginTop: 0, fontSize: 20 }}>{title}</h2><p style={{ marginBottom: 0 }}>Dit onderdeel volgt in een volgende Superuser-release.</p></section>
+}
+
+function ReadOnlyTable({ rows, dataTestId }) {
+  const columns = useMemo(() => {
+    const keys = []
+    for (const row of rows || []) for (const key of Object.keys(row || {})) if (!keys.includes(key)) keys.push(key)
+    return keys.map((key, index) => ({
+      key,
+      header: key.replaceAll('_', ' '),
+      width: index === 0 ? 190 : 145,
+      sortable: true,
+      filterable: true,
+      filterPlaceholder: index === 0 ? 'Zoek' : 'Filter',
+      getValue: (row) => row?.[key] == null ? '' : String(row[key]),
+    }))
+  }, [rows])
+  return <DataTable columns={columns} data={rows || []} dataTestId={dataTestId} emptyMessage="Geen gegevens beschikbaar voor de geselecteerde categorieën in dit onderdeel." defaultSort={columns[0] ? { key: columns[0].key, direction: 'asc' } : null} />
+}
+
+function memberKey(member, index = 0) {
+  return String(member?.selection_key || member?.user_id || member?.email || `member-${index}`)
+}
+
+function rowActorUserId(row) {
+  if (row?.actor_user_id != null && String(row.actor_user_id).trim()) return String(row.actor_user_id)
+  if (row?.user_id != null && String(row.user_id).trim()) return String(row.user_id)
+  return ''
+}
+
+function Diagnostics({ data, selectionLabel, attributionSummary }) {
+  const d = data || {}
+  const cards = [
+    ['Kassabonnen', d.receipt_count ?? 0], ['Voorraadregels', d.inventory_count ?? 0],
+    ['Voorraadevents', d.inventory_event_count ?? 0], ['Uitpakbatches', d.unpack_batch_count ?? 0],
+    ['Actorattributies', d.actor_attribution_count ?? 0], ['Negatieve voorraad', d.negative_inventory_count ?? 0],
+  ]
+  const columns = useMemo(() => [
+    { key: 'onderdeel', header: 'Onderdeel', width: 220, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.onderdeel },
+    { key: 'totaal', header: 'Totaal', width: 110, sortable: true, align: 'right', getValue: (row) => row.totaal },
+    { key: 'met_gebruiker', header: 'Met gebruiker', width: 140, sortable: true, align: 'right', getValue: (row) => row.met_gebruiker },
+    { key: 'niet_herleidbaar', header: 'Niet herleidbaar', width: 150, sortable: true, align: 'right', getValue: (row) => row.niet_herleidbaar },
+  ], [])
   return (
-    <section aria-label={title}>
-      <h2 style={{ marginTop: 0, fontSize: 20 }}>{title}</h2>
-      <p style={{ marginBottom: 0 }}>
-        Dit onderdeel wordt in een volgende Superuser-release gevuld. S1 levert uitsluitend het veilige beheerfundament.
-      </p>
+    <div>
+      <p style={{ marginTop: 0 }}>Gebruikersfilter: <strong>{selectionLabel}</strong>. Diagnosecijfers zijn huishoudbreed en worden niet als gebruikersspecifiek gepresenteerd.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 12, marginBottom: 18 }}>
+        {cards.map(([label, value]) => <div key={label} style={{ border: '1px solid #d4ddd4', borderRadius: 6, padding: 12 }}><div style={{ fontSize: 13 }}>{label}</div><div style={{ fontSize: 24 }}>{value}</div></div>)}
+      </div>
+      <h3 style={{ fontSize: 17, marginBottom: 8 }}>Gebruikersherkomst</h3>
+      <p style={{ marginTop: 0 }}>Deze tabel laat zien hoeveel verwerkingen wel en niet aan een gebruiker kunnen worden herleid.</p>
+      <DataTable columns={columns} data={attributionSummary || []} dataTestId="superuser-attribution-diagnostics-table" getRowKey={(row) => row.key} defaultSort={{ key: 'onderdeel', direction: 'asc' }} emptyMessage="Gebruikersherkomst wordt geladen of is niet beschikbaar." />
+      <p><strong>Laatste kassabon:</strong> {d.last_receipt_at ? String(d.last_receipt_at) : '—'}</p>
+      <p><strong>Laatste voorraadmutatie:</strong> {d.last_inventory_event_at ? String(d.last_inventory_event_at) : '—'}</p>
+      {(d.flags || []).length > 0 && <div>{d.flags.map((flag) => <p key={flag.code}>⚠ {flag.label}</p>)}</div>}
+    </div>
+  )
+}
+
+function HouseholdInspector({ householdId }) {
+  const [overview, setOverview] = useState(null)
+  const [selectedUserKeys, setSelectedUserKeys] = useState([])
+  const [attributionSummary, setAttributionSummary] = useState([])
+  const [screen, setScreen] = useState('diagnose')
+  const [screenData, setScreenData] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    fetchJsonWithAuth(`/api/superuser/households/${encodeURIComponent(householdId)}`)
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload?.detail || 'Huishouden kon niet worden geopend.')
+        if (cancelled) return
+        const members = payload.members || []
+        setOverview(payload)
+        setSelectedUserKeys([...members.map((member, index) => memberKey(member, index)), UNATTRIBUTED_KEY])
+      })
+      .catch((e) => { if (!cancelled) setError(String(e?.message || e)) })
+    return () => { cancelled = true }
+  }, [householdId])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!overview) return () => {}
+    Promise.all(ATTRIBUTION_DIAGNOSTIC_SCREENS.map(async ([key, label]) => {
+      const response = await fetchJsonWithAuth(`/api/superuser/households/${encodeURIComponent(householdId)}/screens/${key}`)
+      const payload = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(payload?.detail || `Diagnose voor ${label} kon niet worden geladen.`)
+      const rows = payload.rows || []
+      const metGebruiker = rows.filter((row) => Boolean(rowActorUserId(row))).length
+      return { key, onderdeel: label, totaal: rows.length, met_gebruiker: metGebruiker, niet_herleidbaar: rows.length - metGebruiker }
+    }))
+      .then((rows) => { if (!cancelled) setAttributionSummary(rows) })
+      .catch(() => { if (!cancelled) setAttributionSummary([]) })
+    return () => { cancelled = true }
+  }, [householdId, overview])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!overview) return () => {}
+    if (screen === 'diagnose') {
+      setScreenData({ diagnostics: overview.diagnostics, rows: [] })
+      return () => {}
+    }
+    fetchJsonWithAuth(`/api/superuser/households/${encodeURIComponent(householdId)}/screens/${screen}`)
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload?.detail || 'Read-only scherm kon niet worden geladen.')
+        if (!cancelled) setScreenData(payload)
+      })
+      .catch((e) => { if (!cancelled) setError(String(e?.message || e)) })
+    return () => { cancelled = true }
+  }, [householdId, overview, screen])
+
+  const memberColumns = useMemo(() => [
+    { key: 'selection', header: 'Selectie', width: 82, sortable: false, filterable: false, className: 'rz-center' },
+    { key: 'email', header: 'Gebruiker', width: 300, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.email || row.user_id || '' },
+    { key: 'role', header: 'Rol', width: 150, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.role || '' },
+    { key: 'status', header: 'Status', width: 130, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.status || '' },
+  ], [])
+
+  const members = overview?.members || []
+  const selectionRows = useMemo(() => [
+    ...members,
+    { selection_key: UNATTRIBUTED_KEY, email: 'Niet aan gebruiker herleidbaar', role: '—', status: '—', unattributed: true },
+  ], [members])
+  const realMemberKeys = useMemo(() => members.map((member, index) => memberKey(member, index)), [members])
+  const allUsersSelected = realMemberKeys.length > 0 && realMemberKeys.every((key) => selectedUserKeys.includes(key))
+  const includeUnattributed = selectedUserKeys.includes(UNATTRIBUTED_KEY)
+  const fullSelection = allUsersSelected && includeUnattributed
+  const selectedUserIds = useMemo(() => new Set(
+    members
+      .filter((member, index) => selectedUserKeys.includes(memberKey(member, index)))
+      .map((member) => String(member?.user_id || ''))
+      .filter(Boolean)
+  ), [members, selectedUserKeys])
+  const selectedMembers = useMemo(() => members.filter((member, index) => selectedUserKeys.includes(memberKey(member, index))), [members, selectedUserKeys])
+  const selectionParts = []
+  if (allUsersSelected) selectionParts.push('alle gebruikers')
+  else if (selectedMembers.length > 0) selectionParts.push(selectedMembers.map((member) => member.email || member.user_id || 'Onbekende gebruiker').join(', '))
+  if (includeUnattributed) selectionParts.push('niet aan gebruiker herleidbaar')
+  const selectionLabel = selectionParts.length > 0 ? selectionParts.join(' + ') : 'geen categorie geselecteerd'
+
+  const visibleRows = useMemo(() => {
+    const rows = screenData?.rows || []
+    if (fullSelection) return rows
+    return rows.filter((row) => {
+      const actorUserId = rowActorUserId(row)
+      if (!actorUserId) return includeUnattributed
+      return selectedUserIds.has(actorUserId)
+    })
+  }, [screenData, fullSelection, includeUnattributed, selectedUserIds])
+
+  function toggleUser(key) {
+    setSelectedUserKeys((current) => current.includes(key) ? current.filter((item) => item !== key) : [...current, key])
+  }
+
+  if (error) return <div role="alert">{error}</div>
+  if (!overview) return <div role="status">Huishouden wordt geladen…</div>
+  const name = overview.household?.name || overview.household?.household_id || householdId
+
+  return (
+    <section data-testid="superuser-household-inspector">
+      <div style={{ border: '1px solid #d4ddd4', background: '#f7faf7', padding: 12, borderRadius: 6, marginBottom: 14 }}><strong>Superuser — Huishouden {name} — Alleen lezen</strong></div>
+      <h2 style={{ fontSize: 20, marginBottom: 8 }}>Gebruikers</h2>
+      <DataTable
+        columns={memberColumns}
+        data={selectionRows}
+        dataTestId="superuser-household-members-table"
+        getRowKey={(row, index) => memberKey(row, index)}
+        defaultSort={{ key: 'email', direction: 'asc' }}
+        emptyMessage="Geen gebruikers gevonden voor dit huishouden."
+        renderRow={(member, index) => {
+          const key = memberKey(member, index)
+          const checked = selectedUserKeys.includes(key)
+          return <tr key={key}><td className="rz-center"><input type="checkbox" checked={checked} onChange={() => toggleUser(key)} aria-label={`Toon details voor ${member.email || member.user_id || index + 1}`} /></td><td>{member.email || member.user_id || ''}</td><td>{member.role || ''}</td><td>{member.status || ''}</td></tr>
+        }}
+      />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, marginTop: 24, marginBottom: 18 }}>
+        {HOUSEHOLD_SCREENS.map(([key, label]) => <button key={key} type="button" className={screen === key ? 'rz-tab rz-tab-active' : 'rz-tab'} onClick={() => setScreen(key)}>{label}</button>)}
+      </div>
+      <h2 style={{ fontSize: 20 }}>{HOUSEHOLD_SCREENS.find(([key]) => key === screen)?.[1]}</h2>
+      {screen === 'diagnose' ? <Diagnostics data={overview.diagnostics} selectionLabel={selectionLabel} attributionSummary={attributionSummary} /> : !screenData ? <p>Gegevens worden geladen…</p> : <><p style={{ marginTop: 0 }}>Filter: <strong>{selectionLabel}</strong>.</p><ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} /></>}
+    </section>
+  )
+}
+
+function HouseholdsSection({ selectedId, onSelectHousehold }) {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    fetchJsonWithAuth('/api/superuser/households')
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(payload?.detail || 'Huishoudens konden niet worden geladen.')
+        if (!cancelled) setItems(payload.items || [])
+      })
+      .catch((e) => { if (!cancelled) setError(String(e?.message || e)) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  const columns = useMemo(() => [
+    { key: 'name', header: 'Huishouden', width: 250, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.name || row.household_id || '' },
+    { key: 'member_count', header: 'Gebruikers', width: 120, sortable: true, align: 'right', getValue: (row) => row.member_count ?? 0 },
+    { key: 'last_active_at', header: 'Laatst actief', width: 190, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.last_active_at ? String(row.last_active_at) : '—' },
+    { key: 'receipt_count', header: 'Bonnen', width: 110, sortable: true, align: 'right', getValue: (row) => row.receipt_count ?? 0 },
+    { key: 'status', header: 'Status', width: 130, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.status || 'active' },
+  ], [])
+
+  if (selectedId) return <HouseholdInspector householdId={selectedId} />
+  return (
+    <section aria-label="Huishoudens" data-testid="superuser-households">
+      <h2 style={{ marginTop: 0, fontSize: 20 }}>Huishoudens</h2>
+      <p style={{ marginTop: 0 }}>Dubbelklik op een huishouden om het alleen-lezen te bekijken.</p>
+      {error && <div role="alert">{error}</div>}
+      {loading ? <p>Huishoudens worden geladen…</p> : <DataTable columns={columns} data={items} dataTestId="superuser-households-table" getRowKey={(row) => row.household_id} defaultSort={{ key: 'name', direction: 'asc' }} emptyMessage="Geen huishoudens gevonden." renderRow={(item) => <tr key={item.household_id} onDoubleClick={() => onSelectHousehold(item.household_id)} title="Dubbelklik om dit huishouden alleen-lezen te bekijken">{columns.map((column) => <td key={column.key} className={column.align === 'right' ? 'rz-num' : ''}>{String(column.getValue(item) ?? '')}</td>)}</tr>} />}
     </section>
   )
 }
@@ -20,58 +245,39 @@ function EmptySection({ title }) {
 export default function SuperuserDashboardPage() {
   const [access, setAccess] = useState(null)
   const [error, setError] = useState('')
+  const [activeTab, setActiveTab] = useState('Overzicht')
+  const [selectedHouseholdId, setSelectedHouseholdId] = useState(null)
 
   useEffect(() => {
     let cancelled = false
-    async function bootstrap() {
-      try {
-        const response = await fetchJsonWithAuth('/api/superuser/bootstrap')
+    fetchJsonWithAuth('/api/superuser/bootstrap')
+      .then(async (response) => {
         const payload = await response.json().catch(() => ({}))
         if (!response.ok) throw new Error(payload?.detail || 'Superuser-toegang kon niet worden gevalideerd.')
         if (cancelled) return
         setAccess(payload)
         await fetchJsonWithAuth('/api/superuser/audit/open', { method: 'POST' })
-      } catch (nextError) {
-        if (!cancelled) setError(String(nextError?.message || nextError || 'Superuser-toegang mislukt.'))
-      }
-    }
-    bootstrap()
+      })
+      .catch((e) => { if (!cancelled) setError(String(e?.message || e || 'Superuser-toegang mislukt.')) })
     return () => { cancelled = true }
   }, [])
+
+  function handleTopTabChange(tab) {
+    setActiveTab(tab)
+    if (tab === 'Huishoudens') setSelectedHouseholdId(null)
+  }
 
   return (
     <div className="rz-screen" data-testid="superuser-dashboard">
       <Header title="Rezzerv Beheercentrum" />
-      <div className="rz-content">
-        <div className="rz-content-inner">
-          <ScreenCard fullWidth>
-            {error ? (
-              <div role="alert">{error}</div>
-            ) : !access ? (
-              <div role="status">Superuser-toegang wordt gecontroleerd…</div>
-            ) : (
-              <>
-                <div
-                  role="status"
-                  aria-label="Superuser alleen-lezen status"
-                  style={{
-                    marginBottom: 16,
-                    padding: '10px 12px',
-                    border: '1px solid #d4ddd4',
-                    borderRadius: 6,
-                    background: '#f7faf7',
-                  }}
-                >
-                  <strong>Superuser</strong> — beheercentrum. Toegang: <strong>alleen lezen</strong>.
-                </div>
-                <Tabs tabs={Array.isArray(access.tabs) ? access.tabs : TABS} defaultTab="Overzicht">
-                  {(activeTab) => <EmptySection title={activeTab} />}
-                </Tabs>
-              </>
-            )}
-          </ScreenCard>
-        </div>
-      </div>
+      <div className="rz-content"><div className="rz-content-inner"><ScreenCard fullWidth>
+        {error ? <div role="alert">{error}</div> : !access ? <div role="status">Superuser-toegang wordt gecontroleerd…</div> : <>
+          <div role="status" aria-label="Superuser alleen-lezen status" style={{ marginBottom: 16, padding: '10px 12px', border: '1px solid #d4ddd4', borderRadius: 6, background: '#f7faf7' }}><strong>Superuser</strong> — beheercentrum. Toegang: <strong>alleen lezen</strong>.</div>
+          <Tabs tabs={Array.isArray(access.tabs) ? access.tabs : TABS} activeTab={activeTab} onTabChange={handleTopTabChange}>
+            {(tab) => tab === 'Huishoudens' ? <HouseholdsSection selectedId={selectedHouseholdId} onSelectHousehold={setSelectedHouseholdId} /> : <EmptySection title={tab} />}
+          </Tabs>
+        </>}
+      </ScreenCard></div></div>
     </div>
   )
 }

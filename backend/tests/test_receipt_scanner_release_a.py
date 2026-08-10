@@ -53,6 +53,19 @@ def _request() -> ScanRequestV1:
     )
 
 
+def _roundtrip(expected: ReceiptParseResult) -> tuple[CanonicalReceiptV1, ReceiptParseResult]:
+    adapter = RezzervLegacyScannerAdapter(parser=lambda *_args: expected)
+    request = _request()
+    submission = adapter.submit(request)
+    assert submission.status == "completed"
+    canonical = validate_canonical_receipt(
+        submission.result,
+        expected_scan_id=request.scan_id,
+        expected_sha256=request.document.sha256,
+    )
+    return canonical, canonical_to_receipt_parse_result(canonical)
+
+
 def test_scan_request_does_not_serialize_document_bytes_or_household_context():
     request = _request()
     payload = request.model_dump(mode="json")
@@ -65,12 +78,7 @@ def test_scan_request_does_not_serialize_document_bytes_or_household_context():
 
 def test_legacy_adapter_roundtrip_preserves_existing_receipt_dto_semantics():
     expected = _legacy_result()
-    adapter = RezzervLegacyScannerAdapter(parser=lambda *_args: expected)
-    request = _request()
-    submission = adapter.submit(request)
-    assert submission.status == "completed"
-    canonical = validate_canonical_receipt(submission.result, expected_scan_id=request.scan_id, expected_sha256=request.document.sha256)
-    actual = canonical_to_receipt_parse_result(canonical)
+    _canonical, actual = _roundtrip(expected)
     assert actual.is_receipt is expected.is_receipt
     assert actual.parse_status == expected.parse_status
     assert actual.store_name == expected.store_name
@@ -81,6 +89,82 @@ def test_legacy_adapter_roundtrip_preserves_existing_receipt_dto_semantics():
     assert actual.currency == expected.currency
     assert actual.lines == expected.lines
     assert actual.parser_diagnostics == expected.parser_diagnostics
+
+
+def test_legacy_adapter_preserves_review_needed_receipt_without_total():
+    expected = ReceiptParseResult(
+        is_receipt=True,
+        parse_status="review_needed",
+        confidence_score=0.62,
+        store_name="Lidl",
+        store_branch="Arnhem",
+        purchase_at="2026-02-19",
+        total_amount=None,
+        discount_total=Decimal("0.00"),
+        currency="EUR",
+        lines=[{
+            "raw_label": "TOMATEN 2,99",
+            "normalized_label": "Tomaten",
+            "quantity": Decimal("1"),
+            "unit": "piece",
+            "unit_price": Decimal("2.99"),
+            "line_total": Decimal("2.99"),
+            "discount_amount": Decimal("0.00"),
+            "barcode": None,
+            "confidence_score": 0.75,
+        }],
+        parser_diagnostics={"reason": "total_unresolved"},
+    )
+    canonical, actual = _roundtrip(expected)
+    assert canonical.quality is not None
+    assert canonical.quality.requires_review is True
+    assert actual.is_receipt is True
+    assert actual.parse_status == "review_needed"
+    assert actual.total_amount is None
+    assert len(actual.lines or []) == 1
+
+
+def test_legacy_adapter_preserves_parsed_receipt_without_article_lines():
+    expected = ReceiptParseResult(
+        is_receipt=True,
+        parse_status="parsed",
+        confidence_score=0.67,
+        store_name="Lidl",
+        store_branch="Arnhem",
+        purchase_at="2026-02-19",
+        total_amount=Decimal("33.80"),
+        discount_total=Decimal("0.00"),
+        currency="EUR",
+        lines=[],
+        parser_diagnostics={"reason": "articles_unresolved"},
+    )
+    canonical, actual = _roundtrip(expected)
+    assert canonical.quality is not None
+    assert canonical.quality.requires_review is True
+    assert actual.is_receipt is True
+    assert actual.parse_status == "parsed"
+    assert actual.total_amount == Decimal("33.80")
+    assert actual.lines == []
+
+
+def test_contract_still_rejects_incomplete_receipt_when_review_is_not_required():
+    payload = {
+        "schema_version": "1.0",
+        "scan_id": "rscan_strict_completed",
+        "provider": {"code": "fake-test"},
+        "status": "completed",
+        "document": {"sha256": "d" * 64, "mime_type": "image/jpeg", "page_count": 1},
+        "receipt": {
+            "store": {"name": "Lidl"},
+            "transaction": {"purchase_date": "2026-02-19", "currency": "EUR"},
+            "totals": {"grand_total": None},
+            "lines": [],
+            "warnings": [],
+        },
+        "quality": {"overall_confidence": 0.95, "requires_review": False},
+    }
+    with pytest.raises(Exception):
+        CanonicalReceiptV1.model_validate(payload)
 
 
 def test_legacy_failed_result_stays_failed_without_persistable_receipt_payload():

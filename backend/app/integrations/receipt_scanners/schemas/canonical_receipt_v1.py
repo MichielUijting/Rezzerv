@@ -136,8 +136,12 @@ class ReceiptBodyV1(ContractModel):
 
     @model_validator(mode="after")
     def validate_lines(self) -> "ReceiptBodyV1":
+        # A legacy Rezzerv parser result may already be a recognized receipt while
+        # article extraction is still incomplete. Empty lines are therefore a
+        # valid intermediate/reviewable payload; CanonicalReceiptV1 decides below
+        # whether that incompleteness is permitted for the reported quality state.
         if not self.lines:
-            raise ValueError("receipt.lines must contain at least one visible receipt line")
+            return self
         line_numbers = [line.line_number for line in self.lines]
         if len(line_numbers) != len(set(line_numbers)):
             raise ValueError("receipt.lines contains duplicate line_number values")
@@ -190,8 +194,14 @@ class CanonicalReceiptV1(ContractModel):
                 raise ValueError("receipt is required when status=completed")
             if self.quality is None:
                 raise ValueError("quality is required when status=completed")
-            if self.receipt.totals.grand_total is None:
-                raise ValueError("receipt.totals.grand_total is required when status=completed")
+            # Preserve the v01.12.76 semantics: a recognized but incomplete receipt
+            # is persistable when it explicitly requires review. Only a result that
+            # claims no review is needed must satisfy the strict completion contract.
+            if not self.quality.requires_review:
+                if self.receipt.totals.grand_total is None:
+                    raise ValueError("receipt.totals.grand_total is required for a completed receipt that does not require review")
+                if not self.receipt.lines:
+                    raise ValueError("receipt.lines must contain at least one visible receipt line for a completed receipt that does not require review")
             if self.error is not None:
                 raise ValueError("error must be absent when status=completed")
         elif self.status == "failed":
