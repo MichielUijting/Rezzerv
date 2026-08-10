@@ -26,7 +26,9 @@ jobs:
         run: docker build --no-cache -t rezzerv-lidl13-e2e -f backend/Dockerfile backend
 
       - name: Draai Lidl-13 productie-importketen
+        shell: bash
         run: |
+          set -euo pipefail
           docker run --rm \
             -e PYTHONPATH=/app \
             rezzerv-lidl13-e2e \
