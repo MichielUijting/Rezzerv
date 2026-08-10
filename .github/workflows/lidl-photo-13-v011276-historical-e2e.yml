@@ -1,0 +1,120 @@
+name: Lidl photo 13 historical v01.12.76 E2E
+
+on:
+  push:
+    branches:
+      - fix/receipt-scanner-legacy-equivalence-v01.12.85
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lidl-photo-13-v011276:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current branch with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Preserve exact PO fixture and historical runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "52a645b56b90037c34a54e61afc594c591874d5b8f9e5e3632332a80ecd5013b  backend/tests/fixtures/lidl_photo_13.jpeg" | sha256sum --check --strict
+          cp backend/tests/fixtures/lidl_photo_13.jpeg /tmp/lidl_photo_13.jpeg
+          cat > /tmp/lidl13_historical_e2e.py <<'PY'
+          from __future__ import annotations
+          import hashlib, importlib, os, sys, tempfile
+          from pathlib import Path
+          from sqlalchemy import text
+
+          EXPECTED_SHA256 = "52a645b56b90037c34a54e61afc594c591874d5b8f9e5e3632332a80ecd5013b"
+          FIXTURE = Path('/app/tests/fixtures/lidl_photo_13.jpeg')
+
+          with tempfile.TemporaryDirectory(prefix='rezzerv-lidl13-v011276-') as tmp:
+              root = Path(tmp)
+              os.environ['DATABASE_URL'] = f"sqlite:///{(root / 'rezzerv.sqlite').as_posix()}"
+              os.environ['RECEIPT_STORAGE_ROOT'] = str(root / 'receipts')
+              if '/app' not in sys.path:
+                  sys.path.insert(0, '/app')
+              main = importlib.import_module('app.main')
+              for name, function in sorted(vars(main).items()):
+                  if name.startswith('ensure_release_') and name.endswith('_schema') and callable(function):
+                      function()
+
+              fixture_bytes = FIXTURE.read_bytes()
+              actual_sha = hashlib.sha256(fixture_bytes).hexdigest()
+              assert actual_sha == EXPECTED_SHA256, (actual_sha, EXPECTED_SHA256)
+
+              result = main.import_uploaded_receipt_payload(
+                  household_id='0',
+                  filename='lidl_photo_13.jpeg',
+                  file_bytes=fixture_bytes,
+                  source_id=None,
+                  mime_type='image/jpeg',
+                  reject_non_receipt=False,
+                  create_failed_receipt_table=False,
+                  include_debug=True,
+              )
+              receipt_table_id = str(result.get('receipt_table_id') or '').strip()
+              assert receipt_table_id, f"v01.12.76 produced no receipt_table_id: {result}"
+
+              with main.engine.begin() as conn:
+                  header = conn.execute(text(
+                      'SELECT id, household_id, store_name, purchase_at, total_amount, parse_status, line_count '
+                      'FROM receipt_tables WHERE id=:id'
+                  ), {'id': receipt_table_id}).mappings().first()
+                  lines = conn.execute(text(
+                      'SELECT raw_label, unit_price, line_total FROM receipt_table_lines '
+                      'WHERE receipt_table_id=:id ORDER BY line_index'
+                  ), {'id': receipt_table_id}).mappings().all()
+              assert header is not None
+              assert lines, f"v01.12.76 persisted no article lines: {header}"
+              print({
+                  'status': 'passed',
+                  'tested_version': 'Rezzerv-MVP-v01.12.76',
+                  'fixture_sha256': actual_sha,
+                  'receipt_table_id': receipt_table_id,
+                  'store_name': header.get('store_name'),
+                  'purchase_at': str(header.get('purchase_at') or ''),
+                  'total_amount': str(header.get('total_amount') or ''),
+                  'parse_status': header.get('parse_status'),
+                  'line_count': header.get('line_count'),
+                  'persisted_lines': len(lines),
+                  'first_line': dict(lines[0]),
+              })
+          PY
+
+      - name: Restore backend exactly to v01.12.76
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout be8494ed9840813155deafe3925f87cc4e80f427 -- backend
+          mkdir -p backend/tests/fixtures
+          cp /tmp/lidl_photo_13.jpeg backend/tests/fixtures/lidl_photo_13.jpeg
+          cp /tmp/lidl13_historical_e2e.py backend/tests/lidl13_historical_e2e.py
+          test "$(cat backend/VERSION.txt)" = "Rezzerv-MVP-v01.12.76"
+          echo "Historical backend: $(cat backend/VERSION.txt) @ be8494ed9840813155deafe3925f87cc4e80f427"
+
+      - name: Build historical production OCR runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --no-cache -t rezzerv-lidl13-v011276 -f backend/Dockerfile backend
+
+      - name: Run exact Lidl photo 13 on v01.12.76
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -e PYTHONPATH=/app rezzerv-lidl13-v011276 python /app/tests/lidl13_historical_e2e.py | tee lidl-photo-13-v011276.log
+
+      - name: Upload historical diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lidl-photo-13-v011276-diagnostic
+          path: lidl-photo-13-v011276.log
+          if-no-files-found: warn
+          retention-days: 3
