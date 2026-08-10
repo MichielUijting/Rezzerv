@@ -32,11 +32,11 @@ def _legacy_result() -> ReceiptParseResult:
         lines=[{
             "raw_label": "2 MELK HALF VOL 1L 2,78",
             "normalized_label": "Melk halfvol 1L",
-            "quantity": Decimal("2"),
+            "quantity": 2.0,
             "unit": "piece",
-            "unit_price": Decimal("1.39"),
-            "line_total": Decimal("2.78"),
-            "discount_amount": Decimal("0.00"),
+            "unit_price": 1.39,
+            "line_total": 2.78,
+            "discount_amount": 0.0,
             "barcode": None,
             "confidence_score": 0.96,
         }],
@@ -81,6 +81,10 @@ def test_legacy_adapter_roundtrip_preserves_existing_receipt_dto_semantics():
     assert actual.currency == expected.currency
     assert actual.lines == expected.lines
     assert actual.parser_diagnostics == expected.parser_diagnostics
+    assert isinstance(actual.lines[0]["quantity"], float)
+    assert isinstance(actual.lines[0]["unit_price"], float)
+    assert isinstance(actual.lines[0]["line_total"], float)
+    assert isinstance(actual.lines[0]["discount_amount"], float)
 
 
 def test_legacy_failed_result_stays_failed_without_persistable_receipt_payload():
