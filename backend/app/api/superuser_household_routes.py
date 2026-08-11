@@ -173,6 +173,50 @@ def _safe_rows(
     return [dict(row) for row in rows]
 
 
+def _shopping_rows(conn: Connection, household_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    """Read the same active shopping-list records shown by the ordinary Winkelen action, without creating or mutating a list."""
+    list_cols = _columns(conn, "shopping_lists")
+    item_cols = _columns(conn, "shopping_list_items")
+    required_list = {"id", "household_id", "status"}
+    required_items = {"id", "shopping_list_id", "household_id", "article_name"}
+    if not required_list.issubset(list_cols) or not required_items.issubset(item_cols):
+        return []
+
+    active_list = conn.execute(text("""
+        SELECT id
+        FROM shopping_lists
+        WHERE CAST(household_id AS TEXT)=:household_id
+          AND lower(trim(COALESCE(status, '')))='active'
+        ORDER BY created_at DESC
+        LIMIT 1
+    """), {"household_id": household_id}).mappings().first()
+    if not active_list:
+        return []
+
+    preferred = ("id", "article_name", "product_type_name", "size", "note", "checked")
+    selected = [column for column in preferred if column in item_cols]
+    if not selected:
+        return []
+    order_parts = []
+    if "checked" in item_cols:
+        order_parts.append("checked ASC")
+    if "article_name" in item_cols:
+        order_parts.append("lower(article_name) ASC")
+    if "created_at" in item_cols:
+        order_parts.append("created_at ASC")
+    order_sql = f" ORDER BY {', '.join(order_parts)}" if order_parts else ""
+    clauses = [
+        "CAST(shopping_list_id AS TEXT)=:shopping_list_id",
+        "CAST(household_id AS TEXT)=:household_id",
+        *_active_record_clauses(item_cols),
+    ]
+    rows = conn.execute(
+        text(f"SELECT {', '.join(selected)} FROM shopping_list_items WHERE {' AND '.join(clauses)}{order_sql} LIMIT :limit"),
+        {"shopping_list_id": str(active_list["id"]), "household_id": household_id, "limit": limit},
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
 def _actor_rows(
     conn: Connection,
     table: str,
@@ -350,8 +394,7 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
                     user_id=selected_user_id,
                 )
             elif key == "winkelen":
-                table = next((t for t in ("shopping_list", "shopping_list_items", "inkooplijst") if _columns(conn, t)), "")
-                rows = _safe_rows(conn, table, household_id, ("id", "naam", "name", "artikel", "quantity", "aantal", "status", "updated_at", "created_at", "user_id"), user_id=selected_user_id) if table else []
+                rows = _shopping_rows(conn, household_id)
             elif key == "prognoses":
                 table = next((t for t in ("forecasts", "prognoses", "purchase_forecasts") if _columns(conn, t)), "")
                 rows = _safe_rows(conn, table, household_id, ("id", "household_article_id", "article_name", "forecast", "quantity", "period", "updated_at", "created_at", "user_id"), user_id=selected_user_id) if table else []
