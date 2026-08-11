@@ -6,6 +6,7 @@ import DataTable from '../../ui/DataTable.jsx'
 import Button from '../../ui/Button.jsx'
 import Checkbox from '../../ui/Checkbox.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
+import SuperuserOverviewSection from './SuperuserOverviewSection.jsx'
 
 const TABS = ['Overzicht', 'Huishoudens', 'Gebruik', 'Kassabonnen', 'Systeem']
 const HOUSEHOLD_SCREENS = [
@@ -136,7 +137,8 @@ function displayValue(key, value) {
   return dutchValue(value)
 }
 
-function EmptySection({ title }) {
+function EmptySection({ title, onOpenHousehold }) {
+  if (title === 'Overzicht') return <SuperuserOverviewSection onOpenHousehold={onOpenHousehold} />
   return <section aria-label={title}><h2 style={{ marginTop: 0, fontSize: 20 }}>{title}</h2><p style={{ marginBottom: 0 }}>Dit onderdeel volgt in een volgende Superuser-release.</p></section>
 }
 
@@ -518,6 +520,11 @@ export default function SuperuserDashboardPage() {
     if (tab === 'Huishoudens') setSelectedHouseholdId(null)
   }
 
+  function openHouseholdFromOverview(householdId) {
+    setSelectedHouseholdId(householdId)
+    setActiveTab('Huishoudens')
+  }
+
   return (
     <div className="rz-screen" data-testid="superuser-dashboard">
       <Header title="Rezzerv Beheercentrum" />
@@ -525,7 +532,9 @@ export default function SuperuserDashboardPage() {
         {error ? <div role="alert">{error}</div> : !access ? <div role="status">Superuser-toegang wordt gecontroleerd…</div> : <>
           <div role="status" aria-label="Superuser alleen-lezen status" style={{ marginBottom: 16, padding: '10px 12px', border: '1px solid #d4ddd4', borderRadius: 6, background: '#f7faf7' }}><strong>Superuser</strong> — beheercentrum. Toegang: <strong>alleen lezen</strong>.</div>
           <Tabs tabs={Array.isArray(access.tabs) ? access.tabs : TABS} activeTab={activeTab} onTabChange={handleTopTabChange}>
-            {(tab) => tab === 'Huishoudens' ? <HouseholdsSection selectedId={selectedHouseholdId} onSelectHousehold={setSelectedHouseholdId} /> : <EmptySection title={tab} />}
+            {(tab) => tab === 'Huishoudens'
+              ? <HouseholdsSection selectedId={selectedHouseholdId} onSelectHousehold={setSelectedHouseholdId} />
+              : <EmptySection title={tab} onOpenHousehold={openHouseholdFromOverview} />}
           </Tabs>
         </>}
       </ScreenCard></div></div>
