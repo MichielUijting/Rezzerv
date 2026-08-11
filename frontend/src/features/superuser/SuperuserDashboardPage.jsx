@@ -7,6 +7,7 @@ import Button from '../../ui/Button.jsx'
 import Checkbox from '../../ui/Checkbox.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 import SuperuserOverviewSection from './SuperuserOverviewSection.jsx'
+import SuperuserUsageSection from './SuperuserUsageSection.jsx'
 
 const TABS = ['Overzicht', 'Huishoudens', 'Gebruik', 'Kassabonnen', 'Systeem']
 const HOUSEHOLD_SCREENS = [
@@ -139,6 +140,7 @@ function displayValue(key, value) {
 
 function EmptySection({ title, onOpenHousehold }) {
   if (title === 'Overzicht') return <SuperuserOverviewSection onOpenHousehold={onOpenHousehold} />
+  if (title === 'Gebruik') return <SuperuserUsageSection onOpenHousehold={onOpenHousehold} />
   return <section aria-label={title}><h2 style={{ marginTop: 0, fontSize: 20 }}>{title}</h2><p style={{ marginBottom: 0 }}>Dit onderdeel volgt in een volgende Superuser-release.</p></section>
 }
 

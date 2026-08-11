@@ -57,3 +57,38 @@ def test_superuser_foundation_exposes_read_only_tabs():
         "Kassabonnen",
         "Systeem",
     )
+
+
+def test_usage_projection_reads_existing_operational_data_without_new_tracking():
+    engine = _engine()
+    with engine.begin() as conn:
+        conn.execute(text("CREATE TABLE household_registry(id TEXT PRIMARY KEY, naam TEXT, status TEXT)"))
+        conn.execute(text("CREATE TABLE household_memberships(household_id TEXT, user_id TEXT, status TEXT)"))
+        conn.execute(text("CREATE TABLE receipt_tables(id TEXT PRIMARY KEY, household_id TEXT, created_at TEXT, deleted_at TEXT)"))
+        conn.execute(text("CREATE TABLE inventory_events(id TEXT PRIMARY KEY, household_id TEXT, created_at TEXT)"))
+        conn.execute(text("CREATE TABLE server_sessions(id TEXT PRIMARY KEY, active_household_id TEXT, updated_at TEXT)"))
+        conn.execute(text("INSERT INTO household_registry VALUES ('1', 'Testhuis', 'active')"))
+        conn.execute(text("INSERT INTO household_memberships VALUES ('1', 'u1', 'active')"))
+        conn.execute(text("INSERT INTO household_memberships VALUES ('1', 'u2', 'inactive')"))
+        conn.execute(text("INSERT INTO receipt_tables VALUES ('r1', '1', '2026-08-11T10:00:00', NULL)"))
+        conn.execute(text("INSERT INTO receipt_tables VALUES ('r2', '1', '2026-08-11T11:00:00', '2026-08-11T12:00:00')"))
+        conn.execute(text("INSERT INTO inventory_events VALUES ('e1', '1', '2026-08-11T12:00:00')"))
+        conn.execute(text("INSERT INTO server_sessions VALUES ('s1', '1', '2026-08-11T13:00:00')"))
+
+        payload = superuser_routes._platform_usage(conn)
+
+    assert payload["access"] == "read_only"
+    assert payload["tracking"] == "existing_data_only"
+    assert payload["metrics"]["active_households"] == 1
+    assert payload["metrics"]["receipt_count"] == 1
+    assert payload["metrics"]["inventory_event_count"] == 1
+    assert payload["metrics"]["households_with_session_activity"] == 1
+    assert payload["items"] == [{
+        "household_id": "1",
+        "household_name": "Testhuis",
+        "active_member_count": 1,
+        "receipt_count": 1,
+        "inventory_event_count": 1,
+        "support_thread_count": 0,
+        "last_active_at": "2026-08-11T13:00:00",
+    }]
