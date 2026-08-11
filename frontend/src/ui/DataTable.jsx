@@ -69,20 +69,23 @@ export default function DataTable({
   const { widths, startResize } = useResizableColumnWidths(defaultWidths)
 
   const headerRowRef = useRef(null)
-  const [stickyHeaderOffset, setStickyHeaderOffset] = useState(32)
+  const [stickyHeaderOffset, setStickyHeaderOffset] = useState(42)
 
   useLayoutEffect(() => {
     const headerRow = headerRowRef.current
     if (!headerRow) return
 
     const measure = () => {
-      const height = Math.ceil(headerRow.getBoundingClientRect().height)
+      const offsetHeight = Number(headerRow.offsetHeight || 0)
+      const rectHeight = Number(headerRow.getBoundingClientRect?.().height || 0)
+      const height = Math.ceil(offsetHeight > 0 ? offsetHeight : rectHeight)
       if (height > 0) {
         setStickyHeaderOffset(height)
       }
     }
 
     measure()
+    const animationFrame = window.requestAnimationFrame(measure)
 
     const resizeObserver =
       typeof ResizeObserver !== 'undefined'
@@ -93,6 +96,7 @@ export default function DataTable({
     window.addEventListener('resize', measure)
 
     return () => {
+      window.cancelAnimationFrame(animationFrame)
       resizeObserver?.disconnect()
       window.removeEventListener('resize', measure)
     }
@@ -243,7 +247,7 @@ export default function DataTable({
                       value={activeFilters[column.key] || ''}
                       onChange={(event) => handleFilterChange(column.key, event.target.value)}
                       placeholder={column.filterPlaceholder || 'Filter'}
-                      aria-label={column.filterLabel || `Filter op ${column.label || column.key}`}
+                      aria-label={column.filterLabel || `Filter op ${column.label || column.header || column.key}`}
                     />
                   ) : null}
                 </th>
