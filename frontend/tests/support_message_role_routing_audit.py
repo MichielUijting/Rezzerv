@@ -5,6 +5,7 @@ HOME = ROOT / "src/features/home/HomePage.jsx"
 ROUTER = ROOT / "src/app/router/AppRouter.jsx"
 PLATFORM_PAGE = ROOT / "src/features/support/PlatformSupportPage.jsx"
 SUPPORT_API = ROOT / "src/features/support/supportApi.js"
+SUPERUSER_OVERVIEW = ROOT / "src/features/superuser/SuperuserOverviewSection.jsx"
 
 
 def require(path: Path, *needles: str) -> None:
@@ -18,7 +19,13 @@ def main() -> None:
     require(
         HOME,
         "isPlatformSuperuserFromContext",
-        "visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen'",
+        "if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser",
+        "if (key === 'meldingen') navigate('/meldingen')",
+    )
+    require(
+        SUPERUSER_OVERVIEW,
+        "Meldingen (",
+        "navigate(notificationRoute)",
     )
     require(
         ROUTER,
