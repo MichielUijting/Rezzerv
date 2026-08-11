@@ -49,7 +49,7 @@ const DETAIL_COLUMN_LABELS = {
   aantal: 'Aantal',
   old_quantity: 'Vorig aantal',
   new_quantity: 'Nieuw aantal',
-  note: 'Opmerking',
+  note: 'Notitie',
   effective_at: 'Effectief op',
   recorded_at: 'Vastgelegd op',
   receipt_table_id: 'Technisch kassabon-ID',
