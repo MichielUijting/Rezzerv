@@ -1,13 +1,9 @@
-"""Read-only Superuser beheercentrum foundation routes.
-
-S1 exposes only an access/bootstrap endpoint and an auditable screen-open event.
-No household data or mutation endpoint is introduced in this release.
-"""
+"""Read-only Superuser beheercentrum foundation and platform overview routes."""
 
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Request
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
 
 from app.services.authorization_foundation_service import (
@@ -15,6 +11,7 @@ from app.services.authorization_foundation_service import (
     write_authorization_audit,
 )
 from app.services.server_session_service import SESSION_COOKIE_NAME, resolve_server_session
+from app.services.support_message_service import ensure_support_message_foundation
 
 
 SUPERUSER_ROLE_KEY = "platform.superuser"
@@ -45,6 +42,136 @@ def _require_platform_superuser(conn, raw_session_id: str | None):
     return context
 
 
+def _columns(conn, table_name: str) -> set[str]:
+    inspector = inspect(conn)
+    if table_name not in inspector.get_table_names():
+        return set()
+    return {str(column.get("name") or "") for column in inspector.get_columns(table_name)}
+
+
+def _first(columns: set[str], *candidates: str) -> str | None:
+    return next((candidate for candidate in candidates if candidate in columns), None)
+
+
+def _active_clauses(columns: set[str], *, alias: str = "") -> list[str]:
+    prefix = f"{alias}." if alias else ""
+    clauses: list[str] = []
+    if "deleted_at" in columns:
+        clauses.append(f"{prefix}deleted_at IS NULL")
+    if "is_deleted" in columns:
+        clauses.append(f"COALESCE({prefix}is_deleted, 0) = 0")
+    return clauses
+
+
+def _platform_overview(conn) -> dict:
+    registry_columns = _columns(conn, "household_registry")
+    household_id_column = _first(registry_columns, "id", "household_id")
+    household_name_column = _first(registry_columns, "naam", "name", "household_name")
+    household_status_column = _first(registry_columns, "status")
+
+    active_households = 0
+    if household_id_column:
+        clauses = [*_active_clauses(registry_columns)]
+        if household_status_column:
+            clauses.append(f"lower(trim(COALESCE({household_status_column}, 'active'))) = 'active'")
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        active_households = int(conn.execute(text(f"SELECT COUNT(*) FROM household_registry{where}")).scalar() or 0)
+
+    membership_columns = _columns(conn, "household_memberships")
+    user_column = _first(membership_columns, "user_id", "user_email", "email")
+    active_users = 0
+    if user_column:
+        clauses = [*_active_clauses(membership_columns)]
+        if "status" in membership_columns:
+            clauses.append("lower(trim(COALESCE(status, 'active'))) = 'active'")
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        active_users = int(conn.execute(text(
+            f"SELECT COUNT(DISTINCT CAST({user_column} AS TEXT)) FROM household_memberships{where}"
+        )).scalar() or 0)
+
+    receipt_columns = _columns(conn, "receipt_tables")
+    receipt_count = 0
+    last_receipt_at = None
+    if "household_id" in receipt_columns:
+        clauses = [*_active_clauses(receipt_columns)]
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        receipt_count = int(conn.execute(text(f"SELECT COUNT(*) FROM receipt_tables{where}")).scalar() or 0)
+        date_column = _first(receipt_columns, "purchase_at", "imported_at", "created_at")
+        if date_column:
+            last_receipt_at = conn.execute(text(f"SELECT MAX({date_column}) FROM receipt_tables{where}")).scalar()
+
+    ensure_support_message_foundation(conn)
+    open_notifications = int(conn.execute(text(
+        "SELECT COUNT(*) FROM support_threads WHERE status IN ('Open', 'In behandeling')"
+    )).scalar() or 0)
+
+    attention: dict[str, dict] = {}
+
+    inventory_columns = _columns(conn, "inventory")
+    if "household_id" in inventory_columns and "aantal" in inventory_columns:
+        clauses = ["COALESCE(aantal, 0) < 0", *_active_clauses(inventory_columns)]
+        rows = conn.execute(text(f"""
+            SELECT CAST(household_id AS TEXT) AS household_id, COUNT(*) AS issue_count
+            FROM inventory
+            WHERE {' AND '.join(clauses)}
+            GROUP BY CAST(household_id AS TEXT)
+        """)).mappings().all()
+        for row in rows:
+            household_id = str(row["household_id"])
+            item = attention.setdefault(household_id, {"household_id": household_id, "signals": [], "signal_count": 0})
+            count = int(row["issue_count"] or 0)
+            item["signals"].append(f"{count} negatieve voorraadregel(s)")
+            item["signal_count"] += count
+
+    notification_rows = conn.execute(text("""
+        SELECT CAST(household_id AS TEXT) AS household_id, COUNT(*) AS issue_count
+        FROM support_threads
+        WHERE household_id IS NOT NULL AND status IN ('Open', 'In behandeling')
+        GROUP BY CAST(household_id AS TEXT)
+    """)).mappings().all()
+    for row in notification_rows:
+        household_id = str(row["household_id"])
+        item = attention.setdefault(household_id, {"household_id": household_id, "signals": [], "signal_count": 0})
+        count = int(row["issue_count"] or 0)
+        item["signals"].append(f"{count} open melding(en)")
+        item["signal_count"] += count
+
+    if household_id_column and attention:
+        ids = list(attention)
+        placeholders = ", ".join(f":hid_{index}" for index in range(len(ids)))
+        params = {f"hid_{index}": household_id for index, household_id in enumerate(ids)}
+        name_sql = household_name_column or household_id_column
+        rows = conn.execute(text(f"""
+            SELECT CAST({household_id_column} AS TEXT) AS household_id, {name_sql} AS household_name
+            FROM household_registry
+            WHERE CAST({household_id_column} AS TEXT) IN ({placeholders})
+        """), params).mappings().all()
+        for row in rows:
+            household_id = str(row["household_id"])
+            if household_id in attention:
+                attention[household_id]["household_name"] = str(row["household_name"] or household_id)
+
+    attention_items = []
+    for item in attention.values():
+        item["household_name"] = item.get("household_name") or item["household_id"]
+        item["signal"] = " · ".join(item.pop("signals"))
+        attention_items.append(item)
+    attention_items.sort(key=lambda item: (-int(item["signal_count"]), str(item["household_name"]).lower()))
+
+    return {
+        "access": "read_only",
+        "metrics": {
+            "active_households": active_households,
+            "active_users": active_users,
+            "receipt_count": receipt_count,
+            "open_notifications": open_notifications,
+            "last_receipt_at": last_receipt_at,
+        },
+        "attention_items": attention_items,
+        "notification_route": "/superuser/meldingen",
+    }
+
+
 def create_superuser_router(engine: Engine) -> APIRouter:
     router = APIRouter()
 
@@ -61,6 +188,25 @@ def create_superuser_router(engine: Engine) -> APIRouter:
             "tabs": list(SUPERUSER_TABS),
             "user_id": context.user_id,
         }
+
+    @router.get("/api/superuser/overview")
+    def overview(request: Request):
+        with engine.begin() as conn:
+            context = _require_platform_superuser(
+                conn,
+                request.cookies.get(SESSION_COOKIE_NAME),
+            )
+            payload = _platform_overview(conn)
+            write_authorization_audit(
+                conn,
+                actor_user_id=context.user_id,
+                actor_type="platform_superuser",
+                action="superuser.overview.viewed",
+                object_type="superuser_overview",
+                new_value={"attention_count": len(payload["attention_items"])},
+                reason="Superuser bekeek platformoverzicht",
+            )
+        return payload
 
     @router.post("/api/superuser/audit/open", status_code=204)
     def audit_open(request: Request):
