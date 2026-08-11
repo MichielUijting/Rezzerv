@@ -67,7 +67,7 @@ def test_superuser_winkelen_frontend_uses_same_visible_semantics_as_regular_wink
         ('article_name', 'Artikel'),
         ('product_type_name', 'Producttype'),
         ('size', 'Omvang'),
-        ('note', 'Opmerking'),
+        ('note', 'Notitie'),
         ('checked', 'Gekocht'),
     ):
         assert f"{key}: '{label}'" in source
