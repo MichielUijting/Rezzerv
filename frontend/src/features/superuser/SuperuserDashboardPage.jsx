@@ -18,6 +18,49 @@ const ATTRIBUTION_DIAGNOSTIC_SCREENS = [
 const UNATTRIBUTED_KEY = '__unattributed__'
 const PAGE_SIZE = 10
 
+const DETAIL_COLUMN_LABELS = {
+  id: 'Technisch ID',
+  retailer: 'Winkelketen',
+  winkel: 'Winkel',
+  purchase_at: 'Aankoopdatum',
+  purchase_date: 'Aankoopdatum',
+  status: 'Status',
+  source: 'Bron',
+  imported_at: 'Geïmporteerd op',
+  created_at: 'Aangemaakt op',
+  updated_at: 'Gewijzigd op',
+  actor_user_id: 'Technisch gebruiker-ID',
+  actor_attribution_source: 'Herkomst gebruiker',
+  user_id: 'Technisch gebruiker-ID',
+  article_id: 'Technisch artikel-ID',
+  household_article_id: 'Technisch huishoudartikel-ID',
+  article_name: 'Artikel',
+  naam: 'Artikel',
+  name: 'Naam',
+  artikel: 'Artikel',
+  location_id: 'Technisch locatie-ID',
+  location_label: 'Locatie',
+  event_type: 'Mutatietype',
+  quantity: 'Aantal',
+  aantal: 'Aantal',
+  old_quantity: 'Vorig aantal',
+  new_quantity: 'Nieuw aantal',
+  note: 'Notitie',
+  effective_at: 'Effectief op',
+  recorded_at: 'Vastgelegd op',
+  receipt_table_id: 'Technisch kassabon-ID',
+  source_reference: 'Bronreferentie',
+  import_status: 'Importstatus',
+  approved_at: 'Goedgekeurd op',
+  processed_at: 'Verwerkt op',
+  forecast: 'Prognose',
+  period: 'Periode',
+}
+
+function detailColumnLabel(key) {
+  return DETAIL_COLUMN_LABELS[key] || `Gegeven (${String(key || '').replaceAll('_', ' ')})`
+}
+
 function EmptySection({ title }) {
   return <section aria-label={title}><h2 style={{ marginTop: 0, fontSize: 20 }}>{title}</h2><p style={{ marginBottom: 0 }}>Dit onderdeel volgt in een volgende Superuser-release.</p></section>
 }
@@ -55,7 +98,7 @@ function ReadOnlyTable({ rows, dataTestId, showTechnicalIds = false }) {
       .filter((key) => showTechnicalIds || !isTechnicalKey(key))
       .map((key, index) => ({
         key,
-        header: key.replaceAll('_', ' '),
+        header: detailColumnLabel(key),
         width: index === 0 ? 190 : 145,
         sortable: true,
         filterable: true,
