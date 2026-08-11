@@ -14,23 +14,16 @@ function defaultGetValue(row, column) {
 }
 
 function buildDefaultWidths(columns) {
-  return Object.fromEntries(
-    columns.map((column) => [column.key, Number(column.width || 120)])
-  )
+  return Object.fromEntries(columns.map((column) => [column.key, Number(column.width || 120)]))
 }
 
 function buildSortDefaults(columns, fallbackSort = null) {
   const defaults = {}
-
   columns.forEach((column) => {
     if (!column?.sortable) return
     defaults[column.key] = column.defaultDirection || (column.align === 'right' ? 'desc' : 'asc')
   })
-
-  if (fallbackSort?.key && !defaults[fallbackSort.key]) {
-    defaults[fallbackSort.key] = fallbackSort.direction || 'asc'
-  }
-
+  if (fallbackSort?.key && !defaults[fallbackSort.key]) defaults[fallbackSort.key] = fallbackSort.direction || 'asc'
   return defaults
 }
 
@@ -55,46 +48,28 @@ export default function DataTable({
   renderFooter = null,
   pagination = false,
   pageSize = 10,
+  paginationActions = null,
 }) {
-  const visibleColumns = useMemo(
-    () => columns.filter((column) => column && column.hidden !== true),
-    [columns]
-  )
-
-  const defaultWidths = useMemo(
-    () => buildDefaultWidths(visibleColumns),
-    [visibleColumns]
-  )
-
+  const visibleColumns = useMemo(() => columns.filter((column) => column && column.hidden !== true), [columns])
+  const defaultWidths = useMemo(() => buildDefaultWidths(visibleColumns), [visibleColumns])
   const { widths, startResize } = useResizableColumnWidths(defaultWidths)
-
   const headerRowRef = useRef(null)
   const [stickyHeaderOffset, setStickyHeaderOffset] = useState(42)
 
   useLayoutEffect(() => {
     const headerRow = headerRowRef.current
     if (!headerRow) return
-
     const measure = () => {
       const offsetHeight = Number(headerRow.offsetHeight || 0)
       const rectHeight = Number(headerRow.getBoundingClientRect?.().height || 0)
       const height = Math.ceil(offsetHeight > 0 ? offsetHeight : rectHeight)
-      if (height > 0) {
-        setStickyHeaderOffset(height)
-      }
+      if (height > 0) setStickyHeaderOffset(height)
     }
-
     measure()
     const animationFrame = window.requestAnimationFrame(measure)
-
-    const resizeObserver =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(measure)
-        : null
-
+    const resizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(measure) : null
     resizeObserver?.observe(headerRow)
     window.addEventListener('resize', measure)
-
     return () => {
       window.cancelAnimationFrame(animationFrame)
       resizeObserver?.disconnect()
@@ -105,77 +80,48 @@ export default function DataTable({
   const [internalFilters, setInternalFilters] = useState({})
   const [internalSort, setInternalSort] = useState(defaultSort || { key: '', direction: 'asc' })
   const [page, setPage] = useState(1)
-
   const activeFilters = filterState || internalFilters
   const activeSort = sortState || internalSort
-
   const hasFilters = visibleColumns.some((column) => column.filterable)
 
   function handleFilterChange(key, value) {
-    if (typeof onFilterChange === 'function') {
-      onFilterChange(key, value)
-      return
-    }
-
+    if (typeof onFilterChange === 'function') return onFilterChange(key, value)
     setInternalFilters((current) => ({ ...current, [key]: value }))
   }
 
   function handleSort(columnKey) {
     const sortDefaults = buildSortDefaults(visibleColumns, defaultSort)
     const next = nextSortState(activeSort, columnKey, sortDefaults)
-
-    if (typeof onSortChange === 'function') {
-      onSortChange(next)
-      return
-    }
-
+    if (typeof onSortChange === 'function') return onSortChange(next)
     setInternalSort(next)
   }
 
-  const filteredData = useMemo(() => {
-    return data.filter((row) => {
-      return visibleColumns.every((column) => {
-        if (!column.filterable) return true
-
-        const filterValue = normalizeText(activeFilters[column.key])
-        if (!filterValue) return true
-
-        const rawValue = typeof column.getFilterValue === 'function'
-          ? column.getFilterValue(row)
-          : typeof column.getValue === 'function'
-            ? column.getValue(row)
-            : defaultGetValue(row, column)
-
-        return normalizeText(rawValue).includes(filterValue)
-      })
-    })
-  }, [data, visibleColumns, activeFilters])
+  const filteredData = useMemo(() => data.filter((row) => visibleColumns.every((column) => {
+    if (!column.filterable) return true
+    const filterValue = normalizeText(activeFilters[column.key])
+    if (!filterValue) return true
+    const rawValue = typeof column.getFilterValue === 'function'
+      ? column.getFilterValue(row)
+      : typeof column.getValue === 'function'
+        ? column.getValue(row)
+        : defaultGetValue(row, column)
+    return normalizeText(rawValue).includes(filterValue)
+  })), [data, visibleColumns, activeFilters])
 
   const sortedData = useMemo(() => {
-    const sortGetters = Object.fromEntries(
-      visibleColumns.map((column) => [
-        column.key,
-        (row) => {
-          if (typeof column.getSortValue === 'function') return column.getSortValue(row)
-          if (typeof column.getValue === 'function') return column.getValue(row)
-          return defaultGetValue(row, column)
-        },
-      ])
-    )
-
+    const sortGetters = Object.fromEntries(visibleColumns.map((column) => [column.key, (row) => {
+      if (typeof column.getSortValue === 'function') return column.getSortValue(row)
+      if (typeof column.getValue === 'function') return column.getValue(row)
+      return defaultGetValue(row, column)
+    }]))
     return sortItems(filteredData, activeSort, sortGetters)
   }, [filteredData, visibleColumns, activeSort])
 
   const normalizedPageSize = Math.max(Number(pageSize) || 10, 1)
   const pageCount = pagination ? Math.max(Math.ceil(sortedData.length / normalizedPageSize), 1) : 1
 
-  useEffect(() => {
-    setPage(1)
-  }, [activeFilters, activeSort, data, normalizedPageSize, pagination])
-
-  useEffect(() => {
-    if (page > pageCount) setPage(pageCount)
-  }, [page, pageCount])
+  useEffect(() => { setPage(1) }, [activeFilters, activeSort, data, normalizedPageSize, pagination])
+  useEffect(() => { if (page > pageCount) setPage(pageCount) }, [page, pageCount])
 
   const displayData = useMemo(() => {
     if (!pagination) return sortedData
@@ -183,18 +129,13 @@ export default function DataTable({
     return sortedData.slice(start, start + normalizedPageSize)
   }, [pagination, sortedData, page, normalizedPageSize])
 
-  const wrapperClasses = [
-    'rz-data-table-wrapper',
-    wrapperClassName,
-  ].filter(Boolean).join(' ')
-
+  const wrapperClasses = ['rz-data-table-wrapper', wrapperClassName].filter(Boolean).join(' ')
   const tableClasses = [
     'rz-data-table',
     stickyHeader ? 'rz-data-table--sticky-header' : '',
     stickyFilters && hasFilters ? 'rz-data-table--sticky-filters' : '',
     tableClassName,
   ].filter(Boolean).join(' ')
-
   const mergedTableStyle = {
     tableLayout: 'fixed',
     width: buildTableWidth(widths),
@@ -205,18 +146,10 @@ export default function DataTable({
 
   return (
     <>
-      <Table
-        wrapperClassName={wrapperClasses}
-        tableClassName={tableClasses}
-        tableStyle={mergedTableStyle}
-        dataTestId={dataTestId}
-      >
+      <Table wrapperClassName={wrapperClasses} tableClassName={tableClasses} tableStyle={mergedTableStyle} dataTestId={dataTestId}>
         <colgroup>
-          {visibleColumns.map((column) => (
-            <col key={column.key} style={{ width: `${widths[column.key] || column.width || 120}px` }} />
-          ))}
+          {visibleColumns.map((column) => <col key={column.key} style={{ width: `${widths[column.key] || column.width || 120}px` }} />)}
         </colgroup>
-
         <thead>
           <tr className="rz-table-header" ref={headerRowRef}>
             {visibleColumns.map((column) => (
@@ -236,7 +169,6 @@ export default function DataTable({
               </ResizableHeaderCell>
             ))}
           </tr>
-
           {stickyFilters && hasFilters ? (
             <tr className="rz-table-filters">
               {visibleColumns.map((column) => (
@@ -255,12 +187,9 @@ export default function DataTable({
             </tr>
           ) : null}
         </thead>
-
         <tbody>
           {sortedData.length === 0 ? (
-            <tr>
-              <td colSpan={visibleColumns.length}>{emptyMessage}</td>
-            </tr>
+            <tr><td colSpan={visibleColumns.length}>{emptyMessage}</td></tr>
           ) : renderRow ? (
             displayData.map((row, index) => renderRow(row, index))
           ) : (
@@ -268,9 +197,7 @@ export default function DataTable({
               <tr key={getRowKey(row, index)}>
                 {visibleColumns.map((column) => (
                   <td key={column.key} className={column.align === 'right' ? 'rz-num' : column.cellClassName || ''}>
-                    {typeof column.renderCell === 'function'
-                      ? column.renderCell(row, index)
-                      : String(defaultGetValue(row, column) ?? '')}
+                    {typeof column.renderCell === 'function' ? column.renderCell(row, index) : String(defaultGetValue(row, column) ?? '')}
                   </td>
                 ))}
               </tr>
@@ -278,10 +205,20 @@ export default function DataTable({
           )}
           {typeof renderBodyAppend === 'function' ? renderBodyAppend({ columns: visibleColumns, data: displayData }) : null}
         </tbody>
-
         {typeof renderFooter === 'function' ? renderFooter({ columns: visibleColumns, data: displayData }) : null}
       </Table>
-      {pagination ? <Pagination page={page} pageCount={pageCount} onPageChange={setPage} /> : null}
+      {(pagination || paginationActions) ? (
+        <div
+          className="rz-data-table-controls"
+          style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12, marginTop: 10 }}
+        >
+          <span aria-hidden="true" />
+          <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
+            {paginationActions}
+          </div>
+        </div>
+      ) : null}
     </>
   )
 }
