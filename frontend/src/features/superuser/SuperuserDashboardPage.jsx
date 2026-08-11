@@ -57,8 +57,76 @@ const DETAIL_COLUMN_LABELS = {
   period: 'Periode',
 }
 
+const DETAIL_SCREEN_COLUMNS = {
+  kassa: ['id', 'retailer', 'winkel', 'purchase_at', 'purchase_date', 'status', 'source', 'imported_at', 'created_at', 'actor_user_id', 'actor_attribution_source'],
+  uitpakken: ['id', 'receipt_table_id', 'source_reference', 'status', 'import_status', 'purchase_date', 'approved_at', 'processed_at', 'updated_at', 'created_at', 'actor_user_id', 'actor_attribution_source'],
+  voorraad: ['id', 'article_id', 'household_article_id', 'article_name', 'location_id', 'location_label', 'event_type', 'quantity', 'old_quantity', 'new_quantity', 'source', 'note', 'effective_at', 'recorded_at', 'created_at', 'actor_user_id', 'actor_attribution_source'],
+  bijna_op: ['id', 'naam', 'aantal', 'household_article_id', 'status', 'updated_at', 'user_id'],
+  winkelen: ['id', 'naam', 'name', 'artikel', 'quantity', 'aantal', 'status', 'updated_at', 'created_at', 'user_id'],
+  prognoses: ['id', 'household_article_id', 'article_name', 'forecast', 'quantity', 'period', 'updated_at', 'created_at', 'user_id'],
+}
+
+const DUTCH_VALUE_LABELS = {
+  active: 'Actief',
+  inactive: 'Inactief',
+  new: 'Nieuw',
+  reviewed: 'Gecontroleerd',
+  purchase: 'Aankoop',
+  pending: 'In behandeling',
+  processed: 'Verwerkt',
+  approved: 'Goedgekeurd',
+  rejected: 'Afgewezen',
+  failed: 'Mislukt',
+  ready: 'Gereed',
+  completed: 'Afgerond',
+  ignored: 'Genegeerd',
+  manual: 'Handmatig',
+  automatic: 'Automatisch',
+  imported: 'Geïmporteerd',
+  draft: 'Concept',
+  open: 'Open',
+  closed: 'Gesloten',
+  owner: 'Eigenaar',
+  admin: 'Beheerder',
+  member: 'Lid',
+  user: 'Gebruiker',
+  viewer: 'Lezer',
+  system: 'Systeem',
+  unknown: 'Onbekend',
+  consumption: 'Verbruik',
+  consume: 'Verbruik',
+  correction: 'Correctie',
+  receipt: 'Kassabon',
+  server_session: 'Serversessie',
+  request_context: 'Aanvraagcontext',
+  actor_attribution: 'Gebruikersherkomst',
+  legacy: 'Historisch',
+}
+
 function detailColumnLabel(key) {
   return DETAIL_COLUMN_LABELS[key] || `Gegeven (${String(key || '').replaceAll('_', ' ')})`
+}
+
+function formatDateTimeToSeconds(value) {
+  if (value == null || value === '') return ''
+  const text = String(value)
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/)
+  return match ? `${match[1]} ${match[2]}` : text
+}
+
+function dutchValue(value) {
+  if (value == null || value === '') return ''
+  const text = String(value)
+  return DUTCH_VALUE_LABELS[text.trim().toLowerCase()] || text
+}
+
+function displayValue(key, value) {
+  if (value == null || value === '') return ''
+  const normalizedKey = String(key || '').toLowerCase()
+  if (normalizedKey.endsWith('_at') || normalizedKey.includes('datetime') || normalizedKey.includes('timestamp')) {
+    return formatDateTimeToSeconds(value)
+  }
+  return dutchValue(value)
 }
 
 function EmptySection({ title }) {
@@ -78,7 +146,7 @@ function detailRowKey(row, index = 0) {
   return String(row?.id || row?.receipt_table_id || row?.household_article_id || row?.article_id || row?.source_reference || `detail-${index}`)
 }
 
-function ReadOnlyTable({ rows, dataTestId, showTechnicalIds = false }) {
+function ReadOnlyTable({ rows, dataTestId, screenKey, showTechnicalIds = false }) {
   const [selectedKeys, setSelectedKeys] = useState([])
   const baseRows = useMemo(() => rows || [], [rows])
 
@@ -88,7 +156,7 @@ function ReadOnlyTable({ rows, dataTestId, showTechnicalIds = false }) {
   }, [baseRows])
 
   const dataColumns = useMemo(() => {
-    const keys = []
+    const keys = [...(DETAIL_SCREEN_COLUMNS[screenKey] || [])]
     for (const row of baseRows) {
       for (const key of Object.keys(row || {})) {
         if (!keys.includes(key)) keys.push(key)
@@ -103,9 +171,9 @@ function ReadOnlyTable({ rows, dataTestId, showTechnicalIds = false }) {
         sortable: true,
         filterable: true,
         filterPlaceholder: index === 0 ? 'Zoek' : 'Filter',
-        getValue: (row) => row?.[key] == null ? '' : String(row[key]),
+        getValue: (row) => displayValue(key, row?.[key]),
       }))
-  }, [baseRows, showTechnicalIds])
+  }, [baseRows, screenKey, showTechnicalIds])
 
   const allSelected = baseRows.length > 0 && baseRows.every((row, index) => selectedKeys.includes(detailRowKey(row, index)))
   const columns = useMemo(() => [
@@ -135,9 +203,7 @@ function ReadOnlyTable({ rows, dataTestId, showTechnicalIds = false }) {
   )
 
   function toggleDetailRow(key, checked) {
-    setSelectedKeys((current) => checked
-      ? [...new Set([...current, key])]
-      : current.filter((item) => item !== key))
+    setSelectedKeys((current) => checked ? [...new Set([...current, key])] : current.filter((item) => item !== key))
   }
 
   function exportSelectedRows() {
@@ -159,30 +225,26 @@ function ReadOnlyTable({ rows, dataTestId, showTechnicalIds = false }) {
   }
 
   return (
-    <>
-      <DataTable
-        columns={columns}
-        data={baseRows}
-        dataTestId={dataTestId}
-        emptyMessage="Geen actieve gegevens beschikbaar voor de geselecteerde categorieën in dit onderdeel."
-        defaultSort={dataColumns[0] ? { key: dataColumns[0].key, direction: 'asc' } : null}
-        pagination
-        pageSize={PAGE_SIZE}
-        getRowKey={(row, index) => detailRowKey(row, index)}
-        renderRow={(row, index) => {
-          const key = detailRowKey(row, index)
-          return (
-            <tr key={key}>
-              <td className="rz-center"><Checkbox checked={selectedKeys.includes(key)} onChange={(event) => toggleDetailRow(key, event.target.checked)} aria-label={`Selecteer detailregel ${index + 1}`} /></td>
-              {dataColumns.map((column) => <td key={column.key}>{column.getValue(row)}</td>)}
-            </tr>
-          )
-        }}
-      />
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
-        <Button type="button" onClick={exportSelectedRows} disabled={selectedRows.length === 0}>Exporteren</Button>
-      </div>
-    </>
+    <DataTable
+      columns={columns}
+      data={baseRows}
+      dataTestId={dataTestId}
+      emptyMessage="Geen actieve gegevens beschikbaar voor de geselecteerde categorieën in dit onderdeel."
+      defaultSort={dataColumns[0] ? { key: dataColumns[0].key, direction: 'asc' } : null}
+      pagination
+      pageSize={PAGE_SIZE}
+      paginationActions={<Button type="button" onClick={exportSelectedRows} disabled={selectedRows.length === 0}>Exporteren</Button>}
+      getRowKey={(row, index) => detailRowKey(row, index)}
+      renderRow={(row, index) => {
+        const key = detailRowKey(row, index)
+        return (
+          <tr key={key}>
+            <td className="rz-center"><Checkbox checked={selectedKeys.includes(key)} onChange={(event) => toggleDetailRow(key, event.target.checked)} aria-label={`Selecteer detailregel ${index + 1}`} /></td>
+            {dataColumns.map((column) => <td key={column.key}>{column.getValue(row)}</td>)}
+          </tr>
+        )
+      }}
+    />
   )
 }
 
@@ -218,8 +280,8 @@ function Diagnostics({ data, selectionLabel, attributionSummary }) {
       <h3 style={{ fontSize: 17, marginBottom: 8 }}>Gebruikersherkomst</h3>
       <p style={{ marginTop: 0 }}>Deze tabel laat zien hoeveel actieve verwerkingen wel en niet aan een gebruiker kunnen worden herleid.</p>
       <DataTable columns={columns} data={attributionSummary || []} dataTestId="superuser-attribution-diagnostics-table" getRowKey={(row) => row.key} defaultSort={{ key: 'onderdeel', direction: 'asc' }} emptyMessage="Gebruikersherkomst wordt geladen of is niet beschikbaar." pagination pageSize={PAGE_SIZE} />
-      <p><strong>Laatste kassabon:</strong> {d.last_receipt_at ? String(d.last_receipt_at) : '—'}</p>
-      <p><strong>Laatste voorraadmutatie:</strong> {d.last_inventory_event_at ? String(d.last_inventory_event_at) : '—'}</p>
+      <p><strong>Laatste kassabon:</strong> {d.last_receipt_at ? formatDateTimeToSeconds(d.last_receipt_at) : '—'}</p>
+      <p><strong>Laatste voorraadmutatie:</strong> {d.last_inventory_event_at ? formatDateTimeToSeconds(d.last_inventory_event_at) : '—'}</p>
       {(d.flags || []).length > 0 && <div>{d.flags.map((flag) => <p key={flag.code}>⚠ {flag.label}</p>)}</div>}
     </div>
   )
@@ -299,8 +361,8 @@ function HouseholdInspector({ householdId }) {
       className: 'rz-center',
     },
     { key: 'email', header: 'Gebruiker', width: 300, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.email || row.user_id || '' },
-    { key: 'role', header: 'Rol', width: 150, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.role || '' },
-    { key: 'status', header: 'Status', width: 130, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.status || '' },
+    { key: 'role', header: 'Rol', width: 150, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => dutchValue(row.role) },
+    { key: 'status', header: 'Status', width: 130, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => dutchValue(row.status) },
   ], [allSelectionRowsSelected, selectionRows])
 
   const realMemberKeys = useMemo(() => members.map((member, index) => memberKey(member, index)), [members])
@@ -349,7 +411,7 @@ function HouseholdInspector({ householdId }) {
           <span>Voorkomens: <strong>alleen actief</strong>.</span>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Checkbox checked={showTechnicalIds} onChange={(event) => setShowTechnicalIds(event.target.checked)} aria-label="Technische ID's tonen" />Technische ID's: {showTechnicalIds ? 'Aan' : 'Uit'}</label>
         </div>
-        <ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} showTechnicalIds={showTechnicalIds} />
+        <ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} screenKey={screen} showTechnicalIds={showTechnicalIds} />
       </>
     )
   }
@@ -370,7 +432,7 @@ function HouseholdInspector({ householdId }) {
         renderRow={(member, index) => {
           const key = memberKey(member, index)
           const checked = selectedUserKeys.includes(key)
-          return <tr key={key}><td className="rz-center"><Checkbox checked={checked} onChange={() => toggleUser(key)} aria-label={`Toon details voor ${member.email || member.user_id || index + 1}`} /></td><td>{member.email || member.user_id || ''}</td><td>{member.role || ''}</td><td>{member.status || ''}</td></tr>
+          return <tr key={key}><td className="rz-center"><Checkbox checked={checked} onChange={() => toggleUser(key)} aria-label={`Toon details voor ${member.email || member.user_id || index + 1}`} /></td><td>{member.email || member.user_id || ''}</td><td>{dutchValue(member.role)}</td><td>{dutchValue(member.status)}</td></tr>
         }}
       />
       <div style={{ marginTop: 24 }}>
@@ -408,9 +470,9 @@ function HouseholdsSection({ selectedId, onSelectHousehold }) {
   const columns = useMemo(() => [
     { key: 'name', header: 'Huishouden', width: 250, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.name || row.household_id || '' },
     { key: 'member_count', header: 'Gebruikers', width: 120, sortable: true, align: 'right', getValue: (row) => row.member_count ?? 0 },
-    { key: 'last_active_at', header: 'Laatst actief', width: 190, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.last_active_at ? String(row.last_active_at) : '—' },
+    { key: 'last_active_at', header: 'Laatst actief', width: 190, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.last_active_at ? formatDateTimeToSeconds(row.last_active_at) : '—' },
     { key: 'receipt_count', header: 'Bonnen', width: 110, sortable: true, align: 'right', getValue: (row) => row.receipt_count ?? 0 },
-    { key: 'status', header: 'Status', width: 130, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.status || 'active' },
+    { key: 'status', header: 'Status', width: 130, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => dutchValue(row.status || 'active') },
   ], [])
 
   if (selectedId) return <HouseholdInspector householdId={selectedId} />
