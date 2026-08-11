@@ -89,11 +89,23 @@ def _scalar(conn: Connection, sql: str, params: dict[str, Any]) -> int:
         return 0
 
 
+def _active_record_clauses(columns: set[str], *, alias: str = "") -> list[str]:
+    """Exclude only records with explicit deletion markers; never infer archive state from status text."""
+    prefix = f"{alias}." if alias else ""
+    clauses: list[str] = []
+    if "deleted_at" in columns:
+        clauses.append(f"{prefix}deleted_at IS NULL")
+    if "is_deleted" in columns:
+        clauses.append(f"COALESCE({prefix}is_deleted, 0) = 0")
+    return clauses
+
+
 def _table_household_count(conn: Connection, table: str, household_id: str, *, household_column: str = "household_id") -> int:
     cols = _columns(conn, table)
     if household_column not in cols:
         return 0
-    return _scalar(conn, f"SELECT COUNT(*) FROM {table} WHERE CAST({household_column} AS TEXT)=:household_id", {"household_id": household_id})
+    clauses = [f"CAST({household_column} AS TEXT)=:household_id", *_active_record_clauses(cols)]
+    return _scalar(conn, f"SELECT COUNT(*) FROM {table} WHERE {' AND '.join(clauses)}", {"household_id": household_id})
 
 
 def _latest_value(conn: Connection, table: str, household_id: str, candidates: tuple[str, ...], *, household_column: str = "household_id") -> Any:
@@ -103,7 +115,8 @@ def _latest_value(conn: Connection, table: str, household_id: str, candidates: t
     col = _pick(cols, *candidates)
     if not col:
         return None
-    return conn.execute(text(f"SELECT MAX({col}) FROM {table} WHERE CAST({household_column} AS TEXT)=:household_id"), {"household_id": household_id}).scalar()
+    clauses = [f"CAST({household_column} AS TEXT)=:household_id", *_active_record_clauses(cols)]
+    return conn.execute(text(f"SELECT MAX({col}) FROM {table} WHERE {' AND '.join(clauses)}"), {"household_id": household_id}).scalar()
 
 
 def _members(conn: Connection, household_id: str, limit: int = 50) -> list[dict[str, Any]]:
@@ -120,7 +133,8 @@ def _members(conn: Connection, household_id: str, limit: int = 50) -> list[dict[
         if col:
             selected.append(f"{col} AS {alias}")
             aliases.append(alias)
-    rows = conn.execute(text(f"SELECT {', '.join(selected)} FROM household_memberships WHERE CAST(household_id AS TEXT)=:household_id LIMIT :limit"), {"household_id": household_id, "limit": limit}).mappings().all()
+    clauses = ["CAST(household_id AS TEXT)=:household_id", *_active_record_clauses(cols)]
+    rows = conn.execute(text(f"SELECT {', '.join(selected)} FROM household_memberships WHERE {' AND '.join(clauses)} LIMIT :limit"), {"household_id": household_id, "limit": limit}).mappings().all()
     return [{key: row.get(key) for key in aliases} for row in rows]
 
 
@@ -145,7 +159,7 @@ def _safe_rows(
         return []
     order_col = _pick(cols, *order_candidates)
     order_sql = f" ORDER BY {order_col} DESC" if order_col else ""
-    clauses = ["CAST(household_id AS TEXT)=:household_id"]
+    clauses = ["CAST(household_id AS TEXT)=:household_id", *_active_record_clauses(cols)]
     params: dict[str, Any] = {"household_id": household_id, "limit": limit}
     if where:
         clauses.append(f"({where})")
@@ -184,12 +198,21 @@ def _actor_rows(
     ])
     order_col = _pick(cols, *order_candidates)
     order_sql = f" ORDER BY t.{order_col} DESC" if order_col else ""
-    clauses = ["CAST(t.household_id AS TEXT)=:household_id"]
+    clauses = ["CAST(t.household_id AS TEXT)=:household_id", *_active_record_clauses(cols, alias="t")]
     params: dict[str, Any] = {
         "household_id": household_id,
         "object_type": object_type,
         "limit": limit,
     }
+    if table == "receipt_tables" and "raw_receipt_id" in cols:
+        raw_cols = _columns(conn, "raw_receipts")
+        if "id" in raw_cols:
+            raw_active = _active_record_clauses(raw_cols, alias="rr")
+            if raw_active:
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM raw_receipts rr WHERE CAST(rr.id AS TEXT)=CAST(t.raw_receipt_id AS TEXT) "
+                    f"AND {' AND '.join(raw_active)})"
+                )
     if user_id:
         clauses.append("CAST(a.actor_user_id AS TEXT)=:user_id")
         params["user_id"] = user_id
@@ -211,7 +234,8 @@ def _diagnostics(conn: Connection, household_id: str) -> dict[str, Any]:
     inventory_cols = _columns(conn, "inventory")
     negative_count = 0
     if "household_id" in inventory_cols and "aantal" in inventory_cols:
-        negative_count = _scalar(conn, "SELECT COUNT(*) FROM inventory WHERE CAST(household_id AS TEXT)=:household_id AND COALESCE(aantal,0)<0", {"household_id": household_id})
+        clauses = ["CAST(household_id AS TEXT)=:household_id", "COALESCE(aantal,0)<0", *_active_record_clauses(inventory_cols)]
+        negative_count = _scalar(conn, f"SELECT COUNT(*) FROM inventory WHERE {' AND '.join(clauses)}", {"household_id": household_id})
     receipt_count = _table_household_count(conn, "receipt_tables", household_id)
     inventory_count = _table_household_count(conn, "inventory", household_id)
     event_count = _table_household_count(conn, "inventory_events", household_id)
@@ -246,7 +270,8 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
             select_parts.append(f"{status_col} AS status" if status_col else "'active' AS status")
             if created_col:
                 select_parts.append(f"{created_col} AS created_at")
-            clauses = ["1=1"]
+            registry_cols = _columns(conn, "household_registry")
+            clauses = ["1=1", *_active_record_clauses(registry_cols)]
             params: dict[str, Any] = {"limit": limit}
             query = str(q or "").strip().lower()
             if query:
@@ -340,8 +365,8 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
                 action="superuser.household.screen_viewed",
                 object_type="household_screen",
                 object_id=key,
-                metadata={"screen": key, "row_count": len(rows), "selected_user_id": selected_user_id},
+                metadata={"screen": key, "row_count": len(rows), "selected_user_id": selected_user_id, "record_scope": "active_only"},
             )
-        return {"access": "read_only", "household_id": household_id, "selected_user_id": selected_user_id, "screen": key, "rows": rows, "diagnostics": diagnostics}
+        return {"access": "read_only", "household_id": household_id, "selected_user_id": selected_user_id, "screen": key, "record_scope": "active_only", "rows": rows, "diagnostics": diagnostics}
 
     return router
