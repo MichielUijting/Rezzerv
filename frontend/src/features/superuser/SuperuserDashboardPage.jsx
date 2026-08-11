@@ -35,6 +35,10 @@ const DETAIL_COLUMN_LABELS = {
   article_id: 'Technisch artikel-ID',
   household_article_id: 'Technisch huishoudartikel-ID',
   article_name: 'Artikel',
+  article_group_name: 'Artikelgroep',
+  product_type_name: 'Producttype',
+  size: 'Omvang',
+  checked: 'Gekocht',
   naam: 'Artikel',
   name: 'Naam',
   artikel: 'Artikel',
@@ -45,7 +49,7 @@ const DETAIL_COLUMN_LABELS = {
   aantal: 'Aantal',
   old_quantity: 'Vorig aantal',
   new_quantity: 'Nieuw aantal',
-  note: 'Notitie',
+  note: 'Opmerking',
   effective_at: 'Effectief op',
   recorded_at: 'Vastgelegd op',
   receipt_table_id: 'Technisch kassabon-ID',
@@ -62,7 +66,7 @@ const DETAIL_SCREEN_COLUMNS = {
   uitpakken: ['id', 'receipt_table_id', 'source_reference', 'status', 'import_status', 'purchase_date', 'approved_at', 'processed_at', 'updated_at', 'created_at', 'actor_user_id', 'actor_attribution_source'],
   voorraad: ['id', 'article_id', 'household_article_id', 'article_name', 'location_id', 'location_label', 'event_type', 'quantity', 'old_quantity', 'new_quantity', 'source', 'note', 'effective_at', 'recorded_at', 'created_at', 'actor_user_id', 'actor_attribution_source'],
   bijna_op: ['id', 'naam', 'aantal', 'household_article_id', 'status', 'updated_at', 'user_id'],
-  winkelen: ['id', 'naam', 'name', 'artikel', 'quantity', 'aantal', 'status', 'updated_at', 'created_at', 'user_id'],
+  winkelen: ['id', 'article_name', 'product_type_name', 'size', 'note', 'checked'],
   prognoses: ['id', 'household_article_id', 'article_name', 'forecast', 'quantity', 'period', 'updated_at', 'created_at', 'user_id'],
 }
 
@@ -123,6 +127,9 @@ function dutchValue(value) {
 function displayValue(key, value) {
   if (value == null || value === '') return ''
   const normalizedKey = String(key || '').toLowerCase()
+  if (normalizedKey === 'checked') {
+    return value === true || value === 1 || String(value).trim() === '1' ? 'Ja' : 'Nee'
+  }
   if (normalizedKey.endsWith('_at') || normalizedKey.includes('datetime') || normalizedKey.includes('timestamp')) {
     return formatDateTimeToSeconds(value)
   }
