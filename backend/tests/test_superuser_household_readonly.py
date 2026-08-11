@@ -21,7 +21,7 @@ def test_s2_backend_exposes_only_get_household_data_routes():
 def test_s2_household_listing_keeps_household_zero_selectable():
     source = _read("backend/app/api/superuser_household_routes.py")
     assert "CAST({id_col} AS TEXT) <> '0'" not in source
-    assert 'clauses = ["1=1"]' in source
+    assert 'clauses = ["1=1", *_active_record_clauses(registry_cols)]' in source
 
 
 def test_s2_never_rotates_superuser_session_into_target_household():
@@ -87,8 +87,9 @@ def test_s2_selection_table_contains_header_checkbox_and_stable_member_columns()
     assert "if (tab === 'Huishoudens') setSelectedHouseholdId(null)" in source
 
 
-def test_s2_detail_tables_reuse_bulk_export_pagination_and_view_selectors():
+def test_s2_detail_tables_reuse_bulk_export_pagination_and_active_only_scope():
     source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
+    backend_source = _read("backend/app/api/superuser_household_routes.py")
     data_table_source = _read("frontend/src/ui/DataTable.jsx")
     pagination_source = _read("frontend/src/ui/Pagination.jsx")
     checkbox_source = _read("frontend/src/ui/Checkbox.jsx")
@@ -100,11 +101,18 @@ def test_s2_detail_tables_reuse_bulk_export_pagination_and_view_selectors():
     assert "pageSize={PAGE_SIZE}" in source
     assert "showTechnicalIds" in source
     assert "Technische ID's:" in source
-    assert "includeArchived" in source
-    assert "Gearchiveerd:" in source
-    assert "useState(false)" in source
+    assert "Voorkomens: <strong>alleen actief</strong>" in source
+    assert "includeArchived" not in source
+    assert "isArchivedRow" not in source
+    assert "Gearchiveerd:" not in source
     assert "isTechnicalKey" in source
-    assert "isArchivedRow" in source
+
+    assert "def _active_record_clauses" in backend_source
+    assert 'if "deleted_at" in columns:' in backend_source
+    assert 'if "is_deleted" in columns:' in backend_source
+    assert '"record_scope": "active_only"' in backend_source
+    assert "never infer archive state from status text" in backend_source
+    assert "EXISTS (SELECT 1 FROM raw_receipts rr" in backend_source
 
     assert "import Pagination from './Pagination.jsx'" in data_table_source
     assert "pagination = false" in data_table_source
