@@ -1,4 +1,4 @@
-"""Read-only Superuser beheercentrum foundation and platform overview routes."""
+"""Read-only Superuser beheercentrum foundation, overview and usage routes."""
 
 from __future__ import annotations
 
@@ -61,6 +61,31 @@ def _active_clauses(columns: set[str], *, alias: str = "") -> list[str]:
     if "is_deleted" in columns:
         clauses.append(f"COALESCE({prefix}is_deleted, 0) = 0")
     return clauses
+
+
+def _count_for_household(conn, table_name: str, household_id: str, *, household_column: str = "household_id") -> int:
+    columns = _columns(conn, table_name)
+    if household_column not in columns:
+        return 0
+    clauses = [f"CAST({household_column} AS TEXT)=:household_id", *_active_clauses(columns)]
+    return int(conn.execute(
+        text(f"SELECT COUNT(*) FROM {table_name} WHERE {' AND '.join(clauses)}"),
+        {"household_id": household_id},
+    ).scalar() or 0)
+
+
+def _latest_for_household(conn, table_name: str, household_id: str, candidates: tuple[str, ...], *, household_column: str = "household_id"):
+    columns = _columns(conn, table_name)
+    if household_column not in columns:
+        return None
+    date_column = _first(columns, *candidates)
+    if not date_column:
+        return None
+    clauses = [f"CAST({household_column} AS TEXT)=:household_id", *_active_clauses(columns)]
+    return conn.execute(
+        text(f"SELECT MAX({date_column}) FROM {table_name} WHERE {' AND '.join(clauses)}"),
+        {"household_id": household_id},
+    ).scalar()
 
 
 def _platform_overview(conn) -> dict:
@@ -172,6 +197,87 @@ def _platform_overview(conn) -> dict:
     }
 
 
+def _platform_usage(conn) -> dict:
+    """Project existing operational data into a read-only usage overview; no new tracking is introduced."""
+    registry_columns = _columns(conn, "household_registry")
+    household_id_column = _first(registry_columns, "id", "household_id")
+    household_name_column = _first(registry_columns, "naam", "name", "household_name")
+    household_status_column = _first(registry_columns, "status")
+    if not household_id_column:
+        return {"access": "read_only", "tracking": "existing_data_only", "metrics": {}, "items": []}
+
+    clauses = [*_active_clauses(registry_columns)]
+    if household_status_column:
+        clauses.append(f"lower(trim(COALESCE({household_status_column}, 'active'))) = 'active'")
+    where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    name_sql = household_name_column or household_id_column
+    households = conn.execute(text(f"""
+        SELECT CAST({household_id_column} AS TEXT) AS household_id, {name_sql} AS household_name
+        FROM household_registry{where}
+        ORDER BY lower(CAST({name_sql} AS TEXT)), CAST({household_id_column} AS TEXT)
+    """)).mappings().all()
+
+    membership_columns = _columns(conn, "household_memberships")
+    items = []
+    total_receipts = 0
+    total_inventory_events = 0
+    total_support_threads = 0
+    households_with_session_activity = 0
+
+    ensure_support_message_foundation(conn)
+    for row in households:
+        household_id = str(row["household_id"])
+        member_count = 0
+        if "household_id" in membership_columns:
+            membership_clauses = ["CAST(household_id AS TEXT)=:household_id", *_active_clauses(membership_columns)]
+            if "status" in membership_columns:
+                membership_clauses.append("lower(trim(COALESCE(status, 'active'))) = 'active'")
+            member_count = int(conn.execute(text(
+                f"SELECT COUNT(*) FROM household_memberships WHERE {' AND '.join(membership_clauses)}"
+            ), {"household_id": household_id}).scalar() or 0)
+
+        receipt_count = _count_for_household(conn, "receipt_tables", household_id)
+        inventory_event_count = _count_for_household(conn, "inventory_events", household_id)
+        support_thread_count = int(conn.execute(text("""
+            SELECT COUNT(*) FROM support_threads WHERE CAST(household_id AS TEXT)=:household_id
+        """), {"household_id": household_id}).scalar() or 0)
+        last_active_at = _latest_for_household(
+            conn,
+            "server_sessions",
+            household_id,
+            ("updated_at", "issued_at", "created_at"),
+            household_column="active_household_id",
+        )
+        if last_active_at is not None:
+            households_with_session_activity += 1
+
+        total_receipts += receipt_count
+        total_inventory_events += inventory_event_count
+        total_support_threads += support_thread_count
+        items.append({
+            "household_id": household_id,
+            "household_name": str(row["household_name"] or household_id),
+            "active_member_count": member_count,
+            "receipt_count": receipt_count,
+            "inventory_event_count": inventory_event_count,
+            "support_thread_count": support_thread_count,
+            "last_active_at": last_active_at,
+        })
+
+    return {
+        "access": "read_only",
+        "tracking": "existing_data_only",
+        "metrics": {
+            "active_households": len(items),
+            "households_with_session_activity": households_with_session_activity,
+            "receipt_count": total_receipts,
+            "inventory_event_count": total_inventory_events,
+            "support_thread_count": total_support_threads,
+        },
+        "items": items,
+    }
+
+
 def create_superuser_router(engine: Engine) -> APIRouter:
     router = APIRouter()
 
@@ -205,6 +311,25 @@ def create_superuser_router(engine: Engine) -> APIRouter:
                 object_type="superuser_overview",
                 new_value={"attention_count": len(payload["attention_items"])},
                 reason="Superuser bekeek platformoverzicht",
+            )
+        return payload
+
+    @router.get("/api/superuser/usage")
+    def usage(request: Request):
+        with engine.begin() as conn:
+            context = _require_platform_superuser(
+                conn,
+                request.cookies.get(SESSION_COOKIE_NAME),
+            )
+            payload = _platform_usage(conn)
+            write_authorization_audit(
+                conn,
+                actor_user_id=context.user_id,
+                actor_type="platform_superuser",
+                action="superuser.usage.viewed",
+                object_type="superuser_usage",
+                new_value={"household_count": len(payload["items"]), "tracking": payload["tracking"]},
+                reason="Superuser bekeek bestaand platformgebruik",
             )
         return payload
 
