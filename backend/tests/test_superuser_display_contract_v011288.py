@@ -40,4 +40,15 @@ def test_bulk_export_shares_control_row_with_standard_pagination():
     assert "paginationActions = null" in table_source
     assert 'className="rz-data-table-controls"' in table_source
     assert "gridTemplateColumns: '1fr auto 1fr'" in table_source
+    assert "justifyContent: 'flex-end'" in table_source
     assert "<Pagination page={page} pageCount={pageCount} onPageChange={setPage} />" in table_source
+
+
+def test_pagination_stays_visible_and_disables_navigation_for_single_page():
+    source = _read("frontend/src/ui/Pagination.jsx")
+    assert "if (totalPages <= 1) return null" not in source
+    assert "const navigationDisabled = disabled || totalPages <= 1" in source
+    assert "disabled={navigationDisabled || currentPage <= 1}" in source
+    assert "disabled={navigationDisabled || currentPage >= totalPages}" in source
+    for label in ("Eerste", "Vorige", "Volgende", "Laatste"):
+        assert label in source
