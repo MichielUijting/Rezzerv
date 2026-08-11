@@ -10,7 +10,7 @@ export default function Pagination({ page = 1, pageCount = 1, onPageChange, disa
     <nav
       aria-label="Paginering"
       className="rz-pagination"
-      style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}
+      style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}
     >
       <Button
         type="button"
