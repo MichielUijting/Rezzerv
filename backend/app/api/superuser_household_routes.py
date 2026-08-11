@@ -246,7 +246,7 @@ def create_superuser_household_router(engine: Engine) -> APIRouter:
             select_parts.append(f"{status_col} AS status" if status_col else "'active' AS status")
             if created_col:
                 select_parts.append(f"{created_col} AS created_at")
-            clauses = [f"CAST({id_col} AS TEXT) <> '0'"]
+            clauses = ["1=1"]
             params: dict[str, Any] = {"limit": limit}
             query = str(q or "").strip().lower()
             if query:
