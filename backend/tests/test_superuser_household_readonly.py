@@ -21,7 +21,7 @@ def test_s2_backend_exposes_only_get_household_data_routes():
 def test_s2_household_listing_keeps_household_zero_selectable():
     source = _read("backend/app/api/superuser_household_routes.py")
     assert "CAST({id_col} AS TEXT) <> '0'" not in source
-    assert 'clauses = ["1=1"]' in source
+    assert 'clauses = ["1=1", *_active_record_clauses(registry_cols)]' in source
 
 
 def test_s2_never_rotates_superuser_session_into_target_household():
@@ -39,27 +39,38 @@ def test_every_household_inspection_is_audited():
     assert "write_authorization_audit" in source
 
 
-def test_s2_frontend_uses_canonical_table_and_double_click_inspector():
+def test_s2_frontend_uses_canonical_components_and_double_click_inspector():
     source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
     assert "HouseholdsSection" in source
     assert "HouseholdInspector" in source
     assert "import DataTable from '../../ui/DataTable.jsx'" in source
+    assert "import Button from '../../ui/Button.jsx'" in source
+    assert "import Checkbox from '../../ui/Checkbox.jsx'" in source
+    assert "import Tabs from '../../ui/Tabs.jsx'" in source
     assert "<DataTable" in source
+    assert "<Button" in source
+    assert "<Checkbox" in source
+    assert "<Tabs" in source
     assert "onDoubleClick" in source
     assert "Dubbelklik op een huishouden" in source
     assert ">Bekijken<" not in source
     assert "Alleen lezen" in source
+    assert "<button" not in source
     for label in ("Start", "Kassa", "Uitpakken", "Voorraad", "Bijna op", "Winkelen", "Prognoses", "Diagnose"):
         assert label in source
 
 
-def test_s2_selection_table_contains_unattributed_as_third_category():
+def test_s2_selection_table_contains_header_checkbox_and_stable_member_columns():
     source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
     users_heading = source.index('>Gebruikers</h2>')
     detail_tabs = source.index('HOUSEHOLD_SCREENS.map')
     assert users_heading < detail_tabs
-    assert "key: 'selection', header: 'Selectie'" in source
-    assert 'type="checkbox"' in source
+    assert "key: 'selection'" in source
+    assert 'aria-label="Selecteer alle gebruikerscategorieën"' in source
+    assert "header: 'Selectie'" not in source
+    assert "header: 'Gebruiker'" in source
+    assert "header: 'Rol'" in source
+    assert "header: 'Status'" in source
     assert "UNATTRIBUTED_KEY = '__unattributed__'" in source
     assert "selectionRows" in source
     assert "email: 'Niet aan gebruiker herleidbaar'" in source
@@ -74,6 +85,63 @@ def test_s2_selection_table_contains_unattributed_as_third_category():
     assert "Terug naar huishoudens" not in source
     assert "handleTopTabChange" in source
     assert "if (tab === 'Huishoudens') setSelectedHouseholdId(null)" in source
+
+
+def test_s2_detail_tables_reuse_bulk_export_pagination_and_active_only_scope():
+    source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
+    backend_source = _read("backend/app/api/superuser_household_routes.py")
+    data_table_source = _read("frontend/src/ui/DataTable.jsx")
+    pagination_source = _read("frontend/src/ui/Pagination.jsx")
+    checkbox_source = _read("frontend/src/ui/Checkbox.jsx")
+
+    assert 'aria-label="Selecteer alle zichtbare detailregels"' in source
+    assert "exportSelectedRows" in source
+    assert ">Exporteren</Button>" in source
+    assert "pagination" in source
+    assert "pageSize={PAGE_SIZE}" in source
+    assert "showTechnicalIds" in source
+    assert "Technische ID's:" in source
+    assert "Voorkomens: <strong>alleen actief</strong>" in source
+    assert "includeArchived" not in source
+    assert "isArchivedRow" not in source
+    assert "Gearchiveerd:" not in source
+    assert "isTechnicalKey" in source
+
+    assert "def _active_record_clauses" in backend_source
+    assert 'if "deleted_at" in columns:' in backend_source
+    assert 'if "is_deleted" in columns:' in backend_source
+    assert '"record_scope": "active_only"' in backend_source
+    assert "never infer archive state from status text" in backend_source
+    assert "EXISTS (SELECT 1 FROM raw_receipts rr" in backend_source
+
+    assert "import Pagination from './Pagination.jsx'" in data_table_source
+    assert "pagination = false" in data_table_source
+    assert "pageSize = 10" in data_table_source
+    assert "<Pagination" in data_table_source
+    assert "headerRow.offsetHeight" in data_table_source
+    assert "requestAnimationFrame(measure)" in data_table_source
+
+    assert "import Button from './Button.jsx'" in pagination_source
+    for label in ("Eerste", "Vorige", "Pagina {currentPage} van {totalPages}", "Volgende", "Laatste"):
+        assert label in pagination_source
+    assert "variant=\"secondary\"" in pagination_source
+
+    assert 'type="checkbox"' in checkbox_source
+    assert "accentColor: '#1A3E2B'" in checkbox_source
+
+
+def test_s2_detail_columns_have_explicit_dutch_labels():
+    source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
+    assert "DETAIL_COLUMN_LABELS" in source
+    assert "header: detailColumnLabel(key)" in source
+    assert "header: key.replaceAll('_', ' ')" not in source
+    for label in (
+        "Winkelketen", "Winkel", "Aankoopdatum", "Bron", "Geïmporteerd op",
+        "Aangemaakt op", "Gewijzigd op", "Technisch gebruiker-ID", "Herkomst gebruiker",
+        "Artikel", "Locatie", "Mutatietype", "Aantal", "Vorig aantal", "Nieuw aantal",
+        "Notitie", "Technisch kassabon-ID", "Bronreferentie", "Importstatus", "Prognose", "Periode",
+    ):
+        assert label in source
 
 
 def test_s2_diagnose_shows_attribution_coverage_for_real_household_data():
