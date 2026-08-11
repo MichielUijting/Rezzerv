@@ -5,8 +5,8 @@ const SUPERUSER_PASSWORD = process.env.PLAYWRIGHT_SUPERUSER_PASSWORD
 
 async function loginAsSuperuser(page) {
   if (!SUPERUSER_PASSWORD) throw new Error('PLAYWRIGHT_SUPERUSER_PASSWORD ontbreekt.')
-  await page.goto('/reset-session')
-  await page.waitForURL('**/login')
+  await page.context().clearCookies()
+  await page.goto('/login')
   await page.getByLabel('E-mail').fill(SUPERUSER_EMAIL)
   await page.getByLabel('Wachtwoord').fill(SUPERUSER_PASSWORD)
   await page.getByRole('button', { name: 'Inloggen' }).click()
