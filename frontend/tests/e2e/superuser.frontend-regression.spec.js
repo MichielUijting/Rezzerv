@@ -46,6 +46,9 @@ test.describe('Superuser frontend-regressie', () => {
     const inspector = page.getByTestId('superuser-household-inspector')
     await expect(inspector.getByRole('columnheader', { name: 'Rol' })).toBeVisible()
     await expect(inspector.getByRole('columnheader', { name: 'Status' })).toBeVisible()
+
+    // Technische-ID-weergave hoort bij de detailtabellen, niet bij de standaardtab Diagnose.
+    await inspector.getByRole('tab', { name: 'Kassa', exact: true }).click()
     await expect(inspector.getByLabel("Technische ID's tonen")).not.toBeChecked()
     await expect(inspector.getByText(/Voorkomens:\s*alleen actief/i)).toBeVisible()
 
@@ -63,7 +66,11 @@ test.describe('Superuser frontend-regressie', () => {
 
     const usageTable = page.locator('[data-testid="superuser-usage-table"]')
     await expect(usageTable).toBeVisible()
-    await expect(usageTable.getByText(/Pagina 1 van/i)).toBeVisible()
+
+    // De standaard Pagination is een sibling-control van DataTable en niet onderdeel van het <table>-element.
+    const usageSection = page.getByTestId('superuser-usage')
+    await expect(usageSection.getByRole('navigation', { name: 'Paginering' })).toBeVisible()
+    await expect(usageSection.getByText(/Pagina 1 van/i)).toBeVisible()
 
     const firstUsageRow = usageTable.locator('tbody tr').first()
     if (await firstUsageRow.count()) {
