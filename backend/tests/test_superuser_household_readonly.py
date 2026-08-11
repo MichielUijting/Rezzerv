@@ -18,6 +18,12 @@ def test_s2_backend_exposes_only_get_household_data_routes():
     assert "@router.delete(" not in source
 
 
+def test_s2_household_listing_keeps_household_zero_selectable():
+    source = _read("backend/app/api/superuser_household_routes.py")
+    assert "CAST({id_col} AS TEXT) <> '0'" not in source
+    assert 'clauses = ["1=1"]' in source
+
+
 def test_s2_never_rotates_superuser_session_into_target_household():
     source = _read("backend/app/api/superuser_household_routes.py")
     assert "rotate_active_household" not in source
