@@ -59,7 +59,7 @@ export default function HomePage() {
   }, [])
 
   function openTile(key) {
-    if (key === 'meldingen') navigate(visibility.isPlatformSuperuser ? '/superuser/meldingen' : '/meldingen')
+    if (key === 'meldingen') navigate('/meldingen')
     if (key === 'bijna-op') navigate('/bijna-op')
     if (key === 'winkelen') navigate('/winkelen')
     if (key === 'voorraad') navigate('/voorraad')
@@ -75,6 +75,7 @@ export default function HomePage() {
   }
 
   function isVisible(tile) {
+    if (tile.key === 'meldingen') return !visibility.isPlatformSuperuser
     if (tile.key === 'admin') return visibility.canOpenAdmin
     if (tile.key === 'externe-databases') return visibility.canOpenExternalDatabases
     if (tile.key === 'superuser') return visibility.isPlatformSuperuser
