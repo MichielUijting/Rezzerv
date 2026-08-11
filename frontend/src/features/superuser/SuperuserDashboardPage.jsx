@@ -31,22 +31,13 @@ function isTechnicalKey(key) {
   return normalized === 'id' || normalized.endsWith('_id') || normalized.includes('uuid')
 }
 
-function isArchivedRow(row) {
-  if (row?.archived === true || row?.is_archived === true) return true
-  if (row?.archived_at != null && String(row.archived_at).trim()) return true
-  return String(row?.status || '').trim().toLowerCase() === 'archived'
-}
-
 function detailRowKey(row, index = 0) {
   return String(row?.id || row?.receipt_table_id || row?.household_article_id || row?.article_id || row?.source_reference || `detail-${index}`)
 }
 
-function ReadOnlyTable({ rows, dataTestId, showTechnicalIds = false, includeArchived = false }) {
+function ReadOnlyTable({ rows, dataTestId, showTechnicalIds = false }) {
   const [selectedKeys, setSelectedKeys] = useState([])
-  const baseRows = useMemo(
-    () => includeArchived ? (rows || []) : (rows || []).filter((row) => !isArchivedRow(row)),
-    [rows, includeArchived],
-  )
+  const baseRows = useMemo(() => rows || [], [rows])
 
   useEffect(() => {
     const validKeys = new Set(baseRows.map((row, index) => detailRowKey(row, index)))
@@ -130,7 +121,7 @@ function ReadOnlyTable({ rows, dataTestId, showTechnicalIds = false, includeArch
         columns={columns}
         data={baseRows}
         dataTestId={dataTestId}
-        emptyMessage="Geen gegevens beschikbaar voor de geselecteerde categorieën in dit onderdeel."
+        emptyMessage="Geen actieve gegevens beschikbaar voor de geselecteerde categorieën in dit onderdeel."
         defaultSort={dataColumns[0] ? { key: dataColumns[0].key, direction: 'asc' } : null}
         pagination
         pageSize={PAGE_SIZE}
@@ -182,7 +173,7 @@ function Diagnostics({ data, selectionLabel, attributionSummary }) {
         {cards.map(([label, value]) => <div key={label} style={{ border: '1px solid #d4ddd4', borderRadius: 6, padding: 12 }}><div style={{ fontSize: 13 }}>{label}</div><div style={{ fontSize: 24 }}>{value}</div></div>)}
       </div>
       <h3 style={{ fontSize: 17, marginBottom: 8 }}>Gebruikersherkomst</h3>
-      <p style={{ marginTop: 0 }}>Deze tabel laat zien hoeveel verwerkingen wel en niet aan een gebruiker kunnen worden herleid.</p>
+      <p style={{ marginTop: 0 }}>Deze tabel laat zien hoeveel actieve verwerkingen wel en niet aan een gebruiker kunnen worden herleid.</p>
       <DataTable columns={columns} data={attributionSummary || []} dataTestId="superuser-attribution-diagnostics-table" getRowKey={(row) => row.key} defaultSort={{ key: 'onderdeel', direction: 'asc' }} emptyMessage="Gebruikersherkomst wordt geladen of is niet beschikbaar." pagination pageSize={PAGE_SIZE} />
       <p><strong>Laatste kassabon:</strong> {d.last_receipt_at ? String(d.last_receipt_at) : '—'}</p>
       <p><strong>Laatste voorraadmutatie:</strong> {d.last_inventory_event_at ? String(d.last_inventory_event_at) : '—'}</p>
@@ -198,7 +189,6 @@ function HouseholdInspector({ householdId }) {
   const [screen, setScreen] = useState('diagnose')
   const [screenData, setScreenData] = useState(null)
   const [showTechnicalIds, setShowTechnicalIds] = useState(false)
-  const [includeArchived, setIncludeArchived] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
@@ -313,10 +303,10 @@ function HouseholdInspector({ householdId }) {
       <>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center', marginBottom: 12 }}>
           <span>Filter: <strong>{selectionLabel}</strong>.</span>
+          <span>Voorkomens: <strong>alleen actief</strong>.</span>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Checkbox checked={showTechnicalIds} onChange={(event) => setShowTechnicalIds(event.target.checked)} aria-label="Technische ID's tonen" />Technische ID's: {showTechnicalIds ? 'Aan' : 'Uit'}</label>
-          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Checkbox checked={includeArchived} onChange={(event) => setIncludeArchived(event.target.checked)} aria-label="Gearchiveerde gegevens tonen" />Gearchiveerd: {includeArchived ? 'Aan' : 'Uit'}</label>
         </div>
-        <ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} showTechnicalIds={showTechnicalIds} includeArchived={includeArchived} />
+        <ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} showTechnicalIds={showTechnicalIds} />
       </>
     )
   }
