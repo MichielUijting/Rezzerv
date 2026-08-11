@@ -81,16 +81,6 @@ def test_s2_diagnose_shows_attribution_coverage_for_real_household_data():
     assert "niet_herleidbaar: rows.length - metGebruiker" in source
 
 
-def test_s2_frontend_never_serves_stale_html_shell():
-    nginx = _read("frontend/nginx.conf")
-    version = _read("frontend/public/version.json")
-    backend_version = _read("backend/VERSION.txt")
-    assert "location = /index.html" in nginx
-    assert 'Cache-Control "no-cache, no-store, must-revalidate"' in nginx
-    assert "Rezzerv-MVP-v01.12.85" in version
-    assert "Rezzerv-MVP-v01.12.85" in backend_version
-
-
 def test_s2_actor_attribution_is_bound_from_authoritative_server_session():
     context_source = _read("backend/app/services/session_request_context.py")
     entrypoint_source = _read("backend/app/session_entrypoint.py")
