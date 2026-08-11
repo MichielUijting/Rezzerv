@@ -118,9 +118,30 @@ def test_s2_detail_tables_reuse_bulk_export_pagination_and_active_only_scope():
     assert "pagination = false" in data_table_source
     assert "pageSize = 10" in data_table_source
     assert "<Pagination" in data_table_source
+    assert "headerRow.offsetHeight" in data_table_source
+    assert "requestAnimationFrame(measure)" in data_table_source
+
     assert "import Button from './Button.jsx'" in pagination_source
+    for label in ("Eerste", "Vorige", "Pagina {currentPage} van {totalPages}", "Volgende", "Laatste"):
+        assert label in pagination_source
+    assert "variant=\"secondary\"" in pagination_source
+
     assert 'type="checkbox"' in checkbox_source
     assert "accentColor: '#1A3E2B'" in checkbox_source
+
+
+def test_s2_detail_columns_have_explicit_dutch_labels():
+    source = _read("frontend/src/features/superuser/SuperuserDashboardPage.jsx")
+    assert "DETAIL_COLUMN_LABELS" in source
+    assert "header: detailColumnLabel(key)" in source
+    assert "header: key.replaceAll('_', ' ')" not in source
+    for label in (
+        "Winkelketen", "Winkel", "Aankoopdatum", "Bron", "Geïmporteerd op",
+        "Aangemaakt op", "Gewijzigd op", "Technisch gebruiker-ID", "Herkomst gebruiker",
+        "Artikel", "Locatie", "Mutatietype", "Aantal", "Vorig aantal", "Nieuw aantal",
+        "Notitie", "Technisch kassabon-ID", "Bronreferentie", "Importstatus", "Prognose", "Periode",
+    ):
+        assert label in source
 
 
 def test_s2_diagnose_shows_attribution_coverage_for_real_household_data():
