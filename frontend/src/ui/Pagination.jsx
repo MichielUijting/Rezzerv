@@ -7,30 +7,45 @@ export default function Pagination({ page = 1, pageCount = 1, onPageChange, disa
   if (totalPages <= 1) return null
 
   return (
-    <nav aria-label="Paginering" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 10 }}>
+    <nav
+      aria-label="Paginering"
+      className="rz-pagination"
+      style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}
+    >
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={disabled || currentPage <= 1}
+        onClick={() => onPageChange?.(1)}
+      >
+        Eerste
+      </Button>
       <Button
         type="button"
         variant="secondary"
         disabled={disabled || currentPage <= 1}
         onClick={() => onPageChange?.(currentPage - 1)}
-        aria-label="Vorige pagina"
       >
-        ‹
+        Vorige
       </Button>
-      <span
-        aria-current="page"
-        style={{ minWidth: 32, height: 32, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-      >
-        {currentPage}
+      <span className="rz-pagination-page-indicator" aria-current="page">
+        Pagina {currentPage} van {totalPages}
       </span>
       <Button
         type="button"
         variant="secondary"
         disabled={disabled || currentPage >= totalPages}
         onClick={() => onPageChange?.(currentPage + 1)}
-        aria-label="Volgende pagina"
       >
-        ›
+        Volgende
+      </Button>
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={disabled || currentPage >= totalPages}
+        onClick={() => onPageChange?.(totalPages)}
+      >
+        Laatste
       </Button>
     </nav>
   )
