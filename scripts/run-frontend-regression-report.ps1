@@ -113,6 +113,8 @@ try {
     "tests/e2e/kassa.frontend-regression.spec.js",
     "tests/e2e/uitpakken.frontend-regression.spec.js",
     "tests/e2e/winkelen.frontend-regression.spec.js",
+    "tests/e2e/meldingen.frontend-regression.spec.js",
+    "tests/e2e/superuser.frontend-regression.spec.js",
     "tests/e2e/external-databases.frontend-regression.spec.js",
     "tests/e2e/external-databases-off.frontend-regression.spec.js",
     "tests/e2e/external-databases-unlink.frontend-regression.spec.js",
@@ -131,6 +133,8 @@ try {
     -e PLAYWRIGHT_TEST_ADMIN_EMAIL=$testAdminEmail `
     -e PLAYWRIGHT_TEST_ADMIN_PASSWORD=$testAdminPassword `
     -e PLAYWRIGHT_HOUSEHOLD_ID=0 `
+    -e PLAYWRIGHT_SUPERUSER_EMAIL=$superuserEmail `
+    -e PLAYWRIGHT_SUPERUSER_PASSWORD=$superuserPassword `
     -v "${frontendPath}:/work" `
     -v rezzerv_playwright_node_modules:/work/node_modules `
     -w /work `
