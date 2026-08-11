@@ -1,5 +1,6 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import Table from './Table'
+import Pagination from './Pagination.jsx'
 import { buildTableWidth, ResizableHeaderCell, useResizableColumnWidths } from './resizableTable.jsx'
 import { nextSortState, sortItems } from './sorting'
 
@@ -52,6 +53,8 @@ export default function DataTable({
   tableStyle = {},
   renderBodyAppend = null,
   renderFooter = null,
+  pagination = false,
+  pageSize = 10,
 }) {
   const visibleColumns = useMemo(
     () => columns.filter((column) => column && column.hidden !== true),
@@ -97,6 +100,7 @@ export default function DataTable({
 
   const [internalFilters, setInternalFilters] = useState({})
   const [internalSort, setInternalSort] = useState(defaultSort || { key: '', direction: 'asc' })
+  const [page, setPage] = useState(1)
 
   const activeFilters = filterState || internalFilters
   const activeSort = sortState || internalSort
@@ -158,6 +162,23 @@ export default function DataTable({
     return sortItems(filteredData, activeSort, sortGetters)
   }, [filteredData, visibleColumns, activeSort])
 
+  const normalizedPageSize = Math.max(Number(pageSize) || 10, 1)
+  const pageCount = pagination ? Math.max(Math.ceil(sortedData.length / normalizedPageSize), 1) : 1
+
+  useEffect(() => {
+    setPage(1)
+  }, [activeFilters, activeSort, data, normalizedPageSize, pagination])
+
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount)
+  }, [page, pageCount])
+
+  const displayData = useMemo(() => {
+    if (!pagination) return sortedData
+    const start = (page - 1) * normalizedPageSize
+    return sortedData.slice(start, start + normalizedPageSize)
+  }, [pagination, sortedData, page, normalizedPageSize])
+
   const wrapperClasses = [
     'rz-data-table-wrapper',
     wrapperClassName,
@@ -179,81 +200,84 @@ export default function DataTable({
   }
 
   return (
-    <Table
-      wrapperClassName={wrapperClasses}
-      tableClassName={tableClasses}
-      tableStyle={mergedTableStyle}
-      dataTestId={dataTestId}
-    >
-      <colgroup>
-        {visibleColumns.map((column) => (
-          <col key={column.key} style={{ width: `${widths[column.key] || column.width || 120}px` }} />
-        ))}
-      </colgroup>
-
-      <thead>
-        <tr className="rz-table-header" ref={headerRowRef}>
+    <>
+      <Table
+        wrapperClassName={wrapperClasses}
+        tableClassName={tableClasses}
+        tableStyle={mergedTableStyle}
+        dataTestId={dataTestId}
+      >
+        <colgroup>
           {visibleColumns.map((column) => (
-            <ResizableHeaderCell
-              key={column.key}
-              columnKey={column.key}
-              widths={widths}
-              onStartResize={startResize}
-              className={column.align === 'right' ? 'rz-num' : column.className || ''}
-              sortable={Boolean(column.sortable)}
-              isSorted={activeSort?.key === column.key}
-              sortDirection={activeSort?.direction || column.defaultDirection || 'asc'}
-              onSort={column.sortable ? handleSort : null}
-              style={column.headerStyle || {}}
-            >
-              {column.header ?? column.label ?? column.key}
-            </ResizableHeaderCell>
+            <col key={column.key} style={{ width: `${widths[column.key] || column.width || 120}px` }} />
           ))}
-        </tr>
+        </colgroup>
 
-        {stickyFilters && hasFilters ? (
-          <tr className="rz-table-filters">
+        <thead>
+          <tr className="rz-table-header" ref={headerRowRef}>
             {visibleColumns.map((column) => (
-              <th key={column.key} className={column.align === 'right' ? 'rz-num' : column.className || ''}>
-                {column.filterable ? (
-                  <input
-                    className="rz-input rz-inline-input"
-                    value={activeFilters[column.key] || ''}
-                    onChange={(event) => handleFilterChange(column.key, event.target.value)}
-                    placeholder={column.filterPlaceholder || 'Filter'}
-                    aria-label={column.filterLabel || `Filter op ${column.label || column.key}`}
-                  />
-                ) : null}
-              </th>
+              <ResizableHeaderCell
+                key={column.key}
+                columnKey={column.key}
+                widths={widths}
+                onStartResize={startResize}
+                className={column.align === 'right' ? 'rz-num' : column.className || ''}
+                sortable={Boolean(column.sortable)}
+                isSorted={activeSort?.key === column.key}
+                sortDirection={activeSort?.direction || column.defaultDirection || 'asc'}
+                onSort={column.sortable ? handleSort : null}
+                style={column.headerStyle || {}}
+              >
+                {column.header ?? column.label ?? column.key}
+              </ResizableHeaderCell>
             ))}
           </tr>
-        ) : null}
-      </thead>
 
-      <tbody>
-        {sortedData.length === 0 ? (
-          <tr>
-            <td colSpan={visibleColumns.length}>{emptyMessage}</td>
-          </tr>
-        ) : renderRow ? (
-          sortedData.map((row, index) => renderRow(row, index))
-        ) : (
-          sortedData.map((row, index) => (
-            <tr key={getRowKey(row, index)}>
+          {stickyFilters && hasFilters ? (
+            <tr className="rz-table-filters">
               {visibleColumns.map((column) => (
-                <td key={column.key} className={column.align === 'right' ? 'rz-num' : column.cellClassName || ''}>
-                  {typeof column.renderCell === 'function'
-                    ? column.renderCell(row, index)
-                    : String(defaultGetValue(row, column) ?? '')}
-                </td>
+                <th key={column.key} className={column.align === 'right' ? 'rz-num' : column.className || ''}>
+                  {column.filterable ? (
+                    <input
+                      className="rz-input rz-inline-input"
+                      value={activeFilters[column.key] || ''}
+                      onChange={(event) => handleFilterChange(column.key, event.target.value)}
+                      placeholder={column.filterPlaceholder || 'Filter'}
+                      aria-label={column.filterLabel || `Filter op ${column.label || column.key}`}
+                    />
+                  ) : null}
+                </th>
               ))}
             </tr>
-          ))
-        )}
-        {typeof renderBodyAppend === 'function' ? renderBodyAppend({ columns: visibleColumns, data: sortedData }) : null}
-      </tbody>
+          ) : null}
+        </thead>
 
-      {typeof renderFooter === 'function' ? renderFooter({ columns: visibleColumns, data: sortedData }) : null}
-    </Table>
+        <tbody>
+          {sortedData.length === 0 ? (
+            <tr>
+              <td colSpan={visibleColumns.length}>{emptyMessage}</td>
+            </tr>
+          ) : renderRow ? (
+            displayData.map((row, index) => renderRow(row, index))
+          ) : (
+            displayData.map((row, index) => (
+              <tr key={getRowKey(row, index)}>
+                {visibleColumns.map((column) => (
+                  <td key={column.key} className={column.align === 'right' ? 'rz-num' : column.cellClassName || ''}>
+                    {typeof column.renderCell === 'function'
+                      ? column.renderCell(row, index)
+                      : String(defaultGetValue(row, column) ?? '')}
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
+          {typeof renderBodyAppend === 'function' ? renderBodyAppend({ columns: visibleColumns, data: displayData }) : null}
+        </tbody>
+
+        {typeof renderFooter === 'function' ? renderFooter({ columns: visibleColumns, data: displayData }) : null}
+      </Table>
+      {pagination ? <Pagination page={page} pageCount={pageCount} onPageChange={setPage} /> : null}
+    </>
   )
 }
