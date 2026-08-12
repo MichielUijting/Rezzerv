@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Header from '../../ui/Header.jsx'
 import ScreenCard from '../../ui/ScreenCard.jsx'
 import Tabs from '../../ui/Tabs.jsx'
@@ -68,10 +69,9 @@ function displayValue(key, value) {
 }
 
 function EmptySection({ title, onOpenHousehold }) {
-  if (title === 'Overzicht') return <SuperuserOverviewSection onOpenHousehold={onOpenHousehold} />
+  if (title === 'Overzicht') return <SuperuserOverviewSection />
   if (title === 'Gebruikers') return <SuperuserUsersSection onOpenHousehold={onOpenHousehold} />
   if (title === 'Gebruik') return <SuperuserUsageSection onOpenHousehold={onOpenHousehold} />
-  if (title === 'Meldingen') return <section aria-label="Meldingen" data-testid="superuser-notifications-tab"><h2 style={{ marginTop: 0, fontSize: 20 }}>Meldingen</h2><p>Open het bestaande platformbrede meldingenoverzicht.</p><Button type="button" onClick={() => window.location.assign('/superuser/meldingen')}>Naar Meldingen</Button></section>
   return <section aria-label={title}><h2 style={{ marginTop: 0, fontSize: 20 }}>{title}</h2><p style={{ marginBottom: 0 }}>Dit onderdeel volgt in een volgende Superuser-release.</p></section>
 }
 
@@ -138,7 +138,7 @@ function HouseholdInspector({ householdId }) {
   if (error) return <div role="alert">{error}</div>; if (!overview) return <div role="status">Huishouden wordt geladen…</div>
   const name = overview.household?.name || overview.household?.household_id || householdId, activeScreenLabel = HOUSEHOLD_SCREENS.find(([key]) => key === screen)?.[1] || 'Diagnose'
   function renderScreenContent() { if (screen === 'diagnose') return <Diagnostics data={overview.diagnostics} selectionLabel={selectionLabel} attributionSummary={attributionSummary} />; if (!screenData) return <p>Gegevens worden geladen…</p>; return <><div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, alignItems: 'center', marginBottom: 12 }}><span>Filter: <strong>{selectionLabel}</strong>.</span><span>Voorkomens: <strong>alleen actief</strong>.</span><label style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}><Checkbox checked={showTechnicalIds} onChange={(event) => setShowTechnicalIds(event.target.checked)} aria-label="Technische ID's tonen" />Technische ID's: {showTechnicalIds ? 'Aan' : 'Uit'}</label></div><ReadOnlyTable rows={visibleRows} dataTestId={`superuser-${screen}-table`} screenKey={screen} showTechnicalIds={showTechnicalIds} /></> }
-  return <section data-testid="superuser-household-inspector"><div style={{ border: '1px solid #d4ddd4', background: '#f7faf7', padding: 12, borderRadius: 6, marginBottom: 14 }}><strong>Superuser — Huishouden {name} — Alleen lezen</strong></div><h2 style={{ fontSize: 20, marginBottom: 8 }}>Gebruikers</h2><DataTable columns={memberColumns} data={selectionRows} dataTestId="superuser-household-members-table" getRowKey={(row, index) => memberKey(row, index)} defaultSort={{ key: 'email', direction: 'asc' }} emptyMessage="Geen gebruikers gevonden voor dit huishouden." pagination pageSize={PAGE_SIZE} renderRow={(member, index) => { const key = memberKey(member, index), checked = selectedUserKeys.includes(key); return <tr key={key}><td className="rz-center"><Checkbox checked={checked} onChange={() => toggleUser(key)} aria-label={`Toon details voor ${member.email || member.user_id || index + 1}`} /></td><td>{member.email || member.user_id || ''}</td><td>{dutchValue(member.role)}</td><td>{dutchValue(member.status)}</td></tr> }} /><div style={{ marginTop: 24 }}><Tabs tabs={HOUSEHOLD_SCREENS.map(([, label]) => label)} activeTab={activeScreenLabel} onTabChange={(label) => setScreen(HOUSEHOLD_SCREENS.find(([, candidate]) => candidate === label)?.[0] || 'diagnose')}>{() => renderScreenContent()}</Tabs></div></section>
+  return <section data-testid="superuser-household-inspector" style={{ minWidth: 0, width: '100%' }}><div style={{ border: '1px solid #d4ddd4', background: '#f7faf7', padding: 12, borderRadius: 6, marginBottom: 14 }}><strong>Superuser — Huishouden {name} — Alleen lezen</strong></div><h2 style={{ fontSize: 20, marginBottom: 8 }}>Gebruikers</h2><DataTable columns={memberColumns} data={selectionRows} dataTestId="superuser-household-members-table" getRowKey={(row, index) => memberKey(row, index)} defaultSort={{ key: 'email', direction: 'asc' }} emptyMessage="Geen gebruikers gevonden voor dit huishouden." pagination pageSize={PAGE_SIZE} renderRow={(member, index) => { const key = memberKey(member, index), checked = selectedUserKeys.includes(key); return <tr key={key}><td className="rz-center"><Checkbox checked={checked} onChange={() => toggleUser(key)} aria-label={`Toon details voor ${member.email || member.user_id || index + 1}`} /></td><td>{member.email || member.user_id || ''}</td><td>{dutchValue(member.role)}</td><td>{dutchValue(member.status)}</td></tr> }} /><div style={{ marginTop: 24 }}><Tabs tabs={HOUSEHOLD_SCREENS.map(([, label]) => label)} activeTab={activeScreenLabel} onTabChange={(label) => setScreen(HOUSEHOLD_SCREENS.find(([, candidate]) => candidate === label)?.[0] || 'diagnose')}>{() => renderScreenContent()}</Tabs></div></section>
 }
 
 function countOpenNotifications(signal) { const match = String(signal || '').match(/(\d+) open melding/i); return match ? Number(match[1]) : 0 }
@@ -157,13 +157,21 @@ function HouseholdsSection({ selectedId, onSelectHousehold }) {
     { key: 'attention_signal', header: 'Aandacht vereist', width: 320, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.attention_signal || '—' },
   ], [])
   if (selectedId) return <HouseholdInspector householdId={selectedId} />
-  return <section aria-label="Huishoudens" data-testid="superuser-households"><h2 style={{ marginTop: 0, fontSize: 20 }}>Huishoudens</h2><p style={{ marginTop: 0 }}>Dubbelklik op een huishouden om het alleen-lezen te bekijken.</p>{error && <div role="alert">{error}</div>}{loading ? <p>Huishoudens worden geladen…</p> : <DataTable columns={columns} data={items} dataTestId="superuser-households-table" getRowKey={(row) => row.household_id} defaultSort={{ key: 'name', direction: 'asc' }} emptyMessage="Geen huishoudens gevonden." pagination pageSize={PAGE_SIZE} renderRow={(item) => <tr key={item.household_id} onDoubleClick={() => onSelectHousehold(item.household_id)} title="Dubbelklik om dit huishouden alleen-lezen te bekijken">{columns.map((column) => <td key={column.key} className={column.align === 'right' ? 'rz-num' : ''}>{String(column.getValue(item) ?? '')}</td>)}</tr>} />}</section>
+  return <section aria-label="Huishoudens" data-testid="superuser-households" style={{ minWidth: 0, width: '100%' }}><h2 style={{ marginTop: 0, fontSize: 20 }}>Huishoudens</h2><p style={{ marginTop: 0 }}>Dubbelklik op een huishouden om het alleen-lezen te bekijken.</p>{error && <div role="alert">{error}</div>}{loading ? <p>Huishoudens worden geladen…</p> : <DataTable columns={columns} data={items} dataTestId="superuser-households-table" getRowKey={(row) => row.household_id} defaultSort={{ key: 'name', direction: 'asc' }} emptyMessage="Geen huishoudens gevonden." pagination pageSize={PAGE_SIZE} renderRow={(item) => <tr key={item.household_id} onDoubleClick={() => onSelectHousehold(item.household_id)} title="Dubbelklik om dit huishouden alleen-lezen te bekijken">{columns.map((column) => <td key={column.key} className={column.align === 'right' ? 'rz-num' : ''}>{String(column.getValue(item) ?? '')}</td>)}</tr>} />}</section>
 }
 
 export default function SuperuserDashboardPage() {
+  const navigate = useNavigate()
   const [access, setAccess] = useState(null), [error, setError] = useState(''), [activeTab, setActiveTab] = useState('Overzicht'), [selectedHouseholdId, setSelectedHouseholdId] = useState(null)
   useEffect(() => { let cancelled = false; fetchJsonWithAuth('/api/superuser/bootstrap').then(async (response) => { const payload = await response.json().catch(() => ({})); if (!response.ok) throw new Error(payload?.detail || 'Superuser-toegang kon niet worden gevalideerd.'); if (cancelled) return; setAccess(payload); await fetchJsonWithAuth('/api/superuser/audit/open', { method: 'POST' }) }).catch((e) => { if (!cancelled) setError(String(e?.message || e || 'Superuser-toegang mislukt.')) }); return () => { cancelled = true } }, [])
-  function handleTopTabChange(tab) { setActiveTab(tab); if (tab === 'Huishoudens') setSelectedHouseholdId(null) }
+  function handleTopTabChange(tab) {
+    if (tab === 'Meldingen') {
+      navigate('/superuser/meldingen')
+      return
+    }
+    setActiveTab(tab)
+    if (tab === 'Huishoudens') setSelectedHouseholdId(null)
+  }
   function openHouseholdFromOverview(householdId) { setSelectedHouseholdId(householdId); setActiveTab('Huishoudens') }
   return <div className="rz-screen" data-testid="superuser-dashboard"><Header title="Rezzerv Beheercentrum" /><div className="rz-content"><div className="rz-content-inner"><ScreenCard fullWidth>{error ? <div role="alert">{error}</div> : !access ? <div role="status">Superuser-toegang wordt gecontroleerd…</div> : <><div role="status" aria-label="Superuser alleen-lezen status" style={{ marginBottom: 16, padding: '10px 12px', border: '1px solid #d4ddd4', borderRadius: 6, background: '#f7faf7' }}><strong>Superuser</strong> — beheercentrum. Toegang: <strong>alleen lezen</strong>.</div><Tabs tabs={TABS} activeTab={activeTab} onTabChange={handleTopTabChange}>{(tab) => tab === 'Huishoudens' ? <HouseholdsSection selectedId={selectedHouseholdId} onSelectHousehold={setSelectedHouseholdId} /> : <EmptySection title={tab} onOpenHousehold={openHouseholdFromOverview} />}</Tabs></>}</ScreenCard></div></div></div>
 }
