@@ -53,7 +53,7 @@ test.describe('Superuser frontend-regressie', () => {
     await expect(page.getByTestId('superuser-dashboard')).toBeVisible()
   })
 
-  test('beheercentrum bewaakt tabs, uitgebreid huishoudsoverzicht en read-only huishoudinzage', async ({ page }) => {
+  test('beheercentrum bewaakt tabs, huishoudselectie/export en read-only huishoudinzage', async ({ page }) => {
     await expect(page.getByRole('status', { name: 'Superuser alleen-lezen status' })).toContainText('alleen lezen')
     for (const tabName of ['Overzicht', 'Huishoudens', 'Gebruikers', 'Gebruik', 'Kassabonnen', 'Meldingen', 'Systeem']) {
       await expect(page.getByRole('tab', { name: tabName, exact: true })).toBeVisible()
@@ -65,13 +65,24 @@ test.describe('Superuser frontend-regressie', () => {
     }
 
     await page.getByRole('tab', { name: 'Huishoudens', exact: true }).click()
+    const householdsSection = page.getByTestId('superuser-households')
     const households = page.getByTestId('superuser-households-table')
     await expect(households).toBeVisible()
     for (const header of ['Huishouden', 'Status', 'Actieve gebruikers', 'Gearchiveerd', 'Aangemaakt op', 'Laatst actief', 'Kassabonnen', 'Open meldingen', 'Aandacht vereist']) {
       await expectSortableHeader(households, header)
     }
     await expectHorizontalScrollbar(households)
-    await expect(page.getByRole('navigation', { name: 'Paginering' })).toBeVisible()
+    await expect(householdsSection.getByRole('navigation', { name: 'Paginering' })).toBeVisible()
+
+    const selectAllHouseholds = householdsSection.getByLabel('Selecteer alle huishoudens')
+    await expect(selectAllHouseholds).toBeVisible()
+    await expect(selectAllHouseholds).not.toBeChecked()
+    const householdsExport = householdsSection.getByRole('button', { name: 'Exporteren', exact: true })
+    await expect(householdsExport).toBeVisible()
+    await expect(householdsExport).toBeDisabled()
+    const firstHouseholdCheckbox = householdsSection.getByRole('checkbox', { name: /Selecteer huishouden / }).first()
+    await firstHouseholdCheckbox.check()
+    await expect(householdsExport).toBeEnabled()
 
     const firstHouseholdRow = households.locator('tbody tr').first()
     await expect(firstHouseholdRow).toBeVisible()
