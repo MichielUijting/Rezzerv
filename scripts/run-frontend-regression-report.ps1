@@ -13,18 +13,27 @@ Push-Location $repoRoot
 
 $fixturesPrepared = $false
 $runFailed = $false
+$promptedSuperuserPassword = $false
+$superuserPasswordBstr = [IntPtr]::Zero
 
 $superuserEmail = if ($env:REZZERV_REGRESSION_SUPERUSER_EMAIL) {
   $env:REZZERV_REGRESSION_SUPERUSER_EMAIL
 } else {
   "supergebruiker@rezzerv.local"
 }
+
 $superuserPassword = $env:REZZERV_REGRESSION_SUPERUSER_PASSWORD
 $testAdminEmail = "test-admin@rezzerv.local"
 $testAdminPassword = "Rt$([Guid]::NewGuid().ToString('N'))"
 
 if (-not $superuserPassword) {
-  throw "REZZERV_REGRESSION_SUPERUSER_PASSWORD ontbreekt in deze PowerShell-sessie."
+  Write-Host "`n=== Vereist PO-credential ===" -ForegroundColor Cyan
+  Write-Host "Deze regressierun heeft het wachtwoord van de platform-superuser nodig." -ForegroundColor Yellow
+  $secureSuperuserPassword = Read-Host "Voer het wachtwoord van $superuserEmail in" -AsSecureString
+  $superuserPasswordBstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureSuperuserPassword)
+  $superuserPassword = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($superuserPasswordBstr)
+  $env:REZZERV_REGRESSION_SUPERUSER_PASSWORD = $superuserPassword
+  $promptedSuperuserPassword = $true
 }
 
 try {
@@ -40,11 +49,7 @@ try {
     Write-Host "`n=== Docker build/start ===" -ForegroundColor Cyan
     docker compose up -d --build
     $dockerBuildExitCode = $LASTEXITCODE
-
-    if ($dockerBuildExitCode -ne 0) {
-      throw "Docker build/start is gefaald met exitcode $dockerBuildExitCode."
-    }
-
+    if ($dockerBuildExitCode -ne 0) { throw "Docker build/start is gefaald met exitcode $dockerBuildExitCode." }
     Write-Host "`n=== Stabilisatie na hernieuwde opbouw: 90 seconden ===" -ForegroundColor Cyan
     Start-Sleep -Seconds 90
   }
@@ -63,10 +68,7 @@ try {
       Start-Sleep -Seconds 10
     }
   }
-
-  if (-not $healthOk) {
-    throw "Backend healthcheck niet groen na 12 pogingen."
-  }
+  if (-not $healthOk) { throw "Backend healthcheck niet groen na 12 pogingen." }
 
   Write-Host "`n=== Autorisatiematrix server-side sessies ===" -ForegroundColor Cyan
   docker compose exec -T `
@@ -75,43 +77,22 @@ try {
     -e REZZERV_TEST_ADMIN_EMAIL=$testAdminEmail `
     -e REZZERV_TEST_ADMIN_PASSWORD=$testAdminPassword `
     backend python /app/tests/authorization_role_matrix_selftest.py
-  $authorizationExitCode = $LASTEXITCODE
-
-  if ($authorizationExitCode -ne 0) {
-    throw "Autorisatiematrix-selftest is gefaald met exitcode $authorizationExitCode."
-  }
+  if ($LASTEXITCODE -ne 0) { throw "Autorisatiematrix-selftest is gefaald met exitcode $LASTEXITCODE." }
 
   Write-Host "`n=== Winkelen Release 1 backend-selftest ===" -ForegroundColor Cyan
-  docker compose exec -T `
-    -e PYTHONPATH=/app `
-    backend python /app/tests/shopping_list_release1_selftest.py
-  $shoppingSelftestExitCode = $LASTEXITCODE
-
-  if ($shoppingSelftestExitCode -ne 0) {
-    throw "Winkelen Release 1 backend-selftest is gefaald met exitcode $shoppingSelftestExitCode."
-  }
+  docker compose exec -T -e PYTHONPATH=/app backend python /app/tests/shopping_list_release1_selftest.py
+  if ($LASTEXITCODE -ne 0) { throw "Winkelen Release 1 backend-selftest is gefaald met exitcode $LASTEXITCODE." }
 
   Write-Host "`n=== Huishouden-0 regressie-fixtures voorbereiden ===" -ForegroundColor Cyan
-  docker compose exec -T backend `
-    python /app/tests/household_zero_regression_fixture.py prepare
-  $fixturePrepareExitCode = $LASTEXITCODE
-
-  if ($fixturePrepareExitCode -ne 0) {
-    throw "Voorbereiden van huishouden-0-fixtures is gefaald met exitcode $fixturePrepareExitCode."
-  }
-
+  docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py prepare
+  if ($LASTEXITCODE -ne 0) { throw "Voorbereiden van huishouden-0-fixtures is gefaald met exitcode $LASTEXITCODE." }
   $fixturesPrepared = $true
 
   Write-Host "`n=== Playwright frontend regressie via Docker ===" -ForegroundColor Cyan
   Write-Host "Platform-superuser: $superuserEmail; huishouden: 0" -ForegroundColor Cyan
   Write-Host "Playwright-testaccount: $testAdminEmail; huishouden: 0" -ForegroundColor Cyan
 
-  $frontendPath = Join-Path $repoRoot "frontend"
-  $frontendPath = $frontendPath.Replace("\", "/")
-
-  # Fase 1 bewaart de bestaande parallelle regressieset. De stateful Kassa-importketen
-  # draait bewust niet parallel, omdat echte OCR/importwrites op dezelfde huishouden-0
-  # runtime andere browserworkers tijdelijk kunnen verstoren.
+  $frontendPath = (Join-Path $repoRoot "frontend").Replace("\", "/")
   $parallelTestFiles = @(
     "tests/e2e/kassa.frontend-regression.spec.js",
     "tests/e2e/uitpakken.frontend-regression.spec.js",
@@ -128,7 +109,6 @@ try {
     "tests/e2e/article-detail.frontend-regression.spec.js",
     "tests/e2e/catalog-gpc-search.frontend-regression.spec.js"
   ) -join " "
-
   $kassaImportTestFile = "tests/e2e/kassa-import-chain.frontend-regression.spec.js"
 
   Write-Host "`n=== Playwright fase 1/2: bestaande regressieset parallel ===" -ForegroundColor Cyan
@@ -146,11 +126,7 @@ try {
     -w /work `
     mcr.microsoft.com/playwright:v1.58.2-noble `
     bash -lc "npm ci && ./node_modules/.bin/playwright test --workers=3 $parallelTestFiles"
-  $parallelPlaywrightExitCode = $LASTEXITCODE
-
-  if ($parallelPlaywrightExitCode -ne 0) {
-    throw "Playwright bestaande frontendregressie is gefaald met exitcode $parallelPlaywrightExitCode."
-  }
+  if ($LASTEXITCODE -ne 0) { throw "Playwright bestaande frontendregressie is gefaald met exitcode $LASTEXITCODE." }
 
   Write-Host "`n=== Playwright fase 2/2: echte Kassa-importketen geisoleerd ===" -ForegroundColor Cyan
   docker run --rm `
@@ -167,11 +143,7 @@ try {
     -w /work `
     mcr.microsoft.com/playwright:v1.58.2-noble `
     bash -lc "./node_modules/.bin/playwright test --workers=1 $kassaImportTestFile"
-  $kassaPlaywrightExitCode = $LASTEXITCODE
-
-  if ($kassaPlaywrightExitCode -ne 0) {
-    throw "Playwright Kassa-importregressie is gefaald met exitcode $kassaPlaywrightExitCode."
-  }
+  if ($LASTEXITCODE -ne 0) { throw "Playwright Kassa-importregressie is gefaald met exitcode $LASTEXITCODE." }
 
   Write-Host "`n=== Frontend regressie groen: bestaande suite + geisoleerde Kassa-importketen ===" -ForegroundColor Green
 }
@@ -183,19 +155,12 @@ finally {
   if ($fixturesPrepared) {
     try {
       Write-Host "`n=== Huishouden-0 regressie-fixtures opruimen ===" -ForegroundColor Cyan
-      docker compose exec -T backend `
-        python /app/tests/household_zero_regression_fixture.py cleanup
-      $cleanupExitCode = $LASTEXITCODE
-
-      if ($cleanupExitCode -ne 0) {
-        throw "Cleanup gaf exitcode $cleanupExitCode."
-      }
+      docker compose exec -T backend python /app/tests/household_zero_regression_fixture.py cleanup
+      if ($LASTEXITCODE -ne 0) { throw "Cleanup gaf exitcode $LASTEXITCODE." }
     }
     catch {
       Write-Host "Regression fixture cleanup na test faalde: $($_.Exception.Message)" -ForegroundColor Red
-      if (-not $runFailed) {
-        throw
-      }
+      if (-not $runFailed) { throw }
     }
   }
   else {
@@ -209,7 +174,6 @@ finally {
       (Join-Path $repoRoot "frontend\playwright"),
       (Join-Path $repoRoot "frontend\test-results")
     )
-
     foreach ($artifactPath in $playwrightArtifacts) {
       if (Test-Path $artifactPath) {
         Remove-Item -Recurse -Force $artifactPath
@@ -219,11 +183,16 @@ finally {
   }
   catch {
     Write-Host "Opruimen van Playwright-testartefacten faalde: $($_.Exception.Message)" -ForegroundColor Red
-    if (-not $runFailed) {
-      throw
-    }
+    if (-not $runFailed) { throw }
   }
 
   $testAdminPassword = $null
+  $superuserPassword = $null
+  if ($promptedSuperuserPassword) {
+    Remove-Item Env:\REZZERV_REGRESSION_SUPERUSER_PASSWORD -ErrorAction SilentlyContinue
+  }
+  if ($superuserPasswordBstr -ne [IntPtr]::Zero) {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($superuserPasswordBstr)
+  }
   Pop-Location
 }
