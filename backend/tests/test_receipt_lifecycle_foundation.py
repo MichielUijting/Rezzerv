@@ -1,4 +1,6 @@
+import pytest
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 
 from app.services.receipt_lifecycle_foundation_service import (
     ensure_receipt_lifecycle_foundation_schema,
@@ -99,12 +101,12 @@ def test_release_a_backfills_identity_once_and_is_idempotent():
         conn.execute(text("INSERT INTO receipt_table_lines (id, receipt_table_id, line_index, raw_label) VALUES ('line-1', 'receipt-1', 1, 'Melk')"))
 
         first = ensure_receipt_lifecycle_foundation_schema(conn)
-        receipt_key_1 = conn.execute(text("SELECT logical_receipt_key FROM receipt_tables WHERE id='receipt-1'" )).scalar_one()
-        line_key_1 = conn.execute(text("SELECT logical_line_key FROM receipt_table_lines WHERE id='line-1'" )).scalar_one()
+        receipt_key_1 = conn.execute(text("SELECT logical_receipt_key FROM receipt_tables WHERE id='receipt-1'")).scalar_one()
+        line_key_1 = conn.execute(text("SELECT logical_line_key FROM receipt_table_lines WHERE id='line-1'")).scalar_one()
 
         second = ensure_receipt_lifecycle_foundation_schema(conn)
-        receipt_key_2 = conn.execute(text("SELECT logical_receipt_key FROM receipt_tables WHERE id='receipt-1'" )).scalar_one()
-        line_key_2 = conn.execute(text("SELECT logical_line_key FROM receipt_table_lines WHERE id='line-1'" )).scalar_one()
+        receipt_key_2 = conn.execute(text("SELECT logical_receipt_key FROM receipt_tables WHERE id='receipt-1'")).scalar_one()
+        line_key_2 = conn.execute(text("SELECT logical_line_key FROM receipt_table_lines WHERE id='line-1'")).scalar_one()
 
         assert receipt_key_1 and receipt_key_1 == receipt_key_2
         assert line_key_1 and line_key_1 == line_key_2
@@ -137,8 +139,8 @@ def test_logical_keys_may_be_reused_by_future_reimport_attempts():
             VALUES ('line-2', 'receipt-2', 1, 'Melk', 'same-line')
         """))
 
-        assert conn.execute(text("SELECT COUNT(*) FROM receipt_tables WHERE logical_receipt_key='same-receipt'" )).scalar_one() == 2
-        assert conn.execute(text("SELECT COUNT(*) FROM receipt_table_lines WHERE logical_line_key='same-line'" )).scalar_one() == 2
+        assert conn.execute(text("SELECT COUNT(*) FROM receipt_tables WHERE logical_receipt_key='same-receipt'")).scalar_one() == 2
+        assert conn.execute(text("SELECT COUNT(*) FROM receipt_table_lines WHERE logical_line_key='same-line'")).scalar_one() == 2
 
 
 def test_exact_source_hash_can_be_reused_only_after_soft_delete():
@@ -147,17 +149,14 @@ def test_exact_source_hash_can_be_reused_only_after_soft_delete():
         ensure_receipt_lifecycle_foundation_schema(conn)
         conn.execute(text("INSERT INTO raw_receipts (id, household_id, sha256_hash) VALUES ('raw-active', '0', 'same-hash')"))
 
-        try:
+    with pytest.raises(IntegrityError):
+        with engine.begin() as conn:
             conn.execute(text("INSERT INTO raw_receipts (id, household_id, sha256_hash) VALUES ('raw-duplicate', '0', 'same-hash')"))
-            assert False, "active duplicate hash had geblokkeerd moeten worden"
-        except Exception:
-            pass
 
-    # Start a fresh transaction after the expected integrity failure.
     with engine.begin() as conn:
         conn.execute(text("UPDATE raw_receipts SET deleted_at=CURRENT_TIMESTAMP WHERE id='raw-active'"))
         conn.execute(text("INSERT INTO raw_receipts (id, household_id, sha256_hash) VALUES ('raw-reimport', '0', 'same-hash')"))
-        assert conn.execute(text("SELECT COUNT(*) FROM raw_receipts WHERE household_id='0' AND sha256_hash='same-hash'" )).scalar_one() == 2
+        assert conn.execute(text("SELECT COUNT(*) FROM raw_receipts WHERE household_id='0' AND sha256_hash='same-hash'")).scalar_one() == 2
 
 
 def test_legacy_deleted_receipt_gets_no_invented_archive_or_remove_meaning():
@@ -166,4 +165,4 @@ def test_legacy_deleted_receipt_gets_no_invented_archive_or_remove_meaning():
         conn.execute(text("INSERT INTO raw_receipts (id, household_id, sha256_hash, deleted_at) VALUES ('raw-1', '0', 'abc', CURRENT_TIMESTAMP)"))
         conn.execute(text("INSERT INTO receipt_tables (id, raw_receipt_id, household_id, deleted_at) VALUES ('receipt-1', 'raw-1', '0', CURRENT_TIMESTAMP)"))
         ensure_receipt_lifecycle_foundation_schema(conn)
-        assert conn.execute(text("SELECT workflow_state FROM receipt_tables WHERE id='receipt-1'" )).scalar_one() == "legacy_deleted"
+        assert conn.execute(text("SELECT workflow_state FROM receipt_tables WHERE id='receipt-1'")).scalar_one() == "legacy_deleted"
