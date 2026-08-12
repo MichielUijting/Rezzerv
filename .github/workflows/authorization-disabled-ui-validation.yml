@@ -8,12 +8,19 @@ on:
       - 'frontend/src/features/settings/SettingsPage.jsx'
       - 'frontend/tests/e2e/authorization-disabled-ui.frontend-regression.spec.js'
       - '.github/workflows/authorization-disabled-ui-validation.yml'
+      - 'docker-compose.yml'
 
 jobs:
   authorization-disabled-ui:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Generate synthetic CI superuser credential
+        shell: bash
+        run: |
+          TEST_PASSWORD="Rt$(cat /proc/sys/kernel/random/uuid | tr -d '-')"
+          echo "REZZERV_SUPERGEBRUIKER_PASSWORD=$TEST_PASSWORD" >> "$GITHUB_ENV"
+          echo "PLAYWRIGHT_TEST_ADMIN_PASSWORD=$TEST_PASSWORD" >> "$GITHUB_ENV"
       - name: Build application images
         run: docker compose build backend frontend
       - name: Start application
@@ -35,6 +42,7 @@ jobs:
           CI: '1'
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
           PLAYWRIGHT_API_URL: http://127.0.0.1:8011
+          PLAYWRIGHT_TEST_ADMIN_EMAIL: supergebruiker@rezzerv.local
         run: |
           npm install
           npx playwright install --with-deps chromium

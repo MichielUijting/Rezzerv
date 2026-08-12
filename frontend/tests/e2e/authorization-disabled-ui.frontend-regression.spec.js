@@ -5,16 +5,28 @@ const MESSAGE = 'Alleen de beheerder is geautoriseerd voor deze functie.'
 const HOUSEHOLD_ID = '1'
 
 async function seedSession(page, permissions = {}, displayRole = 'member') {
-  await page.addInitScript(({ grantedPermissions, role }) => {
-    localStorage.setItem('rezzerv_token', 'rezzerv-dev-token')
-    localStorage.setItem('rezzerv_auth_context', JSON.stringify({
-      active_household_id: '1',
-      active_household_name: 'Testhuishouden',
-      display_role: role,
-      permissions: grantedPermissions,
-    }))
-    sessionStorage.setItem('rezzerv_auth_checked_token', 'rezzerv-dev-token')
-  }, { grantedPermissions: permissions, role: displayRole })
+  await page.route('**/api/session', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user: { id: 'authorization-ui-test@rezzerv.local', email: 'authorization-ui-test@rezzerv.local' },
+        user_id: 'authorization-ui-test@rezzerv.local',
+        email: 'authorization-ui-test@rezzerv.local',
+        active_household_id: HOUSEHOLD_ID,
+        active_household_name: 'Testhuishouden',
+        role: displayRole,
+        display_role: displayRole,
+        permissions,
+        supported_permissions: Object.keys(permissions),
+        can_manage_member_permissions: Boolean(permissions['permissions.manage']),
+        can_manage_members: Boolean(permissions['members.manage']),
+        is_viewer: displayRole === 'viewer',
+        is_platform_superuser: false,
+        is_frontteam: false,
+      }),
+    })
+  })
 }
 
 async function dismissSuccessFeedback(page) {
@@ -167,7 +179,7 @@ test.describe('Autorisatiegestuurde disabled-state', () => {
     const status = await page.evaluate(async () => {
       const response = await fetch('/api/household/name', {
         method: 'PUT',
-        headers: { Authorization: 'Bearer rezzerv-dev-token', 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: 'Ongeoorloofde wijziging' }),
       })
       return response.status
