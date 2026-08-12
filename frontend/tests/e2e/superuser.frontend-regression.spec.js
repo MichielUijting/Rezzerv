@@ -13,6 +13,24 @@ async function loginAsSuperuser(page) {
   await page.waitForURL('**/home')
 }
 
+async function expectReadOnlyInspector(inspector) {
+  await expect(inspector.locator('textarea')).toHaveCount(0)
+  await expect(inspector.locator('form')).toHaveCount(0)
+
+  const nonCheckboxInputs = inspector.locator('input:not([type="checkbox"])')
+  const inputCount = await nonCheckboxInputs.count()
+  expect(inputCount).toBeGreaterThan(0)
+  const allInputsAreTableFilters = await nonCheckboxInputs.evaluateAll((elements) =>
+    elements.every((element) => element.classList.contains('rz-inline-input')),
+  )
+  expect(allInputsAreTableFilters).toBe(true)
+
+  const mutationButtons = inspector.getByRole('button', {
+    name: /^(Opslaan|Bewaren|Toevoegen|Aanmaken|Bewerken|Wijzigen|Verwijderen|Corrigeren|Verwerken)$/i,
+  })
+  await expect(mutationButtons).toHaveCount(0)
+}
+
 test.describe('Superuser frontend-regressie', () => {
   test.beforeEach(async ({ page }) => {
     await loginAsSuperuser(page)
@@ -35,48 +53,52 @@ test.describe('Superuser frontend-regressie', () => {
     await page.getByRole('tab', { name: 'Huishoudens', exact: true }).click()
     const households = page.getByTestId('superuser-households-table')
     await expect(households).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Paginering' })).toBeVisible()
 
     const firstHouseholdRow = households.locator('tbody tr').first()
     await expect(firstHouseholdRow).toBeVisible()
     await firstHouseholdRow.dblclick()
 
-    await expect(page.getByTestId('superuser-household-inspector')).toBeVisible()
-    await expect(page.getByText('Niet aan gebruiker herleidbaar', { exact: true })).toBeVisible()
-
     const inspector = page.getByTestId('superuser-household-inspector')
+    await expect(inspector).toBeVisible()
+    await expect(inspector.getByText(/Alleen lezen/i).first()).toBeVisible()
+    await expect(inspector.getByText('Niet aan gebruiker herleidbaar', { exact: true })).toBeVisible()
     await expect(inspector.getByRole('columnheader', { name: 'Rol' })).toBeVisible()
     await expect(inspector.getByRole('columnheader', { name: 'Status' })).toBeVisible()
+    await expect(inspector.getByLabel('Selecteer alle gebruikerscategorieën')).toBeChecked()
 
-    // Technische-ID-weergave hoort bij de detailtabellen, niet bij de standaardtab Diagnose.
     await inspector.getByRole('tab', { name: 'Kassa', exact: true }).click()
     await expect(inspector.getByLabel("Technische ID's tonen")).not.toBeChecked()
+    await expect(inspector.getByText(/Technische ID's:\s*Uit/i)).toBeVisible()
     await expect(inspector.getByText(/Voorkomens:\s*alleen actief/i)).toBeVisible()
+    await expect(inspector.getByRole('navigation', { name: 'Paginering' }).last()).toBeVisible()
+    await expect(inspector.getByRole('button', { name: 'Exporteren', exact: true })).toBeVisible()
 
-    const mutationInputs = inspector.locator('input:not([type="checkbox"]), textarea')
-    await expect(mutationInputs).toHaveCount(0)
+    await expectReadOnlyInspector(inspector)
   })
 
   test('Gebruik blijft een read-only platformprojectie met standaardtabel en doorklik', async ({ page }) => {
     await page.getByRole('tab', { name: 'Gebruik', exact: true }).click()
 
-    await expect(page.getByText(/geen nieuwe gebruikers- of schermtracking toegevoegd/i)).toBeVisible()
+    const usageSection = page.getByTestId('superuser-usage')
+    await expect(usageSection).toBeVisible()
+    await expect(usageSection.getByText(/geen nieuwe gebruikers- of schermtracking toegevoegd/i)).toBeVisible()
     for (const label of ['Actieve gebruikers', 'Kassabonnen', 'Voorraadmutaties', 'Meldingen', 'Laatst actief']) {
-      await expect(page.getByRole('columnheader', { name: label })).toBeVisible()
+      await expect(usageSection.getByRole('columnheader', { name: label })).toBeVisible()
     }
 
-    const usageTable = page.locator('[data-testid="superuser-usage-table"]')
+    const usageTable = usageSection.locator('[data-testid="superuser-usage-table"]')
     await expect(usageTable).toBeVisible()
-
-    // De standaard Pagination is een sibling-control van DataTable en niet onderdeel van het <table>-element.
-    const usageSection = page.getByTestId('superuser-usage')
     await expect(usageSection.getByRole('navigation', { name: 'Paginering' })).toBeVisible()
     await expect(usageSection.getByText(/Pagina 1 van/i)).toBeVisible()
 
     const firstUsageRow = usageTable.locator('tbody tr').first()
     if (await firstUsageRow.count()) {
       await firstUsageRow.dblclick()
-      await expect(page.getByTestId('superuser-household-inspector')).toBeVisible()
+      const inspector = page.getByTestId('superuser-household-inspector')
+      await expect(inspector).toBeVisible()
       await expect(page.getByRole('status', { name: 'Superuser alleen-lezen status' })).toContainText('alleen lezen')
+      await expect(inspector.getByText(/Alleen lezen/i).first()).toBeVisible()
     }
   })
 })
