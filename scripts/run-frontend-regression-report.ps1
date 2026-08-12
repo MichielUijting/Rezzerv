@@ -109,10 +109,15 @@ try {
   $frontendPath = Join-Path $repoRoot "frontend"
   $frontendPath = $frontendPath.Replace("\", "/")
 
-  $testFiles = @(
+  # Fase 1 bewaart de bestaande parallelle regressieset. De stateful Kassa-importketen
+  # draait bewust niet parallel, omdat echte OCR/importwrites op dezelfde huishouden-0
+  # runtime andere browserworkers tijdelijk kunnen verstoren.
+  $parallelTestFiles = @(
     "tests/e2e/kassa.frontend-regression.spec.js",
     "tests/e2e/uitpakken.frontend-regression.spec.js",
     "tests/e2e/winkelen.frontend-regression.spec.js",
+    "tests/e2e/meldingen.frontend-regression.spec.js",
+    "tests/e2e/superuser.frontend-regression.spec.js",
     "tests/e2e/external-databases.frontend-regression.spec.js",
     "tests/e2e/external-databases-off.frontend-regression.spec.js",
     "tests/e2e/external-databases-unlink.frontend-regression.spec.js",
@@ -124,6 +129,9 @@ try {
     "tests/e2e/catalog-gpc-search.frontend-regression.spec.js"
   ) -join " "
 
+  $kassaImportTestFile = "tests/e2e/kassa-import-chain.frontend-regression.spec.js"
+
+  Write-Host "`n=== Playwright fase 1/2: bestaande regressieset parallel ===" -ForegroundColor Cyan
   docker run --rm `
     --add-host=host.docker.internal:host-gateway `
     -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:5174 `
@@ -131,18 +139,41 @@ try {
     -e PLAYWRIGHT_TEST_ADMIN_EMAIL=$testAdminEmail `
     -e PLAYWRIGHT_TEST_ADMIN_PASSWORD=$testAdminPassword `
     -e PLAYWRIGHT_HOUSEHOLD_ID=0 `
+    -e PLAYWRIGHT_SUPERUSER_EMAIL=$superuserEmail `
+    -e PLAYWRIGHT_SUPERUSER_PASSWORD=$superuserPassword `
     -v "${frontendPath}:/work" `
     -v rezzerv_playwright_node_modules:/work/node_modules `
     -w /work `
     mcr.microsoft.com/playwright:v1.58.2-noble `
-    bash -lc "npm ci && ./node_modules/.bin/playwright test --workers=3 $testFiles"
-  $playwrightExitCode = $LASTEXITCODE
+    bash -lc "npm ci && ./node_modules/.bin/playwright test --workers=3 $parallelTestFiles"
+  $parallelPlaywrightExitCode = $LASTEXITCODE
 
-  if ($playwrightExitCode -ne 0) {
-    throw "Playwright frontend regressie is gefaald met exitcode $playwrightExitCode."
+  if ($parallelPlaywrightExitCode -ne 0) {
+    throw "Playwright bestaande frontendregressie is gefaald met exitcode $parallelPlaywrightExitCode."
   }
 
-  Write-Host "`n=== Frontend regressie groen ===" -ForegroundColor Green
+  Write-Host "`n=== Playwright fase 2/2: echte Kassa-importketen geisoleerd ===" -ForegroundColor Cyan
+  docker run --rm `
+    --add-host=host.docker.internal:host-gateway `
+    -e PLAYWRIGHT_BASE_URL=http://host.docker.internal:5174 `
+    -e PLAYWRIGHT_API_URL=http://host.docker.internal:8011 `
+    -e PLAYWRIGHT_TEST_ADMIN_EMAIL=$testAdminEmail `
+    -e PLAYWRIGHT_TEST_ADMIN_PASSWORD=$testAdminPassword `
+    -e PLAYWRIGHT_HOUSEHOLD_ID=0 `
+    -e PLAYWRIGHT_SUPERUSER_EMAIL=$superuserEmail `
+    -e PLAYWRIGHT_SUPERUSER_PASSWORD=$superuserPassword `
+    -v "${frontendPath}:/work" `
+    -v rezzerv_playwright_node_modules:/work/node_modules `
+    -w /work `
+    mcr.microsoft.com/playwright:v1.58.2-noble `
+    bash -lc "./node_modules/.bin/playwright test --workers=1 $kassaImportTestFile"
+  $kassaPlaywrightExitCode = $LASTEXITCODE
+
+  if ($kassaPlaywrightExitCode -ne 0) {
+    throw "Playwright Kassa-importregressie is gefaald met exitcode $kassaPlaywrightExitCode."
+  }
+
+  Write-Host "`n=== Frontend regressie groen: bestaande suite + geisoleerde Kassa-importketen ===" -ForegroundColor Green
 }
 catch {
   $runFailed = $true
