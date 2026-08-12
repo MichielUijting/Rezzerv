@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react'
-import Card from '../../ui/Card.jsx'
 import DataTable from '../../ui/DataTable.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
@@ -10,18 +9,6 @@ function formatDateTimeToSeconds(value) {
   const text = String(value)
   const match = text.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}:\d{2})/)
   return match ? `${match[1]} ${match[2]}` : text
-}
-
-function MetricCard({ label, value, detail = '' }) {
-  return (
-    <Card>
-      <div style={{ minWidth: 150 }}>
-        <div style={{ fontSize: 14 }}>{label}</div>
-        <div style={{ fontSize: 28, marginTop: 4 }}>{value}</div>
-        {detail ? <div style={{ fontSize: 13, marginTop: 5 }}>{detail}</div> : null}
-      </div>
-    </Card>
-  )
 }
 
 export default function SuperuserUsageSection({ onOpenHousehold }) {
@@ -52,23 +39,18 @@ export default function SuperuserUsageSection({ onOpenHousehold }) {
   if (error) return <div role="alert">{error}</div>
   if (!data) return <div role="status">Gebruiksinformatie wordt geladen…</div>
 
-  const metrics = data.metrics || {}
   return (
-    <section aria-label="Superuser gebruik" data-testid="superuser-usage">
+    <section aria-label="Superuser gebruik" data-testid="superuser-usage" style={{ minWidth: 0, width: '100%' }}>
       <h2 style={{ marginTop: 0, fontSize: 20 }}>Gebruik</h2>
       <p style={{ marginTop: 0 }}>
-        Dit overzicht gebruikt uitsluitend gegevens die Rezzerv al voor de normale werking vastlegt. Er is geen nieuwe gebruikers- of schermtracking toegevoegd.
+        Vergelijk hier de operationele activiteit van huishoudens: aantallen gebruikers, kassabonnen, voorraadmutaties, meldingen en het laatste activiteitstijdstip.
+        Dit tabblad gaat dus over gebruiksvolume en activiteit; <strong>Overzicht</strong> gaat over platformstatus en aandachtspunten.
+      </p>
+      <p>
+        Er wordt uitsluitend gebruikgemaakt van gegevens die Rezzerv al voor de normale werking vastlegt. Er is geen nieuwe gebruikers- of schermtracking toegevoegd.
       </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12, marginBottom: 24 }}>
-        <MetricCard label="Actieve huishoudens" value={metrics.active_households ?? 0} />
-        <MetricCard label="Huishoudens met sessieactiviteit" value={metrics.households_with_session_activity ?? 0} />
-        <MetricCard label="Kassabonnen" value={metrics.receipt_count ?? 0} />
-        <MetricCard label="Voorraadmutaties" value={metrics.inventory_event_count ?? 0} />
-        <MetricCard label="Meldingen" value={metrics.support_thread_count ?? 0} />
-      </div>
-
-      <h2 style={{ fontSize: 20, marginBottom: 8 }}>Gebruik per huishouden</h2>
+      <h2 style={{ fontSize: 20, marginBottom: 8 }}>Operationeel gebruik per huishouden</h2>
       <p style={{ marginTop: 0 }}>Dubbelklik op een huishouden om de bestaande alleen-lezen huishoudinzage te openen.</p>
       <DataTable
         columns={columns}
