@@ -111,6 +111,7 @@ try {
 
   $testFiles = @(
     "tests/e2e/kassa.frontend-regression.spec.js",
+    "tests/e2e/kassa-import-chain.frontend-regression.spec.js",
     "tests/e2e/uitpakken.frontend-regression.spec.js",
     "tests/e2e/winkelen.frontend-regression.spec.js",
     "tests/e2e/meldingen.frontend-regression.spec.js",
