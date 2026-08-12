@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import inspect, text
 from sqlalchemy.engine import Engine
@@ -16,6 +18,7 @@ from app.services.support_message_service import ensure_support_message_foundati
 
 SUPERUSER_ROLE_KEY = "platform.superuser"
 SUPERUSER_TABS = ("Overzicht", "Huishoudens", "Gebruik", "Kassabonnen", "Systeem")
+TREND_DAYS = 7
 
 
 def _require_platform_superuser(conn, raw_session_id: str | None):
@@ -63,6 +66,69 @@ def _active_clauses(columns: set[str], *, alias: str = "") -> list[str]:
     return clauses
 
 
+def _calendar_days() -> list[str]:
+    today = datetime.now(timezone.utc).date()
+    return [(today - timedelta(days=offset)).isoformat() for offset in range(TREND_DAYS - 1, -1, -1)]
+
+
+def _historical_count_series(
+    conn,
+    table_name: str,
+    *,
+    current_value: int,
+    created_candidates: tuple[str, ...] = ("created_at",),
+    distinct_column: str | None = None,
+    extra_clauses: tuple[str, ...] = (),
+) -> list[dict]:
+    """Reconstruct seven end-of-calendar-day counts from existing timestamps only."""
+    days = _calendar_days()
+    columns = _columns(conn, table_name)
+    created_column = _first(columns, *created_candidates)
+    if not created_column:
+        return []
+
+    deleted_column = _first(columns, "deleted_at", "archived_at")
+    result: list[dict] = []
+    for index, day in enumerate(days):
+        if index == len(days) - 1:
+            value = int(current_value)
+        else:
+            end = f"{day}T23:59:59.999999+00:00"
+            clauses = [f"datetime({created_column}) <= datetime(:end)", *extra_clauses]
+            if deleted_column:
+                clauses.append(f"({deleted_column} IS NULL OR datetime({deleted_column}) > datetime(:end))")
+            elif "is_deleted" in columns:
+                clauses.append("COALESCE(is_deleted, 0) = 0")
+            expression = f"DISTINCT CAST({distinct_column} AS TEXT)" if distinct_column else "*"
+            value = int(conn.execute(
+                text(f"SELECT COUNT({expression}) FROM {table_name} WHERE {' AND '.join(clauses)}"),
+                {"end": end},
+            ).scalar() or 0)
+        result.append({"date": day, "value": value})
+    return result
+
+
+def _open_notification_series(conn, current_value: int) -> list[dict]:
+    days = _calendar_days()
+    columns = _columns(conn, "support_threads")
+    if "created_at" not in columns:
+        return []
+    result: list[dict] = []
+    for index, day in enumerate(days):
+        if index == len(days) - 1:
+            value = int(current_value)
+        else:
+            end = f"{day}T23:59:59.999999+00:00"
+            value = int(conn.execute(text("""
+                SELECT COUNT(*)
+                FROM support_threads
+                WHERE datetime(created_at) <= datetime(:end)
+                  AND (closed_at IS NULL OR datetime(closed_at) > datetime(:end))
+            """), {"end": end}).scalar() or 0)
+        result.append({"date": day, "value": value})
+    return result
+
+
 def _count_for_household(conn, table_name: str, household_id: str, *, household_column: str = "household_id") -> int:
     columns = _columns(conn, table_name)
     if household_column not in columns:
@@ -95,20 +161,24 @@ def _platform_overview(conn) -> dict:
     household_status_column = _first(registry_columns, "status")
 
     active_households = 0
+    household_status_clauses: list[str] = []
     if household_id_column:
         clauses = [*_active_clauses(registry_columns)]
         if household_status_column:
-            clauses.append(f"lower(trim(COALESCE({household_status_column}, 'active'))) = 'active'")
+            household_status_clauses.append(f"lower(trim(COALESCE({household_status_column}, 'active'))) = 'active'")
+            clauses.extend(household_status_clauses)
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         active_households = int(conn.execute(text(f"SELECT COUNT(*) FROM household_registry{where}")).scalar() or 0)
 
     membership_columns = _columns(conn, "household_memberships")
     user_column = _first(membership_columns, "user_id", "user_email", "email")
     active_users = 0
+    membership_status_clauses: list[str] = []
     if user_column:
         clauses = [*_active_clauses(membership_columns)]
         if "status" in membership_columns:
-            clauses.append("lower(trim(COALESCE(status, 'active'))) = 'active'")
+            membership_status_clauses.append("lower(trim(COALESCE(status, 'active'))) = 'active'")
+            clauses.extend(membership_status_clauses)
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         active_users = int(conn.execute(text(
             f"SELECT COUNT(DISTINCT CAST({user_column} AS TEXT)) FROM household_memberships{where}"
@@ -129,6 +199,31 @@ def _platform_overview(conn) -> dict:
     open_notifications = int(conn.execute(text(
         "SELECT COUNT(*) FROM support_threads WHERE status IN ('Open', 'In behandeling')"
     )).scalar() or 0)
+
+    trends = {
+        "active_households": _historical_count_series(
+            conn,
+            "household_registry",
+            current_value=active_households,
+            created_candidates=("created_at", "registered_at"),
+            extra_clauses=tuple(household_status_clauses),
+        ),
+        "active_users": _historical_count_series(
+            conn,
+            "household_memberships",
+            current_value=active_users,
+            created_candidates=("created_at", "joined_at", "added_at"),
+            distinct_column=user_column,
+            extra_clauses=tuple(membership_status_clauses),
+        ) if user_column else [],
+        "receipt_count": _historical_count_series(
+            conn,
+            "receipt_tables",
+            current_value=receipt_count,
+            created_candidates=("imported_at", "created_at", "purchase_at"),
+        ),
+        "open_notifications": _open_notification_series(conn, open_notifications),
+    }
 
     attention: dict[str, dict] = {}
 
@@ -192,6 +287,8 @@ def _platform_overview(conn) -> dict:
             "open_notifications": open_notifications,
             "last_receipt_at": last_receipt_at,
         },
+        "trends": trends,
+        "trend_period": {"calendar_days": TREND_DAYS, "timezone": "UTC"},
         "attention_items": attention_items,
         "notification_route": "/superuser/meldingen",
     }

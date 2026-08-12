@@ -145,7 +145,7 @@ export default function DataTable({
   }
 
   return (
-    <>
+    <div className="rz-data-table-shell">
       <Table wrapperClassName={wrapperClasses} tableClassName={tableClasses} tableStyle={mergedTableStyle} dataTestId={dataTestId}>
         <colgroup>
           {visibleColumns.map((column) => <col key={column.key} style={{ width: `${widths[column.key] || column.width || 120}px` }} />)}
@@ -208,17 +208,14 @@ export default function DataTable({
         {typeof renderFooter === 'function' ? renderFooter({ columns: visibleColumns, data: displayData }) : null}
       </Table>
       {(pagination || paginationActions) ? (
-        <div
-          className="rz-data-table-controls"
-          style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', gap: 12, marginTop: 10 }}
-        >
+        <div className="rz-data-table-controls">
           <span aria-hidden="true" />
           <Pagination page={page} pageCount={pageCount} onPageChange={setPage} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
+          <div className="rz-data-table-actions">
             {paginationActions}
           </div>
         </div>
       ) : null}
-    </>
+    </div>
   )
 }

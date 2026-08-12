@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import AppShell from '../../app/AppShell.jsx'
 import Card from '../../ui/Card.jsx'
 import Button from '../../ui/Button.jsx'
@@ -21,11 +22,13 @@ const AUTO_REFRESH_MS = 2000
 
 export default function PlatformSupportPage() {
   const { showFeedback } = useAppFeedback()
+  const [searchParams] = useSearchParams()
+  const initialHouseholdId = searchParams.get('householdId') || ''
   const currentUserId = String(readStoredAuthContext()?.user_id || readStoredAuthContext()?.email || '').trim().toLowerCase()
   const [threads, setThreads] = useState([])
   const [selected, setSelected] = useState(null)
   const [status, setStatus] = useState('Open')
-  const [householdId, setHouseholdId] = useState('')
+  const [householdId, setHouseholdId] = useState(initialHouseholdId)
   const [reply, setReply] = useState('')
   const [broadcastSubject, setBroadcastSubject] = useState('')
   const [broadcastMessage, setBroadcastMessage] = useState('')
@@ -190,7 +193,7 @@ export default function PlatformSupportPage() {
           <div className="rz-support-toolbar">
             <div>
               <h2>Alle meldingen</h2>
-              <p>Hier staan meldingen van alle huishoudens, inclusief nieuwe inzendingen.</p>
+              <p>{householdId ? `Meldingen van en met huishouden ${householdId}.` : 'Hier staan meldingen van alle huishoudens, inclusief nieuwe inzendingen.'}</p>
               <p aria-live="polite" className="rz-support-refresh">{refreshLabel}</p>
             </div>
             <Button variant="secondary" onClick={() => downloadPlatformSupportCsv(status).catch((error) => setFeedback(error.message))}>CSV exporteren</Button>
@@ -199,7 +202,7 @@ export default function PlatformSupportPage() {
             <select value={status} onChange={(event) => setStatus(event.target.value)} aria-label="Filter op status">
               {STATUSES.map((value) => <option key={value || 'all'} value={value}>{value || 'Alle statussen'}</option>)}
             </select>
-            <Input value={householdId} onChange={(event) => setHouseholdId(event.target.value)} placeholder="Huishoud-ID" />
+            <Input value={householdId} onChange={(event) => setHouseholdId(event.target.value)} placeholder="Huishoud-ID" aria-label="Filter op huishouden" />
             <Button variant="secondary" onClick={() => loadThreads({ showBusy: true })}>Zoeken</Button>
           </div>
           {busy && !threads.length ? <p>Bezig met laden…</p> : null}
