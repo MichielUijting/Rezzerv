@@ -88,7 +88,8 @@ def ensure_receipt_lifecycle_foundation_schema(conn) -> dict[str, Any]:
         added.append("receipt_table_lines.logical_line_key")
 
     # Existing rows receive opaque stable identities. Future reimport/reconciliation
-    # may deliberately reuse these keys on a new import attempt.
+    # deliberately reuses these keys on a newer import attempt of the same logical
+    # receipt/line; therefore the key columns themselves are indexed, not unique.
     missing_receipts = [
         str(row[0])
         for row in conn.execute(
@@ -150,11 +151,12 @@ def ensure_receipt_lifecycle_foundation_schema(conn) -> dict[str, Any]:
             "ON receipt_tables (household_id, logical_receipt_key)"
         )
     )
+    # Remove an accidental early Release-A development index if it ever existed.
+    conn.execute(text("DROP INDEX IF EXISTS uq_receipt_table_lines_logical_line_key"))
     conn.execute(
         text(
-            "CREATE UNIQUE INDEX IF NOT EXISTS uq_receipt_table_lines_logical_line_key "
-            "ON receipt_table_lines (logical_line_key) "
-            "WHERE logical_line_key IS NOT NULL AND trim(logical_line_key) <> ''"
+            "CREATE INDEX IF NOT EXISTS idx_receipt_table_lines_logical_line_key "
+            "ON receipt_table_lines (logical_line_key)"
         )
     )
     conn.execute(
