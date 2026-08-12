@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Generate synthetic test-admin credential
+      - name: Generate synthetic CI superuser credential
         shell: bash
         run: |
           TEST_PASSWORD="Rt$(cat /proc/sys/kernel/random/uuid | tr -d '-')"
@@ -42,7 +42,7 @@ jobs:
           CI: '1'
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:5174
           PLAYWRIGHT_API_URL: http://127.0.0.1:8011
-          PLAYWRIGHT_TEST_ADMIN_EMAIL: test-admin@rezzerv.local
+          PLAYWRIGHT_TEST_ADMIN_EMAIL: supergebruiker@rezzerv.local
         run: |
           npm install
           npx playwright install --with-deps chromium
