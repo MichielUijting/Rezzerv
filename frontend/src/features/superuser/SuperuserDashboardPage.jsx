@@ -143,9 +143,13 @@ function HouseholdInspector({ householdId }) {
 
 function countOpenNotifications(signal) { const match = String(signal || '').match(/(\d+) open melding/i); return match ? Number(match[1]) : 0 }
 function HouseholdsSection({ selectedId, onSelectHousehold }) {
-  const [items, setItems] = useState([]), [loading, setLoading] = useState(false), [error, setError] = useState('')
+  const [items, setItems] = useState([])
+  const [selectedHouseholdIds, setSelectedHouseholdIds] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   useEffect(() => { let cancelled = false; setLoading(true); Promise.all([fetchJsonWithAuth('/api/superuser/households'), fetchJsonWithAuth('/api/superuser/overview')]).then(async ([householdsResponse, overviewResponse]) => { const householdPayload = await householdsResponse.json().catch(() => ({})), overviewPayload = await overviewResponse.json().catch(() => ({})); if (!householdsResponse.ok) throw new Error(householdPayload?.detail || 'Huishoudens konden niet worden geladen.'); const attention = new Map((overviewResponse.ok ? overviewPayload.attention_items || [] : []).map((item) => [String(item.household_id), item])); const enriched = await Promise.all((householdPayload.items || []).map(async (item) => { const householdId = String(item.household_id || ''); let members = []; try { const response = await fetchJsonWithAuth(`/api/superuser/households/${encodeURIComponent(householdId)}`); const payload = await response.json().catch(() => ({})); if (response.ok) members = payload.members || [] } catch { members = [] } const activeMembers = members.filter((member) => String(member.status || 'active').toLowerCase() === 'active').length; const archivedMembers = Math.max(0, members.length - activeMembers); const attentionItem = attention.get(householdId) || {}; return { ...item, active_member_count: activeMembers, archived_member_count: archivedMembers, attention_signal: attentionItem.signal || '', attention_count: attentionItem.signal_count || 0, open_notification_count: countOpenNotifications(attentionItem.signal) } })); if (!cancelled) setItems(enriched) }).catch((e) => { if (!cancelled) setError(String(e?.message || e)) }).finally(() => { if (!cancelled) setLoading(false) }); return () => { cancelled = true } }, [])
-  const columns = useMemo(() => [
+  useEffect(() => { const validIds = new Set(items.map((item) => String(item.household_id))); setSelectedHouseholdIds((current) => current.filter((id) => validIds.has(id))) }, [items])
+  const dataColumns = useMemo(() => [
     { key: 'name', header: 'Huishouden', width: 230, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.name || row.household_id || '' },
     { key: 'status', header: 'Status', width: 120, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => dutchValue(row.status || 'active') },
     { key: 'active_member_count', header: 'Actieve gebruikers', width: 145, sortable: true, align: 'right', getValue: (row) => row.active_member_count ?? 0 },
@@ -156,8 +160,29 @@ function HouseholdsSection({ selectedId, onSelectHousehold }) {
     { key: 'open_notification_count', header: 'Open meldingen', width: 135, sortable: true, align: 'right', getValue: (row) => row.open_notification_count ?? 0 },
     { key: 'attention_signal', header: 'Aandacht vereist', width: 320, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.attention_signal || '—' },
   ], [])
+  const allHouseholdsSelected = items.length > 0 && items.every((item) => selectedHouseholdIds.includes(String(item.household_id)))
+  const columns = useMemo(() => [
+    { key: 'selection', header: <Checkbox checked={allHouseholdsSelected} onChange={(event) => setSelectedHouseholdIds(event.target.checked ? items.map((item) => String(item.household_id)) : [])} aria-label="Selecteer alle huishoudens" />, width: 60, sortable: false, filterable: false, className: 'rz-center' },
+    ...dataColumns,
+  ], [allHouseholdsSelected, dataColumns, items])
+  const selectedItems = useMemo(() => items.filter((item) => selectedHouseholdIds.includes(String(item.household_id))), [items, selectedHouseholdIds])
+  function toggleHouseholdSelection(householdId, checked) { const id = String(householdId); setSelectedHouseholdIds((current) => checked ? [...new Set([...current, id])] : current.filter((item) => item !== id)) }
+  function exportSelectedHouseholds() {
+    if (selectedItems.length === 0) return
+    const rowsForExport = [dataColumns.map((column) => column.header), ...selectedItems.map((item) => dataColumns.map((column) => column.getValue(item)))]
+    const csv = `\uFEFF${rowsForExport.map((row) => row.map(csvValue).join(';')).join('\r\n')}`
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'superuser-huishoudens-geselecteerd.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
   if (selectedId) return <HouseholdInspector householdId={selectedId} />
-  return <section aria-label="Huishoudens" data-testid="superuser-households" style={{ minWidth: 0, width: '100%' }}><h2 style={{ marginTop: 0, fontSize: 20 }}>Huishoudens</h2><p style={{ marginTop: 0 }}>Dubbelklik op een huishouden om het alleen-lezen te bekijken.</p>{error && <div role="alert">{error}</div>}{loading ? <p>Huishoudens worden geladen…</p> : <DataTable columns={columns} data={items} dataTestId="superuser-households-table" getRowKey={(row) => row.household_id} defaultSort={{ key: 'name', direction: 'asc' }} emptyMessage="Geen huishoudens gevonden." pagination pageSize={PAGE_SIZE} renderRow={(item) => <tr key={item.household_id} onDoubleClick={() => onSelectHousehold(item.household_id)} title="Dubbelklik om dit huishouden alleen-lezen te bekijken">{columns.map((column) => <td key={column.key} className={column.align === 'right' ? 'rz-num' : ''}>{String(column.getValue(item) ?? '')}</td>)}</tr>} />}</section>
+  return <section aria-label="Huishoudens" data-testid="superuser-households" style={{ minWidth: 0, width: '100%' }}><h2 style={{ marginTop: 0, fontSize: 20 }}>Huishoudens</h2><p style={{ marginTop: 0 }}>Dubbelklik op een huishouden om het alleen-lezen te bekijken.</p>{error && <div role="alert">{error}</div>}{loading ? <p>Huishoudens worden geladen…</p> : <DataTable columns={columns} data={items} dataTestId="superuser-households-table" getRowKey={(row) => row.household_id} defaultSort={{ key: 'name', direction: 'asc' }} emptyMessage="Geen huishoudens gevonden." pagination pageSize={PAGE_SIZE} paginationActions={<Button type="button" onClick={exportSelectedHouseholds} disabled={selectedItems.length === 0}>Exporteren</Button>} renderRow={(item) => { const householdId = String(item.household_id); return <tr key={householdId} onDoubleClick={() => onSelectHousehold(item.household_id)} title="Dubbelklik om dit huishouden alleen-lezen te bekijken"><td className="rz-center"><Checkbox checked={selectedHouseholdIds.includes(householdId)} onChange={(event) => toggleHouseholdSelection(householdId, event.target.checked)} aria-label={`Selecteer huishouden ${item.name || householdId}`} /></td>{dataColumns.map((column) => <td key={column.key} className={column.align === 'right' ? 'rz-num' : ''}>{String(column.getValue(item) ?? '')}</td>)}</tr> }} />}</section>
 }
 
 export default function SuperuserDashboardPage() {
