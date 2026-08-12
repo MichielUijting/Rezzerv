@@ -26,7 +26,7 @@ function MetricCard({ label, value, detail = '' }) {
   )
 }
 
-export default function SuperuserOverviewSection({ onOpenHousehold }) {
+export default function SuperuserOverviewSection() {
   const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
@@ -55,12 +55,17 @@ export default function SuperuserOverviewSection({ onOpenHousehold }) {
   const metrics = data.metrics || {}
   const notificationRoute = data.notification_route || '/superuser/meldingen'
 
+  function openHouseholdNotifications(householdId) {
+    if (!householdId) return
+    navigate(`/superuser/meldingen?householdId=${encodeURIComponent(householdId)}`)
+  }
+
   return (
-    <section aria-label="Superuser overzicht" data-testid="superuser-platform-overview">
+    <section aria-label="Superuser overzicht" data-testid="superuser-platform-overview" style={{ minWidth: 0, width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 20 }}>Platformoverzicht</h2>
-          <p style={{ marginBottom: 0 }}>Actuele platforminformatie op basis van bestaande Rezzerv-gegevens.</p>
+          <p style={{ marginBottom: 0 }}>Actuele platformstatus en aandachtspunten op basis van bestaande Rezzerv-gegevens.</p>
         </div>
         <Button type="button" onClick={() => navigate(notificationRoute)}>Meldingen ({metrics.open_notifications ?? 0})</Button>
       </div>
@@ -73,7 +78,7 @@ export default function SuperuserOverviewSection({ onOpenHousehold }) {
       </div>
 
       <h2 style={{ fontSize: 20, marginBottom: 8 }}>Aandacht vereist</h2>
-      <p style={{ marginTop: 0 }}>Alleen bestaande signalen worden getoond: negatieve voorraad en open of in behandeling zijnde meldingen.</p>
+      <p style={{ marginTop: 0 }}>Dubbelklik op een aandachtspunt om direct de meldingen van het betreffende huishouden te openen.</p>
       <DataTable
         columns={columns}
         data={data.attention_items || []}
@@ -86,8 +91,8 @@ export default function SuperuserOverviewSection({ onOpenHousehold }) {
         renderRow={(item) => (
           <tr
             key={item.household_id}
-            onDoubleClick={() => onOpenHousehold?.(item.household_id)}
-            title="Dubbelklik om dit huishouden alleen-lezen te bekijken"
+            onDoubleClick={() => openHouseholdNotifications(item.household_id)}
+            title="Dubbelklik om de meldingen van dit huishouden te bekijken"
           >
             {columns.map((column) => (
               <td key={column.key} className={column.align === 'right' ? 'rz-num' : ''}>{String(column.getValue(item) ?? '')}</td>
