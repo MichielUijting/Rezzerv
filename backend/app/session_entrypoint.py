@@ -22,6 +22,9 @@ from app.services.authorization_ui_fixture_provisioning import (
     ensure_authorization_ui_fixture_member,
 )
 from app.services.membership_user_identity_service import backfill_membership_user_ids
+from app.services.receipt_lifecycle_foundation_service import (
+    install_receipt_lifecycle_foundation,
+)
 from app.services.session_request_context import (
     authorized_household_id_from_session,
     bind_current_actor_from_request_session_if_available,
@@ -131,6 +134,11 @@ def activate_server_side_session_routes() -> None:
             "Server-side sessieroutes niet uniek geregistreerd: " + ", ".join(duplicates)
         )
 
+
+# Release A must be applied from the actual uvicorn entrypoint. Importing app.main
+# from here is deterministic; relying on app.__init__ background threads is not,
+# because package initialisation can still be in progress while those threads poll.
+install_receipt_lifecycle_foundation(app, legacy_main.engine)
 
 with legacy_main.engine.begin() as provisioning_conn:
     ensure_system_superuser_for_session_runtime(provisioning_conn)

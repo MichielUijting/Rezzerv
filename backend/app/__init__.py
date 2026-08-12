@@ -208,6 +208,24 @@ def _install_receipt_resend_webhook_guard_when_ready() -> None:
         time.sleep(0.1)
 
 
+def _install_receipt_lifecycle_foundation_when_ready() -> None:
+    """Register Release-A schema only after the existing receipt schema is defined."""
+    for _ in range(200):
+        module = sys.modules.get('app.main')
+        if (
+            module is not None
+            and hasattr(module, 'app')
+            and hasattr(module, 'engine')
+            and hasattr(module, 'delete_receipts')
+        ):
+            from .services.receipt_lifecycle_foundation_service import (
+                install_receipt_lifecycle_foundation,
+            )
+            install_receipt_lifecycle_foundation(module.app, module.engine)
+            return
+        time.sleep(0.1)
+
+
 threading.Thread(target=_install_when_ready, daemon=True).start()
 threading.Thread(
     target=_install_inventory_location_patch_when_ready,
@@ -239,5 +257,9 @@ threading.Thread(
 ).start()
 threading.Thread(
     target=_install_receipt_resend_webhook_guard_when_ready,
+    daemon=True,
+).start()
+threading.Thread(
+    target=_install_receipt_lifecycle_foundation_when_ready,
     daemon=True,
 ).start()

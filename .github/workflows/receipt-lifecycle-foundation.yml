@@ -1,0 +1,33 @@
+name: Receipt lifecycle foundation validation
+
+on:
+  pull_request:
+    paths:
+      - 'backend/app/__init__.py'
+      - 'backend/app/models/receipt.py'
+      - 'backend/app/services/receipt_lifecycle_foundation_service.py'
+      - 'backend/tests/test_receipt_lifecycle_foundation.py'
+      - 'scripts/run-receipt-lifecycle-release-a.ps1'
+      - 'docs/technical/RECEIPT-LIFECYCLE-RELEASE-A.md'
+      - '.github/workflows/receipt-lifecycle-foundation.yml'
+  workflow_dispatch:
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install test dependencies
+        run: python -m pip install --quiet pytest sqlalchemy fastapi
+      - name: Compile Release A foundation
+        run: python -m compileall -q app/services/receipt_lifecycle_foundation_service.py app/models/receipt.py tests/test_receipt_lifecycle_foundation.py
+      - name: Validate minimal schema runtime installer and identity invariants
+        env:
+          PYTHONPATH: .
+        run: python -m pytest -q tests/test_receipt_lifecycle_foundation.py

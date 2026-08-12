@@ -53,6 +53,11 @@ class ReceiptTable(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     raw_receipt_id = Column(String, ForeignKey("raw_receipts.id"), nullable=False, unique=True)
     household_id = Column(String, ForeignKey("households.id"), nullable=False)
+    # Release A: opaque business identity reused across future reimports.
+    logical_receipt_key = Column(String, nullable=True)
+    # Only workflow disposition lives here. Approval/unpacked facts stay in their
+    # existing canonical tables and are not duplicated.
+    workflow_state = Column(String, nullable=False, default="active")
     store_name = Column(String, nullable=True)
     store_branch = Column(String, nullable=True)
     purchase_at = Column(DateTime, nullable=True)
@@ -70,6 +75,9 @@ class ReceiptTableLine(Base):
 
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     receipt_table_id = Column(String, ForeignKey("receipt_tables.id"), nullable=False)
+    # Release A: opaque business identity reused when the same physical line is
+    # reconciled on a later import attempt.
+    logical_line_key = Column(String, nullable=True)
     line_index = Column(Integer, nullable=False)
     raw_label = Column(Text, nullable=False)
     normalized_label = Column(Text, nullable=True)
