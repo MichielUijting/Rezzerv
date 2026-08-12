@@ -53,15 +53,23 @@ test.describe('Superuser frontend-regressie', () => {
     await expect(page.getByTestId('superuser-dashboard')).toBeVisible()
   })
 
-  test('beheercentrum bewaakt tabs, huishoudselectie/export en read-only huishoudinzage', async ({ page }) => {
+  test('beheercentrum bewaakt KPI-trends, tabs, huishoudselectie/export en read-only huishoudinzage', async ({ page }) => {
     await expect(page.getByRole('status', { name: 'Superuser alleen-lezen status' })).toContainText('alleen lezen')
     for (const tabName of ['Overzicht', 'Huishoudens', 'Gebruikers', 'Gebruik', 'Kassabonnen', 'Meldingen', 'Systeem']) {
       await expect(page.getByRole('tab', { name: tabName, exact: true })).toBeVisible()
     }
 
-    await expect(page.getByTestId('superuser-platform-overview')).toBeVisible()
+    const overview = page.getByTestId('superuser-platform-overview')
+    await expect(overview).toBeVisible()
     for (const label of ['Actieve huishoudens', 'Actieve gebruikers', 'Kassabonnen', 'Open meldingen', 'Aandacht vereist']) {
       await expect(page.getByText(label, { exact: true }).first()).toBeVisible()
+    }
+    for (const testId of ['superuser-metric-active-households', 'superuser-metric-active-users', 'superuser-metric-receipts', 'superuser-metric-open-notifications']) {
+      const metric = page.getByTestId(testId)
+      await expect(metric).toBeVisible()
+      await expect(metric).toHaveAttribute('data-trend-points', '7')
+      await expect(metric.locator('svg[role="img"]')).toBeVisible()
+      await expect(metric.locator('svg[role="img"]')).toHaveAttribute('aria-label', /ontwikkeling afgelopen 7 kalenderdagen/i)
     }
 
     await page.getByRole('tab', { name: 'Huishoudens', exact: true }).click()
@@ -185,6 +193,12 @@ test.describe('Superuser frontend-regressie', () => {
         contentType: 'application/json',
         body: JSON.stringify({
           metrics: { active_households: 1, active_users: 1, receipt_count: 0, open_notifications: 1 },
+          trends: {
+            active_households: Array.from({ length: 7 }, (_, index) => ({ date: `2026-08-${String(index + 6).padStart(2, '0')}`, value: 1 })),
+            active_users: Array.from({ length: 7 }, (_, index) => ({ date: `2026-08-${String(index + 6).padStart(2, '0')}`, value: 1 })),
+            receipt_count: Array.from({ length: 7 }, (_, index) => ({ date: `2026-08-${String(index + 6).padStart(2, '0')}`, value: 0 })),
+            open_notifications: Array.from({ length: 7 }, (_, index) => ({ date: `2026-08-${String(index + 6).padStart(2, '0')}`, value: index === 6 ? 1 : 0 })),
+          },
           notification_route: '/superuser/meldingen',
           attention_items: [{ household_id: '0', household_name: 'Regressietest huishouden 0', signal: '1 open melding', signal_count: 1 }],
         }),
