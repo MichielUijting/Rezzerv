@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import DataTable from '../../ui/DataTable.jsx'
 import Checkbox from '../../ui/Checkbox.jsx'
+import Button from '../../ui/Button.jsx'
 import { fetchJsonWithAuth } from '../../lib/authSession.js'
 
 const PAGE_SIZE = 10
@@ -27,11 +28,16 @@ function membershipKey(row, index = 0) {
   return `${row.user_id || row.email || 'user'}::${row.household_id || 'household'}::${index}`
 }
 
+function csvValue(value) {
+  return `"${String(value ?? '').replaceAll('"', '""')}"`
+}
+
 export default function SuperuserUsersSection({ onOpenHousehold }) {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [showTechnicalIds, setShowTechnicalIds] = useState(false)
+  const [selectedKeys, setSelectedKeys] = useState([])
 
   useEffect(() => {
     let cancelled = false
@@ -65,7 +71,12 @@ export default function SuperuserUsersSection({ onOpenHousehold }) {
     return () => { cancelled = true }
   }, [])
 
-  const columns = useMemo(() => {
+  useEffect(() => {
+    const validKeys = new Set(items.map((row, index) => membershipKey(row, index)))
+    setSelectedKeys((current) => current.filter((key) => validKeys.has(key)))
+  }, [items])
+
+  const dataColumns = useMemo(() => {
     const result = [
       { key: 'email', header: 'Gebruiker', width: 300, sortable: true, filterable: true, filterPlaceholder: 'Zoek', getValue: (row) => row.email || '—' },
       { key: 'household_name', header: 'Huishouden', width: 240, sortable: true, filterable: true, filterPlaceholder: 'Filter', getValue: (row) => row.household_name || row.household_id || '—' },
@@ -83,8 +94,45 @@ export default function SuperuserUsersSection({ onOpenHousehold }) {
     return result
   }, [showTechnicalIds])
 
+  const allSelected = items.length > 0 && items.every((row, index) => selectedKeys.includes(membershipKey(row, index)))
+  const columns = useMemo(() => [
+    {
+      key: 'selection',
+      header: <Checkbox checked={allSelected} onChange={(event) => setSelectedKeys(event.target.checked ? items.map((row, index) => membershipKey(row, index)) : [])} aria-label="Selecteer alle gebruikersregels" />,
+      width: 60,
+      sortable: false,
+      filterable: false,
+      className: 'rz-center',
+    },
+    ...dataColumns,
+  ], [allSelected, dataColumns, items])
+
+  const selectedRows = useMemo(() => items.filter((row, index) => selectedKeys.includes(membershipKey(row, index))), [items, selectedKeys])
+
+  function toggleRow(key, checked) {
+    setSelectedKeys((current) => checked ? [...new Set([...current, key])] : current.filter((item) => item !== key))
+  }
+
+  function exportSelectedRows() {
+    if (selectedRows.length === 0) return
+    const rowsForExport = [
+      dataColumns.map((column) => column.header),
+      ...selectedRows.map((row) => dataColumns.map((column) => column.getValue(row))),
+    ]
+    const csv = `\uFEFF${rowsForExport.map((row) => row.map(csvValue).join(';')).join('\r\n')}`
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'superuser-gebruikers-geselecteerd.csv'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }
+
   return (
-    <section aria-label="Gebruikers" data-testid="superuser-users-section">
+    <section aria-label="Gebruikers" data-testid="superuser-users-section" style={{ minWidth: 0, width: '100%' }}>
       <h2 style={{ marginTop: 0, fontSize: 20 }}>Gebruikers</h2>
       <p style={{ marginTop: 0 }}>Platformbrede, alleen-lezen inzage in gebruikers en hun huishoudkoppelingen. Dubbelklik op een regel om het huishouden te openen.</p>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -102,11 +150,16 @@ export default function SuperuserUsersSection({ onOpenHousehold }) {
           emptyMessage="Geen gebruikers gevonden."
           pagination
           pageSize={PAGE_SIZE}
-          renderRow={(row, index) => (
-            <tr key={membershipKey(row, index)} onDoubleClick={() => onOpenHousehold?.(row.household_id)} title="Dubbelklik om het huishouden alleen-lezen te bekijken">
-              {columns.map((column) => <td key={column.key}>{String(column.getValue(row) ?? '')}</td>)}
-            </tr>
-          )}
+          paginationActions={<Button type="button" onClick={exportSelectedRows} disabled={selectedRows.length === 0}>Exporteren</Button>}
+          renderRow={(row, index) => {
+            const key = membershipKey(row, index)
+            return (
+              <tr key={key} onDoubleClick={() => onOpenHousehold?.(row.household_id)} title="Dubbelklik om het huishouden alleen-lezen te bekijken">
+                <td className="rz-center"><Checkbox checked={selectedKeys.includes(key)} onChange={(event) => toggleRow(key, event.target.checked)} aria-label={`Selecteer gebruiker ${row.email || index + 1}`} /></td>
+                {dataColumns.map((column) => <td key={column.key}>{String(column.getValue(row) ?? '')}</td>)}
+              </tr>
+            )
+          }}
         />
       )}
     </section>
