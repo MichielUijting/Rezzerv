@@ -14,6 +14,7 @@ const tiles = [
   { key: 'meldingen', label: 'Meldingen', icon: '✉️' },
   { key: 'bijna-op', label: 'Bijna op', icon: '📉' },
   { key: 'winkelen', label: 'Winkelen', icon: '🛒' },
+  { key: 'inzichten', label: 'Inzichten', icon: '📈' },
   { key: 'prognoses', label: 'Prognoses', icon: '📊' },
   { key: 'uitlenen', label: 'Uitlenen', icon: '🔁' },
   { key: 'voorraad', label: 'Voorraad', icon: '📦' },
@@ -62,6 +63,7 @@ export default function HomePage() {
     if (key === 'meldingen') navigate('/meldingen')
     if (key === 'bijna-op') navigate('/bijna-op')
     if (key === 'winkelen') navigate('/winkelen')
+    if (key === 'inzichten') navigate('/inzichten')
     if (key === 'voorraad') navigate('/voorraad')
     if (key === 'productgroepen') navigate('/productgroepen')
     if (key === 'kassabonnen') navigate('/kassabonnen')
@@ -90,7 +92,7 @@ export default function HomePage() {
           <Card className="rz-card-home">
             <div className="rz-tile-grid" role="navigation" aria-label="Acties">
               {tiles.filter(isVisible).map((t) => {
-                const clickable = ['meldingen', 'bijna-op', 'winkelen', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus', 'superuser'].includes(t.key)
+                const clickable = ['meldingen', 'bijna-op', 'winkelen', 'inzichten', 'voorraad', 'productgroepen', 'kassabonnen', 'kassa', 'spaartegoeden', 'externe-databases', 'instellingen', 'admin', 'catalogus', 'superuser'].includes(t.key)
                 return (
                   <div key={t.key} className="rz-tile" onClick={() => clickable && openTile(t.key)} style={{ cursor: clickable ? 'pointer' : 'default' }}>
                     <div className="rz-tile-icon" aria-hidden="true">{t.icon}</div>
