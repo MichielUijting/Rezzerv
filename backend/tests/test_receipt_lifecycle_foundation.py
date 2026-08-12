@@ -1,9 +1,11 @@
 import pytest
+from types import SimpleNamespace
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
 
 from app.services.receipt_lifecycle_foundation_service import (
     ensure_receipt_lifecycle_foundation_schema,
+    install_receipt_lifecycle_foundation,
 )
 
 
@@ -91,6 +93,22 @@ def test_release_a_extends_existing_entities_without_parallel_tables():
             "receipt_tables.workflow_state",
             "receipt_table_lines.logical_line_key",
         ]
+
+
+def test_release_a_runtime_installer_applies_schema_immediately_and_once():
+    engine = _engine()
+    app = SimpleNamespace(state=SimpleNamespace())
+
+    install_receipt_lifecycle_foundation(app, engine)
+
+    with engine.begin() as conn:
+        assert "logical_receipt_key" in _columns(conn, "receipt_tables")
+        assert "workflow_state" in _columns(conn, "receipt_tables")
+        assert "logical_line_key" in _columns(conn, "receipt_table_lines")
+
+    # A second install is a no-op through the app-state marker.
+    install_receipt_lifecycle_foundation(app, engine)
+    assert app.state._rezzerv_receipt_lifecycle_foundation_installed is True
 
 
 def test_release_a_backfills_identity_once_and_is_idempotent():
