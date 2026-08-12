@@ -13,6 +13,10 @@ async function loginAsSuperuser(page) {
   await page.waitForURL('**/home')
 }
 
+async function expectSortableHeader(table, header) {
+  await expect(table.getByRole('button', { name: `${header} sorteren`, exact: true })).toBeVisible()
+}
+
 async function expectReadOnlyInspector(inspector) {
   await expect(inspector.locator('textarea')).toHaveCount(0)
   await expect(inspector.locator('form')).toHaveCount(0)
@@ -46,7 +50,7 @@ test.describe('Superuser frontend-regressie', () => {
     const households = page.getByTestId('superuser-households-table')
     await expect(households).toBeVisible()
     for (const header of ['Huishouden', 'Status', 'Actieve gebruikers', 'Gearchiveerd', 'Aangemaakt op', 'Laatst actief', 'Kassabonnen', 'Open meldingen', 'Aandacht vereist']) {
-      await expect(households.getByRole('columnheader', { name: header, exact: true })).toBeVisible()
+      await expectSortableHeader(households, header)
     }
     await expect(page.getByRole('navigation', { name: 'Paginering' })).toBeVisible()
 
@@ -57,8 +61,8 @@ test.describe('Superuser frontend-regressie', () => {
     await expect(inspector).toBeVisible()
     await expect(inspector.getByText(/Alleen lezen/i).first()).toBeVisible()
     await expect(inspector.getByText('Niet aan gebruiker herleidbaar', { exact: true })).toBeVisible()
-    await expect(inspector.getByRole('columnheader', { name: 'Rol' })).toBeVisible()
-    await expect(inspector.getByRole('columnheader', { name: 'Status' })).toBeVisible()
+    await expectSortableHeader(page.getByTestId('superuser-household-members-table'), 'Rol')
+    await expectSortableHeader(page.getByTestId('superuser-household-members-table'), 'Status')
     await expect(inspector.getByLabel('Selecteer alle gebruikerscategorieën')).toBeChecked()
 
     await inspector.getByRole('tab', { name: 'Kassa', exact: true }).click()
@@ -77,14 +81,14 @@ test.describe('Superuser frontend-regressie', () => {
     const table = page.getByTestId('superuser-users-table')
     await expect(table).toBeVisible()
     for (const header of ['Gebruiker', 'Huishouden', 'Rol', 'Status', 'Laatst actief', 'Toegevoegd op']) {
-      await expect(table.getByRole('columnheader', { name: header, exact: true })).toBeVisible()
+      await expectSortableHeader(table, header)
     }
     const technicalSelector = section.getByLabel("Technische ID's tonen in gebruikersoverzicht")
     await expect(technicalSelector).not.toBeChecked()
-    await expect(table.getByRole('columnheader', { name: 'Technisch gebruiker-ID', exact: true })).toHaveCount(0)
+    await expect(table.getByRole('button', { name: 'Technisch gebruiker-ID sorteren', exact: true })).toHaveCount(0)
     await technicalSelector.check()
-    await expect(table.getByRole('columnheader', { name: 'Technisch gebruiker-ID', exact: true })).toBeVisible()
-    await expect(table.getByRole('columnheader', { name: 'Technisch huishouden-ID', exact: true })).toBeVisible()
+    await expectSortableHeader(table, 'Technisch gebruiker-ID')
+    await expectSortableHeader(table, 'Technisch huishouden-ID')
     await expect(section.getByRole('navigation', { name: 'Paginering' })).toBeVisible()
     await expect(section.locator('textarea, form')).toHaveCount(0)
   })
